@@ -34,13 +34,13 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 ## How to build
 
 #### debug mode
-> sh build.sh debug --init --make
+> bash build.sh debug --init --make
 
 #### release mode
-> sh build.sh release --init --make
+> bash build.sh release --init --make
 
 #### rpm packages
-> sh build.sh rpm --init && cd build_rpm && make -j16 rpm
+> bash build.sh rpm --init && cd build_rpm && make -j16 rpm
 
 ## Contributing
 
