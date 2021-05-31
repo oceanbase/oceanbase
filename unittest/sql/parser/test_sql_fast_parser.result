@@ -1,0 +1,279 @@
+MySQL mode: 
+/*+ c1 */ /* c2 */ select /* ignored */ /*+ no_rewrite, index(t1 primary)    */ /* ignored  */ c1 from t1;
+T_STMT_LIST (null) off: -1 len: -1
+--T_SELECT (null) off: 19 len: 6
+----T_PROJECT_LIST (null) off: -1 len: -1
+------T_PROJECT_STRING (c1) off: -1 len: -1
+--------T_COLUMN_REF (c1) off: 95 len: 2
+----------T_IDENT (c1) off: 95 len: 2
+----T_FROM_LIST (null) off: 98 len: 4
+------T_ORG (null) off: -1 len: -1
+--------T_RELATION_FACTOR (t1) off: -1 len: -1
+----------T_IDENT (t1) off: 103 len: 2
+----T_HINT_OPTION_LIST (null) off: 42 len: 37
+------T_NO_REWRITE (null) off: -1 len: -1
+------T_INDEX (null) off: -1 len: -1
+--------T_RELATION_FACTOR_IN_HINT (null) off: -1 len: -1
+----------T_RELATION_FACTOR (t1) off: -1 len: -1
+------------T_IDENT (t1) off: 62 len: 2
+--------T_IDENT (primary) off: 65 len: 7
+i: 0, off: 0, len: 9
+i: 1, off: 10, len: 8
+select * from t1 where c1 = c2+1*2/3-4 order by c1 + 2 limit 1;
+T_STMT_LIST (null) off: -1 len: -1
+--T_SELECT (null) off: 0 len: 6
+----T_PROJECT_LIST (null) off: -1 len: -1
+------T_PROJECT_STRING (*) off: -1 len: -1
+--------T_STAR (null) off: 7 len: 1
+----T_FROM_LIST (null) off: 9 len: 4
+------T_ORG (null) off: -1 len: -1
+--------T_RELATION_FACTOR (t1) off: -1 len: -1
+----------T_IDENT (t1) off: 14 len: 2
+----T_WHERE_CLAUSE (null) off: 17 len: 5
+------T_OP_EQ (c1 = c2+1*2/3-4) off: 23 len: 15
+--------T_COLUMN_REF (c1) off: 23 len: 2
+----------T_IDENT (c1) off: 23 len: 2
+--------T_OP_MINUS (c2+1*2/3-4) off: 28 len: 10
+----------T_OP_ADD (c2+1*2/3) off: 28 len: 8
+------------T_COLUMN_REF (c2) off: 28 len: 2
+--------------T_IDENT (c2) off: 28 len: 2
+------------T_OP_DIV (1*2/3) off: 31 len: 5
+--------------T_OP_MUL (1*2) off: 31 len: 3
+----------------T_INT (1) off: 31 len: 1
+----------------T_INT (2) off: 33 len: 1
+--------------T_INT (3) off: 35 len: 1
+----------T_INT (4) off: 37 len: 1
+----T_ORDER_BY (null) off: 39 len: 8
+------T_SORT_LIST (null) off: -1 len: -1
+--------T_SORT_KEY (null) off: -1 len: -1
+----------T_OP_ADD (c1 + 2) off: 48 len: 6
+------------T_COLUMN_REF (c1) off: 48 len: 2
+--------------T_IDENT (c1) off: 48 len: 2
+------------T_INT (2) off: 53 len: 1
+----------T_SORT_ASC (null) off: -1 len: -1
+----T_LIMIT_CLAUSE (limit 1) off: 55 len: 7
+------T_LIMIT_INT (1) off: 61 len: 1
+select * from t1 where c1 = c2+1*2/3-4 order by c1 + 2 limit 1 offset 1;
+T_STMT_LIST (null) off: -1 len: -1
+--T_SELECT (null) off: 0 len: 6
+----T_PROJECT_LIST (null) off: -1 len: -1
+------T_PROJECT_STRING (*) off: -1 len: -1
+--------T_STAR (null) off: 7 len: 1
+----T_FROM_LIST (null) off: 9 len: 4
+------T_ORG (null) off: -1 len: -1
+--------T_RELATION_FACTOR (t1) off: -1 len: -1
+----------T_IDENT (t1) off: 14 len: 2
+----T_WHERE_CLAUSE (null) off: 17 len: 5
+------T_OP_EQ (c1 = c2+1*2/3-4) off: 23 len: 15
+--------T_COLUMN_REF (c1) off: 23 len: 2
+----------T_IDENT (c1) off: 23 len: 2
+--------T_OP_MINUS (c2+1*2/3-4) off: 28 len: 10
+----------T_OP_ADD (c2+1*2/3) off: 28 len: 8
+------------T_COLUMN_REF (c2) off: 28 len: 2
+--------------T_IDENT (c2) off: 28 len: 2
+------------T_OP_DIV (1*2/3) off: 31 len: 5
+--------------T_OP_MUL (1*2) off: 31 len: 3
+----------------T_INT (1) off: 31 len: 1
+----------------T_INT (2) off: 33 len: 1
+--------------T_INT (3) off: 35 len: 1
+----------T_INT (4) off: 37 len: 1
+----T_ORDER_BY (null) off: 39 len: 8
+------T_SORT_LIST (null) off: -1 len: -1
+--------T_SORT_KEY (null) off: -1 len: -1
+----------T_OP_ADD (c1 + 2) off: 48 len: 6
+------------T_COLUMN_REF (c1) off: 48 len: 2
+--------------T_IDENT (c1) off: 48 len: 2
+------------T_INT (2) off: 53 len: 1
+----------T_SORT_ASC (null) off: -1 len: -1
+----T_LIMIT_CLAUSE (limit 1 offset 1) off: 55 len: 16
+------T_LIMIT_INT (1) off: 61 len: 1
+------T_INT (1) off: 70 len: 1
+select /*+ index(t1.c1 primary) */* from t1 where `name` = 'abc';
+T_STMT_LIST (null) off: -1 len: -1
+--T_SELECT (null) off: 0 len: 6
+----T_PROJECT_LIST (null) off: -1 len: -1
+------T_PROJECT_STRING (*) off: -1 len: -1
+--------T_STAR (null) off: 34 len: 1
+----T_FROM_LIST (null) off: 36 len: 4
+------T_ORG (null) off: -1 len: -1
+--------T_RELATION_FACTOR (t1) off: -1 len: -1
+----------T_IDENT (t1) off: 41 len: 2
+----T_WHERE_CLAUSE (null) off: 44 len: 5
+------T_OP_EQ (`name` = 'abc') off: 50 len: 14
+--------T_COLUMN_REF (`name`) off: 50 len: 6
+----------T_IDENT (name) off: 51 len: 4
+--------T_VARCHAR ('abc') off: 59 len: 5
+----------T_VARCHAR (abc) off: 60 len: 3
+----T_HINT_OPTION_LIST (null) off: 9 len: 25
+------T_INDEX (null) off: -1 len: -1
+--------T_RELATION_FACTOR_IN_HINT (null) off: -1 len: -1
+----------T_RELATION_FACTOR (c1) off: -1 len: -1
+------------T_IDENT (t1) off: 17 len: 2
+------------T_IDENT (c1) off: 20 len: 2
+--------T_IDENT (primary) off: 23 len: 7
+select /*+ index(t1.name primary) */* from t1 where `c1` = 'abc';
+T_STMT_LIST (null) off: -1 len: -1
+--T_SELECT (null) off: 0 len: 6
+----T_PROJECT_LIST (null) off: -1 len: -1
+------T_PROJECT_STRING (*) off: -1 len: -1
+--------T_STAR (null) off: 36 len: 1
+----T_FROM_LIST (null) off: 38 len: 4
+------T_ORG (null) off: -1 len: -1
+--------T_RELATION_FACTOR (t1) off: -1 len: -1
+----------T_IDENT (t1) off: 43 len: 2
+----T_WHERE_CLAUSE (null) off: 46 len: 5
+------T_OP_EQ (`c1` = 'abc') off: 52 len: 12
+--------T_COLUMN_REF (`c1`) off: 52 len: 4
+----------T_IDENT (c1) off: 53 len: 2
+--------T_VARCHAR ('abc') off: 59 len: 5
+----------T_VARCHAR (abc) off: 60 len: 3
+----T_HINT_OPTION_LIST (null) off: 9 len: 27
+------T_INDEX (null) off: -1 len: -1
+--------T_RELATION_FACTOR_IN_HINT (null) off: -1 len: -1
+----------T_RELATION_FACTOR (name) off: -1 len: -1
+------------T_IDENT (t1) off: 17 len: 2
+------------T_IDENT (name) off: 20 len: 4
+--------T_IDENT (primary) off: 25 len: 7
+Oracle mode: 
+/*+ c1 */ /* c2 */ select /* ignored */ /*+ no_rewrite, index(t1 primary)    */ /* ignored  */ c1 from t1;
+T_STMT_LIST (null) off: -1 len: -1
+--T_SELECT (null) off: 19 len: 6
+----T_PROJECT_LIST (null) off: -1 len: -1
+------T_PROJECT_STRING (C1) off: -1 len: -1
+--------T_OBJ_ACCESS_REF (c1) off: 95 len: 2
+----------T_IDENT (C1) off: 95 len: 2
+----T_FROM_LIST (null) off: 98 len: 4
+------T_ORG (null) off: -1 len: -1
+--------T_RELATION_FACTOR (T1) off: -1 len: -1
+----------T_IDENT (T1) off: 103 len: 2
+----T_HINT_OPTION_LIST (null) off: 78 len: 37
+------T_NO_REWRITE (null) off: -1 len: -1
+------T_INDEX (null) off: -1 len: -1
+--------T_RELATION_FACTOR_IN_HINT (null) off: -1 len: -1
+----------T_RELATION_FACTOR (t1) off: -1 len: -1
+------------T_IDENT (t1) off: 62 len: 2
+--------T_IDENT (primary) off: 65 len: 7
+i: 0, off: 0, len: 9
+i: 1, off: 10, len: 8
+select * from t1 where c1 = c2+1*2/3-4 and rownum < 1 order by c1 + 2;
+T_STMT_LIST (null) off: -1 len: -1
+--T_SELECT (null) off: 0 len: 6
+----T_PROJECT_LIST (null) off: -1 len: -1
+------T_PROJECT_STRING (*) off: 7 len: 1
+--------T_STAR (null) off: -1 len: -1
+----T_FROM_LIST (null) off: 9 len: 4
+------T_ORG (null) off: -1 len: -1
+--------T_RELATION_FACTOR (T1) off: -1 len: -1
+----------T_IDENT (T1) off: 14 len: 2
+----T_WHERE_CLAUSE (null) off: -1 len: -1
+------T_OP_AND (null) off: -1 len: -1
+--------T_OP_EQ (c1 = c2+1*2/3-4) off: 23 len: 15
+----------T_OBJ_ACCESS_REF (c1) off: 23 len: 2
+------------T_IDENT (C1) off: 23 len: 2
+----------T_OP_MINUS (c2+1*2/3-4) off: 28 len: 10
+------------T_OP_ADD (c2+1*2/3) off: 28 len: 8
+--------------T_OBJ_ACCESS_REF (c2) off: 28 len: 2
+----------------T_IDENT (C2) off: 28 len: 2
+--------------T_OP_DIV (1*2/3) off: 31 len: 5
+----------------T_OP_MUL (1*2) off: 31 len: 3
+------------------T_INT (1) off: 31 len: 1
+------------------T_INT (2) off: 33 len: 1
+----------------T_INT (3) off: 35 len: 1
+------------T_INT (4) off: 37 len: 1
+--------T_OP_LT (rownum < 1) off: 43 len: 10
+----------T_FUN_SYS (rownum) off: 43 len: 6
+------------T_IDENT (rownum) off: -1 len: -1
+----------T_INT (1) off: 52 len: 1
+----T_ORDER_BY (null) off: 54 len: 8
+------T_SORT_LIST (null) off: -1 len: -1
+--------T_SORT_KEY (null) off: -1 len: -1
+----------T_OP_ADD (c1 + 2) off: 63 len: 6
+------------T_OBJ_ACCESS_REF (c1) off: 63 len: 2
+--------------T_IDENT (C1) off: 63 len: 2
+------------T_INT (2) off: 68 len: 1
+----------T_SORT_ASC (null) off: -1 len: -1
+select * from t1 where c1 = c2+1*2/3-4 and rownum < 1+1 order by c1 + 2;
+T_STMT_LIST (null) off: -1 len: -1
+--T_SELECT (null) off: 0 len: 6
+----T_PROJECT_LIST (null) off: -1 len: -1
+------T_PROJECT_STRING (*) off: 7 len: 1
+--------T_STAR (null) off: -1 len: -1
+----T_FROM_LIST (null) off: 9 len: 4
+------T_ORG (null) off: -1 len: -1
+--------T_RELATION_FACTOR (T1) off: -1 len: -1
+----------T_IDENT (T1) off: 14 len: 2
+----T_WHERE_CLAUSE (null) off: -1 len: -1
+------T_OP_AND (null) off: -1 len: -1
+--------T_OP_EQ (c1 = c2+1*2/3-4) off: 23 len: 15
+----------T_OBJ_ACCESS_REF (c1) off: 23 len: 2
+------------T_IDENT (C1) off: 23 len: 2
+----------T_OP_MINUS (c2+1*2/3-4) off: 28 len: 10
+------------T_OP_ADD (c2+1*2/3) off: 28 len: 8
+--------------T_OBJ_ACCESS_REF (c2) off: 28 len: 2
+----------------T_IDENT (C2) off: 28 len: 2
+--------------T_OP_DIV (1*2/3) off: 31 len: 5
+----------------T_OP_MUL (1*2) off: 31 len: 3
+------------------T_INT (1) off: 31 len: 1
+------------------T_INT (2) off: 33 len: 1
+----------------T_INT (3) off: 35 len: 1
+------------T_INT (4) off: 37 len: 1
+--------T_OP_LT (rownum < 1+1) off: 43 len: 12
+----------T_FUN_SYS (rownum) off: 43 len: 6
+------------T_IDENT (rownum) off: -1 len: -1
+----------T_OP_ADD (1+1) off: 52 len: 3
+------------T_INT (1) off: 52 len: 1
+------------T_INT (1) off: 54 len: 1
+----T_ORDER_BY (null) off: 56 len: 8
+------T_SORT_LIST (null) off: -1 len: -1
+--------T_SORT_KEY (null) off: -1 len: -1
+----------T_OP_ADD (c1 + 2) off: 65 len: 6
+------------T_OBJ_ACCESS_REF (c1) off: 65 len: 2
+--------------T_IDENT (C1) off: 65 len: 2
+------------T_INT (2) off: 70 len: 1
+----------T_SORT_ASC (null) off: -1 len: -1
+select /*+ index(t1.c1 primary) */* from t1 where "name" = 'abc';
+T_STMT_LIST (null) off: -1 len: -1
+--T_SELECT (null) off: 0 len: 6
+----T_PROJECT_LIST (null) off: -1 len: -1
+------T_PROJECT_STRING (*) off: 34 len: 1
+--------T_STAR (null) off: -1 len: -1
+----T_FROM_LIST (null) off: 36 len: 4
+------T_ORG (null) off: -1 len: -1
+--------T_RELATION_FACTOR (T1) off: -1 len: -1
+----------T_IDENT (T1) off: 41 len: 2
+----T_WHERE_CLAUSE (null) off: -1 len: -1
+------T_OP_EQ ("name" = 'abc') off: 50 len: 14
+--------T_OBJ_ACCESS_REF ("name") off: 50 len: 6
+----------T_IDENT (name) off: 51 len: 4
+--------T_CHAR ('abc') off: 59 len: 5
+----------T_VARCHAR (abc) off: 60 len: 3
+----T_HINT_OPTION_LIST (null) off: 33 len: 25
+------T_INDEX (null) off: -1 len: -1
+--------T_RELATION_FACTOR_IN_HINT (null) off: -1 len: -1
+----------T_RELATION_FACTOR (c1) off: -1 len: -1
+------------T_IDENT (t1) off: 17 len: 2
+------------T_IDENT (c1) off: 20 len: 2
+--------T_IDENT (primary) off: 23 len: 7
+select /*+ index(t1.name primary) */* from t1 where "c1" = 'abc';
+T_STMT_LIST (null) off: -1 len: -1
+--T_SELECT (null) off: 0 len: 6
+----T_PROJECT_LIST (null) off: -1 len: -1
+------T_PROJECT_STRING (*) off: 36 len: 1
+--------T_STAR (null) off: -1 len: -1
+----T_FROM_LIST (null) off: 38 len: 4
+------T_ORG (null) off: -1 len: -1
+--------T_RELATION_FACTOR (T1) off: -1 len: -1
+----------T_IDENT (T1) off: 43 len: 2
+----T_WHERE_CLAUSE (null) off: -1 len: -1
+------T_OP_EQ ("c1" = 'abc') off: 52 len: 12
+--------T_OBJ_ACCESS_REF ("c1") off: 52 len: 4
+----------T_IDENT (c1) off: 53 len: 2
+--------T_CHAR ('abc') off: 59 len: 5
+----------T_VARCHAR (abc) off: 60 len: 3
+----T_HINT_OPTION_LIST (null) off: 35 len: 27
+------T_INDEX (null) off: -1 len: -1
+--------T_RELATION_FACTOR_IN_HINT (null) off: -1 len: -1
+----------T_RELATION_FACTOR (name) off: -1 len: -1
+------------T_IDENT (t1) off: 17 len: 2
+------------T_IDENT (name) off: 20 len: 4
+--------T_IDENT (primary) off: 25 len: 7

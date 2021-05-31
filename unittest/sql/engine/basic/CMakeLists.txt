@@ -1,0 +1,4 @@
+#ob_unittest(test_ra_row_store)
+ob_unittest(test_ra_row_store_projector)
+ob_unittest(test_chunk_row_store)
+ob_unittest(test_chunk_datum_store)

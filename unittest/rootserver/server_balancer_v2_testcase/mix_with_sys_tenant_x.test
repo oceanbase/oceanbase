@@ -1,0 +1,82 @@
+{
+  "standalone_tenants":
+  [
+    {"tenant_id": 1}
+  ],
+  "zones":
+  [
+    {
+      "zone": "zone1",
+      "region": "HZ"
+    }
+  ],
+  "tenant_groups":
+  [
+    {
+      "row": 1,
+      "column": 10,
+      "tenant_id_array": [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010]
+    },
+    {
+      "row": 1,
+      "column": 10,
+      "tenant_id_array": [1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019, 1020]
+    }
+  ],
+  "servers":
+  [
+    {
+      "server_addr": "192.168.2.1",
+      "zone": "zone1",
+      "resources":
+      {
+        "cpu": 62,
+        "memory": 346818609152
+      }
+    },
+    {
+      "server_addr": "192.168.2.2",
+      "zone": "zone1",
+      "resources":
+      {
+        "cpu": 62,
+        "memory": 346818609152
+      }
+    },
+    {
+      "server_addr": "192.168.2.3",
+      "zone": "zone1",
+      "resources":
+      {
+        "cpu": 62,
+        "memory": 346818609152
+      }
+    }
+  ],
+  "units":
+  [
+    {"tenant": 1001, "cpu": 3, "memory": 33285996544, "zone": "zone1", "on_servers": ["192.168.2.2"]},
+    {"tenant": 1002, "cpu": 3, "memory": 33285996544, "zone": "zone1", "on_servers": ["192.168.2.3"]},
+    {"tenant": 1003, "cpu": 3, "memory": 33285996544, "zone": "zone1", "on_servers": ["192.168.2.2"]},
+    {"tenant": 1004, "cpu": 3, "memory": 33285996544, "zone": "zone1", "on_servers": ["192.168.2.3"]},
+    {"tenant": 1005, "cpu": 3, "memory": 33285996544, "zone": "zone1", "on_servers": ["192.168.2.2"]},
+    {"tenant": 1006, "cpu": 3, "memory": 33285996544, "zone": "zone1", "on_servers": ["192.168.2.1"]},
+    {"tenant": 1007, "cpu": 3, "memory": 33285996544, "zone": "zone1", "on_servers": ["192.168.2.2"]},
+    {"tenant": 1008, "cpu": 3, "memory": 33285996544, "zone": "zone1", "on_servers": ["192.168.2.1"]},
+    {"tenant": 1009, "cpu": 3, "memory": 33285996544, "zone": "zone1", "on_servers": ["192.168.2.3"]},
+    {"tenant": 1010, "cpu": 3, "memory": 33285996544, "zone": "zone1", "on_servers": ["192.168.2.1"]},
+
+    {"tenant": 1011, "cpu": 6, "memory": 26843545600, "zone": "zone1", "on_servers": ["192.168.2.2"]},
+    {"tenant": 1012, "cpu": 6, "memory": 26843545600, "zone": "zone1", "on_servers": ["192.168.2.1"]},
+    {"tenant": 1013, "cpu": 6, "memory": 26843545600, "zone": "zone1", "on_servers": ["192.168.2.3"]},
+    {"tenant": 1014, "cpu": 6, "memory": 26843545600, "zone": "zone1", "on_servers": ["192.168.2.1"]},
+    {"tenant": 1015, "cpu": 6, "memory": 26843545600, "zone": "zone1", "on_servers": ["192.168.2.2"]},
+    {"tenant": 1016, "cpu": 6, "memory": 26843545600, "zone": "zone1", "on_servers": ["192.168.2.2"]},
+    {"tenant": 1017, "cpu": 6, "memory": 26843545600, "zone": "zone1", "on_servers": ["192.168.2.1"]},
+    {"tenant": 1018, "cpu": 6, "memory": 26843545600, "zone": "zone1", "on_servers": ["192.168.2.3"]},
+    {"tenant": 1019, "cpu": 6, "memory": 26843545600, "zone": "zone1", "on_servers": ["192.168.2.2"]},
+    {"tenant": 1020, "cpu": 6, "memory": 26843545600, "zone": "zone1", "on_servers": ["192.168.2.3"]},
+
+    {"tenant": 1,    "cpu": -3, "memory": 30064771072, "zone": "zone1", "on_servers": ["192.168.2.2"]}
+  ] 
+}

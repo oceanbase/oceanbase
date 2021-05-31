@@ -1,0 +1,63 @@
+
+
+
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+sleep 2;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30));
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5');
+
+select @var1, @var2;
+
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  eval select @var2_$left := @var1_$left := c$left from t1;
+  eval select @var1_$left, @var2_$left;
+  inc $left;
+}
+
+set @a = 1;
+select @a := @someval;
+select @a;
+--disable_warnings
+drop view if exists vv;
+--enable_warnings
+create view vv as select @a;
+desc vv;
+
+select @a := null;
+select @a;
+--disable_warnings
+drop view if exists vv;
+--enable_warnings
+create view vv as select @a;
+desc vv;
+
+sleep 2;

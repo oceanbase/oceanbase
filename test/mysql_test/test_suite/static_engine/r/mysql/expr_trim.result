@@ -1,0 +1,75 @@
+connect  syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection default;
+drop table if exists t1;
+connection syscon;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select trim('          abc        ') x from dual;
+x
+abc
+select trim(leading from '          abc        ') x from dual;
+x
+abc        
+select trim(trailing from '          abc        ') x from dual;
+x
+          abc
+select trim(both from '          abc        ') x from dual;
+x
+abc
+select trim(both '' from '          abc        ') x from dual;
+x
+          abc        
+select trim(both ' ' from '          abc        ') x from dual;
+x
+abc
+select trim(both 'abc' from 'abcabdefabcabc') x from dual;
+x
+abdef
+select trim(both ' ' from '          abc        ') x from dual;
+x
+abc
+select trim(both NULL from '          abc        ') x from dual;
+x
+NULL
+select trim(both ' ' from NULL) x from dual;
+x
+NULL
+select trim(both 1 from 112311) x from dual;
+x
+23
+select ltrim('          abc             ') x from dual;
+x
+abc             
+select ltrim('          ') x from dual;
+x
+
+select ltrim(NULL) x from dual;
+x
+NULL
+select rtrim('          abc             ') x from dual;
+x
+          abc
+select rtrim('          ') x from dual;
+x
+
+select rtrim(NULL) x from dual;
+x
+NULL
+drop table if exists t1;
+drop view if exists v1;
+create view v1 as select nullif(trim(repeat('abc', 1+1)), 'a');
+desc v1;
+Field	Type	Null	Key	Default	Extra
+nullif(trim(repeat('abc', 1+1)), 'a')	longtext	NO			
+select * from v1;
+nullif(trim(repeat('abc', 1+1)), 'a')
+abcabc
+create table t1(c1 longtext, c2 varchar(100));
+insert into t1 values('abababa', 'a');
+// c1 and c2 will cast to longtext
+select trim(leading c2 from c1) from t1;
+trim(leading c2 from c1)
+bababa
+drop view v1;
+drop table t1;
+connection syscon;

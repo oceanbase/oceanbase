@@ -1,0 +1,36 @@
+
+--disable_abort_on_error
+
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+--disable_warnings
+
+select repeat("abc", -1);
+select repeat("abc", 0);
+select repeat("abc", 1);
+select repeat("abc", 2);
+select repeat("abc", 3);
+
+select repeat("abc", "2.1");
+select repeat("abc", "2.9");
+
+select repeat("", 2);
+select repeat(NULL, 2);
+select repeat("abc", NULL);
+select repeat(1.414, 1);
+select repeat(1.414, 2);
+
+select repeat("abc", 200000000);
+
+--enable_warnings
+
+connection syscon;
+--sleep 2

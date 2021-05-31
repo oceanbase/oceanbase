@@ -1,0 +1,194 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+--echo ================ expression locate ================
+
+select locate('', 'abc');
+select locate('', '');
+select locate('abcd', 'abc');
+select locate('abc', 'abc');
+select locate('a', 'abc');
+select locate('b', 'abc');
+select locate('c', 'abc');
+select locate('bc', 'abc');
+select locate('bc', 'abcbc');
+select locate('阿里', '阿里巴巴');
+select locate('巴巴', '阿里巴巴巴巴');
+select locate('阿里巴巴', '阿里巴巴');
+select locate(true, '123');
+select locate(true, '23');
+select locate(23, 123);
+select locate('', 23);
+select locate('23', 123);
+select locate(123.4, '123.400000');
+select locate('123.400000', 123.4);
+select locate('123.400000', null);
+select locate(null, '巴巴');
+select locate('巴巴', null);
+select locate(null, null);
+
+
+select locate(false, true);
+select locate(true, true);
+select locate(true, 123);
+select locate(false, 123);
+select locate(false, 0123);
+select locate(false, 1023);
+select locate(false,1023.4);
+select locate(true, 1023.4);
+select locate(true, null);
+select locate(null, true);
+
+select locate(23, 123);
+select locate(123456, 123);
+select locate(123, 123.4);
+select locate(123.4, 1234);
+select locate(123, null);
+select locate(null, 123);
+
+select locate(123.4, 123.400000);
+select locate(123.41, 123.400000);
+select locate(123.400000, null);
+select locate(null, 123.41);
+
+--disable_warnings
+drop table if exists test;
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 bigint unsigned);
+insert into t1 values(locate('a','b',9223372036854775807));
+insert into t1 values(locate('a','b',9223372036854775808));
+insert into t1 values(locate('a','b',12233720368547758000));
+select * from t1;
+create table test(c1 datetime primary key);
+sleep 5;
+insert into test values('2015-5-5');
+select locate('201', c1) from test;
+select locate('', c1) from test;
+select locate('haha', c1) from test;
+select locate('-5',c1) from test;
+select locate('2015-5-5', c1) from test;
+select locate(true, c1) from test;
+select locate(201, c1) from test;
+select locate(201.1, c1) from test;
+select locate(c1, null) from test;
+select locate(null, c1) from test;
+--disable_warnings
+drop table if exists test,t1;
+--enable_warnings
+
+select locate('', 'abc', 0);
+select locate('', 'abc', 1);
+select locate('', 'abc', -1);
+select locate('', '', 0);
+select locate('', '', 1);
+select locate('', '', -1);
+select locate('abc', '', 0);
+select locate('abc', '', -1);
+select locate('abc', '', 1);
+select locate('abcd', 'abc', 1);
+select locate('abc', 'abc', 1);
+select locate('abc', 'abc', 2);
+select locate('a', 'abc', 1);
+select locate('a', 'abc', 2);
+select locate('a', 'abac', 1);
+select locate('a', 'abac', 2);
+select locate('b', 'abc', 1);
+select locate('b', 'abc', 2);
+select locate('b', 'abc', 3);
+select locate('c', 'abc', 1);
+select locate('c', 'abc', 3);
+select locate('c', 'abc', 4);
+select locate('bc', 'abc', 1);
+select locate('bc', 'abc', 3);
+select locate('', 'abc', 3);
+select locate('', 'abc', 4);
+select locate('', 'abc', 5);
+select locate('阿里', '阿里巴巴', 1);
+select locate('阿里', '阿里巴巴', 2);
+select locate('巴巴', '阿里巴巴', 1);
+select locate('巴巴', '阿里巴巴', 3);
+select locate('巴巴', '阿里巴巴', 4);
+select locate('巴巴', '阿里巴巴', 5);
+select locate('', '阿里阿里', 3);
+select locate('', '阿里阿里', 4);
+select locate('', '阿里阿里', 5);
+select locate('阿里巴巴', '阿里巴巴', 0);
+select locate('阿里巴巴', '阿里巴巴', 1);
+select locate(23, 123, 1);
+select locate('', 23, 1);
+select locate('23', 123, 1);
+select locate(true, '123', 1);
+select locate(true, '123', 2);
+select locate(true, '123', 2);
+select locate(true, '123', 2);
+select locate(true, '1', 1);
+select locate('1', true, 1);
+select locate(1.3, '1.300000', 2);
+select locate(1.3, '2321.300000', 2);
+select locate(1.3, '2321.3', 2);
+select locate('1.3000', 451.3, 2);
+select locate(null, '巴巴', 3);
+select locate(null, '巴巴', 2);
+select locate('巴巴', null, 3);
+select locate('巴巴', null, 2);
+select locate('巴巴', '阿里巴巴', null);
+select locate(null, null, 0);
+select locate(null, null, 1);
+
+select locate(false, true, 1);
+select locate(false, true, 2);
+select locate(true, true, 1);
+select locate(true, 123, 1);
+select locate(true, 123, 2);
+select locate(false, 1023.4, 2);
+select locate(false, 1023.4, 3);
+select locate(true, null, 0);
+select locate(true, null, 1);
+select locate(null, true, 0);
+select locate(null, true, 3);
+select locate(true, true, null);
+
+select locate(23, 123, 1);
+select locate(23, 123, 3);
+select locate(123456, 123, 9);
+select locate(123, 123.4, 1);
+select locate(123, 123.4, 2);
+select locate(123.4, 1234, 4);
+select locate(123, null, 1);
+select locate(123, null, null);
+select locate(null, 123, 1);
+select locate(null, 123, null);
+
+select locate(123.4, 123.400000, 1);
+select locate(123.4, 123.400000, 2);
+select locate(123.41, 123.400000, 3);
+select locate(123.400000, null, 3);
+select locate(null, 123.41, 3);
+select locate(null, 123.41, null);
+select locate(null, 123.41, 126);
+
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(c1 datetime primary key);
+sleep 5;
+insert into test values('2015-5-5');
+select locate('201', c1, 1) from test;
+select locate('', c1 , 1) from test;
+select locate('haha', c1 , 1) from test;
+select locate('-5',c1 , 1) from test;
+select locate('2015-5-5', c1 , 1) from test;
+select locate(true, c1 , 1) from test;
+select locate(true, c1 , 4) from test;
+select locate(201, c1 , 1) from test;
+select locate(201.1, c1 , 1) from test;
+select locate(null, c1 , 1) from test;
+select locate(c1, null, 1) from test;
+select locate(c1, null, null) from test;
+select mod(locate('a','b'),1.000);
+select ifnull(locate('a','a'),2.345 );
+--disable_warnings
+drop table if exists test;
+--enable_warnings

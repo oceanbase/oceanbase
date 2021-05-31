@@ -1,0 +1,15 @@
+not (10 > 5 and 100 < 9)
+not not a > b
+not a > b
+not a = b
+not a < b
+not a is true
+not a between 1 and 100
+(1 and 2) and (3 and 4) and 5
+(1 or 2) or (3 or 4 or 5)
+(1 and 2) or (3 and 1)
+not(not(a))
+A or (A And B) or (A And C) 
+(A and B) or (A and C and D) 
+(A and B) or (A and C)
+(A and B and C) or (A and B and D) 

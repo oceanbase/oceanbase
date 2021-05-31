@@ -1,0 +1,9 @@
+desc oceanbase.__tenant_virtual_partition_stat;
+Field	Type	Null	Key	Default	Extra
+table_id	bigint(20)	NO		NULL	
+partition_id	bigint(20)	NO		NULL	
+partition_cnt	bigint(20)	NO		NULL	
+row_count	bigint(20)	NO		NULL	
+diff_percentage	bigint(20)	NO		NULL	
+connect  conn_admin,$OBMYSQL_MS0,admin@sys,admin,*NO-ONE*,$OBMYSQL_PORT;
+pass

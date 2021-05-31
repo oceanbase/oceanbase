@@ -1,0 +1,1831 @@
+#!/bin/env python2
+# -*- coding: utf-8 -*-
+
+# Copyright (c) 2021 OceanBase
+# OceanBase CE is licensed under Mulan PubL v2.
+# You can use this software according to the terms and conditions of the Mulan PubL v2.
+# You may obtain a copy of Mulan PubL v2 at:
+#          http://license.coscl.org.cn/MulanPubL-2.0
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+# EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+# MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+# See the Mulan PubL v2 for more details.
+
+#  config file is ob_inner_table_schema_def.py
+#  shell> python2.6 generate_inner_table_schema.py
+#
+
+import copy
+from ob_inner_table_init_data import *
+import StringIO
+import re
+import os
+import glob
+import sys
+
+kv_core_table_id = int(1)
+max_core_table_id = int(100)
+max_sys_table_id = int(10000)
+max_ob_virtual_table_id = int(15000)
+max_ora_virtual_table_id = int(20000)
+max_sys_view_id = int(30000)
+
+
+cpp_f = None
+h_f = None
+fileds = None
+default_filed_values = None
+table_name_ids = []
+table_name_postfix_ids = []
+table_name_postfix_table_names = []
+index_name_ids = []
+table_index=[]
+tenant_space_tables = []
+tenant_space_table_names = []
+only_rs_vtables = []
+column_def_enum_array = []
+all_def_keywords =  {}
+all_agent_virtual_tables = []
+all_iterate_virtual_tables = []
+all_ora_mapping_virtual_table_org_tables = []
+all_ora_mapping_virtual_tables = []
+real_table_virtual_table_names = []
+all_need_migrate_tables = []
+cluster_private_tables = []
+backup_private_tables = []
+all_only_sys_table_name = {}
+rs_restart_related_tables = []
+column_collation = 'CS_TYPE_INVALID'
+# virtual tables only accessible by sys tenant or sys views.
+restrict_access_virtual_tables = []
+is_oracle_sys_table = False
+
+copyright = """/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+"""
+
+def print_method_start(table_name):
+  global cpp_f
+  head = """int ObInnerTableSchema::{0}_schema(ObTableSchema &table_schema)
+{{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+"""
+  # use {{ for string.foramt. string.format will translate {{ to {
+  cpp_f.write(head.format(table_name.replace('$', '_').lower().strip('_')))
+
+def add_method_end():
+  global cpp_f
+  end = """
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
+"""
+  cpp_f.write(end)
+
+def add_index_method_end(num_index):
+  global cpp_f
+  end = """
+  table_schema.set_max_used_column_id(column_id + {0});
+  return ret;
+}}
+
+"""
+  cpp_f.write(end.format(str(num_index)))
+
+def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, default_value, column_id):
+  global cpp_f
+  set_op = "";
+  if "NULL" == default_value or "null" == default_value:
+    set_op = 'set_null()'
+  elif column_type == 'ObIntType':
+    set_op = 'set_int({0})'.format(default_value)
+  elif column_type == 'ObUInt64Type':
+    set_op = 'set_uint64({0})'.format(default_value)
+  elif column_type == 'ObTinyIntType':
+    set_op = 'set_tinyint({0})'.format(default_value)
+  elif column_type == 'ObVarcharType':
+      if column_collation_type == "CS_TYPE_BINARY":
+        set_op = 'set_varbinary(ObString::make_string("{0}"))'.format(default_value)
+      else:
+        set_op = 'set_varchar(ObString::make_string("{0}"))'.format(default_value)
+  elif column_type == 'ObTimestampType':
+    if (default_value == 'CURRENT_TIMESTAMP') or (default_value == 'current_timestmap'):
+      set_op = 'set_timestamp(ObTimeUtility::current_time())'
+    else:
+      set_op = 'set_timestamp({0})'.format(default_value)
+  elif column_type == 'ObLongTextType':
+    set_op = 'set_lob_value(ObLongTextType, "{0}", strlen("{0}"))'.format(default_value)
+    if column_collation_type == "CS_TYPE_BINARY":
+      set_op += '; {0}_default.set_collation_type(CS_TYPE_BINARY);'.format(column_name.lower())
+  else:
+    raise IOError("ERROR column format: column_name={0} column_type={1}\n".format(column_name, column_type))
+
+  if column_id != 0:
+    ## index
+    line = """
+  if (OB_SUCC(ret)) {{
+    ObObj {12}_default;
+    {12}_default.{13};
+    ADD_COLUMN_SCHEMA_T("{0}", //column_name
+      column_id + {1}, //column_id
+      {2}, //rowkey_id
+      {3}, //index_id
+      {4}, //part_key_pos
+      {5}, //column_type
+      {6}, //column_collation_type
+      {7}, //column_length
+      {8}, //column_precision
+      {9}, //column_scale
+      {10}, //is_nullable
+      {11}, //is_autoincrement
+      {12}_default,
+      {12}_default); //default_value
+  }}
+"""
+    cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_name.lower(), set_op))
+  else:
+    line = """
+  if (OB_SUCC(ret)) {{
+    ObObj {11}_default;
+    {11}_default.{12};
+    ADD_COLUMN_SCHEMA_T("{0}", //column_name
+      ++column_id, //column_id
+      {1}, //rowkey_id
+      {2}, //index_id
+      {3}, //part_key_pos
+      {4}, //column_type
+      {5}, //column_collation_type
+      {6}, //column_length
+      {7}, //column_precision
+      {8}, //column_scale
+      {9}, //is_nullable
+      {10}, //is_autoincrement
+      {11}_default,
+      {11}_default); //default_value
+  }}
+"""
+    cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_name.lower(),set_op))
+
+def print_column(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_id):
+  global cpp_f
+
+  if column_id != 0:
+    ## index
+    line = """
+  if (OB_SUCC(ret)) {{
+    ADD_COLUMN_SCHEMA("{0}", //column_name
+      column_id + {1}, //column_id
+      {2}, //rowkey_id
+      {3}, //index_id
+      {4}, //part_key_pos
+      {5}, //column_type
+      {6}, //column_collation_type
+      {7}, //column_length
+      {8}, //column_precision
+      {9}, //column_scale
+      {10},//is_nullable
+      {11}); //is_autoincrement
+  }}
+"""
+    cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement))
+  else:
+    line = """
+  if (OB_SUCC(ret)) {{
+    ADD_COLUMN_SCHEMA("{0}", //column_name
+      ++column_id, //column_id
+      {1}, //rowkey_id
+      {2}, //index_id
+      {3}, //part_key_pos
+      {4}, //column_type
+      {5}, //column_collation_type
+      {6}, //column_length
+      {7}, //column_precision
+      {8}, //column_scale
+      {9}, //is_nullable
+      {10}); //is_autoincrement
+  }}
+"""
+    cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement))
+
+def print_discard_column(column_name):
+  global cpp_f
+  line = """
+  if (OB_SUCC(ret)) {{
+    ++column_id; // for {0}
+  }}
+"""
+  cpp_f.write(line.format(column_name))
+
+
+def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_id, is_on_update_for_timestamp):
+  global cpp_f
+  if rowkey_id > 0:
+    is_nullable = "false"
+  if column_id != 0:
+    if column_scale > 0 :
+      line = """
+  if (OB_SUCC(ret) {{
+    ObObj gmt_default;
+    ObObj gmt_default_null;
+
+    gmt_default.set_ext(ObActionFlag::OP_DEFAULT_NOW_FLAG);
+    gmt_default_null.set_null();
+    ADD_COLUMN_SCHEMA_TS_T("{0}", //column_name
+      column_id + {1}, //column_id
+      {2}, //rowkey_id
+      {3}, //index_id
+      {4}, //part_key_pos
+      {5}, //column_type
+      {6}, //column_collation_type
+      {7}, //column_length
+      {8}, //column_precision
+      {9}, //column_scale
+      {10}, //is_nullable
+      {11}, //is_autoincrement
+      {12}, //is_on_update_for_timestamp
+      gmt_default_null,
+      gmt_default);
+  }}
+"""
+    else :
+      line = """
+  if (OB_SUCC(ret)) {{
+    ADD_COLUMN_SCHEMA_TS("{0}", //column_name
+      column_id + {1}, //column_id
+      {2}, //rowkey_id
+      {3}, //index_id
+      {4}, //part_key_pos
+      {5}, //column_type
+      {6}, //column_collation_type
+      {7}, //column_length
+      {8}, //column_precision
+      {9}, //column_scale
+      {10}, //is_nullable
+      {11}, //is_autoincrement
+      {12}); //is_on_update_for_timestamp
+  }}
+"""
+    cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrementi, is_on_update_for_timestamp))
+  else:
+    if column_scale > 0 :
+      line = """
+  if (OB_SUCC(ret)) {{
+    ObObj gmt_default;
+    ObObj gmt_default_null;
+
+    gmt_default.set_ext(ObActionFlag::OP_DEFAULT_NOW_FLAG);
+    gmt_default_null.set_null();
+    ADD_COLUMN_SCHEMA_TS_T("{0}", //column_name
+      ++column_id, //column_id
+      {1}, //rowkey_id
+      {2}, //index_id
+      {3}, //part_key_pos
+      {4}, //column_type
+      {5}, //column_collation_type
+      {6}, //column_length
+      {7}, //column_precision
+      {8}, //column_scale
+      {9}, //is_nullable
+      {10}, //is_autoincrement
+      {11}, //is_on_update_for_timestamp
+      gmt_default_null,
+      gmt_default)
+  }}
+"""
+    else :
+      line = """
+  if (OB_SUCC(ret)) {{
+    ADD_COLUMN_SCHEMA_TS("{0}", //column_name
+      ++column_id, //column_id
+      {1}, //rowkey_id
+      {2}, //index_id
+      {3}, //part_key_pos
+      {4}, //column_type
+      {5}, //column_collation_type
+      {6}, //column_length
+      {7}, //column_precision
+      {8}, //column_scale
+      {9}, //is_nullable
+      {10}, //is_autoincrement
+      {11}); //is_on_update_for_timestamp
+  }}
+"""
+    cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, is_on_update_for_timestamp))
+
+def add_gm_columns(columns):
+  global cpp_f
+  column_length = 'sizeof(int64_t)'
+  is_nullable = 'false'
+  line = "error"
+  for column in columns:
+    if column == 'gmt_create':
+      line = """
+  if (OB_SUCC(ret)) {
+    ObObj gmt_create_default;
+    ObObj gmt_create_default_null;
+
+    gmt_create_default.set_ext(ObActionFlag::OP_DEFAULT_NOW_FLAG);
+    gmt_create_default_null.set_null();
+    ADD_COLUMN_SCHEMA_TS_T("gmt_create", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObTimestampType,  //column_type
+      CS_TYPE_BINARY,//collation_type
+      0, //column length
+      -1, //column_precision
+      6, //column_scale
+      true,//is nullable
+      false, //is_autoincrement
+      false, //is_on_update_for_timestamp
+      gmt_create_default_null,
+      gmt_create_default)
+  }
+"""
+    elif column == 'gmt_modified':
+      line = """
+  if (OB_SUCC(ret)) {
+    ObObj gmt_modified_default;
+    ObObj gmt_modified_default_null;
+
+    gmt_modified_default.set_ext(ObActionFlag::OP_DEFAULT_NOW_FLAG);
+    gmt_modified_default_null.set_null();
+    ADD_COLUMN_SCHEMA_TS_T("gmt_modified", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObTimestampType,  //column_type
+      CS_TYPE_BINARY,//collation_type
+      0, //column length
+      -1, //column_precision
+      6, //column_scale
+      true,//is nullable
+      false, //is_autoincrement
+      true, //is_on_update_for_timestamp
+      gmt_modified_default_null,
+      gmt_modified_default)
+  }
+"""
+    cpp_f.write(line)
+
+def add_column(column, rowkey_id, index_id, part_key_pos, column_id=0):
+  global column_collation
+  global is_oracle_sys_table
+  column_name = None
+  column_type = None
+  column_collation_type = 'CS_TYPE_INVALID';
+  column_length = None
+  column_precision = -1
+  column_scale = -1
+  is_nullable = "false"
+  is_autoincrement = "false"
+  is_on_update_for_timestamp = "false"
+  default_value = None
+  if len(column) >= 2:
+    column_name = column[0]
+    column_type = column[1]
+    if column_type == 'int':
+      column_type = 'ObIntType'
+      column_length = 'sizeof(int64_t)'
+    elif column_type[:6] == 'bigint':
+      s = column_type.split(':')
+      column_type = 'ObIntType'
+      column_length = 'sizeof(int64_t)'
+      column_precision = 20 if len(s) == 1 else s[1]
+      column_scale = 0
+    elif column_type[:6] == 'number':
+      s = column_type.split(':')
+      column_type = 'ObFloatType' if len(s) == 1 else 'ObNumberType'
+      column_length = 'sizeof(float)' if len(s) == 1 else 38
+      column_precision = -1 if len(s) == 1 else s[1]
+      if len(s) == 3:
+        column_scale = s[2]
+      elif len(s) == 2:
+        column_scale = 0
+    elif column_type == 'uint':
+      column_type = 'ObUInt64Type'
+      column_length = 'sizeof(uint64_t)'
+    elif column_type == 'double':
+      column_type = 'ObDoubleType'
+      column_length = 'sizeof(double)'
+    elif column_type == 'bool':
+      column_type = 'ObTinyIntType'
+      column_length = '1'
+    elif column_type[:9] == 'timestamp':
+      s = column_type.split(':')
+      column_type = 'ObTimestampType'
+      column_length = 'sizeof(ObPreciseDateTime)'
+      if len(s) != 1:
+        column_scale = s[1]
+        column_length = 0
+    elif column_type[:7]  == 'varchar':
+      s = column_type.split(':')
+      column_type = 'ObVarcharType'
+      column_length = s[1]
+      if True == is_oracle_sys_table:
+        column_precision = 2
+      column_collation_type = column_collation;
+    elif column_type[:9]  == 'varbinary':
+      s = column_type.split(':')
+      column_type = 'ObVarcharType'
+      column_length = s[1]
+      column_collation_type = 'CS_TYPE_BINARY'
+    elif column_type == 'otimestamp':
+      column_type = 'ObTimestampLTZType'
+      column_length = 0
+    elif column_type == 'longtext':
+      column_type = 'ObLongTextType'
+      column_length = 0
+    elif column_type == 'longblob':
+      column_type = 'ObLongTextType'
+      column_length = 0
+      column_collation_type = 'CS_TYPE_BINARY'
+
+  if len(column) >= 3:
+    is_nullable = column[2]
+
+  if len(column) >= 4:
+    default_value = column[3]
+
+  if len(column) >= 5:
+    is_autoincrement = column[4]
+
+  if len(column) >= 6:
+    is_on_update_for_timestamp = column[5]
+
+  print column_name, rowkey_id, index_id, part_key_pos, column_type, column_length, is_nullable, is_autoincrement, default_value # remove
+  if column_name.find("[discard]") == 0:
+    print_discard_column(column_name)
+  elif column_type == 'ObTimestampType':
+    print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_id, is_on_update_for_timestamp)
+  elif default_value is None:
+    print_column(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale,  is_nullable, is_autoincrement, column_id)
+  else:
+    print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, default_value, column_id)
+
+def no_direct_access(keywords):
+  global restrict_access_virtual_tables
+  tid = table_name2tid(keywords['table_name'] + (keywords.has_key('name_postfix') and keywords['name_postfix'] or ''))
+  if tid not in restrict_access_virtual_tables:
+    restrict_access_virtual_tables.append(tid)
+  return keywords
+
+def find_column_def(keywords, column_name):
+  i = 1
+  for col in keywords['rowkey_columns']:
+    if col[0] == column_name:
+      return (i, col)
+    else:
+      i += 1
+  for col in keywords['normal_columns']:
+    if col[0] == column_name:
+      return (i, col)
+    else:
+      i += 1
+
+def add_index_column(keywords, rowkey_id, index_id, column):
+  (idx, column_def) = find_column_def(keywords, column)
+  add_column(column_def, rowkey_id, index_id, 0, idx)
+
+def add_index_columns(columns, **keywords):
+  rowkey_id = 1
+  for column in columns:
+    add_index_column(keywords, rowkey_id, rowkey_id, column)
+    rowkey_id += 1
+  for col in keywords['rowkey_columns']:
+    if col[0] not in columns:
+      add_index_column(keywords, rowkey_id, 0, col[0])
+      rowkey_id += 1
+  return rowkey_id - 1
+def add_rowkey_columns(columns, *args):
+  rowkey_id = 1
+  index_id = 0
+  if 0 < len(args):
+    partition_columns = args[0]
+
+  for column in columns:
+    column_name = column[0]
+    if column_name in partition_columns:
+      part_key_pos = partition_columns.index(column_name)
+      add_column(column, rowkey_id, index_id, part_key_pos + 1)
+    else:
+      add_column(column, rowkey_id, index_id, 0)
+    rowkey_id += 1
+
+def add_normal_columns(columns, *args):
+  rowkey_id = 0
+  index_id = 0
+  if 0 < len(args):
+    partition_columns = args[0]
+
+  for column in columns:
+    column_name = column[0]
+    if column_name in partition_columns:
+      part_key_pos = partition_columns.index(column_name)
+      add_column(column, rowkey_id, index_id, part_key_pos + 1)
+    else:
+      add_column(column, rowkey_id, index_id, 0)
+
+def add_field(kw, value):
+  global cpp_f
+  line = "  table_schema.set_{0}({1});\n".format(kw, value)
+  cpp_f.write(line)
+
+def add_char_field(kw, value):
+  global cpp_f
+  field = "table_schema.{0}".format(kw)
+  line = """
+  if (OB_SUCC(ret)) {{
+    if (OB_FAIL(table_schema.set_{0}({2}))) {{
+      LOG_ERROR("fail to set {0}", K(ret));
+    }}
+  }}
+"""
+
+  cpp_f.write(line.format(kw, field, value))
+
+def add_partition_expr_field(value, table_id):
+  global cpp_f
+  type_str = ''
+  expr_str = ''
+  if (len(value) != 3):
+    raise IOError("partition_expr should in format [type, expr, part_num]");
+  else:
+    if 'hash' == value[0]:
+      type_str = 'PARTITION_FUNC_TYPE_HASH'
+      expr_str = '"hash (%s)"' % value[1]
+    elif 'key' == value[0]:
+      type_str = 'PARTITION_FUNC_TYPE_KEY'
+      expr_str = '"key (%s)"' % value[1]
+    elif 'key_v2' == value[0]:
+      type_str = 'PARTITION_FUNC_TYPE_KEY'
+# for compatible, use key_v2() for tables begin with 157
+      if table_id > 156 and table_id < 10000:
+        expr_str = '"key_v2 (%s)"' % value[1]
+      else:
+        expr_str = '"key_v2(%s)"' % value[1]
+    else:
+      raise IOError("partition_expr type %s only support hash or key now" % value[0]);
+    cpp_f.write("  if (OB_SUCC(ret)) {\n")
+    line = "    table_schema.get_part_option().set_part_func_type(%s);\n" % type_str
+    cpp_f.write(line)
+    line = "    if (OB_FAIL(table_schema.get_part_option().set_part_expr(%s))) {\n" % expr_str
+    cpp_f.write(line)
+    line = "      LOG_WARN(\"set_part_expr failed\", K(ret));\n";
+    cpp_f.write(line)
+    cpp_f.write("    }\n")
+    line = "    table_schema.get_part_option().set_part_num(%s);\n" % value[2]
+    cpp_f.write(line)
+    line = "    table_schema.set_part_level(PARTITION_LEVEL_ONE);\n"
+    cpp_f.write(line)
+    cpp_f.write("  }\n")
+
+def calculate_rowkey_column_num(keywords):
+  rowkey_columns = keywords['rowkey_columns']
+  keywords['rowkey_column_num'] = len(rowkey_columns)
+
+def check_fileds(fields, keywords):
+  for field in fields:
+    if field not in keywords and not keywords.has_key('index_name'):
+      if not field in index_only_fields:
+        raise IOError("no field {0} found in def_table_schema, table_name={1}".format(field, keywords["table_name"]))
+
+  non_field_keywords = ('index', 'enable_column_def_enum', 'base_def_keywords', 'self_tid', 'mapping_tid', 'real_vt', 'real_tenant_id')
+  for kw in keywords:
+    if kw not in fields and not keywords.has_key('index_name') and kw not in non_field_keywords:
+      raise IOError("unknown field {0} found in def_table_schema, table_name={1}".format(kw, keywords["table_name"]))
+
+def fill_default_values(default_filed_values, keywords, missing_fields, index_value=('', [])):
+  for key in default_filed_values:
+    if key not in keywords:
+      if key == 'index_status':
+        if index_value[0] != '':
+          keywords[key] = default_filed_values[key]
+      elif key == 'data_table_id':
+        tid = table_name2tid(keywords['table_name'])
+        tid = "combine_id(%s, %s)" % (default_filed_values['tenant_id'], tid)
+        add_field(field, tid)
+      else:
+        keywords[key] = default_filed_values[key]
+        missing_fields[key] = True
+
+def gen_history_table_def(table_id, keywords):
+  new_keywords = copy.deepcopy(keywords)
+  new_keywords["table_id"] = table_id
+  new_keywords["table_name"] = "%s_history" % new_keywords["table_name"]
+  rowkey_columns = new_keywords["rowkey_columns"]
+  rowkey_columns.append(("schema_version", "int"))
+
+  cols = new_keywords["normal_columns"]
+  to_del = None
+  for i in range(len(cols)):
+    col = cols[i]
+    if "schema_version" == col[0]:
+      to_del = col
+      continue
+    l = list(col)
+    if (len(l) < 3):
+      l.append('true')
+    else:
+      l[2] = 'true'
+    cols[i] = tuple(l)
+  if to_del is not None:
+    cols.remove(to_del)
+  cols.insert(0, ('is_deleted', 'int'))
+  return new_keywords
+
+def gen_core_inner_table_def(table_id, table_name, table_type, keywords):
+  new_keywords = copy.deepcopy(keywords)
+  new_keywords["table_id"] = table_id
+  new_keywords["table_name"] = table_name
+  new_keywords["table_type"] = table_type
+  new_keywords["gm_columns"] = []
+
+  if new_keywords.has_key('partition_expr'):
+    del new_keywords["partition_expr"]
+  if new_keywords.has_key('partition_columns'):
+    del new_keywords["partition_columns"]
+  if new_keywords.has_key('index'):
+    del new_keywords["index"]
+  if new_keywords.has_key('migrate_data_before_2200'):
+    del(new_keywords['migrate_data_before_2200'])
+  if new_keywords.has_key('rs_restart_related'):
+    del(new_keywords['rs_restart_related'])
+
+  new_keywords["only_rs_vtable"] = True
+  return new_keywords
+
+def replace_agent_table_columns_def(columns):
+  for i in range(0, len(columns)):
+    column = list(columns[i])
+    column[0] = column[0].upper()
+    t = column[1]
+    if t in ("int", "uint", "bool", "bigint", "double"):
+      t = "number:38"
+    elif t in ("timestamp", "timestamp:6"):
+      t = "otimestamp"
+    elif t == "otimestamp":
+      pass
+    elif t == "longtext":
+      pass
+    elif t.startswith("varchar:") or t.startswith("varbinary:"):
+      pass
+    elif t.startswith("number:"):
+      pass
+    else:
+      raise Exception("unsupported type", t)
+    column[1] = t
+    columns[i] = column[0:3] # ignore default value
+
+def __gen_oracle_vt_base_on_mysql(table_id, keywords, table_name_suffix):
+  global max_sys_table_id
+  new_keywords = copy.deepcopy(keywords)
+  new_keywords["table_type"] = 'VIRTUAL_TABLE'
+  new_keywords["in_tenant_space"] = True
+  new_keywords["table_id"] = table_id
+  new_keywords["database_id"] = "OB_ORA_SYS_DATABASE_ID"
+  new_keywords["collation_type"] = "ObCollationType::CS_TYPE_UTF8MB4_BIN"
+  name = keywords["table_name"]
+  if name.startswith("__all_virtual_") or name.startswith("__all_tenant_virtual"):
+    new_keywords["table_name"] = name.replace("__all_", "all_").upper() + table_name_suffix
+  elif name.startswith("__tenant_virtual"):
+    new_keywords["table_name"] = name.replace("__tenant_", "tenant_").upper() + table_name_suffix
+  else:
+    new_keywords["table_name"] = name.replace("__all_", "all_virtual_").upper() + table_name_suffix
+  replace_agent_table_columns_def(new_keywords["rowkey_columns"])
+  replace_agent_table_columns_def(new_keywords["normal_columns"])
+  for column in new_keywords["gm_columns"]:
+    new_keywords["normal_columns"].append([column.upper(), "otimestamp"])
+  new_keywords["gm_columns"] = []
+  if new_keywords.has_key('index'):
+    new_idx = {}
+    for (k, v) in new_keywords['index'].iteritems():
+      v['index_columns'] = [ c.upper() for c in v['index_columns'] ]
+      new_idx[k] = v
+    new_keywords['index'] = new_idx
+  if int(keywords['table_id']) < max_sys_table_id:
+    new_keywords['index_using_type'] = 'USING_BTREE'
+
+  new_keywords["base_def_keywords"] = keywords
+  return new_keywords
+
+def gen_sys_agent_virtual_table_def(table_id, keywords):
+  global all_agent_virtual_tables
+  new_keywords = __gen_oracle_vt_base_on_mysql(table_id, keywords, "_SYS_AGENT")
+  new_keywords["partition_expr"] = []
+  new_keywords["partition_columns"] = []
+  new_keywords["migrate_data_before_2200"] = False
+  new_keywords["rs_restart_related"] = False
+  all_only_sys_table_name[keywords["table_name"]] = True
+  all_agent_virtual_tables.append(new_keywords)
+  return new_keywords
+
+def gen_agent_virtual_table_def(table_id, keywords):
+  global all_agent_virtual_tables
+  new_keywords = __gen_oracle_vt_base_on_mysql(table_id, keywords, "_AGENT")
+  new_keywords["partition_expr"] = []
+  new_keywords["partition_columns"] = []
+  new_keywords["rs_restart_related"] = False
+  all_agent_virtual_tables.append(new_keywords)
+  return new_keywords
+
+def gen_oracle_mapping_virtual_table_base_def(table_id, keywords, real_table):
+  global max_sys_table_id
+  if True == real_table:
+    new_keywords = __gen_oracle_vt_base_on_mysql(table_id, keywords, "_REAL_AGENT")
+    new_keywords["is_real_virtual_table"] = True
+  else :
+    new_keywords = __gen_oracle_vt_base_on_mysql(table_id, keywords, "")
+
+  new_keywords["name_postfix"] = "_ORA"
+  new_keywords["partition_expr"] = []
+  new_keywords["rs_restart_related"] = False
+  if new_keywords.has_key("partition_columns"):
+    new_keywords["partition_columns"] = [ c.upper() for c in new_keywords["partition_columns"] ]
+
+  if True == real_table :
+    new_keywords["mapping_tid"] = table_name2tid(keywords['table_name'])
+    new_keywords["self_tid"] = table_name2tid(new_keywords['table_name'] + new_keywords['name_postfix'])
+    new_keywords["real_vt"] = True
+    real_table_virtual_table_names.append(new_keywords)
+  else :
+    all_ora_mapping_virtual_table_org_tables.append(table_name2tid(keywords['table_name']))
+    all_ora_mapping_virtual_tables.append(table_name2tid(new_keywords['table_name'] + new_keywords['name_postfix']))
+  return new_keywords
+
+def gen_oracle_mapping_virtual_table_def(table_id, keywords):
+  return gen_oracle_mapping_virtual_table_base_def(table_id, keywords, False)
+
+def gen_oracle_mapping_real_virtual_table_def(table_id, real_tenant_id, keywords):
+  in_tenant_space = keywords.has_key('in_tenant_space') and keywords['in_tenant_space']
+  if False == in_tenant_space:
+    raise Exception("real table must be tenant space", keywords['rowkey_columns'])
+  new_keywords = gen_oracle_mapping_virtual_table_base_def(table_id, keywords, True)
+  new_keywords["real_tenant_id"] = real_tenant_id
+
+  ## check tenant_id must be first key, if has tenant_id
+  if new_keywords.has_key('rowkey_columns') and new_keywords['rowkey_columns']:
+    key_tenant_id = -1
+    nth_key = 0
+    for key in new_keywords['rowkey_columns']:
+      if key[0].upper() == 'TENANT_ID':
+        key_tenant_id = nth_key
+        break
+      nth_key = nth_key + 1
+    if -1 != key_tenant_id and 0 != key_tenant_id:
+      raise Exception("tenant id of real table must be the first key", keywords['rowkey_columns'])
+  return new_keywords
+
+def generate_cluster_private_table(f):
+  global cluster_private_tables
+  all_tables = [x for x in cluster_private_tables]
+  all_tables.sort(key = lambda x: x['table_name'])
+  cluster_private_switch = '\n'
+  for kw in all_tables:
+    cluster_private_switch += 'case ' + table_name2tid(kw['table_name']) + ':\n'
+  f.write('\n\n#ifdef CLUSTER_PRIVATE_TABLE_SWITCH\n' + cluster_private_switch + '\n#endif\n')
+
+def generate_backup_private_table(f):
+  global backup_private_tables
+  all_tables = [x for x in backup_private_tables]
+  all_tables.sort(key = lambda x: x['table_name'])
+  backup_private_switch = '\n'
+  for kw in all_tables:
+    backup_private_switch += 'case ' + table_name2tid(kw['table_name']) + ':\n'
+  f.write('\n\n#ifdef BACKUP_PRIVATE_TABLE_SWITCH\n' + backup_private_switch + '\n#endif\n')
+
+def generate_upgrade_table_misc_data(f):
+  global all_need_migrate_tables
+  all_tables = [x for x in all_need_migrate_tables]
+  all_tables.sort(key = lambda x: x['table_name'])
+  migrate_switch = '\n'
+  for kw in all_tables:
+    migrate_switch += 'case ' + table_name2tid(kw['table_name']) + ':\n'
+  f.write('\n\n#ifdef MIGRATE_TABLE_BEFORE_2200_SWITCH\n' + migrate_switch + '\n#endif\n')
+
+def generate_rs_restart_related_table_misc_data(f):
+  global rs_restart_related_tables
+  all_tables = [x for x in rs_restart_related_tables]
+  all_tables.sort(key = lambda x: x['table_name'])
+  rs_restart_switch = '\n'
+  for kw in all_tables:
+    rs_restart_switch += 'case ' + table_name2tid(kw['table_name']) + ':\n'
+  f.write('\n\n#ifdef RS_RESTART_RELATED\n' + rs_restart_switch + '\n#endif\n')
+
+def generate_virtual_agent_misc_data(f):
+  global all_agent_virtual_tables
+  all_agent = [x for x in all_agent_virtual_tables]
+  all_agent.sort(key = lambda x: x['table_name'])
+  # for ob_sql_partition_location_cache.cpp, switch agent virtual table location
+  location_switch = '\n'
+  for kw in all_agent:
+    location_switch += 'case ' + table_name2tid(kw['table_name']) + ':\n'
+  f.write('\n\n#ifdef AGENT_VIRTUAL_TABLE_LOCATION_SWITCH\n' + location_switch + '\n#endif\n')
+
+  # for ob_virtual_table_iterator_factory.cpp, init agent virtual iterator
+  iter_init = '\n'
+  for kw in all_agent:
+    tid = table_name2tid(kw['table_name'])
+    base_kw = kw['base_def_keywords']
+    base_tid = table_name2tid(base_kw['table_name'])
+    in_tenant_space = base_kw.has_key('in_tenant_space') and base_kw['in_tenant_space']
+    only_sys = all_only_sys_table_name.has_key(base_kw['table_name']) and all_only_sys_table_name[base_kw['table_name']]
+    iter_init += """
+    case %s: {
+      ObAgentVirtualTable *agent_iter = NULL;
+      const uint64_t base_tid = %s;
+      const bool sys_tenant_base_table = %s;
+      const bool only_sys_data = %s;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAgentVirtualTable, agent_iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(agent_iter->init(base_tid, sys_tenant_base_table, index_schema, params, only_sys_data))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        agent_iter->~ObAgentVirtualTable();
+        allocator.free(agent_iter);
+        agent_iter = NULL;
+      } else {
+       vt_iter = agent_iter;
+      }
+      break;
+    }\n""" % (tid, base_tid, in_tenant_space and 'false' or 'true', only_sys and 'true' or 'false')
+  f.write('\n\n#ifdef AGENT_VIRTUAL_TABLE_CREATE_ITER\n' + iter_init + '\n#endif\n')
+
+def def_sys_index_table(index_name, index_table_id, index_columns, index_using_type, keywords):
+  global cpp_f
+  global cpp_f_tmp
+  global StringIO
+
+  kw = copy.deepcopy(keywords)
+  if kw.has_key('index'):
+    raise Exception("should not have index", kw['table_name'])
+  if False == is_sys_table(kw['table_id']):
+    raise Exception("only support sys table", kw['table_name'])
+
+  index_def = ''
+  cpp_f_tmp = cpp_f
+  cpp_f = StringIO.StringIO()
+  kw['index_name'] = index_name
+  kw['index_columns'] = index_columns
+  kw['index_table_id'] = index_table_id
+  kw['index_using_type'] = index_using_type
+  kw['table_type'] = 'USER_INDEX'
+  kw['index_status'] = 'INDEX_STATUS_AVAILABLE'
+  kw['index_type'] = 'INDEX_TYPE_NORMAL_LOCAL';
+  dtid = table_name2tid(kw['table_name'])
+  dtid = "combine_id(%s, %s)" % (default_filed_values['tenant_id'], dtid)
+  kw['data_table_id'] = dtid
+  kw['partition_columns'] = []
+  kw['partition_expr'] = []
+  kw['migrate_data_before_2200'] = False
+  kw['rs_restart_related'] = False
+  kw['columns_with_tenant_id'] = []
+  def_table_schema(**kw)
+  index_def = cpp_f.getvalue()
+  cpp_f = cpp_f_tmp
+  cpp_f.write(index_def)
+
+# Define virtual table to iterate one tenant space table's data of all tenant.
+def gen_iterate_virtual_table_def(table_id, real_tenant_id, table_name, keywords, columns_with_tenant_id = []):
+  global all_iterate_virtual_tables
+  kw = copy.deepcopy(keywords);
+  kw['table_id'] = table_id
+  kw['table_name'] =  table_name
+  if 'SYSTEM_TABLE' != kw['table_type']:
+      raise Exception("unsupported table type", kw['table_type'])
+  kw['table_type'] = 'VIRTUAL_TABLE'
+  kw['index_using_type'] = 'USING_BTREE'
+  del(kw['in_tenant_space'])
+  if kw.has_key('migrate_data_before_2200'):
+    del(kw['migrate_data_before_2200'])
+  if kw.has_key('rs_restart_related'):
+    del(kw['rs_restart_related'])
+  kw['partition_columns'] = []
+  kw['partition_expr'] = []
+
+  # check and add tenant_id in primary key and index.
+  kw['normal_columns'] = filter(lambda x: x[0] != 'tenant_id', kw['normal_columns'])
+  ten_idx = [i for i, x in enumerate(kw['rowkey_columns']) if x[0] == 'tenant_id']
+  if ten_idx:
+    if ten_idx[0] != 0:
+      raise Exception("tenant_id must be prefix of primary key", kw['rowkey_columns'])
+  else:
+    kw['rowkey_columns'].insert(0, ('tenant_id', 'int', 'false'))
+
+  if kw.has_key('index'):
+    for (k, v ) in kw['index'].iteritems():
+      if v['index_columns'].find('tenant_id') >= 0:
+        raise Exception("tenant_id must not exist in index", k, v, kw['table_name'])
+      v['index_columns'].insert(0, 'tenant_id')
+      v['index_using_type'] = 'USING_BTREE'
+
+  if kw.has_key('gm_columns'):
+    for x in reversed(kw['gm_columns']):
+      kw['normal_columns'].insert(0, (x, 'timestamp'))
+    kw['gm_columns'] = []
+  kw['base_def_keywords'] = keywords
+
+  save_kw = copy.deepcopy(kw)
+  save_kw["real_tenant_id"] = real_tenant_id
+  all_iterate_virtual_tables.append(save_kw)
+  return kw
+
+def generate_iterate_virtual_table_misc_data(f):
+  global all_iterate_virtual_tables
+  tables = [x for x in all_iterate_virtual_tables]
+  tables.sort(key = lambda x: x['table_name'])
+  # for ob_sql_partition_location_cache.cpp, switch iterate virtual table location
+  location_switch = '\n'
+  for kw in tables:
+    location_switch += 'case ' + table_name2tid(kw['table_name']) + ':\n'
+  f.write('\n\n#ifdef ITERATE_VIRTUAL_TABLE_LOCATION_SWITCH\n' + location_switch + '\n#endif\n')
+
+  # for ob_virtual_table_iterator_factory.cpp, init iterate virtual iterator
+  iter_init = '\n'
+  for kw in tables:
+    tid = table_name2tid(kw['table_name'])
+    base_kw = kw['base_def_keywords']
+    base_tid = table_name2tid(base_kw['table_name'])
+
+    if not kw.has_key("columns_with_tenant_id"):
+      raise Exception("columns_with_tenant_id is not defined", base_kw['table_name'], kw['table_name'])
+
+    set_columns_stmts = ""
+    for column_name in kw["columns_with_tenant_id"]:
+      set_columns_stmts = set_columns_stmts + """
+      } else if (OB_FAIL(iter->set_column_name_with_tenant_id("%s"))) {
+        SERVER_LOG(WARN, "set column_name with tenant_id failed",
+                   K(ret), "column_name", "%s");""" % (column_name, column_name)
+
+    iter_init += """
+    case %s: {
+      ObIterateVirtualTable *iter = NULL;
+      const bool record_real_tenant_id = %s;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(%s, record_real_tenant_id, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;%s
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }\n""" % (tid, kw['real_tenant_id'] and 'true' or 'false', base_tid, set_columns_stmts)
+  f.write('\n\n#ifdef ITERATE_VIRTUAL_TABLE_CREATE_ITER\n' + iter_init + '\n#endif\n')
+
+def get_column_def_enum(**keywords):
+  global column_def_enum_array
+  columns = []
+  normal_columns = keywords['normal_columns']
+  rowkey_columns = keywords['rowkey_columns']
+
+  columns.extend(map(lambda x : x[0], rowkey_columns))
+  columns.extend(map(lambda x : x[0], normal_columns))
+
+  table_name = keywords['table_name'] + keywords['name_postfix']
+  t = map(lambda x : x.upper().replace('#', '_'), columns)
+  if len(t) > 0 and 'enable_column_def_enum' in keywords and keywords['enable_column_def_enum']:
+    t[0] = '%s = common::OB_APP_MIN_COLUMN_ID' % t[0]
+    content = '''
+struct %s {
+  enum {
+    %s
+  };
+};
+''' % (table_name.replace('$', '_').upper().strip('_') + "_CDE", ",\n    ".join(t))
+    column_def_enum_array.append(content)
+
+def table_name2tid(name):
+  return "OB_" + name.replace('$', '_').upper().strip('_') + "_TID"
+
+def table_name2index_tid(table_name, idx_name):
+  return "OB_" + table_name.replace('$', '_').upper().strip('_') + '_' + str(idx_name).upper() + "_TID";
+
+def table_name2tname(name):
+  return "OB_" + name.replace('$', '_').upper().strip('_') + "_TNAME"
+
+def table_name2tname_ora(name):
+  return "OB_" + name.replace('$', '_').upper().strip('_') + "_ORA_TNAME"
+
+def table_name2index_tname(table_name, idx_name):
+  return "OB_" + table_name.replace('$', '_').upper().strip('_') + '_' + str(idx_name).upper() + "_TNAME";
+
+__current_range_idx = -1 
+__def_cnt = 0 
+__split_size = 50
+def check_split_file(tid):
+  global __current_range_idx
+  global __def_cnt
+  global cpp_f
+  #sometimes cpp_f may modify to STRINGIO object
+  if isinstance(cpp_f, file) or cpp_f == None:
+    print "current schema cnt => %d" % __def_cnt
+    range_idx = tid / __split_size
+    if range_idx > __current_range_idx:
+      if cpp_f != None:
+        end_generate_cpp()
+      fname = "ob_inner_table_schema.%d_%d.cpp" % (range_idx * __split_size + 1, (range_idx + 1) * __split_size)
+      print "generate new file with name %s" % fname
+      start_generate_cpp(fname)
+      __current_range_idx = range_idx
+    elif range_idx < __current_range_idx:
+      print "unexcept table id seq"
+      sys.exit(1)
+    __def_cnt += 1
+
+def def_table_schema(**keywords):
+  tid = int(keywords['table_id'])
+  check_split_file(tid)
+
+  global fields
+  global default_filed_values
+  missing_fields = {}
+  global table_name_ids
+  global table_name_postfix_ids
+  global table_name_postfix_table_names
+  global index_name_ids
+  global tenant_space_tables
+  global all_ora_mapping_virtual_table_org_tables
+  global all_ora_mapping_virtual_tables
+  global tenant_space_table_names
+  global only_rs_vtables
+  global StringIO
+  global ob_virtual_index_table_id
+  global ora_virtual_index_table_id
+  global index_only_id
+  global index_idx
+  global cpp_f
+  global cpp_f_tmp
+  global all_def_keywords
+  global column_collation
+  global is_oracle_sys_table
+  global all_need_migrate_tables
+  global cluster_private_tables
+  global rs_restart_related_tables
+
+  if not keywords.has_key('index_name'):
+    if 'name_postfix' in keywords:
+      all_def_keywords[keywords['table_name'] + keywords['name_postfix']] = copy.deepcopy(keywords)
+    else:
+      all_def_keywords[keywords['table_name']] = copy.deepcopy(keywords)
+
+  index_defs = []
+  index_def = ''
+  calculate_rowkey_column_num(keywords)
+  is_oracle_sys_table = False
+
+  ##virtual table will set index_using_type to USING_HASH by default
+  if int(keywords['table_id']) > max_sys_table_id and int(keywords['table_id']) <= max_ora_virtual_table_id:
+    if not keywords.has_key('index_using_type'):
+      keywords['index_using_type'] = 'USING_HASH'
+
+  fill_default_values(default_filed_values, keywords, missing_fields)
+  check_fileds(fields, keywords)
+
+  get_column_def_enum(**keywords)
+
+  if keywords.has_key('index_name'):
+    print_method_start(keywords['table_name'] + keywords['name_postfix'] + '_' + keywords['index_name'])
+    if True == is_ora_virtual_table(int(keywords['table_id'])):
+      index_name_ids.append([keywords['index_name'], int(ora_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
+      ora_virtual_index_table_id -= 1
+    elif True == is_mysql_virtual_table(int(keywords['table_id'])):
+      index_name_ids.append([keywords['index_name'], int(ob_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
+      ob_virtual_index_table_id -= 1
+    elif True == is_sys_table(int(keywords['table_id'])):
+      if not keywords.has_key('index_table_id'):
+        raise Exception("must specific index_table_id", int(keywords['table_id']))
+      index_name_ids.append([keywords['index_name'], int(keywords['index_table_id']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
+  else:
+    print_method_start(keywords['table_name'] + keywords['name_postfix'])
+    table_name_postfix_ids.append((keywords['table_name']+ keywords['name_postfix'], int(keywords['table_id'])))
+    table_name_postfix_table_names.append((keywords['table_name']+ keywords['name_postfix'], keywords['table_name']))
+    table_name_ids.append((keywords['table_name'], int(keywords['table_id'])))
+  print "\nSTART TO GENERATE: " + keywords['table_name']+ keywords['name_postfix']
+  if True == is_ora_virtual_table(int(keywords['table_id'])):
+    column_collation = 'CS_TYPE_UTF8MB4_BIN'
+    is_oracle_sys_table = True
+  if keywords.has_key('index_name'):
+    local_fields = fields + index_only_fields
+  else:
+    local_fields = fields
+
+  # Generate partition expr for virtual table.
+  # We only support 'partition by hash(addr_to_partition_id(ip, port)) partitions 65536' in mysql mode,
+  # and 'partition by hash(ip, port) partitions 65536' in oracle mode for virtual table.
+  table_id = int(keywords['table_id']);
+  if keywords['partition_columns'] and (is_mysql_virtual_table(table_id) or is_ora_virtual_table(table_id)) and False == keywords['is_real_virtual_table']:
+    cols = keywords['partition_columns']
+    if len(cols) != 2:
+      raise Exception("only support ip, port partition columns for virtual table", cols)
+    types = []
+    for col in cols:
+      types.append([x[1] for x in keywords['rowkey_columns'] + keywords['normal_columns'] if x[0] == col][0])
+    (ip, port) = types
+    if is_mysql_virtual_table(table_id):
+      if not ip.startswith("varchar:") or not port.startswith("int"):
+        raise Exception("unexpected type of ip and port", cols, types);
+      keywords['partition_expr'] = ['hash', 'addr_to_partition_id(' + ', '.join(cols) + ')', '65536']
+    else:
+      if not ip.startswith("varchar:") or not port.startswith("number"):
+        raise Exception("unexpected type of ip and port", cols, types);
+      keywords['partition_expr'] = ['hash', ', '.join(cols), '65536']
+
+  for field in local_fields :
+    value = keywords[field]
+    if field == 'gm_columns':
+      if keywords.has_key('index_table_id'):
+        for column_name in value:
+          print_discard_column(column_name)
+      else:
+        add_gm_columns(value)
+    elif field == 'rowkey_columns':
+      if not keywords.has_key('index_name'):
+        if keywords.has_key('partition_columns'):
+          add_rowkey_columns(value, keywords['partition_columns'])
+        else:
+          add_rowkey_columns(value)
+    elif field == 'normal_columns':
+      if not keywords.has_key('index_name'):
+        if keywords['table_type'] != 'TABLE_TYPE_VIEW':
+          if keywords.has_key('partition_columns'):
+            add_normal_columns(value, keywords['partition_columns'])
+          else:
+            add_normal_columns(value)
+    elif field == 'partition_columns':
+      continue;
+    elif field == 'table_id':
+      if keywords.has_key('index_columns'):
+        tid = table_name2index_tid(keywords['table_name']+ keywords['name_postfix'], keywords['index_name'])
+      else:
+        tid = table_name2tid(keywords['table_name']+ keywords['name_postfix'])
+      tid = "combine_id(%s, %s)" % (default_filed_values['tenant_id'], tid)
+      add_field(field, tid)
+    elif field == 'database_id' and field not in missing_fields:
+      database_id = "combine_id(%s, %s)" % (default_filed_values['tenant_id'],  value)
+      add_field(field, database_id)
+    elif field == 'table_name':
+      if keywords.has_key('index_name') :
+        add_char_field(field, table_name2index_tname(keywords['table_name'], keywords['index_name']))
+      else:
+        if keywords["name_postfix"] != '_ORA':
+          add_char_field(field, table_name2tname(keywords['table_name']))
+        else:
+          add_char_field(field, table_name2tname_ora(keywords['table_name']))
+    elif field in ('compress_func_name'):
+      add_char_field(field, '{0}'.format(value))
+    elif field in ('comment_str', 'part_func_expr', 'sub_part_func_expr'):
+      add_char_field(field, '"{0}"'.format(value))
+    elif field == 'in_tenant_space':
+      if keywords[field]:
+        if keywords.has_key('index_name') :
+          tenant_space_tables.append(table_name2index_tid(keywords['table_name']+ keywords['name_postfix'], keywords['index_name']))
+          tenant_space_table_names.append(table_name2index_tname(keywords['table_name'] + keywords['name_postfix'], keywords['index_name']))
+        else:
+          tenant_space_tables.append(table_name2tid(keywords['table_name']+ keywords['name_postfix']))
+          tenant_space_table_names.append(table_name2tname(keywords['table_name'] + keywords['name_postfix']))
+    elif field == 'only_rs_vtable':
+      if keywords[field]:
+        only_rs_vtables.append(table_name2tid(keywords['table_name']+ keywords['name_postfix']))
+    elif field == 'view_definition':
+      if keywords[field]:
+        add_char_field(field, 'R"__({0})__"'.format(value))
+    elif field == 'partition_expr':
+      if keywords[field]:
+        add_partition_expr_field(value, int(keywords['table_id']))
+    elif field == 'index':
+      if type(value) == dict:
+        # index defined in table definition
+        cpp_f_tmp = cpp_f
+        index_idx = 0
+        del keywords['index']
+        if keywords.has_key('index_using_type'):
+            dt_using_type = keywords['index_using_type']
+        for k, v in value.items():
+          cpp_f = StringIO.StringIO()
+          index_idx += 1
+          keywords['index_name'] = k
+          keywords['index_columns'] = v['index_columns']
+          if v.has_key('index_table_id'):
+              keywords['index_table_id'] = v['index_table_id']
+          if v.has_key('index_using_type'):
+              keywords['index_using_type'] = v['index_using_type']
+          keywords['table_type'] = 'USER_INDEX'
+          keywords['index_status'] = 'INDEX_STATUS_AVAILABLE'
+          keywords['index_type'] = 'INDEX_TYPE_NORMAL_LOCAL';
+          dtid = table_name2tid(keywords['table_name']+ keywords['name_postfix'])
+          dtid = "combine_id(%s, %s)" % (default_filed_values['tenant_id'], dtid)
+          keywords['data_table_id'] = dtid
+          def_table_schema(**keywords)
+          index_def = cpp_f.getvalue()
+          index_defs.append(index_def)
+
+        keywords['index'] = value
+        if dt_using_type is not None:
+            keywords['index_using_type'] = dt_using_type
+        else:
+            del keywords['index_using_type']
+        cpp_f = cpp_f_tmp
+    elif field == 'index_columns':
+      # only index generation will enter here
+      index_num_rowkeys = add_index_columns(value, **keywords)
+    elif field in ('index_name', 'name_postfix', 'migrate_data_before_2200',
+        'columns_with_tenant_id', 'is_cluster_private', 'rs_restart_related',
+        'is_backup_private', 'is_real_virtual_table'):
+      # do nothing
+      print "skip"
+    else:
+      add_field(field, value)
+
+  if keywords.has_key("index_name") and not type(keywords['index']) == dict:
+    add_index_method_end(index_num_rowkeys)
+  else:
+    add_method_end()
+
+  if keywords.has_key('migrate_data_before_2200') and keywords['migrate_data_before_2200']:
+    if keywords.has_key('is_real_virtual_table') and False == keywords['is_real_virtual_table']:
+      kw = copy.deepcopy(keywords)
+      all_need_migrate_tables.append(kw)
+
+  if keywords.has_key('rs_restart_related') and keywords['rs_restart_related']:
+    kw = copy.deepcopy(keywords)
+    rs_restart_related_tables.append(kw)
+
+  if keywords.has_key('is_cluster_private') and keywords['is_cluster_private'] \
+     and keywords.has_key('in_tenant_space') and keywords['in_tenant_space'] \
+     and is_sys_table(table_id):
+    kw = copy.deepcopy(keywords)
+    cluster_private_tables.append(kw)
+
+  if keywords.has_key('is_backup_private') and keywords['is_backup_private'] \
+     and keywords.has_key('in_tenant_space') and keywords['in_tenant_space'] \
+     and is_sys_table(table_id):
+    kw = copy.deepcopy(keywords)
+    backup_private_tables.append(kw)
+
+  if keywords.has_key('index_name'):
+    del keywords['index_name']
+  if keywords.has_key('index_columns'):
+    del keywords['index_columns']
+  if keywords.has_key('index_status'):
+    del keywords['index_status']
+  if keywords.has_key('data_table_id'):
+    del keywords['data_table_id']
+  if keywords.has_key('index_type'):
+    del keywords['index_type']
+  if keywords.has_key('migrate_data_before_2200'):
+    del keywords['migrate_data_before_2200']
+  if keywords.has_key('is_cluster_private'):
+    del keywords['is_cluster_private']
+  if keywords.has_key('is_backup_private'):
+    del keywords['is_backup_private']
+  for index_def in index_defs:
+    cpp_f.write(index_def)
+
+def is_core_table(table_id):
+  OB_TENANT_ID_SHIFT = 40;
+  OB_INVALID_ID = 0xffffffffffffffff;
+  UINT64_MAX= 0xffffffffffffffff;
+  OB_MAX_CORE_TABLE_ID = 100;
+  pure_table_id=(table_id & (~(UINT64_MAX << OB_TENANT_ID_SHIFT)));
+  return ((UINT64_MAX != pure_table_id) and (pure_table_id <= OB_MAX_CORE_TABLE_ID));
+
+def is_sys_table(table_id):
+  OB_TENANT_ID_SHIFT = 40;
+  UINT64_MAX= 0xffffffffffffffff;
+  OB_MAX_SYS_TABLE_ID = 10000;
+  pure_table_id=(table_id & (~(UINT64_MAX << OB_TENANT_ID_SHIFT)));
+  return ((UINT64_MAX != pure_table_id) and (pure_table_id <= OB_MAX_SYS_TABLE_ID));
+
+# is_mysql_virtual_table, is_ora_virtual_table
+def is_mysql_virtual_table(table_id):
+  OB_TENANT_ID_SHIFT = 40;
+  UINT64_MAX= 0xffffffffffffffff;
+  OB_MAX_SYS_TABLE_ID = 10000;
+  OB_MAX_MYSQL_VIRTUAL_TABLE_ID = 15000;
+  pure_table_id=(table_id & (~(UINT64_MAX << OB_TENANT_ID_SHIFT)));
+  return ((UINT64_MAX != pure_table_id) and (pure_table_id > OB_MAX_SYS_TABLE_ID) and (pure_table_id <= OB_MAX_MYSQL_VIRTUAL_TABLE_ID));
+
+def is_ora_virtual_table(table_id):
+  OB_TENANT_ID_SHIFT = 40;
+  UINT64_MAX= 0xffffffffffffffff;
+  OB_MAX_MYSQL_VIRTUAL_TABLE_ID = 15000;
+  OB_MAX_VIRTUAL_TABLE_ID = 20000;
+  pure_table_id=(table_id & (~(UINT64_MAX << OB_TENANT_ID_SHIFT)));
+  return ((UINT64_MAX != pure_table_id) and (pure_table_id > OB_MAX_MYSQL_VIRTUAL_TABLE_ID) and (pure_table_id <= OB_MAX_VIRTUAL_TABLE_ID));
+
+def clean_files(globstr):
+  print "clean files by glob [%s]" % globstr
+  for f in glob.glob(os.path.join('.', globstr)):
+      print "remove  %s ..." % f
+      os.remove(f)
+
+def start_generate_cpp(cpp_file_name):
+  global cpp_f
+  cpp_f = open(cpp_file_name, 'w')
+  head = copyright + """#define USING_LOG_PREFIX SHARE_SCHEMA
+#include "ob_inner_table_schema.h"
+
+#include "share/schema/ob_schema_macro_define.h"
+#include "share/schema/ob_schema_service_sql_impl.h"
+#include "share/schema/ob_table_schema.h"
+
+namespace oceanbase
+{
+using namespace share::schema;
+using namespace common;
+namespace share
+{
+
+"""
+  cpp_f.write(head)
+
+def start_generate_h(h_file_name):
+  global h_f
+  h_f = open(h_file_name, 'w')
+  head = copyright + """#ifndef _OB_INNER_TABLE_SCHEMA_H_
+#define _OB_INNER_TABLE_SCHEMA_H_
+
+#include "share/ob_define.h"
+#include "ob_inner_table_schema_constants.h"
+#include "share/ob_cluster_version.h"
+
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
+class ObTableSchema;
+}
+}
+
+namespace share
+{
+"""
+  h_f.write(head)
+
+def start_generate_constants_h(h_file_name):
+  global constants_h_f
+  constants_h_f = open(h_file_name, 'w')
+  head = copyright + """#ifndef _OB_INNER_TABLE_SCHEMA_CONSTANTS_H_
+#define _OB_INNER_TABLE_SCHEMA_CONSTANTS_H_
+
+#include "share/ob_define.h"
+
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
+class ObTableSchema;
+}
+}
+
+namespace share
+{
+"""
+  constants_h_f.write(head)
+
+def print_class_head_h():
+  global column_def_enum_array
+  h_f.write("\n".join(column_def_enum_array))
+
+  class_head="""
+class ObInnerTableSchema
+{
+"""
+  h_f.write(class_head)
+
+def end_generate_cpp():
+  global cpp_f
+  end = """
+} // end namespace share
+} // end namespace oceanbase
+"""
+  cpp_f.write(end)
+  cpp_f.close()
+
+def generate_constants_h_content():
+  global constants_h_f
+  last_table_id = 0;
+
+  table_id_line = 'const uint64_t OB_{0}_TID = {1}; // "{2}"\n'
+  for (table_name, table_id) in table_name_postfix_ids:
+    constants_h_f.write(table_id_line.format(table_name.replace('$', '_').upper().strip('_'), table_id, table_name))
+    if table_id <= last_table_id:
+        raise Exception("invalid table id", table_name, table_id, last_table_id)
+    last_table_id = table_id
+  for line in index_name_ids:
+    constants_h_f.write(table_id_line.format(line[2].replace('$', '_').upper().strip('_')+'_'+line[0].upper(), line[1], line[2]))
+
+  constants_h_f.write("\n")
+  table_name_line = 'const char *const OB_{0}_TNAME = "{1}";\n'
+  for (table_name_postfix, table_name) in table_name_postfix_table_names:
+    constants_h_f.write(table_name_line.format(table_name_postfix.replace('$', '_').upper().strip('_'), table_name))
+
+  index_name_line = 'const char *const OB_{0}_TNAME = "__idx_{1}_{2}";\n'
+
+  for line in index_name_ids:
+    data_table_id =  int(1) << 40 |  int(line[4]) & (~(18446744073709551615 << 40))
+    constants_h_f.write(index_name_line.format(line[2].replace('$', '_').upper().strip('_')+'_'+line[0].upper(), str(data_table_id), line[0]))
+  constants_h_f.write("\n")
+
+  gen_all_privilege_init_data(constants_h_f);
+
+def generate_h_content():
+  global table_name_ids
+  global h_f
+  core_table_count = 0
+  sys_table_count = 0
+  virtual_table_count = 0
+  sys_view_count = 0
+
+  print_class_head_h()
+
+  h_f.write("\npublic:\n")
+  method_line = "  static int {0}_schema(share::schema::ObTableSchema &table_schema);\n"
+  for (table_name, table_id) in table_name_postfix_ids:
+    h_f.write(method_line.format(table_name.replace('$', '_').lower().strip('_'), table_id))
+  for line in index_name_ids:
+    h_f.write(method_line.format(line[2].replace('$', '_').strip('_').lower()+'_'+line[0].lower(), line[1]))
+  line = """
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObInnerTableSchema);
+};
+"""
+  h_f.write(line)
+
+  h_f.write("\n")
+  h_f.write("typedef int (*schema_create_func)(share::schema::ObTableSchema &table_schema);\n")
+  h_f.write("\n")
+
+  method_name = "  ObInnerTableSchema::{0}_schema,\n"
+  h_f.write("const schema_create_func core_table_schema_creators [] = {\n")
+  for (table_name, table_id) in table_name_postfix_ids:
+    if table_id <= max_core_table_id and table_id != kv_core_table_id:
+      h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
+      core_table_count = core_table_count + 1
+  h_f.write("  NULL,};\n\n")
+
+  h_f.write("const schema_create_func sys_table_schema_creators [] = {\n")
+  for (table_name, table_id) in table_name_postfix_ids:
+    if table_id > max_core_table_id and table_id <= max_sys_table_id:
+      h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
+      sys_table_count = sys_table_count + 1
+  h_f.write("  NULL,};\n\n")
+
+  h_f.write("const schema_create_func virtual_table_schema_creators [] = {\n")
+  for (table_name, table_id) in table_name_postfix_ids:
+    if table_id > max_sys_table_id and table_id <= max_ora_virtual_table_id:
+      h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
+      virtual_table_count = virtual_table_count + 1
+  for index_l in index_name_ids:
+    if index_l[1] > max_sys_table_id and index_l[1] <= max_ora_virtual_table_id:
+      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
+      virtual_table_count = virtual_table_count + 1
+  h_f.write("  NULL,};\n\n")
+
+  h_f.write("const schema_create_func sys_view_schema_creators [] = {\n")
+  for (table_name, table_id) in table_name_postfix_ids:
+    if table_id > max_ora_virtual_table_id and table_id <= max_sys_view_id:
+      h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
+      sys_view_count = sys_view_count + 1
+  h_f.write("  NULL,};\n\n")
+
+  # just to make test happy
+  h_f.write("const schema_create_func information_schema_table_schema_creators[] = {\n")
+  h_f.write("  NULL,};\n\n")
+  h_f.write("const schema_create_func mysql_table_schema_creators[] = {\n")
+  h_f.write("  NULL,};\n\n")
+
+
+  h_f.write("const uint64_t tenant_space_tables [] = {")
+  for name in tenant_space_tables:
+    h_f.write("\n  {0},".format(name))
+  h_f.write("  };\n\n")
+
+  # define oracle virtual table mapping oceanbase virtual table, the schema must be same
+  h_f.write("const uint64_t all_ora_mapping_virtual_table_org_tables [] = {")
+  for name in all_ora_mapping_virtual_table_org_tables:
+    h_f.write("\n  {0},".format(name))
+  h_f.write("  };\n\n")
+
+  h_f.write("const uint64_t all_ora_mapping_virtual_tables [] = {")
+  for name in all_ora_mapping_virtual_tables:
+    h_f.write("  {0}\n,".format(name))
+  h_f.write("  };\n\n")
+
+  # define oracle virtual table mapping oceanbase real table, the schema must be same
+  h_f.write("/* start/end_pos is start/end postition for column with tenant id */\n")
+  h_f.write("struct VTMapping\n")
+  h_f.write("{\n")
+  h_f.write("   uint64_t mapping_tid_;\n")
+  h_f.write("   bool is_real_vt_;\n")
+  h_f.write("   int64_t start_pos_;\n")
+  h_f.write("   int64_t end_pos_;\n")
+  h_f.write("   bool use_real_tenant_id_;\n")
+  h_f.write("};\n\n")
+  h_f.write("// define all columns with tenant id\n")
+  h_f.write("const char* const with_tenant_id_columns[] = {\n")
+  tmp_vt_tables = [x for x in real_table_virtual_table_names]
+  tmp_vt_tables.sort(key = lambda x: x['table_name'])
+  total_columns_with_tenant_id = 0
+  for tmp_kw in tmp_vt_tables:
+    if tmp_kw.has_key("columns_with_tenant_id") and tmp_kw["columns_with_tenant_id"]:
+      for column_name in tmp_kw["columns_with_tenant_id"]:
+        h_f.write("\n  \"{0}\",".format(column_name.upper()))
+        total_columns_with_tenant_id = total_columns_with_tenant_id + 1
+  h_f.write("\n};\n\n")
+  h_f.write("extern VTMapping vt_mappings[5000];\n\n")
+
+  h_f.write("const char* const tenant_space_table_names [] = {")
+  for name in tenant_space_table_names:
+    h_f.write("\n  {0},".format(name))
+  h_f.write("  };\n\n")
+
+  h_f.write("const uint64_t only_rs_vtables [] = {")
+  for name in only_rs_vtables:
+    h_f.write("\n  {0},".format(name))
+  h_f.write("  };\n\n")
+
+  global restrict_access_virtual_tables
+  h_f.write("const uint64_t restrict_access_virtual_tables[] = {\n  "
+      + ",\n  ".join(restrict_access_virtual_tables) + "  };\n\n")
+  h_f.write("""
+static inline bool is_restrict_access_virtual_table(const uint64_t tid)
+{
+  bool found = false;
+  for (int64_t i = 0; i < ARRAYSIZEOF(restrict_access_virtual_tables) && !found; i++) {
+    if (common::extract_pure_id(tid) == restrict_access_virtual_tables[i]) {
+      found = true;
+    }
+  }
+  return found;
+}
+
+""")
+
+  h_f.write("static inline bool is_tenant_table(const uint64_t tid)\n");
+  h_f.write("{\n");
+  h_f.write("  bool in_tenant_space = false;\n");
+  h_f.write("  for (int64_t i = 0; i < ARRAYSIZEOF(tenant_space_tables); ++i) {\n");
+  h_f.write("    if (common::extract_pure_id(tid) == tenant_space_tables[i]) {\n");
+  h_f.write("      in_tenant_space = true;\n");
+  h_f.write("      break;\n");
+  h_f.write("    }\n");
+  h_f.write("  }\n");
+  h_f.write("  return in_tenant_space;\n");
+  h_f.write("}\n\n");
+
+  h_f.write("static inline bool is_tenant_table_name(const common::ObString &tname)\n");
+  h_f.write("{\n");
+  h_f.write("  bool in_tenant_space = false;\n");
+  h_f.write("  for (int64_t i = 0; i < ARRAYSIZEOF(tenant_space_table_names); ++i) {\n");
+  h_f.write("    if (0 == tname.case_compare(tenant_space_table_names[i])) {\n");
+  h_f.write("      in_tenant_space = true;\n");
+  h_f.write("      break;\n");
+  h_f.write("    }\n");
+  h_f.write("  }\n");
+  h_f.write("  return in_tenant_space;\n");
+  h_f.write("}\n\n");
+
+  h_f.write("static inline bool is_global_virtual_table(const uint64_t tid)\n");
+  h_f.write("{\n");
+  h_f.write("  return common::is_virtual_table(tid) && !is_tenant_table(tid);\n");
+  h_f.write("}\n\n");
+
+  h_f.write("static inline bool is_tenant_virtual_table(const uint64_t tid)\n");
+  h_f.write("{\n");
+  h_f.write("  return common::is_virtual_table(tid) && is_tenant_table(tid);\n");
+  h_f.write("}\n\n");
+
+  # oracle virtual table get origin table id in oceanbase database
+  h_f.write("static inline uint64_t get_origin_tid_by_oracle_mapping_tid(const uint64_t tid)\n");
+  h_f.write("{\n")
+  h_f.write("  uint64_t org_tid = common::OB_INVALID_ID;\n")
+  h_f.write("  uint64_t idx = common::OB_INVALID_ID;\n")
+  h_f.write("  for (uint64_t i = 0; common::OB_INVALID_ID == idx && i < ARRAYSIZEOF(all_ora_mapping_virtual_tables); ++i) {\n")
+  h_f.write("    if (common::extract_pure_id(tid) == all_ora_mapping_virtual_tables[i]) {\n")
+  h_f.write("      idx = i;\n")
+  h_f.write("    }\n")
+  h_f.write("  }\n")
+  h_f.write("  if (common::OB_INVALID_ID != idx) {\n")
+  h_f.write("     org_tid = all_ora_mapping_virtual_table_org_tables[idx];\n")
+  h_f.write("  }\n")
+  h_f.write("  return org_tid;\n")
+  h_f.write("}\n\n")
+
+  ## it's oracle virtual table, it's not agent table!!!
+  h_f.write("static inline bool is_oracle_mapping_virtual_table(const uint64_t tid)\n")
+  h_f.write("{\n")
+  h_f.write("  bool is_ora_vt = false;\n")
+  h_f.write("  for (uint64_t i = 0; i < ARRAYSIZEOF(all_ora_mapping_virtual_tables); ++i) {\n")
+  h_f.write("    if (common::extract_pure_id(tid) == all_ora_mapping_virtual_tables[i]) {\n")
+  h_f.write("      is_ora_vt = true;\n")
+  h_f.write("    }\n")
+  h_f.write("  }\n")
+  h_f.write("  return is_ora_vt;\n")
+  h_f.write("}\n\n")
+
+  ## Mappping oceanbase real table to virtual table in Oracle mode
+  # oracle virtual table get origin table id in oceanbase database
+  ## it's oracle virtual table, it's not agent table!!!
+  h_f.write("static inline uint64_t get_real_table_mappings_tid(const uint64_t tid)\n");
+  h_f.write("{\n")
+  h_f.write("  uint64_t org_tid = common::OB_INVALID_ID;\n")
+  h_f.write("  uint64_t pure_id = common::extract_pure_id(tid);\n")
+  h_f.write("  if (pure_id >= common::OB_MIN_VIRTUAL_TABLE_ID && pure_id < common::OB_MAX_VIRTUAL_TABLE_ID) {\n")
+  h_f.write("    int64_t idx = pure_id - common::OB_MIN_VIRTUAL_TABLE_ID;\n")
+  h_f.write("    VTMapping &tmp_vt_mapping = vt_mappings[idx];\n")
+  h_f.write("    if (tmp_vt_mapping.is_real_vt_) {\n")
+  h_f.write("      org_tid = tmp_vt_mapping.mapping_tid_;\n")
+  h_f.write("    }\n")
+  h_f.write("  }\n")
+  h_f.write("  return org_tid;\n")
+  h_f.write("}\n\n")
+
+  h_f.write("static inline bool is_oracle_mapping_real_virtual_table(const uint64_t tid)\n")
+  h_f.write("{\n")
+  h_f.write("  return common::OB_INVALID_ID != get_real_table_mappings_tid(tid);\n")
+  h_f.write("}\n\n")
+  ## end Mapping oceanbase real table to virtual table in Oracle mode
+
+  h_f.write("static inline void get_real_table_vt_mapping(const uint64_t tid, VTMapping *&vt_mapping)\n");
+  h_f.write("{\n")
+  h_f.write("  uint64_t pure_id = common::extract_pure_id(tid);\n")
+  h_f.write("  vt_mapping = nullptr;\n")
+  h_f.write("  if (pure_id >= common::OB_MIN_VIRTUAL_TABLE_ID && pure_id < common::OB_MAX_VIRTUAL_TABLE_ID) {\n")
+  h_f.write("    int64_t idx = pure_id - common::OB_MIN_VIRTUAL_TABLE_ID;\n")
+  h_f.write("    vt_mapping = &vt_mappings[idx];\n")
+  h_f.write("  }\n")
+  h_f.write("}\n\n")
+
+  h_f.write("static inline bool is_only_rs_virtual_table(const uint64_t tid)\n");
+  h_f.write("{\n");
+  h_f.write("  bool only_rs = false;\n");
+  h_f.write("  if (common::extract_pure_id(tid) == OB_ALL_VIRTUAL_ZONE_STAT_TID\n");
+  h_f.write("      && GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_141) {\n");\
+  h_f.write("    only_rs = true;\n");
+  h_f.write("  } else {\n");
+  h_f.write("    for (int64_t i = 0; i < ARRAYSIZEOF(only_rs_vtables); ++i) {\n");
+  h_f.write("      if (common::extract_pure_id(tid) == only_rs_vtables[i]) {\n");
+  h_f.write("        only_rs = true;\n");
+  h_f.write("      }\n");
+  h_f.write("    }\n");
+  h_f.write("  }\n");
+  h_f.write("  return only_rs;\n");
+  h_f.write("}\n\n");
+
+  sys_tenant_table_count = 1 + core_table_count + sys_table_count + virtual_table_count + sys_view_count
+  core_schema_version = 1
+  bootstrap_version = core_schema_version + sys_tenant_table_count + 2
+  h_f.write("const int64_t OB_CORE_TABLE_COUNT = %d;\n" % core_table_count)
+  h_f.write("const int64_t OB_SYS_TABLE_COUNT = %d;\n" % sys_table_count)
+  h_f.write("const int64_t OB_VIRTUAL_TABLE_COUNT = %d;\n" % virtual_table_count)
+  h_f.write("const int64_t OB_SYS_VIEW_COUNT = %d;\n" % sys_view_count)
+  h_f.write("const int64_t OB_SYS_TENANT_TABLE_COUNT = %d;\n" % sys_tenant_table_count)
+  h_f.write("const int64_t OB_CORE_SCHEMA_VERSION = %d;\n" % core_schema_version)
+  h_f.write("const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = %d;\n" % bootstrap_version)
+
+  for (table_name, table_id) in table_name_ids:
+    if table_id > max_sys_view_id:
+      raise IOError("invalid table_id: {0} table_name:{1}".format(table_id, table_name))
+
+def end_generate_h():
+  global h_f
+  end = """
+} // end namespace share
+} // end namespace oceanbase
+#endif /* _OB_INNER_TABLE_SCHEMA_H_ */
+"""
+  h_f.write(end)
+  h_f.close()
+
+def end_generate_constants_h():
+  global constants_h_f
+  end = """
+} // end namespace share
+} // end namespace oceanbase
+#endif /* _OB_INNER_TABLE_SCHEMA_CONSTANTS_H_ */
+"""
+  constants_h_f.write(end)
+  constants_h_f.close()
+
+def write_vt_mapping_cpp(h_file_name):
+  global cpp_f
+  cpp_f = open(h_file_name, 'w')
+  head = copyright + """#define USING_LOG_PREFIX SHARE_SCHEMA
+#include "ob_inner_table_schema.h"
+
+namespace oceanbase
+{
+namespace share
+{
+"""
+  cpp_f.write(head)
+
+  tmp_vt_tables = [x for x in real_table_virtual_table_names]
+  tmp_vt_tables.sort(key = lambda x: x['table_name'])
+  total_columns_with_tenant_id = 0
+  for tmp_kw in tmp_vt_tables:
+    if tmp_kw.has_key("columns_with_tenant_id") and tmp_kw["columns_with_tenant_id"]:
+      for column_name in tmp_kw["columns_with_tenant_id"]:
+        total_columns_with_tenant_id = total_columns_with_tenant_id + 1
+  cpp_f.write("VTMapping vt_mappings[5000];\n")
+  cpp_f.write("bool vt_mapping_init()\n")
+  cpp_f.write("{\n")
+  tmp_start_pos = 0
+  tmp_end_pos = 0
+  cpp_f.write("   int64_t start_idx = common::OB_MIN_VIRTUAL_TABLE_ID;\n".format(tmp_kw["self_tid"]))
+  for tmp_kw in tmp_vt_tables:
+    cpp_f.write("   {\n")
+    cpp_f.write("   int64_t idx = {0} - start_idx;\n".format(tmp_kw["self_tid"]))
+    cpp_f.write("   VTMapping &tmp_vt_mapping = vt_mappings[idx];\n")
+    if tmp_kw.has_key("mapping_tid") and tmp_kw["mapping_tid"]:
+      cpp_f.write("   tmp_vt_mapping.mapping_tid_ = {0};\n".format(tmp_kw["mapping_tid"]))
+    if tmp_kw.has_key("real_vt") and tmp_kw["real_vt"]:
+      is_real_vt = "true"
+      cpp_f.write("   tmp_vt_mapping.is_real_vt_ = {0};\n".format(is_real_vt))
+    if tmp_kw.has_key("columns_with_tenant_id") and tmp_kw["columns_with_tenant_id"]:
+      for column_name in tmp_kw["columns_with_tenant_id"]:
+        tmp_end_pos = tmp_end_pos + 1
+      cpp_f.write("   tmp_vt_mapping.start_pos_ = {0};\n".format(tmp_start_pos))
+      cpp_f.write("   tmp_vt_mapping.end_pos_ = {0};\n".format(tmp_end_pos))
+    if tmp_kw.has_key("real_tenant_id") and tmp_kw["real_tenant_id"]:
+      has_real_tenant_id = "true"
+      cpp_f.write("   tmp_vt_mapping.use_real_tenant_id_ = {0};\n".format(has_real_tenant_id))
+    cpp_f.write("   }\n\n")
+    tmp_start_pos = tmp_end_pos
+    tmp_end_pos = tmp_start_pos
+  cpp_f.write("   return true;\n")
+  cpp_f.write("} // end define vt_mappings\n\n")
+
+  cpp_f.write("bool inited_vt = vt_mapping_init();\n")
+  if total_columns_with_tenant_id != tmp_end_pos:
+    raise Exception("columns with tenant id {0} is not match with {1}".format(total_columns_with_tenant_, tmp_end_pos))
+
+
+  end = """
+} // end namespace share
+} // end namespace oceanbase
+"""
+  cpp_f.write(end)
+  cpp_f.close()
+
+def start_generate_misc_data(fname):
+  f = open(fname, 'w')
+  f.write(copyright)
+  return f
+
+if __name__ == "__main__":
+  global ob_virtual_index_table_id
+  ob_virtual_index_table_id = max_ob_virtual_table_id - 1
+  ora_virtual_index_table_id = max_ora_virtual_table_id - 1
+
+  clean_files("ob_inner_table_schema.*")
+  execfile("ob_inner_table_schema_def.py")
+  end_generate_cpp()
+
+  start_generate_h("ob_inner_table_schema.h")
+  generate_h_content()
+  end_generate_h()
+
+  start_generate_constants_h("ob_inner_table_schema_constants.h")
+  generate_constants_h_content()
+  end_generate_constants_h()
+
+  ## write virtual table for init virtual table information
+  write_vt_mapping_cpp("ob_inner_table_schema.vt.cpp")
+
+  f = start_generate_misc_data("ob_inner_table_schema_misc.ipp")
+  generate_virtual_agent_misc_data(f)
+  generate_iterate_virtual_table_misc_data(f)
+  generate_upgrade_table_misc_data(f)
+  generate_cluster_private_table(f)
+  generate_backup_private_table(f)
+  generate_rs_restart_related_table_misc_data(f)
+
+  f.close()
+
+  print "\nSuccess\n"

@@ -1,0 +1,23 @@
+drop table if exists stu;
+create table stu(id int primary key, name char(20));
+insert into stu(id, name) values(1, 'zhang fei');
+insert into stu(id, name) values(2, 'zhao yun');
+insert into stu(id, name) values(3, 'zhen ji');
+insert into stu(id, name) values(4, 'zhou yu');
+insert into stu(id, name) values(5, 'zhu ge liang');
+insert into stu(id, name) values(6, 'ma chao');
+alter table stu add c1 int;
+alter table stu add column c2 char(90);
+alter table stu add column ctm2 timestamp default current_timestamp();
+insert into stu (id, name, c1) values (7, 'han mei mei', 18);
+insert into stu (id, name, c2) values (8, 'li lei', 'a boy');
+select id,name,c1,c2,length(ctm2) from stu;
+id	name	c1	c2	length(ctm2)
+1	zhang fei	NULL	NULL	19
+2	zhao yun	NULL	NULL	19
+3	zhen ji	NULL	NULL	19
+4	zhou yu	NULL	NULL	19
+5	zhu ge liang	NULL	NULL	19
+6	ma chao	NULL	NULL	19
+7	han mei mei	18	NULL	19
+8	li lei	NULL	a boy	19

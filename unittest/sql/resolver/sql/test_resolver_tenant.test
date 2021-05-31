@@ -1,0 +1,13 @@
+CREATE RESOURCE UNIT resource_test MAX_CPU=1, MIN_MEMORY=8589934592, MAX_MEMORY=17179869184, MAX_IOPS=10000, MAX_DISK_SIZE=10737418240, MAX_SESSION_NUM=9223372036854775807;
+CREATE RESOURCE POOL resource_zone unit='resource_test', unit_num=1, zone_list=('zone1');
+CREATE RESOURCE POOL resource_zone1 unit='resource_test', unit_num=1, zone_list=('zone1');
+CREATE TENANT if not exists tenant_test RESOURCE_POOL_LIST=('resource_zone'), LOCALITY='auto_locality_strategy', logonly_replica_num=1 set ob_tcp_invited_nodes='%';
+#CHANGE EFFECTIVE TENANT tenant_test;
+#alter tenant tenant_test lock;
+#alter tenant tenant_test unlock;
+#alter tenant tenant_test zone_list=('zone1')
+#alter TENANT tenant_test RESOURCE_POOL_LIST=('resource_zone1');
+drop tenant tenant_test;
+drop RESOURCE POOL resource_zone1;
+drop RESOURCE POOL resource_zone;
+drop RESOURCE UNIT resource_test;

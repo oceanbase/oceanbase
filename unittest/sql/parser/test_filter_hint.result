@@ -1,0 +1,519 @@
+**************   Case 1   ***************
+select      /*+trace_log no_rewrite*/* from t1 where c1 = 1 limit 1 order by 1;
+select      * from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 2   ***************
+select /*+trace_log no_rewrite*/ * from t1 where c1 = 1 limit 1 order by 1;
+select  * from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 3   ***************
+select * from t1 where c1 = 1 limit 1 order by 1;
+select * from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 4   ***************
+select /*+*/* from t1 where c1 = 1 limit 1 order by 1;
+select * from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 5   ***************
+select /*+sss*/* from t1 where c1 = 1 limit 1 order by 1;
+select * from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 6   ***************
+select /*+trace_log no_rewrite*/* from t1 where c1 = 1 limit 1 order by 1;
+select * from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 7   ***************
+select /*+trace_log no_rewrite ssss*/* from t1 where c1 = 1 limit 1 order by 1;
+select * from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 8   ***************
+select /*+ssss    no_rewrite*/*      from t1 where c1 = 1 limit 1 order by 1;
+select *      from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 9   ***************
+select */*+trace_log no_rewrite*/ from t1 where c1 = 1 limit 1 order by 1;
+select * from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 10   ***************
+select    /*+trace_log no_rewrite*/* from t1 where c1 = 1 limit 1 order by 1;
+select    * from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 11   ***************
+select * from (select /*+SSSSSS*/ * from t1) as tt where c1 = 1 limit 1 order by 1;
+select * from (select  * from t1) as tt where c1 = 1 limit 1 order by 1;
+**************   Case 12   ***************
+select * from /*+sssssss*/ from t1 where c1 = 1 limit 1 order by 1;
+select * from  from t1 where c1 = 1 limit 1 order by 1;
+**************   Case 13   ***************
+update /*+sssss*/ t1 set c1 = 1 where c1 = 100;
+update  t1 set c1 = 1 where c1 = 100;
+**************   Case 14   ***************
+update /*+no_rewrite sssss*/ t1 set c1 = 1 where c1 = 100;
+update  t1 set c1 = 1 where c1 = 100;
+**************   Case 15   ***************
+update /*+sssss*/ t1 set c1 = 1 where /*+sssss*/ c1 = 100;
+update  t1 set c1 = 1 where  c1 = 100;
+**************   Case 16   ***************
+delete /*+sssss*/ from t1 where c=1;
+delete  from t1 where c=1;
+**************   Case 17   ***************
+delete /*+no_rewrite sssss*/ from t1 where c=1;
+delete  from t1 where c=1;
+**************   Case 18   ***************
+select   /*+ BEGIN_OUTLINE_DATA FULL(@"SEL$1" "t1"@"SEL$1") READ_CONSISTENCY("WEAK") HOTSPOT TOPK(1 100) QUERY_TIMEOUT(100) FROZEN_VERSION(1) USE_PLAN_CACHE("EXACT") ACTIVATE_BURIED_POINT(1, FIX_MODE, 1, 1) NO_REWRITE TRACE_LOG LOG_LEVEL('info') END_OUTLINE_DATA */* from t1;
+select   * from t1;
+**************   Case 19   ***************
+select /*+INDEX(@"SEL$2" "opt.t4"@"SEL$2" "idx_t4_c3")*/* from t1 where c1 in (select c1 from t4);
+select * from t1 where c1 in (select c1 from t4);
+**************   Case 20   ***************
+select /*+ BEGIN_OUTLINE_DATA INDEX(@"SEL$1" "opt.t4"@"SEL$1" "idx_t4_c3") END_OUTLINE_DATA  */ * from t4 where c1 = 1;
+select  * from t4 where c1 = 1;
+**************   Case 21   ***************
+select /*+ BEGIN_OUTLINE_DATA FULL(@"SEL$1" "opt.t4"@"SEL$1") END_OUTLINE_DATA  */ * from t4 where c2 = 1;
+select  * from t4 where c2 = 1;
+**************   Case 22   ***************
+select  /*+ BEGIN_OUTLINE_DATA  USE_MERGE(@"SEL$1" "opt.t2"@"SEL$1") LEADING(@"SEL$1" "opt.t1"@"SEL$1" "opt.t2"@"SEL$1")  FULL(@"SEL$1" "opt.t1"@"SEL$1")  FULL(@"SEL$1" "opt.t2"@"SEL$1")  END_OUTLINE_DATA  */* from t1,t2 where t1.c1=t2.c1;
+select  * from t1,t2 where t1.c1=t2.c1;
+**************   Case 23   ***************
+select /*+log_level('info')*/* from t1;
+select * from t1;
+**************   Case 24   ***************
+select /*+log_level('info')*/t1.c1,t2.c1 from t1,t2 group by t1.c1,t2.c1 having c1 =1;
+select t1.c1,t2.c1 from t1,t2 group by t1.c1,t2.c1 having c1 =1;
+**************   Case 25   ***************
+select /*+log_level('info')*/* from t1 for update;
+select * from t1 for update;
+**************   Case 26   ***************
+select * from /*+sssssss*/ from t1 where c1 in (select /*+fdsafasfa*/ c1 from t2) limit 1 order by 1;
+select * from  from t1 where c1 in (select  c1 from t2) limit 1 order by 1;
+**************   Case 27   ***************
+select * from /*sssssss*/ from t1 where c1 in (select /*fdsafasfa*/ c1 from t2) limit 1 order by 1;
+select * from  from t1 where c1 in (select  c1 from t2) limit 1 order by 1;
+**************   Case 28   ***************
+update /*+sssssss*/t1 set c1 = 1 where c2 ;
+update t1 set c1 = 1 where c2 ;
+**************   Case 29   ***************
+update /*+sssssss*/t1 set c1 = 1 where c2  > any(select /*+index(t3 c1) trace_log*/c1 from t3 where c2 not in (select c1 from t4 order by c1 limit 2));
+update t1 set c1 = 1 where c2  > any(select c1 from t3 where c2 not in (select c1 from t4 order by c1 limit 2));
+**************   Case 30   ***************
+update/*+index(t2 i2)*/ t2 vt2 set vt2.c1=2*vt2.c2,c1=c1+1,vt2.c2=10,c3=2 where c1>0 and vt2.c2<2 order by vt2.c1 asc, vt2.c2 desc limit 2 offset 10;
+update t2 vt2 set vt2.c1=2*vt2.c2,c1=c1+1,vt2.c2=10,c3=2 where c1>0 and vt2.c2<2 order by vt2.c1 asc, vt2.c2 desc limit 2 offset 10;
+**************   Case 31   ***************
+update/*+index(t2 i2),query_timeout(2000)*/ t2 vt2 set vt2.c1=2*vt2.c2,c1=c1+1,vt2.c2=10,c3=10 where c1>0 and vt2.c2<10 order by vt2.c1 asc,c2 desc limit 10,10
+update t2 vt2 set vt2.c1=2*vt2.c2,c1=c1+1,vt2.c2=10,c3=10 where c1>0 and vt2.c2<10 order by vt2.c1 asc,c2 desc limit 10,10
+**************   Case 32   ***************
+UPDATE t1 SET c1=c1+(SELECT MAX(C1) FROM (SELECT 1) t) WHERE c1=(SELECT /*+index(t2 i2),query_timeout(2000)*/ MAX(c1));
+UPDATE t1 SET c1=c1+(SELECT MAX(C1) FROM (SELECT 1) t) WHERE c1=(SELECT  MAX(c1));
+**************   Case 33   ***************
+update t1 set c2 = 6 where c1 = (select /*+index(t2 i2),query_timeout(2000)*/max(c1) from t1);
+update t1 set c2 = 6 where c1 = (select max(c1) from t1);
+**************   Case 34   ***************
+insert /*+index(t2 i2)*/into ta select * from t3 on duplicate key update c1 = c1 + 2, c2 = values(c2);
+insert into ta select * from t3 on duplicate key update c1 = c1 + 2, c2 = values(c2);
+**************   Case 35   ***************
+insert into t1 values (1,2),(3,4) on duplicate key update c1=values(c2)+values(c1), c2= values(c1)+values(c1);
+insert into t1 values (1,2),(3,4) on duplicate key update c1=values(c2)+values(c1), c2= values(c1)+values(c1);
+**************   Case 36   ***************
+insert into t4 (c1,c2,c3) values(11, 2, default), (13,3, default) on duplicate key update c2 = 5, c3=4;
+insert into t4 (c1,c2,c3) values(11, 2, default), (13,3, default) on duplicate key update c2 = 5, c3=4;
+**************   Case 37   ***************
+insert /*+index(t2 i2)*/into ta(c1,c2) values (3,NULL), (4, NULL);
+insert into ta(c1,c2) values (3,NULL), (4, NULL);
+**************   Case 38   ***************
+insert into ta(c1,c2) values (3,NULL), (4, NULL);
+insert into ta(c1,c2) values (3,NULL), (4, NULL);
+**************   Case 39   ***************
+insert /*+index(t2 i2)*/into ta(c1,c2) values (3,NULL), (4, NULL);
+insert into ta(c1,c2) values (3,NULL), (4, NULL);
+**************   Case 40   ***************
+insert into ta select /*+index(t2 i2)*/* from t3 on duplicate key update c1 = c1 + 2, c2 = values(c2);
+insert into ta select * from t3 on duplicate key update c1 = c1 + 2, c2 = values(c2);
+**************   Case 41   ***************
+delete from t1 where c2 > 10 order by c1 limit 0, 1;
+delete from t1 where c2 > 10 order by c1 limit 0, 1;
+**************   Case 42   ***************
+delete /*+ INDEX(t1 idx1)*/ from t1 where c1 =1;
+delete  from t1 where c1 =1;
+**************   Case 43   ***************
+delete /*+ INDEX(t1 idx1)*/ from t1 where c1 in (select /*trace_log*/c2 from t2);
+delete  from t1 where c1 in (select c2 from t2);
+**************   Case 44   ***************
+delete /*dfasdasf*/ from test where c1 = 1;
+delete  from test where c1 = 1;
+**************   Case 45   ***************
+select /*+no_rewrite*/* from t1 where c1 = 4 and c2 = 6 order by 2;
+select * from t1 where c1 = 4 and c2 = 6 order by 2;
+**************   Case 46   ***************
+select * from t1 where c1 = 4 and c2 = 6 order by 2;
+select * from t1 where c1 = 4 and c2 = 6 order by 2;
+**************   Case 47   ***************
+select * from t1 where c1 = 'aaaaa';
+select * from t1 where c1 = 'aaaaa';
+**************   Case 48   ***************
+select * from t1 where c1 = "aaaaa";
+select * from t1 where c1 = "aaaaa";
+**************   Case 49   ***************
+select * from t1 where c1 = '''';
+select * from t1 where c1 = '''';
+**************   Case 50   ***************
+select * from t1 where c1 = '"';
+select * from t1 where c1 = '"';
+**************   Case 51   ***************
+select * from t1 where c1 = "''";
+select * from t1 where c1 = "''";
+**************   Case 52   ***************
+select * from t1 where c1 = '\\';
+select * from t1 where c1 = '\\';
+**************   Case 53   ***************
+select * from t1 where c1 = "\t";
+select * from t1 where c1 = "\t";
+**************   Case 54   ***************
+select * from t1 where c1 = '\n';
+select * from t1 where c1 = '\n';
+**************   Case 55   ***************
+select * from t1 where c1 = "\n";
+select * from t1 where c1 = "\n";
+**************   Case 56   ***************
+select * from t1 where c1 = '  ';
+select * from t1 where c1 = '  ';
+**************   Case 57   ***************
+select * from t1 where c1 = "  ";
+select * from t1 where c1 = "  ";
+**************   Case 58   ***************
+select * from t1 where c1 = `aaaaa`;
+select * from t1 where c1 = `aaaaa`;
+**************   Case 59   ***************
+select * from t1 where c1 = ````;
+select * from t1 where c1 = ````;
+**************   Case 60   ***************
+select /*+ leading(ta, tb) use_nl(tb)*/ * from hint.t1 as tb, opt.t1 as ta where tb.a = ta.c1;
+select  * from hint.t1 as tb, opt.t1 as ta where tb.a = ta.c1;
+**************   Case 61   ***************
+select /*+ leading(ta, tb) use_bnl(tb)*/ * from hint.t1 as tb, opt.t1 as ta where tb.a = ta.c1;
+select  * from hint.t1 as tb, opt.t1 as ta where tb.a = ta.c1;
+**************   Case 62   ***************
+select /*+ leading(t1) use_nl(hint.t1)*/ * from hint.t2, hint.t1, opt.t1 where hint.t2.a = opt.t1.c1;
+select  * from hint.t2, hint.t1, opt.t1 where hint.t2.a = opt.t1.c1;
+**************   Case 63   ***************
+select /*+ leading(t1) use_bnl(hint.t1)*/ * from hint.t2, hint.t1, opt.t1 where hint.t2.a = opt.t1.c1;
+select  * from hint.t2, hint.t1, opt.t1 where hint.t2.a = opt.t1.c1;
+**************   Case 64   ***************
+select /*+ leading(t2, t1) use_merge(t1)*/ * from hint.t2, opt.t1 where t1.c1 = t2.a;
+select  * from hint.t2, opt.t1 where t1.c1 = t2.a;
+**************   Case 65   ***************
+select /*+ index(hint.t1 idx_t1_a)*/ * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c1;
+select  * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c1;
+**************   Case 66   ***************
+select /*+ full(opt.t1)*/ * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c2;
+select  * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c2;
+**************   Case 67   ***************
+select /*+ ordered use_nl(hint.t2 opt.t1)*/ * from (select * from t2) as tb, hint.t2, opt.t1;
+select  * from (select * from t2) as tb, hint.t2, opt.t1;
+**************   Case 68   ***************
+select /*+ ordered use_bnl(hint.t2 opt.t1)*/ * from (select * from t2) as tb, hint.t2, opt.t1;
+select  * from (select * from t2) as tb, hint.t2, opt.t1;
+**************   Case 69   ***************
+select /*+ leading(tb, opt.t1) use_nl(hint.t2 opt.t1)*/ * from (select * from t2) as tb, hint.t2, opt.t1;
+select  * from (select * from t2) as tb, hint.t2, opt.t1;
+**************   Case 70   ***************
+select /*+ leading(tb, opt.t1) use_bnl(hint.t2, opt.t1)*/ * from (select * from t2) as tb, hint.t2, opt.t1;
+select  * from (select * from t2) as tb, hint.t2, opt.t1;
+**************   Case 71   ***************
+select * from opt.t1,opt.t2 use index (idx_t1_c2) where opt.t1.c1 = opt.t2.c2;
+select * from opt.t1,opt.t2 use index (idx_t1_c2) where opt.t1.c1 = opt.t2.c2;
+**************   Case 72   ***************
+select /*+ index(t1 idx_t1_c2)*/ * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c2;
+select  * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c2;
+**************   Case 73   ***************
+select /*+ index(opt.t1 idx_t1_c2)*/ * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c2;
+select  * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c2;
+**************   Case 74   ***************
+select /*+ index(opt.t1 idx_t1_c2) use_merge(hint.t2, hint.t1)*/ * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c2;
+select  * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c2;
+**************   Case 75   ***************
+select /*+ index(opt.t1 idx_t1_c2) use_merge(test hint.t2) use_nl(hint.t1)*/ * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c2;
+select  * from opt.t1, hint.t1 where hint.t1.a = opt.t1.c2;
+**************   Case 76   ***************
+select /*+ index(ta idx_t1_c2) use_merge(test) use_nl(tb)*/ * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+select  * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+**************   Case 77   ***************
+select /*+ index(ta idx_t1_c2) use_merge(test) use_bnl(tb)*/ * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+select  * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+**************   Case 78   ***************
+select /*+ index(opt.t1 idx_t1_c2) use_merge(opt.t2) use_nl(tb)*/ * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+select  * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+**************   Case 79   ***************
+select /*+ index(opt.t1 idx_t1_c2) use_merge(opt.t2) use_bnl(tb)*/ * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+select  * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+**************   Case 80   ***************
+select /*+ index(opt.t1 idx_test) use_merge(opt.t2) use_nl(tb)*/ * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+select  * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+**************   Case 81   ***************
+select /*+ index(opt.t1 idx_test) use_merge(opt.t2) use_bnl(tb)*/ * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+select  * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+**************   Case 82   ***************
+select /*+ index(opt.t1 idx_test) use_merge(ta tb) use_nl(tb)*/ * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+select  * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+**************   Case 83   ***************
+select /*+ index(opt.t1 idx_test) use_merge(ta tb) use_bnl(tb)*/ * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+select  * from opt.t1 as ta, hint.t1 as tb where ta.c1 = tb.a;
+**************   Case 84   ***************
+select * from opt.t1,hint.t1 use index (idx_t1_c2, idx_t1_a) where opt.t1.c1 = hint.t1.a;
+select * from opt.t1,hint.t1 use index (idx_t1_c2, idx_t1_a) where opt.t1.c1 = hint.t1.a;
+**************   Case 85   ***************
+select * from opt.t1,hint.t1 use index (idx_t1_a, idx_t1_c2) where opt.t1.c1 = hint.t1.a;
+select * from opt.t1,hint.t1 use index (idx_t1_a, idx_t1_c2) where opt.t1.c1 = hint.t1.a;
+**************   Case 86   ***************
+select * from opt.t1,hint.t1 force index (idx_t1_a, idx_t1_c2) where opt.t1.c1 = hint.t1.a;
+select * from opt.t1,hint.t1 force index (idx_t1_a, idx_t1_c2) where opt.t1.c1 = hint.t1.a;
+**************   Case 87   ***************
+select * from opt.t4 force index (idx_t4_c2,idx_t4_c3,idx_t4_c2_c3) where opt.t4.c1 = opt.t4.c2;
+select * from opt.t4 force index (idx_t4_c2,idx_t4_c3,idx_t4_c2_c3) where opt.t4.c1 = opt.t4.c2;
+**************   Case 88   ***************
+select * from opt.t4 ignore index (idx_t4_c2,idx_t4_c3,idx_t4_c2_c3) where opt.t4.c1 = opt.t4.c2;
+select * from opt.t4 ignore index (idx_t4_c2,idx_t4_c3,idx_t4_c2_c3) where opt.t4.c1 = opt.t4.c2;
+**************   Case 89   ***************
+select * from opt.t4 ignore index (idx_t4_c2,idx_t4_c3) where opt.t4.c1 = opt.t4.c2;
+select * from opt.t4 ignore index (idx_t4_c2,idx_t4_c3) where opt.t4.c1 = opt.t4.c2;
+**************   Case 90   ***************
+select * from opt.t4, hint.t1 ignore index (idx_t4_c2,idx_t4_c3, idx_t1_a) where opt.t4.c1 = hint.t1.a;
+select * from opt.t4, hint.t1 ignore index (idx_t4_c2,idx_t4_c3, idx_t1_a) where opt.t4.c1 = hint.t1.a;
+**************   Case 91   ***************
+select * from opt.t4 as ta, hint.t1 as tb ignore index (idx_t4_c2,idx_t4_c3, idx_t1_a) where ta.c1 = tb.a;
+select * from opt.t4 as ta, hint.t1 as tb ignore index (idx_t4_c2,idx_t4_c3, idx_t1_a) where ta.c1 = tb.a;
+**************   Case 92   ***************
+select * from opt.t1 use index(idx_yeti, idx_t1_c2) where opt.t1.c1 = opt.t1.c1;
+select * from opt.t1 use index(idx_yeti, idx_t1_c2) where opt.t1.c1 = opt.t1.c1;
+**************   Case 93   ***************
+select * from opt.t4 as ta, hint.t1 as tb ignore index (idx_test, idx_t1_a) where ta.c1 = tb.a;
+select * from opt.t4 as ta, hint.t1 as tb ignore index (idx_test, idx_t1_a) where ta.c1 = tb.a;
+**************   Case 94   ***************
+select * from opt.t1 use index(index_t1_c2) where opt.t1.c2 = (select hint.t1.a from hint.t1,opt.t2 use index(idx_t1_a) where opt.t2.c1 = hint.t1.b);
+select * from opt.t1 use index(index_t1_c2) where opt.t1.c2 = (select hint.t1.a from hint.t1,opt.t2 use index(idx_t1_a) where opt.t2.c1 = hint.t1.b);
+**************   Case 95   ***************
+select /*+ idex(yeti idx_t1_c2)*/ * from (select /*+ idex(opt.t4 idx_t4_c2))*/ * from hint.t1, opt.t4 where hint.t1.a = opt.t4.c2) as yeti, opt.t1 where yeti.a = opt.t1.c2;
+select  * from (select  * from hint.t1, opt.t4 where hint.t1.a = opt.t4.c2) as yeti, opt.t1 where yeti.a = opt.t1.c2;
+**************   Case 96   ***************
+select /*+ idex(ta idx_t1_c2)*/ * from (select /*+ idex(opt.t4 idx_t4_c2))*/ * from hint.t1, opt.t4 where hint.t1.a = opt.t4.c2) as yeti, opt.t1 as ta where yeti.a = ta.c2;
+select  * from (select  * from hint.t1, opt.t4 where hint.t1.a = opt.t4.c2) as yeti, opt.t1 as ta where yeti.a = ta.c2;
+**************   Case 97   ***************
+select /*+ idex(opt.t1 idx_t1_c2)*/ * from (select /*+ idex(opt.t4 idx_t4_c2))*/ * from hint.t1, opt.t4 where hint.t1.a = opt.t4.c2) as yeti, opt.t1 as ta where yeti.a = ta.c2;
+select  * from (select  * from hint.t1, opt.t4 where hint.t1.a = opt.t4.c2) as yeti, opt.t1 as ta where yeti.a = ta.c2;
+**************   Case 98   ***************
+select /*+ full(opt.t1)*/ * from opt.t1 as ta , opt.t2 as tb where ta.c1 = tb.c1;
+select  * from opt.t1 as ta , opt.t2 as tb where ta.c1 = tb.c1;
+**************   Case 99   ***************
+select /*+ full(opt.t1 opt.t2)*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c2;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c2;
+**************   Case 100   ***************
+select /*+ full(opt.t1 hint.t2)*/ * from opt.t1, hint.t2 where opt.t1.c1 = hint.t2.b;
+select  * from opt.t1, hint.t2 where opt.t1.c1 = hint.t2.b;
+**************   Case 101   ***************
+select /*+ full(opt.t1) use_merge(ta)*/ * from opt.t1 as ta , opt.t2 as tb where ta.c1 = tb.c1;
+select  * from opt.t1 as ta , opt.t2 as tb where ta.c1 = tb.c1;
+**************   Case 102   ***************
+select /*+ full(opt.ta) use_merge(ta)*/ * from opt.t1 as ta , opt.t2 as tb where ta.c1 = tb.c1;
+select  * from opt.t1 as ta , opt.t2 as tb where ta.c1 = tb.c1;
+**************   Case 103   ***************
+select /*+ full(opt.t1 opt.t2) use_merge(opt.t1), use_nl(opt.t2)*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c2;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c2;
+**************   Case 104   ***************
+select /*+ full(opt.t1 opt.t2) use_merge(opt.t1), use_bnl(opt.t2)*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c2;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c2;
+**************   Case 105   ***************
+select /*+ full(opt.t1 hint.t2) use_merge(test), use_nl(opt.t1)*/ * from opt.t1, hint.t2 where opt.t1.c1 = hint.t2.b;
+select  * from opt.t1, hint.t2 where opt.t1.c1 = hint.t2.b;
+**************   Case 106   ***************
+select /*+ full(opt.t1 hint.t2) use_merge(test), use_bnl(opt.t1)*/ * from opt.t1, hint.t2 where opt.t1.c1 = hint.t2.b;
+select  * from opt.t1, hint.t2 where opt.t1.c1 = hint.t2.b;
+**************   Case 107   ***************
+select /*+ ordered use_merge(ta,tb,tc,td)*/ * from opt.t1 as ta, opt.t2 as tb , hint.t1 as tc, hint.t2 as td where ta.c1 = tc.a and ta.c2 = tb.c1 and tb.c1 = td.b;
+select  * from opt.t1 as ta, opt.t2 as tb , hint.t1 as tc, hint.t2 as td where ta.c1 = tc.a and ta.c2 = tb.c1 and tb.c1 = td.b;
+**************   Case 108   ***************
+select /*+ ordered use_nl(ta tb tc td)*/ * from opt.t1 as ta, opt.t2 as tb , hint.t1 as tc, hint.t2 as td where ta.c1 = tc.a and ta.c2 = tb.c1 and tb.c1 = td.b;
+select  * from opt.t1 as ta, opt.t2 as tb , hint.t1 as tc, hint.t2 as td where ta.c1 = tc.a and ta.c2 = tb.c1 and tb.c1 = td.b;
+**************   Case 109   ***************
+select /*+ ordered use_bnl(ta tb tc td)*/ * from opt.t1 as ta, opt.t2 as tb , hint.t1 as tc, hint.t2 as td where ta.c1 = tc.a and ta.c2 = tb.c1 and tb.c1 = td.b;
+select  * from opt.t1 as ta, opt.t2 as tb , hint.t1 as tc, hint.t2 as td where ta.c1 = tc.a and ta.c2 = tb.c1 and tb.c1 = td.b;
+**************   Case 110   ***************
+select /*+ ordered*/ * from opt.t1 as ta, opt.t2 as tb , hint.t1 as tc, hint.t2 as td where ta.c1 = tc.a and ta.c2 = tb.c1 and tb.c1 = td.b;
+select  * from opt.t1 as ta, opt.t2 as tb , hint.t1 as tc, hint.t2 as td where ta.c1 = tc.a and ta.c2 = tb.c1 and tb.c1 = td.b;
+**************   Case 111   ***************
+select /*+ leading(test, opt.t1 opt.t2) */ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 112   ***************
+select /*+ leading(opt.t1 opt.t1 opt.t2) use_merge(opt.t1), use_nl(opt.t2)*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 113   ***************
+select /*+ leading(opt.t1 opt.t1 opt.t2) use_merge(opt.t1), use_bnl(opt.t2)*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 114   ***************
+select /*+ leading(opt.t1 opt.t2) */ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 115   ***************
+select /*+ leading(opt.t1 opt.t2 ha hb) */ * from opt.t1, opt.t2, hint.t1 as ha, hint.t2 as hb where opt.t1.c1 = opt.t2.c1 and opt.t1.c1 = ha.a and opt.t2.c2 = hb.b;
+select  * from opt.t1, opt.t2, hint.t1 as ha, hint.t2 as hb where opt.t1.c1 = opt.t2.c1 and opt.t1.c1 = ha.a and opt.t2.c2 = hb.b;
+**************   Case 116   ***************
+select /*+ leading(opt.t1 opt.t2 ha hb) use_merge(opt.t1 ha) use_nl(opt.t1 hb)*/ * from opt.t1, opt.t2, hint.t1 as ha, hint.t2 as hb where opt.t1.c1 = opt.t2.c1 and opt.t1.c1 = ha.a and opt.t2.c2 = hb.b;
+select  * from opt.t1, opt.t2, hint.t1 as ha, hint.t2 as hb where opt.t1.c1 = opt.t2.c1 and opt.t1.c1 = ha.a and opt.t2.c2 = hb.b;
+**************   Case 117   ***************
+select /*+ leading(opt.t1 opt.t2 ha hb) use_merge(opt.t1 ha) use_bnl(opt.t1 hb)*/ * from opt.t1, opt.t2, hint.t1 as ha, hint.t2 as hb where opt.t1.c1 = opt.t2.c1 and opt.t1.c1 = ha.a and opt.t2.c2 = hb.b;
+select  * from opt.t1, opt.t2, hint.t1 as ha, hint.t2 as hb where opt.t1.c1 = opt.t2.c1 and opt.t1.c1 = ha.a and opt.t2.c2 = hb.b;
+**************   Case 118   ***************
+select /*+ leading(test, opt.t1 opt.t2) use_merge(test opt.t1 opt.t2)*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 119   ***************
+select /*+ leading(test, opt.t1 opt.t2) use_merge(test opt.t1) use_nl(test opt.t2)*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 120   ***************
+select /*+ leading(test, opt.t1 opt.t2) use_merge(test opt.t1) use_bnl(test opt.t2)*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 121   ***************
+select /*+ leading(opt.t1 opt.t1 opt.t2) use_nl(opt.t1 opt.t3 opt.t5)*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 122   ***************
+select /*+ leading(opt.t1 opt.t1 opt.t2) use_bnl(opt.t1 opt.t3 opt.t5)*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 123   ***************
+select /*+ leading(opt.t1 opt.t2) use_nl()*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 124   ***************
+select /*+ leading(opt.t1 opt.t2) use_bnl()*/ * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+select  * from opt.t1, opt.t2 where opt.t1.c1 = opt.t2.c1;
+**************   Case 125   ***************
+select /*+ leading(opt.t1 opt.t2 ha hb) use_nl(ta hint.t1 hint.t2 tb)*/ * from opt.t1, opt.t2, hint.t1 as ha, hint.t2 as hb where opt.t1.c1 = opt.t2.c1 and opt.t1.c1 = ha.a and opt.t2.c2 = hb.b;
+select  * from opt.t1, opt.t2, hint.t1 as ha, hint.t2 as hb where opt.t1.c1 = opt.t2.c1 and opt.t1.c1 = ha.a and opt.t2.c2 = hb.b;
+**************   Case 126   ***************
+select /*+ leading(opt.t1 opt.t2 ha hb) use_bnl(ta hint.t1 hint.t2 tb)*/ * from opt.t1, opt.t2, hint.t1 as ha, hint.t2 as hb where opt.t1.c1 = opt.t2.c1 and opt.t1.c1 = ha.a and opt.t2.c2 = hb.b;
+select  * from opt.t1, opt.t2, hint.t1 as ha, hint.t2 as hb where opt.t1.c1 = opt.t2.c1 and opt.t1.c1 = ha.a and opt.t2.c2 = hb.b;
+**************   Case 127   ***************
+select t1.c1, v.c1 from t1, (select t2.c1 from t2, t4) v;
+select t1.c1, v.c1 from t1, (select t2.c1 from t2, t4) v;
+**************   Case 128   ***************
+select t1.c1, v.c1 from t1, (select/*+index(t4 primary)*/ t2.c1 from t2, t4) v;
+select t1.c1, v.c1 from t1, (select t2.c1 from t2, t4) v;
+**************   Case 129   ***************
+select/*+no_rewrite*/ t1.c1, v.c1 from t1, (select/*+index(t4 primary)*/ t2.c1 from t2, t4) v;
+select t1.c1, v.c1 from t1, (select t2.c1 from t2, t4) v;
+**************   Case 130   ***************
+select t1.c1, v.c1 from t1, (select/*+leading(t2)*/ t2.c1 from t2, t4) v;
+select t1.c1, v.c1 from t1, (select t2.c1 from t2, t4) v;
+**************   Case 131   ***************
+select t1.c1, v.c1 from t1, (select/*+read_consistency(weak)*/ t2.c1 from t2, t4) v;
+select t1.c1, v.c1 from t1, (select t2.c1 from t2, t4) v;
+**************   Case 132   ***************
+select t1.c1, v.c1 from t1, (select/*+use_nl(t2, t4)*/ t2.c1 from t2, t4 where t2.c1 = t4.c1) v;
+select t1.c1, v.c1 from t1, (select t2.c1 from t2, t4 where t2.c1 = t4.c1) v;
+**************   Case 133   ***************
+(select /*+read_consistency(weak)*/ c1 from t1) union (select c1 from t2);
+(select  c1 from t1) union (select c1 from t2);
+**************   Case 134   ***************
+(select /*+read_consistency(weak)*/ c1 from t1) union (select /*+read_consistency(strong)*/ c1 from t2);
+(select  c1 from t1) union (select  c1 from t2);
+**************   Case 135   ***************
+select * from opt.t1 ignore index (primary);
+select * from opt.t1 ignore index (primary);
+**************   Case 136   ***************
+select /*+ index(@a0123456789012345678 t4@a0123456789012345678 idx_t4_c3)*/ * from t1 where c1 in (select/*+qb_name(a0123456789012345678)*/ c1 from t4);
+select  * from t1 where c1 in (select c1 from t4);
+**************   Case 137   ***************
+select /*+ index(@a01234567890123456789 t4@a01234567890123456789 idx_t4_c3)*/ * from t1 where c1 in (select/*+qb_name(a01234567890123456789)*/ c1 from t4);
+select  * from t1 where c1 in (select c1 from t4);
+**************   Case 138   ***************
+select /*+ index(@SEL$1 t4  idx_t4_c3)*/ * from t1 where c1 in (select/*+qb_name(yz)*/ c1 from t4);
+select  * from t1 where c1 in (select c1 from t4);
+**************   Case 139   ***************
+select /*+ leading(@SEL$1 t4  t1)*/ * from t1 , (select/*+qb_name(yz)*/ c1 from t4) t where t.c1 = t1.c1;
+select  * from t1 , (select c1 from t4) t where t.c1 = t1.c1;
+**************   Case 140   ***************
+select /*+ leading(@SEL$1 t1  t4)*/ * from t1 , (select/*+qb_name(yz)*/ c1 from t4) t where t.c1 = t1.c1;
+select  * from t1 , (select c1 from t4) t where t.c1 = t1.c1;
+**************   Case 141   ***************
+select /*+ leading(@SEL$1 t1@SEL$1  t4@YZ)*/ * from t1 , (select/*+qb_name(yz)*/ c1 from t4) t where t.c1 = t1.c1;
+select  * from t1 , (select c1 from t4) t where t.c1 = t1.c1;
+**************   Case 142   ***************
+select /*+ leading(@SEL$1 t4@YZ  t1@SEL$1)*/ * from t1 , (select/*+qb_name(yz)*/ c1 from t4) t where t.c1 = t1.c1;
+select  * from t1 , (select c1 from t4) t where t.c1 = t1.c1;
+**************   Case 143   ***************
+select /*+ leading(@SEL$1 t_a@YZ  t1@SEL$1)*/ * from t1 , (select/*+qb_name(yz)*/ c1 from t4 t_a) t where t.c1 = t1.c1;
+select  * from t1 , (select c1 from t4 t_a) t where t.c1 = t1.c1;
+**************   Case 144   ***************
+select /*+ leading(@SEL$1 t4@YZ  t1@SEL$1)*/ * from t1 , (select/*+qb_name(yz)*/ c1 from t4 t_a) t where t.c1 = t1.c1;
+select  * from t1 , (select c1 from t4 t_a) t where t.c1 = t1.c1;
+**************   Case 145   ***************
+select /*+ leading(@SEL$1 t4@YZ  t1@SEL$1) use_nl(@SEL$1 t1@SEL$1)*/ * from t1 , (select/*+qb_name(yz)*/ c1 from t4) t where t.c1 = t1.c1;
+select  * from t1 , (select c1 from t4) t where t.c1 = t1.c1;
+**************   Case 146   ***************
+select /*+ leading(@SEL$1 t4@YZ  t1@SEL$1) use_bnl(@SEL$1 t1@SEL$1)*/ * from t1 , (select/*+qb_name(yz)*/ c1 from t4) t where t.c1 = t1.c1;
+select  * from t1 , (select c1 from t4) t where t.c1 = t1.c1;
+**************   Case 147   ***************
+select /*+ leading(@SEL$1 t4@YZ  t1@SEL$1) */ * from t1 , (select/*+qb_name(yz) use_merge(@SEL$1 t1@SEL$1)*/ c1 from t4) t where t.c1 = t1.c1;
+select  * from t1 , (select c1 from t4) t where t.c1 = t1.c1;
+**************   Case 148   ***************
+select c1 from t1 union select /*+index(@SEL$1 t1 idx_t1_c2)*/ c1 from t2;
+select c1 from t1 union select  c1 from t2;
+**************   Case 149   ***************
+select t1.c1 from t1, t2 where t1.c1 = t2.c1 union select/*+leading(@SEL$1 t1 t2) use_merge(@SEL1 t2@SEL$1)*/ c1 from t2;
+select t1.c1 from t1, t2 where t1.c1 = t2.c1 union select c1 from t2;
+**************   Case 150   ***************
+select/*+leading(@SEL$1 t2 t1)*/ t1.c1 from t1, t2 where t1.c1 = t2.c1 union select/*+leading(@SEL$1 t1 t2) use_merge(@SEL1 t2@SEL$1)*/ c1 from t2;
+select t1.c1 from t1, t2 where t1.c1 = t2.c1 union select c1 from t2;
+**************   Case 151   ***************
+(select /*+ leading(@SEL$1 t4@YZ  t1@SEL$1) */ t1.c1 from t1 , (select/*+qb_name(yz) use_merge(@SEL$1 t1@SEL$1)*/ c1 from t4) t where t.c1 = t1.c1) union select c1 from t3;
+(select  t1.c1 from t1 , (select c1 from t4) t where t.c1 = t1.c1) union select c1 from t3;
+**************   Case 152   ***************
+(select t1.c1 from t1 , (select/*+qb_name(yz)*/ c1 from t4) t where t.c1 = t1.c1) union select/*+leading(@SEL$1 t4@YZ t1@SEL$1) use_merge(@SEL$1 t1@SEL$1)*/ c1 from t3;
+(select t1.c1 from t1 , (select c1 from t4) t where t.c1 = t1.c1) union select c1 from t3;
+**************   Case 153   ***************
+select/*+index(@SEL$1 t4 idx_t4_c2) */t1.c1 from t1 where t1.c1 in (select t4.c1 from t4 group by t4.c2);
+selectt1.c1 from t1 where t1.c1 in (select t4.c1 from t4 group by t4.c2);
+**************   Case 154   ***************
+select/*+index(@SEL$2 t4 idx_t4_c2) */t1.c1 from t1 where t1.c1 in (select t4.c1 from t4 group by t4.c2);
+selectt1.c1 from t1 where t1.c1 in (select t4.c1 from t4 group by t4.c2);
+**************   Case 155   ***************
+select/*+index(@SEL$2 t4 idx_t4_c2) */t1.c1 from t1 where t1.c1 in (select/*+index(t4 idx_t4_c3)*/ t4.c1 from t4, (select t5.c1 from t5) t_a where t4.c2 > 1 and t4.c2 < 3 and t_a.c1 = t4.c1 group by t4.c2);
+selectt1.c1 from t1 where t1.c1 in (select t4.c1 from t4, (select t5.c1 from t5) t_a where t4.c2 > 1 and t4.c2 < 3 and t_a.c1 = t4.c1 group by t4.c2);
+**************   Case 156   ***************
+select/*+index(@SEL$2 t4 idx_t4_c2) */t1.c1 from t1 where t1.c1 in (select/*+index(t4 idx_t4_c3)*/ t4.c1 from t4, (select t5.c1 from t5) t_a where t4.c3 > 1 and t4.c3 < 3 and t_a.c1 = t4.c1 group by t4.c2);
+selectt1.c1 from t1 where t1.c1 in (select t4.c1 from t4, (select t5.c1 from t5) t_a where t4.c3 > 1 and t4.c3 < 3 and t_a.c1 = t4.c1 group by t4.c2);
+**************   Case 157   ***************
+select/*+index(@SEL$2 t4 idx_t4_c2) leading(@SEL$2 t5@SEL$3 t4@SEL$2)*/t1.c1 from t1 where t1.c1 in (select t4.c1 from t4, (select t5.c1 from t5) t_a where t_a.c1 = t4.c1 group by t4.c2);
+selectt1.c1 from t1 where t1.c1 in (select t4.c1 from t4, (select t5.c1 from t5) t_a where t_a.c1 = t4.c1 group by t4.c2);
+**************   Case 158   ***************
+select * from hint.t1 where a in (select * from (select max(t1.a) from hint.t1, hint.t2) as tt);
+select * from hint.t1 where a in (select * from (select max(t1.a) from hint.t1, hint.t2) as tt);
+**************   Case 159   ***************
+select   /*+ BEGIN_OUTLINE_DATA USE_NL(@"SEL$3" "hint.t2"@"SEL$3") LEADING(@"SEL$3" "hint.t2"@"SEL$3" "hint.t1"@"SEL$3") END_OUTLINE_DATA */* from hint.t1 where a in (select * from (select max(t1.a) from hint.t1, hint.t2) as tt);
+select   * from hint.t1 where a in (select * from (select max(t1.a) from hint.t1, hint.t2) as tt);
+**************   Case 160   ***************
+select t1.c1 from t1, (select t2.c1 from t2, (select t3.c1 from t3) t_a where t_a.c1 = t2.c1) t_a1 where t_a1.c1 = t1.c1 and t1.c1 in (select t4.c1 from t4);
+select t1.c1 from t1, (select t2.c1 from t2, (select t3.c1 from t3) t_a where t_a.c1 = t2.c1) t_a1 where t_a1.c1 = t1.c1 and t1.c1 in (select t4.c1 from t4);
+**************   Case 161   ***************
+select /*+ leading(@SEL$1 t1 t4 t3 t2) index(@SEL$4 t4 idx_t4_c3)*/ t1.c1 from t1, (select t2.c1 from t2, (select t3.c1 from t3) t_a where t_a.c1 = t2.c1) t_a1 where t_a1.c1 = t1.c1 and t1.c1 in (select t4.c1 from t4);
+select  t1.c1 from t1, (select t2.c1 from t2, (select t3.c1 from t3) t_a where t_a.c1 = t2.c1) t_a1 where t_a1.c1 = t1.c1 and t1.c1 in (select t4.c1 from t4);
+**************   Case 162   ***************
+select /*+ leading(@SEL1 t1 t4 t3 t2) index(@SEL$4 t4 idx_t4_c3)*/ t1.c1 from t1, (select t2.c1 from t2, (select t3.c1 from t3) t_a where t_a.c1 = t2.c1) t_a1 where t_a1.c1 = t1.c1 and t1.c1 in (select t4.c1 from t4);
+select  t1.c1 from t1, (select t2.c1 from t2, (select t3.c1 from t3) t_a where t_a.c1 = t2.c1) t_a1 where t_a1.c1 = t1.c1 and t1.c1 in (select t4.c1 from t4);
+**************   Case 163   ***************
+select /*+index(@SEL$3 t5@SEL$3 idx_t5_c2) index(@SEL$4 t4 idx_t4_c3)*/ t1.c1 from t1, (select t2.c1 from t2, (select t5.c1 from t5 group by t5.c2) t_a where t_a.c1 = t2.c1) t_a1 where t_a1.c1 = t1.c1 and t1.c1 in (select t4.c1 from t4);
+select  t1.c1 from t1, (select t2.c1 from t2, (select t5.c1 from t5 group by t5.c2) t_a where t_a.c1 = t2.c1) t_a1 where t_a1.c1 = t1.c1 and t1.c1 in (select t4.c1 from t4);
+**************   Case 164   ***************
+select c2 from t_idx use index(t_c2);
+select c2 from t_idx use index(t_c2);
+**************   Case 165   ***************
+select c120 from t_idx use index (idx_t_idx_c2, idx_t_idx_c3, idx_t_idx_c4, idx_t_idx_c5, idx_t_idx_c6, idx_t_idx_c7, idx_t_idx_c8, idx_t_idx_c9, idx_t_idx_c10, idx_t_idx_c11, idx_t_idx_c12, idx_t_idx_c13, idx_t_idx_c14, idx_t_idx_c15, idx_t_idx_c16, idx_t_idx_c17, idx_t_idx_c18, idx_t_idx_c19, idx_t_idx_c20, idx_t_idx_c21, idx_t_idx_c22, idx_t_idx_c23, idx_t_idx_c24, idx_t_idx_c25, idx_t_idx_c26, idx_t_idx_c27, idx_t_idx_c28, idx_t_idx_c29, idx_t_idx_c30, idx_t_idx_c31, idx_t_idx_c32, idx_t_idx_c33, idx_t_idx_c34, idx_t_idx_c35, idx_t_idx_c36, idx_t_idx_c37, idx_t_idx_c38, idx_t_idx_c39, idx_t_idx_c40, idx_t_idx_c41, idx_t_idx_c42, idx_t_idx_c43, idx_t_idx_c44, idx_t_idx_c45, idx_t_idx_c46, idx_t_idx_c47, idx_t_idx_c48, idx_t_idx_c49, idx_t_idx_c50, idx_t_idx_c51, idx_t_idx_c52, idx_t_idx_c53, idx_t_idx_c54, idx_t_idx_c55, idx_t_idx_c56, idx_t_idx_c57, idx_t_idx_c58, idx_t_idx_c59, idx_t_idx_c60, idx_t_idx_c61, idx_t_idx_c62, idx_t_idx_c63, idx_t_idx_c64, idx_t_idx_c65, idx_t_idx_c66, idx_t_idx_c67, idx_t_idx_c68, idx_t_idx_c69, idx_t_idx_c70, idx_t_idx_c71, idx_t_idx_c72, idx_t_idx_c73, idx_t_idx_c74, idx_t_idx_c75, idx_t_idx_c76, idx_t_idx_c77, idx_t_idx_c78, idx_t_idx_c79, idx_t_idx_c80, idx_t_idx_c81, idx_t_idx_c82, idx_t_idx_c83, idx_t_idx_c84, idx_t_idx_c85, idx_t_idx_c86, idx_t_idx_c87, idx_t_idx_c88, idx_t_idx_c89, idx_t_idx_c90, idx_t_idx_c91, idx_t_idx_c92, idx_t_idx_c93, idx_t_idx_c94, idx_t_idx_c95, idx_t_idx_c96, idx_t_idx_c97, idx_t_idx_c98, idx_t_idx_c99, idx_t_idx_c100, idx_t_idx_c101, idx_t_idx_c102, idx_t_idx_c103, idx_t_idx_c104, idx_t_idx_c105, idx_t_idx_c106, idx_t_idx_c107, idx_t_idx_c108, idx_t_idx_c109, idx_t_idx_c110, idx_t_idx_c111, idx_t_idx_c112, idx_t_idx_c113, idx_t_idx_c114, idx_t_idx_c115, idx_t_idx_c116, idx_t_idx_c117, idx_t_idx_c118, idx_t_idx_c119, idx_t_idx_c120, idx_t_idx_c121, idx_t_idx_c122, idx_t_idx_c123, idx_t_idx_c124, idx_t_idx_c125, idx_t_idx_c126, idx_t_idx_c127, idx_t_idx_c128, idx_t_idx_c129) where c120 = 1;
+select c120 from t_idx use index (idx_t_idx_c2, idx_t_idx_c3, idx_t_idx_c4, idx_t_idx_c5, idx_t_idx_c6, idx_t_idx_c7, idx_t_idx_c8, idx_t_idx_c9, idx_t_idx_c10, idx_t_idx_c11, idx_t_idx_c12, idx_t_idx_c13, idx_t_idx_c14, idx_t_idx_c15, idx_t_idx_c16, idx_t_idx_c17, idx_t_idx_c18, idx_t_idx_c19, idx_t_idx_c20, idx_t_idx_c21, idx_t_idx_c22, idx_t_idx_c23, idx_t_idx_c24, idx_t_idx_c25, idx_t_idx_c26, idx_t_idx_c27, idx_t_idx_c28, idx_t_idx_c29, idx_t_idx_c30, idx_t_idx_c31, idx_t_idx_c32, idx_t_idx_c33, idx_t_idx_c34, idx_t_idx_c35, idx_t_idx_c36, idx_t_idx_c37, idx_t_idx_c38, idx_t_idx_c39, idx_t_idx_c40, idx_t_idx_c41, idx_t_idx_c42, idx_t_idx_c43, idx_t_idx_c44, idx_t_idx_c45, idx_t_idx_c46, idx_t_idx_c47, idx_t_idx_c48, idx_t_idx_c49, idx_t_idx_c50, idx_t_idx_c51, idx_t_idx_c52, idx_t_idx_c53, idx_t_idx_c54, idx_t_idx_c55, idx_t_idx_c56, idx_t_idx_c57, idx_t_idx_c58, idx_t_idx_c59, idx_t_idx_c60, idx_t_idx_c61, idx_t_idx_c62, idx_t_idx_c63, idx_t_idx_c64, idx_t_idx_c65, idx_t_idx_c66, idx_t_idx_c67, idx_t_idx_c68, idx_t_idx_c69, idx_t_idx_c70, idx_t_idx_c71, idx_t_idx_c72, idx_t_idx_c73, idx_t_idx_c74, idx_t_idx_c75, idx_t_idx_c76, idx_t_idx_c77, idx_t_idx_c78, idx_t_idx_c79, idx_t_idx_c80, idx_t_idx_c81, idx_t_idx_c82, idx_t_idx_c83, idx_t_idx_c84, idx_t_idx_c85, idx_t_idx_c86, idx_t_idx_c87, idx_t_idx_c88, idx_t_idx_c89, idx_t_idx_c90, idx_t_idx_c91, idx_t_idx_c92, idx_t_idx_c93, idx_t_idx_c94, idx_t_idx_c95, idx_t_idx_c96, idx_t_idx_c97, idx_t_idx_c98, idx_t_idx_c99, idx_t_idx_c100, idx_t_idx_c101, idx_t_idx_c102, idx_t_idx_c103, idx_t_idx_c104, idx_t_idx_c105, idx_t_idx_c106, idx_t_idx_c107, idx_t_idx_c108, idx_t_idx_c109, idx_t_idx_c110, idx_t_idx_c111, idx_t_idx_c112, idx_t_idx_c113, idx_t_idx_c114, idx_t_idx_c115, idx_t_idx_c116, idx_t_idx_c117, idx_t_idx_c118, idx_t_idx_c119, idx_t_idx_c120, idx_t_idx_c121, idx_t_idx_c122, idx_t_idx_c123, idx_t_idx_c124, idx_t_idx_c125, idx_t_idx_c126, idx_t_idx_c127, idx_t_idx_c128, idx_t_idx_c129) where c120 = 1;
+**************   Case 166   ***************
+select c120 from t_idx use index (idx_t_idx_c2, idx_t_idx_c2, idx_t_idx_c3, idx_t_idx_c4, idx_t_idx_c5, idx_t_idx_c6, idx_t_idx_c7, idx_t_idx_c8, idx_t_idx_c9, idx_t_idx_c10, idx_t_idx_c11, idx_t_idx_c12, idx_t_idx_c13, idx_t_idx_c14, idx_t_idx_c15, idx_t_idx_c16, idx_t_idx_c17, idx_t_idx_c18, idx_t_idx_c19, idx_t_idx_c20, idx_t_idx_c21, idx_t_idx_c22, idx_t_idx_c23, idx_t_idx_c24, idx_t_idx_c25, idx_t_idx_c26, idx_t_idx_c27, idx_t_idx_c28, idx_t_idx_c29, idx_t_idx_c30, idx_t_idx_c31, idx_t_idx_c32, idx_t_idx_c33, idx_t_idx_c34, idx_t_idx_c35, idx_t_idx_c36, idx_t_idx_c37, idx_t_idx_c38, idx_t_idx_c39, idx_t_idx_c40, idx_t_idx_c41, idx_t_idx_c42, idx_t_idx_c43, idx_t_idx_c44, idx_t_idx_c45, idx_t_idx_c46, idx_t_idx_c47, idx_t_idx_c48, idx_t_idx_c49, idx_t_idx_c50, idx_t_idx_c51, idx_t_idx_c52, idx_t_idx_c53, idx_t_idx_c54, idx_t_idx_c55, idx_t_idx_c56, idx_t_idx_c57, idx_t_idx_c58, idx_t_idx_c59, idx_t_idx_c60, idx_t_idx_c61, idx_t_idx_c62, idx_t_idx_c63, idx_t_idx_c64, idx_t_idx_c65, idx_t_idx_c66, idx_t_idx_c67, idx_t_idx_c68, idx_t_idx_c69, idx_t_idx_c70, idx_t_idx_c71, idx_t_idx_c72, idx_t_idx_c73, idx_t_idx_c74, idx_t_idx_c75, idx_t_idx_c76, idx_t_idx_c77, idx_t_idx_c78, idx_t_idx_c79, idx_t_idx_c80, idx_t_idx_c81, idx_t_idx_c82, idx_t_idx_c83, idx_t_idx_c84, idx_t_idx_c85, idx_t_idx_c86, idx_t_idx_c87, idx_t_idx_c88, idx_t_idx_c89, idx_t_idx_c90, idx_t_idx_c91, idx_t_idx_c92, idx_t_idx_c93, idx_t_idx_c94, idx_t_idx_c95, idx_t_idx_c96, idx_t_idx_c97, idx_t_idx_c98, idx_t_idx_c99, idx_t_idx_c100, idx_t_idx_c101, idx_t_idx_c102, idx_t_idx_c103, idx_t_idx_c104, idx_t_idx_c105, idx_t_idx_c106, idx_t_idx_c107, idx_t_idx_c108, idx_t_idx_c109, idx_t_idx_c110, idx_t_idx_c111, idx_t_idx_c112, idx_t_idx_c113, idx_t_idx_c114, idx_t_idx_c115, idx_t_idx_c116, idx_t_idx_c117, idx_t_idx_c118, idx_t_idx_c119, idx_t_idx_c120, idx_t_idx_c121, idx_t_idx_c122, idx_t_idx_c123, idx_t_idx_c124, idx_t_idx_c125, idx_t_idx_c126, idx_t_idx_c127, idx_t_idx_c128, idx_t_idx_c129) where c120 = 1;
+select c120 from t_idx use index (idx_t_idx_c2, idx_t_idx_c2, idx_t_idx_c3, idx_t_idx_c4, idx_t_idx_c5, idx_t_idx_c6, idx_t_idx_c7, idx_t_idx_c8, idx_t_idx_c9, idx_t_idx_c10, idx_t_idx_c11, idx_t_idx_c12, idx_t_idx_c13, idx_t_idx_c14, idx_t_idx_c15, idx_t_idx_c16, idx_t_idx_c17, idx_t_idx_c18, idx_t_idx_c19, idx_t_idx_c20, idx_t_idx_c21, idx_t_idx_c22, idx_t_idx_c23, idx_t_idx_c24, idx_t_idx_c25, idx_t_idx_c26, idx_t_idx_c27, idx_t_idx_c28, idx_t_idx_c29, idx_t_idx_c30, idx_t_idx_c31, idx_t_idx_c32, idx_t_idx_c33, idx_t_idx_c34, idx_t_idx_c35, idx_t_idx_c36, idx_t_idx_c37, idx_t_idx_c38, idx_t_idx_c39, idx_t_idx_c40, idx_t_idx_c41, idx_t_idx_c42, idx_t_idx_c43, idx_t_idx_c44, idx_t_idx_c45, idx_t_idx_c46, idx_t_idx_c47, idx_t_idx_c48, idx_t_idx_c49, idx_t_idx_c50, idx_t_idx_c51, idx_t_idx_c52, idx_t_idx_c53, idx_t_idx_c54, idx_t_idx_c55, idx_t_idx_c56, idx_t_idx_c57, idx_t_idx_c58, idx_t_idx_c59, idx_t_idx_c60, idx_t_idx_c61, idx_t_idx_c62, idx_t_idx_c63, idx_t_idx_c64, idx_t_idx_c65, idx_t_idx_c66, idx_t_idx_c67, idx_t_idx_c68, idx_t_idx_c69, idx_t_idx_c70, idx_t_idx_c71, idx_t_idx_c72, idx_t_idx_c73, idx_t_idx_c74, idx_t_idx_c75, idx_t_idx_c76, idx_t_idx_c77, idx_t_idx_c78, idx_t_idx_c79, idx_t_idx_c80, idx_t_idx_c81, idx_t_idx_c82, idx_t_idx_c83, idx_t_idx_c84, idx_t_idx_c85, idx_t_idx_c86, idx_t_idx_c87, idx_t_idx_c88, idx_t_idx_c89, idx_t_idx_c90, idx_t_idx_c91, idx_t_idx_c92, idx_t_idx_c93, idx_t_idx_c94, idx_t_idx_c95, idx_t_idx_c96, idx_t_idx_c97, idx_t_idx_c98, idx_t_idx_c99, idx_t_idx_c100, idx_t_idx_c101, idx_t_idx_c102, idx_t_idx_c103, idx_t_idx_c104, idx_t_idx_c105, idx_t_idx_c106, idx_t_idx_c107, idx_t_idx_c108, idx_t_idx_c109, idx_t_idx_c110, idx_t_idx_c111, idx_t_idx_c112, idx_t_idx_c113, idx_t_idx_c114, idx_t_idx_c115, idx_t_idx_c116, idx_t_idx_c117, idx_t_idx_c118, idx_t_idx_c119, idx_t_idx_c120, idx_t_idx_c121, idx_t_idx_c122, idx_t_idx_c123, idx_t_idx_c124, idx_t_idx_c125, idx_t_idx_c126, idx_t_idx_c127, idx_t_idx_c128, idx_t_idx_c129) where c120 = 1;
+**************   Case 167   ***************
+select /*+use_plan_cache(none)*/ * from hint.t1;
+select  * from hint.t1;
+**************   Case 168   ***************
+select /*+use_plan_cache(meaningless)*/ * from hint.t1;
+select  * from hint.t1;
+**************   Case 169   ***************
+select /*+ index(t1 primary) */ * from hint.t1 order by a desc;
+select  * from hint.t1 order by a desc;
+**************   Case 170   ***************
+select min(a) from z1 za where za.a in (select a from z1);
+select min(a) from z1 za where za.a in (select a from z1);
+**************   Case 171   ***************
+select /*+ INDEX(@SEL$3 opt.z1@SEL$2 z1_b)*/ min(a) from z1 za where za.a in (select a from z1);
+select  min(a) from z1 za where za.a in (select a from z1);
+**************   Case 172   ***************
+select /*+index(z1 z1_b)*/ * from z1 ignore key(a);
+select  * from z1 ignore key(a);
+**************   Case 173   ***************
+select /*+index(z1 z1_b)*/ * from z1 ignore key(z1_b);
+select  * from z1 ignore key(z1_b);

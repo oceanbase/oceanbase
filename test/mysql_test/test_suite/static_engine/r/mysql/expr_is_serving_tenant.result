@@ -1,0 +1,23 @@
+connect  syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection syscon;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select is_serving_tenant(host_ip(), rpc_port(), effective_tenant_id());
+is_serving_tenant(host_ip(), rpc_port(), effective_tenant_id())
+1
+select is_serving_tenant(host_ip(), rpc_port(), 1);
+is_serving_tenant(host_ip(), rpc_port(), 1)
+1
+select is_serving_tenant(host_ip(), rpc_port(), 888);
+is_serving_tenant(host_ip(), rpc_port(), 888)
+0
+select is_serving_tenant('abc', rpc_port(), effective_tenant_id());
+is_serving_tenant('abc', rpc_port(), effective_tenant_id())
+0
+select is_serving_tenant('abc', rpc_port(), 1);
+is_serving_tenant('abc', rpc_port(), 1)
+1
+select is_serving_tenant('abc', rpc_port(), 888);
+is_serving_tenant('abc', rpc_port(), 888)
+0
+connection syscon;

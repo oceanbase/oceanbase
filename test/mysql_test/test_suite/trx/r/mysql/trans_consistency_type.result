@@ -1,0 +1,174 @@
+connect  conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection conn1;
+drop table if exists t1;
+drop table if exists t2;
+create table t1 (c1 int primary key, c2 int);
+create table t2 (c1 int primary key, c2 int);
+desc t1;
+Field	Type	Null	Key	Default	Extra
+c1	int(11)	NO	PRI	NULL	
+c2	int(11)	YES		NULL	
+desc t2;
+Field	Type	Null	Key	Default	Extra
+c1	int(11)	NO	PRI	NULL	
+c2	int(11)	YES		NULL	
+insert into t1 values(1,1);
+insert into t1 values(2,1);
+insert into t2 values(2,1);
+select * from t1;
+c1	c2
+1	1
+2	1
+select * from t2;
+c1	c2
+2	1
+set autocommit=1;
+select /*+read_consistency(weak)+*/ * from t1;
+c1	c2
+1	1
+2	1
+select /*+read_consistency(weak)+*/ * from t1 where c1 = 1;
+c1	c2
+1	1
+select /*+read_consistency(weak)+*/ * from t2;
+c1	c2
+2	1
+select /*+read_consistency(weak)+*/ * from t2 where c1 = 2;
+c1	c2
+2	1
+select /*+read_consistency(weak)+*/ * from t1 as l join t1 as r where l.c1 = r.c1;
+c1	c2	c1	c2
+1	1	1	1
+2	1	2	1
+select /*+read_consistency(weak)+*/ * from t1 join t2 where t1.c1 = t2.c1;
+c1	c2	c1	c2
+2	1	2	1
+set autocommit=0;
+select /*+read_consistency(weak)+*/ * from t1 as l join t1 as r where l.c1 = r.c1;
+c1	c2	c1	c2
+1	1	1	1
+2	1	2	1
+select /*+read_consistency(weak)+*/ * from t1 join t2 where t1.c1 = t2.c1;
+c1	c2	c1	c2
+2	1	2	1
+select /*+read_consistency(weak)+*/* from t1;
+c1	c2
+1	1
+2	1
+select /*+read_consistency(weak)+*/* from t2;
+c1	c2
+2	1
+commit;
+begin;
+insert into t1 values(3, 1);
+insert into t2 values(3, 1);
+select /*+read_consistency(weak)+*/* from t1;
+c1	c2
+1	1
+2	1
+3	1
+select /*+read_consistency(weak)+*/* from t2;
+c1	c2
+2	1
+3	1
+commit;
+begin;
+select /*+read_consistency(weak)+*/* from t1;
+c1	c2
+1	1
+2	1
+3	1
+select /*+read_consistency(weak)+*/* from t2;
+c1	c2
+2	1
+3	1
+insert into t1 values(4, 1);
+ERROR 0A000: different consistency type in one transaction not supported
+select * from t1;
+c1	c2
+1	1
+2	1
+3	1
+insert into t2 values(4, 1);
+ERROR 0A000: different consistency type in one transaction not supported
+select * from t2;
+c1	c2
+2	1
+3	1
+commit;
+begin;
+select /*+read_consistency(weak)+*/* from t1 for update;
+c1	c2
+1	1
+2	1
+3	1
+select /*+read_consistency(weak)+*/* from t2;
+c1	c2
+2	1
+3	1
+insert into t1 values(5, 1);
+select * from t1;
+c1	c2
+1	1
+2	1
+3	1
+5	1
+insert into t2 values(5, 1);
+select * from t2;
+c1	c2
+2	1
+3	1
+5	1
+commit;
+begin;
+select /*+read_consistency(weak)+*/* from t2;
+c1	c2
+2	1
+3	1
+5	1
+select /*+read_consistency(weak)+*/* from t1 for update;
+ERROR 0A000: different consistency type in one transaction not supported
+insert into t1 values(6, 1);
+ERROR 0A000: different consistency type in one transaction not supported
+select * from t1;
+c1	c2
+1	1
+2	1
+3	1
+5	1
+insert into t2 values(6, 1);
+ERROR 0A000: different consistency type in one transaction not supported
+select * from t2;
+c1	c2
+2	1
+3	1
+5	1
+commit;
+begin;
+select /*+read_consistency(strong)*/* from t1;
+c1	c2
+1	1
+2	1
+3	1
+5	1
+select /*+read_consistency(weak)*/* from t1;
+c1	c2
+1	1
+2	1
+3	1
+5	1
+commit;
+begin;
+select /*+read_consistency(weak)*/* from t1;
+c1	c2
+1	1
+2	1
+3	1
+5	1
+select * from t1;
+c1	c2
+1	1
+2	1
+3	1
+5	1
+commit;

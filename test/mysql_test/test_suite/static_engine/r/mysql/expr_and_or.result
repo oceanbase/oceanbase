@@ -1,0 +1,314 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT;
+connection conn_admin;
+set ob_enable_plan_cache = 0;
+drop table if exists t1;
+create table t1(col_int int, 
+col_zero int,
+col_null int, 
+col_varchar varchar(100), 
+col_varchar_num varchar(100),
+col_empty_str varchar(100),
+col_varchar_zero varchar(100));
+insert into t1 values(1, 0, null, 'abc', '1', '', '0');
+// Case1: normal test
+// Case1.1: int test
+//  bool expr exists, no cast expr, res is NULL
+select col_int and col_null from t1;
+col_int and col_null
+NULL
+// same as above
+select col_null and col_int from t1;
+col_null and col_int
+NULL
+// bool expr exists for col_varchar, cast expr exists, res is 0
+select col_int and col_varchar from t1;
+col_int and col_varchar
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'abc'
+// same as above
+select col_varchar and col_int from t1;
+col_varchar and col_int
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'abc'
+// bool expr and cast expr exists for col_varchar_num, res is 0
+select col_int and col_varchar_num from t1;
+col_int and col_varchar_num
+1
+// same as above
+select col_varchar_num and col_int from t1;
+col_varchar_num and col_int
+1
+// bool expr exists, no cast expr, res is 0
+select col_int and 0 from t1;
+col_int and 0
+0
+// same as above
+select 0 and col_int from t1;
+0 and col_int
+0
+// Case1.1: null test
+// bool expr exists, no cast expr, res is NULL
+select col_null and col_null from t1;
+col_null and col_null
+NULL
+// bool expr and cast expr exists for col_varchar_num, res is NULL
+select col_null and col_varchar_num from t1;
+col_null and col_varchar_num
+NULL
+// same as above
+select col_varchar_num and col_null from t1;
+col_varchar_num and col_null
+NULL
+// bool expr and cast expr exists for col_varchar_num, res is 0
+select col_null and col_varchar from t1;
+col_null and col_varchar
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'abc'
+// same as above
+select col_varchar and col_null from t1;
+col_varchar and col_null
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'abc'
+// same as above
+select col_null and 0 from t1;
+col_null and 0
+0
+// Case1.2: 0 test
+// bool expr exists, no cast expr, res is 0
+select col_varchar_num and 0 from t1;
+col_varchar_num and 0
+0
+// same as above
+select col_varchar_num and 0 from t1;
+col_varchar_num and 0
+0
+// Case1.3: empty str test
+// bool expr and cast expr exists for empty str, res is 0
+select col_int and '' from t1;
+col_int and ''
+0
+// same as above
+select '' and col_int from t1;
+'' and col_int
+0
+// bool expr and cast expr exists for empty str and col_varchar, res is 0
+select col_varchar and '' from t1;
+col_varchar and ''
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'abc'
+// same as above
+select '' and col_varchar from t1;
+'' and col_varchar
+0
+// bool expr and cast expr exists for empty str and col_varchar_num, res is 0
+select col_varchar_num and '' from t1;
+col_varchar_num and ''
+0
+// same as above
+select '' and col_varchar_num from t1;
+'' and col_varchar_num
+0
+// Case2: create table as test. 因为select/explain语句对应的cast mode
+// 有WARN_ON_FAIL。其他的没有，所以结果是有区别的
+// TODO: 目前没法测试，建表语句还不完善
+// Case3: or test
+// Case3.1 normal test
+// bool expr exists, res is 1
+select col_int or col_int from t1;
+col_int or col_int
+1
+// bool expr exists, res is 0
+select col_zero or col_zero from t1;
+col_zero or col_zero
+0
+// bool expr exists, cast expr exists res is 0
+select col_varchar_zero or col_varchar_zero from t1;
+col_varchar_zero or col_varchar_zero
+0
+// Case3.2 null test
+// bool expr exists, res is NULL
+select col_null or col_null from t1;
+col_null or col_null
+NULL
+// bool expr exists, res is 1
+select col_int or col_null from t1;
+col_int or col_null
+1
+// same as above
+select col_null or col_int from t1;
+col_null or col_int
+1
+// bool expr exists, res is NULL
+select col_zero or col_null from t1;
+col_zero or col_null
+NULL
+// same as above
+select col_null or col_zero from t1;
+col_null or col_zero
+NULL
+// bool expr exists, res is 1
+select col_varchar_num or col_null from t1;
+col_varchar_num or col_null
+1
+// same as above
+select col_null or col_varchar_num from t1;
+col_null or col_varchar_num
+1
+// bool expr exists, res is NULL
+select col_varchar_zero or col_null from t1;
+col_varchar_zero or col_null
+NULL
+// same as above
+select col_null or col_varchar_zero from t1;
+col_null or col_varchar_zero
+NULL
+// Case3.3 empty str test
+// bool expr exists, res is NULL
+select col_null or '' from t1;
+col_null or ''
+NULL
+// same as above
+select '' or col_null from t1;
+'' or col_null
+NULL
+// bool expr exists, res is 1
+select col_int or '' from t1;
+col_int or ''
+1
+// same as above
+select '' or col_int from t1;
+'' or col_int
+1
+// bool expr exists, res is 0
+select col_zero or '' from t1;
+col_zero or ''
+0
+// same as above
+select '' or col_zero from t1;
+'' or col_zero
+0
+// res is 0
+select col_empty_str or '' from t1;
+col_empty_str or ''
+0
+// Case4: multi and test
+// res is 1
+select 1 and 2 and 3 and col_int from t1;
+1 and 2 and 3 and col_int
+1
+// res is NULL
+select 1 and col_null and 3 and col_int from t1;
+1 and col_null and 3 and col_int
+NULL
+// res is 0
+select 1 and col_null and 3 and col_zero from t1;
+1 and col_null and 3 and col_zero
+0
+// res is 0
+select 1 and col_null and 3 and col_empty_str from t1;
+1 and col_null and 3 and col_empty_str
+0
+// Case5: multi or test
+// res is 1
+select 1 or 2 or col_int from t1;
+1 or 2 or col_int
+1
+// res is NULL
+select 1 or 2 or col_null from t1;
+1 or 2 or col_null
+1
+// res is 0
+select '' or 0 or col_null from t1;
+'' or 0 or col_null
+NULL
+// Case6: 0, 1, null三个值组合测试，结果跟不开新引擎的结果进行对比
+drop table if exists t1;
+create table t1 (c1 int, c2 int, c3 int, 
+c4 float, c5 float, c6 float,
+c7 double, c8 double, c9 double,
+c10 decimal, c11 decimal, c12 decimal,
+c13 datetime, c14 datetime, c15 datetime,
+c16 timestamp, c17 timestamp, c18 timestamp,
+c19 date, c20 date, c21 date,
+c22 varchar(10), c23 varchar(10), c24 varchar(10),
+c25 char(11), c26 char(11), c27 char(12),
+c28 char(10), c29 char(10), c30 char(10));
+insert into t1 values(0, 1, null,
+0.0, 1.0, null,
+0.0, 1.0, null,
+0.0, 1.0, null,
+0, '2019-01-01 00:00:00', null,
+0, '2019-01-01 00:00:00', null,
+0, '2019-01-01', null,
+'0', '123', null,
+'0', '123', null,
+'0', 'abc', null);
+set @@ob_enable_plan_cache = 0;
+select c1, c1, c1 and c1 from t1;
+c1	c1	c1 and c1
+0	0	0
+select c1, c1, c1 or c1 from t1;
+c1	c1	c1 or c1
+0	0	0
+select c1, c2, c1 and c2 from t1;
+c1	c2	c1 and c2
+0	1	0
+select c1, c2, c1 or c2 from t1;
+c1	c2	c1 or c2
+0	1	1
+select c1, c3, c1 and c3 from t1;
+c1	c3	c1 and c3
+0	NULL	0
+select c1, c3, c1 or c3 from t1;
+c1	c3	c1 or c3
+0	NULL	NULL
+select c2, c1, c2 and c1 from t1;
+c2	c1	c2 and c1
+1	0	0
+select c2, c1, c2 or c1 from t1;
+c2	c1	c2 or c1
+1	0	1
+select c2, c2, c2 and c2 from t1;
+c2	c2	c2 and c2
+1	1	1
+select c2, c2, c2 or c2 from t1;
+c2	c2	c2 or c2
+1	1	1
+select c2, c3, c2 and c3 from t1;
+c2	c3	c2 and c3
+1	NULL	NULL
+select c2, c3, c2 or c3 from t1;
+c2	c3	c2 or c3
+1	NULL	1
+select c3, c1, c3 and c1 from t1;
+c3	c1	c3 and c1
+NULL	0	0
+select c3, c1, c3 or c1 from t1;
+c3	c1	c3 or c1
+NULL	0	NULL
+select c3, c2, c3 and c2 from t1;
+c3	c2	c3 and c2
+NULL	1	NULL
+select c3, c2, c3 or c2 from t1;
+c3	c2	c3 or c2
+NULL	1	1
+select c3, c3, c3 and c3 from t1;
+c3	c3	c3 and c3
+NULL	NULL	NULL
+select c3, c3, c3 or c3 from t1;
+c3	c3	c3 or c3
+NULL	NULL	NULL
+drop table t1;
+CREATE TABLE t1(c0 VARCHAR(500), c1 DECIMAL);
+insert into t1 values('', 123);
+SELECT ALL t1.c0 AS ref0 FROM t1 WHERE (NULL AND ( CAST(COALESCE(t1.c0,  EXISTS (SELECT 1)) AS SIGNED) IS NOT NULL)) IS NULL;
+ref0
+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: ''
+drop table t1;

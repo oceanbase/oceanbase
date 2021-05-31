@@ -1,0 +1,242 @@
+/*not use any more*/
+static ObObjTypeClass COMPATIABLE_TYPE_PROMOTION[ObMaxTC][ObMaxType] =
+{
+  {
+    /*null -> XXX*/
+    ObNullTC,/*null*/
+    ObIntTC,/*int*/
+    ObUIntTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObStringTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObStringTC, /*unknown*/
+    ObTextTC, /*text*/
+  },
+  {
+    /*int -> XXX*/
+    ObIntTC,/*null*/
+    ObIntTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObStringTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObStringTC, /*unknown*/
+    ObTextTC, /*text*/
+  },
+  {
+    /*uint -> XXX*/
+    ObUIntTC,/*null*/
+    ObNumberTC,/*int*/
+    ObUIntTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObStringTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObStringTC, /*unknown*/
+    ObTextTC, /*text*/
+  },
+  {
+    /*float -> XXX*/
+    ObNumberTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObStringTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObStringTC, /*unknown*/
+    ObTextTC, /*text*/
+  },
+  {
+    /*double -> XXX*/
+    ObNumberTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObStringTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObStringTC, /*unknown*/
+    ObTextTC, /*text*/
+  },
+  {
+    /*number -> XXX*/
+    ObNumberTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObStringTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObStringTC, /*unknown*/
+    ObTextTC, /*text*/
+  },
+  {
+    /*datetime -> XXX*/
+    ObMaxTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+  },
+  {
+    /*date -> XXX*/
+    ObMaxTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+  },
+  {
+    /*time -> XXX*/
+    ObMaxTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+  },
+  {
+    /*year -> XXX*/
+    ObMaxTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObYearTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+  },
+  {
+    /*string -> XXX*/
+    ObStringTC,/*null*/
+    ObStringTC,/*int*/
+    ObStringTC,/*uint*/
+    ObStringTC,/*float*/
+    ObStringTC,/*double*/
+    ObStringTC,/*number*/
+    ObStringTC,/*datetime*/
+    ObStringTC,/*date*/
+    ObStringTC,/*time*/
+    ObStringTC,/*year*/
+    ObStringTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObStringTC, /*unknown*/
+    ObTextTC, /*text*/
+  },
+  {
+    /*extend -> XXX*/
+    ObMaxTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+  },
+  {
+    /*unknown -> XXX*/
+    ObStringTC,/*null*/
+    ObStringTC,/*int*/
+    ObStringTC,/*uint*/
+    ObStringTC,/*float*/
+    ObStringTC,/*double*/
+    ObStringTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObStringTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObStringTC, /*unknown*/
+    ObTextTC, /*text*/
+  },
+  {
+    /*text -> XXX*/
+    ObTextTC,/*null*/
+    ObTextTC,/*int*/
+    ObTextTC,/*uint*/
+    ObTextTC,/*float*/
+    ObTextTC,/*double*/
+    ObTextTC,/*number*/
+    ObTextTC,/*datetime*/
+    ObTextTC,/*date*/
+    ObTextTC,/*time*/
+    ObTextTC,/*year*/
+    ObTextTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObTextTC, /*unknown*/
+    ObTextTC, /*text*/
+  },
+};

@@ -1,0 +1,87 @@
+{
+    "zones":
+    [
+	{
+	    "zone": "ZTG",
+	    "region": "hangzhou"
+	},
+	{
+	    "zone": "ZUI",
+	    "region": "hangzhou"
+	},
+	{
+	    "zone": "SZ",
+	    "region": "shengzhen"
+	}
+    ],
+    "servers":
+    [
+	{
+	    "server":"192.168.0.1",
+	    "zone":"ZTG",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100000000000
+	    }
+	},
+	{
+	    "server":"192.168.0.2",
+	    "zone":"ZTG",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100000000000
+	    }
+	},
+	{
+	    "server":"192.168.1.1",
+	    "zone":"ZUI",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100000000000
+	    }
+	},
+	{
+	    "server":"192.168.1.2",
+	    "zone":"ZUI",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100000000000
+	    }
+	},
+	{
+	    "server":"192.168.2.1",
+	    "zone":"SZ",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100000000000
+	    }
+	},
+	{
+	    "server":"192.168.2.2",
+	    "zone":"SZ",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100000000000
+	    }
+	}
+    ],
+    "units":
+    [
+	{"tenant":"t1", "cpu": 20, "memory": 1100000000, "zone": "ZTG", "on_servers": ["192.168.0.1"]},
+	{"tenant":"t2", "cpu": 10, "memory": 2000000000, "zone": "ZTG","on_servers": ["192.168.0.1"]},
+	{"tenant":"t3", "cpu": 10, "memory": 2000000000, "zone": "ZTG","on_servers": ["192.168.0.1"]},
+	{"tenant":"t4", "cpu": 10, "memory": 2000000000, "zone": "ZTG","on_servers": ["192.168.0.1"]},
+	{"tenant":"t5", "cpu": 10, "memory": 2000000000, "zone": "ZTG","on_servers": ["192.168.0.1"]},
+	{"tenant":"t11", "cpu": 20, "memory": 1100000000, "zone": "SZ", "on_servers": ["192.168.2.1"]},
+	{"tenant":"t12", "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]},
+	{"tenant":"t13", "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]},
+	{"tenant":"t14", "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]},
+	{"tenant":"t15", "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]}
+    ]
+}

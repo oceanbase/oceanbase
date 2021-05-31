@@ -1,0 +1,141 @@
+
+--disable_abort_on_error
+
+
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+
+set @@ob_enable_plan_cache = 0;
+
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30), c_null int);
+    
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5', null);
+insert into t1 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '-9.5', '10.5', null);
+
+create table t2(
+  a1 char(3) primary key,
+  a2 int,
+  a3 char(3),
+  a4 float,
+  a5 datetime
+);
+insert into t2 values('AME',0,'SEA',0.100,date'1942-02-19');
+insert into t2 values('HBR',1,'SEA',0.085,date'1948-03-05');
+insert into t2 values('BOT',-2,'SEA',-0.085,date'1951-11-29');
+insert into t2 values('BMC',3,'SEA',-0.085,date'1958-09-08');
+insert into t2 values('TWU',+0,'LAX',-0.080,date'1969-10-05');
+insert into t2 values('BDL',-0,'DEN',-0.080,date'1960-11-27');
+insert into t2 values('DTX',1,'NYC',0.080,date'1961-05-04');
+insert into t2 values('PLS',-1,'WDC',-0.075,date'1949-01-02');
+insert into t2 values('ZAJ',2,'CHI',-0.075,date'1960-06-15');
+insert into t2 values('VVV',-2,'MON',0.075,date'1959-06-28');
+insert into t2 values('GTM',3,'DAL',-0.070,date'1977-09-23');
+insert into t2 values('SSJ',null,'CHI',null,date'1974-03-19');
+insert into t2 values('KKK',-3,'ATL',null,null);
+insert into t2 values('XXX',null,'MIN',null,null);
+insert into t2 values('WWW',1,'LED',null,null);
+insert into t2 values('GG3',-3,'DD3',-0.051,date'1974-03-19');
+insert into t2 values('GG2',-3,'DD2',0.052,date'1974-03-19');
+insert into t2 values('GG1',3,'DD1',0.053,date'1974-03-19');
+
+--sleep 1
+
+
+select sign(null) from dual;
+
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  let $right=1;
+  eval select c$left, sign(c$left) from t1;
+  inc $left;
+}
+
+select sign(a1) from t2;
+select sign(a3) from t2;
+select sign(a1),a2 from t2;
+select sign(a2) from t2 where sign(a4) >= 0;
+select sign(a4) from t2 where sign(a2) <=0 AND a2 < 2;
+--replace_column 5 timestamp
+select * from t2 group by sign(a2);
+--replace_column 5 timestamp
+select * from t2 order by sign(a4) ;
+--replace_column 5 timestamp
+select * from t2 order by sign(a4) , a4 ;
+--replace_column 5 timestamp
+select * from t2 order by sign(a4) , a1 ;
+--sorted_result
+select abs(a2) , sum(a4) from t2 group by abs(a2) having sum(sign(a4)) > 0;
+--replace_column 5 timestamp
+select * from t2 where a2 = sign ( floor(1.5) - ceil(1.5) + round(1.5) - abs(-1.5) + neg(-1) );
+select sign( sum(a2) ) , sign( sum(a4) ) from t2;
+select sign( avg(a2) ) , sign( avg(a4) ) from t2;
+select sign( max(a2) ) , sign( min(a4) ) from t2;
+select sign(count(*)) from t2;
+--replace_column 5 timestamp
+select * from t2 where sign( length(a1) ) = 1;
+#cast
+select sign( cast(a1 as char(1024)) ) , sign( cast(a3 as char(1024)) ) from t2;
+select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2;
+# sign in join
+select * from t2 as t21 join t2 as t22 on sign(t21.a2) = sign(t22.a4);
+#col alias
+select tmp.a1 , sign(tmp.a2) , tmp.a3 , sign(tmp.a4) from t2 as tmp;
+
+## select for update
+select sign(a2) from t2 where sign(a4) >= 0 for update;
+select sign(a4) from t2 where sign(a2) <=0 AND a2 < 2 for update;
+select * from t2 group by sign(a2) for update;
+select * from t2 order by sign(a4) for update;
+--sorted_result
+select abs(a2) , sum(a4) from t2 group by abs(a2) having sum(sign(a4)) > 0 for update;
+--replace_column 5 timestamp
+select * from t2 where a2 = sign ( floor(1.5) - ceil(1.5) + round(1.5) - abs(-1.5) + neg(-1) ) for update;
+select sign( sum(a2) ) , sign( sum(a4) ) from t2 for update;
+select sign( avg(a2) ) , sign( avg(a4) ) from t2 for update;
+select sign( max(a2) ) , sign( min(a4) ) from t2 for update;
+select sign(count(*)) from t2 for update;
+--replace_column 5 timestamp
+select * from t2 where sign( length(a1) ) = 1 for update;
+--replace_column 5 timestamp
+select sign( cast(a1 as char(1024)) ) , sign( cast(a3 as char(1024)) ) from t2 for update;
+select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2 for update;
+
+
+--sleep 2

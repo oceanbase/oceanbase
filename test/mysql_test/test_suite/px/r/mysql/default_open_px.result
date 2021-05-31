@@ -1,0 +1,130 @@
+drop database if exists muhangtest;
+drop table if exists t1;
+create database muhangtest;
+use muhangtest;
+create table t1 (c1 int(11) not null, c2 int(11) not null, c3 int(11) not null, primary key (c1, c2, c3)) partition by key(c2) partitions 4;
+explain select * from t1;
+Query Plan
+======================================================
+|ID|OPERATOR               |NAME    |EST. ROWS|COST  |
+------------------------------------------------------
+|0 |PX COORDINATOR         |        |400000   |313022|
+|1 | EXCHANGE OUT DISTR    |:EX10000|400000   |256226|
+|2 |  PX PARTITION ITERATOR|        |400000   |256226|
+|3 |   TABLE SCAN          |t1      |400000   |256226|
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil)
+  1 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), dop=1
+  2 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil)
+  3 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), 
+      access([t1.c2], [t1.c1], [t1.c3]), partitions(p[0-3])
+
+explain select /*+use_px*/ * from t1;
+Query Plan
+======================================================
+|ID|OPERATOR               |NAME    |EST. ROWS|COST  |
+------------------------------------------------------
+|0 |PX COORDINATOR         |        |400000   |313022|
+|1 | EXCHANGE OUT DISTR    |:EX10000|400000   |256226|
+|2 |  PX PARTITION ITERATOR|        |400000   |256226|
+|3 |   TABLE SCAN          |t1      |400000   |256226|
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil)
+  1 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), dop=1
+  2 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil)
+  3 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), 
+      access([t1.c2], [t1.c1], [t1.c3]), partitions(p[0-3])
+
+explain select /*+use_px parallel(15)*/ * from t1;
+Query Plan
+==================================================
+|ID|OPERATOR           |NAME    |EST. ROWS|COST  |
+--------------------------------------------------
+|0 |PX COORDINATOR     |        |400000   |313022|
+|1 | EXCHANGE OUT DISTR|:EX10000|400000   |256226|
+|2 |  PX BLOCK ITERATOR|        |400000   |256226|
+|3 |   TABLE SCAN      |t1      |400000   |256226|
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil)
+  1 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), dop=15
+  2 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil)
+  3 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), 
+      access([t1.c2], [t1.c1], [t1.c3]), partitions(p[0-3])
+
+explain select /*+no_use_px */ * from t1;
+Query Plan
+======================================================
+|ID|OPERATOR               |NAME    |EST. ROWS|COST  |
+------------------------------------------------------
+|0 |PX COORDINATOR         |        |400000   |313022|
+|1 | EXCHANGE OUT DISTR    |:EX10000|400000   |256226|
+|2 |  PX PARTITION ITERATOR|        |400000   |256226|
+|3 |   TABLE SCAN          |t1      |400000   |256226|
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil)
+  1 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), dop=1
+  2 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil)
+  3 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), 
+      access([t1.c2], [t1.c1], [t1.c3]), partitions(p[0-3])
+
+explain select /*+no_use_px use_px*/ * from t1;
+Query Plan
+======================================================
+|ID|OPERATOR               |NAME    |EST. ROWS|COST  |
+------------------------------------------------------
+|0 |PX COORDINATOR         |        |400000   |313022|
+|1 | EXCHANGE OUT DISTR    |:EX10000|400000   |256226|
+|2 |  PX PARTITION ITERATOR|        |400000   |256226|
+|3 |   TABLE SCAN          |t1      |400000   |256226|
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil)
+  1 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), dop=1
+  2 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil)
+  3 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), 
+      access([t1.c2], [t1.c1], [t1.c3]), partitions(p[0-3])
+
+explain select /*+use_px no_use_px */ * from t1;
+Query Plan
+======================================================
+|ID|OPERATOR               |NAME    |EST. ROWS|COST  |
+------------------------------------------------------
+|0 |PX COORDINATOR         |        |400000   |313022|
+|1 | EXCHANGE OUT DISTR    |:EX10000|400000   |256226|
+|2 |  PX PARTITION ITERATOR|        |400000   |256226|
+|3 |   TABLE SCAN          |t1      |400000   |256226|
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil)
+  1 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), dop=1
+  2 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil)
+  3 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), 
+      access([t1.c2], [t1.c1], [t1.c3]), partitions(p[0-3])
+
+drop table if exists t7;
+create table t7(a int, b int, c int, d int, primary key (a)) partition by hash(a) partitions 3;
+insert into t7 values(1,2,3,4);
+insert into t7 values(2,3,5,6);
+select /*+NO_REWRITE use_px */ * from t7 as A, t7 as B where A.a = B.a and exists(select * from t7 where t7.a=B.a);
+a	b	c	d	a	b	c	d
+1	2	3	4	1	2	3	4
+2	3	5	6	2	3	5	6
+drop table if exists t1;
+drop table if exists t7;
+drop database if exists muhangtest;

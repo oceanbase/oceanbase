@@ -1,0 +1,6 @@
+ob_unittest(test_multi_tenant omt/test_multi_tenant.cpp)
+ob_unittest(test_manage_tenant omt/test_manage_tenant.cpp)
+ob_unittest(test_omt_worker omt/test_worker.cpp)
+ob_unittest(test_worker_pool omt/test_worker_pool.cpp)
+ob_unittest(test_token_calcer omt/test_token_calcer.cpp)
+ob_unittest(test_information_schema)

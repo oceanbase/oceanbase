@@ -1,0 +1,71 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+--echo ================ expression instr ================
+select instr('abc', '');
+select instr('', '');
+select instr('', 'abc');
+select instr('abc', 'abcd');
+select instr('abc', 'abc');
+select instr('abc', 'a');
+select instr('abc', 'b');
+select instr('abc', 'c');
+select instr('abc', 'bc');
+select instr('abcbc', 'bc');
+select instr('阿里巴巴', '阿里');
+select instr('阿里巴巴', '巴巴');
+select instr('阿里巴巴巴巴', '巴巴');
+select instr('阿里巴巴', '阿里巴巴');
+select instr('123', true);
+select instr('23', true);
+select instr(123, '23');
+select instr('123', 123);
+select instr('123.400000', 23.4);
+select instr('123.400000', 123.4);
+select instr('123.400000', null);
+select instr(null, '巴巴');
+select instr('巴巴', null);
+select instr(null, null);
+
+select instr(true, false);
+select instr(true, true);
+select instr(123, true);
+select instr(123, false);
+select instr(0123, false);
+select instr(1023, false);
+select instr(1023.4, false);
+select instr(1023.4, true);
+select instr(null, true);
+select instr(true, null);
+
+select instr(123, 23);
+select instr(123, 23456);
+select instr(123.4, 123);
+select instr(1234, 123.4);
+select instr(1234, null);
+select instr(null, 123);
+
+select instr(123.400000, 123.4);
+select instr(123.400000, 123.41);
+select instr(123.400000, null);
+select instr(null, 123.41);
+
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(c1 datetime primary key);
+sleep 5;
+insert into test values('2015-5-5');
+select instr(c1, '201') from test;
+select instr(c1, '') from test;
+select instr(c1, 'haha') from test;
+select instr(c1, '-5') from test;
+select instr(c1, '2015-5-5') from test;
+select instr(c1, true) from test;
+select instr(c1, 201) from test;
+select instr(c1, 201.1) from test;
+select instr(c1, null) from test;
+select instr(null, c1) from test;
+--disable_warnings
+drop table if exists test;
+--enable_warnings

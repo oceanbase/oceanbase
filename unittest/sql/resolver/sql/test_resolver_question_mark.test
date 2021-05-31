@@ -1,0 +1,11 @@
+drop database if exists question_mark_db;
+create database question_mark_db;
+use question_mark_db;
+
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+
+select * from t1 where c1=0
+select * from t1 where c1=1 and c2=1
+
+drop database question_mark_db;
+

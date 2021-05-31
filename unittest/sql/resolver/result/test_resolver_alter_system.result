@@ -1,0 +1,585 @@
+***************   Case 1   ***************
+drop database if exists altersystem;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"altersystem",
+  "if_exist":true,
+  "to_recyclebin":false
+}
+***************   Case 2   ***************
+create database altersystem;
+{
+  "create_database_arg":"database_schema",
+  "database_id":-1,
+  "schema_version":1,
+  "database_name":"altersystem",
+  "replica_num":0,
+  "zone_list": [
+  ],
+  "primary_zone":"",
+  "charset_type":2,
+  "collation_type":"utf8mb4_general_ci",
+  "name_case_mode":-1,
+  "comment":"",
+  "read_only":false,
+  "default_tablegroup_id":-1,
+  "default_tablegroup_name":"",
+  "in_recyclebin":false,
+  "primary_zone_array": [
+  ]
+}
+***************   Case 3   ***************
+use altersystem;
+{
+  "stmt_type":97
+}
+***************   Case 4   ***************
+alter system switch replica leader server = '127.0.0.1:80'
+{
+  "stmt_type":100,
+  "rpc_arg": {
+    "role":1,
+    "partition_key": {
+      "tid":-1,
+      "partition_id":-1,
+      "part_idx":268435455,
+      "subpart_idx":268435455
+    },
+    "server":"127.0.0.1:80",
+    "zone":"",
+    "tenant_name":""
+  }
+}
+***************   Case 5   ***************
+alter system switch replica leader zone = '127.0.0.1:80'
+{
+  "stmt_type":100,
+  "rpc_arg": {
+    "role":1,
+    "partition_key": {
+      "tid":-1,
+      "partition_id":-1,
+      "part_idx":268435455,
+      "subpart_idx":268435455
+    },
+    "server":"0.0.0.0",
+    "zone":"127.0.0.1:80",
+    "tenant_name":""
+  }
+}
+***************   Case 6   ***************
+alter system switch replica leader partition_id = '1 % 3 @ 4' server = '127.0.0.1:80'
+{
+  "stmt_type":100,
+  "rpc_arg": {
+    "role":1,
+    "partition_key": {
+      "tid":4,
+      "partition_id":1,
+      "part_cnt":3
+    },
+    "server":"127.0.0.1:80",
+    "zone":"",
+    "tenant_name":""
+  }
+}
+***************   Case 7   ***************
+alter system switch replica leader zone = 'z1';
+{
+  "stmt_type":100,
+  "rpc_arg": {
+    "role":1,
+    "partition_key": {
+      "tid":-1,
+      "partition_id":-1,
+      "part_idx":268435455,
+      "subpart_idx":268435455
+    },
+    "server":"0.0.0.0",
+    "zone":"z1",
+    "tenant_name":""
+  }
+}
+***************   Case 8   ***************
+alter system switch replica leader server = '127.0.0.1:80';
+{
+  "stmt_type":100,
+  "rpc_arg": {
+    "role":1,
+    "partition_key": {
+      "tid":-1,
+      "partition_id":-1,
+      "part_idx":268435455,
+      "subpart_idx":268435455
+    },
+    "server":"127.0.0.1:80",
+    "zone":"",
+    "tenant_name":""
+  }
+}
+***************   Case 9   ***************
+alter system switch replica leader partition_id = '1%8@3001' server = '127.0.0.1:80';
+{
+  "stmt_type":100,
+  "rpc_arg": {
+    "role":1,
+    "partition_key": {
+      "tid":3001,
+      "partition_id":1,
+      "part_cnt":8
+    },
+    "server":"127.0.0.1:80",
+    "zone":"",
+    "tenant_name":""
+  }
+}
+***************   Case 10   ***************
+alter system switch replica leader partition_id '1%8@3001' server '127.0.0.1:80';
+{
+  "stmt_type":100,
+  "rpc_arg": {
+    "role":1,
+    "partition_key": {
+      "tid":3001,
+      "partition_id":1,
+      "part_cnt":8
+    },
+    "server":"127.0.0.1:80",
+    "zone":"",
+    "tenant_name":""
+  }
+}
+***************   Case 11   ***************
+alter system drop replica partition_id = '1%8@3001' server = '127.0.0.1:80';
+{
+  "stmt_type":101,
+  "rpc_arg": {
+    "partition_key": {
+      "tid":3001,
+      "partition_id":1,
+      "part_cnt":8
+    },
+    "server":"127.0.0.1:80",
+    "zone":"",
+    "create_timestamp":0,
+    "force_cmd":false
+  }
+}
+***************   Case 12   ***************
+alter system drop replica partition_id = '1%8@3001' server = '127.0.0.1:80' create_timestamp = 1;
+{
+  "stmt_type":101,
+  "rpc_arg": {
+    "partition_key": {
+      "tid":3001,
+      "partition_id":1,
+      "part_cnt":8
+    },
+    "server":"127.0.0.1:80",
+    "zone":"",
+    "create_timestamp":1,
+    "force_cmd":false
+  }
+}
+***************   Case 13   ***************
+alter system drop replica partition_id = '1%8@3001' server = '127.0.0.1:80' zone = 'z1';
+{
+  "stmt_type":101,
+  "rpc_arg": {
+    "partition_key": {
+      "tid":3001,
+      "partition_id":1,
+      "part_cnt":8
+    },
+    "server":"127.0.0.1:80",
+    "zone":"z1",
+    "create_timestamp":0,
+    "force_cmd":false
+  }
+}
+***************   Case 14   ***************
+alter system drop replica partition_id = '1%8@3001' server = '127.0.0.1:80' create_timestamp = 1 zone = 'z1';
+{
+  "stmt_type":101,
+  "rpc_arg": {
+    "partition_key": {
+      "tid":3001,
+      "partition_id":1,
+      "part_cnt":8
+    },
+    "server":"127.0.0.1:80",
+    "zone":"z1",
+    "create_timestamp":1,
+    "force_cmd":false
+  }
+}
+***************   Case 15   ***************
+alter system drop replica partition_id '1%8@3001' server '127.0.0.1:80' create_timestamp 1 zone 'z1';
+{
+  "stmt_type":101,
+  "rpc_arg": {
+    "partition_key": {
+      "tid":3001,
+      "partition_id":1,
+      "part_cnt":8
+    },
+    "server":"127.0.0.1:80",
+    "zone":"z1",
+    "create_timestamp":1,
+    "force_cmd":false
+  }
+}
+***************   Case 16   ***************
+alter system copy replica partition_id = '1%8@3001' source = '127.0.0.1:80' destination = '127.0.0.2:80';
+{
+  "stmt_type":102,
+  "rpc_arg": {
+    "is_copy":true,
+    "partition_key": {
+      "tid":3001,
+      "partition_id":1,
+      "part_cnt":8
+    },
+    "src":"127.0.0.1:80",
+    "dest":"127.0.0.2:80",
+    "force_cmd":false
+  }
+}
+***************   Case 17   ***************
+alter system move replica partition_id = '1%8@3001' source = '127.0.0.1:80' destination = '127.0.0.2:80';
+{
+  "stmt_type":102,
+  "rpc_arg": {
+    "is_copy":false,
+    "partition_key": {
+      "tid":3001,
+      "partition_id":1,
+      "part_cnt":8
+    },
+    "src":"127.0.0.1:80",
+    "dest":"127.0.0.2:80",
+    "force_cmd":false
+  }
+}
+***************   Case 18   ***************
+alter system move replica partition_id '1%8@3001' source '127.0.0.1:80' destination '127.0.0.2:80';
+{
+  "stmt_type":102,
+  "rpc_arg": {
+    "is_copy":false,
+    "partition_key": {
+      "tid":3001,
+      "partition_id":1,
+      "part_cnt":8
+    },
+    "src":"127.0.0.1:80",
+    "dest":"127.0.0.2:80",
+    "force_cmd":false
+  }
+}
+***************   Case 19   ***************
+alter system report replica;
+{
+  "stmt_type":80,
+  "rpc_arg": {
+    "server":"0.0.0.0",
+    "zone":""
+  }
+}
+***************   Case 20   ***************
+alter system report replica server = '127.0.0.1:80';
+{
+  "stmt_type":80,
+  "rpc_arg": {
+    "server":"127.0.0.1:80",
+    "zone":""
+  }
+}
+***************   Case 21   ***************
+alter system report replica zone = 'z1';
+{
+  "stmt_type":80,
+  "rpc_arg": {
+    "server":"0.0.0.0",
+    "zone":"z1"
+  }
+}
+***************   Case 22   ***************
+alter system recycle replica;
+{
+  "stmt_type":103,
+  "rpc_arg": {
+    "server":"0.0.0.0",
+    "zone":""
+  }
+}
+***************   Case 23   ***************
+alter system recycle replica server = '127.0.0.1:80';
+{
+  "stmt_type":103,
+  "rpc_arg": {
+    "server":"127.0.0.1:80",
+    "zone":""
+  }
+}
+***************   Case 24   ***************
+alter system recycle replica server '127.0.0.1:80';
+{
+  "stmt_type":103,
+  "rpc_arg": {
+    "server":"127.0.0.1:80",
+    "zone":""
+  }
+}
+***************   Case 25   ***************
+alter system recycle replica zone = 'z1';
+{
+  "stmt_type":103,
+  "rpc_arg": {
+    "server":"0.0.0.0",
+    "zone":"z1"
+  }
+}
+***************   Case 26   ***************
+alter system recycle replica zone 'z1';
+{
+  "stmt_type":103,
+  "rpc_arg": {
+    "server":"0.0.0.0",
+    "zone":"z1"
+  }
+}
+***************   Case 27   ***************
+alter system major freeze;
+{
+  "stmt_type":84,
+  "major_freeze":true,
+  "opt_server_list_": [
+  ],
+  "opt_tenant_ids_": [
+  ],
+  "opt_partition_key_": {
+    "tid":-1,
+    "partition_id":-1,
+    "part_idx":268435455,
+    "subpart_idx":268435455
+  }
+}
+***************   Case 28   ***************
+alter system start merge zone = 'z1';
+{
+  "stmt_type":104,
+  "rpc_arg": {
+    "type":1,
+    "zone":"z1"
+  }
+}
+***************   Case 29   ***************
+alter system suspend merge;
+{
+  "stmt_type":104,
+  "rpc_arg": {
+    "type":2,
+    "zone":""
+  }
+}
+***************   Case 30   ***************
+alter system suspend merge zone = 'z1';
+{
+  "stmt_type":104,
+  "rpc_arg": {
+    "type":2,
+    "zone":"z1"
+  }
+}
+***************   Case 31   ***************
+alter system resume merge;
+{
+  "stmt_type":104,
+  "rpc_arg": {
+    "type":3,
+    "zone":""
+  }
+}
+***************   Case 32   ***************
+alter system resume merge zone = 'z1';
+{
+  "stmt_type":104,
+  "rpc_arg": {
+    "type":3,
+    "zone":"z1"
+  }
+}
+***************   Case 33   ***************
+alter system clear roottable;
+{
+  "stmt_type":94,
+  "rpc_arg": {
+    "tenant_name":""
+  }
+}
+***************   Case 34   ***************
+alter system clear roottable tenant = 'test';
+{
+  "stmt_type":94,
+  "rpc_arg": {
+    "tenant_name":"test"
+  }
+}
+***************   Case 35   ***************
+alter system refresh schema;
+{
+  "stmt_type":95,
+  "rpc_arg": {
+    "server":"0.0.0.0",
+    "zone":""
+  }
+}
+***************   Case 36   ***************
+alter system refresh schema zone = 'test';
+{
+  "stmt_type":95,
+  "rpc_arg": {
+    "server":"0.0.0.0",
+    "zone":"test"
+  }
+}
+***************   Case 37   ***************
+alter system refresh schema server = '127.0.0.1:80';
+{
+  "stmt_type":95,
+  "rpc_arg": {
+    "server":"127.0.0.1:80",
+    "zone":""
+  }
+}
+***************   Case 38   ***************
+alter system set abc = 1, abd = 'xx' server = '127.0.0.1:80', def = true comment 'defxxx' tenant = 't1';
+{
+  "stmt_type":175,
+  "rpc_arg": {
+    "items": [
+       {
+        "name":"abc",
+        "value":"1",
+        "comment":"",
+        "zone":"",
+        "server":"0.0.0.0",
+        "tenant_name":"",
+        "exec_tenant_id":1,
+        "tenant_ids": [
+        ]
+      },
+       {
+        "name":"abd",
+        "value":"xx",
+        "comment":"",
+        "zone":"",
+        "server":"127.0.0.1:80",
+        "tenant_name":"",
+        "exec_tenant_id":1,
+        "tenant_ids": [
+        ]
+      },
+       {
+        "name":"def",
+        "value":"1",
+        "comment":"defxxx",
+        "zone":"",
+        "server":"0.0.0.0",
+        "tenant_name":"t1",
+        "exec_tenant_id":1,
+        "tenant_ids": [
+        ]
+      }
+    ]
+  }
+}
+***************   Case 39   ***************
+alter system modify zone 'z1'
+{
+  "stmt_type":99
+}
+***************   Case 40   ***************
+alter system modify zone 'z1' region = 'r1'
+{
+  "stmt_type":99
+}
+***************   Case 41   ***************
+alter system modify zone 'z1' idc = 'idc1'
+{
+  "stmt_type":99
+}
+***************   Case 42   ***************
+alter system modify zone 'z1' zone_type = 'ReadWrite'
+{
+  "stmt_type":99
+}
+***************   Case 43   ***************
+alter system modify zone 'z1' set idc 'idc1', region 'r1'
+{
+  "stmt_type":99
+}
+***************   Case 44   ***************
+alter system modify zone 'z1' set region 'r1', idc 'idc1'
+{
+  "stmt_type":99
+}
+***************   Case 45   ***************
+alter system modify zone 'z1' set zone_type 'ReadWrite', region 'r1'
+{
+  "stmt_type":99
+}
+***************   Case 46   ***************
+alter system modify zone 'z1' set region 'r1', zone_type 'ReadWrite'
+{
+  "stmt_type":99
+}
+***************   Case 47   ***************
+alter system modify zone 'z1' set idc 'idc1', zone_type 'ReadWrite'
+{
+  "stmt_type":99
+}
+***************   Case 48   ***************
+alter system modify zone 'z1' set zone_type 'ReadWrite', idc 'idc1'
+{
+  "stmt_type":99
+}
+***************   Case 49   ***************
+alter system modify zone 'z1' set zone_type 'ReadWrite', idc 'idc1', region 'r1'
+{
+  "stmt_type":99
+}
+***************   Case 50   ***************
+alter system modify zone 'z1' set zone_type 'ReadWrite', region 'r1', idc 'idc1'
+{
+  "stmt_type":99
+}
+***************   Case 51   ***************
+alter system modify zone 'z1' set idc 'idc1', zone_type 'ReadWrite', region 'r1'
+{
+  "stmt_type":99
+}
+***************   Case 52   ***************
+alter system modify zone 'z1' set idc 'idc1', region 'r1', zone_type 'ReadWrite'
+{
+  "stmt_type":99
+}
+***************   Case 53   ***************
+alter system modify zone 'z1' set region 'r1', idc 'idc1', zone_type 'ReadWrite'
+{
+  "stmt_type":99
+}
+***************   Case 54   ***************
+alter system modify zone 'z1' set region 'r1', zone_type 'ReadWrite', idc 'idc1'
+{
+  "stmt_type":99
+}
+***************   Case 55   ***************
+drop database altersystem;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"altersystem",
+  "if_exist":false,
+  "to_recyclebin":false
+}

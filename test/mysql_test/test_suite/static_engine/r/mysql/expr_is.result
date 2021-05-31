@@ -1,0 +1,388 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT;
+connection conn_admin;
+connection default;
+drop table if exists t1;
+create table t1 (c1 int, c2 int unsigned,
+c3 tinyint, c4 tinyint unsigned,
+c5 smallint, c6 smallint unsigned,
+c7 mediumint, c8 mediumint unsigned,
+c9 integer, c10 integer unsigned,
+c11 bigint, c12 bigint unsigned,
+c13 float, c14 float unsigned,
+c15 double, c16 double unsigned,
+c17 decimal, c18 decimal unsigned,
+c19 date, c20 date not null,
+c21 datetime, c22 datetime not null,
+c23 timestamp, c24 timestamp not null,
+c25 varchar(30), c26 char(30));
+select * from t1;
+c1	c2	c3	c4	c5	c6	c7	c8	c9	c10	c11	c12	c13	c14	c15	c16	c17	c18	c19	c20	c21	c22	c23	c24	c25	c26
+insert into t1 values(NULL, NULL,
+NULL, NULL,
+NULL, NULL,
+NULL, NULL,
+NULL, NULL,
+NULL, NULL,
+NULL, NULL,
+NULL, NULL,
+NULL, NULL,
+NULL, '0000-00-00',
+NULL, '0000-00-00 00:00:00',
+NULL, '0000-00-00 00:00:00',
+NULL, NULL);
+insert into t1 values(0, 0,
+0, 0,
+0, 0,
+0, 0,
+0, 0,
+0, 0,
+0.0, 0.0,
+0.0, 0.0,
+0.0, 0.0,
+'0000-00-00', '0000-00-00',
+'0000-00-00 00:00:00', '0000-00-00 00:00:00',
+'0000-00-00 00:00:00', '0000-00-00 00:00:00',
+'0', '0.0');
+insert into t1 values(1, 1,
+1, 1,
+1, 1,
+1, 1,
+1, 1,
+1, 1,
+-0.1, 0.1,
+-0.1, 0.1,
+-0.1, 0.1,
+'0001-01-01', '0001-01-01',
+'0001-01-01 00:00:00', '0001-01-01 00:00:00',
+'0001-01-01 00:00:00', '0001-01-01 00:00:00',
+'1', '1.0');
+insert into t1 values(11, 11,
+11, 11,
+11, 11,
+11, 11,
+11, 11,
+11, 11,
+11.0, 11.0,
+11.0, 11.0,
+11.0, 11.0,
+'2019-12-01 12:00:00', '2019-12-01 12:00:00',
+'2019-12-01 12:00:00', '2019-12-01 12:00:00',
+'2019-12-01 12:00:00', '2019-12-01 12:00:00',
+'11', '11.0');
+connection conn_admin;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select c1, c1 is true, c1 is false, c1 is null, c1 is unknown from t1;
+c1	c1 is true	c1 is false	c1 is null	c1 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c1, c1 is not true, c1 is not false, c1 is not null, c1 is not unknown from t1;
+c1	c1 is not true	c1 is not false	c1 is not null	c1 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c2, c2 is true, c2 is false, c2 is null, c2 is unknown from t1;
+c2	c2 is true	c2 is false	c2 is null	c2 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c2, c2 is not true, c2 is not false, c2 is not null, c2 is not unknown from t1;
+c2	c2 is not true	c2 is not false	c2 is not null	c2 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c3, c3 is true, c3 is false, c3 is null, c3 is unknown from t1;
+c3	c3 is true	c3 is false	c3 is null	c3 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c3, c3 is not true, c3 is not false, c3 is not null, c3 is not unknown from t1;
+c3	c3 is not true	c3 is not false	c3 is not null	c3 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c4, c4 is true, c4 is false, c4 is null, c4 is unknown from t1;
+c4	c4 is true	c4 is false	c4 is null	c4 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c4, c4 is not true, c4 is not false, c4 is not null, c4 is not unknown from t1;
+c4	c4 is not true	c4 is not false	c4 is not null	c4 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c5, c5 is true, c5 is false, c5 is null, c5 is unknown from t1;
+c5	c5 is true	c5 is false	c5 is null	c5 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c5, c5 is not true, c5 is not false, c5 is not null, c5 is not unknown from t1;
+c5	c5 is not true	c5 is not false	c5 is not null	c5 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c6, c6 is true, c6 is false, c6 is null, c6 is unknown from t1;
+c6	c6 is true	c6 is false	c6 is null	c6 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c6, c6 is not true, c6 is not false, c6 is not null, c6 is not unknown from t1;
+c6	c6 is not true	c6 is not false	c6 is not null	c6 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c7, c7 is true, c7 is false, c7 is null, c7 is unknown from t1;
+c7	c7 is true	c7 is false	c7 is null	c7 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c7, c7 is not true, c7 is not false, c7 is not null, c7 is not unknown from t1;
+c7	c7 is not true	c7 is not false	c7 is not null	c7 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c8, c8 is true, c8 is false, c8 is null, c8 is unknown from t1;
+c8	c8 is true	c8 is false	c8 is null	c8 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c8, c8 is not true, c8 is not false, c8 is not null, c8 is not unknown from t1;
+c8	c8 is not true	c8 is not false	c8 is not null	c8 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c9, c9 is true, c9 is false, c9 is null, c9 is unknown from t1;
+c9	c9 is true	c9 is false	c9 is null	c9 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c9, c9 is not true, c9 is not false, c9 is not null, c9 is not unknown from t1;
+c9	c9 is not true	c9 is not false	c9 is not null	c9 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c10, c10 is true, c10 is false, c10 is null, c10 is unknown from t1;
+c10	c10 is true	c10 is false	c10 is null	c10 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c10, c10 is not true, c10 is not false, c10 is not null, c10 is not unknown from t1;
+c10	c10 is not true	c10 is not false	c10 is not null	c10 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c11, c11 is true, c11 is false, c11 is null, c11 is unknown from t1;
+c11	c11 is true	c11 is false	c11 is null	c11 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c11, c11 is not true, c11 is not false, c11 is not null, c11 is not unknown from t1;
+c11	c11 is not true	c11 is not false	c11 is not null	c11 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c12, c12 is true, c12 is false, c12 is null, c12 is unknown from t1;
+c12	c12 is true	c12 is false	c12 is null	c12 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c12, c12 is not true, c12 is not false, c12 is not null, c12 is not unknown from t1;
+c12	c12 is not true	c12 is not false	c12 is not null	c12 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c13, c13 is true, c13 is false, c13 is null, c13 is unknown from t1;
+c13	c13 is true	c13 is false	c13 is null	c13 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+-0.1	1	0	0	0
+11	1	0	0	0
+select c13, c13 is not true, c13 is not false, c13 is not null, c13 is not unknown from t1;
+c13	c13 is not true	c13 is not false	c13 is not null	c13 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+-0.1	0	1	1	1
+11	0	1	1	1
+select c14, c14 is true, c14 is false, c14 is null, c14 is unknown from t1;
+c14	c14 is true	c14 is false	c14 is null	c14 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+0.1	1	0	0	0
+11	1	0	0	0
+select c14, c14 is not true, c14 is not false, c14 is not null, c14 is not unknown from t1;
+c14	c14 is not true	c14 is not false	c14 is not null	c14 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+0.1	0	1	1	1
+11	0	1	1	1
+select c15, c15 is true, c15 is false, c15 is null, c15 is unknown from t1;
+c15	c15 is true	c15 is false	c15 is null	c15 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+-0.1	1	0	0	0
+11	1	0	0	0
+select c15, c15 is not true, c15 is not false, c15 is not null, c15 is not unknown from t1;
+c15	c15 is not true	c15 is not false	c15 is not null	c15 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+-0.1	0	1	1	1
+11	0	1	1	1
+select c16, c16 is true, c16 is false, c16 is null, c16 is unknown from t1;
+c16	c16 is true	c16 is false	c16 is null	c16 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+0.1	1	0	0	0
+11	1	0	0	0
+select c16, c16 is not true, c16 is not false, c16 is not null, c16 is not unknown from t1;
+c16	c16 is not true	c16 is not false	c16 is not null	c16 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+0.1	0	1	1	1
+11	0	1	1	1
+select c17, c17 is true, c17 is false, c17 is null, c17 is unknown from t1;
+c17	c17 is true	c17 is false	c17 is null	c17 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+0	0	1	0	0
+11	1	0	0	0
+select c17, c17 is not true, c17 is not false, c17 is not null, c17 is not unknown from t1;
+c17	c17 is not true	c17 is not false	c17 is not null	c17 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+0	1	0	1	1
+11	0	1	1	1
+select c18, c18 is true, c18 is false, c18 is null, c18 is unknown from t1;
+c18	c18 is true	c18 is false	c18 is null	c18 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+0	0	1	0	0
+11	1	0	0	0
+select c18, c18 is not true, c18 is not false, c18 is not null, c18 is not unknown from t1;
+c18	c18 is not true	c18 is not false	c18 is not null	c18 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+0	1	0	1	1
+11	0	1	1	1
+select c19, c19 is true, c19 is false, c19 is null, c19 is unknown from t1;
+c19	c19 is true	c19 is false	c19 is null	c19 is unknown
+NULL	0	0	1	1
+0000-00-00	0	1	0	0
+0001-01-01	1	0	0	0
+2019-12-01	1	0	0	0
+select c19, c19 is not true, c19 is not false, c19 is not null, c19 is not unknown from t1;
+c19	c19 is not true	c19 is not false	c19 is not null	c19 is not unknown
+NULL	1	1	0	0
+0000-00-00	1	0	1	1
+0001-01-01	0	1	1	1
+2019-12-01	0	1	1	1
+select c20, c20 is true, c20 is false, c20 is null, c20 is unknown from t1;
+c20	c20 is true	c20 is false	c20 is null	c20 is unknown
+0000-00-00	0	1	0	0
+0000-00-00	0	1	0	0
+0001-01-01	1	0	0	0
+2019-12-01	1	0	0	0
+select c20, c20 is not true, c20 is not false, c20 is not null, c20 is not unknown from t1;
+c20	c20 is not true	c20 is not false	c20 is not null	c20 is not unknown
+0000-00-00	1	0	1	1
+0000-00-00	1	0	1	1
+0001-01-01	0	1	1	1
+2019-12-01	0	1	1	1
+select c21, c21 is true, c21 is false, c21 is null, c21 is unknown from t1;
+c21	c21 is true	c21 is false	c21 is null	c21 is unknown
+NULL	0	0	1	1
+0000-00-00 00:00:00	0	1	0	0
+0001-01-01 00:00:00	1	0	0	0
+2019-12-01 12:00:00	1	0	0	0
+select c21, c21 is not true, c21 is not false, c21 is not null, c21 is not unknown from t1;
+c21	c21 is not true	c21 is not false	c21 is not null	c21 is not unknown
+NULL	1	1	0	0
+0000-00-00 00:00:00	1	0	1	1
+0001-01-01 00:00:00	0	1	1	1
+2019-12-01 12:00:00	0	1	1	1
+select c22, c22 is true, c22 is false, c22 is null, c22 is unknown from t1;
+c22	c22 is true	c22 is false	c22 is null	c22 is unknown
+0000-00-00 00:00:00	0	1	0	0
+0000-00-00 00:00:00	0	1	0	0
+0001-01-01 00:00:00	1	0	0	0
+2019-12-01 12:00:00	1	0	0	0
+select c22, c22 is not true, c22 is not false, c22 is not null, c22 is not unknown from t1;
+c22	c22 is not true	c22 is not false	c22 is not null	c22 is not unknown
+0000-00-00 00:00:00	1	0	1	1
+0000-00-00 00:00:00	1	0	1	1
+0001-01-01 00:00:00	0	1	1	1
+2019-12-01 12:00:00	0	1	1	1
+select c23, c23 is true, c23 is false, c23 is null, c23 is unknown from t1;
+c23	c23 is true	c23 is false	c23 is null	c23 is unknown
+NULL	0	0	1	1
+0000-00-00 00:00:00	0	1	0	0
+0001-01-01 00:00:00	1	0	0	0
+2019-12-01 12:00:00	1	0	0	0
+select c23, c23 is not true, c23 is not false, c23 is not null, c23 is not unknown from t1;
+c23	c23 is not true	c23 is not false	c23 is not null	c23 is not unknown
+NULL	1	1	0	0
+0000-00-00 00:00:00	1	0	1	1
+0001-01-01 00:00:00	0	1	1	1
+2019-12-01 12:00:00	0	1	1	1
+select c24, c24 is true, c24 is false, c24 is null, c24 is unknown from t1;
+c24	c24 is true	c24 is false	c24 is null	c24 is unknown
+0000-00-00 00:00:00	0	1	0	0
+0000-00-00 00:00:00	0	1	0	0
+0001-01-01 00:00:00	1	0	0	0
+2019-12-01 12:00:00	1	0	0	0
+select c24, c24 is not true, c24 is not false, c24 is not null, c24 is not unknown from t1;
+c24	c24 is not true	c24 is not false	c24 is not null	c24 is not unknown
+0000-00-00 00:00:00	1	0	1	1
+0000-00-00 00:00:00	1	0	1	1
+0001-01-01 00:00:00	0	1	1	1
+2019-12-01 12:00:00	0	1	1	1
+select c25, c25 is true, c25 is false, c25 is null, c25 is unknown from t1;
+c25	c25 is true	c25 is false	c25 is null	c25 is unknown
+NULL	0	0	1	1
+0	0	1	0	0
+1	1	0	0	0
+11	1	0	0	0
+select c25, c25 is not true, c25 is not false, c25 is not null, c25 is not unknown from t1;
+c25	c25 is not true	c25 is not false	c25 is not null	c25 is not unknown
+NULL	1	1	0	0
+0	1	0	1	1
+1	0	1	1	1
+11	0	1	1	1
+select c26, c26 is true, c26 is false, c26 is null, c26 is unknown from t1;
+c26	c26 is true	c26 is false	c26 is null	c26 is unknown
+NULL	0	0	1	1
+0.0	0	1	0	0
+1.0	1	0	0	0
+11.0	1	0	0	0
+select c26, c26 is not true, c26 is not false, c26 is not null, c26 is not unknown from t1;
+c26	c26 is not true	c26 is not false	c26 is not null	c26 is not unknown
+NULL	1	1	0	0
+0.0	1	0	1	1
+1.0	0	1	1	1
+11.0	0	1	1	1
+drop table t1;
+connection conn_admin;

@@ -1,0 +1,1485 @@
+***************   Case 0   ***************
+SQL: select distinct a from pjt1,pjt2; 
+=====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST |
+-----------------------------------------------------
+|0 |HASH DISTINCT              |    |100      |10635|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |10000    |7281 |
+|2 |  TABLE SCAN               |pjt1|100      |95   |
+|3 |  MATERIAL                 |    |100      |111  |
+|4 |   TABLE SCAN              |pjt2|100      |92   |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), 
+      distinct([pjt1.a])
+  1 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+
+***************   Case 1   ***************
+SQL: select distinct c from pjt1,pjt2,pjt3; 
+========================================================
+|ID|OPERATOR                    |NAME|EST. ROWS|COST   |
+--------------------------------------------------------
+|0 |HASH DISTINCT               |    |100      |1043356|
+|1 | NESTED-LOOP JOIN CARTESIAN |    |1000000  |715031 |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |10000    |7281   |
+|3 |   TABLE SCAN               |pjt1|100      |92     |
+|4 |   MATERIAL                 |    |100      |113    |
+|5 |    TABLE SCAN              |pjt2|100      |95     |
+|6 |  MATERIAL                  |    |100      |111    |
+|7 |   TABLE SCAN               |pjt3|100      |92     |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt2.c]), filter(nil), 
+      distinct([pjt2.c])
+  1 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([1]), filter(nil), 
+      access([pjt1.__pk_increment]), partitions(p0)
+  4 - output([pjt2.c]), filter(nil)
+  5 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+
+***************   Case 2   ***************
+SQL: select distinct a,d,g from pjt1,pjt2,pjt3,pjt4; 
+===========================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST     |
+-----------------------------------------------------------
+|0 |HASH DISTINCT                |    |1000000  |116647037|
+|1 | NESTED-LOOP JOIN CARTESIAN  |    |100000000|71479078 |
+|2 |  NESTED-LOOP JOIN CARTESIAN |    |1000000  |715033   |
+|3 |   NESTED-LOOP JOIN CARTESIAN|    |10000    |7284     |
+|4 |    TABLE SCAN               |pjt1|100      |95       |
+|5 |    MATERIAL                 |    |100      |113      |
+|6 |     TABLE SCAN              |pjt2|100      |95       |
+|7 |   MATERIAL                  |    |100      |111      |
+|8 |    TABLE SCAN               |pjt3|100      |92       |
+|9 |  MATERIAL                   |    |100      |113      |
+|10|   TABLE SCAN                |pjt4|100      |95       |
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a], [pjt2.d], [pjt4.g]), filter(nil), 
+      distinct([pjt1.a], [pjt2.d], [pjt4.g])
+  1 - output([pjt1.a], [pjt2.d], [pjt4.g]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a], [pjt2.d]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.a], [pjt2.d]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  5 - output([pjt2.d]), filter(nil)
+  6 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  7 - output([1]), filter(nil)
+  8 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  9 - output([pjt4.g]), filter(nil)
+  10 - output([pjt4.g]), filter(nil), 
+      access([pjt4.g]), partitions(p0)
+
+***************   Case 3   ***************
+SQL: select distinct a from pjt1,pjt2,pjt3 where b=d; 
+=====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST |
+-----------------------------------------------------
+|0 |HASH DISTINCT              |    |100      |10933|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |10000    |7579 |
+|2 |  HASH JOIN                |    |100      |393  |
+|3 |   TABLE SCAN              |pjt2|100      |95   |
+|4 |   TABLE SCAN              |pjt1|100      |97   |
+|5 |  MATERIAL                 |    |100      |111  |
+|6 |   TABLE SCAN              |pjt3|100      |92   |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), 
+      distinct([pjt1.a])
+  1 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      equal_conds([pjt1.b = pjt2.d]), other_conds(nil)
+  3 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  4 - output([pjt1.b], [pjt1.a]), filter(nil), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  5 - output([1]), filter(nil)
+  6 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+
+***************   Case 4   ***************
+SQL: select distinct a,g from pjt1,pjt2,pjt3,pjt4 where b=d; 
+========================================================
+|ID|OPERATOR                    |NAME|EST. ROWS|COST   |
+--------------------------------------------------------
+|0 |HASH DISTINCT               |    |10000    |1108876|
+|1 | NESTED-LOOP JOIN CARTESIAN |    |1000000  |715331 |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |10000    |7579   |
+|3 |   HASH JOIN                |    |100      |393    |
+|4 |    TABLE SCAN              |pjt2|100      |95     |
+|5 |    TABLE SCAN              |pjt1|100      |97     |
+|6 |   MATERIAL                 |    |100      |111    |
+|7 |    TABLE SCAN              |pjt3|100      |92     |
+|8 |  MATERIAL                  |    |100      |113    |
+|9 |   TABLE SCAN               |pjt4|100      |95     |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a], [pjt4.g]), filter(nil), 
+      distinct([pjt1.a], [pjt4.g])
+  1 - output([pjt1.a], [pjt4.g]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.a]), filter(nil), 
+      equal_conds([pjt1.b = pjt2.d]), other_conds(nil)
+  4 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  5 - output([pjt1.b], [pjt1.a]), filter(nil), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  8 - output([pjt4.g]), filter(nil)
+  9 - output([pjt4.g]), filter(nil), 
+      access([pjt4.g]), partitions(p0)
+
+***************   Case 5   ***************
+SQL: select distinct c from pjt1,pjt2,pjt3,pjt4 where a=e; 
+========================================================
+|ID|OPERATOR                    |NAME|EST. ROWS|COST   |
+--------------------------------------------------------
+|0 |HASH DISTINCT               |    |100      |1043654|
+|1 | NESTED-LOOP JOIN CARTESIAN |    |1000000  |715329 |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |10000    |7579   |
+|3 |   HASH JOIN                |    |100      |390    |
+|4 |    TABLE SCAN              |pjt1|100      |95     |
+|5 |    TABLE SCAN              |pjt3|100      |95     |
+|6 |   MATERIAL                 |    |100      |113    |
+|7 |    TABLE SCAN              |pjt2|100      |95     |
+|8 |  MATERIAL                  |    |100      |111    |
+|9 |   TABLE SCAN               |pjt4|100      |92     |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt2.c]), filter(nil), 
+      distinct([pjt2.c])
+  1 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([1]), filter(nil), 
+      equal_conds([pjt1.a = pjt3.e]), other_conds(nil)
+  4 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  5 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  6 - output([pjt2.c]), filter(nil)
+  7 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+
+***************   Case 6   ***************
+SQL: select * from pjt1, (select distinct c from pjt2,pjt3) where a=c; 
+=======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST |
+-------------------------------------------------------
+|0 |HASH JOIN                    |    |100      |10947|
+|1 | SUBPLAN SCAN                |    |100      |10649|
+|2 |  HASH DISTINCT              |    |100      |10635|
+|3 |   NESTED-LOOP JOIN CARTESIAN|    |10000    |7281 |
+|4 |    TABLE SCAN               |pjt2|100      |95   |
+|5 |    MATERIAL                 |    |100      |111  |
+|6 |     TABLE SCAN              |pjt3|100      |92   |
+|7 | TABLE SCAN                  |pjt1|100      |97   |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a], [pjt1.b], [.c]), filter(nil), 
+      equal_conds([pjt1.a = .c]), other_conds(nil)
+  1 - output([.c]), filter(nil), 
+      access([.c])
+  2 - output([pjt2.c]), filter(nil), 
+      distinct([pjt2.c])
+  3 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+  5 - output([1]), filter(nil)
+  6 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  7 - output([pjt1.a], [pjt1.b]), filter(nil), 
+      access([pjt1.a], [pjt1.b]), partitions(p0)
+
+***************   Case 7   ***************
+SQL: select * from pjt1, (select distinct c from pjt2,pjt3,pjt4 where d=g) where a=c; 
+=======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST |
+-------------------------------------------------------
+|0 |HASH JOIN                    |    |100      |11245|
+|1 | SUBPLAN SCAN                |    |100      |10947|
+|2 |  HASH DISTINCT              |    |100      |10933|
+|3 |   NESTED-LOOP JOIN CARTESIAN|    |10000    |7579 |
+|4 |    HASH JOIN                |    |100      |393  |
+|5 |     TABLE SCAN              |pjt4|100      |95   |
+|6 |     TABLE SCAN              |pjt2|100      |97   |
+|7 |    MATERIAL                 |    |100      |111  |
+|8 |     TABLE SCAN              |pjt3|100      |92   |
+|9 | TABLE SCAN                  |pjt1|100      |97   |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a], [pjt1.b], [.c]), filter(nil), 
+      equal_conds([pjt1.a = .c]), other_conds(nil)
+  1 - output([.c]), filter(nil), 
+      access([.c])
+  2 - output([pjt2.c]), filter(nil), 
+      distinct([pjt2.c])
+  3 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([pjt2.c]), filter(nil), 
+      equal_conds([pjt2.d = pjt4.g]), other_conds(nil)
+  5 - output([pjt4.g]), filter(nil), 
+      access([pjt4.g]), partitions(p0)
+  6 - output([pjt2.d], [pjt2.c]), filter(nil), 
+      access([pjt2.d], [pjt2.c]), partitions(p0)
+  7 - output([1]), filter(nil)
+  8 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  9 - output([pjt1.a], [pjt1.b]), filter(nil), 
+      access([pjt1.a], [pjt1.b]), partitions(p0)
+
+***************   Case 8   ***************
+SQL: select distinct a from pjt1, (select distinct c from pjt2,pjt3,pjt4 where d=g) where a=1; 
+=======================================================
+|ID|OPERATOR                      |NAME|EST. ROWS|COST|
+-------------------------------------------------------
+|0 |LIMIT                         |    |1        |568 |
+|1 | NESTED-LOOP JOIN CARTESIAN   |    |1        |568 |
+|2 |  SUBPLAN SCAN                |    |1        |456 |
+|3 |   HASH DISTINCT              |    |1        |456 |
+|4 |    NESTED-LOOP JOIN CARTESIAN|    |100      |422 |
+|5 |     HASH JOIN                |    |1        |241 |
+|6 |      TABLE SCAN              |pjt4|100      |95  |
+|7 |      TABLE SCAN              |pjt2|1        |36  |
+|8 |     MATERIAL                 |    |100      |111 |
+|9 |      TABLE SCAN              |pjt3|100      |92  |
+|10|  MATERIAL                    |    |1        |112 |
+|11|   TABLE SCAN                 |pjt1|1        |111 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), limit(1), offset(nil)
+  1 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([1]), filter(nil), 
+      access(nil)
+  3 - output([pjt2.c]), filter(nil), 
+      distinct([pjt2.c])
+  4 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([pjt2.c]), filter(nil), 
+      equal_conds([pjt2.d = pjt4.g]), other_conds(nil)
+  6 - output([pjt4.g]), filter(nil), 
+      access([pjt4.g]), partitions(p0)
+  7 - output([pjt2.d], [pjt2.c]), filter(nil), 
+      access([pjt2.d], [pjt2.c]), partitions(p0)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  10 - output([pjt1.a]), filter(nil)
+  11 - output([pjt1.a]), filter([pjt1.a = ?]), 
+      access([pjt1.a]), partitions(p0)
+
+***************   Case 9   ***************
+SQL: select distinct a from pjt1 where b in (select distinct c from pjt1,pjt2 where d>1); 
+=======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST |
+-------------------------------------------------------
+|0 |HASH DISTINCT                |    |50       |12570|
+|1 | SUBPLAN FILTER              |    |50       |12517|
+|2 |  TABLE SCAN                 |pjt1|100      |97   |
+|3 |  HASH DISTINCT              |    |96       |10237|
+|4 |   NESTED-LOOP JOIN CARTESIAN|    |9600     |7017 |
+|5 |    TABLE SCAN               |pjt2|96       |114  |
+|6 |    MATERIAL                 |    |100      |111  |
+|7 |     TABLE SCAN              |pjt1|100      |92   |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), 
+      distinct([pjt1.a])
+  1 - output([pjt1.a]), filter([pjt1.b = ANY(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  2 - output([pjt1.b], [pjt1.a]), filter(nil), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  3 - output([pjt2.c]), filter(nil), 
+      distinct([pjt2.c])
+  4 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([pjt2.c]), filter([pjt2.d > ?]), 
+      access([pjt2.d], [pjt2.c]), partitions(p0)
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil), 
+      access([pjt1.__pk_increment]), partitions(p0)
+
+***************   Case 10   ***************
+SQL: select distinct a from pjt1 where exists (select distinct c from pjt1,pjt2,pjt3 where d>1 and f=d); 
+=======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST |
+-------------------------------------------------------
+|0 |HASH DISTINCT                |    |50       |10689|
+|1 | SUBPLAN FILTER              |    |50       |10637|
+|2 |  TABLE SCAN                 |pjt1|100      |95   |
+|3 |  HASH DISTINCT              |    |96       |10529|
+|4 |   NESTED-LOOP JOIN CARTESIAN|    |9600     |7309 |
+|5 |    HASH JOIN                |    |96       |406  |
+|6 |     TABLE SCAN              |pjt3|100      |95   |
+|7 |     TABLE SCAN              |pjt2|96       |114  |
+|8 |    MATERIAL                 |    |100      |111  |
+|9 |     TABLE SCAN              |pjt1|100      |92   |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), 
+      distinct([pjt1.a])
+  1 - output([pjt1.a]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  3 - output([pjt2.c]), filter(nil), 
+      distinct([pjt2.c])
+  4 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([pjt2.c]), filter(nil), 
+      equal_conds([pjt3.f = pjt2.d]), other_conds(nil)
+  6 - output([pjt3.f]), filter(nil), 
+      access([pjt3.f]), partitions(p0)
+  7 - output([pjt2.d], [pjt2.c]), filter([pjt2.d > ?]), 
+      access([pjt2.d], [pjt2.c]), partitions(p0)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), 
+      access([pjt1.__pk_increment]), partitions(p0)
+
+***************   Case 11   ***************
+SQL: select distinct a from pjt1,pjt2 where b in (select distinct c from pjt2,pjt3 where d in (select distinct e from pjt3,pjt4)); 
+==========================================================
+|ID|OPERATOR                       |NAME|EST. ROWS|COST  |
+----------------------------------------------------------
+|0 |HASH DISTINCT                  |    |100      |459405|
+|1 | SUBPLAN FILTER                |    |5000     |457692|
+|2 |  NESTED-LOOP JOIN CARTESIAN   |    |10000    |7284  |
+|3 |   TABLE SCAN                  |pjt1|100      |97    |
+|4 |   MATERIAL                    |    |100      |111   |
+|5 |    TABLE SCAN                 |pjt2|100      |92    |
+|6 |  HASH DISTINCT                |    |100      |229788|
+|7 |   SUBPLAN FILTER              |    |5000     |228076|
+|8 |    NESTED-LOOP JOIN CARTESIAN |    |10000    |7284  |
+|9 |     TABLE SCAN                |pjt2|100      |97    |
+|10|     MATERIAL                  |    |100      |111   |
+|11|      TABLE SCAN               |pjt3|100      |92    |
+|12|    HASH DISTINCT              |    |100      |10635 |
+|13|     NESTED-LOOP JOIN CARTESIAN|    |10000    |7281  |
+|14|      TABLE SCAN               |pjt3|100      |95    |
+|15|      MATERIAL                 |    |100      |111   |
+|16|       TABLE SCAN              |pjt4|100      |92    |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), 
+      distinct([pjt1.a])
+  1 - output([pjt1.a]), filter([pjt1.b = ANY(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  2 - output([pjt1.a], [pjt1.b]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.b], [pjt1.a]), filter(nil), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+  6 - output([pjt2.c]), filter(nil), 
+      distinct([pjt2.c])
+  7 - output([pjt2.c]), filter([pjt2.d = ANY(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  8 - output([pjt2.c], [pjt2.d]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  9 - output([pjt2.d], [pjt2.c]), filter(nil), 
+      access([pjt2.d], [pjt2.c]), partitions(p0)
+  10 - output([1]), filter(nil)
+  11 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  12 - output([pjt3.e]), filter(nil), 
+      distinct([pjt3.e])
+  13 - output([pjt3.e]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  14 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  15 - output([1]), filter(nil)
+  16 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+
+***************   Case 12   ***************
+SQL: (select distinct a from pjt1,pjt2) union (select distinct c from pjt2 where exists (select distinct e from pjt3,pjt4)); 
+=======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST |
+-------------------------------------------------------
+|0 |HASH UNION DISTINCT          |    |10050    |28516|
+|1 | NESTED-LOOP JOIN CARTESIAN  |    |10000    |7281 |
+|2 |  TABLE SCAN                 |pjt1|100      |95   |
+|3 |  MATERIAL                   |    |100      |111  |
+|4 |   TABLE SCAN                |pjt2|100      |92   |
+|5 | SUBPLAN FILTER              |    |50       |10743|
+|6 |  TABLE SCAN                 |pjt2|100      |95   |
+|7 |  HASH DISTINCT              |    |100      |10635|
+|8 |   NESTED-LOOP JOIN CARTESIAN|    |10000    |7281 |
+|9 |    TABLE SCAN               |pjt3|100      |95   |
+|10|    MATERIAL                 |    |100      |111  |
+|11|     TABLE SCAN              |pjt4|100      |92   |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+  5 - output([pjt2.c]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  6 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+  7 - output([pjt3.e]), filter(nil), 
+      distinct([pjt3.e])
+  8 - output([pjt3.e]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  9 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  10 - output([1]), filter(nil)
+  11 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+
+***************   Case 13   ***************
+SQL: (select distinct a from pjt1,pjt2) intersect (select distinct c from pjt2,(select distinct e from pjt3,pjt4) where c > 1);  select max(a) from pjt1,pjt2; 
+========================================================
+|ID|OPERATOR                      |NAME|EST. ROWS|COST |
+--------------------------------------------------------
+|0 |HASH INTERSECT DISTINCT       |    |9600     |43759|
+|1 | NESTED-LOOP JOIN CARTESIAN   |    |10000    |7281 |
+|2 |  TABLE SCAN                  |pjt1|100      |95   |
+|3 |  MATERIAL                    |    |100      |111  |
+|4 |   TABLE SCAN                 |pjt2|100      |92   |
+|5 | NESTED-LOOP JOIN CARTESIAN   |    |9600     |17571|
+|6 |  SUBPLAN SCAN                |    |100      |10649|
+|7 |   HASH DISTINCT              |    |100      |10635|
+|8 |    NESTED-LOOP JOIN CARTESIAN|    |10000    |7281 |
+|9 |     TABLE SCAN               |pjt3|100      |95   |
+|10|     MATERIAL                 |    |100      |111  |
+|11|      TABLE SCAN              |pjt4|100      |92   |
+|12|  MATERIAL                    |    |96       |129  |
+|13|   TABLE SCAN                 |pjt2|96       |111  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([INTERSECT([1])]), filter(nil)
+  1 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+  5 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  6 - output([1]), filter(nil), 
+      access(nil)
+  7 - output([pjt3.e]), filter(nil), 
+      distinct([pjt3.e])
+  8 - output([pjt3.e]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  9 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  10 - output([1]), filter(nil)
+  11 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+  12 - output([pjt2.c]), filter(nil)
+  13 - output([pjt2.c]), filter([pjt2.c > ?]), 
+      access([pjt2.c]), partitions(p0)
+
+***************   Case 14   ***************
+SQL: select max(a), min(c) from pjt1,pjt2,pjt3; 
+=======================================================
+|ID|OPERATOR                    |NAME|EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1        |959036|
+|1 | NESTED-LOOP JOIN CARTESIAN |    |1000000  |715033|
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |10000    |7284  |
+|3 |   TABLE SCAN               |pjt1|100      |95    |
+|4 |   MATERIAL                 |    |100      |113   |
+|5 |    TABLE SCAN              |pjt2|100      |95    |
+|6 |  MATERIAL                  |    |100      |111   |
+|7 |   TABLE SCAN               |pjt3|100      |92    |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(pjt1.a)], [T_FUN_MIN(pjt2.c)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(pjt1.a)], [T_FUN_MIN(pjt2.c)])
+  1 - output([pjt1.a], [pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a], [pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  4 - output([pjt2.c]), filter(nil)
+  5 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+
+***************   Case 15   ***************
+SQL: select count(distinct g), max(d), min(a) from pjt1,pjt2,pjt3,pjt4; 
+===========================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST     |
+-----------------------------------------------------------
+|0 |SCALAR GROUP BY              |    |1        |101178412|
+|1 | NESTED-LOOP JOIN CARTESIAN  |    |100000000|71479078 |
+|2 |  NESTED-LOOP JOIN CARTESIAN |    |1000000  |715033   |
+|3 |   NESTED-LOOP JOIN CARTESIAN|    |10000    |7284     |
+|4 |    TABLE SCAN               |pjt1|100      |95       |
+|5 |    MATERIAL                 |    |100      |113      |
+|6 |     TABLE SCAN              |pjt2|100      |95       |
+|7 |   MATERIAL                  |    |100      |111      |
+|8 |    TABLE SCAN               |pjt3|100      |92       |
+|9 |  MATERIAL                   |    |100      |113      |
+|10|   TABLE SCAN                |pjt4|100      |95       |
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(distinct pjt4.g)], [T_FUN_MAX(pjt2.d)], [T_FUN_MIN(pjt1.a)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(distinct pjt4.g)], [T_FUN_MAX(pjt2.d)], [T_FUN_MIN(pjt1.a)])
+  1 - output([pjt4.g], [pjt2.d], [pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt2.d], [pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt2.d], [pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  5 - output([pjt2.d]), filter(nil)
+  6 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  7 - output([1]), filter(nil)
+  8 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  9 - output([pjt4.g]), filter(nil)
+  10 - output([pjt4.g]), filter(nil), 
+      access([pjt4.g]), partitions(p0)
+
+***************   Case 16   ***************
+SQL: select sum(distinct a) from pjt1,pjt2,pjt3 where b=d; 
+====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST|
+----------------------------------------------------
+|0 |SCALAR GROUP BY            |    |1        |9489|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |10000    |7579|
+|2 |  HASH JOIN                |    |100      |393 |
+|3 |   TABLE SCAN              |pjt2|100      |95  |
+|4 |   TABLE SCAN              |pjt1|100      |97  |
+|5 |  MATERIAL                 |    |100      |111 |
+|6 |   TABLE SCAN              |pjt3|100      |92  |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(distinct pjt1.a)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(distinct pjt1.a)])
+  1 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      equal_conds([pjt1.b = pjt2.d]), other_conds(nil)
+  3 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  4 - output([pjt1.b], [pjt1.a]), filter(nil), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  5 - output([1]), filter(nil)
+  6 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+
+***************   Case 17   ***************
+SQL: select max(a) from pjt1,pjt2,pjt3,pjt4 where b=d; 
+=======================================================
+|ID|OPERATOR                    |NAME|EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1        |906341|
+|1 | NESTED-LOOP JOIN CARTESIAN |    |1000000  |715329|
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |10000    |7579  |
+|3 |   HASH JOIN                |    |100      |393   |
+|4 |    TABLE SCAN              |pjt2|100      |95    |
+|5 |    TABLE SCAN              |pjt1|100      |97    |
+|6 |   MATERIAL                 |    |100      |111   |
+|7 |    TABLE SCAN              |pjt3|100      |92    |
+|8 |  MATERIAL                  |    |100      |111   |
+|9 |   TABLE SCAN               |pjt4|100      |92    |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(pjt1.a)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(pjt1.a)])
+  1 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.a]), filter(nil), 
+      equal_conds([pjt1.b = pjt2.d]), other_conds(nil)
+  4 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  5 - output([pjt1.b], [pjt1.a]), filter(nil), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+
+***************   Case 18   ***************
+SQL: select avg(distinct c) from pjt1,pjt2,pjt3,pjt4 where a=e; 
+=======================================================
+|ID|OPERATOR                    |NAME|EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SCALAR GROUP BY             |    |1        |959332|
+|1 | NESTED-LOOP JOIN CARTESIAN |    |1000000  |715329|
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |10000    |7579  |
+|3 |   HASH JOIN                |    |100      |390   |
+|4 |    TABLE SCAN              |pjt1|100      |95    |
+|5 |    TABLE SCAN              |pjt3|100      |95    |
+|6 |   MATERIAL                 |    |100      |113   |
+|7 |    TABLE SCAN              |pjt2|100      |95    |
+|8 |  MATERIAL                  |    |100      |111   |
+|9 |   TABLE SCAN               |pjt4|100      |92    |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(distinct pjt2.c) / T_FUN_COUNT(distinct pjt2.c)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(distinct pjt2.c)], [T_FUN_COUNT(distinct pjt2.c)])
+  1 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([1]), filter(nil), 
+      equal_conds([pjt1.a = pjt3.e]), other_conds(nil)
+  4 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  5 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  6 - output([pjt2.c]), filter(nil)
+  7 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+
+***************   Case 19   ***************
+SQL: select * from pjt1, (select min(d) as x from pjt2,pjt3) where a=x; 
+======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST|
+------------------------------------------------------
+|0 |NESTED-LOOP JOIN             |    |1        |9311|
+|1 | SUBPLAN SCAN                |    |1        |9192|
+|2 |  SCALAR GROUP BY            |    |1        |9191|
+|3 |   NESTED-LOOP JOIN CARTESIAN|    |10000    |7281|
+|4 |    TABLE SCAN               |pjt2|100      |95  |
+|5 |    MATERIAL                 |    |100      |111 |
+|6 |     TABLE SCAN              |pjt3|100      |92  |
+|7 | TABLE SCAN                  |pjt1|100      |97  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a], [pjt1.b], [.x]), filter(nil), 
+      conds([pjt1.a = .x]), nl_params_(nil)
+  1 - output([.x]), filter(nil), 
+      access([.x])
+  2 - output([T_FUN_MIN(pjt2.d)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(pjt2.d)])
+  3 - output([pjt2.d]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  5 - output([1]), filter(nil)
+  6 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  7 - output([pjt1.a], [pjt1.b]), filter(nil), 
+      access([pjt1.a], [pjt1.b]), partitions(p0)
+
+***************   Case 20   ***************
+SQL: select * from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 where d=g) where a=x; 
+======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST|
+------------------------------------------------------
+|0 |NESTED-LOOP JOIN             |    |1        |9617|
+|1 | SUBPLAN SCAN                |    |1        |9490|
+|2 |  SCALAR GROUP BY            |    |1        |9489|
+|3 |   NESTED-LOOP JOIN CARTESIAN|    |10000    |7579|
+|4 |    HASH JOIN                |    |100      |393 |
+|5 |     TABLE SCAN              |pjt2|100      |95  |
+|6 |     TABLE SCAN              |pjt4|100      |97  |
+|7 |    MATERIAL                 |    |100      |111 |
+|8 |     TABLE SCAN              |pjt3|100      |92  |
+|9 | TABLE SCAN                  |pjt1|100      |97  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a], [pjt1.b], [.x]), filter(nil), 
+      conds([pjt1.a = .x]), nl_params_(nil)
+  1 - output([.x]), filter(nil), 
+      access([.x])
+  2 - output([T_FUN_COUNT(distinct pjt4.h)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(distinct pjt4.h)])
+  3 - output([pjt4.h]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([pjt4.h]), filter(nil), 
+      equal_conds([pjt2.d = pjt4.g]), other_conds(nil)
+  5 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  6 - output([pjt4.g], [pjt4.h]), filter(nil), 
+      access([pjt4.g], [pjt4.h]), partitions(p0)
+  7 - output([1]), filter(nil)
+  8 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  9 - output([pjt1.a], [pjt1.b]), filter(nil), 
+      access([pjt1.a], [pjt1.b]), partitions(p0)
+
+***************   Case 21   ***************
+SQL: select min(b) from pjt1, (select count(distinct h)as x from pjt2,pjt3,pjt4 where d=g) where a=1; 
+=======================================================
+|ID|OPERATOR                      |NAME|EST. ROWS|COST|
+-------------------------------------------------------
+|0 |SCALAR GROUP BY               |    |1        |9604|
+|1 | NESTED-LOOP JOIN CARTESIAN   |    |1        |9603|
+|2 |  SUBPLAN SCAN                |    |1        |9490|
+|3 |   SCALAR GROUP BY            |    |1        |9489|
+|4 |    NESTED-LOOP JOIN CARTESIAN|    |10000    |7579|
+|5 |     HASH JOIN                |    |100      |393 |
+|6 |      TABLE SCAN              |pjt2|100      |95  |
+|7 |      TABLE SCAN              |pjt4|100      |97  |
+|8 |     MATERIAL                 |    |100      |111 |
+|9 |      TABLE SCAN              |pjt3|100      |92  |
+|10|  TABLE SCAN                  |pjt1|1        |114 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(pjt1.b)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(pjt1.b)])
+  1 - output([pjt1.b]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([1]), filter(nil), 
+      access(nil)
+  3 - output([T_FUN_COUNT(distinct pjt4.h)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(distinct pjt4.h)])
+  4 - output([pjt4.h]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([pjt4.h]), filter(nil), 
+      equal_conds([pjt2.d = pjt4.g]), other_conds(nil)
+  6 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  7 - output([pjt4.g], [pjt4.h]), filter(nil), 
+      access([pjt4.g], [pjt4.h]), partitions(p0)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  10 - output([pjt1.b]), filter([pjt1.a = ?]), 
+      access([pjt1.a], [pjt1.b]), partitions(p0)
+
+***************   Case 22   ***************
+SQL: select distinct a from pjt1 where b>(select sum(distinct c) from pjt1,pjt2 where d>1); 
+======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST|
+------------------------------------------------------
+|0 |HASH DISTINCT                |    |34       |9003|
+|1 | SUBPLAN FILTER              |    |34       |8969|
+|2 |  TABLE SCAN                 |pjt1|34       |114 |
+|3 |  SCALAR GROUP BY            |    |1        |8851|
+|4 |   NESTED-LOOP JOIN CARTESIAN|    |9600     |7017|
+|5 |    TABLE SCAN               |pjt2|96       |114 |
+|6 |    MATERIAL                 |    |100      |111 |
+|7 |     TABLE SCAN              |pjt1|100      |92  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), 
+      distinct([pjt1.a])
+  1 - output([pjt1.a]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  2 - output([pjt1.a]), filter([pjt1.b > ?]), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  3 - output([T_FUN_SUM(distinct pjt2.c)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(distinct pjt2.c)])
+  4 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([pjt2.c]), filter([pjt2.d > ?]), 
+      access([pjt2.d], [pjt2.c]), partitions(p0)
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil), 
+      access([pjt1.__pk_increment]), partitions(p0)
+
+***************   Case 23   ***************
+SQL: select distinct a from pjt1 where b>(select avg(distinct d) from pjt1,pjt2,pjt3 where d>1 and f=d); 
+======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST|
+------------------------------------------------------
+|0 |HASH DISTINCT                |    |34       |9799|
+|1 | SUBPLAN FILTER              |    |34       |9764|
+|2 |  TABLE SCAN                 |pjt1|34       |114 |
+|3 |  SCALAR GROUP BY            |    |1        |9646|
+|4 |   NESTED-LOOP JOIN CARTESIAN|    |9600     |7304|
+|5 |    HASH JOIN                |    |96       |400 |
+|6 |     TABLE SCAN              |pjt2|96       |111 |
+|7 |     TABLE SCAN              |pjt3|100      |95  |
+|8 |    MATERIAL                 |    |100      |111 |
+|9 |     TABLE SCAN              |pjt1|100      |92  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), 
+      distinct([pjt1.a])
+  1 - output([pjt1.a]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  2 - output([pjt1.a]), filter([pjt1.b > ?]), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  3 - output([T_FUN_SUM(distinct pjt2.d) / T_FUN_COUNT(distinct pjt2.d)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(distinct pjt2.d)], [T_FUN_COUNT(distinct pjt2.d)])
+  4 - output([pjt2.d]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([pjt2.d]), filter(nil), 
+      equal_conds([pjt3.f = pjt2.d]), other_conds(nil)
+  6 - output([pjt2.d]), filter([pjt2.d > ?]), 
+      access([pjt2.d]), partitions(p0)
+  7 - output([pjt3.f]), filter(nil), 
+      access([pjt3.f]), partitions(p0)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), 
+      access([pjt1.__pk_increment]), partitions(p0)
+
+***************   Case 24   ***************
+SQL: select max(a) from pjt1,pjt2 where b > (select min(c) from pjt2,pjt3 where d < (select sum(distinct e) from pjt3,pjt4)); 
+=========================================================
+|ID|OPERATOR                       |NAME|EST. ROWS|COST |
+---------------------------------------------------------
+|0 |SCALAR GROUP BY                |    |1        |16541|
+|1 | SUBPLAN FILTER                |    |3334     |15904|
+|2 |  NESTED-LOOP JOIN CARTESIAN   |    |3334     |2574 |
+|3 |   TABLE SCAN                  |pjt1|34       |105  |
+|4 |   MATERIAL                    |    |100      |111  |
+|5 |    TABLE SCAN                 |pjt2|100      |92   |
+|6 |  SCALAR GROUP BY              |    |1        |12870|
+|7 |   SUBPLAN FILTER              |    |3334     |12234|
+|8 |    NESTED-LOOP JOIN CARTESIAN |    |3334     |2583 |
+|9 |     TABLE SCAN                |pjt2|34       |114  |
+|10|     MATERIAL                  |    |100      |111  |
+|11|      TABLE SCAN               |pjt3|100      |92   |
+|12|    SCALAR GROUP BY            |    |1        |9191 |
+|13|     NESTED-LOOP JOIN CARTESIAN|    |10000    |7281 |
+|14|      TABLE SCAN               |pjt3|100      |95   |
+|15|      MATERIAL                 |    |100      |111  |
+|16|       TABLE SCAN              |pjt4|100      |92   |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(pjt1.a)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(pjt1.a)])
+  1 - output([pjt1.a]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.a]), filter([pjt1.b > ?]), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+  6 - output([T_FUN_MIN(pjt2.c)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(pjt2.c)])
+  7 - output([pjt2.c]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  8 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  9 - output([pjt2.c]), filter([pjt2.d < ?]), 
+      access([pjt2.d], [pjt2.c]), partitions(p0)
+  10 - output([1]), filter(nil)
+  11 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  12 - output([T_FUN_SUM(distinct pjt3.e)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(distinct pjt3.e)])
+  13 - output([pjt3.e]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  14 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  15 - output([1]), filter(nil)
+  16 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+
+***************   Case 25   ***************
+SQL: (select count(distinct a) from pjt1,pjt2) union (select max(c) from pjt2 where d>(select avg(distinct e) from pjt3,pjt4)); 
+========================================================
+|ID|OPERATOR                      |NAME|EST. ROWS|COST |
+--------------------------------------------------------
+|0 |MERGE UNION DISTINCT          |    |2        |19037|
+|1 | SCALAR GROUP BY              |    |1        |9191 |
+|2 |  NESTED-LOOP JOIN CARTESIAN  |    |10000    |7281 |
+|3 |   TABLE SCAN                 |pjt1|100      |95   |
+|4 |   MATERIAL                   |    |100      |111  |
+|5 |    TABLE SCAN                |pjt2|100      |92   |
+|6 | SCALAR GROUP BY              |    |1        |9845 |
+|7 |  SUBPLAN FILTER              |    |34       |9839 |
+|8 |   TABLE SCAN                 |pjt2|34       |114  |
+|9 |   SCALAR GROUP BY            |    |1        |9721 |
+|10|    NESTED-LOOP JOIN CARTESIAN|    |10000    |7281 |
+|11|     TABLE SCAN               |pjt3|100      |95   |
+|12|     MATERIAL                 |    |100      |111  |
+|13|      TABLE SCAN              |pjt4|100      |92   |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([T_FUN_COUNT(distinct pjt1.a)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(distinct pjt1.a)])
+  2 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+  6 - output([cast(T_FUN_MAX(pjt2.c), BIGINT(20, 0))]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(pjt2.c)])
+  7 - output([pjt2.c]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  8 - output([pjt2.c]), filter([pjt2.d > ?]), 
+      access([pjt2.d], [pjt2.c]), partitions(p0)
+  9 - output([T_FUN_SUM(distinct pjt3.e) / T_FUN_COUNT(distinct pjt3.e)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(distinct pjt3.e)], [T_FUN_COUNT(distinct pjt3.e)])
+  10 - output([pjt3.e]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  11 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  12 - output([1]), filter(nil)
+  13 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+
+***************   Case 26   ***************
+SQL: (select max(a) from pjt1, pjt2) minus (select distinct e from pjt3,pjt4); 
+======================================================
+|ID|OPERATOR                    |NAME|EST. ROWS|COST |
+------------------------------------------------------
+|0 |HASH EXCEPT DISTINCT        |    |1        |25592|
+|1 | SCALAR GROUP BY            |    |1        |9191 |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |10000    |7281 |
+|3 |   TABLE SCAN               |pjt1|100      |95   |
+|4 |   MATERIAL                 |    |100      |111  |
+|5 |    TABLE SCAN              |pjt2|100      |92   |
+|6 | NESTED-LOOP JOIN CARTESIAN |    |10000    |7281 |
+|7 |  TABLE SCAN                |pjt3|100      |95   |
+|8 |  MATERIAL                  |    |100      |111  |
+|9 |   TABLE SCAN               |pjt4|100      |92   |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([EXCEPT([1])]), filter(nil)
+  1 - output([T_FUN_MAX(pjt1.a)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(pjt1.a)])
+  2 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+  6 - output([pjt3.e]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  7 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+
+***************   Case 27   ***************
+SQL: select sum(distinct b) from pjt1, (select distinct c from pjt2, pjt3) where a = c; 
+========================================================
+|ID|OPERATOR                      |NAME|EST. ROWS|COST |
+--------------------------------------------------------
+|0 |SCALAR GROUP BY               |    |1        |10966|
+|1 | HASH JOIN                    |    |100      |10947|
+|2 |  SUBPLAN SCAN                |    |100      |10649|
+|3 |   HASH DISTINCT              |    |100      |10635|
+|4 |    NESTED-LOOP JOIN CARTESIAN|    |10000    |7281 |
+|5 |     TABLE SCAN               |pjt2|100      |95   |
+|6 |     MATERIAL                 |    |100      |111  |
+|7 |      TABLE SCAN              |pjt3|100      |92   |
+|8 |  TABLE SCAN                  |pjt1|100      |97   |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(distinct pjt1.b)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(distinct pjt1.b)])
+  1 - output([pjt1.b]), filter(nil), 
+      equal_conds([pjt1.a = .c]), other_conds(nil)
+  2 - output([.c]), filter(nil), 
+      access([.c])
+  3 - output([pjt2.c]), filter(nil), 
+      distinct([pjt2.c])
+  4 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  8 - output([pjt1.a], [pjt1.b]), filter(nil), 
+      access([pjt1.a], [pjt1.b]), partitions(p0)
+
+***************   Case 28   ***************
+SQL: select distinct a from pjt1, pjt2 where b > (select max(e) from pjt3, pjt4); 
+=======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST |
+-------------------------------------------------------
+|0 |HASH DISTINCT                |    |34       |13343|
+|1 | SUBPLAN FILTER              |    |3334     |12225|
+|2 |  NESTED-LOOP JOIN CARTESIAN |    |3334     |2574 |
+|3 |   TABLE SCAN                |pjt1|34       |105  |
+|4 |   MATERIAL                  |    |100      |111  |
+|5 |    TABLE SCAN               |pjt2|100      |92   |
+|6 |  SCALAR GROUP BY            |    |1        |9191 |
+|7 |   NESTED-LOOP JOIN CARTESIAN|    |10000    |7281 |
+|8 |    TABLE SCAN               |pjt3|100      |95   |
+|9 |    MATERIAL                 |    |100      |111  |
+|10|     TABLE SCAN              |pjt4|100      |92   |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), 
+      distinct([pjt1.a])
+  1 - output([pjt1.a]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.a]), filter([pjt1.b > ?]), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+  6 - output([T_FUN_MAX(pjt3.e)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(pjt3.e)])
+  7 - output([pjt3.e]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  8 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  9 - output([1]), filter(nil)
+  10 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+
+***************   Case 29   ***************
+SQL: select count(distinct a) from pjt1,pjt2 where b in (select distinct c from pjt2,pjt3 where d < (select max(e) from pjt3,pjt4)); 
+=========================================================
+|ID|OPERATOR                       |NAME|EST. ROWS|COST |
+---------------------------------------------------------
+|0 |SCALAR GROUP BY                |    |1        |96042|
+|1 | SUBPLAN FILTER                |    |5000     |95087|
+|2 |  NESTED-LOOP JOIN CARTESIAN   |    |10000    |7284 |
+|3 |   TABLE SCAN                  |pjt1|100      |97   |
+|4 |   MATERIAL                    |    |100      |111  |
+|5 |    TABLE SCAN                 |pjt2|100      |92   |
+|6 |  HASH DISTINCT                |    |34       |13343|
+|7 |   SUBPLAN FILTER              |    |3334     |12225|
+|8 |    NESTED-LOOP JOIN CARTESIAN |    |3334     |2574 |
+|9 |     TABLE SCAN                |pjt2|34       |105  |
+|10|     MATERIAL                  |    |100      |111  |
+|11|      TABLE SCAN               |pjt3|100      |92   |
+|12|    SCALAR GROUP BY            |    |1        |9191 |
+|13|     NESTED-LOOP JOIN CARTESIAN|    |10000    |7281 |
+|14|      TABLE SCAN               |pjt3|100      |95   |
+|15|      MATERIAL                 |    |100      |111  |
+|16|       TABLE SCAN              |pjt4|100      |92   |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(distinct pjt1.a)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(distinct pjt1.a)])
+  1 - output([pjt1.a]), filter([pjt1.b = ANY(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  2 - output([pjt1.a], [pjt1.b]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.b], [pjt1.a]), filter(nil), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+  6 - output([pjt2.c]), filter(nil), 
+      distinct([pjt2.c])
+  7 - output([pjt2.c]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  8 - output([pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  9 - output([pjt2.c]), filter([pjt2.d < ?]), 
+      access([pjt2.d], [pjt2.c]), partitions(p0)
+  10 - output([1]), filter(nil)
+  11 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+  12 - output([T_FUN_MAX(pjt3.e)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(pjt3.e)])
+  13 - output([pjt3.e]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  14 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  15 - output([1]), filter(nil)
+  16 - output([1]), filter(nil), 
+      access([pjt4.__pk_increment]), partitions(p0)
+
+***************   Case 30   ***************
+SQL: select distinct a, c from pjt1,pjt2; 
+=====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST |
+-----------------------------------------------------
+|0 |HASH DISTINCT              |    |10000    |18304|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |10000    |7284 |
+|2 |  TABLE SCAN               |pjt1|100      |95   |
+|3 |  MATERIAL                 |    |100      |113  |
+|4 |   TABLE SCAN              |pjt2|100      |95   |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a], [pjt2.c]), filter(nil), 
+      distinct([pjt1.a], [pjt2.c])
+  1 - output([pjt1.a], [pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  3 - output([pjt2.c]), filter(nil)
+  4 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+
+***************   Case 31   ***************
+SQL: select distinct a from pjt1,pjt2,pjt3 where c=e; 
+=====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST |
+-----------------------------------------------------
+|0 |HASH DISTINCT              |    |100      |10933|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |10000    |7579 |
+|2 |  HASH JOIN                |    |100      |390  |
+|3 |   TABLE SCAN              |pjt2|100      |95   |
+|4 |   TABLE SCAN              |pjt3|100      |95   |
+|5 |  MATERIAL                 |    |100      |113  |
+|6 |   TABLE SCAN              |pjt1|100      |95   |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), 
+      distinct([pjt1.a])
+  1 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([1]), filter(nil), 
+      equal_conds([pjt2.c = pjt3.e]), other_conds(nil)
+  3 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+  4 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+  5 - output([pjt1.a]), filter(nil)
+  6 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+
+***************   Case 32   ***************
+SQL: select distinct a + d - e from pjt1,pjt2,pjt3; 
+========================================================
+|ID|OPERATOR                    |NAME|EST. ROWS|COST   |
+--------------------------------------------------------
+|0 |HASH DISTINCT               |    |1000000  |1759000|
+|1 | NESTED-LOOP JOIN CARTESIAN |    |1000000  |715035 |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |10000    |7284   |
+|3 |   TABLE SCAN               |pjt1|100      |95     |
+|4 |   MATERIAL                 |    |100      |113    |
+|5 |    TABLE SCAN              |pjt2|100      |95     |
+|6 |  MATERIAL                  |    |100      |113    |
+|7 |   TABLE SCAN               |pjt3|100      |95     |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a + pjt2.d - pjt3.e]), filter(nil), 
+      distinct([pjt1.a + pjt2.d - pjt3.e])
+  1 - output([pjt1.a + pjt2.d - pjt3.e]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a], [pjt2.d]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  3 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  4 - output([pjt2.d]), filter(nil)
+  5 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  6 - output([pjt3.e]), filter(nil)
+  7 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+
+***************   Case 33   ***************
+SQL: select avg(b) from pjt1, pjt2; 
+====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST|
+----------------------------------------------------
+|0 |SCALAR GROUP BY            |    |1        |9721|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |10000    |7281|
+|2 |  TABLE SCAN               |pjt1|100      |95  |
+|3 |  MATERIAL                 |    |100      |111 |
+|4 |   TABLE SCAN              |pjt2|100      |92  |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(pjt1.b) / T_FUN_COUNT(pjt1.b)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(pjt1.b)], [T_FUN_COUNT(pjt1.b)])
+  1 - output([pjt1.b]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.b]), filter(nil), 
+      access([pjt1.b]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+
+***************   Case 34   ***************
+SQL: select max(a), sum(b) from pjt1, pjt2; 
+====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST|
+----------------------------------------------------
+|0 |SCALAR GROUP BY            |    |1        |9724|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |10000    |7284|
+|2 |  TABLE SCAN               |pjt1|100      |97  |
+|3 |  MATERIAL                 |    |100      |111 |
+|4 |   TABLE SCAN              |pjt2|100      |92  |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(pjt1.a)], [T_FUN_SUM(pjt1.b)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(pjt1.a)], [T_FUN_SUM(pjt1.b)])
+  1 - output([pjt1.a], [pjt1.b]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a], [pjt1.b]), filter(nil), 
+      access([pjt1.a], [pjt1.b]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), 
+      access([pjt2.__pk_increment]), partitions(p0)
+
+***************   Case 35   ***************
+SQL: select max(a+c) from pjt1, pjt2; 
+====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST|
+----------------------------------------------------
+|0 |SCALAR GROUP BY            |    |1        |9194|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |10000    |7284|
+|2 |  TABLE SCAN               |pjt1|100      |95  |
+|3 |  MATERIAL                 |    |100      |113 |
+|4 |   TABLE SCAN              |pjt2|100      |95  |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(pjt1.a + pjt2.c)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(pjt1.a + pjt2.c)])
+  1 - output([pjt1.a + pjt2.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  3 - output([pjt2.c]), filter(nil)
+  4 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+
+***************   Case 36   ***************
+SQL: select distinct a, e from ((select a from pjt1) union (select c from pjt2)), pjt3; 
+=====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST |
+-----------------------------------------------------
+|0 |HASH DISTINCT              |    |10001    |29575|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |20000    |14690|
+|2 |  SUBPLAN SCAN             |    |200      |425  |
+|3 |   HASH UNION DISTINCT     |    |200      |398  |
+|4 |    TABLE SCAN             |pjt1|100      |95   |
+|5 |    TABLE SCAN             |pjt2|100      |95   |
+|6 |  MATERIAL                 |    |100      |113  |
+|7 |   TABLE SCAN              |pjt3|100      |95   |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([.a], [pjt3.e]), filter(nil), 
+      distinct([.a], [pjt3.e])
+  1 - output([.a], [pjt3.e]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([.a]), filter(nil), 
+      access([.a])
+  3 - output([UNION([1])]), filter(nil)
+  4 - output([pjt1.a]), filter(nil), 
+      access([pjt1.a]), partitions(p0)
+  5 - output([pjt2.c]), filter(nil), 
+      access([pjt2.c]), partitions(p0)
+  6 - output([pjt3.e]), filter(nil)
+  7 - output([pjt3.e]), filter(nil), 
+      access([pjt3.e]), partitions(p0)
+
+***************   Case 37   ***************
+SQL: select distinct a from pjt3, pjt1 join pjt2 on b=d; 
+=====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST |
+-----------------------------------------------------
+|0 |HASH DISTINCT              |    |100      |10933|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |10000    |7579 |
+|2 |  HASH JOIN                |    |100      |393  |
+|3 |   TABLE SCAN              |pjt2|100      |95   |
+|4 |   TABLE SCAN              |pjt1|100      |97   |
+|5 |  MATERIAL                 |    |100      |111  |
+|6 |   TABLE SCAN              |pjt3|100      |92   |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pjt1.a]), filter(nil), 
+      distinct([pjt1.a])
+  1 - output([pjt1.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([pjt1.a]), filter(nil), 
+      equal_conds([pjt1.b = pjt2.d]), other_conds(nil)
+  3 - output([pjt2.d]), filter(nil), 
+      access([pjt2.d]), partitions(p0)
+  4 - output([pjt1.b], [pjt1.a]), filter(nil), 
+      access([pjt1.b], [pjt1.a]), partitions(p0)
+  5 - output([1]), filter(nil)
+  6 - output([1]), filter(nil), 
+      access([pjt3.__pk_increment]), partitions(p0)
+
+***************   Case 38   ***************
+SQL: select sum(c1) from t1 group by c1, c2; 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |100      |88  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([cast(t1.c1, DECIMAL(11, 0))]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 39   ***************
+SQL: select sum(c1) from t1 group by c2, c1; 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |100      |88  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([cast(t1.c1, DECIMAL(11, 0))]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 40   ***************
+SQL: select uniq_c2, sum(uniq_c2) from pullup1 group by uniq_c2, pk; 
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|pullup1(uniq)|100      |54  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.uniq_c2], [cast(pullup1.uniq_c2, DECIMAL(11, 0))]), filter(nil), 
+      access([pullup1.uniq_c2]), partitions(p0)
+
+***************   Case 41   ***************
+SQL: select sum(c1) from test_simp group by c1, c2 ,c3; 
+========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST|
+----------------------------------------
+|0 |TABLE SCAN|test_simp|100      |90  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([cast(test_simp.c1, DECIMAL(11, 0))]), filter(nil), 
+      access([test_simp.c1]), partitions(p0)
+
+***************   Case 42   ***************
+SQL: select sum(c1) from test_simp group by c2 ,c3; 
+=================================================
+|ID|OPERATOR     |NAME           |EST. ROWS|COST|
+-------------------------------------------------
+|0 |HASH GROUP BY|               |100      |208 |
+|1 | TABLE SCAN  |test_simp(uniq)|100      |92  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(test_simp.c1)]), filter(nil), 
+      group([test_simp.c2], [test_simp.c3]), agg_func([T_FUN_SUM(test_simp.c1)])
+  1 - output([test_simp.c1], [test_simp.c2], [test_simp.c3]), filter(nil), 
+      access([test_simp.c1], [test_simp.c2], [test_simp.c3]), partitions(p0)
+
+***************   Case 43   ***************
+SQL: select sum(c1) from test_simp group by c2 ,c3, c4; 
+=================================================
+|ID|OPERATOR     |NAME           |EST. ROWS|COST|
+-------------------------------------------------
+|0 |HASH GROUP BY|               |100      |216 |
+|1 | TABLE SCAN  |test_simp(uniq)|100      |95  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(test_simp.c1)]), filter(nil), 
+      group([test_simp.c2], [test_simp.c3], [test_simp.c4]), agg_func([T_FUN_SUM(test_simp.c1)])
+  1 - output([test_simp.c1], [test_simp.c2], [test_simp.c3], [test_simp.c4]), filter(nil), 
+      access([test_simp.c1], [test_simp.c2], [test_simp.c3], [test_simp.c4]), partitions(p0)
+

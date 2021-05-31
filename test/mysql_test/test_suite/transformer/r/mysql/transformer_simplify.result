@@ -1,0 +1,2842 @@
+DROP DATABASE IF EXISTS DB_SIMPLIFY;
+CREATE DATABASE DB_SIMPLIFY;
+USE DB_SIMPLIFY;
+********************* test for basic transform *********
+drop table if exists t1, t2, t3;
+create table t1(c1 int primary key);
+create table t2(c2 int primary key);
+create table t3(c3 int primary key);
+insert into t1 values(1),(2),(3),(4),(5);
+insert into t2 values(11),(12),(13),(14),(15);
+insert into t3 values(111),(112),(113),(114),(115);
+drop table if exists is_c1, is_c2;
+create table is_c1(c1 int);
+create table is_c2(c1 int, c2 int);
+set autocommit = 0;
+select /*+no_rewrite*/ max(c1) from t1 group by c1 desc;
+max(c1)
+5
+4
+3
+2
+1
+select max(c1) from t1 group by c1 desc;
+max(c1)
+5
+4
+3
+2
+1
+select /*+no_rewrite*/ c1 from t1 order by c1,c1,c1;
+c1
+1
+2
+3
+4
+5
+select c1 from t1 order by c1,c1,c1;
+c1
+1
+2
+3
+4
+5
+insert into is_c1 select c1 from t1 order by c1,c1,c1;
+## test for subquery transform  ###
+select /*+no_rewrite*/ * from (select max(c1) from t1 group by c1 desc) as tmp;
+max(c1)
+5
+4
+3
+2
+1
+select * from (select max(c1) from t1 group by c1 desc) as tmp;
+max(c1)
+5
+4
+3
+2
+1
+update t2 set t2.c2 = t2.c2 + 1 where t2.c2 in (select max(c1) from t1 group by c1 desc);
+select * from t2;
+c2
+11
+12
+13
+14
+15
+rollback;
+update /*+NO_REWRITE*/t2 set t2.c2 = t2.c2 + 1 where t2.c2 in (select /*+NO_REWRITE*/max(c1) from t1 group by c1 desc);
+select * from t2;
+c2
+11
+12
+13
+14
+15
+rollback;
+select /*+no_rewrite*/ c2 from t2 where c2 = (select max(c1) from t1 group by c1 desc limit 1);
+c2
+select c2 from t2 where c2 = (select max(c1) from t1 group by c1 desc limit 1);
+c2
+delete from t2 where c2 = (select max(c1) from t1 group by c1 desc limit 1);
+insert into is_c1 select c2 from t2 where c2 = (select max(c1) from t1 group by c1 desc limit 1);
+select /*+no_rewrite*/ * from (select c1 from t1 order by c1,c1,c1) as tmp;
+c1
+1
+2
+3
+4
+5
+select * from (select c1 from t1 order by c1,c1,c1) as tmp;
+c1
+1
+2
+3
+4
+5
+select /*+no_rewrite*/ c2 from t2 where c2 = (select c1 from t1 order by c1,c1,c1 limit 1);
+c2
+select c2 from t2 where c2 = (select c1 from t1 order by c1,c1,c1 limit 1);
+c2
+delete from t2 where c2 = (select c1 from t1 order by c1,c1,c1 limit 1);
+insert into is_c1 select c2 from t2 where c2 = (select c1 from t1 order by c1,c1,c1 limit 1);
+select /*+no_rewrite*/ * from ((select c1 from t1 order by c1) union (select c2 from t2)) as tmp;
+c1
+1
+2
+3
+4
+5
+11
+12
+13
+14
+15
+select * from ((select c1 from t1 order by c1) union (select c2 from t2)) as tmp;
+c1
+1
+2
+3
+4
+5
+11
+12
+13
+14
+15
+select /*+no_rewrite*/ c3 from t3 where c3 in ((select c1 from t1 order by c1) union (select c2 from t2));
+c3
+select c3 from t3 where c3 in ((select c1 from t1 order by c1) union (select c2 from t2));
+c3
+delete from t3 where c3 in ((select c1 from t1 order by c1) union (select c2 from t2));
+insert into is_c1 select c3 from t3 where c3 in ((select c1 from t1 order by c1) union (select c2 from t2));
+select /*+no_rewrite*/ * from ((select c1 from t1) union all (select c2 from t2) limit 2) as tmp;
+c1
+1
+2
+select * from ((select c1 from t1) union all (select c2 from t2) limit 2) as tmp;
+c1
+1
+2
+select /*+no_rewrite*/ c3 from t3 where c3 in ((select c1 from t1) union all (select c2 from t2) limit 2);
+c3
+select c3 from t3 where c3 in ((select c1 from t1) union all (select c2 from t2) limit 2);
+c3
+delete from t3 where c3 in ((select c1 from t1) union all (select c2 from t2) limit 2);
+insert into is_c1 select c3 from t3 where c3 in ((select c1 from t1) union all (select c2 from t2) limit 2);
+drop table is_c1, is_c2, t1,t2,t3;
+set autocommit = 1;
+
+*********************消除subquery中的order by子句 begin*****************
+
+drop table if exists t1, t2;
+create table t1(c1 int not null, c2 int, key idx_c1(c1));
+create table t2(c1 int not null, c2 int, key idx_c2(c2));
+create table is_t1(c1 int);
+create table is_t2(c1 int, c2 int);
+insert/*trace*/into t1 values(1,2),(2,3),(3,3), (4,3),(4,4),(6,5),(6,5),(10,20);
+
+****** no limit, elimilate order by in subquery
+select /*+no_rewrite*/ sum(c1), sum(c2) from t1 where c2 in (select c1 from t1 order by c1, c1, c2);
+sum(c1)	sum(c2)
+14	15
+select sum(c1), sum(c2) from t1 where c2 in (select c1 from t1 order by c1, c1, c2);
+sum(c1)	sum(c2)
+14	15
+update t1 set c2 = c1+1 where c2 in (select c1 from t1 order by c1, c1, c2);
+delete from t1 where c2 in (select c1 from t1 order by c1, c1, c2);
+insert into is_t2 select sum(c1), sum(c2) from t1 where c2 in (select c1 from t1 order by c1, c1, c2);
+
+****** has limit, can't elimilate order by in subquery
+select /*+no_rewrite*/sum(c1), sum(c2) from t1 where c2 in (select c1 from t1 order by c1, c2 limit 1);
+sum(c1)	sum(c2)
+NULL	NULL
+select sum(c1), sum(c2) from t1 where c2 in (select c1 from t1 order by c1, c2 limit 1);
+sum(c1)	sum(c2)
+NULL	NULL
+update t1 set c2 = 1 where c2 in (select c1 from t1 order by c1, c2 limit 1);
+delete from t1 where c2 in (select c1 from t1 order by c1, c2 limit 1);
+insert into is_t2 select sum(c1), sum(c2) from t1 where c2 in (select c1 from t1 order by c1, c2 limit 1);
+
+****** order by subquery, can't elimilate order by in subquery
+select /*+no_rewrite*/ sum(c1), sum(c2) from t1 where c2 in (select c1 from t1 order by (select 1));
+sum(c1)	sum(c2)
+NULL	NULL
+select sum(c1), sum(c2) from t1 where c2 in (select c1 from t1 order by (select 1));
+sum(c1)	sum(c2)
+NULL	NULL
+update t1 set c2 = 1 where c2 in (select c1 from t1 order by (select 1));
+delete from t1 where c2 in (select c1 from t1 order by (select 1));
+insert into is_t2 select sum(c1), sum(c2) from t1 where c2 in (select c1 from t1 order by (select 1));
+drop table t1, t2;
+
+*********************消除subquery中的order by子句 end*****************
+
+*********************消除order by重复列begin*****************
+
+drop table if exists t1;
+create table t1(c1 int not null, c2 int);
+select /*+no_rewrite*/ c1 from t1 order by c1,c1 limit 10;
+c1
+select c1 from t1 order by c1,c1 limit 10;
+c1
+update t1 set c1 = c2 + 1  order by c1,c1 limit 10;
+delete from t1 order by c1,c1 limit 10;
+insert into is_t1 select c1 from t1 order by c1,c1 limit 10;
+
+
+select /*+no_rewrite*/c1 from t1 order by c1,c1,c2 limit 10;
+c1
+select c1 from t1 order by c1,c1,c2 limit 10;
+c1
+update t1 set c1 = c2 + 1 order by c1,c1,c2 limit 10;
+delete from t1 order by c1,c1,c2 limit 10;
+insert into is_t1 select c1 from t1 order by c1,c1,c2 limit 10;
+
+
+select /*+no_rewrite*/c1 from t1 order by c1,c2,c1 limit 10;
+c1
+select c1 from t1 order by c1,c2,c1 limit 10;
+c1
+update t1 set c1 = c2 + 1 order by c1,c2,c1 limit 10;
+delete from t1 order by c1,c2,c1 limit 10;
+insert into is_t1 select c1 from t1 order by c1,c2,c1 limit 10;
+drop table t1;
+
+*********************消除order by重复列end*****************
+
+************************* replace is null condition, begin *********
+
+drop table if exists t1_null, t2_null, t3_null;
+create table t1_null(c1 int primary key, c2 int);
+create table t2_null(c1 int, c2 int not NULL);
+create table t3_null(c1 int primary key, c6 int);
+insert/*trace*/ into t1_null values(1, 1),(2, 2),(3, 3);
+insert/*trace*/ into t2_null values(4, 4),(5, 5),(6, 6);
+
+******  pk is null ==> false
+select /*+no_rewrite*/ * from t1_null where c1 is NULL;
+c1	c2
+select * from t1_null where c1 is NULL;
+c1	c2
+update t1_null set c2 = 0 where c1 is NULL;
+delete from t1_null where c1 is NULL;
+insert into is_t2 select * from t1_null where c1 is NULL;
+
+****** 多个表达式,pk is null ==> false
+select /*+no_rewrite*/* from t1_null where c1 is NULL and c2 = 1;
+c1	c2
+select * from t1_null where c1 is NULL and c2 = 1;
+c1	c2
+update t1_null set c2 = 0 where c1 is NULL and c2 = 1;
+delete from t1_null where c1 is NULL and c2 = 1;
+insert into is_t2 select * from t1_null where c1 is NULL and c2 = 1;
+
+****** column(not NULL) is NULL ==> false
+select /*+no_rewrite*/* from t2_null where c2 is NULL;
+c1	c2
+select * from t2_null where c2 is NULL;
+c1	c2
+update t2_null set c2 = c1 + 1 where c2 is NULL;
+delete from t2_null where c2 is NULL;
+insert into is_t2 select * from t2_null where c2 is NULL;
+
+****** 多个表达式, column(not NULL) is NULL ==> false
+select /*+no_rewrite*/* from t2_null where c2 is NULL and c1 = 1;
+c1	c2
+select * from t2_null where c2 is NULL and c1 = 1;
+c1	c2
+update t2_null set c2 = c1 + 1 where c2 is NULL and c1 = 1;
+delete from t2_null where c2 is NULL and c1 = 1;
+insert into is_t2 select * from t2_null where c2 is NULL and c1 = 1;
+
+******  pk is not NULL ==> true
+select /*+no_rewrite*/* from t1_null where c1 is not NULL;
+c1	c2
+1	1
+2	2
+3	3
+select * from t1_null where c1 is not NULL;
+c1	c2
+1	1
+2	2
+3	3
+update t1_null set c2 = 0 where c1 is not NULL;
+delete from t1_null where c1 is not NULL;
+insert into is_t2 select * from t1_null where c1 is not NULL;
+
+******  多个表达式，pk is not NULL ==> true
+select /*+no_rewrite*/* from t1_null where c1 is not NULL and c2 = 1;
+c1	c2
+select * from t1_null where c1 is not NULL and c2 = 1;
+c1	c2
+update t1_null set c2 = 0 where c1 is not NULL and c2 = 1;
+delete from t1_null where c1 is not NULL and c2 = 1;
+insert into is_t2 select * from t1_null where c1 is not NULL and c2 = 1;
+
+****** column(not NULL) is not NULL ==> true
+select /*+no_rewrite*/* from t2_null where c2 is not NULL;
+c1	c2
+4	4
+5	5
+6	6
+select * from t2_null where c2 is not NULL;
+c1	c2
+4	4
+5	5
+6	6
+update t2_null set c2 = c1 + 1 where c2 is not NULL;
+delete from t2_null where c2 is not NULL;
+insert into is_t2 select * from t2_null where c2 is not NULL;
+
+****** 多个表达式, column(not NULL) is not NULL ==> true
+select /*+no_rewrite*/* from t2_null where c2 is not NULL and c1 = 1;
+c1	c2
+select * from t2_null where c2 is not NULL and c1 = 1;
+c1	c2
+update t2_null set c2 = c1 + 1 where c2 is not NULL and c1 = 1;
+delete from t2_null where c2 is not NULL and c1 = 1;
+insert into is_t2 select * from t2_null where c2 is not NULL and c1 = 1;
+****** 子查询中 pk is null ==> false
+select /*+no_rewrite*/* from t1_null where t1_null.c1 = (select t2_null.c1 from t2_null where t1_null.c1 is NULL limit 1);
+c1	c2
+select * from t1_null where t1_null.c1 = (select t2_null.c1 from t2_null where t1_null.c1 is NULL limit 1);
+c1	c2
+update t1_null set c2 = c1 + 1  where t1_null.c1 = (select t2_null.c1 from t2_null where t1_null.c1 is NULL limit 1);
+delete from t1_null where t1_null.c1 = (select t2_null.c1 from t2_null where t1_null.c1 is NULL limit 1);
+insert into is_t2 select * from t1_null where t1_null.c1 = (select t2_null.c1 from t2_null where t1_null.c1 is NULL limit 1);
+****** 子查询中 pk is not null ==> true
+select /*+no_rewrite*/* from t1_null where t1_null.c1 = (select t2_null.c1 from t2_null where t1_null.c1 is NOT NULL limit 1);
+c1	c2
+select * from t1_null where t1_null.c1 = (select t2_null.c1 from t2_null where t1_null.c1 is NOT NULL limit 1);
+c1	c2
+update t1_null set c2 = c1 + 1 where t1_null.c1 = (select t2_null.c1 from t2_null where t1_null.c1 is NOT NULL limit 1);
+delete from t1_null where t1_null.c1 = (select t2_null.c1 from t2_null where t1_null.c1 is NOT NULL limit 1);
+insert into is_t2 select * from t1_null where t1_null.c1 = (select t2_null.c1 from t2_null where t1_null.c1 is NOT NULL limit 1);
+drop table t1_null, t2_null;
+
+************************* replace is null condition, end*********
+
+************************* replace op null condition, begin *********
+
+drop table if exists t1_op_null, t2_op_null;
+create table t1_op_null(c1 int , c2 int);
+create table t2_op_null(c1 int , c2 int );
+insert/*trace*/ into t1_op_null values (1,1),(2,null),(3,3);
+insert/*trace*/ into t2_op_null values (null,4),(5,5),(null,6);
+
+******  compare null ==> false
+select /*+no_rewrite*/ * from t1_op_null where c1 = NULL;
+c1	c2
+select * from t1_op_null where c1 = NULL;
+c1	c2
+update t1_op_null set c2 = 0 where c1 != NULL;
+delete from t1_op_null where c1 > NULL;
+insert into is_t2 select * from t1_op_null where c1 < NULL;
+select * from t1_op_null where c1 <> NULL;
+c1	c2
+update t1_op_null set c2 = 0 where c1 >= NULL;
+delete from t1_op_null where c1 <= NULL;
+
+****** 多个表达式, compare null ==> false
+select /*+no_rewrite*/* from t1_op_null where c1 = NULL and c2 = 1;
+c1	c2
+select * from t1_op_null where c1 <> NULL or c2 = 1;
+c1	c2
+1	1
+update t1_op_null set c2 = 0 where c1 != NULL and c2 = 1;
+delete from t1_op_null where c1 >= NULL or c2 = 1;
+insert into is_t2 select * from t1_op_null where c1 <= NULL and c2 = 1;
+select * from t1_op_null where c1 <> NULL or c2=1;
+c1	c2
+update t1_op_null set c2 = 0 where c1 =1 and c2 < NULL or c1=NULL;
+delete from t1_op_null where c1 >= NULL or c2 = 1 and c1=3 and c2=1 and c2=NULL;
+insert into is_t2 select * from t1_op_null where c1 <= NULL or c2 != NULL or c1=NULL or c2=1;
+
+****** operator with NULL ==> false
+select /*+no_rewrite*/* from t2_op_null where c2 = NULL+c1;
+c1	c2
+select * from t2_op_null where c2 = NULL+c1;
+c1	c2
+update t2_op_null set c1 = c2 + 1 where c2 = c1-NULL;
+delete from t2_op_null where c2 =c1*NULL;
+insert into is_t2 select * from t2_op_null where c2 = c1/NULL;
+update t2_op_null set c1 = c2 + 1 where c2 = c1 | NULL;
+delete from t2_op_null where c2 =c1 & NULL;
+insert into is_t2 select * from t2_op_null where c2 = c1 mod NULL;
+
+****** 多个表达式, operator NULL ==> false
+select /*+no_rewrite*/* from t2_op_null where c2 = c1+NULL and c1 = 1;
+c1	c2
+select * from t2_op_null where c2 = NULL-c1 or c1 = 1;
+c1	c2
+update t2_op_null set c2 = c1 + 1 where c2 = c1/NULL or c2 = c1*NULL and c2=c1 & NULL ;
+delete from t2_op_null where c2 = c1 mod NULL  or c1 = NULL or c2=c1 | NULL or c1=1;
+insert into is_t2 select * from t2_op_null where c2 = NULL and c1 =c2 >> NULL and c1=c2 << NULL ;
+****** 子查询中 has null ==> false
+select /*+no_rewrite*/* from t1_op_null where t1_op_null.c1 = (select t2_op_null.c1 from t2_op_null where t1_op_null.c1 = NULL limit 1);
+c1	c2
+select * from t1_op_null where t1_op_null.c1 = (select t2_op_null.c1 from t2_op_null where t1_op_null.c1 = NULL limit 1);
+c1	c2
+update t1_op_null set c2 = c1 + 1  where t1_op_null.c1 = (select t2_op_null.c1 from t2_op_null where t1_op_null.c1 != NULL limit 1);
+delete from t1_op_null where t1_op_null.c1 = (select t2_op_null.c1 from t2_op_null where t1_op_null.c1 >= NULL limit 1);
+insert into is_t2 select * from t1_op_null where t1_op_null.c1 = (select t2_op_null.c1 from t2_op_null where t1_op_null.c1 <= NULL limit 1);
+select * from t1_op_null where t1_op_null.c1 = (select t2_op_null.c1 from t2_op_null where t1_op_null.c1 = t1_op_null.c2+NULL limit 1);
+c1	c2
+update t1_op_null set c2 = c1 + 1  where t1_op_null.c1 = (select t2_op_null.c1 from t2_op_null where t1_op_null.c1 = t1_op_null.c2-NULL limit 1);
+delete from t1_op_null where t1_op_null.c1 = (select t2_op_null.c1 from t2_op_null where t1_op_null.c1 = t1_op_null.c2*NULL limit 1);
+insert into is_t2 select * from t1_op_null where t1_op_null.c1 = (select t2_op_null.c1 from t2_op_null where t1_op_null.c1 =t1_op_null.c2/NULL limit 1);
+*****group by having 条件为null ==> false
+select * from t1_op_null group by c1 having count(*) = NULL;
+c1	c2
+select * from t1_op_null group by c1 having count(*) != NULL;
+c1	c2
+select * from t1_op_null where c1 like '%1' group by c1 having count(*) = NULL;
+c1	c2
+select * from t1_op_null where c1 like '%1' group by c1 having count(*) != NULL;
+c1	c2
+
+************************* replace op null condition, end*********
+
+************************改写向量等值条件 begin**********
+
+drop table if exists t1, t2;
+create table t1 (id int, a int, b int, c varchar(10), d decimal);
+create table is_t4 (id int, a int, b int, c varchar(10), d decimal);
+insert/*trace*/ into t1 values (0 , 0, 0, '0', 0);
+insert/*trace*/ into t1 values (1 , 1, 0, '0', 0);
+insert/*trace*/ into t1 values (2 , 0, 1, '0', 0);
+insert/*trace*/ into t1 values (3 , 1, 1, '0', 0);
+insert/*trace*/ into t1 values (4 , 0, 0, '1', 0);
+insert/*trace*/ into t1 values (5 , 1, 0, '1', 0);
+insert/*trace*/ into t1 values (6 , 0, 1, '1', 0);
+insert/*trace*/ into t1 values (7 , 1, 1, '1', 0);
+insert/*trace*/ into t1 values (8 , 0, 0, '0', 1);
+insert/*trace*/ into t1 values (9 , 1, 0, '0', 1);
+insert/*trace*/ into t1 values (10, 0, 1, '0', 1);
+insert/*trace*/ into t1 values (11, 1, 1, '0', 1);
+insert/*trace*/ into t1 values (12, 0, 0, '1', 1);
+insert/*trace*/ into t1 values (13, 1, 0, '1', 1);
+insert/*trace*/ into t1 values (14, 0, 1, '1', 1);
+insert/*trace*/ into t1 values (15, 1, 1, '1', 1);
+
+****** convert_preds_vector_to_scalar: case 1
+select /*+no_rewrite*/* from t1 where (a, b) = (1, 1);
+id	a	b	c	d
+3	1	1	0	0
+7	1	1	1	0
+11	1	1	0	1
+15	1	1	1	1
+select * from t1 where (a, b) = (1, 1);
+id	a	b	c	d
+3	1	1	0	0
+7	1	1	1	0
+11	1	1	0	1
+15	1	1	1	1
+update t1 set a = b + 1 where (a, b) = (1, 1);
+delete from t1 where (a, b) = (1, 1);
+insert into is_t4 select * from t1 where (a, b) = (1, 1);
+
+****** convert_preds_vector_to_scalar: case 2
+select /*+no_rewrite*/* from t1 where (a, c) = (1, 1);
+id	a	b	c	d
+5	1	0	1	0
+13	1	0	1	1
+select * from t1 where (a, c) = (1, 1);
+id	a	b	c	d
+5	1	0	1	0
+13	1	0	1	1
+update t1 set a = b + 1 where (a, c) = (1, 1);
+delete from t1 where (a, c) = (1, 1);
+insert into is_t4 select * from t1 where (a, c) = (1, 1);
+
+******convert_preds_vector_to_scalar: case 3
+select /*+no_rewrite*/* from t1 where (a, b) = (c, d);
+id	a	b	c	d
+0	0	0	0	0
+10	0	1	0	1
+select * from t1 where (a, b) = (c, d);
+id	a	b	c	d
+0	0	0	0	0
+10	0	1	0	1
+update t1 set a = b + 1 where (a, b) = (c, d);
+delete from t1 where (a, b) = (c, d);
+insert into is_t4 select * from t1 where (a, b) = (c, d);
+
+******convert_preds_vector_to_scalar: case 4
+select /*+no_rewrite*/* from t1 where (a, c, d) = (c, d, a);
+id	a	b	c	d
+2	0	1	0	0
+select * from t1 where (a, c, d) = (c, d, a);
+id	a	b	c	d
+2	0	1	0	0
+update t1 set a = b + 1 where (a, c, d) = (c, d, a);
+delete from t1 where (a, c, d) = (c, d, a);
+insert into is_t4 select * from t1 where (a, c, d) = (c, d, a);
+drop table t1;
+
+************************改写向量等值条件 end**********
+
+********************remove dummy exprs begin************************
+
+drop table if exists t1;
+create table t1(a int, b int, c int);
+create table t_temp(a int, b int, c int);
+insert/*trace*/ into t1 values (1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5);
+set autocommit = 0;
+
+******false or filter-> filter**********
+select * from t1 where false or t1.a < 3;
+a	b	c
+1	1	1
+2	2	2
+insert into t_temp select * from t1 where false or t1.a < 3;
+insert /*+NO_REWRITE*/into t_temp select * from t1 where false or t1.a < 3;
+update t1 set t1.b = t1.b + 100 where false or t1.a < 3;
+update /*+NO_REWRITE*/t1 set t1.b = t1.b + 100 where false or t1.a < 3;
+delete from t1 where false or t1.a < 3;
+delete /*+NO_REWRITE*/from t1 where false or t1.a < 3;
+select * from t1 where t1.a < 3 or 1 > 2;
+a	b	c
+select * from t1 where false or t1.a < 3 or t1.b < 3;
+a	b	c
+select * from t1 where t1.a < 3 or 1 > 2 or t1.b < 3;
+a	b	c
+select * from t1 where false or false or t1.a < 3;
+a	b	c
+select * from t1 where t1.a < 3 or false or false;
+a	b	c
+select * from t1 where false or (t1.a < 3 and t1.b < 3);
+a	b	c
+
+******true or filter-> true**********
+select * from t1 where t1.a < 3 or true;
+a	b	c
+3	3	3
+4	4	4
+5	5	5
+insert into t_temp as select * from t1 where t1.a < 3 or true;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'as select * from t1 where t1.a < 3 or true' at line 1
+insert /*+NO_REWRITE*/into t_temp as select * from t1 where t1.a < 3 or true;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'as select * from t1 where t1.a < 3 or true' at line 1
+update t1 set t1.b = t1.b + 100 where t1.a < 3 or true;
+update /*+NO_REWRITE*/t1 set t1.b = t1.b + 100 where t1.a < 3 or true;
+delete from t1 where t1.a < 3 or true;
+delete /*+NO_REWRITE*/from t1 where t1.a < 3 or true;
+select * from t1 where t1.a < 3 or 1 < 2;
+a	b	c
+select * from t1 where true or t1.a < 3;
+a	b	c
+select * from t1 where 1 < 2 or t1.a < 3;
+a	b	c
+select * from t1 where t1.a < 3 or t1.b < 3 or true;
+a	b	c
+select * from t1 where t1.a < 3 or t1.b < 3 or 1 < 2;
+a	b	c
+select * from t1 where true or (t1.a < 3 and t1.b < 3);
+a	b	c
+
+******false and filter-> false**********
+select * from t1 where false and t1.a < 3;
+a	b	c
+select * from t1 where t1.a < 3 and 1 > 2;
+a	b	c
+select * from t1 where t1.a < 3 and false and t1. b < 3;
+a	b	c
+select * from t1 where t1.a < 3 and t1.b < 3 and 1 > 2;
+a	b	c
+select * from t1 where false and (t1.a < 3 and t1.b < 3);
+a	b	c
+insert into t_temp select * from t1 where false and (t1.a < 3 and t1.b < 3);
+insert /*+NO_REWRITE*/into t_temp select * from t1 where false and (t1.a < 3 and t1.b < 3);
+update t1 set t1.b = t1.b + 100 where false and (t1.a < 3 and t1.b < 3);
+update /*+NO_REWRITE*/t1 set t1.b = t1.b + 100 where false and (t1.a < 3 and t1.b < 3);
+delete from t1 where false and (t1.a < 3 and t1.b < 3);
+delete /*+NO_REWRITE*/from t1 where false and (t1.a < 3 and t1.b < 3);
+
+******true and filter-> filter**********
+select * from t1 where true and t1.a < 3;
+a	b	c
+select * from t1 where t1.a < 3 and true and 1 < 2;
+a	b	c
+select * from t1 where t1.a < 3 and 1 < 2 and t1.b < 3;
+a	b	c
+select * from t1 where true and (t1.a < 3 and t1.b < 3);
+a	b	c
+
+**********test cases where we can not remove dummy exprs**********
+select * from t1 where 1 + true >= 2;
+a	b	c
+select * from t1 where 1 + false >= 2;
+a	b	c
+drop table t1;
+drop table t_temp;
+
+drop table if exists cache, resource_assigned;
+CREATE TABLE `cache` ( `id` varchar(20) NOT NULL, `name` varchar(200) DEFAULT NULL, `description` varchar(200) DEFAULT NULL, `iaas_id` varchar(200) DEFAULT NULL, `provider_id` varchar(20) DEFAULT NULL, `region_id` varchar(20) DEFAULT NULL, `zone_id` varchar(20) DEFAULT NULL, `tenant_id` varchar(20) DEFAULT NULL, `workspace_id` varchar(20) DEFAULT NULL, `iaas_type` varchar(100) DEFAULT NULL, `status` varchar(50) NOT NULL, `network_type` varchar(50) DEFAULT NULL, `vpc_id` varchar(20) DEFAULT NULL, `v_switch_iaas_id` varchar(200) DEFAULT NULL, `spec_iaas_id` varchar(200) DEFAULT NULL, `capacity` bigint(20) DEFAULT NULL, `qps` bigint(20) DEFAULT NULL, `bandwidth` bigint(20) DEFAULT NULL, `max_connections` bigint(20) DEFAULT NULL, `connection_domain` varchar(200) DEFAULT NULL, `port` bigint(20) DEFAULT NULL, `user_name` varchar(200) DEFAULT NULL, `password` varchar(200) DEFAULT NULL, `utc_create` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `utc_modified` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP, `utc_deleted` timestamp NULL DEFAULT NULL, PRIMARY KEY (`id`), KEY `workspace_id` (`workspace_id`) BLOCK_SIZE 16384, KEY `zone_id` (`zone_id`) BLOCK_SIZE 16384, KEY `iaas_id` (`iaas_id`) BLOCK_SIZE 16384, KEY `region_id` (`region_id`) BLOCK_SIZE 16384, KEY `status` (`status`) BLOCK_SIZE 16384 );
+CREATE TABLE `resource_assigned` ( `id` varchar(20) NOT NULL, `resource_id` varchar(20) NOT NULL, `resource_type` varchar(20) NOT NULL, `workspace_id` varchar(20) NOT NULL, `app_id` varchar(20) NOT NULL, `utc_create` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `utc_modified` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (`id`), UNIQUE KEY `assignedResource_UNIQUE` (`resource_id`, `resource_type`, `workspace_id`, `app_id`) BLOCK_SIZE 16384, KEY `resource_id` (`resource_id`) BLOCK_SIZE 16384, KEY `workspace_id` (`workspace_id`) BLOCK_SIZE 16384, KEY `app_id` (`app_id`) BLOCK_SIZE 16384 );
+SELECT COUNT(cache.id) FROM cache WHERE false OR cache.workspace_id IN ('0077508610') AND EXISTS ( SELECT resource_assigned.resource_id FROM resource_assigned WHERE resource_assigned.resource_id = cache.id AND resource_assigned.resource_type = 'CACHE' AND resource_assigned.workspace_id IN ('0077508610') AND resource_assigned.app_id IN ('0080452727') ) AND cache.status != 'DELETED';
+COUNT(cache.id)
+0
+drop table cache, resource_assigned;
+
+*********************remove dummy exprs end************************
+
+drop table if exists t1, t2;
+create table t1 (c1 int);
+create table t2 (c1 int primary key);
+insert into t1 values (1);
+insert into t1 values (2);
+insert into t2 values (1);
+insert into t2 values (2);
+select * from t1 where c1 between coalesce( ( SELECT 1 ), -10 )AND 10;
+c1
+1
+2
+select * from t2 where c1 = 1 + (select 1);
+c1
+2
+select * from t2 where c1 = 1 + (select 1);
+c1
+2
+drop table t1;
+drop table t2;
+
+*********************remove dummy exprs end************************
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+select c1, max(c2) from t1 group by c1;
+c1	max(c2)
+select c1, max(c2) from t1 group by c1 with rollup;
+c1	max(c2)
+drop table t1;
+DROP TABLE IF EXISTS `b`, `cc`;
+CREATE TABLE `b` (
+`col_int` int(11) DEFAULT NULL,
+`col_varchar` varchar(1) DEFAULT NULL,
+`col_varchar_10` varchar(10) DEFAULT NULL,
+`col_int_key` int(11) DEFAULT NULL,
+`col_varchar_20` varchar(20) DEFAULT NULL,
+`pk` int(11) NOT NULL,
+`col_varchar_key` varchar(1) DEFAULT NULL,
+`col_varchar_10_key` varchar(10) DEFAULT NULL,
+`col_varchar_20_key` varchar(20) DEFAULT NULL,
+PRIMARY KEY (`pk`),
+KEY `idx1` (`pk`, `col_int_key`)  ,
+KEY `idx3` (`pk`, `col_varchar_key`)  ,
+KEY `idx5` (`pk`, `col_varchar_10_key`)  ,
+KEY `idx7` (`pk`, `col_varchar_20_key`)
+) ;
+CREATE TABLE `cc` (
+`col_int` int(11) DEFAULT NULL,
+`col_varchar_10` varchar(10) DEFAULT NULL,
+`col_varchar` varchar(1) DEFAULT NULL,
+`col_varchar_20_key` varchar(20) DEFAULT NULL,
+`col_varchar_key` varchar(1) DEFAULT NULL,
+`col_varchar_20` varchar(20) DEFAULT NULL,
+`col_int_key` int(11) DEFAULT NULL,
+`col_varchar_10_key` varchar(10) DEFAULT NULL,
+`pk` int(11) NOT NULL,
+PRIMARY KEY (`pk`),
+KEY `idx7` (`pk`, `col_varchar_20_key`)  ,
+KEY `idx3` (`pk`, `col_varchar_key`)  ,
+KEY `idx1` (`pk`, `col_int_key`)  ,
+KEY `idx5` (`pk`, `col_varchar_10_key`)
+) ;
+SELECT table1 . col_varchar_key AS field1,
+CONCAT (table2 . `col_varchar_20`, table1 . `col_varchar_20_key`) AS field2,
+((table2 . `col_int`) + (table1 . `col_int_key`)) AS field3,
+table2 . `col_varchar` AS field4,
+(SELECT SUM(SUBQUERY1_t2 . `pk`) AS SUBQUERY1_field1
+FROM (CC AS SUBQUERY1_t1 INNER JOIN B AS SUBQUERY1_t2 ON (SUBQUERY1_t2 . `col_int` = SUBQUERY1_t1 . `pk`))
+WHERE SUBQUERY1_t1 . `col_varchar_10` <> table1 . `col_varchar_20`
+          AND SUBQUERY1_t1 . `col_int_key` = table1 . `col_int_key` ) AS field5,
+table1 . `pk` AS field6,
+table2 . col_varchar_20_key AS field7,
+CONCAT (table1 . `col_varchar_10_key`, table1 . `col_varchar_10_key`) AS field8,
+table2 . `col_int_key` AS field9,
+SUM(table2 . `pk`) AS field10,
+CONCAT (table1 . `col_varchar_10_key`, table1 . `col_varchar_10_key`) AS field11,
+SUM(table2 . `col_int_key`) AS field12,
+table1 . col_varchar_20_key AS field13,
+CONCAT (table1 . `col_varchar_20`, table2 . `col_varchar`) AS field14,
+((table1 . `pk`) + (table2 . `col_int_key`)) AS field15
+FROM (CC AS table1
+INNER JOIN CC AS table2 ON (table2 . `pk` = table1 . `pk`))
+WHERE (NOT EXISTS ((SELECT 6 FROM DUAL)))
+AND table1 . `col_varchar_key` = table1 . `col_varchar_key`
+GROUP BY field1,
+field2,
+field3,
+field4,
+field5,
+field6,
+field7,
+field8,
+field9,
+field11,
+field13,
+field14,
+field15
+HAVING ((field2 >= 'r'
+         AND field1 < 'qr')
+AND field10 < 'pq')
+ORDER BY field1,
+field2,
+field3,
+field4,
+field5,
+field6,
+field7,
+field8,
+field9,
+field10,
+field11,
+field12,
+field13,
+field14,
+field15
+LIMIT 100
+OFFSET 2;
+field1	field2	field3	field4	field5	field6	field7	field8	field9	field10	field11	field12	field13	field14	field15
+SELECT /*+no_rewrite*/ table1 . col_varchar_key AS field1,
+CONCAT (table2 . `col_varchar_20`, table1 . `col_varchar_20_key`) AS field2,
+((table2 . `col_int`) + (table1 . `col_int_key`)) AS field3,
+table2 . `col_varchar` AS field4,
+(SELECT SUM(SUBQUERY1_t2 . `pk`) AS SUBQUERY1_field1
+FROM (CC AS SUBQUERY1_t1 INNER JOIN B AS SUBQUERY1_t2 ON (SUBQUERY1_t2 . `col_int` = SUBQUERY1_t1 . `pk`))
+WHERE SUBQUERY1_t1 . `col_varchar_10` <> table1 . `col_varchar_20`
+          AND SUBQUERY1_t1 . `col_int_key` = table1 . `col_int_key` ) AS field5,
+table1 . `pk` AS field6,
+table2 . col_varchar_20_key AS field7,
+CONCAT (table1 . `col_varchar_10_key`, table1 . `col_varchar_10_key`) AS field8,
+table2 . `col_int_key` AS field9,
+SUM(table2 . `pk`) AS field10,
+CONCAT (table1 . `col_varchar_10_key`, table1 . `col_varchar_10_key`) AS field11,
+SUM(table2 . `col_int_key`) AS field12,
+table1 . col_varchar_20_key AS field13,
+CONCAT (table1 . `col_varchar_20`, table2 . `col_varchar`) AS field14,
+((table1 . `pk`) + (table2 . `col_int_key`)) AS field15
+FROM (CC AS table1
+INNER JOIN CC AS table2 ON (table2 . `pk` = table1 . `pk`))
+WHERE (NOT EXISTS ((SELECT 6 FROM DUAL)))
+AND table1 . `col_varchar_key` = table1 . `col_varchar_key`
+GROUP BY field1,
+field2,
+field3,
+field4,
+field5,
+field6,
+field7,
+field8,
+field9,
+field11,
+field13,
+field14,
+field15
+HAVING ((field2 >= 'r'
+         AND field1 < 'qr')
+AND field10 < 'pq')
+ORDER BY field1,
+field2,
+field3,
+field4,
+field5,
+field6,
+field7,
+field8,
+field9,
+field10,
+field11,
+field12,
+field13,
+field14,
+field15
+LIMIT 100
+OFFSET 2;
+field1	field2	field3	field4	field5	field6	field7	field8	field9	field10	field11	field12	field13	field14	field15
+
+************************消除冗余select begin**********
+
+drop table if exists t1,t2,t3;
+create table t1 (c1 int, c2 int);
+create table t2 (c1 int, c2 int);
+create table t3 (c1 int, c2 int);
+select (select 123 from dual) from dual;
+(select 123 from dual)
+123
+select /*+no_rewrite*/ (select 123 from dual) from dual;
+(select 123 from dual)
+123
+select (select sum(c1) from t1) from dual;
+(select sum(c1) from t1)
+15
+select /*+no_rewrite*/ (select sum(c1) from t1) from dual;
+(select sum(c1) from t1)
+15
+select (select c1 from t1 limit 1) from dual;
+(select c1 from t1 limit 1)
+1
+select /*+no_rewrite*/ (select c1 from t1 limit 1) from dual;
+(select c1 from t1 limit 1)
+1
+select (select sum(c1) over() from t1) from dual;
+ERROR 21000: Subquery returns more than 1 row
+select * from (select (select 123 from dual) from dual);
+(select 123 from dual)
+123
+select * from (select /*+no_rewrite*/ (select 123 from dual) from dual);
+(select 123 from dual)
+123
+select * from (select (select sum(c1) from t1) from dual);
+(select sum(c1) from t1)
+15
+select * from (select /*+no_rewrite*/ (select sum(c1) from t1) from dual);
+(select sum(c1) from t1)
+15
+select * from t2,(select (select 123 from dual) as c1 from dual) V where t2.c1 = V.c1;
+c1	c2	c1
+select * from t2,(select /*+no_rewrite*/ (select 123 from dual) as c1 from dual) V where t2.c1 = V.c1;
+c1	c2	c1
+select * from t2,(select (select sum(c1) from t1) as c1 from dual) V where t2.c1 = V.c1;
+c1	c2	c1
+select * from t2,(select /*+no_rewrite*/ (select sum(c1) from t1) as c1 from dual) V where t2.c1 = V.c1;
+c1	c2	c1
+select * from t2 where t2.c1 = (select (select 123 from dual) from dual);
+c1	c2
+select * from t2 where t2.c1 = (select /*+no_rewrite*/ (select 123 from dual) from dual);
+c1	c2
+select * from t2 where t2.c1 = (select (select count(c1) from t1) from dual);
+c1	c2
+5	5
+select * from t2 where t2.c1 = (select /*+no_rewrite*/ (select count(c1) from t1) from dual);
+c1	c2
+5	5
+select * from t2 where t2.c1 in (select (select 123 from dual) from dual);
+c1	c2
+select * from t2 where t2.c1 in (select /*+no_rewrite*/ (select 123 from dual) from dual);
+c1	c2
+select * from t2 where t2.c1 in (select (select count(c1) from t1) from dual);
+c1	c2
+5	5
+select * from t2 where t2.c1 in (select /*+no_rewrite*/ (select count(c1) from t1) from dual);
+c1	c2
+5	5
+select * from t2 where exists (select (select 123 from dual) from dual);
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+select * from t2 where exists (select /*+no_rewrite*/ (select 123 from dual) from dual);
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+select * from t2 where exists (select (select count(c1) from t1) from dual);
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+select * from t2 where exists (select /*+no_rewrite*/ (select count(c1) from t1) from dual);
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+select * from t2 where t2.c1 > all (select (select 123 from dual) from dual);
+c1	c2
+select * from t2 where t2.c1 > all (select /*+no_rewrite*/ (select 123 from dual) from dual);
+c1	c2
+select * from t2 where t2.c1 > all (select (select count(c1) from t1) from dual);
+c1	c2
+select * from t2 where t2.c1 > all (select /*+no_rewrite*/ (select count(c1) from t1) from dual);
+c1	c2
+select t2.c1, (select (select 123 from dual) from dual) as s1 from t2 order by s1;
+c1	s1
+1	123
+2	123
+3	123
+4	123
+5	123
+select t2.c1, (select /*+no_rewrite*/ (select 123 from dual) from dual) as s1 from t2 order by s1;
+c1	s1
+1	123
+2	123
+3	123
+4	123
+5	123
+select t2.c1, (select (select sum(c1) from t1) from dual) as s1 from t2 order by s1;
+c1	s1
+1	15
+2	15
+3	15
+4	15
+5	15
+select t2.c1, (select /*+no_rewrite*/ (select sum(c1) from t1) from dual) as s1 from t2 order by s1;
+c1	s1
+1	15
+2	15
+3	15
+4	15
+5	15
+select t2.c1, (select (select 123 from dual) from dual) as s1 from t2 having s1 > 5;
+c1	s1
+1	123
+2	123
+3	123
+4	123
+5	123
+select t2.c1, (select /*+no_rewrite*/ (select 123 from dual) from dual) as s1 from t2 having s1 > 5;
+c1	s1
+1	123
+2	123
+3	123
+4	123
+5	123
+select t2.c1, (select (select sum(c1) from t1) from dual) as s1 from t2 having s1 > 5;
+c1	s1
+1	15
+2	15
+3	15
+4	15
+5	15
+select t2.c1, (select /*+no_rewrite*/ (select sum(c1) from t1) from dual) as s1 from t2 having s1 > 5;
+c1	s1
+1	15
+2	15
+3	15
+4	15
+5	15
+select (select (select 123 from dual) from dual) from dual;
+(select (select 123 from dual) from dual)
+123
+select /*+no_rewrite*/ (select /*+no_rewrite*/ (select 123 from dual) from dual) from dual;
+(select /*+no_rewrite*/ (select 123 from dual) from dual)
+123
+select (select (select sum(c1) from t1) from dual) from dual;
+(select (select sum(c1) from t1) from dual)
+15
+select /*+no_rewrite*/ (select /*+no_rewrite*/ (select sum(c1) from t1) from dual) from dual;
+(select /*+no_rewrite*/ (select sum(c1) from t1) from dual)
+15
+select * from (select (select (select 123 from dual) from dual) from dual);
+(select (select 123 from dual) from dual)
+123
+select * from (select /*+no_rewrite*/ (select /*+no_rewrite*/ (select 123 from dual) from dual) from dual);
+(select /*+no_rewrite*/ (select 123 from dual) from dual)
+123
+select * from (select (select (select sum(c1) from t1) from dual) from dual);
+(select (select sum(c1) from t1) from dual)
+15
+select * from (select /*+no_rewrite*/ (select /*+no_rewrite*/ (select sum(c1) from t1) from dual) from dual);
+(select /*+no_rewrite*/ (select sum(c1) from t1) from dual)
+15
+select * from t2,(select (select (select 123 from dual) from dual) as c1 from dual) V where t2.c1 = V.c1;
+c1	c2	c1
+select * from t2,(select /*+no_rewrite*/ (select /*+no_rewrite*/ (select 123 from dual) from dual) as c1 from dual) V where t2.c1 = V.c1;
+c1	c2	c1
+select * from t2,(select (select (select sum(c1) from t1) from dual) as c1 from dual) V where t2.c1 = V.c1;
+c1	c2	c1
+select * from t2,(select /*+no_rewrite*/ (select /*+no_rewrite*/ (select sum(c1) from t1) from dual) as c1 from dual) V where t2.c1 = V.c1;
+c1	c2	c1
+select * from t2 where t2.c1 = (select (select (select 123 from dual) from dual) from dual);
+c1	c2
+select * from t2 where t2.c1 = (select /*+no_rewrite*/ (select /*+no_rewrite*/ (select 123 from dual) from dual) from dual);
+c1	c2
+select * from t2 where t2.c1 = (select (select (select count(c1) from t1) from dual) from dual);
+c1	c2
+5	5
+select * from t2 where t2.c1 = (select /*+no_rewrite*/ (select /*+no_rewrite*/ (select count(c1) from t1) from dual) from dual);
+c1	c2
+5	5
+select * from t2 where t2.c1 in (select (select (select 123 from dual) from dual) from dual);
+c1	c2
+select * from t2 where t2.c1 in (select /*+no_rewrite*/ (select /*+no_rewrite*/ (select 123 from dual) from dual) from dual);
+c1	c2
+select * from t2 where t2.c1 in (select (select (select count(c1) from t1) from dual) from dual);
+c1	c2
+5	5
+select * from t2 where t2.c1 in (select /*+no_rewrite*/ (select /*+no_rewrite*/ (select count(c1) from t1) from dual) from dual);
+c1	c2
+5	5
+select t2.c1, (select (select (select 123 from dual) from dual) from dual) as s1 from t2 order by s1;
+c1	s1
+1	123
+2	123
+3	123
+4	123
+5	123
+select t2.c1, (select /*+no_rewrite*/ (select /*+no_rewrite*/ (select 123 from dual) from dual) from dual) as s1 from t2 order by s1;
+c1	s1
+1	123
+2	123
+3	123
+4	123
+5	123
+select t2.c1, (select (select (select sum(c1) from t1) from dual) from dual) as s1 from t2 order by s1;
+c1	s1
+1	15
+2	15
+3	15
+4	15
+5	15
+select t2.c1, (select /*+no_rewrite*/ (select /*+no_rewrite*/ (select sum(c1) from t1) from dual) from dual) as s1 from t2 order by s1;
+c1	s1
+1	15
+2	15
+3	15
+4	15
+5	15
+drop table t1,t2,t3;
+
+*********************remove dummy exprs end************************
+
+************************消除冗余group by/distinct**********
+
+drop table if exists t1, t2, t3, tpart1, tpart2, t4, t5, t6;
+create table t1 (c1 int, c2 int, c3 int, c4 int);
+create table t2 (c1 int, c2 int, c3 int, c4 int);
+create table t3 (c1 int, c2 int, c3 int, c4 int);
+create table tpart1 (c1 int, c2 int, c3 int, c4 int) partition by hash(c1) partitions 3;
+create table tpart2 (c1 int, c2 int, c3 int, c4 int) partition by hash(c1) partitions 3;
+create table t4 (c1 int, c2 int, c3 int, c4 int);
+create table t5 (c1 int, c2 int, c3 int, c4 int);
+create table t6 (c1 int, c2 float, c3 decimal, c4 varchar(20), c5 date);
+set autocommit = 1;
+select c1, c2, min(minc3) from (select c1, c2, min(c3) minc3 from t1 group by c1,c2) group by c1,c2;
+c1	c2	min(minc3)
+1	1	3
+1	2	1
+2	1	2
+NULL	NULL	NULL
+select /*+no_rewrite*/ c1, c2, min(minc3) from (select c1, c2, min(c3) minc3 from t1 group by c1,c2) group by c1,c2;
+c1	c2	min(minc3)
+NULL	NULL	NULL
+1	1	3
+1	2	1
+2	1	2
+select c1, min(minc3) from (select c1, c2, min(c3) minc3 from t1 group by c1,c2) group by c1;
+c1	min(minc3)
+1	1
+2	2
+NULL	NULL
+select /*+no_rewrite*/ c1, min(minc3) from (select c1, c2, min(c3) minc3 from t1 group by c1,c2) group by c1;
+c1	min(minc3)
+NULL	NULL
+1	1
+2	2
+select min(minc3) from (select c1, c2, min(c3) minc3 from t1 group by c1,c2);
+min(minc3)
+1
+select /*+no_rewrite*/ min(minc3) from (select c1, c2, min(c3) minc3 from t1 group by c1,c2);
+min(minc3)
+1
+select min(minc3) from (select min(c3) minc3 from t1);
+min(minc3)
+1
+select /*+no_rewrite*/ min(minc3) from (select min(c3) minc3 from t1);
+min(minc3)
+1
+select c1, c2, max(maxc3) from (select c1, c2, max(c3) maxc3 from t1 group by c1,c2) group by c1,c2;
+c1	c2	max(maxc3)
+1	1	5
+1	2	4
+2	1	2
+NULL	NULL	NULL
+select /*+no_rewrite*/ c1, c2, max(maxc3) from (select c1, c2, max(c3) maxc3 from t1 group by c1,c2) group by c1,c2;
+c1	c2	max(maxc3)
+NULL	NULL	NULL
+1	1	5
+1	2	4
+2	1	2
+select c1, max(maxc3) from (select c1, c2, max(c3) maxc3 from t1 group by c1,c2) group by c1;
+c1	max(maxc3)
+1	5
+2	2
+NULL	NULL
+select /*+no_rewrite*/ c1, max(maxc3) from (select c1, c2, max(c3) maxc3 from t1 group by c1,c2) group by c1;
+c1	max(maxc3)
+NULL	NULL
+1	5
+2	2
+select max(maxc3) from (select c1, c2, max(c3) maxc3 from t1 group by c1,c2);
+max(maxc3)
+5
+select /*+no_rewrite*/ max(maxc3) from (select c1, c2, max(c3) maxc3 from t1 group by c1,c2);
+max(maxc3)
+5
+select max(maxc3) from (select max(c3) maxc3 from t1);
+max(maxc3)
+5
+select /*+no_rewrite*/ max(maxc3) from (select max(c3) maxc3 from t1);
+max(maxc3)
+5
+select c1, c2, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1,c2) group by c1,c2;
+c1	c2	sum(sc3)
+1	1	8
+1	2	5
+2	1	2
+NULL	NULL	NULL
+select /*+no_rewrite*/ c1, c2, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1,c2) group by c1,c2;
+c1	c2	sum(sc3)
+NULL	NULL	NULL
+1	1	8
+1	2	5
+2	1	2
+select c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1,c2) group by c1;
+c1	sum(sc3)
+1	13
+2	2
+NULL	NULL
+select /*+no_rewrite*/ c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1,c2) group by c1;
+c1	sum(sc3)
+NULL	NULL
+1	13
+2	2
+select sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1,c2);
+sum(sc3)
+15
+select /*+no_rewrite*/ sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1,c2);
+sum(sc3)
+15
+select sum(sc3) from (select sum(c3) sc3 from t1);
+sum(sc3)
+15
+select /*+no_rewrite*/ sum(sc3) from (select sum(c3) sc3 from t1);
+sum(sc3)
+15
+select min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t1 group by c1,c2);
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+1	2	15	1	5
+select /*+no_rewrite*/ min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t1 group by c1,c2);
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+1	2	15	1	5
+select min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from tpart1 group by c1,c2);
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+1	2	13	1	3
+select /*+no_rewrite*/ min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from tpart1 group by c1,c2);
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+1	2	13	1	3
+select min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t4 group by c1,c2) group by c1;
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+NULL	NULL	NULL	NULL	NULL
+select /*+no_rewrite*/ min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t4 group by c1,c2) group by c1;
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+NULL	NULL	NULL	NULL	NULL
+select min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t4 group by c1,c2);
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+NULL	NULL	NULL	NULL	NULL
+select /*+no_rewrite*/ min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t4 group by c1,c2);
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+NULL	NULL	NULL	NULL	NULL
+select sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t4);
+sum(sc3)	min(minc3)	max(maxc3)
+NULL	NULL	NULL
+select /*+no_rewrite*/ sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t4);
+sum(sc3)	min(minc3)	max(maxc3)
+NULL	NULL	NULL
+select min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t5 group by c1,c2) group by c1;
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+select /*+no_rewrite*/ min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t5 group by c1,c2) group by c1;
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+select min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t5 group by c1,c2);
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+NULL	NULL	NULL	NULL	NULL
+select /*+no_rewrite*/ min(c1), max(c2), sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t5 group by c1,c2);
+min(c1)	max(c2)	sum(sc3)	min(minc3)	max(maxc3)
+NULL	NULL	NULL	NULL	NULL
+select sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t5);
+sum(sc3)	min(minc3)	max(maxc3)
+NULL	NULL	NULL
+select /*+no_rewrite*/ sum(sc3), min(minc3), max(maxc3) from (select c1, c2, sum(c3) sc3, min(c3) minc3, max(c3) maxc3 from t5);
+sum(sc3)	min(minc3)	max(maxc3)
+NULL	NULL	NULL
+select sum(sc3)
+from ((select sum(c3) sc3 from t1 group by c1,c2)
+union all
+(select sum(c3) sc3 from t2 group by c1,c2));
+sum(sc3)
+34
+select /*+no_rewrite*/ sum(sc3)
+from ((select sum(c3) sc3 from t1 group by c1,c2)
+union all
+(select sum(c3) sc3 from t2 group by c1,c2));
+sum(sc3)
+34
+select max(maxc3)
+from ((select max(c3) maxc3 from t1 group by c1,c2)
+union all
+(select c1 from t2));
+max(maxc3)
+5
+select /*+no_rewrite*/ max(maxc3)
+from ((select max(c3) maxc3 from t1 group by c1,c2)
+union all
+(select c1 from t2));
+max(maxc3)
+5
+select sum(sc3)
+from ((select sum(c3) sc3 from t1 group by c1)
+union all
+(select min(c3) sc3 from t2 group by c1,c2));
+sum(sc3)
+19
+select /*+no_rewrite*/ sum(sc3)
+from ((select sum(c3) sc3 from t1 group by c1)
+union all
+(select min(c3) sc3 from t2 group by c1,c2));
+sum(sc3)
+19
+select sum(sc3)
+from ((select sum(c3) sc3 from tpart1 group by c1,c2)
+union all
+(select sum(c3) sc3 from tpart2 group by c1,c2));
+sum(sc3)
+44
+select /*+no_rewrite*/ sum(sc3)
+from ((select sum(c3) sc3 from tpart1 group by c1,c2)
+union all
+(select sum(c3) sc3 from tpart2 group by c1,c2));
+sum(sc3)
+44
+select sum(sc3)
+from ((select sum(c3) sc3 from t1 group by c1,c2)
+union all
+(select sum(c3) sc3 from tpart2 group by c1,c2));
+sum(sc3)
+46
+select /*+no_rewrite*/ sum(sc3)
+from ((select sum(c3) sc3 from t1 group by c1,c2)
+union all
+(select sum(c3) sc3 from tpart2 group by c1,c2));
+sum(sc3)
+46
+select sum(sc3)
+from ((select sum(c3) sc3 from t1 group by c1,c2)
+union all
+(select sum(c3) sc3 from t2 group by c1,c2)
+union all
+(select sum(c3) sc3 from t3 group by c1,c2));
+sum(sc3)
+46
+select /*+no_rewrite*/ sum(sc3)
+from ((select sum(c3) sc3 from t1 group by c1,c2)
+union all
+(select sum(c3) sc3 from t2 group by c1,c2)
+union all
+(select sum(c3) sc3 from t3 group by c1,c2));
+sum(sc3)
+46
+select sum(sc3)
+from ((select sum(c3) sc3 from t1 group by c1,c2)
+union all
+(select min(c3) sc3 from t2 group by c1,c2)
+union all
+(select sum(c3) sc3 from t3 group by c1,c2));
+sum(sc3)
+31
+select /*+no_rewrite*/ sum(sc3)
+from ((select sum(c3) sc3 from t1 group by c1,c2)
+union all
+(select min(c3) sc3 from t2 group by c1,c2)
+union all
+(select sum(c3) sc3 from t3 group by c1,c2));
+sum(sc3)
+31
+select min(minc2), min(minc3), min(minc4), min(minc5) from (select min(c2) minc2, min(c3) minc3, min(c4) minc4 , min(c5) minc5 from t6 group by c1);
+min(minc2)	min(minc3)	min(minc4)	min(minc5)
+2.5	4	ertt	2020-07-12
+select /*+no_rewrite*/ min(minc2), min(minc3), min(minc4), min(minc5) from (select min(c2) minc2, min(c3) minc3, min(c4) minc4 , min(c5) minc5 from t6 group by c1);
+min(minc2)	min(minc3)	min(minc4)	min(minc5)
+2.5	4	ertt	2020-07-12
+select max(maxc2), max(maxc3), max(maxc4), max(maxc5) from (select max(c2) maxc2, max(c3) maxc3, max(c4) maxc4 , max(c5) maxc5 from t6 group by c1);
+max(maxc2)	max(maxc3)	max(maxc4)	max(maxc5)
+5.4	9	trew	2020-07-30
+select /*+no_rewrite*/ max(maxc2), max(maxc3), max(maxc4), max(maxc5) from (select max(c2) maxc2, max(c3) maxc3, max(c4) maxc4 , max(c5) maxc5 from t6 group by c1);
+max(maxc2)	max(maxc3)	max(maxc4)	max(maxc5)
+5.4	9	trew	2020-07-30
+select sum(sumc2), sum(sumc3) from (select sum(c2) sumc2, sum(c3) sumc3 from t6 group by c1);
+sum(sumc2)	sum(sumc3)
+15.299999952316284	24
+select /*+no_rewrite*/ sum(sumc2), sum(sumc3) from (select sum(c2) sumc2, sum(c3) sumc3 from t6 group by c1);
+sum(sumc2)	sum(sumc3)
+15.299999952316284	24
+select sum(sumc3)
+from ((select sum(c3) sumc3 from t1 group by c1)
+union all
+(select sum(c2) from t6 group by c1));
+sum(sumc3)
+30.299999952316284
+select /*+no_rewrite*/ sum(sumc3)
+from ((select sum(c3) sumc3 from t1 group by c1)
+union all
+(select sum(c2) from t6 group by c1));
+sum(sumc3)
+30.299999952316284
+select sum(sumc3)
+from ((select sum(c3) sumc3 from t1 group by c1)
+union all
+(select sum(c3) from t6 group by c1));
+sum(sumc3)
+39
+select /*+no_rewrite*/ sum(sumc3)
+from ((select sum(c3) sumc3 from t1 group by c1)
+union all
+(select sum(c3) from t6 group by c1));
+sum(sumc3)
+39
+select min(minc3)
+from ((select min(c3) minc3 from t1 group by c1)
+union all
+(select min(c3) from t6 group by c1));
+min(minc3)
+1
+select /*+no_rewrite*/ min(minc3)
+from ((select min(c3) minc3 from t1 group by c1)
+union all
+(select min(c3) from t6 group by c1));
+min(minc3)
+1
+select max(maxc3)
+from ((select max(c3) maxc3 from t1 group by c1)
+union all
+(select max(c4) from t6 group by c1));
+max(maxc3)
+trew
+select /*+no_rewrite*/ max(maxc3)
+from ((select max(c3) maxc3 from t1 group by c1)
+union all
+(select max(c4) from t6 group by c1));
+max(maxc3)
+trew
+select max(maxc3)
+from ((select max(c3) maxc3 from t1 group by c1)
+union all
+(select max(c5) from t6 group by c1));
+max(maxc3)
+5
+select /*+no_rewrite*/ max(maxc3)
+from ((select max(c3) maxc3 from t1 group by c1)
+union all
+(select max(c5) from t6 group by c1));
+max(maxc3)
+5
+select c1, sc3 from (select c1, c2, max(c3) sc3 from t1 group by c1,c2) group by c1;
+c1	sc3
+NULL	NULL
+1	5
+2	2
+select /*+no_rewrite*/ c1, sc3 from (select c1, c2, max(c3) sc3 from t1 group by c1,c2) group by c1;
+c1	sc3
+NULL	NULL
+1	5
+2	2
+select c1, c2 from (select c1, c2, max(c3) sc3 from t1 group by c1,c2) group by c1;
+c1	c2
+NULL	NULL
+1	1
+2	1
+select /*+no_rewrite*/c1, c2 from (select c1, c2, max(c3) sc3 from t1 group by c1,c2) group by c1;
+c1	c2
+NULL	NULL
+1	1
+2	1
+select c1, sum(c3) from (select c1, c2, min(c3) c3 from t1 group by c1,c2) group by c1;
+c1	sum(c3)
+NULL	NULL
+1	4
+2	2
+select /*+no_rewrite*/c1, sum(c3) from (select c1, c2, min(c3) c3 from t1 group by c1,c2) group by c1;
+c1	sum(c3)
+NULL	NULL
+1	4
+2	2
+select c1, sum(c3) from (select c1, c2, max(c3) c3 from t1 group by c1,c2) group by c1;
+c1	sum(c3)
+NULL	NULL
+1	9
+2	2
+select /*+no_rewrite*/c1, sum(c3) from (select c1, c2, max(c3) c3 from t1 group by c1,c2) group by c1;
+c1	sum(c3)
+NULL	NULL
+1	9
+2	2
+select c1, max(c3) from (select c1, c2, min(c3) c3 from t1 group by c1,c2) group by c1;
+c1	max(c3)
+NULL	NULL
+1	3
+2	2
+select /*+no_rewrite*/c1, max(c3) from (select c1, c2, min(c3) c3 from t1 group by c1,c2) group by c1;
+c1	max(c3)
+NULL	NULL
+1	3
+2	2
+select sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1,c2 limit 5);
+sum(sc3)
+15
+select /*+no_rewrite*/ sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1,c2 limit 5);
+sum(sc3)
+15
+select sum(sc3) from (select distinct c1, c2, sum(c3) sc3 from t1 group by c1,c2);
+sum(sc3)
+15
+select /*+no_rewrite*/ sum(sc3) from (select distinct c1, c2, sum(c3) sc3 from t1 group by c1,c2);
+sum(sc3)
+15
+select sum(sc3) from (select c1, c2, sum(distinct c3) sc3 from t1 group by c1,c2);
+sum(sc3)
+15
+select /*+no_rewrite*/ sum(sc3) from (select c1, c2, sum(distinct c3) sc3 from t1 group by c1,c2);
+sum(sc3)
+15
+select sum(distinct sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1,c2);
+sum(distinct sc3)
+15
+select /*+no_rewrite*/ sum(distinct sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1,c2);
+sum(distinct sc3)
+15
+select c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1  where c1 > 10 group by c1, c2) group by c1;
+c1	sum(sc3)
+select /*+no_rewrite*/ c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1  where c1 > 10 group by c1, c2) group by c1;
+c1	sum(sc3)
+select c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2 having sc3 > 10) group by c1;
+c1	sum(sc3)
+select /*+no_rewrite*/ c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2 having sc3 > 3) group by c1;
+c1	sum(sc3)
+1	13
+select c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) where sc3 > 10 group by c1;
+c1	sum(sc3)
+select /*+no_rewrite*/ c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) where sc3 > 3 group by c1;
+c1	sum(sc3)
+1	13
+select c1, c3 from (select c1, c2, max(c3) c3 from t1 group by c1,c2) group by c1 having c3 > 10;
+c1	c3
+select /*+no_rewrite*/ c1, c3 from (select c1, c2, max(c3) c3 from t1 group by c1,c2) group by c1 having c3 > 3;
+c1	c3
+1	5
+select c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) group by c1 having sum(sc3)> 3;
+c1	sum(sc3)
+1	13
+select /*+no_rewrite*/ c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) group by c1 having sum(sc3)> 3;
+c1	sum(sc3)
+1	13
+select c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) group by c1 having sum(c1)> 3;
+c1	sum(sc3)
+select /*+no_rewrite*/ c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) group by c1 having sum(c1)> 3;
+c1	sum(sc3)
+select c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) group by c1 having min(c1)> 1;
+c1	sum(sc3)
+2	2
+select /*+no_rewrite*/ c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) group by c1 having min(c1)> 1;
+c1	sum(sc3)
+2	2
+select c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) group by c1 having c1> 1;
+c1	sum(sc3)
+2	2
+select /*+no_rewrite*/ c1, sum(sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) group by c1 having c1> 1;
+c1	sum(sc3)
+2	2
+select c1, sum(c1 + sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) group by c1;
+c1	sum(c1 + sc3)
+NULL	NULL
+1	15
+2	4
+select /*+no_rewrite*/ c1, sum(c1 + sc3) from (select c1, c2, sum(c3) sc3 from t1 group by c1, c2) group by c1;
+c1	sum(c1 + sc3)
+NULL	NULL
+1	15
+2	4
+select c1, sum(sc3) from (select c1, c2, 2 + sum(c3) sc3 from t1 group by c1, c2) group by c1;
+c1	sum(sc3)
+NULL	NULL
+1	17
+2	4
+select /*+no_rewrite*/ c1, sum(sc3) from (select c1, c2, 2 + sum(c3) sc3 from t1 group by c1, c2) group by c1;
+c1	sum(sc3)
+NULL	NULL
+1	17
+2	4
+select c1, min(c3) from (select c1, c2, min(c3) c3 from t1 group by c1,c2 with rollup) group by c1;
+c1	min(c3)
+NULL	1
+1	1
+2	2
+select /*+no_rewrite*/ c1, min(c3) from (select c1, c2, min(c3) c3 from t1 group by c1,c2 with rollup) group by c1;
+c1	min(c3)
+NULL	1
+1	1
+2	2
+select c1, min(c3) from (select c1, c2, min(c3) c3 from t1 group by c1,c2) group by c1 with rollup;
+c1	min(c3)
+NULL	NULL
+1	1
+2	2
+NULL	1
+select /*+no_rewrite*/ c1, min(c3) from (select c1, c2, min(c3) c3 from t1 group by c1,c2) group by c1 with rollup;
+c1	min(c3)
+NULL	NULL
+1	1
+2	2
+NULL	1
+select min(minc3)
+from ((select min(c3) minc3 from t1 group by c1,c2 with rollup)
+union all
+(select min(c3) minc3 from t2 group by c1,c2)
+union all
+(select min(c3) minc3 from t3 group by c1,c2));
+min(minc3)
+1
+select /*+no_rewrite*/ min(minc3)
+from ((select min(c3) minc3 from t1 group by c1,c2 with rollup)
+union all
+(select min(c3) minc3 from t2 group by c1,c2)
+union all
+(select min(c3) minc3 from t3 group by c1,c2));
+min(minc3)
+1
+select distinct c1, c2 from t1
+union all
+select distinct c1, c2 from t2;
+c1	c2
+1	1
+1	2
+2	1
+NULL	NULL
+1	1
+2	2
+2	1
+NULL	NULL
+select distinct c1, c2 from t1
+union
+select distinct c1, c2 from t2;
+c1	c2
+1	1
+1	2
+2	1
+NULL	NULL
+2	2
+select distinct c1, c2 from t1
+intersect
+select distinct c1, c2 from t2;
+c1	c2
+1	1
+2	1
+NULL	NULL
+select distinct c1, c2 from t1
+except
+select distinct c1, c2 from t2;
+c1	c2
+1	2
+select distinct c1, c2 from t1
+union
+(select distinct c1, c2 from t2
+union all
+select distinct c1, c2 from t3);
+c1	c2
+1	1
+1	2
+2	1
+NULL	NULL
+2	2
+select distinct c1, c2 from t1
+union
+(select distinct c1, c2 from t2
+union
+select distinct c1, c2 from t3);
+c1	c2
+1	1
+1	2
+2	1
+NULL	NULL
+2	2
+select distinct c1, c2 from t1
+union
+select distinct c1, c2 from t2 limit 2;
+c1	c2
+1	1
+1	2
+select distinct c1, c2 from t1 limit 2
+union
+select distinct c1, c2 from t2;
+c1	c2
+1	1
+1	2
+2	2
+2	1
+NULL	NULL
+drop table t1,t2,t3,tpart1,tpart2,t4,t5,t6;
+set autocommit = 0;
+
+************************消除冗余group by/distinct end**********
+
+*********************push down outer join on condition begin**************
+
+set autocommit = 1;
+drop table if exists t1,t2,t3,t4,t5,tp1,tp2;
+create table t1 (c1 int, c2 int);
+create table t2 (c1 int, c2 int);
+create table t3 (c1 int, c2 int);
+create table t4 (c1 int, c2 int);
+create table t5 (c1 int, c2 int);
+create table tp1 (c1 int, c2 int) partition by hash(c1) partitions 2;
+create table tp2 (c1 int, c2 int) partition by hash(c1) partitions 2;
+select * from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3);
+c1	c2	c1	c2
+NULL	NULL	NULL	NULL
+1	1	1	1
+2	2	NULL	NULL
+3	3	NULL	NULL
+select /*+no_rewrite*/ * from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3);
+ERROR 0A000: Not supported feature or function
+select * from t1 ta left join t1 tb on ta.c1 = tb.c1 and tb.c1 in (select c2 from t3);
+c1	c2	c1	c2
+NULL	NULL	NULL	NULL
+1	1	1	1
+2	2	2	2
+3	3	NULL	NULL
+select /*+no_rewrite*/ * from t1 ta left join t1 tb on ta.c1 = tb.c1 and tb.c1 in (select c2 from t3);
+ERROR 0A000: Not supported feature or function
+select * from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3), t4;
+c1	c2	c1	c2	c1	c2
+NULL	NULL	NULL	NULL	2	2
+NULL	NULL	NULL	NULL	3	3
+NULL	NULL	NULL	NULL	4	4
+NULL	NULL	NULL	NULL	NULL	NULL
+1	1	1	1	2	2
+1	1	1	1	3	3
+1	1	1	1	4	4
+1	1	1	1	NULL	NULL
+2	2	NULL	NULL	2	2
+2	2	NULL	NULL	3	3
+2	2	NULL	NULL	4	4
+2	2	NULL	NULL	NULL	NULL
+3	3	NULL	NULL	2	2
+3	3	NULL	NULL	3	3
+3	3	NULL	NULL	4	4
+3	3	NULL	NULL	NULL	NULL
+select /*+no_rewrite*/ * from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3), t4;
+ERROR 0A000: Not supported feature or function
+select * from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t4) left join t3 on t1.c1 = t3.c1;
+c1	c2	c1	c2	c1	c2
+NULL	NULL	NULL	NULL	NULL	NULL
+1	1	NULL	NULL	1	1
+2	2	NULL	NULL	2	2
+3	3	3	3	NULL	NULL
+select /*+no_rewrite*/ * from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t4) left join t3 on t1.c1 = t3.c1;
+ERROR 0A000: Not supported feature or function
+select * from t1 left join t2 on t1.c1 = t2.c1 and (t1.c1,t2.c1) in (select c1,c2 from t3);
+ERROR 0A000: Not supported feature or function
+select /*+no_rewrite*/ * from t1 left join t2 on t1.c1 = t2.c1 and (t1.c1,t2.c1) in (select c1,c2 from t3);
+ERROR 0A000: Not supported feature or function
+select * from tp1 left join tp2 on tp1.c1 = tp2.c1 and tp2.c1 in (select c2 from t3);
+c1	c2	c1	c2
+1	1	1	1
+2	2	2	2
+3	3	NULL	NULL
+select /*+no_rewrite*/ * from tp1 left join tp2 on tp1.c1 = tp2.c1 and tp2.c1 in (select c2 from t3);
+ERROR 0A000: Not supported feature or function
+select * from t1 left join tp1 on t1.c1 = tp1.c1 and tp1.c1 in (select c2 from tp2);
+c1	c2	c1	c2
+1	1	1	1
+2	2	2	2
+3	3	3	3
+NULL	NULL	NULL	NULL
+select /*+no_rewrite*/ * from t1 left join tp1 on t1.c1 = tp1.c1 and tp1.c1 in (select c2 from tp2);
+ERROR 0A000: Not supported feature or function
+select * from t1 left join (select c1+c2 a,c2 b from t2) v on t1.c1 = v.a and v.a in (select c2 from t3);
+c1	c2	a	b
+1	1	NULL	NULL
+2	2	2	1
+3	3	NULL	NULL
+NULL	NULL	NULL	NULL
+select /*+no_rewrite*/ * from t1 left join (select c1+c2 a,c2 b from t2) v on t1.c1 = v.a and v.a in (select c2 from t3);
+ERROR 0A000: Not supported feature or function
+select t1.*, v.b, v.a, v.c from t1 left join (select c1 a,c2 b, c1 + c2 c from t2) v on t1.c1 = v.a and v.a in (select c2 from t3);
+c1	c2	b	a	c
+NULL	NULL	NULL	NULL	NULL
+1	1	1	1	2
+2	2	NULL	NULL	NULL
+3	3	NULL	NULL	NULL
+select /*+no_rewrite*/ t1.*, v.b, v.a, v.c from t1 left join (select c1 a,c2 b, c1 + c2 c from t2) v on t1.c1 = v.a and v.a in (select c2 from t3);
+ERROR 0A000: Not supported feature or function
+select * from t1 left join (select c1+c2 a,c2 b from t2) v on t1.c1 = v.a and v.a in (select c2 from t4) left join t3 on t1.c1 = t3.c1;
+c1	c2	a	b	c1	c2
+1	1	NULL	NULL	1	1
+2	2	2	1	2	2
+3	3	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL	NULL
+select /*+no_rewrite*/ * from t1 left join (select c1+c2 a,c2 b from t2) v on t1.c1 = v.a and v.a in (select c2 from t4) left join t3 on t1.c1 = t3.c1;
+ERROR 0A000: Not supported feature or function
+select * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4);
+c1	c2	c1	c2	c1	c2
+NULL	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	1	1
+NULL	NULL	NULL	NULL	2	2
+NULL	NULL	NULL	NULL	4	4
+select /*+no_rewrite*/ * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4);
+ERROR 0A000: Not supported feature or function
+select * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t1.c1 in (select c2 from t4);
+c1	c2	c1	c2	c1	c2
+NULL	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	1	1
+2	2	NULL	NULL	2	2
+NULL	NULL	NULL	NULL	4	4
+select /*+no_rewrite*/ * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t1.c1 in (select c2 from t4);
+ERROR 0A000: Not supported feature or function
+select * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4) left join t5 on t1.c1 = t5.c1;
+c1	c2	c1	c2	c1	c2	c1	c2
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	1	1	NULL	NULL
+NULL	NULL	NULL	NULL	2	2	NULL	NULL
+NULL	NULL	NULL	NULL	4	4	NULL	NULL
+select /*+no_rewrite*/ * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4) left join t5 on t1.c1 = t5.c1;
+ERROR 0A000: Not supported feature or function
+select * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t1.c1 in (select c2 from t4) left join t5 on t1.c1 = t5.c1;
+c1	c2	c1	c2	c1	c2	c1	c2
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	1	1	NULL	NULL
+2	2	NULL	NULL	2	2	2	2
+NULL	NULL	NULL	NULL	4	4	NULL	NULL
+select /*+no_rewrite*/ * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t1.c1 in (select c2 from t4) left join t5 on t1.c1 = t5.c1;
+ERROR 0A000: Not supported feature or function
+select * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4) right join t5 on t1.c1 = t5.c1;
+c1	c2	c1	c2	c1	c2	c1	c2
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL	NULL	1	1
+NULL	NULL	NULL	NULL	NULL	NULL	2	2
+NULL	NULL	NULL	NULL	NULL	NULL	5	5
+select /*+no_rewrite*/ * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4) right join t5 on t1.c1 = t5.c1;
+ERROR 0A000: Not supported feature or function
+select * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t1.c1 in (select c2 from t4) right join t5 on t1.c1 = t5.c1;
+c1	c2	c1	c2	c1	c2	c1	c2
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL	NULL	1	1
+2	2	NULL	NULL	2	2	2	2
+NULL	NULL	NULL	NULL	NULL	NULL	5	5
+select /*+no_rewrite*/ * from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t1.c1 in (select c2 from t4) right join t5 on t1.c1 = t5.c1;
+ERROR 0A000: Not supported feature or function
+select t2.c2 from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3) where t2.c1 not in (select c1 from t4);
+c2
+select t2.c2 from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3) where t2.c1 in (select c1 from t4);
+c2
+select t2.c2 from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4) where t2.c1 not in (select c1 from t5);
+c2
+select t2.c2 from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4) where t2.c1 in (select c1 from t5);
+c2
+select t2.c2 from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4) where t1.c1 not in (select c1 from t5);
+c2
+select t2.c2 from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4) where t1.c1 in (select c1 from t5);
+c2
+select t2.c2 from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4) where (t1.c1, t2.c1) not in (select c1,c2 from t5);
+c2
+select t2.c2 from t1 left join t2 on t1.c1 = t2.c1 right join t3 on t1.c1 = t3.c1 and t2.c1 in (select c2 from t4) where (t1.c1, t2.c1) in (select c1,c2 from t5);
+c2
+select * from t4 where c1 not in (select t1.c1 from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3));
+c1	c2
+select * from t4 where c1 in (select t1.c1 from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3));
+c1	c2
+2	2
+3	3
+select * from t4 where c1 not in (select t2.c1 from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3));
+c1	c2
+select * from t4 where c1 in (select t2.c1 from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3));
+c1	c2
+select * from t4 where c1 not in (select t1.c1 + t2.c1 from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3));
+c1	c2
+select * from t4 where c1 in (select t1.c1 + t2.c1 from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3));
+c1	c2
+2	2
+select * from t1 left join t2 on t1.c1 = t2.c1 and t2.c1 in (select c2 from t3) where t2.c1 not in (select t4.c1 from t4 left join t5 on t4.c1 = t5.c1 and t5.c1 in (select c2 from t3));
+c1	c2	c1	c2
+explain update t1 left join t2 on t1.c1 = t2.c1 and t2.c2 in (select c1 from t3) set t2.c2 = 10;
+Query Plan
+=================================================
+|ID|OPERATOR               |NAME |EST. ROWS|COST|
+-------------------------------------------------
+|0 |UPDATE                 |     |4        |131 |
+|1 | HASH OUTER JOIN       |     |4        |127 |
+|2 |  TABLE SCAN           |t1   |4        |37  |
+|3 |  SUBPLAN SCAN         |VIEW1|4        |82  |
+|4 |   HASH RIGHT SEMI JOIN|     |4        |82  |
+|5 |    TABLE SCAN         |t3   |4        |37  |
+|6 |    TABLE SCAN         |t2   |4        |37  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t2: ({t2: (VIEW1.t2.__pk_increment, VIEW1.t2.c1, VIEW1.t2.c2)}), hash_distinct}]),
+      update([VIEW1.t2.c2=?])
+  1 - output([VIEW1.t2.__pk_increment], [VIEW1.t2.c1], [VIEW1.t2.c2], [?]), filter(nil), 
+      equal_conds([t1.c1 = VIEW1.t2.c1]), other_conds(nil)
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  3 - output([VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.__pk_increment]), filter(nil), 
+      access([VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.__pk_increment])
+  4 - output([t2.c1], [t2.c2], [t2.__pk_increment]), filter(nil), 
+      equal_conds([t2.c2 = t3.c1]), other_conds(nil)
+  5 - output([t3.c1]), filter(nil), 
+      access([t3.c1]), partitions(p0)
+  6 - output([t2.c1], [t2.c2], [t2.__pk_increment]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.__pk_increment]), partitions(p0)
+
+update t1 left join t2 on t1.c1 = t2.c1 and t2.c2 in (select c1 from t3) set t2.c2 = 10;
+explain update tp1 left join tp2 on tp1.c1 = tp2.c1 and tp2.c1 in (select c1 from t3) set tp2.c2 = 10;
+ERROR HY000: Invalid argument
+update tp1 left join tp2 on tp1.c1 = tp2.c1 and tp2.c1 in (select c1 from t3) set tp2.c2 = 10;
+ERROR HY000: Invalid argument
+drop table if exists C, D, BB, CC, B;
+CREATE TABLE C (
+col_varchar_10 varchar(10),
+col_varchar varchar (1),
+col_int int,
+pk int,
+col_varchar_20 varchar(20),
+col_varchar_key varchar (1),
+col_varchar_10_key varchar(10),
+col_int_key int,
+col_varchar_20_key varchar(20),
+/*Indices*/
+primary key (pk) ,
+key idx3(pk, col_varchar_key ),
+key idx5(pk, col_varchar_10_key ),
+key idx1(pk, col_int_key ),
+key idx7(pk, col_varchar_20_key )) ;
+CREATE TABLE D (
+pk int,
+col_varchar_10 varchar(10),
+col_varchar_20 varchar(20),
+col_varchar_10_key varchar(10),
+col_varchar_20_key varchar(20),
+col_int int,
+col_int_key int,
+col_varchar_key varchar (1),
+col_varchar varchar (1),
+/*Indices*/
+primary key (pk) ,
+key idx5(pk, col_varchar_10_key ),
+key idx7(pk, col_varchar_20_key ),
+key idx1(pk, col_int_key ),
+key idx3(pk, col_varchar_key )) ;
+CREATE TABLE BB (
+col_varchar_20_key varchar(20),
+col_int_key int,
+col_int int,
+col_varchar_10 varchar(10),
+col_varchar_10_key varchar(10),
+col_varchar_key varchar (1),
+col_varchar varchar (1),
+col_varchar_20 varchar(20),
+pk int,
+/*Indices*/
+key idx7(pk, col_varchar_20_key ),
+key idx1(pk, col_int_key ),
+key idx5(pk, col_varchar_10_key ),
+key idx3(pk, col_varchar_key ),
+primary key (pk) ) ;
+CREATE TABLE CC (
+col_varchar_20_key varchar(20),
+col_varchar_key varchar (1),
+col_varchar_10_key varchar(10),
+col_varchar_20 varchar(20),
+col_int int,
+pk int,
+col_varchar varchar (1),
+col_varchar_10 varchar(10),
+col_int_key int,
+/*Indices*/
+key idx7(pk, col_varchar_20_key ),
+key idx3(pk, col_varchar_key ),
+key idx5(pk, col_varchar_10_key ),
+primary key (pk) ,
+key idx1(pk, col_int_key )) ;
+CREATE TABLE B (
+col_varchar varchar (1),
+col_int int,
+col_varchar_20 varchar(20),
+col_varchar_10 varchar(10),
+col_int_key int,
+col_varchar_10_key varchar(10),
+pk int,
+col_varchar_20_key varchar(20),
+col_varchar_key varchar (1),
+/*Indices*/
+key idx1(pk, col_int_key ),
+key idx5(pk, col_varchar_10_key ),
+primary key (pk) ,
+key idx7(pk, col_varchar_20_key ),
+key idx3(pk, col_varchar_key )) ;
+SELECT table2 . col_int_key AS field1 
+FROM ( C AS table1 LEFT  JOIN 
+( CC AS table2 INNER JOIN 
+(  SELECT   SUBQUERY1_t2 . * 
+FROM ( D AS SUBQUERY1_t2 RIGHT  JOIN 
+CC AS SUBQUERY1_t3 ON (SUBQUERY1_t3 . `col_varchar_10_key` = SUBQUERY1_t2 . `col_varchar_key`
+                                            AND SUBQUERY1_t2 . `col_varchar_10` != SOME ( SELECT   CHILD_SUBQUERY1_t1 . `col_varchar_10_key` AS CHILD_SUBQUERY1_field1
+FROM C AS CHILD_SUBQUERY1_t1 ))) 
+WHERE   EXISTS ( SELECT DISTINCT  CHILD_SUBQUERY2_t1 . `col_varchar_10` AS CHILD_SUBQUERY1_field1 FROM CC AS CHILD_SUBQUERY2_t1 WHERE CHILD_SUBQUERY2_t1 . `col_int_key` != SUBQUERY1_t3 . `pk` ) )
+AS table3 ON (table3 . `col_varchar_key` = table2 . `col_varchar_20_key`  ) ) 
+ON (table3 . `pk` = table2 . `pk`  ) ) 
+WHERE ( table1 . `col_varchar_10_key` > table3 . `col_varchar_20` AND table1 . `col_int` <> table1 . `col_int` )  GROUP BY field1  ORDER BY field1;
+field1
+SELECT  SUBQUERY1_t2 . * 
+FROM ( D AS SUBQUERY1_t2 RIGHT  JOIN 
+CC AS SUBQUERY1_t3 ON (SUBQUERY1_t3 . `col_varchar_10_key` = SUBQUERY1_t2 . `col_varchar_key`
+                                AND SUBQUERY1_t2 . `col_varchar_10` != SOME ( SELECT   CHILD_SUBQUERY1_t1 . `col_varchar_10_key` AS CHILD_SUBQUERY1_field1
+FROM C AS CHILD_SUBQUERY1_t1 ))) 
+WHERE EXISTS (SELECT DISTINCT CHILD_SUBQUERY2_t1 . `col_varchar_10` AS CHILD_SUBQUERY1_field1 FROM CC AS CHILD_SUBQUERY2_t1 WHERE CHILD_SUBQUERY2_t1 . `col_int_key` != SUBQUERY1_t2 . `pk`);
+pk	col_varchar_10	col_varchar_20	col_varchar_10_key	col_varchar_20_key	col_int	col_int_key	col_varchar_key	col_varchar
+select * from ( t1 right  join t2 on (t2.c1 = t1.c1 and t1.c2 not in ( select c1 from t3)));
+c1	c2	c1	c2
+NULL	NULL	1	10
+NULL	NULL	3	3
+NULL	NULL	4	4
+NULL	NULL	NULL	NULL
+select * from ( t1 right join t2 on (t2.c1 = t1.c1 and t1.c2 not in (select c1 from t3)))
+where exists (select distinct c2 from t2 where t1.c2 != t2.c1);
+c1	c2	c1	c2
+select * from ( t1 right join t3 on t1.c1 = t3.c1 right join t2 on (t2.c1 = t1.c1 and t1.c2 not in ( select c1 from t4)));
+c1	c2	c1	c2	c1	c2
+NULL	NULL	NULL	NULL	1	10
+NULL	NULL	NULL	NULL	3	3
+NULL	NULL	NULL	NULL	4	4
+NULL	NULL	NULL	NULL	NULL	NULL
+SELECT Count(table1 . `pk`)     AS field1, 
+table1 . col_varchar_key AS field2 
+FROM   ( (SELECT DISTINCT SUBQUERY1_t1 . * 
+FROM   ( cc AS SUBQUERY1_t1 
+RIGHT JOIN bb AS SUBQUERY1_t2 
+ON ( SUBQUERY1_t2 . `pk` = SUBQUERY1_t1 . `col_int` ) ) 
+WHERE  SUBQUERY1_t1 . `pk` < 7) AS table1 
+RIGHT OUTER JOIN d AS table2 
+ON ( table2 . `pk` = table1 . `col_int_key` 
+AND ( 9, 7 ) IN (SELECT Sum(SUBQUERY2_t1 . 
+`col_int_key`) AS 
+SUBQUERY2_field1, 
+Count(SUBQUERY2_t1 . `pk`) 
+AS 
+SUBQUERY2_field2 
+FROM   ( cc AS SUBQUERY2_t1 
+INNER JOIN cc AS 
+SUBQUERY2_t2 
+ON ( SUBQUERY2_t2 . 
+`col_int_key` 
+= 
+SUBQUERY2_t1 . 
+`pk` ) 
+) 
+) ) ) 
+WHERE  ( EXISTS ((SELECT 5 
+FROM   DUAL)) ) 
+OR table1 . `pk` < table1 . `col_int` 
+GROUP  BY field2 
+ORDER  BY field1, 
+field2;
+field1	field2
+SELECT  table1 . col_varchar_key 
+FROM (SELECT * FROM CC AS SUBQUERY1_t1) AS table1 
+RIGHT OUTER JOIN D AS table2 ON table2 . `pk` = table1 . `col_int_key` 
+AND 9  IN (SELECT `col_int_key` AS SUBQUERY2_field1 FROM CC AS SUBQUERY2_t1);
+col_varchar_key
+SELECT Min(table2 . `pk`) AS field1 
+FROM   ( cc AS table1 
+RIGHT OUTER JOIN c AS table2 
+ON ( table2 . `col_varchar` = table1 . `col_varchar_key` ) 
+) 
+WHERE  ( ( 9, 5 ) IN (SELECT Sum(SUBQUERY1_t1 . `col_int`) AS SUBQUERY1_field1, 
+Max(SUBQUERY1_t1 . `pk`)      AS SUBQUERY1_field2 
+FROM   ( cc AS SUBQUERY1_t1 
+LEFT JOIN ( c AS SUBQUERY1_t2 
+INNER JOIN c AS SUBQUERY1_t3 
+ON ( SUBQUERY1_t3 . 
+`col_int_key` = 
+SUBQUERY1_t2 . 
+`col_int_key` 
+OR ( 'x', 'j' ) IN 
+(SELECT Sum(CHILD_SUBQUERY1_t1 . 
+`col_varchar_key`) AS 
+CHILD_SUBQUERY1_field1, 
+Sum(CHILD_SUBQUERY1_t1 . 
+`col_varchar` 
+) 
+AS 
+CHILD_SUBQUERY1_field2 
+FROM   ( cc AS CHILD_SUBQUERY1_t1 
+INNER JOIN cc AS 
+CHILD_SUBQUERY1_t2 
+ON ( 
+CHILD_SUBQUERY1_t2 . 
+`col_varchar_20` 
+= 
+CHILD_SUBQUERY1_t1 . 
+`col_varchar_key` 
+) ) 
+) ) ) 
+ON ( SUBQUERY1_t3 . `col_varchar` = 
+SUBQUERY1_t2 . `col_varchar_key` 
+OR 
+SUBQUERY1_t3 . `col_varchar_20_key` NOT 
+IN 
+(SELECT 5 
+UNION 
+SELECT 8) 
+) ) 
+WHERE  ( 'i', 'm' ) IN (SELECT Min(CHILD_SUBQUERY3_t1 . 
+`col_varchar`)       AS 
+CHILD_SUBQUERY3_field1, 
+Count(CHILD_SUBQUERY3_t1 . 
+`col_varchar_key`) AS 
+CHILD_SUBQUERY3_field2 
+FROM   ( cc AS CHILD_SUBQUERY3_t1 
+RIGHT JOIN b AS 
+CHILD_SUBQUERY3_t2 
+ON ( 
+CHILD_SUBQUERY3_t2 . 
+`col_varchar_10` = 
+CHILD_SUBQUERY3_t1 . 
+`col_varchar_key` ) 
+) 
+WHERE 
+CHILD_SUBQUERY3_t2 . `col_varchar_10` 
+<= 
+CHILD_SUBQUERY3_t2 . `col_varchar`)) ) 
+AND ( table1 . `col_int_key` NOT BETWEEN 226 AND ( 226 + 183 ) 
+OR table1 . `col_varchar_key` <= 'm' ) 
+AND (SELECT Max(SUBQUERY2_t1 . `col_varchar_20`) AS SUBQUERY2_field1 
+FROM   ( cc AS SUBQUERY2_t1 
+INNER JOIN c AS SUBQUERY2_t2 
+ON ( SUBQUERY2_t2 . `col_varchar_key` = 
+SUBQUERY2_t1 . `col_varchar` ) )) IS NULL 
+HAVING field1 > 't' 
+ORDER  BY field1;
+field1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'x'
+Warning	1292	Truncated incorrect DOUBLE value: 'j'
+SELECT 1 FROM ( cc AS SUBQUERY1_t1 LEFT JOIN ( c AS SUBQUERY1_t2
+INNER JOIN c AS SUBQUERY1_t3 
+ON ( SUBQUERY1_t3.`col_int_key` = SUBQUERY1_t2.`col_int_key`
+OR 1 IN (SELECT 1 union select 2))
+) ON (SUBQUERY1_t3.`col_varchar_20_key` NOT IN (SELECT 5 UNION SELECT 8)));
+1
+drop table t1,t2,t3,t4,t5,tp1,tp2,C,D,BB,CC,B;
+set autocommit = 0;
+
+*********************push down outer join on condition end**************
+
+************************pullup select expr in query with offset begin**********
+************************通过调整逻辑算子分配顺序实现,case不移除**********************
+
+set autocommit = 1;
+drop table if exists t1, t2;
+create table t1 (c1 int, c2 int);
+create table t2 (c1 int, c2 int);
+select c1, c2, (select c1 from t2 where c2 = t1.c1) from t1 limit 1 offset 2;
+c1	c2	(select c1 from t2 where c2 = t1.c1)
+3	3	3
+select /*+no_rewrite*/ c1, c2, (select c1 from t2 where c2 = t1.c1) from t1 limit 1 offset 2;
+c1	c2	(select c1 from t2 where c2 = t1.c1)
+3	3	3
+select c1, c2, c1 + c2, c2 + (select c1 from t2 where c2 = t1.c1) from t1 limit 1 offset 2;
+c1	c2	c1 + c2	c2 + (select c1 from t2 where c2 = t1.c1)
+3	3	6	6
+select /*+no_rewrite*/ c1, c2, c1 + c2, c2 + (select c1 from t2 where c2 = t1.c1) from t1 limit 1 offset 2;
+c1	c2	c1 + c2	c2 + (select c1 from t2 where c2 = t1.c1)
+3	3	6	6
+select c1, c2, (select c1 from t2 where c2 = t1.c1) from t1 order by 3 limit 10 offset 2;
+c1	c2	(select c1 from t2 where c2 = t1.c1)
+1	1	1
+2	2	2
+3	3	3
+select /*+no_rewrite*/ c1, c2, (select c1 from t2 where c2 = t1.c1) from t1 order by 3 limit 10 offset 2;
+c1	c2	(select c1 from t2 where c2 = t1.c1)
+1	1	1
+2	2	2
+3	3	3
+select c1, c2, (select c1 from t2 where c2 = t1.c1) from t1 group by c1, c2 limit 10 offset 2;
+c1	c2	(select c1 from t2 where c2 = t1.c1)
+3	3	3
+4	4	NULL
+5	5	NULL
+select /*+no_rewrite*/ c1, c2, (select c1 from t2 where c2 = t1.c1) from t1 group by c1, c2 limit 10 offset 2;
+c1	c2	(select c1 from t2 where c2 = t1.c1)
+3	3	3
+4	4	NULL
+5	5	NULL
+select c1, c2, (select c1 from t2 where c2 = t1.c1) from t1 group by c1, c2 with rollup limit 10 offset 2;
+c1	c2	(select c1 from t2 where c2 = t1.c1)
+2	2	2
+2	NULL	2
+3	3	3
+3	NULL	3
+4	4	NULL
+4	NULL	NULL
+5	5	NULL
+5	NULL	NULL
+NULL	NULL	NULL
+select /*+no_rewrite*/ c1, c2, (select c1 from t2 where c2 = t1.c1) from t1 group by c1, c2 with rollup limit 10 offset 2;
+c1	c2	(select c1 from t2 where c2 = t1.c1)
+2	2	2
+2	NULL	2
+3	3	3
+3	NULL	3
+4	4	NULL
+4	NULL	NULL
+5	5	NULL
+5	NULL	NULL
+NULL	NULL	NULL
+drop table t1;
+drop table t2;
+set autocommit = 0;
+
+************************pullup select expr in query with offset end**********
+DROP TABLE IF EXISTS B, C, BB, CC;
+CREATE TABLE B (
+col_varchar_10_key varchar(10),
+pk int,
+col_varchar_20_key varchar(20),
+col_varchar varchar (1),
+col_varchar_10 varchar(10),
+col_int int,
+col_varchar_20 varchar(20),
+col_varchar_key varchar (1),
+col_int_key int,
+/*Indices*/
+key idx5(pk, col_varchar_10_key ),
+primary key (pk) ,
+key idx7(pk, col_varchar_20_key ),
+key idx3(pk, col_varchar_key ),
+key idx1(pk, col_int_key )) ;
+CREATE TABLE C (
+col_varchar_10_key varchar(10),
+col_varchar_10 varchar(10),
+col_int_key int,
+col_varchar_20_key varchar(20),
+col_varchar_key varchar (1),
+pk int,
+col_int int,
+col_varchar_20 varchar(20),
+col_varchar varchar (1),
+/*Indices*/
+key idx5(pk, col_varchar_10_key ),
+key idx1(pk, col_int_key ),
+key idx7(pk, col_varchar_20_key ),
+key idx3(pk, col_varchar_key ),
+primary key (pk) ) ;
+CREATE TABLE BB (
+col_varchar_20_key varchar(20),
+pk int,
+col_varchar_10 varchar(10),
+col_varchar_key varchar (1),
+col_varchar_10_key varchar(10),
+col_int_key int,
+col_varchar varchar (1),
+col_int int,
+col_varchar_20 varchar(20),
+/*Indices*/
+key idx7(pk, col_varchar_20_key ),
+primary key (pk) ,
+key idx3(pk, col_varchar_key ),
+key idx5(pk, col_varchar_10_key ),
+key idx1(pk, col_int_key )) ;
+CREATE TABLE CC (
+col_varchar_10 varchar(10),
+col_varchar varchar (1),
+col_int int,
+col_varchar_key varchar (1),
+pk int,
+col_varchar_10_key varchar(10),
+col_varchar_20 varchar(20),
+col_int_key int,
+col_varchar_20_key varchar(20),
+/*Indices*/
+key idx3(pk, col_varchar_key ),
+primary key (pk) ,
+key idx5(pk, col_varchar_10_key ),
+key idx1(pk, col_int_key ),
+key idx7(pk, col_varchar_20_key )) ;
+SELECT table1 . col_int_key AS field1,
+table1 . col_varchar_20_key AS field2,
+MAX(table1 . `col_varchar`) AS field3,
+table2 . `col_int_key` AS field4,
+(SELECT DISTINCT SUM(SUBQUERY1_t1 . `pk`) AS SUBQUERY1_field1
+FROM C AS SUBQUERY1_t1) AS field5,
+CONCAT (table1 . `col_varchar_20`,
+table1 . `col_varchar_20_key`) AS field6,
+table1 . `col_varchar_20` AS field7,
+table2 . col_varchar_10_key AS field8,
+table1 . `col_int` AS field9,
+table1 . col_varchar_20_key AS field10,
+(SELECT MAX(SUBQUERY2_t2 . `pk`) AS SUBQUERY2_field1
+FROM (BB AS SUBQUERY2_t1
+LEFT OUTER JOIN C AS SUBQUERY2_t2 ON (SUBQUERY2_t2 . `col_varchar_key` = SUBQUERY2_t1 . `col_varchar`))) AS field11,
+MIN(table1 . `col_int`) AS field12,
+table1 . col_varchar_10_key AS field13
+FROM (CC AS table1
+LEFT  JOIN ((B AS table2
+INNER JOIN CC AS table3 ON (table3 . `col_varchar_key` = table2 . `col_varchar_10_key`))) ON (table3 . `pk` = table2 . `col_int_key`))
+WHERE (table1 . `col_varchar_10` IN
+(SELECT SUBQUERY3_t1 . `col_varchar_20` AS SUBQUERY3_field1
+FROM CC AS SUBQUERY3_t1
+GROUP BY SUBQUERY3_field1))
+AND (table1 . `col_varchar_key` IN ('a')
+OR table1 . `col_varchar_key` <> 'g')
+AND table1 . `col_varchar` IS NULL
+GROUP BY field1,
+field2,
+field4,
+field5,
+field6,
+field7,
+field8,
+field9,
+field10,
+field11,
+field13
+HAVING field6 >= 'bx'
+ORDER BY field1,
+field2,
+field3,
+field4,
+field5,
+field6,
+field7,
+field8,
+field9,
+field10,
+field11,
+field12,
+field13
+LIMIT 100;
+field1	field2	field3	field4	field5	field6	field7	field8	field9	field10	field11	field12	field13
+5	w	NULL	NULL	3	xw	x	NULL	2	w	2	2	n
+SELECT /*+no_rewrite*/table1 . col_int_key AS field1,
+table1 . col_varchar_20_key AS field2,
+MAX(table1 . `col_varchar`) AS field3,
+table2 . `col_int_key` AS field4,
+(SELECT DISTINCT SUM(SUBQUERY1_t1 . `pk`) AS SUBQUERY1_field1
+FROM C AS SUBQUERY1_t1) AS field5,
+CONCAT (table1 . `col_varchar_20`,
+table1 . `col_varchar_20_key`) AS field6,
+table1 . `col_varchar_20` AS field7,
+table2 . col_varchar_10_key AS field8,
+table1 . `col_int` AS field9,
+table1 . col_varchar_20_key AS field10,
+(SELECT MAX(SUBQUERY2_t2 . `pk`) AS SUBQUERY2_field1
+FROM (BB AS SUBQUERY2_t1
+LEFT OUTER JOIN C AS SUBQUERY2_t2 ON (SUBQUERY2_t2 . `col_varchar_key` = SUBQUERY2_t1 . `col_varchar`))) AS field11,
+MIN(table1 . `col_int`) AS field12,
+table1 . col_varchar_10_key AS field13
+FROM (CC AS table1
+LEFT  JOIN ((B AS table2
+INNER JOIN CC AS table3 ON (table3 . `col_varchar_key` = table2 . `col_varchar_10_key`))) ON (table3 . `pk` = table2 . `col_int_key`))
+WHERE (table1 . `col_varchar_10` IN
+(SELECT SUBQUERY3_t1 . `col_varchar_20` AS SUBQUERY3_field1
+FROM CC AS SUBQUERY3_t1
+GROUP BY SUBQUERY3_field1))
+AND (table1 . `col_varchar_key` IN ('a')
+OR table1 . `col_varchar_key` <> 'g')
+AND table1 . `col_varchar` IS NULL
+GROUP BY field1,
+field2,
+field4,
+field5,
+field6,
+field7,
+field8,
+field9,
+field10,
+field11,
+field13
+HAVING field6 >= 'bx'
+ORDER BY field1,
+field2,
+field3,
+field4,
+field5,
+field6,
+field7,
+field8,
+field9,
+field10,
+field11,
+field12,
+field13
+LIMIT 100;
+field1	field2	field3	field4	field5	field6	field7	field8	field9	field10	field11	field12	field13
+5	w	NULL	NULL	3	xw	x	NULL	2	w	2	2	n
+drop table if exists t1, t2 ,t3;
+create table t1(a int, b int, c int);
+create table t2(a int, b int, c int);
+create table t3(a int, b int, c int);
+create table t_temp(a int, b int, c int);
+create table t_temp_join(a int, b int, c int, d int, e int, f int);
+set autocommit = 0;
+select a, b from (select a, b from t1 order by a) group by a, b;
+a	b
+1	1
+2	2
+3	3
+4	4
+select /*+no_rewrite*/a,b from (select * from t1 order by a) group by a, b;
+a	b
+1	1
+2	2
+3	3
+4	4
+insert into t_temp select * from (select * from t1 order by a) group by a, b;
+select * from t_temp;
+a	b	c
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+rollback;
+insert /*+NO_REWRITE*/into t_temp select * from (select * from t1 order by a) group by a, b;
+select * from t_temp;
+a	b	c
+rollback;
+update t_temp set t_temp.b = t_temp.b + 100 where t_temp.b in (select a from t1 order by a);
+select * from t_temp;
+a	b	c
+rollback;
+update /*+no_rewrite*/t_temp set t_temp.b = t_temp.b + 100 where t_temp.b in (select a from t1 order by a);
+select * from t_temp;
+a	b	c
+rollback;
+delete from t_temp where not exists (select null from t1 where t1.a = t_temp.a order by a);
+select * from t_temp;
+a	b	c
+rollback;
+delete /*+no_rewrite*/from t_temp where not exists (select null from t1 where t1.a = t_temp.a order by t_temp.a);
+select * from t_temp;
+a	b	c
+rollback;
+select a, b from (select a, b from t1 order by a) group by a, b limit 1;
+a	b
+select /*+no_rewrite*/ a, b from (select a, b from t1 order by a) group by a, b limit 1;
+a	b
+select a, b from (select a, b from t1 order by a, (select a from t3)) group by a, b;
+a	b
+select /*+no_rewrite*/ a, b from (select a, b from t1 order by a, (select a from t3)) group by a, b;
+a	b
+insert into t_temp select * from (select * from t1 order by a, (select a from t3)) group by a, b;
+select * from t_temp;
+a	b	c
+rollback;
+insert /*+NO_REWRITE*/into t_temp select * from (select * from t1 order by a, (select a from t3)) group by a, b;
+select * from t_temp;
+a	b	c
+rollback;
+update t_temp set t_temp.b = t_temp.b + 100 where t_temp.b in (select a from t1 order by a, (select a from t3));
+select * from t_temp;
+a	b	c
+rollback;
+update /*+NO_REWRITE*/t_temp set t_temp.b = t_temp.b + 100 where t_temp.b in (select a from t1 order by a, (select a from t3));
+select * from t_temp;
+a	b	c
+rollback;
+delete from t_temp where t_temp.b in (select a from t1 order by a, (select a from t3));
+select * from t_temp;
+a	b	c
+rollback;
+delete /*+NO_REWRITE*/from t_temp where t_temp.b in (select a from t1 order by a, (select a from t3));
+select * from t_temp;
+a	b	c
+rollback;
+select sum(a) from (select a from t1 order by a);
+sum(a)
+NULL
+select /*+no_rewrite*/sum(a) from (select a from t1 order by a);
+sum(a)
+NULL
+select sum(a) from (select a from t1 order by a) limit 1;
+sum(a)
+NULL
+select /*+no_rewrite*/sum(a) from (select a from t1 order by a) limit 1;
+sum(a)
+NULL
+select sum(a) from (select a from t1 order by a, (select a from t3));
+sum(a)
+NULL
+select /*+no_rewrite*/sum(a) from (select a from t1 order by a, (select a from t3));
+sum(a)
+NULL
+select distinct * from (select * from t1 order by a);
+a	b	c
+select /*+no_rewrite*/distinct * from (select * from t1 order by a);
+a	b	c
+select distinct * from (select * from t1 order by a) limit 1;
+a	b	c
+select /*+no_rewrite*/distinct * from (select * from t1 order by a) limit 1;
+a	b	c
+select distinct * from (select * from t1 order by a, (select a from t3));
+a	b	c
+select /*+no_rewrite*/distinct * from (select * from t1 order by a, (select a from t3));
+a	b	c
+select * from (select * from t1 order by a) order by b;
+a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a) order by b;
+a	b	c
+select * from (select * from t1 order by a) order by b limit 1;
+a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a) order by b limit 1;
+a	b	c
+select * from (select * from t1 order by a, (select a from t3)) order by b;
+a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a, (select a from t3)) order by b;
+a	b	c
+select * from (select * from t1 order by a);
+a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a);
+a	b	c
+insert into t_temp select * from (select * from t1 order by a);
+select * from t_temp;
+a	b	c
+rollback;
+insert /*+NO_REWRITE*/into t_temp select * from (select * from t1 order by a);
+select * from t_temp;
+a	b	c
+rollback;
+update t_temp set t_temp.b = t_temp.b + 100 where t_temp.b in (select a from t1 order by a);
+select * from t_temp;
+a	b	c
+rollback;
+update /*+NO_REWRITE*/t_temp set t_temp.b = t_temp.b + 100 where t_temp.b in (select a from t1 order by a);
+select * from t_temp;
+a	b	c
+rollback;
+delete from t_temp where t_temp.b in (select a from t1 order by a);
+select * from t_temp;
+a	b	c
+rollback;
+delete /*+NO_REWRITE*/from t_temp where t_temp.b in (select a from t1 order by a);
+select * from t_temp;
+a	b	c
+rollback;
+select * from (select * from t1 order by a) limit 1;
+a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a) limit 1;
+a	b	c
+select distinct * from (select * from t1 order by a limit 1);
+a	b	c
+select /*+no_rewrite*/distinct * from (select * from t1 order by a limit 1);
+a	b	c
+select a from (select a from t1 order by a limit 1) group by a;
+a
+select /*+no_rewrite*/a from (select a from t1 order by a limit 1) group by a;
+a
+select * from (select * from t1 order by a, (select a from t3));
+a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a, (select a from t3));
+a	b	c
+select * from (select * from t1 order by a), t2;
+a	b	c	a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a), t2;
+a	b	c	a	b	c
+insert into t_temp_join (select * from (select * from t1 order by a), t2);
+insert /*+*/
+select * from (select * from t1 order by a, (select a from t3)), t2;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'select * from (select * from t1 order by a, (select a from t3)), t2' at line 2
+select /*+no_rewrite*/* from (select * from t1 order by a, (select a from t3)), t2;
+a	b	c	a	b	c
+select * from (select * from t1 order by a) v1, (select * from t2 order by a) v2;
+a	b	c	a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a) v1, (select * from t2 order by a) v2;
+a	b	c	a	b	c
+select * from (select * from t1 order by a) v left join t2 on v.a = t2.a;
+a	b	c	a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a) v left join t2 on v.a = t2.a;
+a	b	c	a	b	c
+select * from (select * from t1 order by a, (select a from t3)) v left join t2 on v.a = t2.a;
+a	b	c	a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a) v left join t2 on v.a = t2.a;
+a	b	c	a	b	c
+select * from (select * from t1 order by a) v1 left join (select * from t2 order by a) v2 on v1.a = v2.a;
+a	b	c	a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a) v1 left join (select * from t2 order by a) v2 on v1.a = v2.a;
+a	b	c	a	b	c
+select * from (select * from t1 order by a limit 1) v1 left join (select * from t2 order by a) v2 on v1.a = v2.a;
+a	b	c	a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a limit 1) v1 left join (select * from t2 order by a) v2 on v1.a = v2.a;
+a	b	c	a	b	c
+select * from (select * from t1 order by (select a from t3)), t2;
+a	b	c	a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by (select a from t3)), t2;
+a	b	c	a	b	c
+select * from (select * from t1 order by a limit 1), t2;
+a	b	c	a	b	c
+select /*+no_rewrite*/* from (select * from t1 order by a limit 1), t2;
+a	b	c	a	b	c
+drop table if exists t1, t2, t3, t4;
+create table t1 (pk int primary key, c1 int, c2 int);
+create table t2 (pk int primary key, c1 int, c2 int);
+create table t3 (pk int primary key, c1 int, c2 int);
+create table t4 (pk int primary key, c1 int, c2 int);
+insert/**/ into t3 values (1, 1, 1);
+select * from t3 where not exists (select 1 from t1 left join t2 on t1.c1 = t2.c1 where t2.pk is null and t2.c2 = t3.c2);
+pk	c1	c2
+1	1	1
+select /*+no_rewrite*/ * from t3 where not exists (select 1 from t1 left join t2 on t1.c1 = t2.c1 where t2.pk is null and t2.c2 = t3.c2);
+pk	c1	c2
+1	1	1
+select * from t3 where exists (select 1 from t1 left join t2 on t1.c1 = t2.c1 where t2.pk is null and t2.c2 = t3.c2);
+pk	c1	c2
+select /*+no_rewrite*/ * from t3 where exists (select 1 from t1 left join t2 on t1.c1 = t2.c1 where t2.pk is null and t2.c2 = t3.c2);
+pk	c1	c2
+select * from t3 where not exists (select 1 from t4 where t3.c2 = t4.c2 and exists (select 1 from t1 left join t2 on t1.c1 = t2.c1 where t2.pk is null and t2.c2 = t4.c2));
+pk	c1	c2
+1	1	1
+select /*+no_rewrite*/ * from t3 where not exists (select 1 from t4 where t3.c2 = t4.c2 and exists (select 1 from t1 left join t2 on t1.c1 = t2.c1 where t2.pk is null and t2.c2 = t4.c2));
+pk	c1	c2
+1	1	1
+drop table t1,t2,t3,t_temp;
+DROP TABLE IF EXISTS `d`, `cc`;
+CREATE TABLE `d` (
+`col_varchar_10` varchar(10) DEFAULT NULL,
+`col_varchar` varchar(1) DEFAULT NULL,
+`col_varchar_20_key` varchar(20) DEFAULT NULL,
+`col_varchar_20` varchar(20) DEFAULT NULL,
+`col_varchar_10_key` varchar(10) DEFAULT NULL,
+`col_int` int(11) DEFAULT NULL,
+`col_varchar_key` varchar(1) DEFAULT NULL,
+`col_int_key` int(11) DEFAULT NULL,
+`pk` int(11) NOT NULL,
+PRIMARY KEY (`pk`),
+KEY `idx7` (`pk`, `col_varchar_20_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx5` (`pk`, `col_varchar_10_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx3` (`pk`, `col_varchar_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx1` (`pk`, `col_int_key`) BLOCK_SIZE 16384 GLOBAL
+) ;
+CREATE TABLE `cc` (
+`col_varchar_key` varchar(1) DEFAULT NULL,
+`col_int` int(11) DEFAULT NULL,
+`col_varchar_20` varchar(20) DEFAULT NULL,
+`col_int_key` int(11) DEFAULT NULL,
+`col_varchar_20_key` varchar(20) DEFAULT NULL,
+`col_varchar` varchar(1) DEFAULT NULL,
+`col_varchar_10_key` varchar(10) DEFAULT NULL,
+`pk` int(11) NOT NULL,
+`col_varchar_10` varchar(10) DEFAULT NULL,
+PRIMARY KEY (`pk`),
+KEY `idx3` (`pk`, `col_varchar_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx1` (`pk`, `col_int_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx7` (`pk`, `col_varchar_20_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx5` (`pk`, `col_varchar_10_key`) BLOCK_SIZE 16384 GLOBAL
+) ;
+SELECT DISTINCT MIN(DISTINCT table1 . `col_varchar_10`) AS field1,
+table1 . col_varchar_10_key AS field2,
+table2 . `col_int_key` AS field3,
+table1 . `col_varchar_key` AS field4,
+table2 . col_varchar_20_key AS field5,
+MIN(table1 . `col_varchar_10`) AS field6,
+table1 . col_varchar_20_key AS field7,
+table1 . col_varchar_10_key AS field8
+FROM (CC AS table1
+RIGHT OUTER JOIN CC AS table2 ON (table2 . `pk` = table1 . `col_int`))
+WHERE (
+(SELECT MAX(SUBQUERY1_t1 . `pk`) AS SUBQUERY1_field1
+FROM (CC AS SUBQUERY1_t1
+INNER JOIN CC AS SUBQUERY1_t2 ON (SUBQUERY1_t2 . `col_int` = SUBQUERY1_t1 . `pk`
+                                                  AND SUBQUERY1_t2 . `col_varchar_10_key` >=
+(SELECT MAX(CHILD_SUBQUERY1_t1 . `col_varchar_20`) AS CHILD_SUBQUERY1_field1
+FROM (CC AS CHILD_SUBQUERY1_t1
+INNER JOIN D AS CHILD_SUBQUERY1_t2 ON (CHILD_SUBQUERY1_t2 . `pk` = CHILD_SUBQUERY1_t1 . `col_int`)))))) IS NULL)
+OR table1 . `col_varchar_key` <= 'n'
+GROUP BY field2,
+field3,
+field4,
+field5,
+field7,
+field8
+ORDER BY 1,
+field1,
+field2,
+field3,
+field4,
+field5,
+field6,
+field7,
+field8;
+field1	field2	field3	field4	field5	field6	field7	field8
+NULL	NULL	NULL	NULL	g	NULL	NULL	NULL
+NULL	NULL	0	NULL	e	NULL	NULL	NULL
+NULL	NULL	0	NULL	j	NULL	NULL	NULL
+NULL	NULL	0	NULL	s	NULL	NULL	NULL
+NULL	NULL	1	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	1	NULL	a	NULL	NULL	NULL
+NULL	NULL	1	NULL	f	NULL	NULL	NULL
+NULL	NULL	1	NULL	n	NULL	NULL	NULL
+NULL	NULL	2	NULL	r	NULL	NULL	NULL
+NULL	NULL	2	NULL	s	NULL	NULL	NULL
+NULL	NULL	2	k	NULL	NULL	v	NULL
+NULL	NULL	3	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	4	NULL	m	NULL	NULL	NULL
+NULL	NULL	4	NULL	o	NULL	NULL	NULL
+NULL	NULL	4	NULL	x	NULL	NULL	NULL
+NULL	NULL	5	NULL	m	NULL	NULL	NULL
+NULL	NULL	5	NULL	v	NULL	NULL	NULL
+NULL	NULL	6	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	7	NULL	j	NULL	NULL	NULL
+NULL	NULL	8	NULL	s	NULL	NULL	NULL
+NULL	NULL	9	NULL	c	NULL	NULL	NULL
+NULL	NULL	9	NULL	h	NULL	NULL	NULL
+NULL	k	2	m	NULL	NULL	NULL	k
+NULL	p	6	h	NULL	NULL	c	p
+NULL	t	NULL	j	d	NULL	x	t
+a	n	NULL	NULL	d	a	r	n
+b	b	NULL	NULL	NULL	b	m	b
+o	NULL	8	t	b	o	h	NULL
+o	c	5	n	q	o	m	c
+o	j	6	g	NULL	o	s	j
+p	i	3	f	NULL	p	g	i
+q	g	NULL	z	d	q	n	g
+q	r	5	d	q	q	NULL	r
+s	NULL	6	f	NULL	s	f	NULL
+x	i	5	m	q	x	q	i
+x	i	8	j	b	x	a	i
+y	i	8	d	b	y	s	i
+z	h	5	k	q	z	b	h
+SELECT /*+no_rewrite*/ DISTINCT MIN(DISTINCT table1 . `col_varchar_10`) AS field1,
+table1 . col_varchar_10_key AS field2,
+table2 . `col_int_key` AS field3,
+table1 . `col_varchar_key` AS field4,
+table2 . col_varchar_20_key AS field5,
+MIN(table1 . `col_varchar_10`) AS field6,
+table1 . col_varchar_20_key AS field7,
+table1 . col_varchar_10_key AS field8
+FROM (CC AS table1
+RIGHT OUTER JOIN CC AS table2 ON (table2 . `pk` = table1 . `col_int`))
+WHERE (
+(SELECT MAX(SUBQUERY1_t1 . `pk`) AS SUBQUERY1_field1
+FROM (CC AS SUBQUERY1_t1
+INNER JOIN CC AS SUBQUERY1_t2 ON (SUBQUERY1_t2 . `col_int` = SUBQUERY1_t1 . `pk`
+                                                  AND SUBQUERY1_t2 . `col_varchar_10_key` >=
+(SELECT MAX(CHILD_SUBQUERY1_t1 . `col_varchar_20`) AS CHILD_SUBQUERY1_field1
+FROM (CC AS CHILD_SUBQUERY1_t1
+INNER JOIN D AS CHILD_SUBQUERY1_t2 ON (CHILD_SUBQUERY1_t2 . `pk` = CHILD_SUBQUERY1_t1 . `col_int`)))))) IS NULL)
+OR table1 . `col_varchar_key` <= 'n'
+GROUP BY field2,
+field3,
+field4,
+field5,
+field7,
+field8
+ORDER BY 1,
+field1,
+field2,
+field3,
+field4,
+field5,
+field6,
+field7,
+field8;
+field1	field2	field3	field4	field5	field6	field7	field8
+NULL	NULL	NULL	NULL	g	NULL	NULL	NULL
+NULL	NULL	0	NULL	e	NULL	NULL	NULL
+NULL	NULL	0	NULL	j	NULL	NULL	NULL
+NULL	NULL	0	NULL	s	NULL	NULL	NULL
+NULL	NULL	1	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	1	NULL	a	NULL	NULL	NULL
+NULL	NULL	1	NULL	f	NULL	NULL	NULL
+NULL	NULL	1	NULL	n	NULL	NULL	NULL
+NULL	NULL	2	NULL	r	NULL	NULL	NULL
+NULL	NULL	2	NULL	s	NULL	NULL	NULL
+NULL	NULL	2	k	NULL	NULL	v	NULL
+NULL	NULL	3	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	4	NULL	m	NULL	NULL	NULL
+NULL	NULL	4	NULL	o	NULL	NULL	NULL
+NULL	NULL	4	NULL	x	NULL	NULL	NULL
+NULL	NULL	5	NULL	m	NULL	NULL	NULL
+NULL	NULL	5	NULL	v	NULL	NULL	NULL
+NULL	NULL	6	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	7	NULL	j	NULL	NULL	NULL
+NULL	NULL	8	NULL	s	NULL	NULL	NULL
+NULL	NULL	9	NULL	c	NULL	NULL	NULL
+NULL	NULL	9	NULL	h	NULL	NULL	NULL
+NULL	k	2	m	NULL	NULL	NULL	k
+NULL	p	6	h	NULL	NULL	c	p
+NULL	t	NULL	j	d	NULL	x	t
+a	n	NULL	NULL	d	a	r	n
+b	b	NULL	NULL	NULL	b	m	b
+o	NULL	8	t	b	o	h	NULL
+o	c	5	n	q	o	m	c
+o	j	6	g	NULL	o	s	j
+p	i	3	f	NULL	p	g	i
+q	g	NULL	z	d	q	n	g
+q	r	5	d	q	q	NULL	r
+s	NULL	6	f	NULL	s	f	NULL
+x	i	5	m	q	x	q	i
+x	i	8	j	b	x	a	i
+y	i	8	d	b	y	s	i
+z	h	5	k	q	z	b	h
+SELECT MIN(DISTINCT col_varchar_10), MIN(col_varchar_10) FROM CC WHERE (SELECT /*+unnest*/ MAX(pk) FROM CC) IS NULL;
+MIN(DISTINCT col_varchar_10)	MIN(col_varchar_10)
+NULL	NULL
+SELECT /*+no_rewrite*/ MIN(DISTINCT col_varchar_10), MIN(col_varchar_10) FROM CC WHERE (SELECT /*+unnest*/ MAX(pk) FROM CC) IS NULL;
+MIN(DISTINCT col_varchar_10)	MIN(col_varchar_10)
+NULL	NULL
+drop table `d`, `cc`;
+drop table if exists t1;
+create table t1(a int, b int);
+select max(distinct a) over(order by a), max(a) over(order by a) from t1;
+max(distinct a) over(order by a)	max(a) over(order by a)
+1	1
+2	2
+3	3
+4	4
+select /*+no_rewrite*/max(distinct a) over(order by a), max(a) over(order by a) from t1;
+max(distinct a) over(order by a)	max(a) over(order by a)
+1	1
+2	2
+3	3
+4	4
+select max(distinct a) over(order by a), max(a) over(order by a), min(a) over(order by a) , min(distinct a) over(order by a) from t1;
+max(distinct a) over(order by a)	max(a) over(order by a)	min(a) over(order by a)	min(distinct a) over(order by a)
+1	1	1	1
+2	2	1	1
+3	3	1	1
+4	4	1	1
+select /*+no_rewrite*/max(distinct a) over(order by a), max(a) over(order by a), min(a) over(order by a), min(distinct a) over(order by a) from t1;
+max(distinct a) over(order by a)	max(a) over(order by a)	min(a) over(order by a)	min(distinct a) over(order by a)
+1	1	1	1
+2	2	1	1
+3	3	1	1
+4	4	1	1
+drop table if exists t1, t2;
+create table t1(a int, b int);
+create table t2(a int, b int);
+insert into t1 select * from t2 order by a;
+select/**/ * from t1;
+a	b
+1	1
+2	2
+3	3
+insert into t1 select * from t2 where a > 1 order by a, b;
+select/**/ * from t1;
+a	b
+1	1
+2	2
+3	3
+2	2
+3	3
+insert into t1 select * from t2 where a in (select a from t2 order by a) order by a;
+select/**/ * from t1;
+a	b
+1	1
+2	2
+3	3
+2	2
+3	3
+1	1
+2	2
+3	3
+drop table t1, t2;
+
+************************消除冗余case when**********
+
+drop table if exists t1;
+create table t1 (c1 int, c2 int);
+select * from t1 where case when t1.c1 > 2 
+then (case when t1.c1 > 2 then t1.c2 = 3 else t1.c2 = 4 end)
+else t1.c2 = 5 end;
+c1	c2
+3	3
+select /*+no_rewrite*/* from t1 where case when t1.c1 > 2 
+then (case when t1.c1 > 2 then t1.c2 = 3 else t1.c2 = 4 end)
+else t1.c2 = 5 end;
+c1	c2
+3	3
+select * from t1 where case when t1.c1 > 1 
+then (case when t1.c1 > 2 then t1.c2 = 3 else t1.c2 = 4 end)
+when t1.c1 > 2 
+then (case when t1.c1 > 2 then t1.c2 = 3 else t1.c2 = 4 end)
+else t1.c2 = 5 end;
+c1	c2
+3	3
+select /*+no_rewrite*/* from t1 where case when t1.c1 > 1 
+then (case when t1.c1 > 2 then t1.c2 = 3 else t1.c2 = 4 end)
+when t1.c1 > 2 
+then (case when t1.c1 > 2 then t1.c2 = 3 else t1.c2 = 4 end)
+else t1.c2 = 5 end;
+c1	c2
+3	3
+select * from t1 where case when t1.c1 > 2 
+then (case when t1.c1 > 1 
+then (case when t1.c1 > 1 then t1.c2 = 3 else t1.c2 = 4 end)
+else t1.c2 = 5 end)
+else t1.c2 = 6 end;
+c1	c2
+3	3
+select /*+no_rewrite*/* from t1 where case when t1.c1 > 2 
+then (case when t1.c1 > 1 
+then (case when t1.c1 > 1 then t1.c2 = 3 else t1.c2 = 4 end)
+else t1.c2 = 5 end)
+else t1.c2 = 6 end;
+c1	c2
+3	3
+select * from t1 where case when t1.c1 > 2 
+then (case when t1.c1 > 2 
+then (case when t1.c1 > 2 then t1.c2 = 3 else t1.c2 = 4 end)
+else t1.c2 = 5 end)
+else t1.c2 = 6 end;
+c1	c2
+3	3
+select /*+no_rewrite*/* from t1 where case when t1.c1 > 2 
+then (case when t1.c1 > 2 
+then (case when t1.c1 > 2 then t1.c2 = 3 else t1.c2 = 4 end)
+else t1.c2 = 5 end)
+else t1.c2 = 6 end;
+c1	c2
+3	3
+select * from t1 where case when t1.c1 > 2 
+then (case when t1.c1 > 1 
+then t1.c2 = 3 
+when t1.c1 > 2
+then t1.c2 = 4
+else t1.c2 = 5 end)
+else t1.c2 = 6 end;
+c1	c2
+3	3
+select /*+no_rewrite*/* from t1 where case when t1.c1 > 2 
+then (case when t1.c1 > 1 
+then t1.c2 = 3 
+when t1.c1 > 2
+then t1.c2 = 4
+else t1.c2 = 5 end)
+else t1.c2 = 6 end;
+c1	c2
+3	3
+drop table if exists t1;
+USE DB_SIMPLIFY;
+drop database DB_SIMPLIFY;
+alter system set _enable_record_rollback_trans_log=true;
+ERROR 42000: System config unknown
+set autocommit = 1;

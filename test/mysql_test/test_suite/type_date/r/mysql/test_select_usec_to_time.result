@@ -1,0 +1,60 @@
+drop table if exists test;
+create table test(a int primary key,b  timestamp(6) default "2012-01-01 12:00:00",c datetime(6));
+insert into test values(1,'2014-04-24 12:00:01','2014-04-23 15:00:01');
+insert into test values(2,'2014-04-14 12:00:01','2014-04-13 15:00:01');
+select * from test where b=USEC_TO_TIME(1398312001000000);
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select * from test where b=USEC_TO_TIME(TIME_TO_USEC(b));
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+2	2014-04-14 12:00:01.000000	2014-04-13 15:00:01.000000
+select * from test where b=USEC_TO_TIME(TIME_TO_USEC('2014-04-24 12:00:01'));
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select USEC_TO_TIME(13983120010000000);
+USEC_TO_TIME(13983120010000000)
+2413-02-09 00:00:10.000000
+select * from test where b>=USEC_TO_TIME(1398312001000000);
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select * from test where b=USEC_TO_TIME(1398312001000000);
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select * from test where b>=USEC_TO_TIME(1398312001000000) and b<=current_timestamp();
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select * from test where b>=USEC_TO_TIME(1398312001000000) and b<=now();
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select * from test where c>=USEC_TO_TIME(1398236401000000) and c<=current_timestamp();
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select * from test where c>=USEC_TO_TIME(1398236401000000) and c<=now();
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select * from test where b>='2014-04-24 12:00:01' and b<=current_timestamp();
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select * from test where b>='2014-04-24 12:00:01' and b<=now();
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select * from test where c>='2014-04-23 12:00:01' and c<=current_timestamp();
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select * from test where c>='2014-04-23 12:00:01' and c<=now();
+a	b	c
+1	2014-04-24 12:00:01.000000	2014-04-23 15:00:01.000000
+select date '';
+ERROR HY000: Incorrect DATE value: ''
+select date 'abc';
+ERROR HY000: Incorrect DATE value: 'abc'
+select time '';
+ERROR HY000: Incorrect TIME value: ''
+select time 'abc';
+ERROR HY000: Incorrect TIME value: 'abc'
+select timestamp '';
+ERROR HY000: Incorrect DATETIME value: ''
+select timestamp 'abc';
+ERROR HY000: Incorrect DATETIME value: 'abc'
+drop table test;

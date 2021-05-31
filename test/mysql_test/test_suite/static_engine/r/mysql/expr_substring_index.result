@@ -1,0 +1,88 @@
+connect  syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection default;
+drop table if exists t1;
+create table t1 (c1 bigint, c2 bigint unsigned, c3 decimal(40,2), c4 varchar(40));
+insert into t1 (c1, c2, c3, c4) values (-1, 0, 1, "2.1");
+insert into t1 (c1, c2, c3, c4) values (-2, 0, 2.1, "2.9");
+insert into t1 (c1, c2, c3, c4) values (-2, 0, 2.9, "2.9");
+insert into t1 (c1, c2, c3, c4) values (-10, 0, 10, "10");
+insert into t1 (c1, c2, c3, c4) values (4294967296, 4294967296, 4294967296, "4294967296");
+insert into t1 (c1, c2, c3, c4) values (4294967297, 4294967297, 4294967295, "4294967295");
+insert into t1 (c1, c2, c3, c4) values (-4294967296, 4294967296, -4294967296, "-4294967296");
+insert into t1 (c1, c2, c3, c4) values (-4294967297, 4294967297, -4294967295, "-4294967295");
+insert into t1 (c1, c2, c3, c4) values (9223372036854775806, 9223372036854775808, 9223372036854775808, "9223372036854775808");
+insert into t1 (c1, c2, c3, c4) values (9223372036854775807, 9223372036854775807, 9223372036854775807, "9223372036854775807");
+insert into t1 (c1, c2, c3, c4) values (9223372036854775806, 9223372036854775809, 9223372036854775809, "9223372036854775809");
+insert into t1 (c1, c2, c3, c4) values (-9223372036854775807, 9223372036854775807, -9223372036854775807, "-9223372036854775807");
+connection syscon;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select substring_index("a,b,c,d", ",", -1);
+substring_index("a,b,c,d", ",", -1)
+d
+select substring_index("a,b,c,d", ",", 0);
+substring_index("a,b,c,d", ",", 0)
+
+select substring_index("a,b,c,d", ",", 1);
+substring_index("a,b,c,d", ",", 1)
+a
+select substring_index("a,b,c,d", ",", 2);
+substring_index("a,b,c,d", ",", 2)
+a,b
+select substring_index("", ",", 2);
+substring_index("", ",", 2)
+
+select substring_index("a,b,c,d", "", 2);
+substring_index("a,b,c,d", "", 2)
+
+select substring_index(NULL, ",", 2);
+substring_index(NULL, ",", 2)
+NULL
+select substring_index("a,b,c,d", NULL, 2);
+substring_index("a,b,c,d", NULL, 2)
+NULL
+select substring_index("a,b,c,d", ",", NULL);
+substring_index("a,b,c,d", ",", NULL)
+NULL
+select substring_index(1.414, 1, 2);
+substring_index(1.414, 1, 2)
+1.4
+select c1, substring_index("a,b,c,d", ",", c1), c2, substring_index("a,b,c,d", ",", c2), c3, substring_index("a,b,c,d", ",", c3), c4, substring_index("a,b,c,d", ",", c4) from t1;
+c1	substring_index("a,b,c,d", ",", c1)	c2	substring_index("a,b,c,d", ",", c2)	c3	substring_index("a,b,c,d", ",", c3)	c4	substring_index("a,b,c,d", ",", c4)
+-1	d	0		1.00	a	2.1	a,b
+-2	c,d	0		2.10	a,b	2.9	a,b
+-2	c,d	0		2.90	a,b,c	2.9	a,b
+-10	a,b,c,d	0		10.00	a,b,c,d	10	a,b,c,d
+4294967296		4294967296		4294967296.00		4294967296	
+4294967297	a	4294967297	a	4294967295.00	d	4294967295	d
+-4294967296		4294967296		-4294967296.00		-4294967296	
+-4294967297	d	4294967297	a	-4294967295.00	a	-4294967295	a
+9223372036854775806	c,d	9223372036854775808		9223372036854775808.00	d	9223372036854775808	d
+9223372036854775807	d	9223372036854775807	d	9223372036854775807.00	d	9223372036854775807	d
+9223372036854775806	c,d	9223372036854775809	a	9223372036854775809.00	d	9223372036854775809	d
+-9223372036854775807	a	9223372036854775807	d	-9223372036854775807.00	a	-9223372036854775807	a
+drop table if exists t2, t3;
+create table t2(c1 varchar(20));
+create table t3(c1 varchar(20));
+insert into t2 values(null), (''), ('1');
+insert into t3 values(''), (null), ('1');
+//the result of next 2 sqls should be same
+select c1, substring_index(c1, 'vpprm', -47) from t2 order by c1;
+c1	substring_index(c1, 'vpprm', -47)
+NULL	NULL
+	
+1	1
+select c1, substring_index(c1, 'vpprm', -47) from t3 order by c1;
+c1	substring_index(c1, 'vpprm', -47)
+NULL	NULL
+	
+1	1
+drop table t1, t2,t3;
+drop table if exists t1;
+create table t1(c1 char(10));
+insert into t1 values(null), ('');
+select substring_index(c1, 'a', 1) from t1;
+substring_index(c1, 'a', 1)
+NULL
+
+connection syscon;

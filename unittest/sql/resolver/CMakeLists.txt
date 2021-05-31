@@ -1,0 +1,8 @@
+sql_unittest(test_raw_expr_print_visitor expr/test_raw_expr_print_visitor.cpp)
+sql_unittest(test_raw_expr_to_str expr/test_raw_expr_to_str.cpp)
+sql_unittest(test_raw_expr_hash expr/test_raw_expr_hash.cpp)
+sql_unittest(test_raw_expr_resolver expr/test_raw_expr_resolver.cpp)
+sql_unittest(test_raw_expr_canonicalizer expr/test_raw_expr_canonicalizer.cpp)
+sql_unittest(test_sql_bitset)
+sql_unittest(ddl_resolver)
+#sql_unittest(test_resolver)

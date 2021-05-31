@@ -1,0 +1,14 @@
+easy_add_objects(io
+easy_baseth_pool.c
+easy_client.c
+easy_connection.c
+easy_file.c
+easy_io.c
+easy_log.c
+easy_maccept.c
+easy_message.c
+easy_request.c
+easy_socket.c
+easy_ssl.c
+easy_summary.c
+ev.c)

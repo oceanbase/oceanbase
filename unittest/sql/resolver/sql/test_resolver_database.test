@@ -1,0 +1,12 @@
+drop database if exists database_test;
+create database if not exists database_test;
+alter database database_test CHARACTER SET UTF8;
+alter database database_test collate utf8mb4_general_ci;
+alter database database_test CHARACTER SET UTF8 collate utf8mb4_general_ci;
+drop database database_test;
+create database database_test CHARACTER SET UTF8;
+drop database database_test;
+create database database_test collate utf8mb4_general_ci;
+drop database database_test;
+create database database_test CHARACTER SET UTF8 collate utf8mb4_general_ci;
+

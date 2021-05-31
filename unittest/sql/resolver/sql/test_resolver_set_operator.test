@@ -1,0 +1,39 @@
+drop database if exists db_set;
+create database db_set;
+use db_set;
+
+
+##
+## Test of unions
+##
+#
+drop table if exists t1,t2;
+CREATE TABLE t1 (pk int primary key, a int not null, b char (10) not null);
+CREATE TABLE t2 (pk int primary key, a int not null, b char (10) not null);
+
+select a,b from t1 union select a,b from t2;
+select a,b from t1 union distinct select a,b from t2;
+select a,b from t1 union all select a,b from t2;
+select a,b from t1 union all select a,b from t2 order by b;
+select a,b from t1 limit 1 union select a,b from t2;
+select a,b from t1 union select a,b from t2 limit 1;
+select a,b from t1 limit 1 union select a,b from t2 limit 1;
+select a,b from t1 limit 1 union select a,b from t2 order by a limit 3;
+(select a,b from t1 limit 1) union (select a,b from t2 order by a limit 3);
+#--error 5001
+#(select a,b from t1) order by a union (select a,b from t2);
+(select a,b from t1 limit 1) union (select a,b from t2 order by a limit 3) limit 1;
+select a,b from t1 union (select a,b from t2 order by a limit 3);
+(select a from t1) union select a from t2;
+select 'test' union select 'test2';
+select 'test' limit 1 union select 'test2';
+--error 4007
+select a from t1 union select a from t1 order by a+1;
+select/*+query_timeout(1000)*/ 'test' union select/*+query_timeout(1000)*/ 'test2';
+
+drop table t1,t2;
+
+
+drop database db_set;
+
+

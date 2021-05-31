@@ -1,0 +1,2276 @@
+***************   Case 1   ***************
+
+SQL: select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3) from t1_topk where c2 <10 group by c2  limit 5; 
+
+============================================================
+|ID|OPERATOR                       |NAME    |EST. ROWS|COST|
+------------------------------------------------------------
+|0 |LIMIT                          |        |5        |319 |
+|1 | PX COORDINATOR                |        |5        |318 |
+|2 |  EXCHANGE OUT DISTR           |:EX10001|5        |317 |
+|3 |   LIMIT                       |        |5        |317 |
+|4 |    HASH GROUP BY              |        |5        |316 |
+|5 |     EXCHANGE IN DISTR         |        |5        |250 |
+|6 |      EXCHANGE OUT DISTR (HASH)|:EX10000|5        |248 |
+|7 |       HASH GROUP BY           |        |5        |248 |
+|8 |        PX PARTITION ITERATOR  |        |97       |182 |
+|9 |         TABLE SCAN            |t1_topk |97       |182 |
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1)) / T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2)) / T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3)) / T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil)
+  2 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil), dop=1
+  3 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil), limit(5), offset(nil)
+  4 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))])
+  5 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [t1_topk.c2], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)]), filter(nil)
+  6 - (#keys=1, [t1_topk.c2]), output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [t1_topk.c2], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)]), filter(nil), dop=1
+  7 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [t1_topk.c2], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)])
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 1(end)  ************** 
+
+***************   Case 2   ***************
+
+SQL: select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3) from t1_topk  where c2 <10 group by c2 order by avg(c1); 
+
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |74       |531 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|74       |510 |
+|2 |  SORT                        |        |74       |510 |
+|3 |   HASH GROUP BY              |        |74       |325 |
+|4 |    EXCHANGE IN DISTR         |        |97       |210 |
+|5 |     EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|6 |      PX PARTITION ITERATOR   |        |97       |182 |
+|7 |       TABLE SCAN             |t1_topk |97       |182 |
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC])
+  1 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), dop=1
+  2 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC])
+  3 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)])
+  4 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  5 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  7 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 2(end)  ************** 
+
+***************   Case 3   ***************
+
+SQL: select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3) from t1_topk  where c2 <10 order by avg(c1) limit 5; 
+
+=======================================================
+|ID|OPERATOR                  |NAME    |EST. ROWS|COST|
+-------------------------------------------------------
+|0 |LIMIT                     |        |1        |271 |
+|1 | SCALAR GROUP BY          |        |1        |271 |
+|2 |  PX COORDINATOR          |        |1        |227 |
+|3 |   EXCHANGE OUT DISTR     |:EX10000|1        |226 |
+|4 |    MERGE GROUP BY        |        |1        |226 |
+|5 |     PX PARTITION ITERATOR|        |97       |182 |
+|6 |      TABLE SCAN          |t1_topk |97       |182 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1)) / T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2)) / T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3)) / T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))])
+  2 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)]), filter(nil)
+  3 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)]), filter(nil), dop=1
+  4 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)]), filter(nil), 
+      group(nil), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)])
+  5 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      NO_USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 3(end)  ************** 
+
+***************   Case 4   ***************
+
+SQL: select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3) from t1_topk  where c2 <10 group by c2 order by avg(c1) limit 5 for update nowait; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |409 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |409 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |407 |
+|3 |   LIMIT                        |        |5        |407 |
+|4 |    TOP-N SORT                  |        |5        |407 |
+|5 |     HASH GROUP BY              |        |74       |325 |
+|6 |      EXCHANGE IN DISTR         |        |97       |210 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|8 |        PX PARTITION ITERATOR   |        |97       |182 |
+|9 |         TABLE SCAN             |t1_topk |97       |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC])
+  2 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), dop=1
+  3 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  4 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC]), topn(5)
+  5 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 4(end)  ************** 
+
+***************   Case 5   ***************
+
+SQL: select avg(c1), avg(c2), avg(c3) from t1_topk  where c2 <10 group by c2 order by avg(c1) limit 5; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |409 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |409 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |407 |
+|3 |   LIMIT                        |        |5        |407 |
+|4 |    TOP-N SORT                  |        |5        |407 |
+|5 |     HASH GROUP BY              |        |74       |325 |
+|6 |      EXCHANGE IN DISTR         |        |97       |210 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|8 |        PX PARTITION ITERATOR   |        |97       |182 |
+|9 |         TABLE SCAN             |t1_topk |97       |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC])
+  2 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), dop=1
+  3 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  4 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC]), topn(5)
+  5 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 5(end)  ************** 
+
+***************   Case 6   ***************
+
+SQL: select /*+topk(20 6)*/ sql_calc_found_rows avg(c2), avg(c3)  from t1_topk where c2 <10 group by c2 order by avg(c1) limit 5; 
+
+============================================================
+|ID|OPERATOR                       |NAME    |EST. ROWS|COST|
+------------------------------------------------------------
+|0 |LIMIT                          |        |5        |541 |
+|1 | PX COORDINATOR MERGE SORT     |        |74       |531 |
+|2 |  EXCHANGE OUT DISTR           |:EX10001|74       |510 |
+|3 |   SORT                        |        |74       |510 |
+|4 |    HASH GROUP BY              |        |74       |325 |
+|5 |     EXCHANGE IN DISTR         |        |97       |210 |
+|6 |      EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|7 |       PX PARTITION ITERATOR   |        |97       |182 |
+|8 |        TABLE SCAN             |t1_topk |97       |182 |
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC])
+  2 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), dop=1
+  3 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC])
+  4 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)])
+  5 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  6 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  7 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 6(end)  ************** 
+
+***************   Case 7   ***************
+
+SQL: select /*+topk(20 6)*/  avg(c1), avg(c2), avg(c3)  from t1_topk where c2 <10 group by c2 order by (select c1  from t1_topk where c2 = 1)  limit 5; 
+
+============================================================
+|ID|OPERATOR                       |NAME    |EST. ROWS|COST|
+------------------------------------------------------------
+|0 |LIMIT                          |        |5        |496 |
+|1 | SUBPLAN FILTER                |        |5        |495 |
+|2 |  PX COORDINATOR               |        |5        |317 |
+|3 |   EXCHANGE OUT DISTR          |:EX10001|5        |316 |
+|4 |    HASH GROUP BY              |        |5        |316 |
+|5 |     EXCHANGE IN DISTR         |        |5        |250 |
+|6 |      EXCHANGE OUT DISTR (HASH)|:EX10000|5        |248 |
+|7 |       HASH GROUP BY           |        |5        |248 |
+|8 |        PX PARTITION ITERATOR  |        |97       |182 |
+|9 |         TABLE SCAN            |t1_topk |97       |182 |
+|10|  PX COORDINATOR               |        |2        |178 |
+|11|   EXCHANGE OUT DISTR          |:EX20000|2        |178 |
+|12|    PX PARTITION ITERATOR      |        |2        |178 |
+|13|     TABLE SCAN                |t1_topk |2        |178 |
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1)) / T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2)) / T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3)) / T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  2 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil)
+  3 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil), dop=1
+  4 - output([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1_topk.c3))])
+  5 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [t1_topk.c2], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)]), filter(nil)
+  6 - (#keys=1, [t1_topk.c2]), output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [t1_topk.c2], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)]), filter(nil), dop=1
+  7 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [t1_topk.c2], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)])
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+  10 - output([t1_topk.c1]), filter(nil)
+  11 - output([t1_topk.c1]), filter(nil), dop=1
+  12 - output([t1_topk.c1]), filter(nil), 
+      force partition granule, asc.
+  13 - output([t1_topk.c1]), filter([t1_topk.c2 = 1]), 
+      access([t1_topk.c1], [t1_topk.c2]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      FULL(@"SEL$2" "opt.t1_topk"@"SEL$2")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:1, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 7(end)  ************** 
+
+***************   Case 8   ***************
+
+SQL: select /*+topk(20 6)*/ distinct avg(c1), avg(c2), avg(c3)  from t1_topk where c2 <10 group by c2 order by avg(c1) limit 5; 
+
+================================================================
+|ID|OPERATOR                           |NAME    |EST. ROWS|COST|
+----------------------------------------------------------------
+|0 |LIMIT                              |        |5        |538 |
+|1 | PX COORDINATOR MERGE SORT         |        |5        |537 |
+|2 |  EXCHANGE OUT DISTR               |:EX10002|5        |536 |
+|3 |   LIMIT                           |        |5        |536 |
+|4 |    MERGE DISTINCT                 |        |5        |535 |
+|5 |     SORT                          |        |5        |532 |
+|6 |      EXCHANGE IN DISTR            |        |74       |346 |
+|7 |       EXCHANGE OUT DISTR (HASH)   |:EX10001|74       |325 |
+|8 |        HASH GROUP BY              |        |74       |325 |
+|9 |         EXCHANGE IN DISTR         |        |97       |210 |
+|10|          EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|11|           PX PARTITION ITERATOR   |        |97       |182 |
+|12|            TABLE SCAN             |t1_topk |97       |182 |
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC])
+  2 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), dop=1
+  3 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), limit(5), offset(nil)
+  4 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), 
+      distinct([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)])
+  5 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2), ASC], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), ASC])
+  6 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil)
+  7 - (#keys=3, [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), dop=1
+  8 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)])
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  10 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  11 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  12 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 8(end)  ************** 
+
+***************   Case 9   ***************
+
+SQL: select /*+topk(20 6)*/ sum(c1), avg(c2), group_concat(c3, c1)  from t1_topk where c2 <10 group by c2 order by avg(c1) limit 5; 
+
+==============================================================
+|ID|OPERATOR                         |NAME    |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |LIMIT                            |        |5        |539 |
+|1 | PX COORDINATOR MERGE SORT       |        |5        |539 |
+|2 |  EXCHANGE OUT DISTR             |:EX10001|5        |537 |
+|3 |   LIMIT                         |        |5        |537 |
+|4 |    TOP-N SORT                   |        |5        |537 |
+|5 |     MERGE GROUP BY              |        |74       |455 |
+|6 |      SORT                       |        |97       |408 |
+|7 |       EXCHANGE IN DISTR         |        |97       |210 |
+|8 |        EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|9 |         PX PARTITION ITERATOR   |        |97       |182 |
+|10|          TABLE SCAN             |t1_topk |97       |182 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_GROUP_CONCAT(t1_topk.c3, t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_GROUP_CONCAT(t1_topk.c3, t1_topk.c1)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC])
+  2 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_GROUP_CONCAT(t1_topk.c3, t1_topk.c1)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), dop=1
+  3 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_GROUP_CONCAT(t1_topk.c3, t1_topk.c1)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  4 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_GROUP_CONCAT(t1_topk.c3, t1_topk.c1)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC]), topn(5)
+  5 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_GROUP_CONCAT(t1_topk.c3, t1_topk.c1)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_GROUP_CONCAT(t1_topk.c3, t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c1)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), sort_keys([t1_topk.c2, ASC])
+  7 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  8 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  10 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      NO_USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 9(end)  ************** 
+
+***************   Case 10   ***************
+
+SQL: select /*+topk(20 6)*/  avg(c1), avg(c2), avg(c3) from (select *  from t1_topk where c2 <10) as a  group by a.c2 order by avg(a.c1) limit 5; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |409 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |409 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |407 |
+|3 |   LIMIT                        |        |5        |407 |
+|4 |    TOP-N SORT                  |        |5        |407 |
+|5 |     HASH GROUP BY              |        |74       |325 |
+|6 |      EXCHANGE IN DISTR         |        |97       |210 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|8 |        PX PARTITION ITERATOR   |        |97       |182 |
+|9 |         TABLE SCAN             |t1_topk |97       |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC])
+  2 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), dop=1
+  3 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  4 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1), ASC]), topn(5)
+  5 - output([T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 10(end)  ************** 
+
+***************   Case 11   ***************
+
+SQL: select /*+topk(20 6)*/ distinct avg(t1_topk.c1), avg(t1_topk.c2), avg(t1_topk.c3)  from t1_topk , t2_topk group by t1_topk.c2 order by avg(t1_topk.c1) limit 5; 
+
+====================================================================
+|ID|OPERATOR                             |NAME    |EST. ROWS|COST  |
+--------------------------------------------------------------------
+|0 |LIMIT                                |        |5        |101317|
+|1 | MERGE DISTINCT                      |        |5        |101316|
+|2 |  SORT                               |        |5        |101313|
+|3 |   MERGE GROUP BY                    |        |75       |101042|
+|4 |    SORT                             |        |20000    |90249 |
+|5 |     NESTED-LOOP JOIN CARTESIAN      |        |20000    |15141 |
+|6 |      PX COORDINATOR                 |        |100      |803   |
+|7 |       EXCHANGE OUT DISTR            |:EX10001|100      |753   |
+|8 |        SUBPLAN SCAN                 |VIEW1   |100      |753   |
+|9 |         MERGE GROUP BY              |        |100      |740   |
+|10|          SORT                       |        |200      |632   |
+|11|           EXCHANGE IN DISTR         |        |200      |205   |
+|12|            EXCHANGE OUT DISTR (HASH)|:EX10000|200      |149   |
+|13|             PX PARTITION ITERATOR   |        |200      |149   |
+|14|              TABLE SCAN             |t1_topk |200      |149   |
+|15|      MATERIAL                       |        |200      |186   |
+|16|       PX COORDINATOR                |        |200      |149   |
+|17|        EXCHANGE OUT DISTR           |:EX20000|200      |140   |
+|18|         PX PARTITION ITERATOR       |        |200      |140   |
+|19|          TABLE SCAN                 |t2_topk |200      |140   |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c1)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c2)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c3)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c3))]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c1)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c2)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c3)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c3))]), filter(nil), 
+      distinct([T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c1)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c2)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c3)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c3))])
+  2 - output([T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c1)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c2)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c3)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c3))]), filter(nil), sort_keys([T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c1)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c1)), ASC], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c2)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c2)), ASC], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c3)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c3)), ASC])
+  3 - output([T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c1)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c2)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c3)) / T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c3))]), filter(nil), 
+      group([VIEW1.t1_topk.c2]), agg_func([T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c1))], [T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c1))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c2))], [T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c2))], [T_FUN_SUM(VIEW1.T_FUN_SUM(t1_topk.c3))], [T_FUN_COUNT_SUM(VIEW1.T_FUN_COUNT(t1_topk.c3))])
+  4 - output([VIEW1.T_FUN_SUM(t1_topk.c1)], [VIEW1.T_FUN_COUNT(t1_topk.c1)], [VIEW1.T_FUN_SUM(t1_topk.c2)], [VIEW1.T_FUN_COUNT(t1_topk.c2)], [VIEW1.T_FUN_SUM(t1_topk.c3)], [VIEW1.T_FUN_COUNT(t1_topk.c3)], [VIEW1.t1_topk.c2]), filter(nil), sort_keys([VIEW1.t1_topk.c2, ASC])
+  5 - output([VIEW1.T_FUN_SUM(t1_topk.c1)], [VIEW1.T_FUN_COUNT(t1_topk.c1)], [VIEW1.T_FUN_SUM(t1_topk.c2)], [VIEW1.T_FUN_COUNT(t1_topk.c2)], [VIEW1.T_FUN_SUM(t1_topk.c3)], [VIEW1.T_FUN_COUNT(t1_topk.c3)], [VIEW1.t1_topk.c2]), filter(nil), 
+      conds(nil), nl_params_(nil), batch_join=false
+  6 - output([VIEW1.t1_topk.c2], [VIEW1.T_FUN_SUM(t1_topk.c1)], [VIEW1.T_FUN_COUNT(t1_topk.c1)], [VIEW1.T_FUN_SUM(t1_topk.c2)], [VIEW1.T_FUN_COUNT(t1_topk.c2)], [VIEW1.T_FUN_SUM(t1_topk.c3)], [VIEW1.T_FUN_COUNT(t1_topk.c3)]), filter(nil)
+  7 - output([VIEW1.t1_topk.c2], [VIEW1.T_FUN_SUM(t1_topk.c1)], [VIEW1.T_FUN_COUNT(t1_topk.c1)], [VIEW1.T_FUN_SUM(t1_topk.c2)], [VIEW1.T_FUN_COUNT(t1_topk.c2)], [VIEW1.T_FUN_SUM(t1_topk.c3)], [VIEW1.T_FUN_COUNT(t1_topk.c3)]), filter(nil), dop=1
+  8 - output([VIEW1.t1_topk.c2], [VIEW1.T_FUN_SUM(t1_topk.c1)], [VIEW1.T_FUN_COUNT(t1_topk.c1)], [VIEW1.T_FUN_SUM(t1_topk.c2)], [VIEW1.T_FUN_COUNT(t1_topk.c2)], [VIEW1.T_FUN_SUM(t1_topk.c3)], [VIEW1.T_FUN_COUNT(t1_topk.c3)]), filter(nil), 
+      access([VIEW1.t1_topk.c2], [VIEW1.T_FUN_SUM(t1_topk.c1)], [VIEW1.T_FUN_COUNT(t1_topk.c1)], [VIEW1.T_FUN_SUM(t1_topk.c2)], [VIEW1.T_FUN_COUNT(t1_topk.c2)], [VIEW1.T_FUN_SUM(t1_topk.c3)], [VIEW1.T_FUN_COUNT(t1_topk.c3)])
+  9 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c2)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c3)])
+  10 - output([t1_topk.c2], [t1_topk.c1], [t1_topk.c3]), filter(nil), sort_keys([t1_topk.c2, ASC])
+  11 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  12 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  13 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  14 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+  15 - output([1]), filter(nil)
+  16 - output([1]), filter(nil)
+  17 - output([1]), filter(nil), dop=1
+  18 - output([1]), filter(nil), 
+      force partition granule, asc.
+  19 - output([1]), filter(nil), 
+      access([t2_topk.c1]), partitions(p[0-1]), 
+      is_index_back=false, 
+      range_key([t2_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      NO_USE_HASH_AGGREGATION(@"SEL$2")
+      LEADING(@"SEL$2" ("VIEW1"@"SEL$2" "opt.t2_topk"@"SEL$2" ))
+      USE_NL(@"SEL$2" ("opt.t2_topk"@"SEL$2" ))
+      USE_NL_MATERIALIZATION(@"SEL$2" ("opt.t2_topk"@"SEL$2" ))
+      NO_USE_HASH_AGGREGATION(@"SEL$3")
+      FULL(@"SEL$3" "opt.t1_topk"@"SEL$3")
+      FULL(@"SEL$2" "opt.t2_topk"@"SEL$2")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:200, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+
+
+
+
+
+t2_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:200, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t2_topk]
+Parameters
+-------------------------------------
+
+*************** Case 11(end)  ************** 
+
+***************   Case 12   ***************
+
+SQL: select /*+topk(1 2) use_hash_aggregation*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <10 group by c2 order by c3 limit 1; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |1        |382 |
+|1 | PX COORDINATOR MERGE SORT      |        |1        |381 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|1        |381 |
+|3 |   LIMIT                        |        |1        |381 |
+|4 |    TOP-N SORT                  |        |1        |381 |
+|5 |     HASH GROUP BY              |        |74       |330 |
+|6 |      EXCHANGE IN DISTR         |        |97       |210 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|8 |        PX PARTITION ITERATOR   |        |97       |182 |
+|9 |         TABLE SCAN             |t1_topk |97       |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(1), offset(nil)
+  1 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC])
+  2 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), dop=1
+  3 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), limit(1), offset(nil)
+  4 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC]), topn(1)
+  5 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+      USE_HASH_AGGREGATION(@"SEL$1")
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 12(end)  ************** 
+
+***************   Case 13   ***************
+
+SQL: select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <10 group by c2 order by c3 limit 1; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |1        |382 |
+|1 | PX COORDINATOR MERGE SORT      |        |1        |381 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|1        |381 |
+|3 |   LIMIT                        |        |1        |381 |
+|4 |    TOP-N SORT                  |        |1        |381 |
+|5 |     HASH GROUP BY              |        |74       |330 |
+|6 |      EXCHANGE IN DISTR         |        |97       |210 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|8 |        PX PARTITION ITERATOR   |        |97       |182 |
+|9 |         TABLE SCAN             |t1_topk |97       |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(1), offset(nil)
+  1 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC])
+  2 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), dop=1
+  3 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), limit(1), offset(nil)
+  4 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC]), topn(1)
+  5 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 13(end)  ************** 
+
+***************   Case 14   ***************
+
+SQL: select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <12 group by c2 order by c3 limit 1 offset 4; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |1        |506 |
+|1 | PX COORDINATOR MERGE SORT      |        |1        |505 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|1        |505 |
+|3 |   LIMIT                        |        |1        |505 |
+|4 |    TOP-N SORT                  |        |5        |504 |
+|5 |     HASH GROUP BY              |        |83       |355 |
+|6 |      EXCHANGE IN DISTR         |        |116      |215 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|116      |182 |
+|8 |        PX PARTITION ITERATOR   |        |116      |182 |
+|9 |         TABLE SCAN             |t1_topk |116      |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(1), offset(?)
+  1 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC])
+  2 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), dop=1
+  3 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), limit(1 + ?), offset(nil)
+  4 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC]), topn(1 + ?)
+  5 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:115, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":12}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}, {obj:{"BIGINT":4}, accuracy:{length:1, precision:1, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 14(end)  ************** 
+
+***************   Case 15   ***************
+
+SQL: select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <12 group by c2 order by c3 limit 1 offset 1000; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |0        |746 |
+|1 | PX COORDINATOR MERGE SORT      |        |0        |734 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|0        |734 |
+|3 |   LIMIT                        |        |0        |734 |
+|4 |    TOP-N SORT                  |        |83       |723 |
+|5 |     HASH GROUP BY              |        |83       |355 |
+|6 |      EXCHANGE IN DISTR         |        |116      |215 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|116      |182 |
+|8 |        PX PARTITION ITERATOR   |        |116      |182 |
+|9 |         TABLE SCAN             |t1_topk |116      |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(1), offset(?)
+  1 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC])
+  2 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), dop=1
+  3 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), limit(1 + ?), offset(nil)
+  4 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC]), topn(1 + ?)
+  5 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:115, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":12}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}, {obj:{"BIGINT":1000}, accuracy:{length:4, precision:4, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 15(end)  ************** 
+
+***************   Case 16   ***************
+
+SQL: select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <10 group by c2 order by c3 limit 0; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |0        |380 |
+|1 | PX COORDINATOR MERGE SORT      |        |0        |380 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|0        |380 |
+|3 |   LIMIT                        |        |0        |380 |
+|4 |    TOP-N SORT                  |        |0        |380 |
+|5 |     HASH GROUP BY              |        |74       |330 |
+|6 |      EXCHANGE IN DISTR         |        |97       |210 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|8 |        PX PARTITION ITERATOR   |        |97       |182 |
+|9 |         TABLE SCAN             |t1_topk |97       |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(0), offset(nil)
+  1 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC])
+  2 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), dop=1
+  3 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), limit(0), offset(nil)
+  4 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC]), topn(0)
+  5 - output([t1_topk.c3], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 16(end)  ************** 
+
+***************   Case 17   ***************
+
+SQL: select /*+topk(1 1)*/ c2, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <10 group by c2 order by avg(c3), sum(c1)/sum(c2) limit 5; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |401 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |400 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |399 |
+|3 |   LIMIT                        |        |5        |399 |
+|4 |    TOP-N SORT                  |        |5        |398 |
+|5 |     HASH GROUP BY              |        |74       |330 |
+|6 |      EXCHANGE IN DISTR         |        |97       |210 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|8 |        PX PARTITION ITERATOR   |        |97       |182 |
+|9 |         TABLE SCAN             |t1_topk |97       |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  1 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), ASC], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2), ASC])
+  2 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  3 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(5), offset(nil)
+  4 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), ASC], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2), ASC]), topn(5)
+  5 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 17(end)  ************** 
+
+***************   Case 18   ***************
+
+SQL: select /*+topk(1 1)*/ c1, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <10 group by c2 order by avg(c3) desc, sum(c1)/sum(c2)  limit 5; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |401 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |400 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |399 |
+|3 |   LIMIT                        |        |5        |399 |
+|4 |    TOP-N SORT                  |        |5        |398 |
+|5 |     HASH GROUP BY              |        |74       |330 |
+|6 |      EXCHANGE IN DISTR         |        |97       |210 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|8 |        PX PARTITION ITERATOR   |        |97       |182 |
+|9 |         TABLE SCAN             |t1_topk |97       |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c1], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  1 - output([t1_topk.c1], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2), ASC])
+  2 - output([t1_topk.c1], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  3 - output([t1_topk.c1], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(5), offset(nil)
+  4 - output([t1_topk.c1], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2), ASC]), topn(5)
+  5 - output([t1_topk.c1], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 18(end)  ************** 
+
+***************   Case 19   ***************
+
+SQL: select /*+topk(1 1)*/ c2, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <10 group by c2 order by avg(c3) desc, sum(c1)/sum(c2) + avg(c2)  limit 5; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |406 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |405 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |404 |
+|3 |   LIMIT                        |        |5        |404 |
+|4 |    TOP-N SORT                  |        |5        |403 |
+|5 |     HASH GROUP BY              |        |74       |335 |
+|6 |      EXCHANGE IN DISTR         |        |97       |210 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|97       |182 |
+|8 |        PX PARTITION ITERATOR   |        |97       |182 |
+|9 |         TABLE SCAN             |t1_topk |97       |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  1 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2) + T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2) + T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2), ASC])
+  2 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2) + T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)]), filter(nil), dop=1
+  3 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2) + T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)]), filter(nil), limit(5), offset(nil)
+  4 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2) + T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2) + T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2), ASC]), topn(5)
+  5 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) / T_FUN_SUM(t1_topk.c2) + T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_COUNT(t1_topk.c2)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 19(end)  ************** 
+
+***************   Case 20   ***************
+
+SQL: select /*+topk(0 0)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <12 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |434 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |433 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |431 |
+|3 |   LIMIT                        |        |5        |431 |
+|4 |    TOP-N SORT                  |        |5        |431 |
+|5 |     HASH GROUP BY              |        |83       |355 |
+|6 |      EXCHANGE IN DISTR         |        |116      |215 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|116      |182 |
+|8 |        PX PARTITION ITERATOR   |        |116      |182 |
+|9 |         TABLE SCAN             |t1_topk |116      |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  1 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2), ASC])
+  2 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  3 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(5), offset(nil)
+  4 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2), ASC]), topn(5)
+  5 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:115, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":12}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 20(end)  ************** 
+
+***************   Case 21   ***************
+
+SQL: select /*+topk(50 0)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <12 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |434 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |433 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |431 |
+|3 |   LIMIT                        |        |5        |431 |
+|4 |    TOP-N SORT                  |        |5        |431 |
+|5 |     HASH GROUP BY              |        |83       |355 |
+|6 |      EXCHANGE IN DISTR         |        |116      |215 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|116      |182 |
+|8 |        PX PARTITION ITERATOR   |        |116      |182 |
+|9 |         TABLE SCAN             |t1_topk |116      |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  1 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2), ASC])
+  2 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  3 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(5), offset(nil)
+  4 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2), ASC]), topn(5)
+  5 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:115, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":12}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 21(end)  ************** 
+
+***************   Case 22   ***************
+
+SQL: select /*+topk(10000 1)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <12 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |434 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |433 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |431 |
+|3 |   LIMIT                        |        |5        |431 |
+|4 |    TOP-N SORT                  |        |5        |431 |
+|5 |     HASH GROUP BY              |        |83       |355 |
+|6 |      EXCHANGE IN DISTR         |        |116      |215 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|116      |182 |
+|8 |        PX PARTITION ITERATOR   |        |116      |182 |
+|9 |         TABLE SCAN             |t1_topk |116      |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  1 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2), ASC])
+  2 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  3 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(5), offset(nil)
+  4 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2), ASC]), topn(5)
+  5 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:115, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":12}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 22(end)  ************** 
+
+***************   Case 23   ***************
+
+SQL: select /*+topk(1 10000)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1_topk where c2 <12 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |434 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |433 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |431 |
+|3 |   LIMIT                        |        |5        |431 |
+|4 |    TOP-N SORT                  |        |5        |431 |
+|5 |     HASH GROUP BY              |        |83       |355 |
+|6 |      EXCHANGE IN DISTR         |        |116      |215 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|116      |182 |
+|8 |        PX PARTITION ITERATOR   |        |116      |182 |
+|9 |         TABLE SCAN             |t1_topk |116      |182 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  1 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2), ASC])
+  2 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  3 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(5), offset(nil)
+  4 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3), DESC], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2), ASC]), topn(5)
+  5 - output([t1_topk.c2], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)], [T_FUN_SUM(t1_topk.c3) / T_FUN_COUNT(t1_topk.c3)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  6 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2], [t1_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:115, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":12}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 23(end)  ************** 
+
+***************   Case 24   ***************
+
+SQL: select * from (select /*+topk(0 4)*/ avg(c1)  from t1_topk where c2 <10 group by c2 order by sum(c2) limit 5) as a; 
+
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |LIMIT                           |        |5        |342 |
+|1 | PX COORDINATOR MERGE SORT      |        |5        |341 |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|5        |340 |
+|3 |   LIMIT                        |        |5        |340 |
+|4 |    TOP-N SORT                  |        |5        |340 |
+|5 |     HASH GROUP BY              |        |74       |287 |
+|6 |      EXCHANGE IN DISTR         |        |97       |187 |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|97       |178 |
+|8 |        PX PARTITION ITERATOR   |        |97       |178 |
+|9 |         TABLE SCAN             |t1_topk |97       |178 |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  1 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c2), ASC])
+  2 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  3 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(5), offset(nil)
+  4 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c2), ASC]), topn(5)
+  5 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)])
+  6 - output([t1_topk.c1], [t1_topk.c2]), filter(nil)
+  7 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2]), filter(nil), dop=1
+  8 - output([t1_topk.c1], [t1_topk.c2]), filter(nil), 
+      force partition granule, asc.
+  9 - output([t1_topk.c1], [t1_topk.c2]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$2")
+      FULL(@"SEL$2" "opt.t1_topk"@"SEL$2")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 24(end)  ************** 
+
+***************   Case 25   ***************
+
+SQL: select c1  from t1_topk where c1 < any (select /*+topk(0 4)*/ avg(c1)  from t1_topk where c2 <10 group by c2 order by sum(c2)  limit 5); 
+
+================================================================
+|ID|OPERATOR                           |NAME    |EST. ROWS|COST|
+----------------------------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN              |        |67       |900 |
+|1 | PX COORDINATOR                    |        |200      |149 |
+|2 |  EXCHANGE OUT DISTR               |:EX10000|200      |140 |
+|3 |   PX PARTITION ITERATOR           |        |200      |140 |
+|4 |    TABLE SCAN                     |t1_topk |200      |140 |
+|5 | MATERIAL                          |        |5        |344 |
+|6 |  SUBPLAN SCAN                     |VIEW1   |5        |342 |
+|7 |   LIMIT                           |        |5        |342 |
+|8 |    PX COORDINATOR MERGE SORT      |        |5        |341 |
+|9 |     EXCHANGE OUT DISTR            |:EX20001|5        |340 |
+|10|      LIMIT                        |        |5        |340 |
+|11|       TOP-N SORT                  |        |5        |340 |
+|12|        HASH GROUP BY              |        |74       |287 |
+|13|         EXCHANGE IN DISTR         |        |97       |187 |
+|14|          EXCHANGE OUT DISTR (HASH)|:EX20000|97       |178 |
+|15|           PX PARTITION ITERATOR   |        |97       |178 |
+|16|            TABLE SCAN             |t1_topk |97       |178 |
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c1]), filter(nil), 
+      conds([t1_topk.c1 < VIEW1.avg(c1)]), nl_params_(nil), batch_join=false
+  1 - output([t1_topk.c1]), filter(nil)
+  2 - output([t1_topk.c1]), filter(nil), dop=1
+  3 - output([t1_topk.c1]), filter(nil), 
+      force partition granule, asc.
+  4 - output([t1_topk.c1]), filter(nil), 
+      access([t1_topk.c1]), partitions(p[0-1]), 
+      is_index_back=false, 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+  5 - output([VIEW1.avg(c1)]), filter(nil)
+  6 - output([VIEW1.avg(c1)]), filter(nil), 
+      access([VIEW1.avg(c1)])
+  7 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  8 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c2), ASC])
+  9 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  10 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(5), offset(nil)
+  11 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c2), ASC]), topn(5)
+  12 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)])
+  13 - output([t1_topk.c1], [t1_topk.c2]), filter(nil)
+  14 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2]), filter(nil), dop=1
+  15 - output([t1_topk.c1], [t1_topk.c2]), filter(nil), 
+      force partition granule, asc.
+  16 - output([t1_topk.c1], [t1_topk.c2]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      LEADING(@"SEL$1" ("opt.t1_topk"@"SEL$1" "VIEW1"@"SEL$1" ))
+      USE_NL(@"SEL$1" ("VIEW1"@"SEL$1" ))
+      USE_NL_MATERIALIZATION(@"SEL$1" ("VIEW1"@"SEL$1" ))
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      USE_HASH_AGGREGATION(@"SEL$2")
+      FULL(@"SEL$2" "opt.t1_topk"@"SEL$2")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:200, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+
+
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 25(end)  ************** 
+
+***************   Case 26   ***************
+
+SQL: select /*+topk(0 4), no_use_px*/ avg(c1)  from t1_topk where c2 <10 group by c2 order by sum(c2) limit 5 union (select /*+topk(0 10)*/ sum(c1)  from t1_topk where c2 <10 group by c2 order by sum(c2) limit 7); 
+
+==============================================================
+|ID|OPERATOR                         |NAME    |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |HASH UNION DISTINCT              |        |12       |697 |
+|1 | LIMIT                           |        |5        |342 |
+|2 |  PX COORDINATOR MERGE SORT      |        |5        |341 |
+|3 |   EXCHANGE OUT DISTR            |:EX10001|5        |340 |
+|4 |    LIMIT                        |        |5        |340 |
+|5 |     TOP-N SORT                  |        |5        |340 |
+|6 |      HASH GROUP BY              |        |74       |287 |
+|7 |       EXCHANGE IN DISTR         |        |97       |187 |
+|8 |        EXCHANGE OUT DISTR (HASH)|:EX10000|97       |178 |
+|9 |         PX PARTITION ITERATOR   |        |97       |178 |
+|10|          TABLE SCAN             |t1_topk |97       |178 |
+|11| LIMIT                           |        |7        |343 |
+|12|  PX COORDINATOR MERGE SORT      |        |7        |343 |
+|13|   EXCHANGE OUT DISTR            |:EX20001|7        |342 |
+|14|    LIMIT                        |        |7        |342 |
+|15|     TOP-N SORT                  |        |7        |341 |
+|16|      HASH GROUP BY              |        |74       |281 |
+|17|       EXCHANGE IN DISTR         |        |97       |187 |
+|18|        EXCHANGE OUT DISTR (HASH)|:EX20000|97       |178 |
+|19|         PX PARTITION ITERATOR   |        |97       |178 |
+|20|          TABLE SCAN             |t1_topk |97       |178 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), limit(5), offset(nil)
+  2 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c2), ASC])
+  3 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  4 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(5), offset(nil)
+  5 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c2), ASC]), topn(5)
+  6 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)])
+  7 - output([t1_topk.c1], [t1_topk.c2]), filter(nil)
+  8 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2]), filter(nil), dop=1
+  9 - output([t1_topk.c1], [t1_topk.c2]), filter(nil), 
+      force partition granule, asc.
+  10 - output([t1_topk.c1], [t1_topk.c2]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+  11 - output([T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(7), offset(nil)
+  12 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c2), ASC])
+  13 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  14 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(7), offset(nil)
+  15 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c2), ASC]), topn(7)
+  16 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)])
+  17 - output([t1_topk.c1], [t1_topk.c2]), filter(nil)
+  18 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2]), filter(nil), dop=1
+  19 - output([t1_topk.c1], [t1_topk.c2]), filter(nil), 
+      force partition granule, asc.
+  20 - output([t1_topk.c1], [t1_topk.c2]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      USE_HASH_AGGREGATION(@"SEL$1")
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      USE_HASH_AGGREGATION(@"SEL$2")
+      FULL(@"SEL$2" "opt.t1_topk"@"SEL$2")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}, {obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 26(end)  ************** 
+
+***************   Case 27   ***************
+
+SQL: select c1  from t1_topk where (select /*+topk(0 10)*/ avg(c1)  from t1_topk where c2 <10 group by c2 order by sum(c2) limit 1) > 1 ; 
+
+==============================================================
+|ID|OPERATOR                         |NAME    |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |SUBPLAN FILTER                   |        |100      |487 |
+|1 | PX COORDINATOR                  |        |200      |149 |
+|2 |  EXCHANGE OUT DISTR             |:EX10000|200      |140 |
+|3 |   PX PARTITION ITERATOR         |        |200      |140 |
+|4 |    TABLE SCAN                   |t1_topk |200      |140 |
+|5 | LIMIT                           |        |1        |311 |
+|6 |  PX COORDINATOR MERGE SORT      |        |1        |311 |
+|7 |   EXCHANGE OUT DISTR            |:EX20001|1        |311 |
+|8 |    LIMIT                        |        |1        |311 |
+|9 |     TOP-N SORT                  |        |1        |310 |
+|10|      HASH GROUP BY              |        |74       |287 |
+|11|       EXCHANGE IN DISTR         |        |97       |187 |
+|12|        EXCHANGE OUT DISTR (HASH)|:EX20000|97       |178 |
+|13|         PX PARTITION ITERATOR   |        |97       |178 |
+|14|          TABLE SCAN             |t1_topk |97       |178 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1_topk.c1]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([subquery(1) > ?]), init_plan_idxs_(nil)
+  1 - output([t1_topk.c1]), filter(nil)
+  2 - output([t1_topk.c1]), filter(nil), dop=1
+  3 - output([t1_topk.c1]), filter(nil), 
+      force partition granule, asc.
+  4 - output([t1_topk.c1]), filter(nil), 
+      access([t1_topk.c1]), partitions(p[0-1]), 
+      is_index_back=false, 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+  5 - output([T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)]), filter(nil), limit(1), offset(nil)
+  6 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c2), ASC])
+  7 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), dop=1
+  8 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), limit(1), offset(nil)
+  9 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), sort_keys([T_FUN_SUM(t1_topk.c2), ASC]), topn(1)
+  10 - output([T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)])
+  11 - output([t1_topk.c1], [t1_topk.c2]), filter(nil)
+  12 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c2]), filter(nil), dop=1
+  13 - output([t1_topk.c1], [t1_topk.c2]), filter(nil), 
+      force partition granule, asc.
+  14 - output([t1_topk.c1], [t1_topk.c2]), filter([t1_topk.c2 < ?]), 
+      access([t1_topk.c1], [t1_topk.c2]), partitions(p[0-1]), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$1" "opt.t1_topk"@"SEL$1")
+      USE_HASH_AGGREGATION(@"SEL$2")
+      FULL(@"SEL$2" "opt.t1_topk"@"SEL$2")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:200, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:96, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+Parameters
+-------------------------------------
+{obj:{"BIGINT":10}, accuracy:{length:2, precision:2, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}, {obj:{"BIGINT":1}, accuracy:{length:1, precision:1, scale:0}, flag:1, raw_text_pos:-1, raw_text_len:-1, param_meta:{type:"BIGINT", collation:"binary", coercibility:"NUMERIC"}}
+*************** Case 27(end)  ************** 
+
+***************   Case 28   ***************
+
+SQL: select * from (select /*+topk(10 5)*/ c3, c1, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1) from t1_topk group by c2 order by c3 limit 7) as a left join t2_topk on a.c1 = t2_topk.c1 left join t3_topk on t3_topk.c1 = a.c1; 
+
+========================================================================
+|ID|OPERATOR                                   |NAME    |EST. ROWS|COST|
+------------------------------------------------------------------------
+|0 |PX COORDINATOR                             |        |7        |1920|
+|1 | EXCHANGE OUT DISTR                        |:EX10004|7        |1910|
+|2 |  MERGE OUTER JOIN                         |        |7        |1910|
+|3 |   EXCHANGE IN MERGE SORT DISTR            |        |7        |1303|
+|4 |    EXCHANGE OUT DISTR (PKEY)              |:EX10003|7        |1294|
+|5 |     MERGE OUTER JOIN                      |        |7        |1294|
+|6 |      SORT                                 |        |7        |687 |
+|7 |       EXCHANGE IN DISTR                   |        |7        |657 |
+|8 |        EXCHANGE OUT DISTR (PKEY)          |:EX10002|7        |651 |
+|9 |         MATERIAL                          |        |7        |651 |
+|10|          SUBPLAN SCAN                     |a       |7        |626 |
+|11|           LIMIT                           |        |7        |625 |
+|12|            EXCHANGE IN MERGE SORT DISTR   |        |7        |624 |
+|13|             EXCHANGE OUT DISTR            |:EX10001|7        |622 |
+|14|              LIMIT                        |        |7        |622 |
+|15|               TOP-N SORT                  |        |7        |621 |
+|16|                HASH GROUP BY              |        |100      |417 |
+|17|                 EXCHANGE IN DISTR         |        |200      |205 |
+|18|                  EXCHANGE OUT DISTR (HASH)|:EX10000|200      |149 |
+|19|                   PX PARTITION ITERATOR   |        |200      |149 |
+|20|                    TABLE SCAN             |t1_topk |200      |149 |
+|21|      SORT                                 |        |200      |575 |
+|22|       PX PARTITION ITERATOR               |        |200      |149 |
+|23|        TABLE SCAN                         |t2_topk |200      |149 |
+|24|   SORT                                    |        |200      |575 |
+|25|    PX PARTITION ITERATOR                  |        |200      |149 |
+|26|     TABLE SCAN                            |t3_topk |200      |149 |
+========================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c3], [a.c1], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)], [t2_topk.c1], [t2_topk.c2], [t2_topk.c3], [t3_topk.c1], [t3_topk.c2], [t3_topk.c3]), filter(nil)
+  1 - output([a.c3], [a.c1], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)], [t2_topk.c1], [t2_topk.c2], [t2_topk.c3], [t3_topk.c1], [t3_topk.c2], [t3_topk.c3]), filter(nil), dop=1
+  2 - output([a.c3], [a.c1], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)], [t2_topk.c1], [t2_topk.c2], [t2_topk.c3], [t3_topk.c1], [t3_topk.c2], [t3_topk.c3]), filter(nil), 
+      equal_conds([t3_topk.c1 = a.c1]), other_conds(nil), 
+      merge_directions([ASC])
+  3 - output([a.c3], [a.c1], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)], [t2_topk.c1], [t2_topk.c2], [t2_topk.c3]), filter(nil), sort_keys([a.c1, ASC])
+  4 - (#keys=1, [a.c1]), output([a.c3], [a.c1], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)], [t2_topk.c1], [t2_topk.c2], [t2_topk.c3]), filter(nil), dop=1
+  5 - output([a.c3], [a.c1], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)], [t2_topk.c1], [t2_topk.c2], [t2_topk.c3]), filter(nil), 
+      equal_conds([a.c1 = t2_topk.c1]), other_conds(nil), 
+      merge_directions([ASC])
+  6 - output([a.c3], [a.c1], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)]), filter(nil), sort_keys([a.c1, ASC])
+  7 - output([a.c3], [a.c1], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)]), filter(nil)
+  8 - (#keys=1, [a.c1]), output([a.c3], [a.c1], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)]), filter(nil), is_single, dop=1
+  9 - output([a.c3], [a.c1], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)]), filter(nil)
+  10 - output([a.c1], [a.c3], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)]), filter(nil), 
+      access([a.c1], [a.c3], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)])
+  11 - output([t1_topk.c3], [t1_topk.c1], [T_FUN_SUM(t1_topk.c1) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1) + T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2) / T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3) / T_FUN_SUM(t1_topk.c1)]), filter(nil), limit(7), offset(nil)
+  12 - output([t1_topk.c3], [t1_topk.c1], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC])
+  13 - output([t1_topk.c3], [t1_topk.c1], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), dop=1
+  14 - output([t1_topk.c3], [t1_topk.c1], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), limit(7), offset(nil)
+  15 - output([t1_topk.c3], [t1_topk.c1], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), sort_keys([t1_topk.c3, ASC]), topn(7)
+  16 - output([t1_topk.c3], [t1_topk.c1], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c2)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)]), filter(nil), 
+      group([t1_topk.c2]), agg_func([T_FUN_SUM(t1_topk.c2)], [T_FUN_SUM(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c3)], [T_FUN_MIN(t1_topk.c3)], [T_FUN_MAX(t1_topk.c1)], [T_FUN_COUNT(t1_topk.c1)], [T_FUN_SUM(t1_topk.c3)])
+  17 - output([t1_topk.c1], [t1_topk.c3], [t1_topk.c2]), filter(nil)
+  18 - (#keys=1, [t1_topk.c2]), output([t1_topk.c1], [t1_topk.c3], [t1_topk.c2]), filter(nil), dop=1
+  19 - output([t1_topk.c1], [t1_topk.c3], [t1_topk.c2]), filter(nil), 
+      force partition granule, asc.
+  20 - output([t1_topk.c1], [t1_topk.c3], [t1_topk.c2]), filter(nil), 
+      access([t1_topk.c1], [t1_topk.c3], [t1_topk.c2]), partitions(p[0-1]), 
+      is_index_back=false, 
+      range_key([t1_topk.c1]), range(MIN ; MAX)always true
+  21 - output([t2_topk.c1], [t2_topk.c2], [t2_topk.c3]), filter(nil), sort_keys([t2_topk.c1, ASC]), local merge sort
+  22 - output([t2_topk.c1], [t2_topk.c2], [t2_topk.c3]), filter(nil), 
+      affinitize, force partition granule, asc.
+  23 - output([t2_topk.c1], [t2_topk.c2], [t2_topk.c3]), filter(nil), 
+      access([t2_topk.c1], [t2_topk.c2], [t2_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, 
+      range_key([t2_topk.c1]), range(MIN ; MAX)always true
+  24 - output([t3_topk.c1], [t3_topk.c2], [t3_topk.c3]), filter(nil), sort_keys([t3_topk.c1, ASC]), local merge sort
+  25 - output([t3_topk.c1], [t3_topk.c2], [t3_topk.c3]), filter(nil), 
+      affinitize, force partition granule, asc.
+  26 - output([t3_topk.c1], [t3_topk.c2], [t3_topk.c3]), filter(nil), 
+      access([t3_topk.c1], [t3_topk.c2], [t3_topk.c3]), partitions(p[0-1]), 
+      is_index_back=false, 
+      range_key([t3_topk.c1]), range(MIN ; MAX)always true
+
+Used Hint:
+-------------------------------------
+  /*+
+  */
+
+Outline Data:
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      LEADING(@"SEL$1" (("a"@"SEL$1" "opt.t2_topk"@"SEL$1" )"opt.t3_topk"@"SEL$1" ))
+      USE_MERGE(@"SEL$1" ("opt.t3_topk"@"SEL$1" ))
+      PQ_DISTRIBUTE(@"SEL$1" ("opt.t3_topk"@"SEL$1" ) PARTITION NONE)
+      USE_MERGE(@"SEL$1" ("opt.t2_topk"@"SEL$1" ))
+      PQ_DISTRIBUTE(@"SEL$1" ("opt.t2_topk"@"SEL$1" ) PARTITION NONE)
+      USE_HASH_AGGREGATION(@"SEL$2")
+      FULL(@"SEL$2" "opt.t1_topk"@"SEL$2")
+      FULL(@"SEL$1" "opt.t2_topk"@"SEL$1")
+      FULL(@"SEL$1" "opt.t3_topk"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Plan Type:
+-------------------------------------
+DISTRIBUTED
+
+Optimization Info:
+-------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+t1_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:200, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1_topk]
+
+
+
+t2_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:200, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t2_topk]
+
+
+
+t3_topk:table_rows:200, physical_range_rows:200, logical_range_rows:200, index_back_rows:0, output_rows:200, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t3_topk]
+Parameters
+-------------------------------------
+
+*************** Case 28(end)  ************** 
+

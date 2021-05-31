@@ -1,0 +1,548 @@
+***************   Case 0   ***************
+SQL: select c1 from t1 union select c2 from t2; 
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |MERGE UNION DISTINCT|    |200      |351 |
+|1 | TABLE SCAN         |t1  |100      |88  |
+|2 | SORT               |    |100      |198 |
+|3 |  TABLE SCAN        |t2  |100      |90  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  2 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
+  3 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+
+***************   Case 1   ***************
+SQL: select c1 from t1 union select c2 from t2 limit 2; 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |LIMIT                |    |2        |78  |
+|1 | MERGE UNION DISTINCT|    |2        |78  |
+|2 |  TABLE SCAN         |t1  |2        |37  |
+|3 |  SORT               |    |2        |40  |
+|4 |   LIMIT             |    |2        |39  |
+|5 |    HASH DISTINCT    |    |2        |39  |
+|6 |     TABLE SCAN      |t2  |2        |37  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil), limit(2), offset(nil)
+  1 - output([UNION([1])]), filter(nil)
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(2), offset(nil)
+  3 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
+  4 - output([t2.c2]), filter(nil), limit(2), offset(nil)
+  5 - output([t2.c2]), filter(nil), 
+      distinct([t2.c2])
+  6 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+
+***************   Case 2   ***************
+SQL: select c1 from t1 minus select c2 from t2 limit 2; 
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |LIMIT                 |    |2        |338 |
+|1 | MERGE EXCEPT DISTINCT|    |2        |337 |
+|2 |  TABLE SCAN          |t1  |100      |88  |
+|3 |  SORT                |    |100      |198 |
+|4 |   TABLE SCAN         |t2  |100      |90  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([EXCEPT([1])]), filter(nil), limit(2), offset(nil)
+  1 - output([EXCEPT([1])]), filter(nil)
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  3 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
+  4 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+
+***************   Case 3   ***************
+SQL: select c1 from t1 limit 2 union select c2 from t2; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |102      |233 |
+|1 | TABLE SCAN        |t1  |2        |37  |
+|2 | TABLE SCAN        |t2  |100      |90  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(2), offset(nil)
+  2 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+
+***************   Case 4   ***************
+SQL: select c1 from t1 union all select c2 from t2 limit 2; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |2        |74  |
+|1 | UNION ALL  |    |2        |74  |
+|2 |  TABLE SCAN|t1  |2        |37  |
+|3 |  TABLE SCAN|t2  |2        |37  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil), limit(2), offset(nil)
+  1 - output([UNION([1])]), filter(nil)
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(2), offset(nil)
+  3 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0), 
+      limit(2), offset(nil)
+
+***************   Case 5   ***************
+SQL: select c1 from t1 limit 5 union all select c2 from t2 limit 2; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |2        |74  |
+|1 | UNION ALL  |    |2        |74  |
+|2 |  TABLE SCAN|t1  |2        |37  |
+|3 |  TABLE SCAN|t2  |2        |37  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil), limit(2), offset(nil)
+  1 - output([UNION([1])]), filter(nil)
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(5), offset(nil)
+  3 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0), 
+      limit(2), offset(nil)
+
+***************   Case 6   ***************
+SQL: select c1 from t1 intersect select c2 from t2 limit 2; 
+==================================================
+|ID|OPERATOR                 |NAME|EST. ROWS|COST|
+--------------------------------------------------
+|0 |LIMIT                    |    |2        |338 |
+|1 | MERGE INTERSECT DISTINCT|    |2        |337 |
+|2 |  TABLE SCAN             |t1  |100      |88  |
+|3 |  SORT                   |    |100      |198 |
+|4 |   TABLE SCAN            |t2  |100      |90  |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([INTERSECT([1])]), filter(nil), limit(2), offset(nil)
+  1 - output([INTERSECT([1])]), filter(nil)
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  3 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
+  4 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+
+***************   Case 7   ***************
+SQL: select c1 from t1 union all select c2 from t2 order by c1; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |SORT        |    |200      |476 |
+|1 | UNION ALL  |    |200      |244 |
+|2 |  TABLE SCAN|t1  |100      |88  |
+|3 |  TABLE SCAN|t2  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil), sort_keys([UNION([1]), ASC])
+  1 - output([UNION([1])]), filter(nil)
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  3 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+
+***************   Case 8   ***************
+SQL: select c1 from t1 union all select c2 from t2 order by c1 limit 2; 
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |LIMIT          |    |2        |161 |
+|1 | SORT          |    |2        |161 |
+|2 |  UNION ALL    |    |4        |159 |
+|3 |   TABLE SCAN  |t1  |2        |37  |
+|4 |   LIMIT       |    |2        |122 |
+|5 |    TOP-N SORT |    |2        |122 |
+|6 |     TABLE SCAN|t2  |100      |90  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil), limit(2), offset(nil)
+  1 - output([UNION([1])]), filter(nil), sort_keys([UNION([1]), ASC])
+  2 - output([UNION([1])]), filter(nil)
+  3 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(2), offset(nil)
+  4 - output([t2.c2]), filter(nil), limit(2), offset(nil)
+  5 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC]), topn(2)
+  6 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+
+***************   Case 9   ***************
+SQL: select c1, c2 from t1 order by c2 union all select c1, c2 from t2 order by c1 limit 2; 
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |LIMIT        |    |2        |77  |
+|1 | SORT        |    |2        |76  |
+|2 |  UNION ALL  |    |4        |74  |
+|3 |   TABLE SCAN|t1  |2        |37  |
+|4 |   TABLE SCAN|t2  |2        |37  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil), limit(2), offset(nil)
+  1 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil)
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      limit(2), offset(nil)
+  4 - output([t2.c1], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0), 
+      limit(2), offset(nil)
+
+***************   Case 10   ***************
+SQL: select c1, c2 from t1 limit 5 union all select c1, c2 from t2 order by c1 limit 2; 
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |LIMIT        |    |2        |79  |
+|1 | SORT        |    |2        |79  |
+|2 |  UNION ALL  |    |7        |76  |
+|3 |   TABLE SCAN|t1  |5        |37  |
+|4 |   TABLE SCAN|t2  |2        |37  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil), limit(2), offset(nil)
+  1 - output([UNION([1])], [UNION([2])]), filter(nil), sort_keys([UNION([1]), ASC])
+  2 - output([UNION([1])], [UNION([2])]), filter(nil)
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      limit(5), offset(nil)
+  4 - output([t2.c1], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0), 
+      limit(2), offset(nil)
+
+***************   Case 11   ***************
+SQL: select c1 from t1 minus select c2 from t2 order by c1 limit 2; 
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |LIMIT                 |    |2        |338 |
+|1 | MERGE EXCEPT DISTINCT|    |2        |337 |
+|2 |  TABLE SCAN          |t1  |100      |88  |
+|3 |  SORT                |    |100      |198 |
+|4 |   TABLE SCAN         |t2  |100      |90  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([EXCEPT([1])]), filter(nil), limit(2), offset(nil)
+  1 - output([EXCEPT([1])]), filter(nil)
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  3 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
+  4 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+
+***************   Case 12   ***************
+SQL: select * from v limit 10 union select * from v limit 10 union select * from v limit 10 union select * from v limit 10 union select * from v limit 10 union select * from v order by c1 limit 10; 
+======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                        |    |10       |281 |
+|1 | MERGE UNION DISTINCT        |    |10       |280 |
+|2 |  LIMIT                      |    |10       |233 |
+|3 |   MERGE UNION DISTINCT      |    |10       |231 |
+|4 |    LIMIT                    |    |10       |185 |
+|5 |     MERGE UNION DISTINCT    |    |10       |183 |
+|6 |      LIMIT                  |    |10       |137 |
+|7 |       MERGE UNION DISTINCT  |    |10       |135 |
+|8 |        LIMIT                |    |10       |89  |
+|9 |         MERGE UNION DISTINCT|    |10       |87  |
+|10|          LIMIT              |    |10       |41  |
+|11|           SUBPLAN SCAN      |v   |10       |39  |
+|12|            TABLE SCAN       |t1  |10       |38  |
+|13|          LIMIT              |    |10       |41  |
+|14|           SUBPLAN SCAN      |v   |10       |39  |
+|15|            TABLE SCAN       |t1  |10       |38  |
+|16|        LIMIT                |    |10       |41  |
+|17|         SUBPLAN SCAN        |v   |10       |39  |
+|18|          TABLE SCAN         |t1  |10       |38  |
+|19|      LIMIT                  |    |10       |41  |
+|20|       SUBPLAN SCAN          |v   |10       |39  |
+|21|        TABLE SCAN           |t1  |10       |38  |
+|22|    LIMIT                    |    |10       |41  |
+|23|     SUBPLAN SCAN            |v   |10       |39  |
+|24|      TABLE SCAN             |t1  |10       |38  |
+|25|  LIMIT                      |    |10       |41  |
+|26|   SUBPLAN SCAN              |v   |10       |39  |
+|27|    TABLE SCAN               |t1  |10       |38  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  1 - output([UNION([1])]), filter(nil)
+  2 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  3 - output([UNION([1])]), filter(nil)
+  4 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  5 - output([UNION([1])]), filter(nil)
+  6 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  7 - output([UNION([1])]), filter(nil)
+  8 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  9 - output([UNION([1])]), filter(nil)
+  10 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  11 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  12 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  13 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  14 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  15 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  16 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  17 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  18 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  19 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  20 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  21 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  22 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  23 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  24 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  25 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  26 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  27 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 13   ***************
+SQL: select * from v order by c1 union select * from v order by c1 union select * from v order by c1 union select * from v order by c1 union select * from v order by c1 union select * from v order by c1 limit 10; 
+======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                        |    |10       |281 |
+|1 | MERGE UNION DISTINCT        |    |10       |280 |
+|2 |  LIMIT                      |    |10       |233 |
+|3 |   MERGE UNION DISTINCT      |    |10       |231 |
+|4 |    LIMIT                    |    |10       |185 |
+|5 |     MERGE UNION DISTINCT    |    |10       |183 |
+|6 |      LIMIT                  |    |10       |137 |
+|7 |       MERGE UNION DISTINCT  |    |10       |135 |
+|8 |        LIMIT                |    |10       |89  |
+|9 |         MERGE UNION DISTINCT|    |10       |87  |
+|10|          LIMIT              |    |10       |41  |
+|11|           SUBPLAN SCAN      |v   |10       |39  |
+|12|            TABLE SCAN       |t1  |10       |38  |
+|13|          LIMIT              |    |10       |41  |
+|14|           SUBPLAN SCAN      |v   |10       |39  |
+|15|            TABLE SCAN       |t1  |10       |38  |
+|16|        LIMIT                |    |10       |41  |
+|17|         SUBPLAN SCAN        |v   |10       |39  |
+|18|          TABLE SCAN         |t1  |10       |38  |
+|19|      LIMIT                  |    |10       |41  |
+|20|       SUBPLAN SCAN          |v   |10       |39  |
+|21|        TABLE SCAN           |t1  |10       |38  |
+|22|    LIMIT                    |    |10       |41  |
+|23|     SUBPLAN SCAN            |v   |10       |39  |
+|24|      TABLE SCAN             |t1  |10       |38  |
+|25|  LIMIT                      |    |10       |41  |
+|26|   SUBPLAN SCAN              |v   |10       |39  |
+|27|    TABLE SCAN               |t1  |10       |38  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  1 - output([UNION([1])]), filter(nil)
+  2 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  3 - output([UNION([1])]), filter(nil)
+  4 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  5 - output([UNION([1])]), filter(nil)
+  6 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  7 - output([UNION([1])]), filter(nil)
+  8 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  9 - output([UNION([1])]), filter(nil)
+  10 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  11 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  12 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  13 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  14 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  15 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  16 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  17 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  18 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  19 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  20 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  21 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  22 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  23 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  24 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  25 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  26 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  27 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 14   ***************
+SQL: select * from v order by c1 union all select * from v order by c1 union all select * from v order by c1 union all select * from v order by c1 union all select * from v order by c1 union select * from v order by c1 limit 10; 
+======================================================
+|ID|OPERATOR                     |NAME|EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                        |    |10       |281 |
+|1 | MERGE UNION DISTINCT        |    |10       |280 |
+|2 |  LIMIT                      |    |10       |233 |
+|3 |   MERGE UNION DISTINCT      |    |10       |231 |
+|4 |    LIMIT                    |    |10       |185 |
+|5 |     MERGE UNION DISTINCT    |    |10       |183 |
+|6 |      LIMIT                  |    |10       |137 |
+|7 |       MERGE UNION DISTINCT  |    |10       |135 |
+|8 |        LIMIT                |    |10       |89  |
+|9 |         MERGE UNION DISTINCT|    |10       |87  |
+|10|          LIMIT              |    |10       |41  |
+|11|           SUBPLAN SCAN      |v   |10       |39  |
+|12|            TABLE SCAN       |t1  |10       |38  |
+|13|          LIMIT              |    |10       |41  |
+|14|           SUBPLAN SCAN      |v   |10       |39  |
+|15|            TABLE SCAN       |t1  |10       |38  |
+|16|        LIMIT                |    |10       |41  |
+|17|         SUBPLAN SCAN        |v   |10       |39  |
+|18|          TABLE SCAN         |t1  |10       |38  |
+|19|      LIMIT                  |    |10       |41  |
+|20|       SUBPLAN SCAN          |v   |10       |39  |
+|21|        TABLE SCAN           |t1  |10       |38  |
+|22|    LIMIT                    |    |10       |41  |
+|23|     SUBPLAN SCAN            |v   |10       |39  |
+|24|      TABLE SCAN             |t1  |10       |38  |
+|25|  LIMIT                      |    |10       |41  |
+|26|   SUBPLAN SCAN              |v   |10       |39  |
+|27|    TABLE SCAN               |t1  |10       |38  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  1 - output([UNION([1])]), filter(nil)
+  2 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  3 - output([UNION([1])]), filter(nil)
+  4 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  5 - output([UNION([1])]), filter(nil)
+  6 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  7 - output([UNION([1])]), filter(nil)
+  8 - output([UNION([1])]), filter(nil), limit(10), offset(nil)
+  9 - output([UNION([1])]), filter(nil)
+  10 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  11 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  12 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  13 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  14 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  15 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  16 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  17 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  18 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  19 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  20 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  21 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  22 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  23 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  24 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  25 - output([v.c1]), filter(nil), limit(10), offset(nil)
+  26 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  27 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 15   ***************
+SQL: (select c2 from t1 order by c2 intersect select * from v order by c2 limit 10)union (select c1 from t1 minus select * from v order by c1 limit 11) order by c2 limit 3; 
+====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST|
+----------------------------------------------------
+|0 |LIMIT                      |    |3        |595 |
+|1 | MERGE UNION DISTINCT      |    |3        |595 |
+|2 |  LIMIT                    |    |3        |352 |
+|3 |   MERGE INTERSECT DISTINCT|    |3        |351 |
+|4 |    SORT                   |    |100      |198 |
+|5 |     TABLE SCAN            |t1  |100      |90  |
+|6 |    SUBPLAN SCAN           |v   |100      |102 |
+|7 |     TABLE SCAN            |t1  |100      |88  |
+|8 |  LIMIT                    |    |3        |242 |
+|9 |   MERGE EXCEPT DISTINCT   |    |3        |241 |
+|10|    TABLE SCAN             |t1  |100      |88  |
+|11|    SUBPLAN SCAN           |v   |100      |102 |
+|12|     TABLE SCAN            |t1  |100      |88  |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil), limit(3), offset(nil)
+  1 - output([UNION([1])]), filter(nil)
+  2 - output([INTERSECT([1])]), filter(nil), limit(10), offset(nil)
+  3 - output([INTERSECT([1])]), filter(nil)
+  4 - output([t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
+  5 - output([t1.c2]), filter(nil), 
+      access([t1.c2]), partitions(p0)
+  6 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  7 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  8 - output([EXCEPT([1])]), filter(nil), limit(11), offset(nil)
+  9 - output([EXCEPT([1])]), filter(nil)
+  10 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  11 - output([v.c1]), filter(nil), 
+      access([v.c1])
+  12 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+

@@ -1,0 +1,562 @@
+drop table if exists t1;
+create table t1 (c1 int, c2 int, c3 int, c4 int, primary key (c1, c2)) partition by hash(c1) partitions 4;
+create index gkey1 on t1(c2,c3) global;
+create index gkey2 on t1(c2,c3) global partition by hash(c3) partitions 2;
+select /*+index(t1 primary)*/ c2, c3 from t1 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+10	11
+11	12
+select /*+index(t1 gkey1)*/ c2, c3 from t1 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+10	11
+11	12
+select /*+index(t1 gkey2)*/ c2, c3 from t1 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+10	11
+11	12
+select /*+index(t1 primary)*/ * from t1 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 gkey1)*/ * from t1 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 gkey2)*/ * from t1 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 primary)*/ c2, c3 from t1 where c2 < 10 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey1)*/ c2, c3 from t1 where c2 < 10 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey2)*/ c2, c3 from t1 where c2 < 10 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 primary)*/ * from t1 where c2 < 10 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+select /*+index(t1 gkey1)*/ * from t1 where c2 < 10 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+select /*+index(t1 gkey2)*/ * from t1 where c2 < 10 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+select /*+index(t1 primary)*/ * from t1 where c4 < 6 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+select /*+index(t1 gkey1)*/ * from t1 where c4 < 6 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+select /*+index(t1 gkey2)*/ * from t1 where c4 < 6 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+select /*+index(t1 primary)*/ * from t1 where c2 < 10 and c4 < 6 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+select /*+index(t1 gkey1)*/ * from t1 where c2 < 10 and c4 < 6 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+select /*+index(t1 gkey2)*/ * from t1 where c2 < 10 and c4 < 6 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+select /*+index(t1 primary)*/ * from t1 where c2 < 10 and c4 < 6 and c3 + c4 < 10 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+select /*+index(t1 gkey1)*/ * from t1 where c2 < 10 and c4 < 6 and c3 + c4 < 10 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+select /*+index(t1 gkey2)*/ * from t1 where c2 < 10 and c4 < 6 and c3 + c4 < 10 order by c1;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+select /*+index(t1 primary)*/ c2, sum(c3) from t1 where c2 < 10 group by c1;
+c2	sum(c3)
+5	6
+9	10
+2	3
+6	7
+3	4
+7	8
+4	5
+8	9
+select /*+index(t1 gkey1)*/ c2, sum(c3) from t1 where c2 < 10 group by c1;
+c2	sum(c3)
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey2)*/ c2, sum(c3) from t1 where c2 < 10 group by c1;
+c2	sum(c3)
+3	4
+5	6
+7	8
+9	10
+2	3
+4	5
+6	7
+8	9
+select /*+index(t1 primary)*/ c2, sum(c3) from t1 where c2 < 10 group by c2 having sum(c3) > 5 order by c2;
+c2	sum(c3)
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey1)*/ c2, sum(c3) from t1 where c2 < 10 group by c2 having sum(c3) > 5 order by c2;
+c2	sum(c3)
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey2)*/ c2, sum(c3) from t1 where c2 < 10 group by c2 having sum(c3) > 5 order by c2;
+c2	sum(c3)
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 primary)*/ c2, sum(c3) from t1 where c2 < 10 group by c4 having sum(c4) > 6 order by c4;
+c2	sum(c3)
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey1)*/ c2, sum(c3) from t1 where c2 < 10 group by c4 having sum(c4) > 6 order by c4;
+c2	sum(c3)
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey2)*/ c2, sum(c3) from t1 where c2 < 10 group by c4 having sum(c4) > 6 order by c4;
+c2	sum(c3)
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 primary)*/ distinct c2, c3 from t1 where c2 < 10 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey1)*/ distinct c2, c3 from t1 where c2 < 10 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey2)*/ distinct c2, c3 from t1 where c2 < 10 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 primary)*/ distinct c2, c3 from t1 where c2 < 10 order by c1;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey1)*/ distinct c2, c3 from t1 where c2 < 10 order by c1;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 gkey2)*/ distinct c2, c3 from t1 where c2 < 10 order by c1;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+select /*+index(t1 primary)*/ distinct c2, c3, c4 from t1 where c2 < 10 order by c1;
+c2	c3	c4
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+6	7	8
+7	8	9
+8	9	10
+9	10	11
+select /*+index(t1 gkey1)*/ distinct c2, c3, c4 from t1 where c2 < 10 order by c1;
+c2	c3	c4
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+6	7	8
+7	8	9
+8	9	10
+9	10	11
+select /*+index(t1 gkey2)*/ distinct c2, c3, c4 from t1 where c2 < 10 order by c1;
+c2	c3	c4
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+6	7	8
+7	8	9
+8	9	10
+9	10	11
+select /*+index(t1 primary)*/ c2, c3 from t1 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+10	11
+11	12
+select /*+index(t1 gkey1)*/ c2, c3 from t1 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+10	11
+11	12
+select /*+index(t1 gkey2)*/ c2, c3 from t1 order by c2;
+c2	c3
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	10
+10	11
+11	12
+select /*+index(t1 primary)*/ * from t1 order by c2;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 gkey1)*/ * from t1 order by c2;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 gkey2)*/ * from t1 order by c2;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 primary)*/ * from t1 order by c2, c3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 gkey1)*/ * from t1 order by c2, c3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 gkey2)*/ * from t1 order by c2, c3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 primary)*/ * from t1 order by c3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 gkey1)*/ * from t1 order by c3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 gkey2)*/ * from t1 order by c3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+4	5	6	7
+5	6	7	8
+6	7	8	9
+7	8	9	10
+8	9	10	11
+9	10	11	12
+10	11	12	13
+select /*+index(t1 primary)*/ c2, c3 from t1 order by c2 limit 3;
+c2	c3
+2	3
+3	4
+4	5
+select /*+index(t1 gkey1)*/ c2, c3 from t1 order by c2 limit 3;
+c2	c3
+2	3
+3	4
+4	5
+select /*+index(t1 gkey2)*/ c2, c3 from t1 order by c2 limit 3;
+c2	c3
+2	3
+3	4
+4	5
+select /*+index(t1 primary)*/ * from t1 order by c2 limit 3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+select /*+index(t1 gkey1)*/ * from t1 order by c2 limit 3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+select /*+index(t1 gkey2)*/ * from t1 order by c2 limit 3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+select /*+index(t1 primary)*/ * from t1 order by c2, c3 limit 3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+select /*+index(t1 gkey1)*/ * from t1 order by c2, c3 limit 3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+select /*+index(t1 gkey2)*/ * from t1 order by c2, c3 limit 3;
+c1	c2	c3	c4
+1	2	3	4
+2	3	4	5
+3	4	5	6
+select /*+index(t1 primary)*/ count(*) from t1;
+count(*)
+10
+select /*+index(t1 gkey1)*/ count(*) from t1;
+count(*)
+10
+select /*+index(t1 gkey2)*/ count(*) from t1;
+count(*)
+10
+drop table if exists t1;
+drop table if exists t1;
+create table t1(a int, b int, c int, d int, primary key(a,b)) partition by hash(a) partitions 3;
+create unique index idx on t1(c) partition by hash(c) partitions 5;
+insert into t1 values (1,1,1,1),(2,2,2,2),(3,3,3,3);
+update t1 set d=d+1 where (a,b)>=(1,1) and c=1;
+drop table if exists t1;
+drop table if exists obright_part;
+create table obright_part(grp_id bigint, row_id bigint, row_hex varchar(2048), trx_grp bigint,
+v1 varchar(65536), v1_check bigint, v2 varchar(65536), v2_check bigint, r1 int, r2 int, glike varchar(4096),
+c1 bigint, c2 bigint, c3 bigint, c4 bigint, c5 bigint, c6 tinyint, c7 bigint, c8 bigint, c9 bigint, c10 bigint, v3 varchar(1024),
+ts timestamp(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6), t1 timestamp(6) null, t2 datetime(6),
+dec1 decimal(16,4), dec2 decimal(16,4), dec3 decimal(16,6),
+b1 boolean, d1 bigint default 0, ac1 bigint auto_increment, gmt_create timestamp(6) default now(6), gmt_modified timestamp(6) default now(6),
+gen_v1 varchar(10) GENERATED ALWAYS AS (substr(v1,1,10)) virtual,
+gen_v2 varchar(10) GENERATED ALWAYS AS (substr(v1,1,10)) stored,
+primary key(grp_id, row_id, row_hex),
+index obright_part2(trx_grp,row_id, ac1) LOCAL,
+index obright_part3(glike) LOCAL,
+index obright_part4(t1,ts,dec1,dec2) storing(v1,v1_check,r1,r2) LOCAL,
+index obright_part5(v1_check,v2_check) LOCAL,
+index obright_part6(row_hex,v1_check) storing(glike,t1,r1) LOCAL,
+unique index obright_part1_uniq(t1,grp_id,row_id,row_hex) LOCAL,
+unique index obright_part2_uniq(trx_grp,r1,row_hex,row_id,grp_id) LOCAL,
+unique index obright_part3_uniq(row_hex,grp_id,row_id) LOCAL)
+partition by key (grp_id) partitions 2;
+create index obright_part1 on obright_part(row_id) global partition by HASH(row_id) partitions 2;
+select grp_id, max(row_id), max(row_hex), max(trx_grp), abs(row_id)%2 as row_id_mod from obright_part where grp_id=6447+length('a')-1 group by row_id_mod order by row_id_mod desc limit 1;
+grp_id	max(row_id)	max(row_hex)	max(trx_grp)	row_id_mod
+drop table if exists obright_part;

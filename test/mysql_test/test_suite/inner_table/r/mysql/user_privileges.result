@@ -1,0 +1,85 @@
+show create table information_schema.user_privileges;
+Table	Create Table
+USER_PRIVILEGES	CREATE TABLE `USER_PRIVILEGES` (
+  `GRANTEE` varchar(81) NOT NULL DEFAULT '',
+  `TABLE_CATALOG` varchar(4096) NOT NULL DEFAULT '',
+  `PRIVILEGE_TYPE` varchar(64) NOT NULL DEFAULT '',
+  `IS_GRANTABLE` varchar(3) NOT NULL DEFAULT ''
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = NUM BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+desc information_schema.user_privileges;
+Field	Type	Null	Key	Default	Extra
+GRANTEE	varchar(81)	NO			
+TABLE_CATALOG	varchar(4096)	NO			
+PRIVILEGE_TYPE	varchar(64)	NO			
+IS_GRANTABLE	varchar(3)	NO			
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
+create user tmp_user_user_privileges identified by '123';
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
+'tmp_user_user_privileges'@'%'	def	USAGE	NO
+grant select on *.* to tmp_user_user_privileges;
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
+'tmp_user_user_privileges'@'%'	def	SELECT	NO
+revoke select on *.* from tmp_user_user_privileges;
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
+'tmp_user_user_privileges'@'%'	def	USAGE	NO
+grant select on *.* to tmp_user_user_privileges with grant option;
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
+'tmp_user_user_privileges'@'%'	def	SELECT	YES
+revoke grant option on *.* from tmp_user_user_privileges;
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
+'tmp_user_user_privileges'@'%'	def	SELECT	NO
+revoke all on *.* from tmp_user_user_privileges;
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
+'tmp_user_user_privileges'@'%'	def	USAGE	NO
+drop user tmp_user_user_privileges;
+select * from information_schema.user_privileges where grantee like '%tmp_user_user_privileges%';
+GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
+select * from information_schema.user_privileges where grantee like '%root%' or grantee like '%admin%';
+GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
+'root'@'%'	def	ALTER	YES
+'root'@'%'	def	CREATE	YES
+'root'@'%'	def	CREATE USER	YES
+'root'@'%'	def	DELETE	YES
+'root'@'%'	def	DROP	YES
+'root'@'%'	def	INSERT	YES
+'root'@'%'	def	UPDATE	YES
+'root'@'%'	def	SELECT	YES
+'root'@'%'	def	INDEX	YES
+'root'@'%'	def	CREATE VIEW	YES
+'root'@'%'	def	SHOW VIEW	YES
+'root'@'%'	def	SHOW DB	YES
+'root'@'%'	def	SUPER	YES
+'root'@'%'	def	PROCESS	YES
+'root'@'%'	def	CREATE SYNONYM	YES
+'root'@'%'	def	FILE	YES
+'root'@'%'	def	ALTER TENANT	YES
+'root'@'%'	def	ALTER SYSTEM	YES
+'root'@'%'	def	CREATE RESOURCE POOL	YES
+'root'@'%'	def	CREATE RESOURCE UNIT	YES
+'admin'@'%'	def	ALTER	YES
+'admin'@'%'	def	CREATE	YES
+'admin'@'%'	def	CREATE USER	YES
+'admin'@'%'	def	DELETE	YES
+'admin'@'%'	def	DROP	YES
+'admin'@'%'	def	INSERT	YES
+'admin'@'%'	def	UPDATE	YES
+'admin'@'%'	def	SELECT	YES
+'admin'@'%'	def	INDEX	YES
+'admin'@'%'	def	CREATE VIEW	YES
+'admin'@'%'	def	SHOW VIEW	YES
+'admin'@'%'	def	SHOW DB	YES
+'admin'@'%'	def	SUPER	YES
+'admin'@'%'	def	PROCESS	YES
+'admin'@'%'	def	CREATE SYNONYM	YES
+'admin'@'%'	def	FILE	YES
+'admin'@'%'	def	ALTER TENANT	YES
+'admin'@'%'	def	ALTER SYSTEM	YES
+'admin'@'%'	def	CREATE RESOURCE POOL	YES
+'admin'@'%'	def	CREATE RESOURCE UNIT	YES

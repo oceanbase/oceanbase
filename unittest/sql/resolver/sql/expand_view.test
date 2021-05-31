@@ -1,0 +1,348 @@
+#
+#################################schema##############################
+#
+create table view_table_2(a int, b int);
+create view v1 as select * from t2;
+create database rongxuan2;
+create table rongxuan2.t1(c1 int);
+
+#
+##############################select clause###########################
+#
+
+#
+##basic
+#
+create view v as select 1, true, false, '', 'test', null, 10.123;
+create view v as select 1 from DUAL;
+create view v as select 1 from DUAL where 2>1;
+create view v as select c1 from t1 where c1 group by c2 having c1 order by c2 limit 1, 10;
+create view v as (select c1 from t1) union (select c2 from t2) order by c1 limit 1
+create view v as select * from t1;
+create view v as select t1.* from t1;
+create view v as select t1.*,view_table_2.* from t1, view_table_2;
+
+#
+## column_list
+#
+create view v(a,b) as select c1,c2 from t1;
+create view v(a,b) as select c1,c2 from t1;
+create view v(a,b) as select c1 as alias1, c2 from t1;
+
+#
+##distinct/all
+#
+create view v as select distinct c1, c2 from t1;
+create view v as select all c1, c2 from t1;
+
+#
+##from
+#
+##base table
+create view v as select * from t1;
+create view v as select * from t1 a;
+create view v as select * from t1 as a;
+create view v as select * from t1 partition(p0,p1);
+create view v as select * from t1 partition(p0,p1) a;
+create view v as select * from t1 partition(p0,p1) join t2 partition(p1) a;
+##view_table
+create view v as select * from v1;
+create view v as select * from v1 a;
+create view v as select * from v1 as a;
+##join_table
+create view v as select t1.c1 from t1,t2;
+create view v as select t1.c1 from t1,t2;
+create view v as select t1.c1 from t1 join t2;
+create view v as select t1.c1 from t1 join t2 on t1.c1 = t2.c1;
+create view v as select t1.c1 from t1 inner join t2;
+create view v as select t1.c1 from t1 inner join t2 on t1.c1 = t2.c1;
+create view v as select t1.c1 from t1 left join t2 on t1.c1 = t2.c1;
+create view v as select t1.c1 from t1 right join t2 on t1.c1 = t2.c1;
+create view v as select t1.c1 from t1 full join t2 on t1.c1 = t2.c1;
+##generated table cannot appear in view
+##table_references
+create view v as select * from t1 ,t2;
+
+#
+##where
+#
+create view v as select * from t1 where c1=1;
+create view v as select * from t1 where c1=1 and c2 = 1;
+create view v as select * from t1 where c1=1 and c2 =1 and true;
+create view v as select * from t1 where c1=1 and (c2 =1 and true);
+create view v as select * from t1 where c1=1 or c2 = 1;
+create view v as select * from t1 where c1=1 or (c2 =1 or true);
+
+#
+##group by
+#
+create view v as select * from t1 group by c1;
+create view v as select * from t1 group by c1,c2;
+create view v as select * from t1 group by c1 and c2;
+
+#
+##having
+#
+create view v as select * from t1 having c1;
+create view v as select * from t1 having c1 and c2 and 1;
+create view v as select * from t1 having c1 and (c2 and true);
+
+#
+#order by
+#
+create view v as select * from t1 order by c1;
+create view v as select * from t1 order by 1;
+create view v as select * from t1 order by c1 asc;
+create view v as select * from t1 order by c1 desc;
+create view v as select * from t1 order by c1 desc, c2 asc;
+create view v as select * from t1 order by 1 desc, c2 asc;
+
+#
+##limit
+#
+create view v as select * from t1 limit 10;
+create view v as select * from t1 limit 1, 10;
+
+#
+##set_op
+#
+create view v as (select c1 from t1) union (select c1 from t2);
+create view v as (select c1 from t1) union (select c1 from t2) union (select c1 from t2);
+create view v as (select c1 from t1) union (select c1 from t2) order by c1 limit 1;
+create view v as (select c1 from t1) intersect (select c1 from t2);
+create view v as (select c1 from t1) intersect (select c1 from t2) order by c1 limit 1;
+create view v as (select c1 from t1) except (select c1 from t2);
+create view v as (select c1 from t1) except (select c1 from t2) order by c1 limit 1;
+
+
+#
+####################################expr##################################
+#
+
+#
+##const
+#
+create view v as select null, 1, +2, -10, 1.9, 'fdf', true, false;
+
+#
+##binary
+#
+create view v as select c1 from t1;
+#from tables cross db
+create view v as select rongxuan2.t1.c1 from t1, rongxuan2.t1;
+#view cross db
+create view rongxuan2.v as select c1 from rongxuan.t1;
+
+#
+##op
+#
+create view v as select c1 and c2 from t1;
+create view v as select c1 && c2 from t1;
+create view v as select c1 or c2 from t1;
+create view v as select c1 || c2 from t1;
+create view v as select c1+c2 from t1;
+create view v as select c1-c2 from t1;
+create view v as select c1*c2 from t1;
+create view v as select c1/c2 from t1;
+create view v as select pow(c1,c2) from t1;
+create view v as select c1^c2 from t1;
+create view v as select c1%c2 from t1;
+create view v as select c1 div c2 from t1;
+create view v as select c1<=c2 from t1;
+create view v as select c1<c2 from t1;
+create view v as select c1=c2 from t1;
+create view v as select c1<=>c2 from t1;
+create view v as select c1>=c2 from t1;
+create view v as select c1>c2 from t1;
+create view v as select c1%c2 from t1;
+create view v as select c1<>c2 from t1;
+create view v as select c1!=c2 from t1;
+create view v as select c1|c2 from t1;
+create view v as select c1&c2 from t1;
+create view v as select !c1 from t1;
+create view v as select !!c1 from t1;
+create view v as select c1 mod c2 from t1;
+create view v as select c1 div c2 from t1;
+create view v as select "fdsfds" regexp "fds*" from t1;
+create view v as select "fdsfds" not regexp "fds*" from t1;
+create view v as select c1 from t1 where exists (select c1 from t2);
+create view v as select c1 from t1 where c1 = any(select c1 from t2);
+create view v as select c1 from t1 where c1+c2 > any(select c1 from t2);
+create view v as select c1 from t1 where c1 = some(select c1 from t2);
+create view v as select c1 from t1 where c1+c2 > some(select c1 from t2);
+create view v as select c1 from t1 where c1 = all(select c1 from t2);
+create view v as select c1 from t1 where c1+c2 > all(select c1 from t2);
+#not support now
+#create view v as select c1 xor c2 from t1;
+create view v as select c1 is true from t1;
+create view v as select c1 is false from t1;
+create view v as select c1 is not true from t1;
+create view v as select c1 is not false from t1;
+create view v as select c1 is null from t1;
+create view v as select c1 is not null from t1;
+create view v as select c1 is unknown from t1;
+create view v as select c1 is not unknown from t1;
+create view v as select c1 from t1 where (c1,c2) in (select c1,c2 from t2);
+create view v as select c1 from t1 where (c1,c2) in ((1,2),(2,3));
+create view v as select c1 from t1 where c1 in ((1),2,3);
+create view v as select c1 from t1 where (c1,c2) in ((1,2),(2,3));
+create view v as select c1 from t1 where (c1,c2) not in (select c1,c2 from t2);
+create view v as select c1 from t1 where (c1,c2) not in (select c1,c2 from t2);
+create view v as select * from t1 where c1 like '%fhlds%';
+create view v as select * from t1 where c1 not like '%fhlds%';
+create view v as select * from t1 where c1 between 1 and 10;
+create view v as select * from t1 where c1 not between 1 and 10;
+
+#
+##sysfun
+#
+create view v as select if(c1>10,1,2) from t1;
+create view v as select now() from t1;
+create view v as select now(0) from t1;
+create view v as select now(3) from t1;
+create view v as select current_timestamp() from t1;
+create view v as select current_timestamp(0) from t1;
+create view v as select current_timestamp(3) from t1;
+create view v as select localtime() from t1;
+create view v as select localtime(0) from t1;
+create view v as select localtime(3) from t1;
+create view v as select localtimestamp() from t1;
+create view v as select localtimestamp(0) from t1;
+create view v as select localtimestamp(3) from t1;
+create view v as select curtime() from t1;
+create view v as select curtime(0) from t1;
+create view v as select curtime(3) from t1;
+create view v as select current_time from t1;
+create view v as select current_time() from t1;
+create view v as select current_time(0) from t1;
+create view v as select current_time(3) from t1;
+create view v as select curdate() from t1;
+create view v as select current_date from t1;
+create view v as select current_date() from t1;
+create view v as SELECT DATE_ADD('1999-01-01', INTERVAL 1 DAY);
+create view v as select date_add(current_date(), interval 2 day) from t1;
+create view v as SELECT DATE_sub('1999-01-01', INTERVAL 1 DAY);
+create view v as select date_sub(current_date(), interval 2 day) from t1;
+create view v as SELECT TIMESTAMPDIFF(MONTH,'2009-12-01','2009-09-01');
+create view v as SELECT extract(MONTH from '2009-12-01');
+create view v as select current_date() from t1;
+create view v as select utc_timestamp() from t1;
+create view v as select utc_timestamp(3) from t1;
+create view v as select date(c1) from t1;
+#create view v as select time(c1) from t1;
+create view v as select month(c1) from t1;
+create view v as SELECT TRIM(leading "a" from ' barbar ');
+create view v as select substring("fdfdsaf" from 2 for 3);
+create view v as select coalesce(null, "fdfdsaf");
+#cast && convert
+create view v as select cast(c1 as binary) from t1;
+create view v as select cast(c1 as binary(10)) from t1;
+create view v as select cast(c1 as character) from t1;
+create view v as select cast(c1 as character(10)) from t1;
+create view v as select cast(c1 as char) from t1;
+create view v as select cast(c1 as char(10)) from t1;
+create view v as select convert(1, binary);
+create view v as select convert(1, binary(10));
+create view v as select convert(1, character);
+create view v as select convert(1, character(10));
+create view v as select convert(1, char);
+create view v as select convert(1, char(10));
+create view v as select convert(1 using binary);
+create view v as select convert(1 using utf8mb4);
+create view v as select cast(c1 as number(3,2)) from t1;
+create view v as select cast(c1 as datetime) from t1;
+create view v as select cast(c1 as date) from t1;
+create view v as select cast(c1 as time) from t1;
+create view v as select cast(c1 as signed) from t1;
+create view v as select cast(c1 as unsigned) from t1;
+create view v as select concat(c1,c2,'fds') from t1
+create view v as select binary c1+c2 from t1;
+create view v as select isnull(c1) from t1;
+create view v as select hex(c1) from t1;
+create view v as select unhex(c1) from t1;
+
+#
+##aggfunc
+#
+create view v as select count(*) from t1 group by c1;
+create view v as select count(c1) from t1 group by c1;
+create view v as select count(c1+10) from t1;
+create view v as select count(distinct c1+10,c2-10) from t1;
+create view v as select sum(c1+c2) from t1 group by c1;
+create view v as select sum(all c1+c2) from t1 group by c1;
+create view v as select sum(distinct c1+c2) from t1 group by c1;
+create view v as select min(c1+c2) from t1 group by c1;
+create view v as select min(all c1+c2) from t1 group by c1;
+create view v as select min(distinct c1+c2) from t1 group by c1;
+create view v as select max(c1+c2) from t1 group by c1;
+create view v as select max(all c1+c2) from t1 group by c1;
+create view v as select max(distinct c1+c2) from t1 group by c1;
+create view v as select avg(c1+c2) from t1 group by c1;
+create view v as select avg(all c1+c2) from t1 group by c1;
+create view v as select avg(distinct c1+c2) from t1 group by c1;
+create view v as select group_concat(distinct c1+c2,c2 order by c2, 1 desc separator ',') from t1 group by c1;
+
+#
+##caseop
+#
+create view v as select case when c1 > 3 then 1 when c1 > 2 then 2 else 1 end from t1;
+
+#
+##unary
+#
+create view v as select c1 from t1 where (select c1) = (select c1 from t2 limit 1);
+create view v as select c1 from t1 order by (select c1);
+create view v as select c1 from t1 group by (select c1);
+create view v as select c1 from t1 having (select c1);
+
+#
+##others
+#
+create view v as select t1.c1 from t1 full join t2 on t1.c1 = (select c2 from t2 limit 1);
+create view v as select t1.c1 from t1 left join t2 on t1.c1 = (select c2 from t2 limit 1);
+create view v as select t1.c1 from t1 right join t2 on t1.c1 = any(select c2 from t2);
+create view v as select t1.c1 from t1 join t2 on t1.c1=t2.c1;
+create view v as select t1.c1 from t1 join t2 on t1.c1= t2.c1 or t1.c1 > (select 10);
+create view v as select t1.c1 from t1 join t2 on t1.c1=t2.c1 join t3 on t1.c1=0;
+create view v as select t1.c1 from t1 join t2 on t1.c1=t2.c1 inner join t3 on t1.c1=0 left join t4 on t1.c1 > t4.c1;
+create view v as select t1.c1 from t1 join t2 on t1.c1=t2.c1 join t3 on t1.c1=0;
+create view v as select t1.c1 from t1 join t2 a on t1.c1=a.c1 join t3 b on a.c1 != 10;
+create view v as select  c2 from t1 where c1 > all((select c1 from t1) union (select c1 from t2));
+create view v as select  c2 from t1 where c1 > all((select c1 from t1) except (select c1 from t2));
+create view v as select c1 from t1 where c1 > (select c2 from t1 limit 1);
+create view v as select c1 from t1 where c1 > (select c2 from t2 limit 1);
+create view v as select c1 from t1 where c1 > (select c2 from t1 tt limit 1);
+create view v as select c1 from t1 where c1 > (select c2 from t1 as tt limit 1);
+create view v as select t1.c1 from t1 join t2 on t1.c1 > (select c2 from t2 limit 1);
+create view v as select c1 from t1 group by c1 having c1 > (select c1 from t2 limit 1);
+create view v as select c1 from t1 where c1 > (select t1.c2 from t1 join t2 on t1.c1 = t2.c1 limit 1);
+create view v as select c1, (select c2 from t2 limit 1) from t1;
+
+#
+## hint
+#
+create view v as select /*+ NO_REWRITE */ * from t1;
+create view v as select /*+ READ_CONSISTENCY(frozen) */ * from t1;
+create view v as select /*+ READ_CONSISTENCY(weak) */ * from t1;
+create view v as select /*+ READ_CONSISTENCY(strong) */ * from t1;
+create view v as select /*+ INDEX(t1 c1) */ * from t1;
+create view v as select /*+ FULL(t1) */ * from t1;
+create view v as select /*+ QUERY_TIMEOUT(100000) */ * from t1;
+create view v as select /*+ LEADING(t1,t2) */ t1.* from t1,t2;
+create view v as select /*+ USE_MERGE(t1,t2) */ t1.* from t1,t2;
+create view v as select /*+ USE_HASH(t1,t2) */ t1.* from t1,t2;
+create view v as select /*+ USE_NL(t1,t2) */ t1.* from t1,t2;
+create view v as select /*+ USE_PLAN_CACHE(default) */ * from t1;
+create view v as select /*+ USE_PLAN_CACHE(exact) */ * from t1;
+create view v as select /*+ ORDERED */ * from t1;
+create view v as select /*+ NO_REWRITE, READ_CONSISTENCY(weak), index(t1 c1), full(t1), QUERY_TIMEOUT(1000000), LEADING(t1), USE_MERGE(t1), USE_HASH(t1),USE_NL(t1), USE_PLAN_CACHE(default), ORDERED */ * from t1;
+create view v as select /*+ USE_HASH(@sel1 t1,t2) */ t1.* from t1,t2;
+create view v as select t1.c1 from t1 where c1 in (select/*+FULL(@sel1 t1)*/ c1 from t2);
+
+#
+#################################clear schema##############################
+#
+drop table view_table_2;
+drop view v1;
+drop table rongxuan2.t1;
+drop database rongxuan2;

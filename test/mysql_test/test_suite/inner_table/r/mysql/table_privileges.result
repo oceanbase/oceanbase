@@ -1,0 +1,33 @@
+create user tmp_user_test_user_priv identified by '123';
+create database test_user_priv_db;
+use test_user_priv_db;
+create table zhan_t1 (a int primary key, b int);
+show create table information_schema.table_privileges;
+Table	Create Table
+TABLE_PRIVILEGES	CREATE TABLE `TABLE_PRIVILEGES` (
+  `GRANTEE` varchar(81) NOT NULL DEFAULT '',
+  `TABLE_CATALOG` varchar(4096) NOT NULL DEFAULT '',
+  `TABLE_SCHEMA` varchar(128) NOT NULL DEFAULT '',
+  `TABLE_NAME` varchar(64) NOT NULL DEFAULT '',
+  `PRIVILEGE_TYPE` varchar(64) NOT NULL DEFAULT '',
+  `IS_GRANTABLE` varchar(3) NOT NULL DEFAULT ''
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = NUM BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+desc information_schema.table_privileges;
+Field	Type	Null	Key	Default	Extra
+GRANTEE	varchar(81)	NO			
+TABLE_CATALOG	varchar(4096)	NO			
+TABLE_SCHEMA	varchar(128)	NO			
+TABLE_NAME	varchar(64)	NO			
+PRIVILEGE_TYPE	varchar(64)	NO			
+IS_GRANTABLE	varchar(3)	NO			
+select * from information_schema.table_privileges where table_name = 'zhan_t1';
+GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	PRIVILEGE_TYPE	IS_GRANTABLE
+grant select on test_user_priv_db.zhan_t1 to tmp_user_test_user_priv;
+select * from information_schema.table_privileges where table_name = 'zhan_t1';
+GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	PRIVILEGE_TYPE	IS_GRANTABLE
+'tmp_user_test_user_priv'@'%'	def	test_user_priv_db	zhan_t1	SELECT	NO
+revoke select on test_user_priv_db.zhan_t1 from tmp_user_test_user_priv;
+select * from information_schema.table_privileges where table_name = 'zhan_t1';
+GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	PRIVILEGE_TYPE	IS_GRANTABLE
+drop database test_user_priv_db;
+drop user tmp_user_test_user_priv;

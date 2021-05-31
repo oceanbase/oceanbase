@@ -1,0 +1,58 @@
+# What is OceanBase database
+
+<!-- TODO: some badges here -->
+OceanBase Database is a native distributed relational database. It is developed entirely by Alibaba and Ant Group. OceanBase Database is built on a common server cluster. Based on the Paxos protocol and its distributed structure, OceanBase Database provides high availability and linear scalability for financial institutions. OceanBase Database is not dependent on specific hardware architectures.
+
+OceanBase Database has these features:
+
+- High availability: Single server failure recovers automatically. OceanBase Database supports cross-city disaster tolerance for multiple IDCs and zero data loss. OceanBase Database meets the financial industry Level 6 disaster recovery standard (RPO=0, RTO<=30 seconds).
+- Linear scalability: OceanBase Database scales transparently to applications and balances the system load automatically. Its cluster can contain more than 1500 nodes. The data volume can reach petabytes. The records in a single table can be more than a trillion rows.
+- High compatible with MySQL: OceanBase Database is compatible with MySQL protocol and syntax. You can access to OceanBase Database by using MySQL client.
+- High performance: OceanBase Database supports quasi memory level data change and exclusive encoding compression. Together with the linear scalability, OceanBase Database provides high performance.
+- Low cost: OceanBase Database uses PC servers and cheap SSDs. Its high storage compression ratio and high performance also reduce the storage cost and the computing cost.
+- Multi-tenancy: OceanBase Database supports native multi-tenancy architecture. One cluster supports multiple businesses. Data is isolated among tenants. This reduces the deployment, operation, and maintenance costs.
+
+OceanBase Database supports the entire core business of Alipay and the core systems of hundreds of financial institutions, such as banks and insurance companies.
+
+## Quick start
+
+Refer to the Get Started guide [link TODO] to try out OceanBase Database.
+
+## Documentation
+
+- English [link TODO]
+- [Simplified Chinese](https://open.oceanbase.com/docs) (简体中文)
+
+## Supported clients
+
+- [OBClient](https://github.com/oceanbase/obclient)
+
+## Licencing
+
+OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPubL-2.0/index.html) license. You can freely copy and use the source code. When you modify or distribute the source code, please obey the MulanPubL - 2.0 license.
+
+## How to build
+
+#### debug mode
+> sh build.sh debug --init --make
+
+#### release mode
+> sh build.sh release --init --make
+
+#### rpm packages
+> sh build.sh rpm --init && cd build_rpm && make -j16 rpm
+
+## Contributing
+
+Contributions are warmly welcomed and greatly appreciated. Here are a few ways you can contribute:
+
+- Raise us an [issue](https://github.com/oceanbase/oceanbase/issues).
+- Submit Pull Requests. For details, see [How to contribute](CONTRIBUTING.md).
+
+## Support
+
+In case you have any problems when using OceanBase Database, welcome reach out for help:
+
+- [GitHub Issue](https://github.com/oceanbase/oceanbase/issues)
+- Official forum [link TODO]
+- Knowledge base [link TODO]

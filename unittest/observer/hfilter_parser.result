@@ -1,0 +1,343 @@
+**************   Case 1   ***************
+RowFilter(<, 'binary:abc')
+{
+  "filter":"RowFilter",
+  "cmp_op":"LESS",
+  "comparator": {
+    "comparable":"BinaryComparator"
+  }
+}
+**************   Case 2   ***************
+RowFilter(<=, 'binary:abc''(),xyz,,rowfilter''')
+{
+  "filter":"RowFilter",
+  "cmp_op":"LESS_OR_EQUAL",
+  "comparator": {
+    "comparable":"BinaryComparator"
+  }
+}
+**************   Case 3   ***************
+RowFilter(!=, 'binaryprefix:abc')
+{
+  "filter":"RowFilter",
+  "cmp_op":"NOT_EQUAL",
+  "comparator": {
+    "comparable":"BinaryPrefixComparator"
+  }
+}
+**************   Case 4   ***************
+ValueFilter(=, 'substring:abc*123')
+{
+  "filter":"ValueFilter",
+  "cmp_op":"EQUAL",
+  "comparator": {
+    "comparable":"SubStringComparator"
+  }
+}
+**************   Case 5   ***************
+QualifierFilter(=, 'substring:abc')
+{
+  "filter":"QualifierFilter",
+  "cmp_op":"EQUAL",
+  "comparator": {
+    "comparable":"SubStringComparator"
+  }
+}
+**************   Case 6   ***************
+( singlecolumnvaluefilter ( 'cf1', 'c1', !=, 'substring:abc', true, false ) )
+{
+  "filter":"SingleColumnValueFilter",
+  "family":"cf1",
+  "qualifier":"c1",
+  "cmp_op":"NOT_EQUAL",
+  "comparator": {
+    "comparable":"SubStringComparator"
+  },
+  "filter_if_missing":true,
+  "latest_version_only":false
+}
+**************   Case 7   ***************
+Skip RowFilter(>=, 'binaryprefix:def')
+{
+  "filter":"SkipFilter",
+  "sub_filter": {
+    "filter":"RowFilter",
+    "cmp_op":"GREATER_OR_EQUAL",
+    "comparator": {
+      "comparable":"BinaryPrefixComparator"
+    }
+  }
+}
+**************   Case 8   ***************
+while ((RowFilter(>=, 'binaryprefix:def')))
+{
+  "filter":"WhileMatchFilter",
+  "sub_filter": {
+    "filter":"RowFilter",
+    "cmp_op":"GREATER_OR_EQUAL",
+    "comparator": {
+      "comparable":"BinaryPrefixComparator"
+    }
+  }
+}
+**************   Case 9   ***************
+RowFilter(<=, 'binaryprefix:abc') AND RowFilter(!=, 'binaryprefix:abc') AND ValueFilter(=, 'substring:abc*123')
+{
+  "filter":"FilterList",
+  "op":"AND",
+  "filters": [
+     {
+      "filter":"FilterList",
+      "op":"AND",
+      "filters": [
+         {
+          "filter":"RowFilter",
+          "cmp_op":"LESS_OR_EQUAL",
+          "comparator": {
+            "comparable":"BinaryPrefixComparator"
+          }
+        },
+         {
+          "filter":"RowFilter",
+          "cmp_op":"NOT_EQUAL",
+          "comparator": {
+            "comparable":"BinaryPrefixComparator"
+          }
+        }
+      ]
+    },
+     {
+      "filter":"ValueFilter",
+      "cmp_op":"EQUAL",
+      "comparator": {
+        "comparable":"SubStringComparator"
+      }
+    }
+  ]
+}
+**************   Case 10   ***************
+RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc') OR ValueFilter(=, 'substring:abc*123')
+{
+  "filter":"FilterList",
+  "op":"OR",
+  "filters": [
+     {
+      "filter":"FilterList",
+      "op":"OR",
+      "filters": [
+         {
+          "filter":"RowFilter",
+          "cmp_op":"LESS_OR_EQUAL",
+          "comparator": {
+            "comparable":"BinaryPrefixComparator"
+          }
+        },
+         {
+          "filter":"RowFilter",
+          "cmp_op":"NOT_EQUAL",
+          "comparator": {
+            "comparable":"BinaryPrefixComparator"
+          }
+        }
+      ]
+    },
+     {
+      "filter":"ValueFilter",
+      "cmp_op":"EQUAL",
+      "comparator": {
+        "comparable":"SubStringComparator"
+      }
+    }
+  ]
+}
+**************   Case 11   ***************
+RowFilter(<=, 'binaryprefix:abc') AND RowFilter(!=, 'binaryprefix:abc') OR ValueFilter(=, 'substring:abc*123')
+{
+  "filter":"FilterList",
+  "op":"OR",
+  "filters": [
+     {
+      "filter":"FilterList",
+      "op":"AND",
+      "filters": [
+         {
+          "filter":"RowFilter",
+          "cmp_op":"LESS_OR_EQUAL",
+          "comparator": {
+            "comparable":"BinaryPrefixComparator"
+          }
+        },
+         {
+          "filter":"RowFilter",
+          "cmp_op":"NOT_EQUAL",
+          "comparator": {
+            "comparable":"BinaryPrefixComparator"
+          }
+        }
+      ]
+    },
+     {
+      "filter":"ValueFilter",
+      "cmp_op":"EQUAL",
+      "comparator": {
+        "comparable":"SubStringComparator"
+      }
+    }
+  ]
+}
+**************   Case 12   ***************
+RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc') AND ValueFilter(=, 'substring:abc*123')
+{
+  "filter":"FilterList",
+  "op":"OR",
+  "filters": [
+     {
+      "filter":"RowFilter",
+      "cmp_op":"LESS_OR_EQUAL",
+      "comparator": {
+        "comparable":"BinaryPrefixComparator"
+      }
+    },
+     {
+      "filter":"FilterList",
+      "op":"AND",
+      "filters": [
+         {
+          "filter":"RowFilter",
+          "cmp_op":"NOT_EQUAL",
+          "comparator": {
+            "comparable":"BinaryPrefixComparator"
+          }
+        },
+         {
+          "filter":"ValueFilter",
+          "cmp_op":"EQUAL",
+          "comparator": {
+            "comparable":"SubStringComparator"
+          }
+        }
+      ]
+    }
+  ]
+}
+**************   Case 13   ***************
+(RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc')) AND ValueFilter(=, 'substring:abc*123')
+{
+  "filter":"FilterList",
+  "op":"AND",
+  "filters": [
+     {
+      "filter":"FilterList",
+      "op":"OR",
+      "filters": [
+         {
+          "filter":"RowFilter",
+          "cmp_op":"LESS_OR_EQUAL",
+          "comparator": {
+            "comparable":"BinaryPrefixComparator"
+          }
+        },
+         {
+          "filter":"RowFilter",
+          "cmp_op":"NOT_EQUAL",
+          "comparator": {
+            "comparable":"BinaryPrefixComparator"
+          }
+        }
+      ]
+    },
+     {
+      "filter":"ValueFilter",
+      "cmp_op":"EQUAL",
+      "comparator": {
+        "comparable":"SubStringComparator"
+      }
+    }
+  ]
+}
+**************   Case 14   ***************
+Skip While Skip RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc') AND ValueFilter(=, 'substring:abc*123')
+{
+  "filter":"FilterList",
+  "op":"OR",
+  "filters": [
+     {
+      "filter":"SkipFilter",
+      "sub_filter": {
+        "filter":"WhileMatchFilter",
+        "sub_filter": {
+          "filter":"SkipFilter",
+          "sub_filter": {
+            "filter":"RowFilter",
+            "cmp_op":"LESS_OR_EQUAL",
+            "comparator": {
+              "comparable":"BinaryPrefixComparator"
+            }
+          }
+        }
+      }
+    },
+     {
+      "filter":"FilterList",
+      "op":"AND",
+      "filters": [
+         {
+          "filter":"RowFilter",
+          "cmp_op":"NOT_EQUAL",
+          "comparator": {
+            "comparable":"BinaryPrefixComparator"
+          }
+        },
+         {
+          "filter":"ValueFilter",
+          "cmp_op":"EQUAL",
+          "comparator": {
+            "comparable":"SubStringComparator"
+          }
+        }
+      ]
+    }
+  ]
+}
+**************   Case 15   ***************
+RowFilter(<=>, 'binary:abc')
+**************   Case 16   ***************
+RowF(<, 'binary:abc')
+**************   Case 17   ***************
+RowFilter(<, 'binary
+**************   Case 18   ***************
+RowFilter(<, 'binary'')
+**************   Case 19   ***************
+RowFilter(<, 'binary''')
+**************   Case 20   ***************
+RowFilter(<, 'binary:abc'))
+**************   Case 21   ***************
+(RowFilter(<, 'binary:abc')
+**************   Case 22   ***************
+RowFilter(>, 'substring:abc')
+**************   Case 23   ***************
+RowFilter(>=, 'regexstring:abc')
+**************   Case 24   ***************
+( singlecolumnvaluefilter ( !=, 'substring:abc', 'cf1', 'c1') )
+**************   Case 25   ***************
+( singlecolumnvaluefilter ( 'cf1', 'c1', !=, 'substring:abc') )
+{
+  "filter":"SingleColumnValueFilter",
+  "family":"cf1",
+  "qualifier":"c1",
+  "cmp_op":"NOT_EQUAL",
+  "comparator": {
+    "comparable":"SubStringComparator"
+  },
+  "filter_if_missing":false,
+  "latest_version_only":true
+}
+**************   Case 26   ***************
+PrefixFilter ( 'abc' )
+{
+  "filter":"RowFilter",
+  "cmp_op":"EQUAL",
+  "comparator": {
+    "comparable":"BinaryPrefixComparator"
+  }
+}

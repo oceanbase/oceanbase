@@ -1,0 +1,14 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+use information_schema;
+select * from views order by table_name desc;
+select table_schema, table_name from views order by table_name desc;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view views;
+desc views;
+disconnect obsys;
+connection default;

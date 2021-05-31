@@ -1,0 +1,379 @@
+drop database if exists bushy_leading_hint_db;
+create database bushy_leading_hint_db;
+use bushy_leading_hint_db;
+drop table if exists nn1;
+drop table if exists nn2;
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+create table nn1(c1 int, c2 int, c3 varchar(10));
+create table nn2(d1 int, d2 int, d3 varchar(10));
+create table t1(a int, b int, c int);
+create table t2(a int, b int, c int);
+create table t3(a int, b int, c int);
+### 1, 基本测试  ###
+select /*+ leading(c,  (b , a) ) */ count(*),sum(a.c1+b.d2*a.c2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5  ;
+count(*)	sum(a.c1+b.d2*a.c2)
+0	NULL
+select /*+ leading(c,  (b , a) ) */ count(a.c1), sum(a.c2+b.d2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on c.c1 = b.d2 + 1 where a.c2 < 15  ;
+count(a.c1)	sum(a.c2+b.d2)
+0	NULL
+select /*+ leading((c, d), (a , b) ) */ count(*),sum(a.c1),sum(b.d2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
+count(*)	sum(a.c1)	sum(b.d2)
+0	NULL	NULL
+select /*+ leading(c, d, (a , b)) */ count(*),sum(a.c1+b.d1+c.c1-d.c2) from 
+nn1 a, nn2 b , nn1 c, nn1 d 
+where a.c1 = b.d2 and b.d1 = c.c1 and d.c2 = c.c2;
+count(*)	sum(a.c1+b.d1+c.c1-d.c2)
+0	NULL
+select /*+ leading(c,  (a ,d, b) ) use_hash(c,d) */ count(a.c1),sum(b.d1*b.d2-a.c2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
+and d.c2 = a.c1  ;
+count(a.c1)	sum(b.d1*b.d2-a.c2)
+0	NULL
+select /*+ leading(c,  (d, b) ) */ count(*) 
+from  nn2 b, nn1 c, nn1 d
+where b.d1 = c.c1 and d.c2 = c.c2 and d.c1 = b.d2;
+count(*)
+0
+select /*+ leading(t2, (t1, t3), t7, (t8, t9), (t4, t5, t6)) */
+count(*) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1 
+and t1.c3 = 'hello11' and t2.c2 < 4 ;
+count(*)
+0
+select /*+ leading(t1,t2,t3,(t4,t5,t6),(t7,t8)) */ count(*),sum(t1.c1+t2.d1+t3.c1+t4.d2-t5.c1+t6.d2-t7.c1-t8.d2)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5 , nn2 t6, nn1 t7, nn2 t8
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and 
+t4.d1 = t1.c1 and t5.c1 = t2.d2 and t6.d2 = t3.c1 AND
+t7.c1 = t2.d1 and t7.c2 = t5.c1 and t8.d1 = t4.d2 and t8.d2 = t6.d2;
+count(*)	sum(t1.c1+t2.d1+t3.c1+t4.d2-t5.c1+t6.d2-t7.c1-t8.d2)
+0	NULL
+select /*+ leading(c, (d, (a,b))) */ count(a.c1+b.d2+a.c2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
+count(a.c1+b.d2+a.c2)
+0
+select /*+ leading(t2,  (t1, (t3 , (t7,  (t8, (t9 ,  (t4, (t5, (t6))))))))) */
+count(*),sum(t1.c1+t2.c1+t3.c1+t4.c2-t5.c1+t6.c2-t7.c1-t8.c2)+count(t9.c1)
+from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+count(*)	sum(t1.c1+t2.c1+t3.c1+t4.c2-t5.c1+t6.c2-t7.c1-t8.c2)+count(t9.c1)
+0	NULL
+select /*+ leading(t1, ((t2, t3), t4), (t5, t6)) */ count(t1.c1), count(t2.d1 * t3.c1), sum(t4.d1 + t5.c1)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 + t2.d2 = t4.d1 + t1.c2 and 
+t4.d1 = t5.c1 + t6.d2 and t2.d2 = t5.c1 and t2.d1 = t6.d2 and 
+t1.c1 + t4.d2 = t5.c2 + t6.d2 - 1;
+count(t1.c1)	count(t2.d1 * t3.c1)	sum(t4.d1 + t5.c1)
+0	0	NULL
+select /*+ leading(t1, ((t2, t3), t4)) */ count(*), sum(t2.d1 * t3.c1 - t4.d2)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 + t2.d2 = t4.d1 + t1.c2;
+count(*)	sum(t2.d1 * t3.c1 - t4.d2)
+0	NULL
+select /*+ leading(t1, (t2, t3)) */ count(*), sum(t2.d1+t3.c2)
+from nn1 t1, nn2 t2, nn1 t3
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 =t3.c1+t2.d2;
+count(*)	sum(t2.d1+t3.c2)
+0	NULL
+### 3, 复杂测试(集合、子查询中等)  ###
+SELECT count(*), sum(b.d1) from
+nn1 a,  nn2 b,  nn1 c
+WHERE
+a.c1 = b.d1   and b.d2 = c.c1   and c.c2 in (
+select
+/*+ leading(x, ((y, z), x2, (y2,y3))) no_use_hash(y2, y3) */
+x.c1
+from nn1 x, nn2 y, nn1 z, nn1 x2, nn1 y2, nn1 y3
+where x.c2 = y.d2 and y.d1 = z.c2 and y2.c1 = y3.c1
+);
+count(*)	sum(b.d1)
+0	NULL
+select /*+ leading(t6, (t5, t4), (t3, t1), (t2)) */ count(*), sum(t2.c1) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
+where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 44
+union ALL
+select /* leading(t2, t1, (t4, t3, (t6, t5))) */ sum(t1.c1), max(t2.c2)+sum(t5.c1-t6.c2) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
+where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 55;
+count(*)	sum(t2.c1)
+0	NULL
+NULL	NULL
+select /*+ leading(t9, (t8, t7, (t6, t5), t4), (t3, t1), t2)*/ count(*),sum(t9.c1-t5.c1+t4.d2-t1.c1) from 
+nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6, nn1 t7, nn2 t8, nn1 t9
+where mod(t1.c1, 3) = mod(t2.d2,2) and mod(t1.c1,5) = mod(t3.c1,4) and mod(t1.c2, 7) = mod(t4.d1, 3) AND 
+mod(t1.c2, 5) = mod(t5.c1, 6) and mod(t1.c1, 3) = mod(t6.d2, 2) and mod(t1.c1, 4) = mod(t7.c1,3) AND
+mod(t1.c1, 7) = mod(t8.d1, 3) and mod(t1.c2, 5) = mod(t9.c1, 4) AND
+mod(t2.d1,5) = mod(t3.c1,4) and mod(t2.d2, 7) = mod(t4.d1, 3) AND 
+mod(t2.d2, 5) = mod(t5.c1, 6) and mod(t2.d1, 3) = mod(t6.d2, 2) and mod(t2.d1, 4) = mod(t7.c1,3) AND
+mod(t2.d1, 7) = mod(t8.d1, 3) and mod(t2.d2, 5) = mod(t9.c1, 4) AND
+mod(t3.c2, 7) = mod(t4.d1, 3) AND 
+mod(t3.c2, 5) = mod(t5.c1, 6) and mod(t3.c1, 3) = mod(t6.d2, 2) and mod(t3.c1, 4) = mod(t7.c1,3) AND
+mod(t3.c1, 7) = mod(t8.d1, 3) and mod(t3.c2, 5) = mod(t9.c1, 4) AND
+mod(t4.d2, 5) = mod(t5.c1, 6) and mod(t4.d1, 3) = mod(t6.d2, 2) and mod(t4.d1, 4) = mod(t7.c1,3) AND
+mod(t4.d1, 7) = mod(t8.d1, 3) and mod(t4.d2, 5) = mod(t9.c1, 4) and 
+mod(t5.c1, 2) = mod(t6.d2, 5) and mod(t5.c1, 4) = mod(t7.c1,1) AND
+mod(t5.c1, 7) = mod(t8.d1, 6) and mod(t5.c2, 5) = mod(t9.c1, 4) AND
+mod(t6.d1, 4) = mod(t7.c1,3) AND
+mod(t6.d1, 7) = mod(t8.d1, 3) and mod(t6.d2, 5) = mod(t9.c1, 4) AND
+mod(t7.c1, 7) = mod(t8.d1, 3) and mod(t7.c2, 5) = mod(t9.c1, 4) AND
+mod(t8.d2, 5) = mod(t9.c1, 14)    ;
+count(*)	sum(t9.c1-t5.c1+t4.d2-t1.c1)
+0	NULL
+select /*+ leading(a (c ,(b, d))) */ count(*),sum(a.c1) from nn1 a, (select * from nn2) b, 
+(select * from nn1 cc group by c1,c2) c, nn2 d 
+where a.c1 = c.c1 and b.d2 = d.d1 and c.c2 = d.d2;
+count(*)	sum(a.c1)
+0	NULL
+select /*+ leading(a (c ,(b, d))) */count(*), sum(b.d2) from nn1 a left join nn2  b
+on a.c1 = b.d1 left join  nn1 c on b.d2 = c.c1 left join nn2 d on c.c2 = d.d2 
+where a.c1 = b.d1 and b.d2 = c.c1 and c.c2 = d.d2;
+count(*)	sum(b.d2)
+0	NULL
+select (select /*+ leading(a (c ,(b, d))) */ count(x.c2) from nn1 a left join nn2  b
+on a.c1 = b.d1 left join  nn1 c on b.d2 = c.c1 left join nn2 d on c.c2 = d.d2 
+where a.c1 = b.d1 and b.d2 = c.c1 and c.c2 = d.d2 and x.c1 = a.c1 + b.d1 + c.c2 - d.d2 * 5) as x
+from nn1 x;
+x
+NULL
+select /* leading(t3 (t2 t1)) */ sum(t1.c1) from nn1 t1 , nn1 t2 , nn1 t3  where t2.c2=t1.c2 and t1.c1 = 
+(select /*+ leading(x,(y z)) */ count(*) from nn1 x, nn2 y, nn1 z where x.c1 = y.d1 and y.d2 = z.c1)
+and t3.c1 in (1,2);
+sum(t1.c1)
+NULL
+### 4, 错误、无效或冗余的指定测试  ###
+select /*+ leading((d, c), b , a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
+count(*)	sum(b.d1+d.d2)
+0	NULL
+select /*+ leading((d, (c), (b)) , (a)) */  count(*),sum(a.c1+b.d2+c.c1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d2  and c.c2 = d.d2;
+count(*)	sum(a.c1+b.d2+c.c1+d.d2)
+0	NULL
+select /*+ leading(b, (c d)) a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
+count(*)	sum(b.d1+d.d2)
+0	NULL
+select /*+ leading(b1, (c1 d1 ) a1) */  count(*), sum(b.d2+d.d1*c.c1-a.c1) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
+count(*)	sum(b.d2+d.d1*c.c1-a.c1)
+0	NULL
+select /*+ leading((((t2,t1,t4),t3),t5), (t6),(t7))*/ count(*), sum(t6.c1+t7.c1+t4.c2) from 
+nn1 t1, nn1 t2, nn1 t3, nn1  t4, nn1 t5, nn1 t6, nn1 t7
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1;
+count(*)	sum(t6.c1+t7.c1+t4.c2)
+0	NULL
+select /*+ leading(t4,t6,t5) */ count(*), sum(t2.c2+t3.c1)
+from nn1 t1 left join nn1 t2 on t1.c1 = t2.c1 left JOIN
+nn1 t3 on t3.c2 IN(1,23,4,2,5,6) join nn1 t4 on t3.c1=t4.c1 join nn1 t5 on t4.c2=t5.c2 
+join nn1 t6 on t5.c1 = t6.c2 left join nn1 t7 on t1.c1=t7.c1;
+count(*)	sum(t2.c2+t3.c1)
+0	NULL
+### 6, 嵌套hint和hint的print测试  ###
+select /*+ leading(c,  (a ,(d, b)) ) */ count(a.c1+b.d2) , sum(b.d2+b.d2*a.c1) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
+and d.c2 = a.c1  ;
+count(a.c1+b.d2)	sum(b.d2+b.d2*a.c1)
+0	NULL
+create view v1 as  select /*+ leading(c,  b , a ) use_hash(b a) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2, c.c3 as c_c3 from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5;
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select /*+ LEADING(c b a) USE_HASH((b) (a)) */`bushy_leading_hint_db`.`a`.`c1` AS `a_c1`,`bushy_leading_hint_db`.`a`.`c2` AS `a_c2`,`bushy_leading_hint_db`.`a`.`c3` AS `a_c3`,`bushy_leading_hint_db`.`b`.`d1` AS `d1`,`bushy_leading_hint_db`.`b`.`d2` AS `d2`,`bushy_leading_hint_db`.`b`.`d3` AS `d3`,`bushy_leading_hint_db`.`c`.`c1` AS `c_c1`,`bushy_leading_hint_db`.`c`.`c2` AS `c_c2`,`bushy_leading_hint_db`.`c`.`c3` AS `c_c3` from ((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`bushy_leading_hint_db`.`a`.`c1` = `bushy_leading_hint_db`.`b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`bushy_leading_hint_db`.`b`.`d1` = `bushy_leading_hint_db`.`c`.`c1`))) where (`bushy_leading_hint_db`.`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
+create view v2 as  select /*+ leading(c,  (b , a)) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2,     c.c3 as c_c3 from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5  ;
+show create view v2;
+View	Create View	character_set_client	collation_connection
+v2	CREATE VIEW `v2` AS select /*+ LEADING(c (b a)) */`bushy_leading_hint_db`.`a`.`c1` AS `a_c1`,`bushy_leading_hint_db`.`a`.`c2` AS `a_c2`,`bushy_leading_hint_db`.`a`.`c3` AS `a_c3`,`bushy_leading_hint_db`.`b`.`d1` AS `d1`,`bushy_leading_hint_db`.`b`.`d2` AS `d2`,`bushy_leading_hint_db`.`b`.`d3` AS `d3`,`bushy_leading_hint_db`.`c`.`c1` AS `c_c1`,`bushy_leading_hint_db`.`c`.`c2` AS `c_c2`,`bushy_leading_hint_db`.`c`.`c3` AS `c_c3` from ((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`bushy_leading_hint_db`.`a`.`c1` = `bushy_leading_hint_db`.`b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`bushy_leading_hint_db`.`b`.`d1` = `bushy_leading_hint_db`.`c`.`c1`))) where (`bushy_leading_hint_db`.`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
+create view v3 as select /*+ leading(c, (d, (a,b))) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2,     c.c3 as c_c3 from nn1 a  join nn2 b 
+on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
+show create view v3;
+View	Create View	character_set_client	collation_connection
+v3	CREATE VIEW `v3` AS select /*+ LEADING(c (d (a b))) */`bushy_leading_hint_db`.`a`.`c1` AS `a_c1`,`bushy_leading_hint_db`.`a`.`c2` AS `a_c2`,`bushy_leading_hint_db`.`a`.`c3` AS `a_c3`,`bushy_leading_hint_db`.`b`.`d1` AS `d1`,`bushy_leading_hint_db`.`b`.`d2` AS `d2`,`bushy_leading_hint_db`.`b`.`d3` AS `d3`,`bushy_leading_hint_db`.`c`.`c1` AS `c_c1`,`bushy_leading_hint_db`.`c`.`c2` AS `c_c2`,`bushy_leading_hint_db`.`c`.`c3` AS `c_c3` from (((`bushy_leading_hint_db`.`nn1` `a` join `bushy_leading_hint_db`.`nn2` `b` on ((`bushy_leading_hint_db`.`a`.`c1` = `bushy_leading_hint_db`.`b`.`d2`))) join `bushy_leading_hint_db`.`nn1` `c` on ((`bushy_leading_hint_db`.`b`.`d1` = `bushy_leading_hint_db`.`c`.`c1`))) join `bushy_leading_hint_db`.`nn1` `d` on ((`bushy_leading_hint_db`.`d`.`c2` = `bushy_leading_hint_db`.`c`.`c2`))) where (`bushy_leading_hint_db`.`a`.`c2` < 5)	utf8mb4	utf8mb4_general_ci
+create view v4 as 
+select /*+ leading(t2, (t1, t3), (t7, (t8, t9)), (t4, t5, t6)) */
+t1.c1 as x, t3.c2 as y, t5.c2 as z from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+show create view v4;
+View	Create View	character_set_client	collation_connection
+v4	CREATE VIEW `v4` AS select /*+ LEADING(t2 (t1 t3) (t7 (t8 t9)) (t4 t5 t6)) */`bushy_leading_hint_db`.`t1`.`c1` AS `x`,`bushy_leading_hint_db`.`t3`.`c2` AS `y`,`bushy_leading_hint_db`.`t5`.`c2` AS `z` from `bushy_leading_hint_db`.`nn1` `t1`,`bushy_leading_hint_db`.`nn1` `t2`,`bushy_leading_hint_db`.`nn1` `t3`,`bushy_leading_hint_db`.`nn1` `t4`,`bushy_leading_hint_db`.`nn1` `t5`,`bushy_leading_hint_db`.`nn1` `t6`,`bushy_leading_hint_db`.`nn1` `t7`,`bushy_leading_hint_db`.`nn1` `t8`,`bushy_leading_hint_db`.`nn1` `t9` where (`bushy_leading_hint_db`.`t1`.`c1` = `bushy_leading_hint_db`.`t2`.`c1`) and (`bushy_leading_hint_db`.`t1`.`c1` = `bushy_leading_hint_db`.`t3`.`c2`) and (`bushy_leading_hint_db`.`t2`.`c1` = `bushy_leading_hint_db`.`t3`.`c1`) and (`bushy_leading_hint_db`.`t3`.`c1` = `bushy_leading_hint_db`.`t4`.`c1`) and (`bushy_leading_hint_db`.`t4`.`c1` = `bushy_leading_hint_db`.`t5`.`c1`) and (`bushy_leading_hint_db`.`t5`.`c1` = `bushy_leading_hint_db`.`t6`.`c1`) and (`bushy_leading_hint_db`.`t6`.`c1` = `bushy_leading_hint_db`.`t7`.`c1`) and (`bushy_leading_hint_db`.`t7`.`c1` = `bushy_leading_hint_db`.`t8`.`c1`) and (`bushy_leading_hint_db`.`t8`.`c1` = `bushy_leading_hint_db`.`t9`.`c1`) and (`bushy_leading_hint_db`.`t8`.`c1` = `bushy_leading_hint_db`.`t2`.`c1`) and (`bushy_leading_hint_db`.`t1`.`c1` = `bushy_leading_hint_db`.`t9`.`c1`)	utf8mb4	utf8mb4_general_ci
+select count(*), sum(x+y-z*4) from v4;
+count(*)	sum(x+y-z*4)
+0	NULL
+select /*+ leading(t2, (t1, t3), (t7, (t8, t9))) */
+count(*)+sum(t1.c1+t4.c2+t5.c1+t5.c2-5*t9.c1) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+count(*)+sum(t1.c1+t4.c2+t5.c1+t5.c2-5*t9.c1)
+NULL
+select /*+ leading(t2, t1, t3, (t4, (t5, t6)), (t8, (t9, t7))) */
+count(*), sum(t1.c1+t5.c1+t6.c1-t7.c1-t8.c2*t9.c1) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 >= t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c2 and t8.c2 = t9.c1 and t8.c1 <= t2.c1 and t1.c1 = t9.c1;
+count(*)	sum(t1.c1+t5.c1+t6.c1-t7.c1-t8.c2*t9.c1)
+0	NULL
+select /*+ leading(t2, (t1, t3), (t7, t8, t9), (t4, t5, t6)) */
+count(*), sum(t1.c1-t7.c2-t8.c1-t9.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+count(*)	sum(t1.c1-t7.c2-t8.c1-t9.c2)
+0	NULL
+select /*+ leading(t1, (t2  t3), (t4, t5  (t6, t7))) use_hash(t4, t5) use_hash(t6,t7) */
+count(*), sum(t1.c1-t5.c2+t6.c1) - max(t2.c1*t8.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+count(*)	sum(t1.c1-t5.c2+t6.c1) - max(t2.c1*t8.c2)
+0	NULL
+select /*+ leading(t2  (t7, t1 (t8, t9))) */
+count(*) , sum(t1.c1+t5.c1+t8.c2*t9.c1-t3.c1*4) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+count(*)	sum(t1.c1+t5.c1+t8.c2*t9.c1-t3.c1*4)
+0	NULL
+select /*+ leading(t1,t4,(t2,t3)) */
+count(*), sum(t1.c1)-sum(t4.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4
+where t1.c1 = t2.c1 and  t3.c1 = t4.c1 and t1.c2 = t3.c2;
+count(*)	sum(t1.c1)-sum(t4.c2)
+0	NULL
+### 7, 带qb_name的测试  ###
+select /*+ LEADING(@x2x (c d), (a b)) */
+* from nn1 x
+where exists (select /*+ qb_name(x2x) */  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+and c.c2 = d.d1) order by x.c1 asc, x.c2 asc, x.c3 desc;
+c1	c2	c3
+select /*+ LEADING(@x2x (c d), (a b)) */
+* from nn1 x
+where exists (select /*+ qb_name(x2x)  LEADING(a c b d)*/  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+and c.c2 = d.d1) order by x.c1 desc, x.c2 asc, x.c3 desc;
+c1	c2	c3
+select /*+ LEADING(@x3x b d (a c)) */
+* from nn1 x
+where exists (select /*+ qb_name(x3x) */  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+and c.c2 = d.d1) order by x.c1 desc, x.c3 desc, x.c2 asc ;
+c1	c2	c3
+### 8, 通过bushy 扩展能获取较好的计划  ###
+select /*+ leading(t1,t2,(t4,t5))*/ count(*),min(t2.c1)+max(t5.d2) from nn1 t1, nn1 t2,  nn2 t4, nn2 t5 
+where t1.c1 = t2.c1 and 
+t4.d1 = t5.d1 AND
+t1.c1 + t2.c1  = t4.d1 + t5.d2 ;
+count(*)	min(t2.c1)+max(t5.d2)
+0	NULL
+explain select /*+leading(t1 (t2 t3))*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
+Query Plan
+=====================================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST      |
+-----------------------------------------------------
+|0 |HASH JOIN             |    |960597   |2820926886|
+|1 | NESTED-LOOP ANTI JOIN|    |981      |2820256644|
+|2 |  TABLE SCAN          |t1  |100000   |66272     |
+|3 |  MATERIAL            |    |100000   |80235     |
+|4 |   TABLE SCAN         |t2  |100000   |61860     |
+|5 | TABLE SCAN           |t3  |100000   |66272     |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t1.a = t3.a]), other_conds(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      conds([(T_OP_OR, t1.b = t2.b, (T_OP_IS, t1.b, NULL, 0), (T_OP_IS, t2.b, NULL, 0))]), nl_params_(nil)
+  2 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+  3 - output([t2.b]), filter(nil)
+  4 - output([t2.b]), filter(nil), 
+      access([t2.b]), partitions(p0)
+  5 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.a], [t3.b], [t3.c]), partitions(p0)
+
+explain select /*+leading(t2 t3 t1)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
+Query Plan
+=====================================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST      |
+-----------------------------------------------------
+|0 |HASH JOIN             |    |960597   |2820926886|
+|1 | NESTED-LOOP ANTI JOIN|    |981      |2820256644|
+|2 |  TABLE SCAN          |t1  |100000   |66272     |
+|3 |  MATERIAL            |    |100000   |80235     |
+|4 |   TABLE SCAN         |t2  |100000   |61860     |
+|5 | TABLE SCAN           |t3  |100000   |66272     |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t1.a = t3.a]), other_conds(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      conds([(T_OP_OR, t1.b = t2.b, (T_OP_IS, t1.b, NULL, 0), (T_OP_IS, t2.b, NULL, 0))]), nl_params_(nil)
+  2 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+  3 - output([t2.b]), filter(nil)
+  4 - output([t2.b]), filter(nil), 
+      access([t2.b]), partitions(p0)
+  5 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.a], [t3.b], [t3.c]), partitions(p0)
+
+explain select /*+leading(t3 t1 t2)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
+Query Plan
+=======================================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST         |
+-------------------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|    |960597   |2.764048e+12 |
+|1 | HASH JOIN           |    |98010000 |58439627     |
+|2 |  TABLE SCAN         |t3  |100000   |66272        |
+|3 |  TABLE SCAN         |t1  |100000   |66272        |
+|4 | MATERIAL            |    |100000   |80235        |
+|5 |  TABLE SCAN         |t2  |100000   |61860        |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      conds([(T_OP_OR, t1.b = t2.b, (T_OP_IS, t1.b, NULL, 0), (T_OP_IS, t2.b, NULL, 0))]), nl_params_(nil)
+  1 - output([t1.a], [t1.b], [t1.c], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t1.a = t3.a]), other_conds(nil)
+  2 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.a], [t3.b], [t3.c]), partitions(p0)
+  3 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+  4 - output([t2.b]), filter(nil)
+  5 - output([t2.b]), filter(nil), 
+      access([t2.b]), partitions(p0)
+
+explain select /*+leading(t1 t2 t3)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2);
+Query Plan
+=====================================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST      |
+-----------------------------------------------------
+|0 |HASH JOIN             |    |960597   |2820926886|
+|1 | NESTED-LOOP ANTI JOIN|    |981      |2820256644|
+|2 |  TABLE SCAN          |t1  |100000   |66272     |
+|3 |  MATERIAL            |    |100000   |80235     |
+|4 |   TABLE SCAN         |t2  |100000   |61860     |
+|5 | TABLE SCAN           |t3  |100000   |66272     |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t1.a = t3.a]), other_conds(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      conds([(T_OP_OR, t1.b = t2.b, (T_OP_IS, t1.b, NULL, 0), (T_OP_IS, t2.b, NULL, 0))]), nl_params_(nil)
+  2 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+  3 - output([t2.b]), filter(nil)
+  4 - output([t2.b]), filter(nil), 
+      access([t2.b]), partitions(p0)
+  5 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.a], [t3.b], [t3.c]), partitions(p0)
+
+drop table nn1;
+drop table nn2;
+drop table t1;
+drop table t2;
+drop table t3;
+drop database bushy_leading_hint_db;

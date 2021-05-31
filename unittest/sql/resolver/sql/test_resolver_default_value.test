@@ -1,0 +1,63 @@
+drop database if exists defaultvalue;
+create database defaultvalue;
+use defaultvalue;
+
+drop table if exists default_t1;
+create table if not exists default_t1 (a int, b int primary key);
+
+ALTER TABLE default_t1 ADD i1 int;
+ALTER TABLE default_t1 ADD i2 int not null;
+ALTER TABLE default_t1 ADD i3 int not null default 5;
+
+ALTER TABLE default_t1 ADD f1 float;
+ALTER TABLE default_t1 ADD f2 float not null;
+ALTER TABLE default_t1 ADD f3 float not null default 5.0;
+
+ALTER TABLE default_t1 ADD d1 double;
+ALTER TABLE default_t1 ADD d2 double not null;
+ALTER TABLE default_t1 ADD d3 double not null default 5.0000
+
+ALTER TABLE default_t1 ADD v1 varchar(500);
+ALTER TABLE default_t1 ADD v2 varchar(500) not null;
+ALTER TABLE default_t1 ADD v3 varchar(500) not null default '@varchar500';
+--error 5173
+ALTER TABLE default_t1 ADD v3 varchar(500) not null default null;
+
+#ALTER TABLE default_t1 ADD ts1 timestamp;
+# disable as result is changed
+# ALTER TABLE default_t1 ADD ts2 timestamp not null;
+ALTER TABLE default_t1 ADD ts3 timestamp not null default '2015-7-16';
+
+ALTER TABLE default_t1 ADD y1 year;
+ALTER TABLE default_t1 ADD y2 year not null;
+ALTER TABLE default_t1 ADD y3 year not null default 1983
+
+ALTER TABLE default_t1 ADD t1 time;
+ALTER TABLE default_t1 ADD t2 time not null;
+ALTER TABLE default_t1 ADD t3 time not null default 10;
+
+ALTER TABLE default_t1 ADD d1 date;
+ALTER TABLE default_t1 ADD d2 date not null;
+ALTER TABLE default_t1 ADD d3 date not null default '2015-07-16';
+
+ALTER TABLE default_t1 ADD dt1 datetime;
+ALTER TABLE default_t1 ADD dt2 datetime not null;
+ALTER TABLE default_t1 ADD dt3 datetime not null default '2015-07-16 10:10:30';
+
+ALTER TABLE default_t1 ADD n1 number;
+ALTER TABLE default_t1 ADD n2 number not null;
+ALTER TABLE default_t1 ADD n3 number not null default 1111;
+
+ALTER TABLE default_t1 ADD c1 char;
+ALTER TABLE default_t1 ADD c2 char not null;
+ALTER TABLE default_t1 ADD c3 char not null default 'x';
+
+ALTER TABLE default_t1 ADD b1 binary;
+ALTER TABLE default_t1 ADD b2 binary not null;
+ALTER TABLE default_t1 ADD b3 binary not null default '@binary'
+
+ALTER TABLE default_t1 ADD vb1 varbinary(1000);
+ALTER TABLE default_t1 ADD vb2 varbinary(1000) not null;
+ALTER TABLE default_t1 ADD vb3 varbinary(1000) not null default '@varbinary@1000';
+
+drop database defaultvalue;

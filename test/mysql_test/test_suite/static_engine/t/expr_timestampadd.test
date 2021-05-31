@@ -1,0 +1,164 @@
+
+--disable_abort_on_error
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30));
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5');
+
+--echo // Case1: normal test.测试各种类型组合, 跟不开新引擎开关进行对比
+alter system flush plan cache global;
+
+set @@ob_enable_plan_cache = 0;
+let $cnt=22;
+let $left=1;
+##  timestampadd(second, c14/c16, c19/c20)四种情况结果有误
+while ($left <= $cnt)
+{
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select timestampadd(second, null, c$right) from t1;
+    eval select timestampadd(second, c$left, c$right) from t1;
+    eval select timestampadd(year, c$left, c$right) from t1;
+
+    inc $right;
+  }
+  inc $left;
+}
+
+--echo Case2: copied from timestampadd.test
+select timestampadd(second,NULL,NULL);
+select timestampadd(second, 123,"2011-05-09 13:45:55");
+select timestampadd(second, -123,"2011-05-09 13:45:55");
+select timestampadd(second, 123, NULL);
+select timestampadd(second, 1,"2011-12-31 23:59:59");
+select timestampadd(minute,46,"2011-05-09 13:45:55");
+select timestampadd(minute,-46,"2010-05-09 13:45:55");
+select timestampadd(minute,45,"2011-05-09 13:45:55");
+select timestampadd(minute,-45,"2010-05-09 13:45:55");
+select timestampadd(minute, 1,"2011-12-31 23:59:59");
+select timestampadd(hour,5,"2011-05-09 00:00:00");
+select timestampadd(hour,-5,"2012-04-08 23:59:59");
+select timestampadd(hour, 1,"2011-12-31 23:59:59");
+select timestampadd(day,1,"2011-05-09 00:00:00");
+select timestampadd(day,-10,"2012-04-08 23:59:59");
+select timestampadd(day, 1,"2011-12-31 23:59:59");
+select timestampadd(week,1,"2011-05-09 00:00:00");
+select timestampadd(week,2,"2012-04-08 23:59:59");
+select timestampadd(week,3,"2011-05-09 00:00:00");
+select timestampadd(week,4,"2012-04-08 23:59:59");
+select timestampadd(week,-1,"2011-05-09 00:00:00");
+select timestampadd(week,-2,"2012-04-08 23:59:59");
+select timestampadd(week,-3,"2011-05-09 00:00:00");
+select timestampadd(week,-4,"2012-04-08 23:59:59");
+select timestampadd(week,1,"2011-12-25 00:00:00");
+select timestampadd(month,1,"2011-05-07 02:00:00");
+select timestampadd(month,3,"2011-10-07 01:11:11");
+select timestampadd(month,5,"2015-09-07 02:00:00");
+select timestampadd(month,-6,"2011-05-07 02:00:00");
+select timestampadd(month,-12,"2011-10-07 01:11:11");
+select timestampadd(month,-54,"2015-09-07 02:00:00");
+select timestampadd(month,1,"2015-12-07 02:00:00");
+select timestampadd(quarter,1,"2015-05-09");
+select timestampadd(quarter,2,"2015-04-07");
+select timestampadd(quarter,3,"2015-05-07");
+select timestampadd(quarter,-1,"2015-05-09");
+select timestampadd(quarter,-2,"2015-04-07");
+select timestampadd(quarter,-3,"2015-05-07");
+select timestampadd(quarter,1,"2015-11-07");
+select timestampadd(year,1,"2015-05-09");
+select timestampadd(year,2,"2015-04-07");
+select timestampadd(year,3,"2015-05-07");
+select timestampadd(year,-1,"2015-05-09");
+select timestampadd(year,-2,"2015-04-07");
+select timestampadd(year,-3,"2015-05-07");
+select timestampadd(year,1,"2036-05-07");
+select timestampadd(second, 123456789,"2011-05-09 13:45:55");
+select timestampadd(second, -123456789,"2011-05-09 13:45:55");
+select timestampadd(second, 123456789, NULL);
+select timestampadd(minute,123456789,"2011-05-09 13:45:55");
+select timestampadd(minute,-123456789,"2010-05-09 13:45:55");
+select timestampadd(minute,123456789,"2011-05-09 13:45:55");
+select timestampadd(minute,-123456789,"2010-05-09 13:45:55");
+select timestampadd(hour,123456789,"2011-05-09 00:00:00");
+select timestampadd(hour,-123456789,"2012-04-08 23:59:59");
+select timestampadd(day,123456789,"2011-05-09 00:00:00");
+select timestampadd(day,-123456789,"2012-04-08 23:59:59");
+select timestampadd(week,123456789,"2011-05-09 00:00:00");
+select timestampadd(week,123456789,"2012-04-08 23:59:59");
+select timestampadd(week,123456789,"2011-05-09 00:00:00");
+select timestampadd(week,123456789,"2012-04-08 23:59:59");
+select timestampadd(week,-123456789,"2011-05-09 00:00:00");
+select timestampadd(week,-123456789,"2012-04-08 23:59:59");
+select timestampadd(week,-123456789,"2011-05-09 00:00:00");
+select timestampadd(week,-123456789,"2012-04-08 23:59:59");
+select timestampadd(month,123456789,"2011-05-07 02:00:00");
+select timestampadd(month,123456789,"2011-10-07 01:11:11");
+select timestampadd(month,123456789,"2015-09-07 02:00:00");
+select timestampadd(month,-123456789,"2011-05-07 02:00:00");
+select timestampadd(month,-123456789,"2011-10-07 01:11:11");
+select timestampadd(month,-123456789,"2015-09-07 02:00:00");
+select timestampadd(quarter,123456789,"2015-05-09");
+select timestampadd(quarter,123456789,"2015-04-07");
+select timestampadd(quarter,123456789,"2015-05-07");
+select timestampadd(quarter,-123456789,"2015-05-09");
+select timestampadd(quarter,-123456789,"2015-04-07");
+select timestampadd(quarter,-123456789,"2015-05-07");
+select timestampadd(year,123456789,"2015-05-09");
+select timestampadd(year,123456789,"2015-04-07");
+select timestampadd(year,123456789,"2015-05-07");
+select timestampadd(year,-123456789,"2015-05-09");
+select timestampadd(year,-123456789,"2015-04-07");
+select timestampadd(year,-123456789,"2015-05-07");
+select timestampadd(year,1,"9999-05-07");
+select timestampadd(year,1,"2036-05-07");
+
+
+set time_zone='-5:00';
+create table sb(a timestamp);
+insert into sb values ("2010-01-01 00:00:00");
+set time_zone='-5:00';
+alter system flush plan cache global;
+
+set @@ob_enable_plan_cache = 0;
+select timestampadd(hour,1,a) from sb;
+select timestampadd(hour,-1,a) from sb;
+drop table sb;
+
+
+set time_zone='+6:00';
+create table sb(a datetime);
+insert into sb values ("2010-08-06 12:34:56");
+set time_zone='-7:00';
+alter system flush plan cache global;
+
+select timestampadd(hour,1,a) from sb;
+select timestampadd(hour,-1,a) from sb;
+
+drop table sb;
+--sleep 2

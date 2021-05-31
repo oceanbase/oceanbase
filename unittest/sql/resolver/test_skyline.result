@@ -1,0 +1,1341 @@
+***************   Case 1   ***************
+
+select * from t1 group by c1;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:1		match count:1
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 1(end)***************
+
+***************   Case 2   ***************
+
+select distinct(c1) from t1;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:1
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 2(end)***************
+
+***************   Case 3   ***************
+
+select * from t1 order by c1;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:1
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 3(end)***************
+
+***************   Case 4   ***************
+
+select * from t1 group by c2;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:1		match count:1
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 4(end)***************
+
+***************   Case 5   ***************
+
+select distinct(c2) from t1;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:1
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 5(end)***************
+
+***************   Case 6   ***************
+
+select * from t1 order by c2;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:1
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 6(end)***************
+
+***************   Case 7   ***************
+
+select * from t1 group by c1, c2;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:1		match count:1
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 7(end)***************
+
+***************   Case 8   ***************
+
+select * from t1 group by c2, c1;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:1		match count:1
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 8(end)***************
+
+***************   Case 9   ***************
+
+select distinct(c1), c2 from t1;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:1
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 9(end)***************
+
+***************   Case 10   ***************
+
+select distinct(c2), c1 from t1;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:1
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 10(end)***************
+
+***************   Case 11   ***************
+
+select * from t1 order by c1, c2;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:1
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 11(end)***************
+
+***************   Case 12   ***************
+
+select * from t1 order by c2, c1;
+
+table [t1]
+	idx1 <c2, c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:2
+	is_set_match:0	match_count:0
+
+	t1 <c1>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 12(end)***************
+
+***************   Case 13   ***************
+
+select a from t_equal_prefix where b = 1 order by c desc limit 9;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:2
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 13(end)***************
+
+***************   Case 14   ***************
+
+select b, c from t_equal_prefix where a = 1 order by b, c;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:2
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:3
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:1
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 14(end)***************
+
+***************   Case 15   ***************
+
+select a from t_equal_prefix where b = 1 and a = 2 order by c;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:2
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:3
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 15(end)***************
+
+***************   Case 16   ***************
+
+select a from t_equal_prefix where b = 1 or b = 2 order by a;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 16(end)***************
+
+***************   Case 17   ***************
+
+select a from t_equal_prefix where b = 1 and c = 2 order by a;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:2
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 17(end)***************
+
+***************   Case 18   ***************
+
+select a from t_equal_prefix where b = 1 order by a, c desc;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:2
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 18(end)***************
+
+***************   Case 19   ***************
+
+select a from t_equal_prefix where b > 1 order by c desc;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 19(end)***************
+
+***************   Case 20   ***************
+
+select a from t_equal_prefix where b = 1 and a > 2 order by c;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:2
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 20(end)***************
+
+***************   Case 21   ***************
+
+select a from t_equal_prefix where b = 1 and d = 2 order by e, a; 
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:2
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 21(end)***************
+
+***************   Case 22   ***************
+
+select a from t_equal_prefix where b = 1 and d = 2 order by e, c;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:4
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 22(end)***************
+
+***************   Case 23   ***************
+
+select a from t_equal_prefix where e = 1 and c = 2 order by b, d, a;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:1
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:1
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:1	match_count:5
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 23(end)***************
+
+***************   Case 24   ***************
+
+select a from t_equal_prefix where b = 1 group by c limit 9;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 24(end)***************
+
+***************   Case 25   ***************
+
+select b, c from t_equal_prefix where a = 1 group by b, c;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:1		match count:3
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:1		match count:1
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 25(end)***************
+
+***************   Case 26   ***************
+
+select a from t_equal_prefix where b = 1 and a = 2 group by c;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:1		match count:3
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 26(end)***************
+
+***************   Case 27   ***************
+
+select a from t_equal_prefix where b = 1 or b = 2 group by a;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 27(end)***************
+
+***************   Case 28   ***************
+
+select a from t_equal_prefix where b = 1 and c = 2 group by a;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 28(end)***************
+
+***************   Case 29   ***************
+
+select a from t_equal_prefix where b = 1 group by a, c;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:1		match count:3
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 29(end)***************
+
+***************   Case 30   ***************
+
+select a from t_equal_prefix where b > 1 group by c;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 30(end)***************
+
+***************   Case 31   ***************
+
+select a from t_equal_prefix where b = 1 and a > 2 group by c;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 31(end)***************
+
+***************   Case 32   ***************
+
+select a from t_equal_prefix where b = 1 and d = 2 group by e, a; 
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 32(end)***************
+
+***************   Case 33   ***************
+
+select a from t_equal_prefix where b = 1 and d = 2 group by e, c;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:1		match count:4
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 33(end)***************
+
+***************   Case 34   ***************
+
+select a from t_equal_prefix where e = 1 and c = 2 group by b, d, a;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:1		match count:1
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:1		match count:2
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:1		match count:5
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 34(end)***************
+
+***************   Case 35   ***************
+
+select distinct c from t_equal_prefix where b = 1 and a > 0 limit 9;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 35(end)***************
+
+***************   Case 36   ***************
+
+select distinct b, c from t_equal_prefix where a = 1;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:3
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:1
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 36(end)***************
+
+***************   Case 37   ***************
+
+select distinct c from t_equal_prefix where b = 1 and a = 2;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:3
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 37(end)***************
+
+***************   Case 38   ***************
+
+select distinct a from t_equal_prefix where b = 1 or b = 2;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 38(end)***************
+
+***************   Case 39   ***************
+
+select distinct a from t_equal_prefix where b = 1 and c = 2;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 39(end)***************
+
+***************   Case 40   ***************
+
+select distinct a, c from t_equal_prefix where b = 1;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:3
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 40(end)***************
+
+***************   Case 41   ***************
+
+select distinct c from t_equal_prefix where b > 1;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 41(end)***************
+
+***************   Case 42   ***************
+
+select distinct c from t_equal_prefix where b = 1 and a > 2;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 42(end)***************
+
+***************   Case 43   ***************
+
+select distinct e, a from t_equal_prefix where b = 1 and d = 2;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 43(end)***************
+
+***************   Case 44   ***************
+
+select distinct e, c from t_equal_prefix where b = 1 and d = 2;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:4
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 44(end)***************
+
+***************   Case 45   ***************
+
+select distinct b, d, a from t_equal_prefix where e = 1 and c = 2;
+
+table [t_equal_prefix]
+	idx_b_c <b, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:1
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_a_c <b, a, c, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:2
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	idx_b_e_d_c_a <b, e, d, c, a, pk>
+	is_group_math:0		match count:0
+	is_distinct_match:1	match count:5
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+	t_equal_prefix <pk>
+	is_group_math:0		match count:0
+	is_distinct_match:0	match count:0
+	is_orderby_match:0	match_count:0
+	is_set_match:0	match_count:0
+
+----------------------------------
+
+***************   Case 45(end)***************
+

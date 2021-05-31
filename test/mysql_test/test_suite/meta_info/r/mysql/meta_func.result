@@ -1,0 +1,181 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection conn_admin;
+alter system flush plan cache global;
+connection default;
+drop table if exists tt;
+create table tt(c tinyint);
+select avg(c) from tt;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				avg(c)	avg(c)	246	10	0	Y	32896	4	63
+avg(c)
+NULL
+drop table if exists tt;
+create table tt(c tinyint);
+select 2*avg(c) from tt;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				2*avg(c)	2*avg(c)	246	11	0	Y	32896	4	63
+2*avg(c)
+NULL
+drop table if exists tt;
+create table tt(c tinyint);
+insert into tt values(19),(20);
+select 2*avg(c) from tt;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				2*avg(c)	2*avg(c)	246	11	7	Y	32896	4	63
+2*avg(c)
+39.0000
+select str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 1	str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 1	246	21	14	Y	32896	0	63
+str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 1
+19700102000001
+select str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 10000;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 10000	str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 10000	246	21	14	Y	32896	0	63
+str_to_date('1970-01-02','%Y-%m-%d %H:%i:%s') + 10000
+19700102010000
+select str_to_date('1970-01-02',null) + 100;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-01-02',null) + 100	str_to_date('1970-01-02',null) + 100	246	28	0	Y	32896	6	63
+str_to_date('1970-01-02',null) + 100
+NULL
+select str_to_date('1970-01-02','null') + 100;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-01-02','null') + 100	str_to_date('1970-01-02','null') + 100	8	11	0	Y	32896	0	63
+str_to_date('1970-01-02','null') + 100
+NULL
+select str_to_date('1970-01-02',0)+ 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-01-02',0)+ 1	str_to_date('1970-01-02',0)+ 1	246	21	0	Y	32896	0	63
+str_to_date('1970-01-02',0)+ 1
+NULL
+select str_to_date('1970-01-02', 23) +10;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-01-02', 23) +10	str_to_date('1970-01-02', 23) +10	246	21	0	Y	32896	0	63
+str_to_date('1970-01-02', 23) +10
+NULL
+select str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000	str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000	246	21	14	Y	32896	0	63
+str_to_date('1970-01-02 12:23:32','%Y-%m-%d %H:%i:%s')+ 10000
+19700102132332
+select str_to_date('1970-01-02 12:23:32','%Y-%m-%d')+ 10000;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-01-02 12:23:32','%Y-%m-%d')+ 10000	str_to_date('1970-01-02 12:23:32','%Y-%m-%d')+ 10000	8	11	8	Y	32896	0	63
+str_to_date('1970-01-02 12:23:32','%Y-%m-%d')+ 10000
+19710102
+select str_to_date('12:23:32','%H:%i:%s')+ 10000;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('12:23:32','%H:%i:%s')+ 10000	str_to_date('12:23:32','%H:%i:%s')+ 10000	246	12	6	Y	32896	0	63
+str_to_date('12:23:32','%H:%i:%s')+ 10000
+132332
+select str_to_date('12:23:32',10)+ 10000;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('12:23:32',10)+ 10000	str_to_date('12:23:32',10)+ 10000	246	21	0	Y	32896	0	63
+str_to_date('12:23:32',10)+ 10000
+NULL
+drop table if exists t1, t2, t3, t3k;
+CREATE TABLE t1 (EMPNUM INT);
+INSERT INTO t1 VALUES (0), (2);
+CREATE TABLE t2 (EMPNUM DECIMAL (4, 2));
+INSERT INTO t2 VALUES (0.0), (9.0);
+SELECT IFNULL(t2.EMPNUM,t1.EMPNUM) AS CEMPNUM
+FROM t1 LEFT JOIN t2 ON t1.EMPNUM=t2.EMPNUM;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				CEMPNUM	CEMPNUM	246	6	4	Y	32896	2	63
+CEMPNUM
+0.00
+2.00
+create table t3(a int, b decimal, c varchar(10));
+select ifnull(0, 0.0);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				ifnull(0, 0.0)	ifnull(0, 0.0)	246	4	3	Y	32896	1	63
+ifnull(0, 0.0)
+0.0
+insert into t3 values(0, 2.4, "123");
+select ifnull(a, b), ifnull(a, c) from t3;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				ifnull(a, b)	ifnull(a, b)	246	11	1	Y	32896	0	63
+def				ifnull(a, c)	ifnull(a, c)	253	44	1	Y	0	31	45
+ifnull(a, b)	ifnull(a, c)
+0	0
+drop table t1,t2, t3;
+create table t3k(c1 timestamp(6), c2 datetime(5), c3 timestamp(3), c4 datetime(5), c5 datetime(2));
+select UNIX_TIMESTAMP(c1), UNIX_TIMESTAMP(c2), UNIX_TIMESTAMP(c3), UNIX_TIMESTAMP(c4), UNIX_TIMESTAMP(c5) from t3k;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				UNIX_TIMESTAMP(c1)	UNIX_TIMESTAMP(c1)	246	20	0	Y	32896	6	63
+def				UNIX_TIMESTAMP(c2)	UNIX_TIMESTAMP(c2)	246	19	0	Y	32896	5	63
+def				UNIX_TIMESTAMP(c3)	UNIX_TIMESTAMP(c3)	246	17	0	Y	32896	3	63
+def				UNIX_TIMESTAMP(c4)	UNIX_TIMESTAMP(c4)	246	19	0	Y	32896	5	63
+def				UNIX_TIMESTAMP(c5)	UNIX_TIMESTAMP(c5)	246	16	0	Y	32896	2	63
+UNIX_TIMESTAMP(c1)	UNIX_TIMESTAMP(c2)	UNIX_TIMESTAMP(c3)	UNIX_TIMESTAMP(c4)	UNIX_TIMESTAMP(c5)
+drop table t3k;
+drop table if exists t1, t2, t3, t3k;
+drop view if exists v1;
+CREATE TABLE t1 (a DATETIME NOT NULL);
+INSERT INTO t1 VALUES ('2009-09-20 07:32:39.06');
+INSERT INTO t1 VALUES ('0000-00-00 00:00:00.00');
+CREATE VIEW v1 AS SELECT * FROM t1;
+SELECT CAST(UNIX_TIMESTAMP(a) AS DECIMAL(25,3)) AS c1 FROM v1 ORDER BY 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				c1	c1	246	27	14	Y	32896	3	63
+c1
+0.000
+1253403159.000
+CREATE TABLE t2 (a VARCHAR(32) NOT NULL);
+INSERT INTO t2 VALUES ('a');
+SELECT 1 FROM t2 GROUP BY @a:=UNIX_TIMESTAMP(a);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				1	1	8	1	1	N	32897	0	63
+1
+1
+SELECT a, UNIX_TIMESTAMP(a), UNIX_TIMESTAMP('a') FROM t2;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	t2	t2	a	a	253	128	1	N	1	31	45
+def				UNIX_TIMESTAMP(a)	UNIX_TIMESTAMP(a)	246	20	8	Y	32896	6	63
+def				UNIX_TIMESTAMP('a')	UNIX_TIMESTAMP('a')	246	20	8	Y	32896	6	63
+a	UNIX_TIMESTAMP(a)	UNIX_TIMESTAMP('a')
+a	0.000000	0.000000
+SELECT a, UNIX_TIMESTAMP(a), UNIX_TIMESTAMP('5000-01-01 00:00:00') FROM t2;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	t2	t2	a	a	253	128	1	N	1	31	45
+def				UNIX_TIMESTAMP(a)	UNIX_TIMESTAMP(a)	246	20	8	Y	32896	6	63
+def				UNIX_TIMESTAMP('5000-01-01 00:00:00')	UNIX_TIMESTAMP('5000-01-01 00:00:00')	8	12	11	Y	32896	0	63
+a	UNIX_TIMESTAMP(a)	UNIX_TIMESTAMP('5000-01-01 00:00:00')
+a	0.000000	95617555200
+create table tbl1(a datetime(5),b date,c timestamp, d double);
+set time_zone='-3:00';
+insert into tbl1 values("2010-01-01 11:22:33","2010-10-01","2010-01-01 11:22:33",3302747.4167);
+insert into tbl1 values(20100101112233,20101001,20100101112233,3302747.4167);
+set time_zone='+4:00';
+select UNIX_TIMESTAMP(a),UNIX_TIMESTAMP(b),UNIX_TIMESTAMP(c),UNIX_TIMESTAMP(d) from tbl1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				UNIX_TIMESTAMP(a)	UNIX_TIMESTAMP(a)	246	19	16	Y	32896	5	63
+def				UNIX_TIMESTAMP(b)	UNIX_TIMESTAMP(b)	8	12	10	Y	32896	0	63
+def				UNIX_TIMESTAMP(c)	UNIX_TIMESTAMP(c)	8	12	10	Y	32896	0	63
+def				UNIX_TIMESTAMP(d)	UNIX_TIMESTAMP(d)	246	20	8	Y	32896	6	63
+UNIX_TIMESTAMP(a)	UNIX_TIMESTAMP(b)	UNIX_TIMESTAMP(c)	UNIX_TIMESTAMP(d)
+1262330553.00000	1285876800	1262355753	0.000000
+1262330553.00000	1285876800	1262355753	0.000000
+select UNIX_TIMESTAMP(1);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				UNIX_TIMESTAMP(1)	UNIX_TIMESTAMP(1)	8	12	1	Y	32896	0	63
+UNIX_TIMESTAMP(1)
+0
+select UNIX_TIMESTAMP("1");
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				UNIX_TIMESTAMP("1")	UNIX_TIMESTAMP("1")	246	20	8	Y	32896	6	63
+UNIX_TIMESTAMP("1")
+0.000000
+select UNIX_TIMESTAMP("2010-01-01 11:22:33");
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				UNIX_TIMESTAMP("2010-01-01 11:22:33")	UNIX_TIMESTAMP("2010-01-01 11:22:33")	8	12	10	Y	32896	0	63
+UNIX_TIMESTAMP("2010-01-01 11:22:33")
+1262330553
+select UNIX_TIMESTAMP(20100101112233);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				UNIX_TIMESTAMP(20100101112233)	UNIX_TIMESTAMP(20100101112233)	8	12	10	Y	32896	0	63
+UNIX_TIMESTAMP(20100101112233)
+1262330553
+drop table t1, t2, tbl1;
+drop view v1;

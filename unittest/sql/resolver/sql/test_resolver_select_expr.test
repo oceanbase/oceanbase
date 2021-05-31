@@ -1,0 +1,75 @@
+
+# simple case
+--error 5217
+select 1 as a, (select a) as b;
+--error 5217
+select 1 as a, (select a+a) as b;
+--error 5217
+select 1 as a, 2 as b, (select a) as c;
+--error 5217
+select 1 as a, 2 as b, (select a+a) as c;
+--error 5217
+select 1 as a, 2 as b, (select a+b) as c;
+
+# same alias case
+--error 5217
+select 1 as a, 2 as a, (select a) as c;
+--error 5217
+select 1 as a, 2 as a, (select a+a) as c;
+
+# subquery case
+--error 5217
+SELECT 1 FROM (SELECT 1 as a) as b HAVING (SELECT a)=1;
+
+SELECT (select max(t1.c1) from t1) as field from t1 group by field;
+--error 5217
+SELECT 1 FROM (SELECT c1 FROM t1) b HAVING (SELECT b.c1)=1;
+
+SELECT c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
+--error 5217
+SELECT c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING t1.a=1);
+
+--error 5217
+SELECT (SELECT 1) a, (select A);
+--error 5217
+SELECT 1 as a,(SELECT a+a) b,(SELECT b);
+
+select 1 in (1, (1));
+select 1 in (1, (select 1));
+select 1 in ((select 1), (select 1));
+select 1 in ((select 1), (select 1), (select 1));
+select 1 in (1, (select 1), (select c1 from t1));
+
+select MAX(c1) c from t1 having (select c) > 0;
+--error 5225
+select MAX(c1) c from t1 group by (select c);
+select MAX(c1) c from t1 order by (select c);
+--error 5217
+select MAX(c1) c, (select c1 from t1 having c > 0) from t1;
+--error 5217
+select max(c1) b , (select b) from t1;
+
+select max(c1) b from t1 having b > 0;
+select max(c1) b from t1 order by b;
+--error 5206  
+select max(c1) b from t1 group by b;
+--error 5217
+SELECT MAX(c2) c, (SELECT c1 FROM t1 WHERE c2 = c) FROM t1 HAVING c2 = 10;
+
+--error 5207
+select c1, c2 as c1 from t1 group by c1;
+--error 5207
+select c1 as c1, c2 as c1 from t1 group by c1;
+--error 5207
+select c1, c2 as c1 from t1 order by c1;
+--error 5207
+select c1 as c1, c2 as c1 from t1 order by c1;
+--error 5207
+select c1, c2 as c1 from t1 having c1 > 0;
+--error 5207
+select c1 as c1, c2 as c1 from t1 having c1 > 0;
+select c1, c2 as c1 from t1 having t1.c1 > 2;
+--error 5217
+select c1 as cc, c2 from t1 having t1.cc > 2;
+--error 5217
+select c1 from t1 group by t2.c1;

@@ -1,0 +1,13 @@
+drop database if exists equalset_db;
+create database equalset_db;
+use equalset_db;
+
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+
+select * from t1 where c1=1 and c2=1;
+select * from t1 where c1=c2 and c2=1;
+select * from t1 where c1=1 and c2=1 and c1=c2;
+select * from t1 where c1=c1;
+select * from t1 where 1=1;
+
+drop database equalset_db;

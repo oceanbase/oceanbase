@@ -1,0 +1,796 @@
+***************   Case 1   ***************
+drop database if exists tablegroup_db;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"tablegroup_db",
+  "if_exist":true,
+  "to_recyclebin":false
+}
+***************   Case 2   ***************
+create database tablegroup_db;
+{
+  "create_database_arg":"database_schema",
+  "database_id":-1,
+  "schema_version":1,
+  "database_name":"tablegroup_db",
+  "replica_num":0,
+  "zone_list": [
+  ],
+  "primary_zone":"",
+  "charset_type":2,
+  "collation_type":"utf8mb4_general_ci",
+  "name_case_mode":-1,
+  "comment":"",
+  "read_only":false,
+  "default_tablegroup_id":-1,
+  "default_tablegroup_name":"",
+  "in_recyclebin":false,
+  "primary_zone_array": [
+  ]
+}
+***************   Case 3   ***************
+use tablegroup_db;
+{
+  "stmt_type":97
+}
+***************   Case 4   ***************
+create table t1(c1 int primary key, c2 int);
+{"ObTableStmt":{"partition_fun_expr":[], "range_values_exprs":[], "list_values_exprs":[], "index_partition_resolve_results":[], "part_type":8}, "stmt_type":20, "create_table_arg":{"if_not_exist":false, "schema":{"simple_table_schema":{"tenant_id":1, "database_id":18446744073709551615, "tablegroup_id":1099511627777, "table_id":18446744073709551615, "table_name":"t1", "replica_num":0, "previous_locality_str":"", "min_partition_id":0, "session_id":0, "index_type":0, "table_type":3, "data_table_id":0, "name_casemode":-1, "schema_version":0, "part_level":0, "part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":0}, "sub_part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":-1}, "locality_str":"", "zone_list":[], "primary_zone":"", "part_num":0, "subpart_num":0, "partition_num":1, "subpartition_num":0, "partition_array":[{"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":0, "name":"p0", "high_bound_val":, "list_row_values":[], "part_idx":0}, "mapping_pg_part_id":-1}], "subpartition_array":null, "index_status":1, "binding":false, "duplicate_scope":0}, "max_used_column_id":17, "max_used_constraint_id":0, "sess_active_time":0, "rowkey_column_num":1, "index_column_num":0, "rowkey_split_pos":0, "block_size":16384, "is_use_bloomfilter":false, "progressive_merge_num":0, "tablet_size":134217728, "pctfree":10, "load_type":0, "index_using_type":0, "def_type":1, "charset_type":2, "collation_type":45, "create_mem_version":0, "index_status":1, "partition_status":0, "code_version":1, "last_modified_frozen_version":0, "comment":"", "pk_comment":"", "create_host":"", "zone_replica_attr_array":[], "region_replica_num_array":[], "tablegroup_name":"", "compress_func_name":"zstd_1.0", "row_store_type":1, "store_format":3, "expire_info":"", "view_schema":{"view_definition":"", "check_option":"none", "is_updatable":"false", "is_materialized":"false"}, "autoinc_column_id":0, "auto_increment":1, "read_only":false, "primary_zone_array":[], "index_tid_array":[], "mv_tid_array":[], "aux_vp_tid_array":[], "base_table_ids":[], "rowkey_info":{"columns":[{"length":0, "column_id":16, "type":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":1}, "partition_key_info":{"columns":null, "capacity":0}, "aux_vp_tid_array":[]}, "index_arg_list":[], "constraint_list":[], "db_name":"tablegroup_db", "last_replay_log_id":0, "foreign_key_arg_list":[], "vertical_partition_arg_list":[]}, "index_arg_list":[]}
+***************   Case 5   ***************
+create table t2(c1 int primary key, c2 int, c3 varchar(32));
+{"ObTableStmt":{"partition_fun_expr":[], "range_values_exprs":[], "list_values_exprs":[], "index_partition_resolve_results":[], "part_type":8}, "stmt_type":20, "create_table_arg":{"if_not_exist":false, "schema":{"simple_table_schema":{"tenant_id":1, "database_id":18446744073709551615, "tablegroup_id":1099511627777, "table_id":18446744073709551615, "table_name":"t2", "replica_num":0, "previous_locality_str":"", "min_partition_id":0, "session_id":0, "index_type":0, "table_type":3, "data_table_id":0, "name_casemode":-1, "schema_version":0, "part_level":0, "part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":0}, "sub_part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":-1}, "locality_str":"", "zone_list":[], "primary_zone":"", "part_num":0, "subpart_num":0, "partition_num":1, "subpartition_num":0, "partition_array":[{"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":0, "name":"p0", "high_bound_val":, "list_row_values":[], "part_idx":0}, "mapping_pg_part_id":-1}], "subpartition_array":null, "index_status":1, "binding":false, "duplicate_scope":0}, "max_used_column_id":18, "max_used_constraint_id":0, "sess_active_time":0, "rowkey_column_num":1, "index_column_num":0, "rowkey_split_pos":0, "block_size":16384, "is_use_bloomfilter":false, "progressive_merge_num":0, "tablet_size":134217728, "pctfree":10, "load_type":0, "index_using_type":0, "def_type":1, "charset_type":2, "collation_type":45, "create_mem_version":0, "index_status":1, "partition_status":0, "code_version":1, "last_modified_frozen_version":0, "comment":"", "pk_comment":"", "create_host":"", "zone_replica_attr_array":[], "region_replica_num_array":[], "tablegroup_name":"", "compress_func_name":"zstd_1.0", "row_store_type":1, "store_format":3, "expire_info":"", "view_schema":{"view_definition":"", "check_option":"none", "is_updatable":"false", "is_materialized":"false"}, "autoinc_column_id":0, "auto_increment":1, "read_only":false, "primary_zone_array":[], "index_tid_array":[], "mv_tid_array":[], "aux_vp_tid_array":[], "base_table_ids":[], "rowkey_info":{"columns":[{"length":0, "column_id":16, "type":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":1}, "partition_key_info":{"columns":null, "capacity":0}, "aux_vp_tid_array":[]}, "index_arg_list":[], "constraint_list":[], "db_name":"tablegroup_db", "last_replay_log_id":0, "foreign_key_arg_list":[], "vertical_partition_arg_list":[]}, "index_arg_list":[]}
+***************   Case 6   ***************
+create table t3(c1 int primary key, c2 int, c3 varchar(32));
+{"ObTableStmt":{"partition_fun_expr":[], "range_values_exprs":[], "list_values_exprs":[], "index_partition_resolve_results":[], "part_type":8}, "stmt_type":20, "create_table_arg":{"if_not_exist":false, "schema":{"simple_table_schema":{"tenant_id":1, "database_id":18446744073709551615, "tablegroup_id":1099511627777, "table_id":18446744073709551615, "table_name":"t3", "replica_num":0, "previous_locality_str":"", "min_partition_id":0, "session_id":0, "index_type":0, "table_type":3, "data_table_id":0, "name_casemode":-1, "schema_version":0, "part_level":0, "part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":0}, "sub_part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":-1}, "locality_str":"", "zone_list":[], "primary_zone":"", "part_num":0, "subpart_num":0, "partition_num":1, "subpartition_num":0, "partition_array":[{"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":0, "name":"p0", "high_bound_val":, "list_row_values":[], "part_idx":0}, "mapping_pg_part_id":-1}], "subpartition_array":null, "index_status":1, "binding":false, "duplicate_scope":0}, "max_used_column_id":18, "max_used_constraint_id":0, "sess_active_time":0, "rowkey_column_num":1, "index_column_num":0, "rowkey_split_pos":0, "block_size":16384, "is_use_bloomfilter":false, "progressive_merge_num":0, "tablet_size":134217728, "pctfree":10, "load_type":0, "index_using_type":0, "def_type":1, "charset_type":2, "collation_type":45, "create_mem_version":0, "index_status":1, "partition_status":0, "code_version":1, "last_modified_frozen_version":0, "comment":"", "pk_comment":"", "create_host":"", "zone_replica_attr_array":[], "region_replica_num_array":[], "tablegroup_name":"", "compress_func_name":"zstd_1.0", "row_store_type":1, "store_format":3, "expire_info":"", "view_schema":{"view_definition":"", "check_option":"none", "is_updatable":"false", "is_materialized":"false"}, "autoinc_column_id":0, "auto_increment":1, "read_only":false, "primary_zone_array":[], "index_tid_array":[], "mv_tid_array":[], "aux_vp_tid_array":[], "base_table_ids":[], "rowkey_info":{"columns":[{"length":0, "column_id":16, "type":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":1}, "partition_key_info":{"columns":null, "capacity":0}, "aux_vp_tid_array":[]}, "index_arg_list":[], "constraint_list":[], "db_name":"tablegroup_db", "last_replay_log_id":0, "foreign_key_arg_list":[], "vertical_partition_arg_list":[]}, "index_arg_list":[]}
+***************   Case 7   ***************
+create tablegroup tg1;
+{
+  "create_tablegroup_arg": {
+    "tablegroup_schema": {
+      "tenant_id":1,
+      "tablegroup_id":-1,
+      "schema_version":1,
+      "tablegroup_name":"tg1",
+      "comment":"",
+      "locality_info": {
+        "locality_str":"",
+        "zone_replica_attr_array": [
+        ],
+        "region_replica_num_array": [
+        ]
+      },
+      "primary_zone_info": {
+        "primary_zone_str":"",
+        "primary_zone_array": [
+        ]
+      },
+      "part_level":0,
+      "part_option": {
+        "part_func_type":0,
+        "part_func_expr":"",
+        "part_num":1,
+        "partition_cnt_within_partition_table":-1,
+        "max_used_part_id":-1
+      },
+      "sub_part_option": {
+        "part_func_type":0,
+        "part_func_expr":"",
+        "part_num":1,
+        "partition_cnt_within_partition_table":-1,
+        "max_used_part_id":-1
+      },
+      "part_func_expr_num":-1,
+      "sub_part_func_expr_num":-1,
+      "part_num":0,
+      "subpart_num":0,
+      "partition_num":0,
+      "subpartition_num":0,
+      "error_ret":0,
+      "partition_status":0,
+      "partition_array":null,
+      "subpartition_array":null,
+      "previous_locality":"",
+      "binding":false
+    },
+    "if_not_exist":false,
+    "create_mode":1
+  }
+}
+***************   Case 8   ***************
+create tablegroup tg2;
+{
+  "create_tablegroup_arg": {
+    "tablegroup_schema": {
+      "tenant_id":1,
+      "tablegroup_id":-1,
+      "schema_version":1,
+      "tablegroup_name":"tg2",
+      "comment":"",
+      "locality_info": {
+        "locality_str":"",
+        "zone_replica_attr_array": [
+        ],
+        "region_replica_num_array": [
+        ]
+      },
+      "primary_zone_info": {
+        "primary_zone_str":"",
+        "primary_zone_array": [
+        ]
+      },
+      "part_level":0,
+      "part_option": {
+        "part_func_type":0,
+        "part_func_expr":"",
+        "part_num":1,
+        "partition_cnt_within_partition_table":-1,
+        "max_used_part_id":-1
+      },
+      "sub_part_option": {
+        "part_func_type":0,
+        "part_func_expr":"",
+        "part_num":1,
+        "partition_cnt_within_partition_table":-1,
+        "max_used_part_id":-1
+      },
+      "part_func_expr_num":-1,
+      "sub_part_func_expr_num":-1,
+      "part_num":0,
+      "subpart_num":0,
+      "partition_num":0,
+      "subpartition_num":0,
+      "error_ret":0,
+      "partition_status":0,
+      "partition_array":null,
+      "subpartition_array":null,
+      "previous_locality":"",
+      "binding":false
+    },
+    "if_not_exist":false,
+    "create_mode":1
+  }
+}
+***************   Case 9   ***************
+create tablegroup if not exists tg1;
+{
+  "create_tablegroup_arg": {
+    "tablegroup_schema": {
+      "tenant_id":1,
+      "tablegroup_id":-1,
+      "schema_version":1,
+      "tablegroup_name":"tg1",
+      "comment":"",
+      "locality_info": {
+        "locality_str":"",
+        "zone_replica_attr_array": [
+        ],
+        "region_replica_num_array": [
+        ]
+      },
+      "primary_zone_info": {
+        "primary_zone_str":"",
+        "primary_zone_array": [
+        ]
+      },
+      "part_level":0,
+      "part_option": {
+        "part_func_type":0,
+        "part_func_expr":"",
+        "part_num":1,
+        "partition_cnt_within_partition_table":-1,
+        "max_used_part_id":-1
+      },
+      "sub_part_option": {
+        "part_func_type":0,
+        "part_func_expr":"",
+        "part_num":1,
+        "partition_cnt_within_partition_table":-1,
+        "max_used_part_id":-1
+      },
+      "part_func_expr_num":-1,
+      "sub_part_func_expr_num":-1,
+      "part_num":0,
+      "subpart_num":0,
+      "partition_num":0,
+      "subpartition_num":0,
+      "error_ret":0,
+      "partition_status":0,
+      "partition_array":null,
+      "subpartition_array":null,
+      "previous_locality":"",
+      "binding":false
+    },
+    "if_not_exist":true,
+    "create_mode":1
+  }
+}
+***************   Case 10   ***************
+alter tablegroup tg1 add table t1;
+{
+  "alter_tablegroup_arg": {
+    "table_items": [
+       {
+        "database_name":"tablegroup_db",
+        "table_name":"t1"
+      }
+    ],
+    "tenant_id":1,
+    "tablegroup_name":"tg1",
+    "create_mode":1,
+    "alter_tablegroup_schema": {
+      "tenant_id":-1,
+      "tablegroup_id":-1,
+      "schema_version":1,
+      "tablegroup_name":"",
+      "comment":"",
+      "locality_info": {
+        "locality_str":"",
+        "zone_replica_attr_array": [
+        ],
+        "region_replica_num_array": [
+        ]
+      },
+      "primary_zone_info": {
+        "primary_zone_str":"",
+        "primary_zone_array": [
+        ]
+      },
+      "part_level":0,
+      "part_option": {
+        "part_func_type":0,
+        "part_func_expr":"",
+        "part_num":1,
+        "partition_cnt_within_partition_table":-1,
+        "max_used_part_id":-1
+      },
+      "sub_part_option": {
+        "part_func_type":0,
+        "part_func_expr":"",
+        "part_num":1,
+        "partition_cnt_within_partition_table":-1,
+        "max_used_part_id":-1
+      },
+      "part_func_expr_num":-1,
+      "sub_part_func_expr_num":-1,
+      "part_num":0,
+      "subpart_num":0,
+      "partition_num":0,
+      "subpartition_num":0,
+      "error_ret":0,
+      "partition_status":0,
+      "partition_array":null,
+      "subpartition_array":null,
+      "previous_locality":"",
+      "binding":false
+    }
+  }
+}
+***************   Case 11   ***************
+alter tablegroup tg1 add table t2,t3;
+{
+  "alter_tablegroup_arg": {
+    "table_items": [
+       {
+        "database_name":"tablegroup_db",
+        "table_name":"t2"
+      },
+       {
+        "database_name":"tablegroup_db",
+        "table_name":"t3"
+      }
+    ],
+    "tenant_id":1,
+    "tablegroup_name":"tg1",
+    "create_mode":1,
+    "alter_tablegroup_schema": {
+      "tenant_id":-1,
+      "tablegroup_id":-1,
+      "schema_version":1,
+      "tablegroup_name":"",
+      "comment":"",
+      "locality_info": {
+        "locality_str":"",
+        "zone_replica_attr_array": [
+        ],
+        "region_replica_num_array": [
+        ]
+      },
+      "primary_zone_info": {
+        "primary_zone_str":"",
+        "primary_zone_array": [
+        ]
+      },
+      "part_level":0,
+      "part_option": {
+        "part_func_type":0,
+        "part_func_expr":"",
+        "part_num":1,
+        "partition_cnt_within_partition_table":-1,
+        "max_used_part_id":-1
+      },
+      "sub_part_option": {
+        "part_func_type":0,
+        "part_func_expr":"",
+        "part_num":1,
+        "partition_cnt_within_partition_table":-1,
+        "max_used_part_id":-1
+      },
+      "part_func_expr_num":-1,
+      "sub_part_func_expr_num":-1,
+      "part_num":0,
+      "subpart_num":0,
+      "partition_num":0,
+      "subpartition_num":0,
+      "error_ret":0,
+      "partition_status":0,
+      "partition_array":null,
+      "subpartition_array":null,
+      "previous_locality":"",
+      "binding":false
+    }
+  }
+}
+***************   Case 12   ***************
+alter table t1 tablegroup = 'tg1';
+{
+  "ObTableStmt": {
+    "partition_fun_expr": [
+    ],
+    "range_values_exprs": [
+    ],
+    "list_values_exprs": [
+    ],
+    "index_partition_resolve_results": [
+    ],
+    "part_type":8
+  },
+  "stmt_type":22,
+  "alter_table_arg": {
+    "is_alter_columns":false,
+    "is_alter_indexs":false,
+    "is_alter_options":true,
+    "session_id":-1,
+    "index_arg_list": [
+    ],
+    "alter_table_schema": {
+      "alter_type":"OB_INVALID_DDL_OP",
+      "origin_table_name":"t1",
+      "new_database_name":"tablegroup_db",
+      "origin_database_name":"tablegroup_db",
+      "split_partition_name":"",
+      "alter_table_schema": {
+        "simple_table_schema": {
+          "tenant_id":1,
+          "database_id":-1,
+          "tablegroup_id":-1,
+          "table_id":-1,
+          "table_name":"t1",
+          "replica_num":0,
+          "previous_locality_str":"",
+          "min_partition_id":0,
+          "session_id":0,
+          "index_type":0,
+          "table_type":3,
+          "data_table_id":0,
+          "name_casemode":-1,
+          "schema_version":0,
+          "part_level":0,
+          "part_option": {
+            "part_func_type":0,
+            "part_func_expr":"",
+            "part_num":1,
+            "partition_cnt_within_partition_table":-1,
+            "max_used_part_id":-1
+          },
+          "sub_part_option": {
+            "part_func_type":0,
+            "part_func_expr":"",
+            "part_num":1,
+            "partition_cnt_within_partition_table":-1,
+            "max_used_part_id":-1
+          },
+          "locality_str":"",
+          "zone_list": [
+          ],
+          "primary_zone":"",
+          "part_num":0,
+          "subpart_num":0,
+          "partition_num":0,
+          "subpartition_num":0,
+          "partition_array":null,
+          "subpartition_array":null,
+          "index_status":1,
+          "binding":false,
+          "duplicate_scope":0
+        },
+        "max_used_column_id":0,
+        "max_used_constraint_id":0,
+        "sess_active_time":0,
+        "rowkey_column_num":0,
+        "index_column_num":0,
+        "rowkey_split_pos":0,
+        "block_size":16384,
+        "is_use_bloomfilter":false,
+        "progressive_merge_num":0,
+        "tablet_size":-1,
+        "pctfree":10,
+        "load_type":0,
+        "index_using_type":0,
+        "def_type":1,
+        "charset_type":0,
+        "collation_type":0,
+        "create_mem_version":0,
+        "index_status":1,
+        "partition_status":0,
+        "code_version":1,
+        "last_modified_frozen_version":0,
+        "comment":"",
+        "pk_comment":"",
+        "create_host":"",
+        "zone_replica_attr_array": [
+        ],
+        "region_replica_num_array": [
+        ],
+        "tablegroup_name":"tg1",
+        "compress_func_name":"",
+        "row_store_type":3,
+        "store_format":0,
+        "expire_info":"",
+        "view_schema": {
+          "view_definition":"",
+          "check_option":"none",
+          "is_updatable":"false",
+          "is_materialized":"false"
+        },
+        "autoinc_column_id":0,
+        "auto_increment":1,
+        "read_only":false,
+        "primary_zone_array": [
+        ],
+        "index_tid_array": [
+        ],
+        "mv_tid_array": [
+        ],
+        "aux_vp_tid_array": [
+        ],
+        "base_table_ids": [
+        ],
+        "rowkey_info": {
+          "columns":null,
+          "capacity":0
+        },
+        "partition_key_info": {
+          "columns":null,
+          "capacity":0
+        },
+        "aux_vp_tid_array": [
+        ]
+      }
+    },
+    "nls_formats": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "index_arg_list": [
+  ]
+}
+***************   Case 13   ***************
+alter table t2 tablegroup = 'tg2';
+{
+  "ObTableStmt": {
+    "partition_fun_expr": [
+    ],
+    "range_values_exprs": [
+    ],
+    "list_values_exprs": [
+    ],
+    "index_partition_resolve_results": [
+    ],
+    "part_type":8
+  },
+  "stmt_type":22,
+  "alter_table_arg": {
+    "is_alter_columns":false,
+    "is_alter_indexs":false,
+    "is_alter_options":true,
+    "session_id":-1,
+    "index_arg_list": [
+    ],
+    "alter_table_schema": {
+      "alter_type":"OB_INVALID_DDL_OP",
+      "origin_table_name":"t2",
+      "new_database_name":"tablegroup_db",
+      "origin_database_name":"tablegroup_db",
+      "split_partition_name":"",
+      "alter_table_schema": {
+        "simple_table_schema": {
+          "tenant_id":1,
+          "database_id":-1,
+          "tablegroup_id":-1,
+          "table_id":-1,
+          "table_name":"t2",
+          "replica_num":0,
+          "previous_locality_str":"",
+          "min_partition_id":0,
+          "session_id":0,
+          "index_type":0,
+          "table_type":3,
+          "data_table_id":0,
+          "name_casemode":-1,
+          "schema_version":0,
+          "part_level":0,
+          "part_option": {
+            "part_func_type":0,
+            "part_func_expr":"",
+            "part_num":1,
+            "partition_cnt_within_partition_table":-1,
+            "max_used_part_id":-1
+          },
+          "sub_part_option": {
+            "part_func_type":0,
+            "part_func_expr":"",
+            "part_num":1,
+            "partition_cnt_within_partition_table":-1,
+            "max_used_part_id":-1
+          },
+          "locality_str":"",
+          "zone_list": [
+          ],
+          "primary_zone":"",
+          "part_num":0,
+          "subpart_num":0,
+          "partition_num":0,
+          "subpartition_num":0,
+          "partition_array":null,
+          "subpartition_array":null,
+          "index_status":1,
+          "binding":false,
+          "duplicate_scope":0
+        },
+        "max_used_column_id":0,
+        "max_used_constraint_id":0,
+        "sess_active_time":0,
+        "rowkey_column_num":0,
+        "index_column_num":0,
+        "rowkey_split_pos":0,
+        "block_size":16384,
+        "is_use_bloomfilter":false,
+        "progressive_merge_num":0,
+        "tablet_size":-1,
+        "pctfree":10,
+        "load_type":0,
+        "index_using_type":0,
+        "def_type":1,
+        "charset_type":0,
+        "collation_type":0,
+        "create_mem_version":0,
+        "index_status":1,
+        "partition_status":0,
+        "code_version":1,
+        "last_modified_frozen_version":0,
+        "comment":"",
+        "pk_comment":"",
+        "create_host":"",
+        "zone_replica_attr_array": [
+        ],
+        "region_replica_num_array": [
+        ],
+        "tablegroup_name":"tg2",
+        "compress_func_name":"",
+        "row_store_type":3,
+        "store_format":0,
+        "expire_info":"",
+        "view_schema": {
+          "view_definition":"",
+          "check_option":"none",
+          "is_updatable":"false",
+          "is_materialized":"false"
+        },
+        "autoinc_column_id":0,
+        "auto_increment":1,
+        "read_only":false,
+        "primary_zone_array": [
+        ],
+        "index_tid_array": [
+        ],
+        "mv_tid_array": [
+        ],
+        "aux_vp_tid_array": [
+        ],
+        "base_table_ids": [
+        ],
+        "rowkey_info": {
+          "columns":null,
+          "capacity":0
+        },
+        "partition_key_info": {
+          "columns":null,
+          "capacity":0
+        },
+        "aux_vp_tid_array": [
+        ]
+      }
+    },
+    "nls_formats": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "index_arg_list": [
+  ]
+}
+***************   Case 14   ***************
+alter table t2 drop tablegroup;
+{
+  "ObTableStmt": {
+    "partition_fun_expr": [
+    ],
+    "range_values_exprs": [
+    ],
+    "list_values_exprs": [
+    ],
+    "index_partition_resolve_results": [
+    ],
+    "part_type":8
+  },
+  "stmt_type":22,
+  "alter_table_arg": {
+    "is_alter_columns":false,
+    "is_alter_indexs":false,
+    "is_alter_options":true,
+    "session_id":-1,
+    "index_arg_list": [
+    ],
+    "alter_table_schema": {
+      "alter_type":"OB_INVALID_DDL_OP",
+      "origin_table_name":"t2",
+      "new_database_name":"tablegroup_db",
+      "origin_database_name":"tablegroup_db",
+      "split_partition_name":"",
+      "alter_table_schema": {
+        "simple_table_schema": {
+          "tenant_id":1,
+          "database_id":-1,
+          "tablegroup_id":-1,
+          "table_id":-1,
+          "table_name":"t2",
+          "replica_num":0,
+          "previous_locality_str":"",
+          "min_partition_id":0,
+          "session_id":0,
+          "index_type":0,
+          "table_type":3,
+          "data_table_id":0,
+          "name_casemode":-1,
+          "schema_version":0,
+          "part_level":0,
+          "part_option": {
+            "part_func_type":0,
+            "part_func_expr":"",
+            "part_num":1,
+            "partition_cnt_within_partition_table":-1,
+            "max_used_part_id":-1
+          },
+          "sub_part_option": {
+            "part_func_type":0,
+            "part_func_expr":"",
+            "part_num":1,
+            "partition_cnt_within_partition_table":-1,
+            "max_used_part_id":-1
+          },
+          "locality_str":"",
+          "zone_list": [
+          ],
+          "primary_zone":"",
+          "part_num":0,
+          "subpart_num":0,
+          "partition_num":0,
+          "subpartition_num":0,
+          "partition_array":null,
+          "subpartition_array":null,
+          "index_status":1,
+          "binding":false,
+          "duplicate_scope":0
+        },
+        "max_used_column_id":0,
+        "max_used_constraint_id":0,
+        "sess_active_time":0,
+        "rowkey_column_num":0,
+        "index_column_num":0,
+        "rowkey_split_pos":0,
+        "block_size":16384,
+        "is_use_bloomfilter":false,
+        "progressive_merge_num":0,
+        "tablet_size":-1,
+        "pctfree":10,
+        "load_type":0,
+        "index_using_type":0,
+        "def_type":1,
+        "charset_type":0,
+        "collation_type":0,
+        "create_mem_version":0,
+        "index_status":1,
+        "partition_status":0,
+        "code_version":1,
+        "last_modified_frozen_version":0,
+        "comment":"",
+        "pk_comment":"",
+        "create_host":"",
+        "zone_replica_attr_array": [
+        ],
+        "region_replica_num_array": [
+        ],
+        "tablegroup_name":"",
+        "compress_func_name":"",
+        "row_store_type":3,
+        "store_format":0,
+        "expire_info":"",
+        "view_schema": {
+          "view_definition":"",
+          "check_option":"none",
+          "is_updatable":"false",
+          "is_materialized":"false"
+        },
+        "autoinc_column_id":0,
+        "auto_increment":1,
+        "read_only":false,
+        "primary_zone_array": [
+        ],
+        "index_tid_array": [
+        ],
+        "mv_tid_array": [
+        ],
+        "aux_vp_tid_array": [
+        ],
+        "base_table_ids": [
+        ],
+        "rowkey_info": {
+          "columns":null,
+          "capacity":0
+        },
+        "partition_key_info": {
+          "columns":null,
+          "capacity":0
+        },
+        "aux_vp_tid_array": [
+        ]
+      }
+    },
+    "nls_formats": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "index_arg_list": [
+  ]
+}
+***************   Case 15   ***************
+drop tablegroup tg2;
+{
+  "drop_tablegroup_arg": {
+    "tenant_id":1,
+    "tablegroup_name":"tg2",
+    "if_exist":false
+  }
+}
+***************   Case 16   ***************
+drop tablegroup if exists tg2;
+{
+  "drop_tablegroup_arg": {
+    "tenant_id":1,
+    "tablegroup_name":"tg2",
+    "if_exist":true
+  }
+}
+***************   Case 17   ***************
+drop database tablegroup_db;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"tablegroup_db",
+  "if_exist":false,
+  "to_recyclebin":false
+}

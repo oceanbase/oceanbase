@@ -1,0 +1,28 @@
+drop database if exists wf_db;
+create database wf_db;
+use wf_db;
+
+create table t1(c1 int primary key, c2 int, c3 datetime);
+
+#select max(c1) over (order by c1) from t1;
+#select max(c1) over (partition by c1 order by c2) from t1;
+#select max(c1) over (partition by c1 order by c2 rows between 2 preceding and 3 following) from t1;
+#--error 4007
+#select max(c1) over (partition by c1 order by c2 range between 2 preceding and 3 following) from t1;
+#--error 4007
+#select max(c1) over (partition by c1 order by c3 range between interval '1-3' YEAR_MONTH preceding and interval '2-1' DAY_HOUR following) from t1;
+#select max(c1) over (partition by c1 order by c2 rows between current row and unbounded following) from t1;
+#select max(c1) over (partition by c1 order by c2 rows between unbounded preceding and current row) from t1;
+#select max(c1) over (partition by c1 order by c2 rows between 3 preceding and 1 preceding) from t1;
+#select max(c1) over (partition by c1 order by c2 rows between 1 following and 3 following) from t1;
+#select max(c1) over (partition by c1 order by c2 rows unbounded preceding) from t1;
+#select max(c1) over (partition by c1 order by c2 rows current row) from t1;
+#select max(c1) over (partition by c1 order by c2 rows 2 preceding) from t1;
+#--error 4007
+#select max(c1) over (partition by c1 order by c2 range 2 preceding) from t1;
+#--error 4007
+#select max(c1) over (partition by c1 order by c3 range interval '1-3' YEAR_MONTH preceding) from t1;
+#
+#select max(c1) over (partition by c1,c2 order by c2,c3) from t1;
+
+drop database wf_db;

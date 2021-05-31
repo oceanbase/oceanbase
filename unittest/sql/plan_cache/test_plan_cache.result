@@ -1,0 +1,264 @@
+***************   Case Start   ***************
+
+select * from t1 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":2, "projector":[0, 1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16, 17], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select * from t1 where c1 = 1 and c2 = 2; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":3, "projector":[0, 1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":3, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":3, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}], [{"cell_index":2}, {"param":1}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16, 17, 17], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select * from t1 where c1 = 1 and c2 = 3; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":3, "projector":[0, 1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":3, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":3, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}], [{"cell_index":2}, {"param":1}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16, 17, 17], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1, c2 from t1 where c1 = 2; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":2, "projector":[0, 1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16, 17], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1, c2 from t1 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":2, "projector":[0, 1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16, 17], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1, c2 from t1 where c1 = 1 and c2 = 2 limit 0, 1; 
+
+{"operators_num":5, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":4, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":3, "column_count":2, "projector":[0, 1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":2, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_LIMIT":{"id":1, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[], "limit":[{"param":2}], "offset":[{"param":3}]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}], [{"cell_index":1}, {"param":1}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16, 17], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1 from t1 where c1 = 3; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":1, "projector":[0], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":1, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":1, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1, c2 from t1 where c1 = 4 limit 2, 10; 
+
+{"operators_num":5, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":4, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":3, "column_count":2, "projector":[0, 1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":2, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_LIMIT":{"id":1, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[], "limit":[{"param":1}], "offset":[{"param":2}]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16, 17], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1, c2 from t1 where c1 =5 order by c2; 
+
+{"operators_num":3, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":2, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_SORT":{"order_by":[{"index_id":1, "collation_type":"utf8mb4_general_ci", "ascending":"ASC"}], "limit":0}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[0, 1], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16, 17], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1 from t1 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":1, "projector":[0], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":1, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":1, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1 from t1 where c1 = 2; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":1, "projector":[0], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":1, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":1, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c2 from t1 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":2, "projector":[1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16, 17], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1 from t2 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":2, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":1, "projector":[0], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":1, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":1, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":2, "index_table_id":2, "column_id":[16], "flag":0, "limit":[], "offset":[], "table_id":2, "table_location_key":2}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c2 from t2 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":2, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":2, "projector":[1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":2, "index_table_id":2, "column_id":[16, 17], "flag":0, "limit":[], "offset":[], "table_id":2, "table_location_key":2}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c3 from t2 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":2, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":2, "projector":[1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":2, "index_table_id":2, "column_id":[16, 18], "flag":0, "limit":[], "offset":[], "table_id":2, "table_location_key":2}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1, c2 from t2 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":2, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":2, "projector":[0, 1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":2, "index_table_id":2, "column_id":[16, 17], "flag":0, "limit":[], "offset":[], "table_id":2, "table_location_key":2}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1, c3 from t2 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":2, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":2, "projector":[0, 1], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":2, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":2, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":2, "index_table_id":2, "column_id":[16, 18], "flag":0, "limit":[], "offset":[], "table_id":2, "table_location_key":2}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c2, c3 from t2 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":2, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":3, "projector":[1, 2], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":3, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":3, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":2, "index_table_id":2, "column_id":[16, 17, 18], "flag":0, "limit":[], "offset":[], "table_id":2, "table_location_key":2}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+select c1, c2, c3 from t2 where c1 = 1; 
+
+{"operators_num":4, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":2, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":2, "column_count":3, "projector":[0, 1, 2], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":1, "column_count":3, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":3, "projector":[], "filter_exprs":[[{"cell_index":0}, {"param":0}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":2, "index_table_id":2, "column_id":[16, 17, 18], "flag":0, "limit":[], "offset":[], "table_id":2, "table_location_key":2}}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+
+***************   Case Start   ***************
+
+delete from t1 where c2 > 10 and c1 = 2 order by c1 limit 0, 1; 
+
+{"operators_num":7, "subquery_num":1, "param_num":0, "table_schema_version":[{"table_id":1, "schema_version":0}], 
+"main_query":
+{"PHY_ROOT_TRANSMIT":{"id":6, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_RECEIVE":{"id":5, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DIRECT_TRANSMIT":{"id":4, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[]}, "child_operators":[
+{"PHY_DELETE":{"id":3, "column_count":0, "projector":[], "filter_exprs":[], "calc_exprs":[], "table_id":1, "column_id":[16, 17]}, "child_operators":[
+{"PHY_LIMIT":{"id":2, "column_count":3, "projector":[], "filter_exprs":[], "calc_exprs":[], "limit":[{"param":2}], "offset":[{"param":3}]}, "child_operators":[
+{"PHY_SORT":{"order_by":[{"index_id":0, "collation_type":"utf8mb4_general_ci", "ascending":"ASC"}], "limit":0}, "child_operators":[
+{"PHY_TABLE_SCAN":{"id":0, "column_count":3, "projector":[0, 1, 2], "filter_exprs":[[{"cell_index":2}, {"param":0}, {"op":{"expr_type":"T_OP_GT", "expr_name":">", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}], [{"cell_index":0}, {"param":1}, {"op":{"expr_type":"T_OP_EQ", "expr_name":"=", "param_num":2, "dimension":-1, "real_param_num":2, "result_type":"TINYINT"}}]], "calc_exprs":[], "ref_table_id":1, "index_table_id":1, "column_id":[16, 17, 17], "flag":0, "limit":[], "offset":[], "table_id":1, "table_location_key":1}}]}]}]}]}]}]}, 
+"query_range":[]}
+***************   Case END   ************** 
+

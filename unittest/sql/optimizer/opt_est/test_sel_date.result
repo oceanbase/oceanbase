@@ -1,0 +1,84 @@
+EXPR_STR: select c1 from t4 where c1 > '20150305123012';
+SELECTIVITY = 0.808483
+
+EXPR_STR: select c1 from t4 where c1 = '20150305123012';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t4 where c1 > '00000101000000';
+SELECTIVITY = 1
+
+EXPR_STR: select c1 from t4 where c1 < '00000101000000';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t4 where c1 > '99991231235959';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t4 where c1 < '99991231235959';
+SELECTIVITY = 1
+
+EXPR_STR: select c1 from t4 where c2 > '20150305123012';
+SELECTIVITY = 0.516212
+
+EXPR_STR: select c1 from t4 where c2 = '20150305123012';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t4 where c2 > '00000102080000';
+SELECTIVITY = 0.633968
+
+EXPR_STR: select c1 from t4 where c2 < '00000102080000';
+SELECTIVITY = 0.0100002
+
+EXPR_STR: select c1 from t4 where c2 > '99991230235959';
+SELECTIVITY = 0.0100002
+
+EXPR_STR: select c1 from t4 where c2 < '99991230235959';
+SELECTIVITY = 0.633968
+
+EXPR_STR: select c1 from t4 where c3 > '2012-01-01';
+SELECTIVITY = 0.572686
+
+EXPR_STR: select c1 from t4 where c3 = '2016-07-27';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t4 where c3 > '1000-01-01';
+SELECTIVITY = 0.633968
+
+EXPR_STR: select c1 from t4 where c3 < '1000-01-01';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t4 where c3 > '9999-12-31';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t4 where c3 < '9999-12-31';
+SELECTIVITY = 0.633968
+
+EXPR_STR: select c1 from t4 where c4 = '12:01:01';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t4 where c4 < '838:59:59';
+SELECTIVITY = 0.633968
+
+EXPR_STR: select c1 from t4 where c4 > '838:59:59';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t4 where c4 > '00:00:00';
+SELECTIVITY = 0.633968
+
+EXPR_STR: select c1 from t4 where c4 < '00:00:00';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t4 where c5 = 2016;
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t4 where c5 > 1970;
+SELECTIVITY = 0.333333
+
+EXPR_STR: select c1 from t4 where c5 < 1970;
+SELECTIVITY = 0.333333
+
+EXPR_STR: select c1 from t4 where c5 > 2155;
+SELECTIVITY = 0.333333
+
+EXPR_STR: select c1 from t4 where c5 < 2155;
+SELECTIVITY = 0.333333
+

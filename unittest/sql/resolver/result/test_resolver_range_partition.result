@@ -1,0 +1,703 @@
+***************   Case 1   ***************
+drop database if exists range_partition;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"range_partition",
+  "if_exist":true,
+  "to_recyclebin":false
+}
+***************   Case 2   ***************
+create database range_partition;
+{
+  "create_database_arg":"database_schema",
+  "database_id":-1,
+  "schema_version":1,
+  "database_name":"range_partition",
+  "replica_num":0,
+  "zone_list": [
+  ],
+  "primary_zone":"",
+  "charset_type":2,
+  "collation_type":"utf8mb4_general_ci",
+  "name_case_mode":-1,
+  "comment":"",
+  "read_only":false,
+  "default_tablegroup_id":-1,
+  "default_tablegroup_name":"",
+  "in_recyclebin":false,
+  "primary_zone_array": [
+  ]
+}
+***************   Case 3   ***************
+use range_partition;
+{
+  "stmt_type":97
+}
+***************   Case 4   ***************
+create table t1(c1 int, c2 int) partition by range columns(c1) (partition p0 values less than(20), partition p1 values less than(30), partition p2 values less than maxvalue);
+{"ObTableStmt":{"partition_fun_expr":[{"item_type":"T_REF_COLUMN", "result_type":{"meta":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "accuracy":{"length":-1, "precision":11, "scale":0}, "flag":0, "calc_type":{"type":"NULL", "collation":"invalid_type", "coercibility":"INVALID"}}, "expr_info":["IS_COLUMN", "CNT_COLUMN"], "rel_id":[], "table_id":18446744073709551615, "column_id":16, "database_name":"", "table_name":"", "synonym_name":"", "column_name":"c1", "expr_level":-1, "expr_levels":[], "column_flags":0, "is_explicited_referece":false, "explicited_ref_count":0, "enum_set_values":[], "is_lob_column":false}], "range_values_exprs":[{"item_type":"T_INT", "result_type":{"meta":{"type":"BIGINT", "collation":"binary", "coercibility":"NUMERIC"}, "accuracy":{"length":2, "precision":2, "scale":0}, "flag":1, "calc_type":{"type":"NULL", "collation":"invalid_type", "coercibility":"INVALID"}}, "expr_info":["IS_CONST", "CNT_CONST"], "rel_id":[], "value":{"BIGINT":20}}, {"item_type":"T_INT", "result_type":{"meta":{"type":"BIGINT", "collation":"binary", "coercibility":"NUMERIC"}, "accuracy":{"length":2, "precision":2, "scale":0}, "flag":1, "calc_type":{"type":"NULL", "collation":"invalid_type", "coercibility":"INVALID"}}, "expr_info":["IS_CONST", "CNT_CONST"], "rel_id":[], "value":{"BIGINT":30}}, {"item_type":"Unknown", "result_type":{"meta":{"type":"", "collation":"binary", "coercibility":"NUMERIC"}, "accuracy":{"length":-1, "precision":-1, "scale":-1}, "flag":0, "calc_type":{"type":"NULL", "collation":"invalid_type", "coercibility":"INVALID"}}, "expr_info":[], "rel_id":[], "value":{"NULL":"NULL"}}], "list_values_exprs":[], "index_partition_resolve_results":[], "part_type":8}, "stmt_type":20, "create_table_arg":{"if_not_exist":false, "schema":{"simple_table_schema":{"tenant_id":1, "database_id":18446744073709551615, "tablegroup_id":1099511627777, "table_id":18446744073709551615, "table_name":"t1", "replica_num":0, "previous_locality_str":"", "min_partition_id":0, "session_id":0, "index_type":0, "table_type":3, "data_table_id":0, "name_casemode":-1, "schema_version":0, "part_level":1, "part_option":{"part_func_type":4, "part_func_expr":"c1", "part_num":3, "partition_cnt_within_partition_table":-1, "max_used_part_id":2}, "sub_part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":-1}, "locality_str":"", "zone_list":[], "primary_zone":"", "part_num":0, "subpart_num":0, "partition_num":3, "subpartition_num":0, "partition_array":[{"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":0, "name":"p0", "high_bound_val":{"BIGINT":20}, "list_row_values":[], "part_idx":-1}, "mapping_pg_part_id":-1}, {"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":1, "name":"p1", "high_bound_val":{"BIGINT":30}, "list_row_values":[], "part_idx":-1}, "mapping_pg_part_id":-1}, {"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":2, "name":"p2", "high_bound_val":MAX, "list_row_values":[], "part_idx":-1}, "mapping_pg_part_id":-1}], "subpartition_array":null, "index_status":1, "binding":false, "duplicate_scope":0}, "max_used_column_id":17, "max_used_constraint_id":0, "sess_active_time":0, "rowkey_column_num":3, "index_column_num":0, "rowkey_split_pos":0, "block_size":16384, "is_use_bloomfilter":false, "progressive_merge_num":0, "tablet_size":134217728, "pctfree":10, "load_type":0, "index_using_type":0, "def_type":1, "charset_type":2, "collation_type":45, "create_mem_version":0, "index_status":1, "partition_status":0, "code_version":1, "last_modified_frozen_version":0, "comment":"", "pk_comment":"", "create_host":"", "zone_replica_attr_array":[], "region_replica_num_array":[], "tablegroup_name":"", "compress_func_name":"zstd_1.0", "row_store_type":1, "store_format":3, "expire_info":"", "view_schema":{"view_definition":"", "check_option":"none", "is_updatable":"false", "is_materialized":"false"}, "autoinc_column_id":0, "auto_increment":1, "read_only":false, "primary_zone_array":[], "index_tid_array":[], "mv_tid_array":[], "aux_vp_tid_array":[], "base_table_ids":[], "rowkey_info":{"columns":[{"length":0, "column_id":1, "type":{"type":"BIGINT UNSIGNED", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}, {"length":0, "column_id":4, "type":{"type":"BIGINT UNSIGNED", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}, {"length":0, "column_id":5, "type":{"type":"BIGINT UNSIGNED", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":3}, "partition_key_info":{"columns":[{"length":0, "column_id":16, "type":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":1}, "aux_vp_tid_array":[]}, "index_arg_list":[], "constraint_list":[], "db_name":"range_partition", "last_replay_log_id":0, "foreign_key_arg_list":[], "vertical_partition_arg_list":[]}, "index_arg_list":[]}
+***************   Case 5   ***************
+create table t2(c1 int, c2 int) partition by hash(c1) subpartition by range columns(c2) subpartition template (subpartition p0 values less than(20), subpartition p1 values less than(30)) partitions 4;
+{"ObTableStmt":{"partition_fun_expr":[{"item_type":"T_REF_COLUMN", "result_type":{"meta":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "accuracy":{"length":-1, "precision":11, "scale":0}, "flag":0, "calc_type":{"type":"NULL", "collation":"invalid_type", "coercibility":"INVALID"}}, "expr_info":["IS_COLUMN", "CNT_COLUMN"], "rel_id":[], "table_id":18446744073709551615, "column_id":17, "database_name":"", "table_name":"", "synonym_name":"", "column_name":"c2", "expr_level":-1, "expr_levels":[], "column_flags":0, "is_explicited_referece":false, "explicited_ref_count":0, "enum_set_values":[], "is_lob_column":false}], "range_values_exprs":[{"item_type":"T_INT", "result_type":{"meta":{"type":"BIGINT", "collation":"binary", "coercibility":"NUMERIC"}, "accuracy":{"length":2, "precision":2, "scale":0}, "flag":1, "calc_type":{"type":"NULL", "collation":"invalid_type", "coercibility":"INVALID"}}, "expr_info":["IS_CONST", "CNT_CONST"], "rel_id":[], "value":{"BIGINT":20}}, {"item_type":"T_INT", "result_type":{"meta":{"type":"BIGINT", "collation":"binary", "coercibility":"NUMERIC"}, "accuracy":{"length":2, "precision":2, "scale":0}, "flag":1, "calc_type":{"type":"NULL", "collation":"invalid_type", "coercibility":"INVALID"}}, "expr_info":["IS_CONST", "CNT_CONST"], "rel_id":[], "value":{"BIGINT":30}}], "list_values_exprs":[], "index_partition_resolve_results":[], "part_type":8}, "stmt_type":20, "create_table_arg":{"if_not_exist":false, "schema":{"simple_table_schema":{"tenant_id":1, "database_id":18446744073709551615, "tablegroup_id":1099511627777, "table_id":18446744073709551615, "table_name":"t2", "replica_num":0, "previous_locality_str":"", "min_partition_id":0, "session_id":0, "index_type":0, "table_type":3, "data_table_id":0, "name_casemode":-1, "schema_version":0, "part_level":2, "part_option":{"part_func_type":0, "part_func_expr":"c1", "part_num":4, "partition_cnt_within_partition_table":-1, "max_used_part_id":3}, "sub_part_option":{"part_func_type":4, "part_func_expr":"c2", "part_num":2, "partition_cnt_within_partition_table":-1, "max_used_part_id":-1}, "locality_str":"", "zone_list":[], "primary_zone":"", "part_num":0, "subpart_num":0, "partition_num":4, "subpartition_num":2, "partition_array":[{"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":0, "name":"p0", "high_bound_val":, "list_row_values":[], "part_idx":0}, "mapping_pg_part_id":-1}, {"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":1, "name":"p1", "high_bound_val":, "list_row_values":[], "part_idx":1}, "mapping_pg_part_id":-1}, {"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":2, "name":"p2", "high_bound_val":, "list_row_values":[], "part_idx":2}, "mapping_pg_part_id":-1}, {"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":3, "name":"p3", "high_bound_val":, "list_row_values":[], "part_idx":3}, "mapping_pg_part_id":-1}], "subpartition_array":[{"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":-1, "name":"p0", "high_bound_val":{"BIGINT":20}, "list_row_values":[], "part_idx":-1}, "subpart_id":0, "subpart_idx":-1, "mapping_pg_sub_part_id":-1}, {"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":-1, "name":"p1", "high_bound_val":{"BIGINT":30}, "list_row_values":[], "part_idx":-1}, "subpart_id":1, "subpart_idx":-1, "mapping_pg_sub_part_id":-1}], "index_status":1, "binding":false, "duplicate_scope":0}, "max_used_column_id":17, "max_used_constraint_id":0, "sess_active_time":0, "rowkey_column_num":3, "index_column_num":0, "rowkey_split_pos":0, "block_size":16384, "is_use_bloomfilter":false, "progressive_merge_num":0, "tablet_size":134217728, "pctfree":10, "load_type":0, "index_using_type":0, "def_type":1, "charset_type":2, "collation_type":45, "create_mem_version":0, "index_status":1, "partition_status":0, "code_version":1, "last_modified_frozen_version":0, "comment":"", "pk_comment":"", "create_host":"", "zone_replica_attr_array":[], "region_replica_num_array":[], "tablegroup_name":"", "compress_func_name":"zstd_1.0", "row_store_type":1, "store_format":3, "expire_info":"", "view_schema":{"view_definition":"", "check_option":"none", "is_updatable":"false", "is_materialized":"false"}, "autoinc_column_id":0, "auto_increment":1, "read_only":false, "primary_zone_array":[], "index_tid_array":[], "mv_tid_array":[], "aux_vp_tid_array":[], "base_table_ids":[], "rowkey_info":{"columns":[{"length":0, "column_id":1, "type":{"type":"BIGINT UNSIGNED", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}, {"length":0, "column_id":4, "type":{"type":"BIGINT UNSIGNED", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}, {"length":0, "column_id":5, "type":{"type":"BIGINT UNSIGNED", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":3}, "partition_key_info":{"columns":[{"length":0, "column_id":16, "type":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":1}, "aux_vp_tid_array":[]}, "index_arg_list":[], "constraint_list":[], "db_name":"range_partition", "last_replay_log_id":0, "foreign_key_arg_list":[], "vertical_partition_arg_list":[]}, "index_arg_list":[]}
+***************   Case 6   ***************
+create table t3(c1 date, c2 int) partition by range columns(c1) (partition p0 values less than('1990-01-01'), partition p1 values less than('19910101'));
+{
+  "ObTableStmt": {
+    "partition_fun_expr": [
+       {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"DATE",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":10,
+            "scale":0
+          },
+          "flag":0,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+        ],
+        "table_id":-1,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"",
+        "synonym_name":"",
+        "column_name":"c1",
+        "expr_level":-1,
+        "expr_levels": [
+        ],
+        "column_flags":0,
+        "is_explicited_referece":false,
+        "explicited_ref_count":0,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    ],
+    "range_values_exprs": [
+       {
+        "item_type":"T_VARCHAR",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"binary",
+            "coercibility":"COERCIBLE"
+          },
+          "accuracy": {
+            "length":10,
+            "precision":1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_CONST",
+          "CNT_CONST"
+        ],
+        "rel_id": [
+        ],
+        "value": {
+          "VARCHAR":"1990-01-01",
+          "collation":"binary"
+        }
+      },
+       {
+        "item_type":"T_VARCHAR",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"binary",
+            "coercibility":"COERCIBLE"
+          },
+          "accuracy": {
+            "length":8,
+            "precision":1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_CONST",
+          "CNT_CONST"
+        ],
+        "rel_id": [
+        ],
+        "value": {
+          "VARCHAR":"19910101",
+          "collation":"binary"
+        }
+      }
+    ],
+    "list_values_exprs": [
+    ],
+    "index_partition_resolve_results": [
+    ],
+    "part_type":8
+  },
+  "stmt_type":20,
+  "create_table_arg": {
+    "if_not_exist":false,
+    "schema": {
+      "simple_table_schema": {
+        "tenant_id":1,
+        "database_id":-1,
+        "tablegroup_id":1099511627777,
+        "table_id":-1,
+        "table_name":"t3",
+        "replica_num":0,
+        "previous_locality_str":"",
+        "min_partition_id":0,
+        "session_id":0,
+        "index_type":0,
+        "table_type":3,
+        "data_table_id":0,
+        "name_casemode":-1,
+        "schema_version":0,
+        "part_level":1,
+        "part_option": {
+          "part_func_type":4,
+          "part_func_expr":"c1",
+          "part_num":2,
+          "partition_cnt_within_partition_table":-1,
+          "max_used_part_id":1
+        },
+        "sub_part_option": {
+          "part_func_type":0,
+          "part_func_expr":"",
+          "part_num":1,
+          "partition_cnt_within_partition_table":-1,
+          "max_used_part_id":-1
+        },
+        "locality_str":"",
+        "zone_list": [
+        ],
+        "primary_zone":"",
+        "part_num":0,
+        "subpart_num":0,
+        "partition_num":2,
+        "subpartition_num":0,
+        "partition_array": [
+           {
+            "BasePartition": {
+              "tenant_id":-1,
+              "table_id":-1,
+              "part_id":0,
+              "name":"p0",
+              "high_bound_val": {
+                "DATE":"1990-01-01"
+              },
+              "list_row_values": [
+              ],
+              "part_idx":-1
+            },
+            "mapping_pg_part_id":-1
+          },
+           {
+            "BasePartition": {
+              "tenant_id":-1,
+              "table_id":-1,
+              "part_id":1,
+              "name":"p1",
+              "high_bound_val": {
+                "DATE":"1991-01-01"
+              },
+              "list_row_values": [
+              ],
+              "part_idx":-1
+            },
+            "mapping_pg_part_id":-1
+          }
+        ],
+        "subpartition_array":null,
+        "index_status":1,
+        "binding":false,
+        "duplicate_scope":0
+      },
+      "max_used_column_id":17,
+      "max_used_constraint_id":0,
+      "sess_active_time":0,
+      "rowkey_column_num":3,
+      "index_column_num":0,
+      "rowkey_split_pos":0,
+      "block_size":16384,
+      "is_use_bloomfilter":false,
+      "progressive_merge_num":0,
+      "tablet_size":134217728,
+      "pctfree":10,
+      "load_type":0,
+      "index_using_type":0,
+      "def_type":1,
+      "charset_type":2,
+      "collation_type":45,
+      "create_mem_version":0,
+      "index_status":1,
+      "partition_status":0,
+      "code_version":1,
+      "last_modified_frozen_version":0,
+      "comment":"",
+      "pk_comment":"",
+      "create_host":"",
+      "zone_replica_attr_array": [
+      ],
+      "region_replica_num_array": [
+      ],
+      "tablegroup_name":"",
+      "compress_func_name":"zstd_1.0",
+      "row_store_type":1,
+      "store_format":3,
+      "expire_info":"",
+      "view_schema": {
+        "view_definition":"",
+        "check_option":"none",
+        "is_updatable":"false",
+        "is_materialized":"false"
+      },
+      "autoinc_column_id":0,
+      "auto_increment":1,
+      "read_only":false,
+      "primary_zone_array": [
+      ],
+      "index_tid_array": [
+      ],
+      "mv_tid_array": [
+      ],
+      "aux_vp_tid_array": [
+      ],
+      "base_table_ids": [
+      ],
+      "rowkey_info": {
+        "columns": [
+           {
+            "length":0,
+            "column_id":1,
+            "type": {
+              "type":"BIGINT UNSIGNED",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "order":0,
+            "fulltext_flag":false
+          },
+           {
+            "length":0,
+            "column_id":4,
+            "type": {
+              "type":"BIGINT UNSIGNED",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "order":0,
+            "fulltext_flag":false
+          },
+           {
+            "length":0,
+            "column_id":5,
+            "type": {
+              "type":"BIGINT UNSIGNED",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "order":0,
+            "fulltext_flag":false
+          }
+        ],
+        "capacity":3
+      },
+      "partition_key_info": {
+        "columns": [
+           {
+            "length":0,
+            "column_id":16,
+            "type": {
+              "type":"DATE",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "order":0,
+            "fulltext_flag":false
+          }
+        ],
+        "capacity":1
+      },
+      "aux_vp_tid_array": [
+      ]
+    },
+    "index_arg_list": [
+    ],
+    "constraint_list": [
+    ],
+    "db_name":"range_partition",
+    "last_replay_log_id":0,
+    "foreign_key_arg_list": [
+    ],
+    "vertical_partition_arg_list": [
+    ]
+  },
+  "index_arg_list": [
+  ]
+}
+***************   Case 7   ***************
+create table t4(c1 year, c2 int) partition by range columns(c1) (partition p0 values less than('1990'), partition p1 values less than(1997));
+***************   Case 8   ***************
+create table t5(c1 time, c2 int) partition by range columns(c1) (partition p0 values less than('10:10:10'), partition p1 values less than(101010));
+***************   Case 9   ***************
+create table t6(c1 datetime, c2 int) partition by range columns(c1) (partition p0 values less than('1990-01-01'), partition p1 values less than('19910101'));
+{
+  "ObTableStmt": {
+    "partition_fun_expr": [
+       {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"DATETIME",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":19,
+            "scale":0
+          },
+          "flag":0,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+        ],
+        "table_id":-1,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"",
+        "synonym_name":"",
+        "column_name":"c1",
+        "expr_level":-1,
+        "expr_levels": [
+        ],
+        "column_flags":0,
+        "is_explicited_referece":false,
+        "explicited_ref_count":0,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    ],
+    "range_values_exprs": [
+       {
+        "item_type":"T_VARCHAR",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"binary",
+            "coercibility":"COERCIBLE"
+          },
+          "accuracy": {
+            "length":10,
+            "precision":1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_CONST",
+          "CNT_CONST"
+        ],
+        "rel_id": [
+        ],
+        "value": {
+          "VARCHAR":"1990-01-01",
+          "collation":"binary"
+        }
+      },
+       {
+        "item_type":"T_VARCHAR",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"binary",
+            "coercibility":"COERCIBLE"
+          },
+          "accuracy": {
+            "length":8,
+            "precision":1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_CONST",
+          "CNT_CONST"
+        ],
+        "rel_id": [
+        ],
+        "value": {
+          "VARCHAR":"19910101",
+          "collation":"binary"
+        }
+      }
+    ],
+    "list_values_exprs": [
+    ],
+    "index_partition_resolve_results": [
+    ],
+    "part_type":8
+  },
+  "stmt_type":20,
+  "create_table_arg": {
+    "if_not_exist":false,
+    "schema": {
+      "simple_table_schema": {
+        "tenant_id":1,
+        "database_id":-1,
+        "tablegroup_id":1099511627777,
+        "table_id":-1,
+        "table_name":"t6",
+        "replica_num":0,
+        "previous_locality_str":"",
+        "min_partition_id":0,
+        "session_id":0,
+        "index_type":0,
+        "table_type":3,
+        "data_table_id":0,
+        "name_casemode":-1,
+        "schema_version":0,
+        "part_level":1,
+        "part_option": {
+          "part_func_type":4,
+          "part_func_expr":"c1",
+          "part_num":2,
+          "partition_cnt_within_partition_table":-1,
+          "max_used_part_id":1
+        },
+        "sub_part_option": {
+          "part_func_type":0,
+          "part_func_expr":"",
+          "part_num":1,
+          "partition_cnt_within_partition_table":-1,
+          "max_used_part_id":-1
+        },
+        "locality_str":"",
+        "zone_list": [
+        ],
+        "primary_zone":"",
+        "part_num":0,
+        "subpart_num":0,
+        "partition_num":2,
+        "subpartition_num":0,
+        "partition_array": [
+           {
+            "BasePartition": {
+              "tenant_id":-1,
+              "table_id":-1,
+              "part_id":0,
+              "name":"p0",
+              "high_bound_val": {
+                "DATETIME":"1990-01-01 00:00:00"
+              },
+              "list_row_values": [
+              ],
+              "part_idx":-1
+            },
+            "mapping_pg_part_id":-1
+          },
+           {
+            "BasePartition": {
+              "tenant_id":-1,
+              "table_id":-1,
+              "part_id":1,
+              "name":"p1",
+              "high_bound_val": {
+                "DATETIME":"1991-01-01 00:00:00"
+              },
+              "list_row_values": [
+              ],
+              "part_idx":-1
+            },
+            "mapping_pg_part_id":-1
+          }
+        ],
+        "subpartition_array":null,
+        "index_status":1,
+        "binding":false,
+        "duplicate_scope":0
+      },
+      "max_used_column_id":17,
+      "max_used_constraint_id":0,
+      "sess_active_time":0,
+      "rowkey_column_num":3,
+      "index_column_num":0,
+      "rowkey_split_pos":0,
+      "block_size":16384,
+      "is_use_bloomfilter":false,
+      "progressive_merge_num":0,
+      "tablet_size":134217728,
+      "pctfree":10,
+      "load_type":0,
+      "index_using_type":0,
+      "def_type":1,
+      "charset_type":2,
+      "collation_type":45,
+      "create_mem_version":0,
+      "index_status":1,
+      "partition_status":0,
+      "code_version":1,
+      "last_modified_frozen_version":0,
+      "comment":"",
+      "pk_comment":"",
+      "create_host":"",
+      "zone_replica_attr_array": [
+      ],
+      "region_replica_num_array": [
+      ],
+      "tablegroup_name":"",
+      "compress_func_name":"zstd_1.0",
+      "row_store_type":1,
+      "store_format":3,
+      "expire_info":"",
+      "view_schema": {
+        "view_definition":"",
+        "check_option":"none",
+        "is_updatable":"false",
+        "is_materialized":"false"
+      },
+      "autoinc_column_id":0,
+      "auto_increment":1,
+      "read_only":false,
+      "primary_zone_array": [
+      ],
+      "index_tid_array": [
+      ],
+      "mv_tid_array": [
+      ],
+      "aux_vp_tid_array": [
+      ],
+      "base_table_ids": [
+      ],
+      "rowkey_info": {
+        "columns": [
+           {
+            "length":0,
+            "column_id":1,
+            "type": {
+              "type":"BIGINT UNSIGNED",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "order":0,
+            "fulltext_flag":false
+          },
+           {
+            "length":0,
+            "column_id":4,
+            "type": {
+              "type":"BIGINT UNSIGNED",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "order":0,
+            "fulltext_flag":false
+          },
+           {
+            "length":0,
+            "column_id":5,
+            "type": {
+              "type":"BIGINT UNSIGNED",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "order":0,
+            "fulltext_flag":false
+          }
+        ],
+        "capacity":3
+      },
+      "partition_key_info": {
+        "columns": [
+           {
+            "length":0,
+            "column_id":16,
+            "type": {
+              "type":"DATETIME",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "order":0,
+            "fulltext_flag":false
+          }
+        ],
+        "capacity":1
+      },
+      "aux_vp_tid_array": [
+      ]
+    },
+    "index_arg_list": [
+    ],
+    "constraint_list": [
+    ],
+    "db_name":"range_partition",
+    "last_replay_log_id":0,
+    "foreign_key_arg_list": [
+    ],
+    "vertical_partition_arg_list": [
+    ]
+  },
+  "index_arg_list": [
+  ]
+}
+***************   Case 10   ***************
+create table t7(c1 timestamp, c2 int) partition by range columns(c1) (partition p0 values less than('1990-01-01 10:10:10'), partition p1 values less than(19910101101010));
+***************   Case 11   ***************
+create table t8(c1 float, c2 int) partition by range columns(c1) (partition p0 values less than(20), partition p1 values less than(30), partition p2 values less than maxvalue);
+***************   Case 12   ***************
+create table t9(c1 varchar(30), c2 int) partition by range columns(c1) (partition p0 values less than(20), partition p1 values less than(30), partition p2 values less than maxvalue);
+***************   Case 13   ***************
+create table t10(c1 int, c2 int) partition by range columns(c1) (partition p0 values less than(1.20),partition p1 values less than(30));
+***************   Case 14   ***************
+create table t11(c1 int, c2 int) partition by range columns(c1) (partition p0 values less than(10), partition p0 values less than(300));
+***************   Case 15   ***************
+drop database range_partition;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"range_partition",
+  "if_exist":false,
+  "to_recyclebin":false
+}

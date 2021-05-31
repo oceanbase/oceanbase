@@ -1,0 +1,419 @@
+***************   Case 1   ***************
+
+SQL: merge into targetTable using sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales; 
+
+=================================================
+|ID|OPERATOR         |NAME       |EST. ROWS|COST|
+-------------------------------------------------
+|0 |MERGE            |           |810      |810 |
+|1 | MERGE OUTER JOIN|           |810      |688 |
+|2 |  TABLE SCAN     |sourceTable|100      |90  |
+|3 |  TABLE SCAN     |targetTable|100      |90  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([1]), filter(nil), 
+      columns([targetTable.id], [targetTable.sales]), partitions(nil), update([targetTable.sales=column_conv(INT,PS:(11,0),NULL,sourceTable.sales)]), 
+      match_conds([targetTable.id = sourceTable.id]), insert_conds(nil), 
+      update_conds(nil), delete_conds(nil)
+  1 - output([sourceTable.sales], [column_conv(INT,PS:(11,0),NULL,sourceTable.sales)], [targetTable.id = sourceTable.id], [targetTable.id]), filter(nil), 
+      equal_conds([targetTable.id = sourceTable.id]), other_conds(nil)
+  2 - output([sourceTable.id], [sourceTable.sales]), filter(nil), 
+      access([sourceTable.id], [sourceTable.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([sourceTable.id]), range(MIN ; MAX)always true
+  3 - output([targetTable.id], [targetTable.sales]), filter(nil), 
+      access([targetTable.id], [targetTable.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([targetTable.id]), range(MIN ; MAX)always true
+
+*************** Case 1(end)  ************** 
+
+***************   Case 2   ***************
+
+SQL: merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales); 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE            |    |810      |810 |
+|1 | MERGE OUTER JOIN|    |810      |688 |
+|2 |  TABLE SCAN     |t2  |100      |90  |
+|3 |  TABLE SCAN     |t1  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,t2.id)], [column_conv(INT,PS:(11,0),NULL,t2.sales)]), filter(nil), 
+      columns([t1.id], [t1.sales]), partitions(nil), 
+      match_conds([t1.id = t2.id]), insert_conds(nil), 
+      update_conds(nil), delete_conds(nil)
+  1 - output([t2.id], [column_conv(INT,PS:(11,0),NOT NULL,t2.id)], [t2.sales], [column_conv(INT,PS:(11,0),NULL,t2.sales)], [t1.id = t2.id], [t1.id]), filter(nil), 
+      equal_conds([t1.id = t2.id]), other_conds(nil)
+  2 - output([t2.id], [t2.sales]), filter(nil), 
+      access([t2.id], [t2.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.id]), range(MIN ; MAX)always true
+  3 - output([t1.id], [t1.sales]), filter(nil), 
+      access([t1.id], [t1.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.id]), range(MIN ; MAX)always true
+
+*************** Case 2(end)  ************** 
+
+***************   Case 3   ***************
+
+SQL: merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id and t1.id != t2.sales) when matched then update set t1.sales = t2.sales; 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE            |    |405      |405 |
+|1 | MERGE OUTER JOIN|    |405      |549 |
+|2 |  TABLE SCAN     |t2  |100      |90  |
+|3 |  TABLE SCAN     |t1  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([1]), filter(nil), 
+      columns([t1.id], [t1.sales]), partitions(nil), update([t1.sales=column_conv(INT,PS:(11,0),NULL,t2.sales)]), 
+      match_conds([t1.id = t2.id], [t1.id != t2.sales]), insert_conds(nil), 
+      update_conds(nil), delete_conds(nil)
+  1 - output([t2.sales], [column_conv(INT,PS:(11,0),NULL,t2.sales)], [t1.id = t2.id], [t1.id != t2.sales], [t1.id]), filter(nil), 
+      equal_conds([t1.id = t2.id]), other_conds([t1.id != t2.sales])
+  2 - output([t2.id], [t2.sales]), filter(nil), 
+      access([t2.id], [t2.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.id]), range(MIN ; MAX)always true
+  3 - output([t1.id], [t1.sales]), filter(nil), 
+      access([t1.id], [t1.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.id]), range(MIN ; MAX)always true
+
+*************** Case 3(end)  ************** 
+
+***************   Case 4   ***************
+
+SQL: merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id and t1.id != t2.sales) when matched then update set t1.sales = t2.sales where t1.sales > 1; 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE            |    |405      |405 |
+|1 | MERGE OUTER JOIN|    |405      |549 |
+|2 |  TABLE SCAN     |t2  |100      |90  |
+|3 |  TABLE SCAN     |t1  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([1]), filter(nil), 
+      columns([t1.id], [t1.sales]), partitions(nil), update([t1.sales=column_conv(INT,PS:(11,0),NULL,t2.sales)]), 
+      match_conds([t1.id = t2.id], [t1.id != t2.sales]), insert_conds(nil), 
+      update_conds([t1.sales > 1]), delete_conds(nil)
+  1 - output([t2.sales], [column_conv(INT,PS:(11,0),NULL,t2.sales)], [t1.id = t2.id], [t1.id != t2.sales], [t1.sales > 1], [t1.id]), filter(nil), 
+      equal_conds([t1.id = t2.id]), other_conds([t1.id != t2.sales])
+  2 - output([t2.id], [t2.sales]), filter(nil), 
+      access([t2.id], [t2.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.id]), range(MIN ; MAX)always true
+  3 - output([t1.id], [t1.sales]), filter(nil), 
+      access([t1.id], [t1.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.id]), range(MIN ; MAX)always true
+
+*************** Case 4(end)  ************** 
+
+***************   Case 5   ***************
+
+SQL: merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id and t1.id != t2.sales) when matched then update set t1.sales = t2.sales where t1.sales > 88 delete where t1.id < 99; 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE            |    |405      |405 |
+|1 | MERGE OUTER JOIN|    |405      |549 |
+|2 |  TABLE SCAN     |t2  |100      |90  |
+|3 |  TABLE SCAN     |t1  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([1]), filter(nil), 
+      columns([t1.id], [t1.sales]), partitions(nil), update([t1.sales=column_conv(INT,PS:(11,0),NULL,t2.sales)]), 
+      match_conds([t1.id = t2.id], [t1.id != t2.sales]), insert_conds(nil), 
+      update_conds([t1.sales > 88]), delete_conds([t1.id < 99])
+  1 - output([t2.sales], [column_conv(INT,PS:(11,0),NULL,t2.sales)], [t1.id = t2.id], [t1.id != t2.sales], [t1.sales > 88], [t1.id]), filter(nil), 
+      equal_conds([t1.id = t2.id]), other_conds([t1.id != t2.sales])
+  2 - output([t2.id], [t2.sales]), filter(nil), 
+      access([t2.id], [t2.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.id]), range(MIN ; MAX)always true
+  3 - output([t1.id], [t1.sales]), filter(nil), 
+      access([t1.id], [t1.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.id]), range(MIN ; MAX)always true
+
+*************** Case 5(end)  ************** 
+
+***************   Case 6   ***************
+
+SQL: merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0; 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE            |    |810      |810 |
+|1 | MERGE OUTER JOIN|    |810      |688 |
+|2 |  TABLE SCAN     |t2  |100      |90  |
+|3 |  TABLE SCAN     |t1  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,t2.id)], [column_conv(INT,PS:(11,0),NULL,t2.sales)]), filter(nil), 
+      columns([t1.id], [t1.sales]), partitions(nil), 
+      match_conds([t1.id = t2.id]), insert_conds([t2.id > 0]), 
+      update_conds(nil), delete_conds(nil)
+  1 - output([t2.id], [column_conv(INT,PS:(11,0),NOT NULL,t2.id)], [t2.sales], [column_conv(INT,PS:(11,0),NULL,t2.sales)], [t1.id = t2.id], [t2.id > 0], [t1.id]), filter(nil), 
+      equal_conds([t1.id = t2.id]), other_conds(nil)
+  2 - output([t2.id], [t2.sales]), filter(nil), 
+      access([t2.id], [t2.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.id]), range(MIN ; MAX)always true
+  3 - output([t1.id], [t1.sales]), filter(nil), 
+      access([t1.id], [t1.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.id]), range(MIN ; MAX)always true
+
+*************** Case 6(end)  ************** 
+
+***************   Case 7   ***************
+
+SQL: merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id = 999 delete where t1.sales =888 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id = 777; 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE            |    |810      |810 |
+|1 | MERGE OUTER JOIN|    |810      |688 |
+|2 |  TABLE SCAN     |t2  |100      |90  |
+|3 |  TABLE SCAN     |t1  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,t2.id)], [column_conv(INT,PS:(11,0),NULL,t2.sales)]), filter(nil), 
+      columns([t1.id], [t1.sales]), partitions(nil), update([t1.sales=column_conv(INT,PS:(11,0),NULL,t2.sales)]), 
+      match_conds([t1.id = t2.id]), insert_conds([t2.id = 777]), 
+      update_conds([t1.id = 999]), delete_conds([t1.sales = 888])
+  1 - output([t2.id], [column_conv(INT,PS:(11,0),NOT NULL,t2.id)], [t2.sales], [column_conv(INT,PS:(11,0),NULL,t2.sales)], [column_conv(INT,PS:(11,0),NULL,t2.sales)], [t1.id = t2.id], [t2.id = 777], [t1.id = 999], [t1.sales], [t1.id]), filter(nil), 
+      equal_conds([t1.id = t2.id]), other_conds(nil)
+  2 - output([t2.id], [t2.sales]), filter(nil), 
+      access([t2.id], [t2.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.id]), range(MIN ; MAX)always true
+  3 - output([t1.id], [t1.sales]), filter(nil), 
+      access([t1.id], [t1.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.id]), range(MIN ; MAX)always true
+
+*************** Case 7(end)  ************** 
+
+***************   Case 8   ***************
+
+SQL: merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id and t1.id != t2.sales) when matched then update set t1.sales = 1; 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE            |    |405      |405 |
+|1 | MERGE OUTER JOIN|    |405      |549 |
+|2 |  TABLE SCAN     |t2  |100      |90  |
+|3 |  TABLE SCAN     |t1  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([1]), filter(nil), 
+      columns([t1.id], [t1.sales]), partitions(nil), update([t1.sales=?]), 
+      match_conds([t1.id = t2.id], [t1.id != t2.sales]), insert_conds(nil), 
+      update_conds(nil), delete_conds(nil)
+  1 - output([t1.id = t2.id], [t1.id != t2.sales], [t1.id]), filter(nil), 
+      equal_conds([t1.id = t2.id]), other_conds([t1.id != t2.sales])
+  2 - output([t2.id], [t2.sales]), filter(nil), 
+      access([t2.id], [t2.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.id]), range(MIN ; MAX)always true
+  3 - output([t1.id], [t1.sales]), filter(nil), 
+      access([t1.id], [t1.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.id]), range(MIN ; MAX)always true
+
+*************** Case 8(end)  ************** 
+
+***************   Case 9   ***************
+
+SQL: merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(1, 1); 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE            |    |810      |810 |
+|1 | MERGE OUTER JOIN|    |810      |686 |
+|2 |  TABLE SCAN     |t2  |100      |88  |
+|3 |  TABLE SCAN     |t1  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?], [?]), filter(nil), 
+      columns([t1.id], [t1.sales]), partitions(nil), 
+      match_conds([t1.id = t2.id]), insert_conds(nil), 
+      update_conds(nil), delete_conds(nil)
+  1 - output([t1.id = t2.id], [t1.id]), filter(nil), 
+      equal_conds([t1.id = t2.id]), other_conds(nil)
+  2 - output([t2.id]), filter(nil), 
+      access([t2.id]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.id]), range(MIN ; MAX)always true
+  3 - output([t1.id], [t1.sales]), filter(nil), 
+      access([t1.id], [t1.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.id]), range(MIN ; MAX)always true
+
+*************** Case 9(end)  ************** 
+
+***************   Case 10   ***************
+
+SQL: merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id) values(t2.id); 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |MERGE            |    |810      |810 |
+|1 | MERGE OUTER JOIN|    |810      |686 |
+|2 |  TABLE SCAN     |t2  |100      |88  |
+|3 |  TABLE SCAN     |t1  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,t2.id)], [?]), filter(nil), 
+      columns([t1.id], [t1.sales]), partitions(nil), 
+      match_conds([t1.id = t2.id]), insert_conds(nil), 
+      update_conds(nil), delete_conds(nil)
+  1 - output([t2.id], [column_conv(INT,PS:(11,0),NOT NULL,t2.id)], [t1.id = t2.id], [t1.id]), filter(nil), 
+      equal_conds([t1.id = t2.id]), other_conds(nil)
+  2 - output([t2.id]), filter(nil), 
+      access([t2.id]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.id]), range(MIN ; MAX)always true
+  3 - output([t1.id], [t1.sales]), filter(nil), 
+      access([t1.id], [t1.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.id]), range(MIN ; MAX)always true
+
+*************** Case 10(end)  ************** 
+
+***************   Case 11   ***************
+
+SQL: merge into target1 using sourceTable on (target1.id = sourceTable.id) when matched then update set target1.c2 = sourceTable.sales; 
+
+=================================================
+|ID|OPERATOR         |NAME       |EST. ROWS|COST|
+-------------------------------------------------
+|0 |MERGE            |           |810      |810 |
+|1 | MERGE OUTER JOIN|           |810      |690 |
+|2 |  TABLE SCAN     |sourceTable|100      |90  |
+|3 |  TABLE SCAN     |target1    |100      |92  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([1]), filter(nil), 
+      columns([target1.id], [target1.c2], [target1.c3]), partitions(nil), update([target1.c2=column_conv(INT,PS:(11,0),NOT NULL,sourceTable.sales)]), 
+      match_conds([target1.id = sourceTable.id]), insert_conds(nil), 
+      update_conds(nil), delete_conds(nil)
+  1 - output([sourceTable.sales], [column_conv(INT,PS:(11,0),NOT NULL,sourceTable.sales)], [target1.id = sourceTable.id], [target1.id], [target1.c2]), filter(nil), 
+      equal_conds([target1.id = sourceTable.id]), other_conds(nil)
+  2 - output([sourceTable.id], [sourceTable.sales]), filter(nil), 
+      access([sourceTable.id], [sourceTable.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([sourceTable.id]), range(MIN ; MAX)always true
+  3 - output([target1.id], [target1.c2], [target1.c3]), filter(nil), 
+      access([target1.id], [target1.c2], [target1.c3]), partitions(p0), 
+      is_index_back=false, 
+      range_key([target1.id], [target1.c2]), range(MIN,MIN ; MAX,MAX)always true
+
+*************** Case 11(end)  ************** 
+
+***************   Case 12   ***************
+
+SQL: merge into target2 using sourceTable on (target2.id = sourceTable.id) when matched then update set target2.c2 = sourceTable.sales; 
+
+================================================
+|ID|OPERATOR        |NAME       |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE           |           |810      |810 |
+|1 | HASH OUTER JOIN|           |810      |828 |
+|2 |  TABLE SCAN    |sourceTable|100      |90  |
+|3 |  TABLE SCAN    |target2    |100      |97  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([1]), filter(nil), 
+      columns([target2.__pk_increment], [target2.__pk_cluster_id], [target2.__pk_partition_id], [target2.id], [target2.c2]), partitions(nil), update([target2.c2=column_conv(INT,PS:(11,0),NULL,sourceTable.sales)]), 
+      match_conds([target2.id = sourceTable.id]), insert_conds(nil), 
+      update_conds(nil), delete_conds(nil)
+  1 - output([sourceTable.sales], [column_conv(INT,PS:(11,0),NULL,sourceTable.sales)], [target2.id = sourceTable.id], [target2.__pk_increment], [target2.__pk_cluster_id], [target2.__pk_partition_id]), filter(nil), 
+      equal_conds([target2.id = sourceTable.id]), other_conds(nil)
+  2 - output([sourceTable.id], [sourceTable.sales]), filter(nil), 
+      access([sourceTable.id], [sourceTable.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([sourceTable.id]), range(MIN ; MAX)always true
+  3 - output([target2.id], [target2.c2], [target2.__pk_increment], [target2.__pk_cluster_id], [target2.__pk_partition_id]), filter(nil), 
+      access([target2.id], [target2.c2], [target2.__pk_increment], [target2.__pk_cluster_id], [target2.__pk_partition_id]), partitions(p0), 
+      is_index_back=false, 
+      range_key([target2.__pk_increment], [target2.__pk_cluster_id], [target2.__pk_partition_id]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+
+*************** Case 12(end)  ************** 
+
+***************   Case 13   ***************
+
+SQL: merge into targetTable t1 using (select * from sourceTable) t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id = 999 delete where t1.sales =888 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id = 777; 
+
+=================================================
+|ID|OPERATOR         |NAME       |EST. ROWS|COST|
+-------------------------------------------------
+|0 |MERGE            |           |100      |100 |
+|1 | MERGE OUTER JOIN|           |100      |274 |
+|2 |  SUBPLAN SCAN   |t2         |100      |104 |
+|3 |   TABLE SCAN    |sourceTable|100      |90  |
+|4 |  TABLE SCAN     |t1         |100      |90  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,t2.id)], [column_conv(INT,PS:(11,0),NULL,t2.sales)]), filter(nil), 
+      columns([t1.id], [t1.sales]), partitions(nil), update([t1.sales=column_conv(INT,PS:(11,0),NULL,t2.sales)]), 
+      match_conds([t1.id = t2.id]), insert_conds([t2.id = 777]), 
+      update_conds([t1.id = 999]), delete_conds([t1.sales = 888])
+  1 - output([t2.id], [column_conv(INT,PS:(11,0),NOT NULL,t2.id)], [t2.sales], [column_conv(INT,PS:(11,0),NULL,t2.sales)], [column_conv(INT,PS:(11,0),NULL,t2.sales)], [t1.id = t2.id], [t2.id = 777], [t1.id = 999], [t1.sales], [t1.id]), filter(nil), 
+      equal_conds([t1.id = t2.id]), other_conds(nil)
+  2 - output([t2.id], [t2.sales]), filter(nil), 
+      access([t2.id], [t2.sales])
+  3 - output([sourceTable.id], [sourceTable.sales]), filter(nil), 
+      access([sourceTable.id], [sourceTable.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([sourceTable.id]), range(MIN ; MAX)always true
+  4 - output([t1.id], [t1.sales]), filter(nil), 
+      access([t1.id], [t1.sales]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.id]), range(MIN ; MAX)always true
+
+*************** Case 13(end)  ************** 
+

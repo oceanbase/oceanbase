@@ -1,0 +1,2649 @@
+[0] (a, b, c) > (?{1}, ?{2}, ?{3}) and (a, b, c) < (?{2}, ?{3}, ?{4})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3},{"BIGINT":4})"}]
+
+[1] a > 1 and b < 1 or (a > 2 and b < 2) 
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"BIGINT":1},MAX;MAX,MAX)"}]
+
+[2] (a > 1 or c < 2) and b > 1
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,(MIN,MIN,MIN;MAX,MAX,MAX)"}]
+
+[3] #((a, b), (c, d), (e, f)) < ((1, 2), (2, 3), (3, 4)) and ((a, b), (c, d), (e, f)) < ((1, 1), (2, 2), (3, 3))
+[4] #((a, b), (c, d), (e, f)) > ((1, 2), (2, 3), (3, 4)) and ((a, b), (c, d), (e, f)) < ((1, 1), (2, 2), (3, 3))
+[5] #((a, b), (c, d), (e, f)) > ((?{1}, 2), (?{2}, 3), (3, ?4)) and ((a, b), (c, d), (e, f)) < ((?1, ?1), (?2, ?2), (?3, ?3))
+[6] (a, b, c) < (1, 2, 3) and (a, b, c) < (2, 3, 4)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX;{"BIGINT":1},{"BIGINT":2},{"BIGINT":3})"}]
+
+[7] (a, b, c) < (1, 2, ?{3}) and (a, b, c) < (2, ?{3}, 4)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX;{"BIGINT":1},{"BIGINT":2},{"BIGINT":3})"}]
+
+[8] (a, b, c) < (1, 2, 3) and (a, b, c) < (2, 0, 0)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX;{"BIGINT":1},{"BIGINT":2},{"BIGINT":3})"}]
+
+[9] (a, b, c) < (?{1}, ?{2}, ?{3}) and (a, b, c) < (?{2}, ?{0}, ?{0})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX;{"BIGINT":1},MAX,MAX)"}]
+
+[10] (a, b, c) < (1, 2, 3) and (a, b, c) < (1, 0, 0)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX;{"BIGINT":1},{"BIGINT":0},{"BIGINT":0})"}]
+
+[11] (a, b, c) < (1, 2, 3) and (a, b, c) < (?{1}, ?{0}, ?{0})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX;{"BIGINT":1},MAX,MAX)"}]
+
+[12] (a, b, c) > (1, 2, 3) and (a, b, c) > (2, 0, 0)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":2},{"BIGINT":0},{"BIGINT":0};MAX,MAX,MAX)"}]
+
+[13] (a, b, c) > (?{1}, ?{2}, ?{3}) and (a, b, c) > (2, 0, 0)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":2},MIN,MIN;MAX,MAX,MAX)"}]
+
+[14] (a, b, c) > (1, 2, 3) and (a, b, c) < (0, 4, 1)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,(MAX,MAX,MAX;MIN,MIN,MIN)"}]
+
+[15] (a, b, c) > (?{1}, 2, ?{3}) and (a, b, c) < (0, ?{4}, ?{1})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,(MAX,MAX,MAX;MIN,MIN,MIN)"}]
+
+[16] (a, b, c) > (1, 2, 3) and (a, b, c) < (2, 0, 0)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":0},{"BIGINT":0})"}]
+
+[17] (a, b, c) > (?{1}, ?{2}, 3) and (a, b, c) < (2, ?{0}, ?{0})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":2},{"BIGINT":0},MAX)"}]
+
+[18] (a, b, c) > (1, 2, 3) and (a, b, c) < (2, 3, 4)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3},{"BIGINT":4})"}]
+
+[19] (a, b, c) > (?{1}, 2, 3) and (a, b, c) < (2, 3, ?{4})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},MIN;{"BIGINT":2},{"BIGINT":3},MAX)"}]
+
+[20] (a, b, c) > (1, 2, 3) and (1, 2, 3) < (2, 3, 4)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},{"BIGINT":3};MAX,MAX,MAX)"}]
+
+[21] (1, b, c) < (0, b, c) and (1, b, c) < (2, b, c)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,(MAX,MAX;MIN,MIN)"}]
+
+[22] (1, 2, 3) < (2, 3, 4) and (a, b, c) > (?{1}, 2, 3)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},{"BIGINT":3};MAX,MAX,MAX)"}]
+
+[23] (a, b, c) < (?{1}, ?{2}, ?{3}) and (a, b, c) > (?{0}, ?{2}, ?{3})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":0},{"BIGINT":2},{"BIGINT":3};{"BIGINT":1},{"BIGINT":2},{"BIGINT":3})"}]
+
+[24] (a, b, c) < (2, 3, 4) and (a, b, c) > (2, 1, 3)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":2},{"BIGINT":1},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3},{"BIGINT":4})"}]
+
+[25] (a, b) > (1, 2) and (a, b) < (2, 0) and (a, b) > (2, 3) and (a, b) < (3, 1)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,(MAX,MIN;MIN,MAX)"}]
+
+[26] (a, b, c) > (?{1}, ?{2}, ?{3}) and (a, b, c) > (?{2}, ?{0}, ?{0})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":2},MIN,MIN;MAX,MAX,MAX)"}]
+
+[27] ((a, b, c) > (1, 2, 3) and (a, b, c) < (4, 5, 6)) and ((a, b, c) > (2, 3, 4) and (a, b, c) < (7, 8, 9))
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":2},{"BIGINT":3},{"BIGINT":4};{"BIGINT":4},{"BIGINT":5},{"BIGINT":6})"}]
+
+[28] ((a, b, c) > (?{1}, ?{2}, ?{3}) and (a, b, c) < (?{4}, ?{5}, ?{6})) and ((a, b, c) > (?{2}, ?{3}, ?{4}) and (a, b, c) < (?{7}, ?{8}, ?{9}))
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":2},MIN,MIN;{"BIGINT":4},MAX,MAX)"}]
+
+[29] (a > 1 or a < 2) and (b < 1 or b > 2) and (c > 1 or c > 2) and (d > 1 or d < 3)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 4
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX,MAX;MAX,MAX,MAX,MAX)"}]
+
+[30] NULL and a > 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[31] a != 1
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"NULL":"NULL"};{"BIGINT":1})"}, {"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[32] (a > 1 and b > 1) or (b < 0)
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,(MIN,MIN;MAX,MAX)"}]
+
+[33] (a < 1 or a > 10) and (a > 3 or b < 0) 
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX;{"BIGINT":1},MIN)"}, {"range":"table_id:3003,({"BIGINT":10},MAX;MAX,MAX)"}]
+
+[34] ((a < 1 and b < 1 or b < 4) and c > 1) and ((a > 3 and b < 4 or a < 1 and b < 2) and b = 3) 
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":3},MAX,MAX;MAX,{"BIGINT":3},MAX)"}]
+
+[35] (a < 1 and a >2) and a < 3
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[36] a > 1 and (NULL <=> 0)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[37] a > 1 and false
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[38] a > 1 or a > 1 or a > 1 or a > 1 or a < 1
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}, {"range":"table_id:3003,({"NULL":"NULL"};{"BIGINT":1})"}]
+
+[39] a > 1 or a > 1 or a > 1 or a > 1 or 0 < 1
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[40] a > 1 or a > 1 or a > 1 or a > 1 or 1 < 0
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[41] (a, b, c) > (1, 2, 3) and (a, b, c) <= (2, 3, 4)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3},{"BIGINT":4}]"}]
+
+[42] (a, b, c) > (1, 2, 3) or (a, b, c) <= (2, 3, 4)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX;MAX,MAX,MAX)"}]
+
+[43] (a, b, c) > (1, 2, 3) or (a, b, c) >= (2, 3, 4) and (a, b, c) <= (4, 5, 6)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},MIN,MIN;MAX,MAX,MAX)"}]
+
+[44] (a, b, c) > (1, 2, 3) or (a, b, c) < (1, 2, 3)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX;MAX,MAX,MAX)"}]
+
+[45] (a, b, c) > (1, 2, 3) or (a, b, c) < (0, 1, 2)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},{"BIGINT":3};MAX,MAX,MAX)"}, {"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX;{"BIGINT":0},{"BIGINT":1},{"BIGINT":2})"}]
+
+[46] (a, b, c) > (1, 2, 3) and (a, b, c) < (0, 1, 2) or (a, b, c) < (0, 1, 2)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX,MAX;{"BIGINT":0},{"BIGINT":1},{"BIGINT":2})"}]
+
+[47] a >= 1 and b < 1 and (a <= 1 and b < 1)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"BIGINT":1},{"NULL":"NULL"};{"BIGINT":1},{"BIGINT":1})"}]
+
+[48] a >= 1 and b < 1 and (0 <= 1 and 2 < 1)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,(MAX,MAX;MIN,MIN)"}]
+
+[49] 2 >= 1 and 3 < 1 and (a <= 1 and b < 1)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,(MAX,MAX;MIN,MIN)"}]
+
+[50] a > 3 and b < 10 or (a < 4 and b < 5) 
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX;MAX,MAX)"}]
+
+[51] a > ?{3} and b < ?{10} or (a < ?{4} and b < ?{5}) 
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX;MAX,MAX)"}]
+
+[52] a > 3 and b < 10 and (a < 4 and b < 5) 
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"BIGINT":3},MAX;{"BIGINT":4},MIN)"}]
+
+[53] a > ?{3} and b < ?{10} and (a < ?{4} and b < ?{5}) 
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"BIGINT":3},MAX;{"BIGINT":4},MIN)"}]
+
+[54] 1 < 2 or 1 < 3 or 1 < 4 and a > 1
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[55] 1 > 2 or 1 > 3 or 1 > 4 and a > 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[56] a is NULL
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+
+[57] a is TRUE
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[58] a between 1 and 10
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":1};{"BIGINT":10}]"}]
+
+[59] a not between 1 and 10
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"NULL":"NULL"};{"BIGINT":1})"}, {"range":"table_id:3003,({"BIGINT":10};MAX)"}]
+
+[60] a = (1 + 5)
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[61] a = (1 < 5)
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[62] 5 = a
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":5}]"}]
+
+[63] a = 5 and 1 > 5
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[64] a = 5 and 1 = 5
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[65] a = 5 and 2 >= 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":5}]"}]
+
+[66] a = 5 and 2 <= 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[67] a = 5 and ?{1} = ?{1}
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":5}]"}]
+
+[68] a = 5 and b = 6
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":5},{"BIGINT":6};{"BIGINT":5},{"BIGINT":6}]"}]
+
+[69] a = ?{5}
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":5}]"}]
+
+[70] (a = 5) or (a = 6)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 1
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":5}]"}, {"range":"table_id:3003,[{"BIGINT":6};{"BIGINT":6}]"}]
+
+[71] a = ?{5} or a = ?{6}
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 1
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":5}]"}, {"range":"table_id:3003,[{"BIGINT":6};{"BIGINT":6}]"}]
+
+[72] a = ?{5} or a = 6
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 1
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":5}]"}, {"range":"table_id:3003,[{"BIGINT":6};{"BIGINT":6}]"}]
+
+[73] (a >= 5) or (a < 10)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"NULL":"NULL"};MAX)"}]
+
+[74] a >= ?{5} or a < 10
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"NULL":"NULL"};MAX)"}]
+
+[75] a >= 5 and a < 10
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":10})"}]
+
+[76] a >= 5 and a < ?{10}
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":10})"}]
+
+[77] a >= ?{5} and a < ?{10}
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":10})"}]
+
+[78] a >= 5 and a < 10 and a <= 8
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":8}]"}]
+
+[79] a >= ?{5} and a < ?{10} and a <= ?{8}
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":8}]"}]
+
+[80] (a >= 5 and a < 10) or a <= 8
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"NULL":"NULL"};{"BIGINT":10})"}]
+
+[81] (a >= ?{5} and a < ?{10}) or a <= ?{8}
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"NULL":"NULL"};{"BIGINT":10})"}]
+
+[82] (a >= 5 and a < 10) or (a > 8 and a <= 13)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":13}]"}]
+
+[83] a < 3 and a = ?{3} or a <= 3
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,({"NULL":"NULL"};{"BIGINT":3}]"}]
+
+[84] (a >= ?{5} and a < ?{10}) or (a > ?{8} and a <= ?{13})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":13}]"}]
+
+[85] (a >= 10 or a < 5) and (a < 8 or a >= 13)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":13};MAX)"}, {"range":"table_id:3003,({"NULL":"NULL"};{"BIGINT":5})"}]
+
+[86] a <= 5 and a > 10
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[87] (a >= 10 or a < 5) and (a < 8 or a >= 13)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":13};MAX)"}, {"range":"table_id:3003,({"NULL":"NULL"};{"BIGINT":5})"}]
+
+[88] (a > 1 or a < 2 or a > 3) and (b > 1)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX;MAX,MAX)"}]
+
+[89] a in (5, 6, 8, 15)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 4
+get_methods.count() = 4
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+get_methods 3: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+star_border_flag[3] = 1
+end_border_flag[3] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":5};{"BIGINT":5}]"}, {"range":"table_id:3003,[{"BIGINT":6};{"BIGINT":6}]"}, {"range":"table_id:3003,[{"BIGINT":8};{"BIGINT":8}]"}, {"range":"table_id:3003,[{"BIGINT":15};{"BIGINT":15}]"}]
+
+[90] a < 0 or a > 0
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"NULL":"NULL"};{"BIGINT":0})"}, {"range":"table_id:3003,({"BIGINT":0};MAX)"}]
+
+[91] a = 5 and b = 6
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":5},{"BIGINT":6};{"BIGINT":5},{"BIGINT":6}]"}]
+
+[92] b = 6 and a = 5
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":5},{"BIGINT":6};{"BIGINT":5},{"BIGINT":6}]"}]
+
+[93] a = ?{5} and b = ?{6}
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":5},{"BIGINT":6};{"BIGINT":5},{"BIGINT":6}]"}]
+
+[94] b = ?{6} and a = ?{5}
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":5},{"BIGINT":6};{"BIGINT":5},{"BIGINT":6}]"}]
+
+[95] (b = 6 and a = 5) or (a = 10 and b = 15) 
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 1
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":5},{"BIGINT":6};{"BIGINT":5},{"BIGINT":6}]"}, {"range":"table_id:3003,[{"BIGINT":10},{"BIGINT":15};{"BIGINT":10},{"BIGINT":15}]"}]
+
+[96] (b = 6 and a < 5) or (a > 8 and b = 15)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX;{"BIGINT":5},MIN)"}, {"range":"table_id:3003,({"BIGINT":8},MAX;MAX,{"BIGINT":15})"}]
+
+[97] (b = ?{6} and a = ?{5}) or (a = ?{10} and b = ?{15})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 1
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":5},{"BIGINT":6};{"BIGINT":5},{"BIGINT":6}]"}, {"range":"table_id:3003,[{"BIGINT":10},{"BIGINT":15};{"BIGINT":10},{"BIGINT":15}]"}]
+
+[98] (b = 6 and a < 5) or (a < 8 and b = 15)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX;{"BIGINT":8},MIN)"}]
+
+[99] (b = ?{6} and a < ?{5}) or (a < ?{8} and b = ?{15})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX;{"BIGINT":8},MIN)"}]
+
+[100] (b = 6 and a < 5) or (a > 8 and b = 15)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX;{"BIGINT":5},MIN)"}, {"range":"table_id:3003,({"BIGINT":8},MAX;MAX,{"BIGINT":15})"}]
+
+[101] (a,b) in ((5,6), (8,15), (20,30), (40,50))
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 4
+get_methods.count() = 4
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+get_methods 3: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+star_border_flag[3] = 1
+end_border_flag[3] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":5},{"BIGINT":6};{"BIGINT":5},{"BIGINT":6}]"}, {"range":"table_id:3003,[{"BIGINT":8},{"BIGINT":15};{"BIGINT":8},{"BIGINT":15}]"}, {"range":"table_id:3003,[{"BIGINT":20},{"BIGINT":30};{"BIGINT":20},{"BIGINT":30}]"}, {"range":"table_id:3003,[{"BIGINT":40},{"BIGINT":50};{"BIGINT":40},{"BIGINT":50}]"}]
+
+[102] (a,b) in ((?{5},?{6}),(?{8},?{15}), (?{20},?{30}), (?{40},?{50}))
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 4
+get_methods.count() = 4
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+get_methods 3: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+star_border_flag[3] = 1
+end_border_flag[3] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":5},{"BIGINT":6};{"BIGINT":5},{"BIGINT":6}]"}, {"range":"table_id:3003,[{"BIGINT":8},{"BIGINT":15};{"BIGINT":8},{"BIGINT":15}]"}, {"range":"table_id:3003,[{"BIGINT":20},{"BIGINT":30};{"BIGINT":20},{"BIGINT":30}]"}, {"range":"table_id:3003,[{"BIGINT":40},{"BIGINT":50};{"BIGINT":40},{"BIGINT":50}]"}]
+
+[103] (b = 6 and a = 5) and (a = 10 and b = 15)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,(MAX,MAX;MIN,MIN)"}]
+
+[104] (b >= 5 and a = 10) and (a = 10 and b <= 15)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":10},{"BIGINT":5};{"BIGINT":10},{"BIGINT":15}]"}]
+
+[105] (b >= ?{5} and a = ?{10}) and (a = 10 and b <= 15)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":10},{"BIGINT":5};{"BIGINT":10},{"BIGINT":15}]"}]
+
+[106] a in (?{1}, ?{2}, ?{1})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 1
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2};{"BIGINT":2}]"}]
+
+[107] (a, b, c) > (?{1} , ?{1}, ?{1}) and (a, b, c) < (?{1}, ?{1}, ?{2})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":2})"}]
+
+[108] (a, b, c) > (?{1} , ?{1}, ?{1}) and (a, b, c) < (?{1}, ?{1}, ?{1})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1})"}]
+
+[109] a > 207474332 and a = 207474332
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[110] f > "asas" and f < "asasa"
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"VARCHAR":"asas", collation:"utf8mb4_general_ci"};{"VARCHAR":"asasa", collation:"utf8mb4_general_ci"})"}]
+
+[111] f = 'a'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"}]"}]
+
+[112] f < ?[a]
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"NULL":"NULL"};{"VARCHAR":"a", collation:"utf8mb4_general_ci"})"}]
+
+[113] f >= 'a' and f <='b'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"b", collation:"utf8mb4_general_ci"}]"}]
+
+[114] f > ?[a] and f < ?[b]
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"b", collation:"utf8mb4_general_ci"})"}]
+
+[115] f >= 'a' and f <= 'B'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"B", collation:"utf8mb4_general_ci"}]"}]
+
+[116] f > ?[a] and f < ?[B]
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};{"VARCHAR":"B", collation:"utf8mb4_general_ci"})"}]
+
+[117] a like 1
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[118] a > 1 and a < 2 and a like 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};{"BIGINT":2})"}]
+
+[119] f > 'a' or  f < 'b' and (h < 'a' or h > 'k') 
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX;MAX,MAX)"}]
+
+[120] NULL and f > 'a'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[121] 1 != 2 and f > 'a'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
+
+[122] 1 = 2 and f > 'a'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[123] f > 'a' and h  < 'b' and g >'j' and a > 1 and b < 2
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 5
+[{"range":"table_id:3003,({"BIGINT":1},MAX,MAX,MAX,MAX;MAX,{"BIGINT":2},MIN,MIN,MIN)"}]
+
+[124] 1 and a > 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[125] 0 and a < 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[126] 1 and 0 and a > 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[127] a > 1 and 1 and 0
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[128] a > 1 or 1
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[129] 0.0 and a > 1 and 1.0
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[130] a > 1 and 'asasa' and 1.0
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[131] false and 123 or a > 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[132] true and 1.0 and 0.000000001 or a > 1
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[133] 'asas' or a > 1 and true
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[134] true and 1 and 1.0 or a > 1
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[135] false and a > 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[136] a = (20 > 30) or (20 > 30) or (20 > -3)
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[137] a > 1 and null <=> null
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[138] a > 1 and null = null
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[139] a > 1 and a > null
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[140] a > 1 or a <=> null
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 1
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}, {"range":"table_id:3003,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+
+[141] a > 1 and null < 0 
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[142] a > 1 and a like null
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[143] a > 1 and 1 <=> null
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[144] a > 1 and null is null
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[145] f like 'h%' OR f like ?[aaa]
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"VARCHAR":"h", collation:"utf8mb4_general_ci"};{"VARCHAR":"h" '<EFBFBF><repeat 682 times>' " ", collation:"utf8mb4_general_ci"}]"}, {"range":"table_id:3003,[{"VARCHAR":"aaa", collation:"utf8mb4_general_ci"};{"VARCHAR":"aaa", collation:"utf8mb4_general_ci"}]"}]
+
+[146] f like ?[h%] OR f like ?[aaa]
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"VARCHAR":"h", collation:"utf8mb4_general_ci"};{"VARCHAR":"h" '<EFBFBF><repeat 682 times>' " ", collation:"utf8mb4_general_ci"}]"}, {"range":"table_id:3003,[{"VARCHAR":"aaa", collation:"utf8mb4_general_ci"};{"VARCHAR":"aaa", collation:"utf8mb4_general_ci"}]"}]
+
+[147] f like ?[h%] OR f like 'aaa'
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 0
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"VARCHAR":"h", collation:"utf8mb4_general_ci"};{"VARCHAR":"h" '<EFBFBF><repeat 682 times>' " ", collation:"utf8mb4_general_ci"}]"}, {"range":"table_id:3003,[{"VARCHAR":"aaa", collation:"utf8mb4_general_ci"};{"VARCHAR":"aaa", collation:"utf8mb4_general_ci"}]"}]
+
+[148] f like 'h%' AND f like 'aaa'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[149] f like ?[h%] AND f like ?[aaa]
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[150] f > 'a' OR f like 'aaa'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
+
+[151] f > ?[a] OR f like ?[aaa]
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"VARCHAR":"a", collation:"utf8mb4_general_ci"};MAX)"}]
+
+[152] f > ?[a] AND f like ?[h%]
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"VARCHAR":"h", collation:"utf8mb4_general_ci"};{"VARCHAR":"h" '<EFBFBF><repeat 682 times>' " ", collation:"utf8mb4_general_ci"}]"}]
+
+[153] a>1 or '1' like '2'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[154] a>1 or 1 like 1.0
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[155] a>1 or 1 like 1
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[156] a>1 or 1 like 1.223
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[157] a > 1 and 1 like 1.0
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[158] a > 1 and 1 like '1'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[159] a > 1 and 1.0 like '1'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[160] a > 1 and 'a' like 'aa' 
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[161] a > 1 and 'a' like 'aa' escape 'a' 
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,({"BIGINT":1};MAX)"}]
+
+[162] a like '1'
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[163] a like '1%'
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[164] f like '1%'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"VARCHAR":"1", collation:"utf8mb4_general_ci"};{"VARCHAR":"1" '<EFBFBF><repeat 682 times>' " ", collation:"utf8mb4_general_ci"}]"}]
+
+[165] f like '1'
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"VARCHAR":"1", collation:"utf8mb4_general_ci"};{"VARCHAR":"1", collation:"utf8mb4_general_ci"}]"}]
+
+[166] f like 1
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MIN;MAX)"}]
+
+[167] a = ?{1} and b = ?{1} and (a, b) = (?{1},?{1})
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}]
+
+[168] a = ?{1} and b = 1 and (a, b) = (1,1)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}]
+
+[169] a = 1 and b = 1 and (a, b) = (1,1)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}]
+
+[170] a = 1 and b = 1 and (a, b) = (1,2)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,(MAX,MAX;MIN,MIN)"}]
+
+[171] (a, b) > (1, 1) and (a, b) = (1, 2)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}]
+
+[172] (a, b) > (1, 1) and (a, b) = (?{1}, 2)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}]
+
+[173] (a, c) > (1, 2) and (a, b, c) > (1, 2, 3)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},{"BIGINT":3};MAX,MAX,MAX)"}]
+
+[174] (a, b) > (1, 2) and (a, b) <  (2, 3) and (a, b) > (1, 4) and (a, b) < (2, 5)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,(MAX,MIN;MIN,MAX)"}]
+
+[175] (a, b) > (?{1}, 2) and (a, b) <  (2, 3) and (a, b) > (1, 4) and (a, b) < (2, 5)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":4};{"BIGINT":2},MAX)"}]
+
+[176] a=50 and (a, b, c) > (50, 55, 60)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":50},MIN,MIN;{"BIGINT":50},MAX,MAX)"}]
+
+[177] a=50 and b>70 and (a, b, c) > (50, 55, 60)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":50},{"BIGINT":70},MAX;{"BIGINT":50},MAX,MAX)"}]
+
+[178] a=50 and b=70 and (a, b, c) > (50, 55, 60)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":50},{"BIGINT":70},MIN;{"BIGINT":50},{"BIGINT":70},MAX)"}]
+
+[179] a=50 and b=70 and c=80 and (a, b, c) > (50, 55, 60)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":50},{"BIGINT":70},{"BIGINT":80};{"BIGINT":50},{"BIGINT":70},{"BIGINT":80}]"}]
+
+[180] a=50 and b=70 and c<80 and (a, b, c) > (50, 55, 60)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":50},{"BIGINT":55},{"BIGINT":60};{"BIGINT":50},{"BIGINT":70},{"BIGINT":80})"}]
+
+[181] a=50 and b=70 and c<80 or c < 90 or b > 60 and (a, b, c) > (50, 55, 60) 
+query range need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,(MIN,MIN,MIN;MAX,MAX,MAX)"}]
+
+[182] a is null
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+
+[183] e=?{-1}
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[184] e= -1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[185] a <=> ?[NULL] and b=?{1}
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"NULL":"NULL"},{"BIGINT":1};{"NULL":"NULL"},{"BIGINT":1}]"}]
+
+[186] a between ?[NULL] and ?{2}
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 1
+[{"range":"table_id:3003,(MAX;MIN)"}]
+
+[187] d in (9999.99, 0)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"FLOAT":"0.000000000e+00"};{"FLOAT":"0.000000000e+00"}]"}]
+
+[188] d in (9999, 0)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 1
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"FLOAT":"9.999000000e+03"};{"FLOAT":"9.999000000e+03"}]"}, {"range":"table_id:3003,[{"FLOAT":"0.000000000e+00"};{"FLOAT":"0.000000000e+00"}]"}]
+
+[189] d in (?[-99999.99999], ?[0.0])
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"FLOAT":"0.000000000e+00"};{"FLOAT":"0.000000000e+00"}]"}]
+
+[190] (a, b, c) in ((1, 2, 3), (4, 5, 6))
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 1
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":1},{"BIGINT":2},{"BIGINT":3}]"}, {"range":"table_id:3003,[{"BIGINT":4},{"BIGINT":5},{"BIGINT":6};{"BIGINT":4},{"BIGINT":5},{"BIGINT":6}]"}]
+
+[191] (a, b, c) in ((1, 2, 3), (4, (select 5), 6))
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 1
+get_methods 1: 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":1},{"BIGINT":2},{"BIGINT":3}]"}, {"range":"table_id:3003,({"BIGINT":4},MIN,MIN;{"BIGINT":4},MAX,MAX)"}]
+
+[192] (a, b, c) in((1, 2, 3), ((select 4), 5, 6))
+query range not need to deep copy
+is min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,(MIN,MIN,MIN;MAX,MAX,MAX)"}]
+
+[193] a = 1 and b is null and c=2
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"NULL":"NULL"},{"BIGINT":2};{"BIGINT":1},{"NULL":"NULL"},{"BIGINT":2}]"}]
+
+[194] a is null
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+
+[195] a <=> null
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"NULL":"NULL"};{"NULL":"NULL"}]"}]
+
+[196] (a, b, c) = (1, 2, 3)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":1},{"BIGINT":2},{"BIGINT":3}]"}]
+
+[197] a <=> ?[NULL] and b = 1
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"NULL":"NULL"},{"BIGINT":1};{"NULL":"NULL"},{"BIGINT":1}]"}]
+
+[198] (a, b, c) = (?{1}, 2, 3)
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":1},{"BIGINT":2},{"BIGINT":3}]"}]
+
+[199] a in (NULL, 1, 2, 3)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 3
+get_methods.count() = 3
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":3};{"BIGINT":3}]"}]
+
+[200] a in (1,2,3,NULL)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 3
+get_methods.count() = 3
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+count of rang columns = 1
+[{"range":"table_id:3003,[{"BIGINT":1};{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2};{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":3};{"BIGINT":3}]"}]
+
+[201] a in (NULL, 1,2,3) and b in (NULL,1,2,3)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 9
+get_methods.count() = 9
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+get_methods 3: 1
+get_methods 4: 1
+get_methods 5: 1
+get_methods 6: 1
+get_methods 7: 1
+get_methods 8: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+star_border_flag[3] = 1
+end_border_flag[3] = 1
+star_border_flag[4] = 1
+end_border_flag[4] = 1
+star_border_flag[5] = 1
+end_border_flag[5] = 1
+star_border_flag[6] = 1
+end_border_flag[6] = 1
+star_border_flag[7] = 1
+end_border_flag[7] = 1
+star_border_flag[8] = 1
+end_border_flag[8] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":3};{"BIGINT":1},{"BIGINT":3}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":1};{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}, {"range":"table_id:3003,[{"BIGINT":3},{"BIGINT":1};{"BIGINT":3},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":3},{"BIGINT":2};{"BIGINT":3},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":3},{"BIGINT":3};{"BIGINT":3},{"BIGINT":3}]"}]
+
+[202] a = ?{1} and b = ?{1} and c in (?{1},?{2},?{3})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 3
+get_methods.count() = 3
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":3};{"BIGINT":1},{"BIGINT":1},{"BIGINT":3}]"}]
+
+[203] a = ?{1} and (b = ?{1} or b = ?{2}) and c in (?{1},?{2},?{3})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 6
+get_methods.count() = 6
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+get_methods 3: 1
+get_methods 4: 1
+get_methods 5: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+star_border_flag[3] = 1
+end_border_flag[3] = 1
+star_border_flag[4] = 1
+end_border_flag[4] = 1
+star_border_flag[5] = 1
+end_border_flag[5] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":3};{"BIGINT":1},{"BIGINT":1},{"BIGINT":3}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":1};{"BIGINT":1},{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":1},{"BIGINT":2},{"BIGINT":3}]"}]
+
+[204] (a = ?{1} or a = ?{2}) and b = ?{1} and c in (?{1}, ?{2}, ?{3})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 6
+get_methods.count() = 6
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+get_methods 3: 1
+get_methods 4: 1
+get_methods 5: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+star_border_flag[3] = 1
+end_border_flag[3] = 1
+star_border_flag[4] = 1
+end_border_flag[4] = 1
+star_border_flag[5] = 1
+end_border_flag[5] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":3};{"BIGINT":1},{"BIGINT":1},{"BIGINT":3}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":1},{"BIGINT":1};{"BIGINT":2},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":1},{"BIGINT":2};{"BIGINT":2},{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":1},{"BIGINT":3};{"BIGINT":2},{"BIGINT":1},{"BIGINT":3}]"}]
+
+[205] a = ?{1} and (b,c) in ((?{1},?{2}),(?{2},?{3}))
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 2
+get_methods.count() = 2
+get_methods 0: 1
+get_methods 1: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":1},{"BIGINT":2},{"BIGINT":3}]"}]
+
+[206] a = ?{1} and b in (?{1},?{2},?{3}) and c = ?{1}
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 3
+get_methods.count() = 3
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":1};{"BIGINT":1},{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":3},{"BIGINT":1};{"BIGINT":1},{"BIGINT":3},{"BIGINT":1}]"}]
+
+[207] a = ?{1} and b in (?{1}, ?{2}, ?{3}) and c in (?{1}, ?{2}, ?{3})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 9
+get_methods.count() = 9
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+get_methods 3: 1
+get_methods 4: 1
+get_methods 5: 1
+get_methods 6: 1
+get_methods 7: 1
+get_methods 8: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+star_border_flag[3] = 1
+end_border_flag[3] = 1
+star_border_flag[4] = 1
+end_border_flag[4] = 1
+star_border_flag[5] = 1
+end_border_flag[5] = 1
+star_border_flag[6] = 1
+end_border_flag[6] = 1
+star_border_flag[7] = 1
+end_border_flag[7] = 1
+star_border_flag[8] = 1
+end_border_flag[8] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":3};{"BIGINT":1},{"BIGINT":1},{"BIGINT":3}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":1};{"BIGINT":1},{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":3};{"BIGINT":1},{"BIGINT":2},{"BIGINT":3}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":3},{"BIGINT":1};{"BIGINT":1},{"BIGINT":3},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":3},{"BIGINT":2};{"BIGINT":1},{"BIGINT":3},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":3},{"BIGINT":3};{"BIGINT":1},{"BIGINT":3},{"BIGINT":3}]"}]
+
+[208] (a = ?{1} or a = ?{2}) and b in (?{1},?{2},?{3})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 6
+get_methods.count() = 6
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+get_methods 3: 1
+get_methods 4: 1
+get_methods 5: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+star_border_flag[3] = 1
+end_border_flag[3] = 1
+star_border_flag[4] = 1
+end_border_flag[4] = 1
+star_border_flag[5] = 1
+end_border_flag[5] = 1
+count of rang columns = 2
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":3};{"BIGINT":1},{"BIGINT":3}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":1};{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":3};{"BIGINT":2},{"BIGINT":3}]"}]
+
+[209] (a = ?{1} or a = ?{2}) and b in (?{1},?{2},?{3}) and (c = ?{1} or c = ?{2})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 12
+get_methods.count() = 12
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+get_methods 3: 1
+get_methods 4: 1
+get_methods 5: 1
+get_methods 6: 1
+get_methods 7: 1
+get_methods 8: 1
+get_methods 9: 1
+get_methods 10: 1
+get_methods 11: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+star_border_flag[3] = 1
+end_border_flag[3] = 1
+star_border_flag[4] = 1
+end_border_flag[4] = 1
+star_border_flag[5] = 1
+end_border_flag[5] = 1
+star_border_flag[6] = 1
+end_border_flag[6] = 1
+star_border_flag[7] = 1
+end_border_flag[7] = 1
+star_border_flag[8] = 1
+end_border_flag[8] = 1
+star_border_flag[9] = 1
+end_border_flag[9] = 1
+star_border_flag[10] = 1
+end_border_flag[10] = 1
+star_border_flag[11] = 1
+end_border_flag[11] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":1};{"BIGINT":1},{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":3},{"BIGINT":1};{"BIGINT":1},{"BIGINT":3},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":3},{"BIGINT":2};{"BIGINT":1},{"BIGINT":3},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":1},{"BIGINT":1};{"BIGINT":2},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":1},{"BIGINT":2};{"BIGINT":2},{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":1};{"BIGINT":2},{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":3},{"BIGINT":1};{"BIGINT":2},{"BIGINT":3},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":3},{"BIGINT":2};{"BIGINT":2},{"BIGINT":3},{"BIGINT":2}]"}]
+
+[210] (a = ?{1} or a = ?{2}) and b in (?{1},?{2},?{3}) and c in (?{1},?{2})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 12
+get_methods.count() = 12
+get_methods 0: 1
+get_methods 1: 1
+get_methods 2: 1
+get_methods 3: 1
+get_methods 4: 1
+get_methods 5: 1
+get_methods 6: 1
+get_methods 7: 1
+get_methods 8: 1
+get_methods 9: 1
+get_methods 10: 1
+get_methods 11: 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 1
+end_border_flag[1] = 1
+star_border_flag[2] = 1
+end_border_flag[2] = 1
+star_border_flag[3] = 1
+end_border_flag[3] = 1
+star_border_flag[4] = 1
+end_border_flag[4] = 1
+star_border_flag[5] = 1
+end_border_flag[5] = 1
+star_border_flag[6] = 1
+end_border_flag[6] = 1
+star_border_flag[7] = 1
+end_border_flag[7] = 1
+star_border_flag[8] = 1
+end_border_flag[8] = 1
+star_border_flag[9] = 1
+end_border_flag[9] = 1
+star_border_flag[10] = 1
+end_border_flag[10] = 1
+star_border_flag[11] = 1
+end_border_flag[11] = 1
+count of rang columns = 3
+[{"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":2};{"BIGINT":1},{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":1};{"BIGINT":1},{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":2},{"BIGINT":2};{"BIGINT":1},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":3},{"BIGINT":1};{"BIGINT":1},{"BIGINT":3},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":1},{"BIGINT":3},{"BIGINT":2};{"BIGINT":1},{"BIGINT":3},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":1},{"BIGINT":1};{"BIGINT":2},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":1},{"BIGINT":2};{"BIGINT":2},{"BIGINT":1},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":1};{"BIGINT":2},{"BIGINT":2},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":3},{"BIGINT":1};{"BIGINT":2},{"BIGINT":3},{"BIGINT":1}]"}, {"range":"table_id:3003,[{"BIGINT":2},{"BIGINT":3},{"BIGINT":2};{"BIGINT":2},{"BIGINT":3},{"BIGINT":2}]"}]
+
+[211] a in (?{1},?{2},?{3}) and (b = ?{1} or b = ?{2}) and c > ?{1}
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 6
+get_methods.count() = 6
+get_methods 0: 0
+get_methods 1: 0
+get_methods 2: 0
+get_methods 3: 0
+get_methods 4: 0
+get_methods 5: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+star_border_flag[2] = 0
+end_border_flag[2] = 0
+star_border_flag[3] = 0
+end_border_flag[3] = 0
+star_border_flag[4] = 0
+end_border_flag[4] = 0
+star_border_flag[5] = 0
+end_border_flag[5] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},MAX)"}, {"range":"table_id:3003,({"BIGINT":1},{"BIGINT":2},{"BIGINT":1};{"BIGINT":1},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,({"BIGINT":2},{"BIGINT":1},{"BIGINT":1};{"BIGINT":2},{"BIGINT":1},MAX)"}, {"range":"table_id:3003,({"BIGINT":2},{"BIGINT":2},{"BIGINT":1};{"BIGINT":2},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,({"BIGINT":3},{"BIGINT":1},{"BIGINT":1};{"BIGINT":3},{"BIGINT":1},MAX)"}, {"range":"table_id:3003,({"BIGINT":3},{"BIGINT":2},{"BIGINT":1};{"BIGINT":3},{"BIGINT":2},MAX)"}]
+
+[212] a in (?{1},?{2},?{3}) and b > ?{1} and (c = ?{1} or c = ?{2})
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 3
+get_methods.count() = 3
+get_methods 0: 0
+get_methods 1: 0
+get_methods 2: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+star_border_flag[2] = 0
+end_border_flag[2] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,({"BIGINT":1},{"BIGINT":1},MAX;{"BIGINT":1},MAX,{"BIGINT":2})"}, {"range":"table_id:3003,({"BIGINT":2},{"BIGINT":1},MAX;{"BIGINT":2},MAX,{"BIGINT":2})"}, {"range":"table_id:3003,({"BIGINT":3},{"BIGINT":1},MAX;{"BIGINT":3},MAX,{"BIGINT":2})"}]
+
+[213] a in (?{1},?{2},?{3}) and b > ?{1} and (c = ?{1} or c = ?{2}) and false
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,(MAX,MAX,MAX;MIN,MIN,MIN)"}]
+
+[214] a = ?{1} and (b,c) in ((?{1},?{2}),(?{2},?{3})) and false
+query range not need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 3
+[{"range":"table_id:3003,(MAX,MAX,MAX;MIN,MIN,MIN)"}]
+
+[215] (a,b) != (1,2)
+query range need to deep copy
+is not min_to_max_range
+ranges.count() = 1
+get_methods.count() = 1
+get_methods 0: 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+count of rang columns = 2
+[{"range":"table_id:3003,({"NULL":"NULL"},MAX;MAX,MAX)"}]
+

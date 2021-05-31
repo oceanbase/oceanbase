@@ -1,0 +1,61 @@
+drop database if exists delete_db;
+create database delete_db;
+use delete_db;
+
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+create table t2(c1 int, c2 int, c3 varchar(32), primary key(c2, c3)) partition by key(c2, c3) partitions 3
+#create index idx1 on t1(c2)
+create table test(c1 int , c2 int, c3 varchar(50), c4 varchar(50), c5 int , c6 double, c7 int, primary key(c1, c2, c3))
+create index test_indx on test(c4, c5)
+
+###common
+delete from t1 where c2 > 10 order by c1 limit 0, 1
+delete from t1 where c1 = 1
+
+###where
+delete from t1 partition(p0) where c1 = 1
+
+#### question mark
+delete from t1 where 2 = 1
+delete from t1 where c1 = 0
+delete from t1 where 1 = 1
+
+
+### order by
+#### asc, desc
+delete from t2 order by c1, c2 desc, c3 asc
+
+#### function or expression
+delete from t2 order by c2/2
+delete from t1 order by 1+1
+
+#delete from t1 order by 1	//not support
+
+### limit
+
+#### const
+delete from t1 limit 10
+delete from t1 limit 2, 10
+delete from t1 limit 2 offset 10
+
+#### question mark
+delete from t1 limit 1
+delete from t1 limit 1,0
+delete from t1 limit 2,10
+delete from t1 limit 1,10
+
+### hintkkk
+delete /*+ INDEX(t1 idx1)*/ from t1 where c1 =1
+
+### partition
+delete from t1 partition (p1)
+
+### multiple table
+#delete from t1,t2 where t1.c1 = t2.c1 //not support
+
+### not contain the index's rowkey
+delete from test where c1 = 1
+#test truncate
+truncate table test;
+truncate table t1;
+drop database delete_db;

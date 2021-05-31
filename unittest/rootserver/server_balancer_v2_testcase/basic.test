@@ -1,0 +1,46 @@
+{
+  "standalone_tenants":
+  [
+    {"tenant_id": 1001},
+    {"tenant_id": 1002},
+    {"tenant_id": 1003},
+    {"tenant_id": 1004},
+    {"tenant_id": 1005}
+  ],
+  "zones":
+  [
+    {
+      "zone": "SZ",
+      "region": "shengzhen"
+   	}
+  ],
+  "servers":
+  [
+    {
+      "server_addr":"192.168.2.1",
+      "zone":"SZ",
+      "resources":
+      {
+	      "cpu": 100,
+	      "memory": 100000000000
+      }
+    },
+    {
+      "server_addr":"192.168.2.2",
+      "zone":"SZ",
+      "resources":
+      {
+	      "cpu": 100,
+	      "memory": 100000000000
+      }
+    }
+  ],
+  "units":
+  [
+    {"tenant": 1001, "cpu": 20, "memory": 1100000000, "zone": "SZ", "on_servers": ["192.168.2.1", "192.168.2.2"]},
+    {"tenant": 1002, "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]},
+    {"tenant": 1003, "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]},
+    {"tenant": 1004, "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]},
+    {"tenant": 1005, "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]}
+  ]
+}

@@ -1,0 +1,102 @@
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+--sleep 2
+connection default;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1 (c1 int, c2 int unsigned,
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned,
+    c15 double, c16 double unsigned,
+    c17 decimal, c18 decimal unsigned,
+    c19 date, c20 date not null,
+    c21 datetime, c22 datetime not null,
+    c23 timestamp, c24 timestamp not null,
+    c25 varchar(30), c26 char(30));
+
+select * from t1;
+
+insert into t1 values(NULL, NULL,
+    NULL, NULL,
+    NULL, NULL,
+    NULL, NULL,
+    NULL, NULL,
+    NULL, NULL,
+    NULL, NULL,
+    NULL, NULL,
+    NULL, NULL,
+    NULL, '0000-00-00',
+    NULL, '0000-00-00 00:00:00',
+    NULL, '0000-00-00 00:00:00',
+    NULL, NULL);
+
+insert into t1 values(0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+    0.0, 0.0,
+    0.0, 0.0,
+    0.0, 0.0,
+    '0000-00-00', '0000-00-00',
+    '0000-00-00 00:00:00', '0000-00-00 00:00:00',
+    '0000-00-00 00:00:00', '0000-00-00 00:00:00',
+    '0', '0.0');
+
+insert into t1 values(1, 1,
+    1, 1,
+    1, 1,
+    1, 1,
+    1, 1,
+    1, 1,
+    -0.1, 0.1,
+    -0.1, 0.1,
+    -0.1, 0.1,
+    '0001-01-01', '0001-01-01',
+    '0001-01-01 00:00:00', '0001-01-01 00:00:00',
+    '0001-01-01 00:00:00', '0001-01-01 00:00:00',
+    '1', '1.0');
+
+insert into t1 values(11, 11,
+    11, 11,
+    11, 11,
+    11, 11,
+    11, 11,
+    11, 11,
+    11.0, 11.0,
+    11.0, 11.0,
+    11.0, 11.0,
+    '2019-12-01 12:00:00', '2019-12-01 12:00:00',
+    '2019-12-01 12:00:00', '2019-12-01 12:00:00',
+    '2019-12-01 12:00:00', '2019-12-01 12:00:00',
+    '11', '11.0');
+
+connection conn_admin;
+--sleep 2
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+
+
+let $cnt=26;
+let $left=1;
+while ($left <= $cnt)
+{
+  eval select c$left, c$left is true, c$left is false, c$left is null, c$left is unknown from t1;
+  eval select c$left, c$left is not true, c$left is not false, c$left is not null, c$left is not unknown from t1;
+  inc $left;
+}
+drop table t1;
+
+
+
+connection conn_admin;
+--sleep 2

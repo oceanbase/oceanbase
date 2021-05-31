@@ -1,0 +1,1814 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection conn_admin;
+alter system flush plan cache global;
+connection default;
+drop table if exists build_in_func_test_table;
+create table build_in_func_test_table (varchar_c varchar(128) primary key, date_c datetime(6),v varchar(128));
+insert into build_in_func_test_table values ('hello', '2012-11-01 19:14:32',null);
+select substr(varchar_c, 1, 1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 1, 1)	substr(varchar_c, 1, 1)	253	4	1	Y	0	31	45
+substr(varchar_c, 1, 1)
+h
+select substr(varchar_c, 0, 1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 0, 1)	substr(varchar_c, 0, 1)	253	512	0	Y	0	31	45
+substr(varchar_c, 0, 1)
+
+select substr(varchar_c, -1, 1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -1, 1)	substr(varchar_c, -1, 1)	253	512	1	Y	0	31	45
+substr(varchar_c, -1, 1)
+o
+select substr(varchar_c, -5, 1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -5, 1)	substr(varchar_c, -5, 1)	253	512	1	Y	0	31	45
+substr(varchar_c, -5, 1)
+h
+select substr(varchar_c, -6, 1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -6, 1)	substr(varchar_c, -6, 1)	253	512	0	Y	0	31	45
+substr(varchar_c, -6, 1)
+
+select substr(varchar_c, -100, 1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -100, 1)	substr(varchar_c, -100, 1)	253	512	0	Y	0	31	45
+substr(varchar_c, -100, 1)
+
+select substr(varchar_c, 3, 1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 3, 1)	substr(varchar_c, 3, 1)	253	4	1	Y	0	31	45
+substr(varchar_c, 3, 1)
+l
+select substr(varchar_c, 5, 1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 5, 1)	substr(varchar_c, 5, 1)	253	4	1	Y	0	31	45
+substr(varchar_c, 5, 1)
+o
+select substr(varchar_c, 6, 1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 6, 1)	substr(varchar_c, 6, 1)	253	4	0	Y	0	31	45
+substr(varchar_c, 6, 1)
+
+select substr(varchar_c, 6, -1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 6, -1)	substr(varchar_c, 6, -1)	253	0	0	Y	0	31	45
+substr(varchar_c, 6, -1)
+
+select substr(varchar_c, 5, -1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 5, -1)	substr(varchar_c, 5, -1)	253	0	0	Y	0	31	45
+substr(varchar_c, 5, -1)
+
+select substr(varchar_c, 4, -1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 4, -1)	substr(varchar_c, 4, -1)	253	0	0	Y	0	31	45
+substr(varchar_c, 4, -1)
+
+select substr(varchar_c, -1, -1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -1, -1)	substr(varchar_c, -1, -1)	253	0	0	Y	0	31	45
+substr(varchar_c, -1, -1)
+
+select substr(varchar_c, 0, 5) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 0, 5)	substr(varchar_c, 0, 5)	253	512	0	Y	0	31	45
+substr(varchar_c, 0, 5)
+
+select substr(varchar_c, 0, 6) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 0, 6)	substr(varchar_c, 0, 6)	253	512	0	Y	0	31	45
+substr(varchar_c, 0, 6)
+
+select substr(varchar_c, 0, 100) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 0, 100)	substr(varchar_c, 0, 100)	253	512	0	Y	0	31	45
+substr(varchar_c, 0, 100)
+
+select substr(varchar_c, -6, 10) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -6, 10)	substr(varchar_c, -6, 10)	253	512	0	Y	0	31	45
+substr(varchar_c, -6, 10)
+
+select substr(varchar_c, -5, 10) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -5, 10)	substr(varchar_c, -5, 10)	253	512	5	Y	0	31	45
+substr(varchar_c, -5, 10)
+hello
+select substr(varchar_c, -5, 3) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -5, 3)	substr(varchar_c, -5, 3)	253	512	3	Y	0	31	45
+substr(varchar_c, -5, 3)
+hel
+select substr(v,5,10) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(v,5,10)	substr(v,5,10)	253	40	0	Y	0	31	45
+substr(v,5,10)
+NULL
+select substr(varchar_c,null,10) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c,null,10)	substr(varchar_c,null,10)	253	40	0	Y	0	31	45
+substr(varchar_c,null,10)
+NULL
+select substr(varchar_c,2,null) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c,2,null)	substr(varchar_c,2,null)	253	508	0	Y	0	31	45
+substr(varchar_c,2,null)
+NULL
+select substr(varchar_c, -6) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -6)	substr(varchar_c, -6)	253	512	0	Y	0	31	45
+substr(varchar_c, -6)
+
+select substr(varchar_c, -5) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -5)	substr(varchar_c, -5)	253	512	5	Y	0	31	45
+substr(varchar_c, -5)
+hello
+select substr(varchar_c, -4) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -4)	substr(varchar_c, -4)	253	512	4	Y	0	31	45
+substr(varchar_c, -4)
+ello
+select substr(varchar_c, -0) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, -0)	substr(varchar_c, -0)	253	512	0	Y	0	31	45
+substr(varchar_c, -0)
+
+select substr(varchar_c, 1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 1)	substr(varchar_c, 1)	253	512	5	Y	0	31	45
+substr(varchar_c, 1)
+hello
+select substr(varchar_c, 2) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 2)	substr(varchar_c, 2)	253	508	4	Y	0	31	45
+substr(varchar_c, 2)
+ello
+select substr(varchar_c, 5) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 5)	substr(varchar_c, 5)	253	496	1	Y	0	31	45
+substr(varchar_c, 5)
+o
+select substr(varchar_c, 6) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c, 6)	substr(varchar_c, 6)	253	492	0	Y	0	31	45
+substr(varchar_c, 6)
+
+select substr(varchar_c,null) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(varchar_c,null)	substr(varchar_c,null)	253	512	0	Y	0	31	45
+substr(varchar_c,null)
+NULL
+select substr(v,1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(v,1)	substr(v,1)	253	512	0	Y	0	31	45
+substr(v,1)
+NULL
+select substr(cast(date_c as char(1024)), 0) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(cast(date_c as char(1024)), 0)	substr(cast(date_c as char(1024)), 0)	253	4096	0	Y	0	31	45
+substr(cast(date_c as char(1024)), 0)
+
+select substr(cast(date_c as char(1024)), 10) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(cast(date_c as char(1024)), 10)	substr(cast(date_c as char(1024)), 10)	253	4060	17	Y	0	31	45
+substr(cast(date_c as char(1024)), 10)
+1 19:14:32.000000
+select substr(cast(1024 as char(1024)), 1, 2) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(cast(1024 as char(1024)), 1, 2)	substr(cast(1024 as char(1024)), 1, 2)	253	8	2	Y	0	31	45
+substr(cast(1024 as char(1024)), 1, 2)
+10
+select substr(cast(date_c as char(1024)) from 10) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(cast(date_c as char(1024)) from 10)	substr(cast(date_c as char(1024)) from 10)	253	4060	17	Y	0	31	45
+substr(cast(date_c as char(1024)) from 10)
+1 19:14:32.000000
+select substr(cast(date_c as char(1024)) from 10 for 10) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				substr(cast(date_c as char(1024)) from 10 for 10)	substr(cast(date_c as char(1024)) from 10 for 10)	253	40	10	Y	0	31	45
+substr(cast(date_c as char(1024)) from 10 for 10)
+1 19:14:32
+select coalesce(cast(null as signed int), null) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				coalesce(cast(null as signed int), null)	coalesce(cast(null as signed int), null)	8	20	0	Y	32896	0	63
+coalesce(cast(null as signed int), null)
+NULL
+select coalesce(null, 'monkey59', 123) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				coalesce(null, 'monkey59', 123)	coalesce(null, 'monkey59', 123)	253	80	8	Y	0	31	45
+coalesce(null, 'monkey59', 123)
+monkey59
+select coalesce('jasimin', null, 'a,a', 123) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				coalesce('jasimin', null, 'a,a', 123)	coalesce('jasimin', null, 'a,a', 123)	253	80	7	Y	0	31	45
+coalesce('jasimin', null, 'a,a', 123)
+jasimin
+select coalesce(cast(null as signed int), null, 32.23) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				coalesce(cast(null as signed int), null, 32.23)	coalesce(cast(null as signed int), null, 32.23)	246	24	5	Y	32896	2	63
+coalesce(cast(null as signed int), null, 32.23)
+32.23
+select lower('ABC&*03_+abc') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				lower('ABC&*03_+abc')	lower('ABC&*03_+abc')	253	48	12	Y	0	31	45
+lower('ABC&*03_+abc')
+abc&*03_+abc
+select lower(varchar_c) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				lower(varchar_c)	lower(varchar_c)	253	512	5	Y	0	31	45
+lower(varchar_c)
+hello
+select lower(null) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				lower(null)	lower(null)	253	0	0	Y	128	31	63
+lower(null)
+NULL
+select upper('ABC&*03_+abc') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				upper('ABC&*03_+abc')	upper('ABC&*03_+abc')	253	48	12	Y	0	31	45
+upper('ABC&*03_+abc')
+ABC&*03_+ABC
+select upper(varchar_c) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				upper(varchar_c)	upper(varchar_c)	253	512	5	Y	0	31	45
+upper(varchar_c)
+HELLO
+select upper(null) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				upper(null)	upper(null)	253	0	0	Y	128	31	63
+upper(null)
+NULL
+select cast(12 as  datetime) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast(12 as  datetime)	cast(12 as  datetime)	12	19	0	N	129	0	63
+cast(12 as  datetime)
+NULL
+select cast('12' as  datetime) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast('12' as  datetime)	cast('12' as  datetime)	12	19	0	N	129	0	63
+cast('12' as  datetime)
+NULL
+select cast(cast('1970-01-01 08:00:12' as  datetime) as signed int) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast(cast('1970-01-01 08:00:12' as  datetime) as signed int)	cast(cast('1970-01-01 08:00:12' as  datetime) as signed int)	8	19	14	N	32897	0	63
+cast(cast('1970-01-01 08:00:12' as  datetime) as signed int)
+19700101080012
+select cast('1970-01-01 08:00:12' as signed int) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast('1970-01-01 08:00:12' as signed int)	cast('1970-01-01 08:00:12' as signed int)	8	19	4	N	32897	0	63
+cast('1970-01-01 08:00:12' as signed int)
+1970
+select cast(cast('12' as decimal) as  datetime) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast(cast('12' as decimal) as  datetime)	cast(cast('12' as decimal) as  datetime)	12	19	0	N	129	0	63
+cast(cast('12' as decimal) as  datetime)
+NULL
+select cast(cast('12' as decimal) as datetime) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast(cast('12' as decimal) as datetime)	cast(cast('12' as decimal) as datetime)	12	19	0	N	129	0	63
+cast(cast('12' as decimal) as datetime)
+NULL
+select cast(cast('12' as decimal) as datetime) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast(cast('12' as decimal) as datetime)	cast(cast('12' as decimal) as datetime)	12	19	0	N	129	0	63
+cast(cast('12' as decimal) as datetime)
+NULL
+select cast(v as signed int) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast(v as signed int)	cast(v as signed int)	8	21	0	Y	32896	0	63
+cast(v as signed int)
+NULL
+select trim('aba' from 'ababa') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim('aba' from 'ababa')	trim('aba' from 'ababa')	253	20	2	Y	0	31	45
+trim('aba' from 'ababa')
+ba
+select length(trim('aba' from 'aba')) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				length(trim('aba' from 'aba'))	length(trim('aba' from 'aba'))	8	20	1	Y	32896	0	63
+length(trim('aba' from 'aba'))
+0
+select trim('aba' from 'aba') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim('aba' from 'aba')	trim('aba' from 'aba')	253	20	0	Y	0	31	45
+trim('aba' from 'aba')
+
+select trim('  hello  ') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim('  hello  ')	trim('  hello  ')	253	36	5	Y	0	31	45
+trim('  hello  ')
+hello
+select trim('h' from 'hhhhello!')  from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim('h' from 'hhhhello!')	trim('h' from 'hhhhello!')	253	36	5	Y	0	31	45
+trim('h' from 'hhhhello!')
+ello!
+select trim('o!' from 'hhhhello!')  from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim('o!' from 'hhhhello!')	trim('o!' from 'hhhhello!')	253	36	7	Y	0	31	45
+trim('o!' from 'hhhhello!')
+hhhhell
+select trim('h' from 'hhhhaaaahhhh')  from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim('h' from 'hhhhaaaahhhh')	trim('h' from 'hhhhaaaahhhh')	253	36	4	Y	0	31	45
+trim('h' from 'hhhhaaaahhhh')
+aaaa
+select trim(LEADING 'h' from 'hhhhaaaahhhh') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(LEADING 'h' from 'hhhhaaaahhhh')	trim(LEADING 'h' from 'hhhhaaaahhhh')	253	48	8	Y	0	31	45
+trim(LEADING 'h' from 'hhhhaaaahhhh')
+aaaahhhh
+select trim(TRAILING 'h' from 'hhhhaaaahhhh')  from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(TRAILING 'h' from 'hhhhaaaahhhh')	trim(TRAILING 'h' from 'hhhhaaaahhhh')	253	48	8	Y	0	31	45
+trim(TRAILING 'h' from 'hhhhaaaahhhh')
+hhhhaaaa
+select trim(BOTH 'h' from 'hhhhaaaahhhh')  from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(BOTH 'h' from 'hhhhaaaahhhh')	trim(BOTH 'h' from 'hhhhaaaahhhh')	253	48	4	Y	0	31	45
+trim(BOTH 'h' from 'hhhhaaaahhhh')
+aaaa
+select trim(BOTH  from '  hhhhaaaa  ')  from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(BOTH  from '  hhhhaaaa  ')	trim(BOTH  from '  hhhhaaaa  ')	253	48	8	Y	0	31	45
+trim(BOTH  from '  hhhhaaaa  ')
+hhhhaaaa
+select trim(123 from 123542) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(123 from 123542)	trim(123 from 123542)	253	24	3	Y	0	31	45
+trim(123 from 123542)
+542
+select trim(2 from cast(12312312 as datetime)) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(2 from cast(12312312 as datetime))	trim(2 from cast(12312312 as datetime))	253	76	0	Y	0	31	45
+trim(2 from cast(12312312 as datetime))
+NULL
+select length(trim('     hi' || 'dir ')) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				length(trim('     hi' || 'dir '))	length(trim('     hi' || 'dir '))	8	20	1	Y	32896	0	63
+length(trim('     hi' || 'dir '))
+1
+select trim(1) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(1)	trim(1)	253	4	1	Y	0	31	45
+trim(1)
+1
+select trim(cast(111 as char(1024))) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(cast(111 as char(1024)))	trim(cast(111 as char(1024)))	253	4096	3	Y	0	31	45
+trim(cast(111 as char(1024)))
+111
+select trim(LEADING '1' from cast(111 as char(1024))) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(LEADING '1' from cast(111 as char(1024)))	trim(LEADING '1' from cast(111 as char(1024)))	253	4096	0	Y	0	31	45
+trim(LEADING '1' from cast(111 as char(1024)))
+
+select trim(TRAILING '1' from cast(111 as char(1024))) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(TRAILING '1' from cast(111 as char(1024)))	trim(TRAILING '1' from cast(111 as char(1024)))	253	4096	0	Y	0	31	45
+trim(TRAILING '1' from cast(111 as char(1024)))
+
+select trim(v) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(v)	trim(v)	253	512	0	Y	0	31	45
+trim(v)
+NULL
+select trim(leading v from 'v'),trim(leading varchar_c from 'he') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				trim(leading v from 'v')	trim(leading v from 'v')	253	4	0	Y	0	31	45
+def				trim(leading varchar_c from 'he')	trim(leading varchar_c from 'he')	253	8	2	Y	0	31	45
+trim(leading v from 'v')	trim(leading varchar_c from 'he')
+NULL	he
+set timestamp = 1456986986;
+select cast(current_timestamp() as signed int) - cast(utc_timestamp() as signed int) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast(current_timestamp() as signed int) - cast(utc_timestamp() as signed int)	cast(current_timestamp() as signed int) - cast(utc_timestamp() as signed int)	8	20	5	Y	32896	0	63
+cast(current_timestamp() as signed int) - cast(utc_timestamp() as signed int)
+80000
+select cast(now() as signed int) - cast(utc_timestamp() as signed int) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast(now() as signed int) - cast(utc_timestamp() as signed int)	cast(now() as signed int) - cast(utc_timestamp() as signed int)	8	20	5	Y	32896	0	63
+cast(now() as signed int) - cast(utc_timestamp() as signed int)
+80000
+select cast(utc_timestamp() as signed int)-cast(utc_timestamp() as signed int) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cast(utc_timestamp() as signed int)-cast(utc_timestamp() as signed int)	cast(utc_timestamp() as signed int)-cast(utc_timestamp() as signed int)	8	20	1	N	32897	0	63
+cast(utc_timestamp() as signed int)-cast(utc_timestamp() as signed int)
+0
+select time_to_usec(current_timestamp()) - time_to_usec(utc_timestamp()) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				time_to_usec(current_timestamp()) - time_to_usec(utc_timestamp())	time_to_usec(current_timestamp()) - time_to_usec(utc_timestamp())	8	21	11	Y	32896	0	63
+time_to_usec(current_timestamp()) - time_to_usec(utc_timestamp())
+28800000000
+select time_to_usec(now()) - time_to_usec(utc_timestamp()) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				time_to_usec(now()) - time_to_usec(utc_timestamp())	time_to_usec(now()) - time_to_usec(utc_timestamp())	8	21	11	Y	32896	0	63
+time_to_usec(now()) - time_to_usec(utc_timestamp())
+28800000000
+select time_to_usec(utc_timestamp())-time_to_usec(utc_timestamp()) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				time_to_usec(utc_timestamp())-time_to_usec(utc_timestamp())	time_to_usec(utc_timestamp())-time_to_usec(utc_timestamp())	8	21	1	Y	32896	0	63
+time_to_usec(utc_timestamp())-time_to_usec(utc_timestamp())
+0
+set timestamp = 0;
+select usec_to_time(12) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				usec_to_time(12)	usec_to_time(12)	7	26	26	Y	1152	6	63
+usec_to_time(12)
+1970-01-01 08:00:00.000012
+select usec_to_time(65535) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				usec_to_time(65535)	usec_to_time(65535)	7	26	26	Y	1152	6	63
+usec_to_time(65535)
+1970-01-01 08:00:00.065535
+select date_add('invalid date string', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('invalid date string', INTERVAL 1 DAY)	date_add('invalid date string', INTERVAL 1 DAY)	253	104	0	Y	0	31	45
+date_add('invalid date string', INTERVAL 1 DAY)
+NULL
+select date_add('2003-08', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2003-08', INTERVAL 1 DAY)	date_add('2003-08', INTERVAL 1 DAY)	253	104	0	Y	0	31	45
+date_add('2003-08', INTERVAL 1 DAY)
+NULL
+select date_add('www   2013\09>23?12&&00^^^00', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('www   2013\09>23?12&&00^^^00', INTERVAL 1 DAY)	date_add('www   2013\09>23?12&&00^^^00', INTERVAL 1 DAY)	253	104	0	Y	0	31	45
+date_add('www   2013\09>23?12&&00^^^00', INTERVAL 1 DAY)
+NULL
+select date_add('www   2013/**/09>23?12&&00^^^00', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('www   2013/**/09>23?12&&00^^^00', INTERVAL 1 DAY)	date_add('www   2013/**/09>23?12&&00^^^00', INTERVAL 1 DAY)	253	104	0	Y	0	31	45
+date_add('www   2013/**/09>23?12&&00^^^00', INTERVAL 1 DAY)
+NULL
+select date_add('2013-09-23 12:00:00', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23 12:00:00', INTERVAL 1 DAY)	date_add('2013-09-23 12:00:00', INTERVAL 1 DAY)	253	104	19	Y	0	31	45
+date_add('2013-09-23 12:00:00', INTERVAL 1 DAY)
+2013-09-24 12:00:00
+select date_add('2013-09-23', INTERVAL 1 MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL 1 MICROSECOND)	date_add('2013-09-23', INTERVAL 1 MICROSECOND)	253	104	26	Y	0	31	45
+date_add('2013-09-23', INTERVAL 1 MICROSECOND)
+2013-09-23 00:00:00.000001
+select date_add('2013-09-23', INTERVAL 1 SECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL 1 SECOND)	date_add('2013-09-23', INTERVAL 1 SECOND)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL 1 SECOND)
+2013-09-23 00:00:01
+select date_add('2013-09-23', INTERVAL 1 minute) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL 1 minute)	date_add('2013-09-23', INTERVAL 1 minute)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL 1 minute)
+2013-09-23 00:01:00
+select date_add('2013-09-23', INTERVAL 1 HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL 1 HOUR)	date_add('2013-09-23', INTERVAL 1 HOUR)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL 1 HOUR)
+2013-09-23 01:00:00
+select date_add('2013-09-23', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL 1 DAY)	date_add('2013-09-23', INTERVAL 1 DAY)	253	104	10	Y	0	31	45
+date_add('2013-09-23', INTERVAL 1 DAY)
+2013-09-24
+select date_add('2013-09-23', INTERVAL 1 MONTH) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL 1 MONTH)	date_add('2013-09-23', INTERVAL 1 MONTH)	253	104	10	Y	0	31	45
+date_add('2013-09-23', INTERVAL 1 MONTH)
+2013-10-23
+select date_add('2013-09-23', INTERVAL 1 QUARTER) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL 1 QUARTER)	date_add('2013-09-23', INTERVAL 1 QUARTER)	253	104	10	Y	0	31	45
+date_add('2013-09-23', INTERVAL 1 QUARTER)
+2013-12-23
+select date_add('2013-09-23', INTERVAL 1 YEAR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL 1 YEAR)	date_add('2013-09-23', INTERVAL 1 YEAR)	253	104	10	Y	0	31	45
+date_add('2013-09-23', INTERVAL 1 YEAR)
+2014-09-23
+select date_add('2013-09-23', INTERVAL '3.2' SECOND_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '3.2' SECOND_MICROSECOND)	date_add('2013-09-23', INTERVAL '3.2' SECOND_MICROSECOND)	253	104	26	Y	0	31	45
+date_add('2013-09-23', INTERVAL '3.2' SECOND_MICROSECOND)
+2013-09-23 00:00:03.200000
+select date_add('2013-09-23', INTERVAL '3:5.2' MINUTE_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '3:5.2' MINUTE_MICROSECOND)	date_add('2013-09-23', INTERVAL '3:5.2' MINUTE_MICROSECOND)	253	104	26	Y	0	31	45
+date_add('2013-09-23', INTERVAL '3:5.2' MINUTE_MICROSECOND)
+2013-09-23 00:03:05.200000
+select date_add('2013-09-23', INTERVAL '3:5' MINUTE_SECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '3:5' MINUTE_SECOND)	date_add('2013-09-23', INTERVAL '3:5' MINUTE_SECOND)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL '3:5' MINUTE_SECOND)
+2013-09-23 00:03:05
+select date_add('2013-09-23', INTERVAL '8:7:3.5' HOUR_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '8:7:3.5' HOUR_MICROSECOND)	date_add('2013-09-23', INTERVAL '8:7:3.5' HOUR_MICROSECOND)	253	104	26	Y	0	31	45
+date_add('2013-09-23', INTERVAL '8:7:3.5' HOUR_MICROSECOND)
+2013-09-23 08:07:03.500000
+select date_add('2013-09-23', INTERVAL '8:7:3' HOUR_SECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '8:7:3' HOUR_SECOND)	date_add('2013-09-23', INTERVAL '8:7:3' HOUR_SECOND)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL '8:7:3' HOUR_SECOND)
+2013-09-23 08:07:03
+select date_add('2013-09-23', INTERVAL '8:7' HOUR_MINUTE) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '8:7' HOUR_MINUTE)	date_add('2013-09-23', INTERVAL '8:7' HOUR_MINUTE)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL '8:7' HOUR_MINUTE)
+2013-09-23 08:07:00
+select date_add('2013-09-23', INTERVAL '2 8:7:6.5' DAY_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '2 8:7:6.5' DAY_MICROSECOND)	date_add('2013-09-23', INTERVAL '2 8:7:6.5' DAY_MICROSECOND)	253	104	26	Y	0	31	45
+date_add('2013-09-23', INTERVAL '2 8:7:6.5' DAY_MICROSECOND)
+2013-09-25 08:07:06.500000
+select date_add('2013-09-23', INTERVAL '2 8:7:6' DAY_SECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '2 8:7:6' DAY_SECOND)	date_add('2013-09-23', INTERVAL '2 8:7:6' DAY_SECOND)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL '2 8:7:6' DAY_SECOND)
+2013-09-25 08:07:06
+select date_add('2013-09-23', INTERVAL '2 8:7' DAY_MINUTE) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '2 8:7' DAY_MINUTE)	date_add('2013-09-23', INTERVAL '2 8:7' DAY_MINUTE)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL '2 8:7' DAY_MINUTE)
+2013-09-25 08:07:00
+select date_add('2013-09-23', INTERVAL '2 8' DAY_HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '2 8' DAY_HOUR)	date_add('2013-09-23', INTERVAL '2 8' DAY_HOUR)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL '2 8' DAY_HOUR)
+2013-09-25 08:00:00
+select date_add('2013-09-23', INTERVAL '12-25' YEAR_MONTH) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '12-25' YEAR_MONTH)	date_add('2013-09-23', INTERVAL '12-25' YEAR_MONTH)	253	104	10	Y	0	31	45
+date_add('2013-09-23', INTERVAL '12-25' YEAR_MONTH)
+2027-10-23
+select date_add('2013-09-23', INTERVAL '2 3' DAY_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '2 3' DAY_MICROSECOND)	date_add('2013-09-23', INTERVAL '2 3' DAY_MICROSECOND)	253	104	26	Y	0	31	45
+date_add('2013-09-23', INTERVAL '2 3' DAY_MICROSECOND)
+2013-09-23 00:00:02.300000
+select date_add('2013-09-23', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '2 3' DAY_HOUR)	date_add('2013-09-23', INTERVAL '2 3' DAY_HOUR)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL '2 3' DAY_HOUR)
+2013-09-25 03:00:00
+select date_add('2013-09-23', interval length('date_add function') hour) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', interval length('date_add function') hour)	date_add('2013-09-23', interval length('date_add function') hour)	253	104	19	Y	0	31	45
+date_add('2013-09-23', interval length('date_add function') hour)
+2013-09-23 17:00:00
+select date_add(date_add('2013-09-23', INTERVAL '2' DAY),INTERVAL 5 HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add(date_add('2013-09-23', INTERVAL '2' DAY),INTERVAL 5 HOUR)	date_add(date_add('2013-09-23', INTERVAL '2' DAY),INTERVAL 5 HOUR)	253	104	19	Y	0	31	45
+date_add(date_add('2013-09-23', INTERVAL '2' DAY),INTERVAL 5 HOUR)
+2013-09-25 05:00:00
+select date_add('2013-09-25', INTERVAL '2 &&& 8 *** 9' DAY_SECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-25', INTERVAL '2 &&& 8 *** 9' DAY_SECOND)	date_add('2013-09-25', INTERVAL '2 &&& 8 *** 9' DAY_SECOND)	253	104	19	Y	0	31	45
+date_add('2013-09-25', INTERVAL '2 &&& 8 *** 9' DAY_SECOND)
+2013-09-25 02:08:09
+select date_add('2013-09-23', INTERVAL '-2 3' DAY_HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '-2 3' DAY_HOUR)	date_add('2013-09-23', INTERVAL '-2 3' DAY_HOUR)	253	104	19	Y	0	31	45
+date_add('2013-09-23', INTERVAL '-2 3' DAY_HOUR)
+2013-09-20 21:00:00
+select date_add('2013-09-23', INTERVAL '-2-3' DAY_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('2013-09-23', INTERVAL '-2-3' DAY_MICROSECOND)	date_add('2013-09-23', INTERVAL '-2-3' DAY_MICROSECOND)	253	104	26	Y	0	31	45
+date_add('2013-09-23', INTERVAL '-2-3' DAY_MICROSECOND)
+2013-09-22 23:59:57.700000
+select date_add('10-09-23', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('10-09-23', INTERVAL '2 3' DAY_HOUR)	date_add('10-09-23', INTERVAL '2 3' DAY_HOUR)	253	104	19	Y	0	31	45
+date_add('10-09-23', INTERVAL '2 3' DAY_HOUR)
+2010-09-25 03:00:00
+select date_add('80-09-24', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('80-09-24', INTERVAL '2 3' DAY_HOUR)	date_add('80-09-24', INTERVAL '2 3' DAY_HOUR)	253	104	19	Y	0	31	45
+date_add('80-09-24', INTERVAL '2 3' DAY_HOUR)
+1980-09-26 03:00:00
+select date_add('1970-01-01 08:00:00', INTERVAL -1 MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('1970-01-01 08:00:00', INTERVAL -1 MICROSECOND)	date_add('1970-01-01 08:00:00', INTERVAL -1 MICROSECOND)	253	104	26	Y	0	31	45
+date_add('1970-01-01 08:00:00', INTERVAL -1 MICROSECOND)
+1970-01-01 07:59:59.999999
+select date_add('1970-01-01 07:59:59.2', INTERVAL 800000 MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('1970-01-01 07:59:59.2', INTERVAL 800000 MICROSECOND)	date_add('1970-01-01 07:59:59.2', INTERVAL 800000 MICROSECOND)	253	104	19	Y	0	31	45
+date_add('1970-01-01 07:59:59.2', INTERVAL 800000 MICROSECOND)
+1970-01-01 08:00:00
+select date_add('1970-01-01 00:00:00', INTERVAL 100 MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('1970-01-01 00:00:00', INTERVAL 100 MICROSECOND)	date_add('1970-01-01 00:00:00', INTERVAL 100 MICROSECOND)	253	104	26	Y	0	31	45
+date_add('1970-01-01 00:00:00', INTERVAL 100 MICROSECOND)
+1970-01-01 00:00:00.000100
+select date_add(CAST(-1 AS TIMESTAMP), INTERVAL 100 MICROSECOND) from build_in_func_test_table;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'TIMESTAMP), INTERVAL 100 MICROSECOND) from build_in_func_test_table' at line 1
+select date_add('1970-01-01 08:00:00', INTERVAL CAST(1000 AS CREATETIME) MICROSECOND) from build_in_func_test_table;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'CREATETIME) MICROSECOND) from build_in_func_test_table' at line 1
+select date_add('1970-01-01 08:00:00', INTERVAL CAST(1000 AS MODIFYTIME) MICROSECOND) from build_in_func_test_table;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'MODIFYTIME) MICROSECOND) from build_in_func_test_table' at line 1
+select date_add(NULL, INTERVAL 1 DAY);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add(NULL, INTERVAL 1 DAY)	date_add(NULL, INTERVAL 1 DAY)	6	0	0	Y	32896	0	63
+date_add(NULL, INTERVAL 1 DAY)
+NULL
+select date_add('1970-01-01 08:00:00', INTERVAL NULL MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_add('1970-01-01 08:00:00', INTERVAL NULL MICROSECOND)	date_add('1970-01-01 08:00:00', INTERVAL NULL MICROSECOND)	253	104	0	Y	0	31	45
+date_add('1970-01-01 08:00:00', INTERVAL NULL MICROSECOND)
+NULL
+select date_sub('invalid date string', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('invalid date string', INTERVAL 1 DAY)	date_sub('invalid date string', INTERVAL 1 DAY)	253	104	0	Y	0	31	45
+date_sub('invalid date string', INTERVAL 1 DAY)
+NULL
+select date_sub('2003-08', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2003-08', INTERVAL 1 DAY)	date_sub('2003-08', INTERVAL 1 DAY)	253	104	0	Y	0	31	45
+date_sub('2003-08', INTERVAL 1 DAY)
+NULL
+select date_sub('www   2013\09>23?12&&00^^^00', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('www   2013\09>23?12&&00^^^00', INTERVAL 1 DAY)	date_sub('www   2013\09>23?12&&00^^^00', INTERVAL 1 DAY)	253	104	0	Y	0	31	45
+date_sub('www   2013\09>23?12&&00^^^00', INTERVAL 1 DAY)
+NULL
+select date_sub('www   2013/**/09>23?12&&00^^^00', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('www   2013/**/09>23?12&&00^^^00', INTERVAL 1 DAY)	date_sub('www   2013/**/09>23?12&&00^^^00', INTERVAL 1 DAY)	253	104	0	Y	0	31	45
+date_sub('www   2013/**/09>23?12&&00^^^00', INTERVAL 1 DAY)
+NULL
+select date_sub('2013-09-23 12:00:00', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23 12:00:00', INTERVAL 1 DAY)	date_sub('2013-09-23 12:00:00', INTERVAL 1 DAY)	253	104	19	Y	0	31	45
+date_sub('2013-09-23 12:00:00', INTERVAL 1 DAY)
+2013-09-22 12:00:00
+select date_sub('2013-09-23', INTERVAL 1 MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL 1 MICROSECOND)	date_sub('2013-09-23', INTERVAL 1 MICROSECOND)	253	104	26	Y	0	31	45
+date_sub('2013-09-23', INTERVAL 1 MICROSECOND)
+2013-09-22 23:59:59.999999
+select date_sub('2013-09-23', INTERVAL 1 SECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL 1 SECOND)	date_sub('2013-09-23', INTERVAL 1 SECOND)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL 1 SECOND)
+2013-09-22 23:59:59
+select date_sub('2013-09-23', INTERVAL 1 minute) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL 1 minute)	date_sub('2013-09-23', INTERVAL 1 minute)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL 1 minute)
+2013-09-22 23:59:00
+select date_sub('2013-09-23', INTERVAL 1 HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL 1 HOUR)	date_sub('2013-09-23', INTERVAL 1 HOUR)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL 1 HOUR)
+2013-09-22 23:00:00
+select date_sub('2013-09-23', INTERVAL 1 WEEK) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL 1 WEEK)	date_sub('2013-09-23', INTERVAL 1 WEEK)	253	104	10	Y	0	31	45
+date_sub('2013-09-23', INTERVAL 1 WEEK)
+2013-09-16
+select date_sub('2013-09-23', INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL 1 DAY)	date_sub('2013-09-23', INTERVAL 1 DAY)	253	104	10	Y	0	31	45
+date_sub('2013-09-23', INTERVAL 1 DAY)
+2013-09-22
+select date_sub('2013-09-23', INTERVAL 1 MONTH) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL 1 MONTH)	date_sub('2013-09-23', INTERVAL 1 MONTH)	253	104	10	Y	0	31	45
+date_sub('2013-09-23', INTERVAL 1 MONTH)
+2013-08-23
+select date_sub('2013-09-23', INTERVAL 1 QUARTER) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL 1 QUARTER)	date_sub('2013-09-23', INTERVAL 1 QUARTER)	253	104	10	Y	0	31	45
+date_sub('2013-09-23', INTERVAL 1 QUARTER)
+2013-06-23
+select date_sub('2013-09-23', INTERVAL 1 YEAR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL 1 YEAR)	date_sub('2013-09-23', INTERVAL 1 YEAR)	253	104	10	Y	0	31	45
+date_sub('2013-09-23', INTERVAL 1 YEAR)
+2012-09-23
+select date_sub('2013-09-23', INTERVAL '3.2' SECOND_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '3.2' SECOND_MICROSECOND)	date_sub('2013-09-23', INTERVAL '3.2' SECOND_MICROSECOND)	253	104	26	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '3.2' SECOND_MICROSECOND)
+2013-09-22 23:59:56.800000
+select date_sub('2013-09-23', INTERVAL '3:5.2' MINUTE_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '3:5.2' MINUTE_MICROSECOND)	date_sub('2013-09-23', INTERVAL '3:5.2' MINUTE_MICROSECOND)	253	104	26	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '3:5.2' MINUTE_MICROSECOND)
+2013-09-22 23:56:54.800000
+select date_sub('2013-09-23', INTERVAL '3:5' MINUTE_SECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '3:5' MINUTE_SECOND)	date_sub('2013-09-23', INTERVAL '3:5' MINUTE_SECOND)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '3:5' MINUTE_SECOND)
+2013-09-22 23:56:55
+select date_sub('2013-09-23', INTERVAL '8:7:3.5' HOUR_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '8:7:3.5' HOUR_MICROSECOND)	date_sub('2013-09-23', INTERVAL '8:7:3.5' HOUR_MICROSECOND)	253	104	26	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '8:7:3.5' HOUR_MICROSECOND)
+2013-09-22 15:52:56.500000
+select date_sub('2013-09-23', INTERVAL '8:7:3' HOUR_SECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '8:7:3' HOUR_SECOND)	date_sub('2013-09-23', INTERVAL '8:7:3' HOUR_SECOND)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '8:7:3' HOUR_SECOND)
+2013-09-22 15:52:57
+select date_sub('2013-09-23', INTERVAL '8:7' HOUR_MINUTE) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '8:7' HOUR_MINUTE)	date_sub('2013-09-23', INTERVAL '8:7' HOUR_MINUTE)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '8:7' HOUR_MINUTE)
+2013-09-22 15:53:00
+select date_sub('2013-09-23', INTERVAL '2 8:7:6.5' DAY_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '2 8:7:6.5' DAY_MICROSECOND)	date_sub('2013-09-23', INTERVAL '2 8:7:6.5' DAY_MICROSECOND)	253	104	26	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '2 8:7:6.5' DAY_MICROSECOND)
+2013-09-20 15:52:53.500000
+select date_sub('2013-09-23', INTERVAL '2 8:7:6' DAY_SECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '2 8:7:6' DAY_SECOND)	date_sub('2013-09-23', INTERVAL '2 8:7:6' DAY_SECOND)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '2 8:7:6' DAY_SECOND)
+2013-09-20 15:52:54
+select date_sub('2013-09-23', INTERVAL '2 8:7' DAY_MINUTE) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '2 8:7' DAY_MINUTE)	date_sub('2013-09-23', INTERVAL '2 8:7' DAY_MINUTE)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '2 8:7' DAY_MINUTE)
+2013-09-20 15:53:00
+select date_sub('2013-09-23', INTERVAL '2 8' DAY_HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '2 8' DAY_HOUR)	date_sub('2013-09-23', INTERVAL '2 8' DAY_HOUR)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '2 8' DAY_HOUR)
+2013-09-20 16:00:00
+select date_sub('2013-09-23', INTERVAL '12-25' YEAR_MONTH) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '12-25' YEAR_MONTH)	date_sub('2013-09-23', INTERVAL '12-25' YEAR_MONTH)	253	104	10	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '12-25' YEAR_MONTH)
+1999-08-23
+select date_sub('2013-09-23', INTERVAL '21-25' YEAR_MONTH) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '21-25' YEAR_MONTH)	date_sub('2013-09-23', INTERVAL '21-25' YEAR_MONTH)	253	104	10	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '21-25' YEAR_MONTH)
+1990-08-23
+select date_sub('2013-09-23', INTERVAL '2 3' DAY_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '2 3' DAY_MICROSECOND)	date_sub('2013-09-23', INTERVAL '2 3' DAY_MICROSECOND)	253	104	26	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '2 3' DAY_MICROSECOND)
+2013-09-22 23:59:57.700000
+select date_sub('2013-09-23', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '2 3' DAY_HOUR)	date_sub('2013-09-23', INTERVAL '2 3' DAY_HOUR)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '2 3' DAY_HOUR)
+2013-09-20 21:00:00
+select date_sub('2013-09-23', interval length('date_add function') hour) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', interval length('date_add function') hour)	date_sub('2013-09-23', interval length('date_add function') hour)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', interval length('date_add function') hour)
+2013-09-22 07:00:00
+select date_sub(date_sub('2013-09-23', INTERVAL '2' DAY),INTERVAL 5 HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub(date_sub('2013-09-23', INTERVAL '2' DAY),INTERVAL 5 HOUR)	date_sub(date_sub('2013-09-23', INTERVAL '2' DAY),INTERVAL 5 HOUR)	253	104	19	Y	0	31	45
+date_sub(date_sub('2013-09-23', INTERVAL '2' DAY),INTERVAL 5 HOUR)
+2013-09-20 19:00:00
+select date_sub('2013-09-25', INTERVAL '2 &&& 8 *** 9' DAY_SECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-25', INTERVAL '2 &&& 8 *** 9' DAY_SECOND)	date_sub('2013-09-25', INTERVAL '2 &&& 8 *** 9' DAY_SECOND)	253	104	19	Y	0	31	45
+date_sub('2013-09-25', INTERVAL '2 &&& 8 *** 9' DAY_SECOND)
+2013-09-24 21:51:51
+select date_sub('2013-09-23', INTERVAL '-2 3' DAY_HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '-2 3' DAY_HOUR)	date_sub('2013-09-23', INTERVAL '-2 3' DAY_HOUR)	253	104	19	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '-2 3' DAY_HOUR)
+2013-09-25 03:00:00
+select date_sub('2013-09-23', INTERVAL '-2-3' DAY_MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('2013-09-23', INTERVAL '-2-3' DAY_MICROSECOND)	date_sub('2013-09-23', INTERVAL '-2-3' DAY_MICROSECOND)	253	104	26	Y	0	31	45
+date_sub('2013-09-23', INTERVAL '-2-3' DAY_MICROSECOND)
+2013-09-23 00:00:02.300000
+select date_sub('10-09-23', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('10-09-23', INTERVAL '2 3' DAY_HOUR)	date_sub('10-09-23', INTERVAL '2 3' DAY_HOUR)	253	104	19	Y	0	31	45
+date_sub('10-09-23', INTERVAL '2 3' DAY_HOUR)
+2010-09-20 21:00:00
+select date_sub('80-09-24', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('80-09-24', INTERVAL '2 3' DAY_HOUR)	date_sub('80-09-24', INTERVAL '2 3' DAY_HOUR)	253	104	19	Y	0	31	45
+date_sub('80-09-24', INTERVAL '2 3' DAY_HOUR)
+1980-09-21 21:00:00
+select date_sub('1970-01-01 08:00:00', INTERVAL 1 MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('1970-01-01 08:00:00', INTERVAL 1 MICROSECOND)	date_sub('1970-01-01 08:00:00', INTERVAL 1 MICROSECOND)	253	104	26	Y	0	31	45
+date_sub('1970-01-01 08:00:00', INTERVAL 1 MICROSECOND)
+1970-01-01 07:59:59.999999
+select date_sub('1970-01-01 00:00:00', INTERVAL 100 MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('1970-01-01 00:00:00', INTERVAL 100 MICROSECOND)	date_sub('1970-01-01 00:00:00', INTERVAL 100 MICROSECOND)	253	104	26	Y	0	31	45
+date_sub('1970-01-01 00:00:00', INTERVAL 100 MICROSECOND)
+1969-12-31 23:59:59.999900
+select date_sub(USEC_TO_TIME(0), INTERVAL 100 MICROSECOND) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub(USEC_TO_TIME(0), INTERVAL 100 MICROSECOND)	date_sub(USEC_TO_TIME(0), INTERVAL 100 MICROSECOND)	12	26	26	Y	128	6	63
+date_sub(USEC_TO_TIME(0), INTERVAL 100 MICROSECOND)
+1970-01-01 07:59:59.999900
+select date_sub(NULL, INTERVAL 1 DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub(NULL, INTERVAL 1 DAY)	date_sub(NULL, INTERVAL 1 DAY)	6	0	0	Y	32896	0	63
+date_sub(NULL, INTERVAL 1 DAY)
+NULL
+select date_sub('1970-01-01 08:00:00', INTERVAL NULL DAY) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_sub('1970-01-01 08:00:00', INTERVAL NULL DAY)	date_sub('1970-01-01 08:00:00', INTERVAL NULL DAY)	253	104	0	Y	0	31	45
+date_sub('1970-01-01 08:00:00', INTERVAL NULL DAY)
+NULL
+select extract(MICROSECOND FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(MICROSECOND FROM '2012-09-01 10:35:07:99999')	extract(MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32896	0	63
+extract(MICROSECOND FROM '2012-09-01 10:35:07:99999')
+0
+select extract(SECOND FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(SECOND FROM '2012-09-01 10:35:07:99999')	extract(SECOND FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32896	0	63
+extract(SECOND FROM '2012-09-01 10:35:07:99999')
+7
+select extract(MINUTE FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(MINUTE FROM '2012-09-01 10:35:07:99999')	extract(MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32896	0	63
+extract(MINUTE FROM '2012-09-01 10:35:07:99999')
+35
+select extract(HOUR FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(HOUR FROM '2012-09-01 10:35:07:99999')	extract(HOUR FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32896	0	63
+extract(HOUR FROM '2012-09-01 10:35:07:99999')
+10
+select extract(DAY FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(DAY FROM '2012-09-01 10:35:07:99999')	extract(DAY FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32896	0	63
+extract(DAY FROM '2012-09-01 10:35:07:99999')
+1
+select extract(WEEK FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(WEEK FROM '2012-09-01 10:35:07:99999')	extract(WEEK FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32896	0	63
+extract(WEEK FROM '2012-09-01 10:35:07:99999')
+35
+select extract(MONTH FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(MONTH FROM '2012-09-01 10:35:07:99999')	extract(MONTH FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32896	0	63
+extract(MONTH FROM '2012-09-01 10:35:07:99999')
+9
+select extract(QUARTER FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(QUARTER FROM '2012-09-01 10:35:07:99999')	extract(QUARTER FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32896	0	63
+extract(QUARTER FROM '2012-09-01 10:35:07:99999')
+3
+select extract(YEAR FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(YEAR FROM '2012-09-01 10:35:07:99999')	extract(YEAR FROM '2012-09-01 10:35:07:99999')	8	20	4	Y	32896	0	63
+extract(YEAR FROM '2012-09-01 10:35:07:99999')
+2012
+select extract(SECOND_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(SECOND_MICROSECOND FROM '2012-09-01 10:35:07:99999')	extract(SECOND_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	7	Y	32896	0	63
+extract(SECOND_MICROSECOND FROM '2012-09-01 10:35:07:99999')
+7000000
+select extract(MINUTE_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(MINUTE_MICROSECOND FROM '2012-09-01 10:35:07:99999')	extract(MINUTE_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	10	Y	32896	0	63
+extract(MINUTE_MICROSECOND FROM '2012-09-01 10:35:07:99999')
+3507000000
+select extract(MINUTE_SECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(MINUTE_SECOND FROM '2012-09-01 10:35:07:99999')	extract(MINUTE_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	4	Y	32896	0	63
+extract(MINUTE_SECOND FROM '2012-09-01 10:35:07:99999')
+3507
+select extract(HOUR_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(HOUR_MICROSECOND FROM '2012-09-01 10:35:07:99999')	extract(HOUR_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	12	Y	32896	0	63
+extract(HOUR_MICROSECOND FROM '2012-09-01 10:35:07:99999')
+103507000000
+select extract(DAY_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(DAY_MICROSECOND FROM '2012-09-01 10:35:07:99999')	extract(DAY_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	13	Y	32896	0	63
+extract(DAY_MICROSECOND FROM '2012-09-01 10:35:07:99999')
+1103507000000
+select extract(DAY_SECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(DAY_SECOND FROM '2012-09-01 10:35:07:99999')	extract(DAY_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	7	Y	32896	0	63
+extract(DAY_SECOND FROM '2012-09-01 10:35:07:99999')
+1103507
+select extract(HOUR_SECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(HOUR_SECOND FROM '2012-09-01 10:35:07:99999')	extract(HOUR_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	6	Y	32896	0	63
+extract(HOUR_SECOND FROM '2012-09-01 10:35:07:99999')
+103507
+select extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')	extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	5	Y	32896	0	63
+extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')
+11035
+select extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')	extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	5	Y	32896	0	63
+extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')
+11035
+select extract(DAY_HOUR FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(DAY_HOUR FROM '2012-09-01 10:35:07:99999')	extract(DAY_HOUR FROM '2012-09-01 10:35:07:99999')	8	20	3	Y	32896	0	63
+extract(DAY_HOUR FROM '2012-09-01 10:35:07:99999')
+110
+select extract(YEAR_MONTH FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(YEAR_MONTH FROM '2012-09-01 10:35:07:99999')	extract(YEAR_MONTH FROM '2012-09-01 10:35:07:99999')	8	20	6	Y	32896	0	63
+extract(YEAR_MONTH FROM '2012-09-01 10:35:07:99999')
+201209
+select extract(MICROSECOND FROM '2012-09-01') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(MICROSECOND FROM '2012-09-01')	extract(MICROSECOND FROM '2012-09-01')	8	20	1	Y	32896	0	63
+extract(MICROSECOND FROM '2012-09-01')
+0
+select extract(QUARTER FROM '2012-02-01') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(QUARTER FROM '2012-02-01')	extract(QUARTER FROM '2012-02-01')	8	20	1	Y	32896	0	63
+extract(QUARTER FROM '2012-02-01')
+1
+select extract(QUARTER FROM '2012-05-01') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(QUARTER FROM '2012-05-01')	extract(QUARTER FROM '2012-05-01')	8	20	1	Y	32896	0	63
+extract(QUARTER FROM '2012-05-01')
+2
+select extract(QUARTER FROM '2012-07-01') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(QUARTER FROM '2012-07-01')	extract(QUARTER FROM '2012-07-01')	8	20	1	Y	32896	0	63
+extract(QUARTER FROM '2012-07-01')
+3
+select extract(QUARTER FROM '2012-10-01') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(QUARTER FROM '2012-10-01')	extract(QUARTER FROM '2012-10-01')	8	20	1	Y	32896	0	63
+extract(QUARTER FROM '2012-10-01')
+4
+select extract(QUARTER FROM '2012-11-01') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(QUARTER FROM '2012-11-01')	extract(QUARTER FROM '2012-11-01')	8	20	1	Y	32896	0	63
+extract(QUARTER FROM '2012-11-01')
+4
+select extract(WEEK FROM '2012-01-01') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(WEEK FROM '2012-01-01')	extract(WEEK FROM '2012-01-01')	8	20	1	Y	32896	0	63
+extract(WEEK FROM '2012-01-01')
+1
+select extract(WEEK FROM '2012-05-30') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(WEEK FROM '2012-05-30')	extract(WEEK FROM '2012-05-30')	8	20	2	Y	32896	0	63
+extract(WEEK FROM '2012-05-30')
+22
+select extract(WEEK FROM '2012-06-15') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(WEEK FROM '2012-06-15')	extract(WEEK FROM '2012-06-15')	8	20	2	Y	32896	0	63
+extract(WEEK FROM '2012-06-15')
+24
+select extract(WEEK FROM '2012-10-25') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(WEEK FROM '2012-10-25')	extract(WEEK FROM '2012-10-25')	8	20	2	Y	32896	0	63
+extract(WEEK FROM '2012-10-25')
+43
+select extract(WEEK FROM '2013-01-01') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(WEEK FROM '2013-01-01')	extract(WEEK FROM '2013-01-01')	8	20	1	Y	32896	0	63
+extract(WEEK FROM '2013-01-01')
+0
+select extract(WEEK FROM '2019-03-09') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(WEEK FROM '2019-03-09')	extract(WEEK FROM '2019-03-09')	8	20	1	Y	32896	0	63
+extract(WEEK FROM '2019-03-09')
+9
+select extract(YEAR FROM '12-09-02') from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(YEAR FROM '12-09-02')	extract(YEAR FROM '12-09-02')	8	20	4	Y	32896	0	63
+extract(YEAR FROM '12-09-02')
+2012
+select extract(HOUR FROM CAST('0' AS TIMESTAMP)) from build_in_func_test_table;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'TIMESTAMP)) from build_in_func_test_table' at line 1
+select extract(HOUR FROM NULL) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				extract(HOUR FROM NULL)	extract(HOUR FROM NULL)	8	20	0	Y	32896	0	63
+extract(HOUR FROM NULL)
+NULL
+select date_format('2007-10-04 22:23:10.567', '%H:%i:%s');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format('2007-10-04 22:23:10.567', '%H:%i:%s')	date_format('2007-10-04 22:23:10.567', '%H:%i:%s')	253	104	8	Y	0	31	45
+date_format('2007-10-04 22:23:10.567', '%H:%i:%s')
+22:23:10
+select date_format(timestamp'2007-10-04 22:23:10.567', '%H:%i:%s');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format(timestamp'2007-10-04 22:23:10.567', '%H:%i:%s')	date_format(timestamp'2007-10-04 22:23:10.567', '%H:%i:%s')	253	104	8	Y	0	31	45
+date_format(timestamp'2007-10-04 22:23:10.567', '%H:%i:%s')
+22:23:10
+select date_format('2007-10-04 22:23:10.567', '%H %k %I %r %T %S %w');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format('2007-10-04 22:23:10.567', '%H %k %I %r %T %S %w')	date_format('2007-10-04 22:23:10.567', '%H %k %I %r %T %S %w')	253	104	34	Y	0	31	45
+date_format('2007-10-04 22:23:10.567', '%H %k %I %r %T %S %w')
+22 22 10 10:23:10 PM 22:23:10 10 4
+select date_format('2007-10-04 22:23:10.567', '%c %d %e %f %H %h %I %i %j %k %l %m %p %r %S %s %T %U %u %V %v %w %X %x %Y %y %%');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format('2007-10-04 22:23:10.567', '%c %d %e %f %H %h %I %i %j %k %l %m %p %r %S %s %T %U %u %V %v %w %X %x %Y %y %%')	date_format('2007-10-04 22:23:10.567', '%c %d %e %f %H %h %I %i %j %k %l %m %p %r %S %s %T %U %u %V %v %w %X %x %Y %y %%')	253	104	103	Y	0	31	45
+date_format('2007-10-04 22:23:10.567', '%c %d %e %f %H %h %I %i %j %k %l %m %p %r %S %s %T %U %u %V %v %w %X %x %Y %y %%')
+10 04 4 567000 22 10 10 23 277 22 10 10 PM 10:23:10 PM 10 10 22:23:10 39 40 39 40 4 2007 2007 2007 07 %
+2007-01-01 year_day=week_day=1
+select date_format('2007-01-01', '%U %u %V-%X %v-%x');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format('2007-01-01', '%U %u %V-%X %v-%x')	date_format('2007-01-01', '%U %u %V-%X %v-%x')	253	104	21	Y	0	31	45
+date_format('2007-01-01', '%U %u %V-%X %v-%x')
+00 01 53-2006 01-2007
+2013-01-01 year_day=1, week_day=2 the critical week in this year
+select date_format('2013-01-01', '%U %u %V-%X %v-%x');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format('2013-01-01', '%U %u %V-%X %v-%x')	date_format('2013-01-01', '%U %u %V-%X %v-%x')	253	104	21	Y	0	31	45
+date_format('2013-01-01', '%U %u %V-%X %v-%x')
+00 01 53-2012 01-2013
+2015-01-01 year_day=1, week_day=4 the critical week in last year when start with sunday, in this year when start with monday
+select date_format('2015-01-01', '%U %u %V-%X %v-%x');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format('2015-01-01', '%U %u %V-%X %v-%x')	date_format('2015-01-01', '%U %u %V-%X %v-%x')	253	104	21	Y	0	31	45
+date_format('2015-01-01', '%U %u %V-%X %v-%x')
+00 01 52-2014 01-2015
+2014-12-31 year_day=365, week_day=3 thi critical week in this year when start with sunday, in next year when start with monday
+select date_format('2014-12-31', '%U %u %V-%X %v-%x');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format('2014-12-31', '%U %u %V-%X %v-%x')	date_format('2014-12-31', '%U %u %V-%X %v-%x')	253	104	21	Y	0	31	45
+date_format('2014-12-31', '%U %u %V-%X %v-%x')
+52 53 52-2014 01-2015
+select date_format('2014-04-24', '%U %u %V-%X %v-%x');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format('2014-04-24', '%U %u %V-%X %v-%x')	date_format('2014-04-24', '%U %u %V-%X %v-%x')	253	104	21	Y	0	31	45
+date_format('2014-04-24', '%U %u %V-%X %v-%x')
+16 17 16-2014 17-2014
+select date_format('2014-09-24', NULL);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format('2014-09-24', NULL)	date_format('2014-09-24', NULL)	253	104	0	Y	0	31	45
+date_format('2014-09-24', NULL)
+NULL
+select date_format(NULL, '%U %u %V-%X %v-%x');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format(NULL, '%U %u %V-%X %v-%x')	date_format(NULL, '%U %u %V-%X %v-%x')	253	104	0	Y	0	31	45
+date_format(NULL, '%U %u %V-%X %v-%x')
+NULL
+select str_to_date('1970-02-03', '%Y-%m-%d');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-02-03', '%Y-%m-%d')	str_to_date('1970-02-03', '%Y-%m-%d')	10	10	10	Y	128	0	63
+str_to_date('1970-02-03', '%Y-%m-%d')
+1970-02-03
+select str_to_date('04/30/2004 10:23:24.789', '%m/%d/%Y %T.%f');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('04/30/2004 10:23:24.789', '%m/%d/%Y %T.%f')	str_to_date('04/30/2004 10:23:24.789', '%m/%d/%Y %T.%f')	12	26	26	Y	128	6	63
+str_to_date('04/30/2004 10:23:24.789', '%m/%d/%Y %T.%f')
+2004-04-30 10:23:24.789000
+select str_to_date('4/30/2013 PM 09:25:45', '%m/%e/%Y %p %h:%i:%S');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('4/30/2013 PM 09:25:45', '%m/%e/%Y %p %h:%i:%S')	str_to_date('4/30/2013 PM 09:25:45', '%m/%e/%Y %p %h:%i:%S')	12	19	19	Y	128	0	63
+str_to_date('4/30/2013 PM 09:25:45', '%m/%e/%Y %p %h:%i:%S')
+2013-04-30 21:25:45
+select str_to_date('1970-02-03 10:56:56', '%Y-%m-%d %T');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-02-03 10:56:56', '%Y-%m-%d %T')	str_to_date('1970-02-03 10:56:56', '%Y-%m-%d %T')	12	19	19	Y	128	0	63
+str_to_date('1970-02-03 10:56:56', '%Y-%m-%d %T')
+1970-02-03 10:56:56
+select str_to_date(NULL, '%Y-%m-%d %T');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date(NULL, '%Y-%m-%d %T')	str_to_date(NULL, '%Y-%m-%d %T')	12	19	0	Y	128	0	63
+str_to_date(NULL, '%Y-%m-%d %T')
+NULL
+select str_to_date('1970-02-03 10:56:56', NULL);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('1970-02-03 10:56:56', NULL)	str_to_date('1970-02-03 10:56:56', NULL)	12	26	0	Y	128	6	63
+str_to_date('1970-02-03 10:56:56', NULL)
+NULL
+select coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxddsd'))), length('dir')) from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss	coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss	8	20	3	Y	32896	0	63
+coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss
+466
+select 'NAME:'||varchar_c,'ADDR:'||v from build_in_func_test_table;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'NAME:'||varchar_c	'NAME:'||varchar_c	3	1	1	Y	32896	0	63
+def				'ADDR:'||v	'ADDR:'||v	3	1	0	Y	32896	0	63
+'NAME:'||varchar_c	'ADDR:'||v
+0	NULL
+drop table build_in_func_test_table;
+drop table if exists test_0;
+create table test_0 (test_id varchar(10) primary key,name varchar(20),create_date  timestamp(6) default "2012-01-01 12:00:00");
+insert into test_0 values('13','12','2014-03-21');
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	test_0	test_0	test_id	test_id	253	40	2	N	16387	31	45
+def	test	test_0	test_0	name	name	253	80	2	Y	0	31	45
+def				value	value	253	104	10	Y	0	31	45
+test_id	name	value
+13	12	2014-03-21
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='13';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	test_0	test_0	test_id	test_id	253	40	2	N	16387	31	45
+def	test	test_0	test_0	name	name	253	80	2	Y	0	31	45
+def				value	value	253	104	10	Y	0	31	45
+test_id	name	value
+13	12	2014-03-21
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='12';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	test_0	test_0	test_id	test_id	253	40	0	N	16387	31	45
+def	test	test_0	test_0	name	name	253	80	0	Y	0	31	45
+def				value	value	253	104	0	Y	0	31	45
+test_id	name	value
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='13' and name='12';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	test_0	test_0	test_id	test_id	253	40	2	N	16387	31	45
+def	test	test_0	test_0	name	name	253	80	2	Y	0	31	45
+def				value	value	253	104	10	Y	0	31	45
+test_id	name	value
+13	12	2014-03-21
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='13' and name='11';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	test_0	test_0	test_id	test_id	253	40	0	N	16387	31	45
+def	test	test_0	test_0	name	name	253	80	0	Y	0	31	45
+def				value	value	253	104	0	Y	0	31	45
+test_id	name	value
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='11';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	test_0	test_0	test_id	test_id	253	40	0	N	16387	31	45
+def	test	test_0	test_0	name	name	253	80	0	Y	0	31	45
+def				value	value	253	104	0	Y	0	31	45
+test_id	name	value
+drop table if exists test_format;
+create table test_format (datetest varchar(50), pk int primary key);
+insert into test_format values(date_FORMAT('2003-01-02 10:11:12', '%Y-%m-%d %H:%i:%S'),1);
+insert into test_format values(date_FORMAT('2003-01-02 10:11:12', '%Y-%m-%d %H:%i:%S'),2);
+insert into test_format values(date_FORMAT('03-01-02 8:11:2.123456', '%y-%m-%d %H:%i:%S'),3);
+insert into test_format values(date_FORMAT('0003-01-02 8:11:2.123456', '%Y-%m-%d %H:%i:%S'),4);
+insert into test_format values(date_FORMAT('03-01-02 8:11:2.123456',   '%Y-%m-%d %H:%i:%S'),5);
+insert into test_format values(date_FORMAT('2003-01-02 01:11:12.12345AM', '%Y-%m-%d %h:%i:%S.%f%p'),7);
+insert into test_format values(date_FORMAT('2003-01-02 02:11:12.12345AM', '%Y-%m-%d %h:%i:%S.%f %p'),8);
+insert into test_format values(date_FORMAT('2003-01-02 12:11:12.12345 am', '%Y-%m-%d %h:%i:%S.%f%p'),9);
+insert into test_format values(date_FORMAT('2003-01-02 11:11:12Pm', '%Y-%m-%d %h:%i:%S%p'),10);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10', '%Y-%m-%d %H:%i:%s'),11);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10', '%Y-%m-%d %h:%i:%s.%f'),12);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10', '%Y-%m-%d %T'),13);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10AM', '%Y-%m-%d %h:%i:%s%p'),14);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10AM', '%Y-%m-%d  %r'),15);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10.44AM', '%Y-%m-%d %h:%i:%s.%f%p'),16);
+select * from test_format;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	test_format	test_format	datetest	datetest	253	200	29	Y	0	31	45
+def	test	test_format	test_format	pk	pk	3	11	2	N	49283	0	63
+datetest	pk
+2003-01-02 10:11:12	1
+2003-01-02 10:11:12	2
+03-01-02 08:11:02	3
+0003-01-02 08:11:02	4
+2003-01-02 08:11:02	5
+2003-01-02 01:11:12.123450AM	7
+2003-01-02 02:11:12.123450 AM	8
+2003-01-02 12:11:12.123450PM	9
+2003-01-02 11:11:12AM	10
+2003-01-02 10:20:10	11
+2003-01-02 10:20:10.000000	12
+2003-01-02 10:20:10	13
+2003-01-02 10:20:10AM	14
+2003-01-02  10:20:10 AM	15
+2003-01-02 10:20:10.440000AM	16
+drop table if exists t1;
+create table t1 (date1 char(30) primary key, format char(30) not null);
+insert into t1 values
+('2003-01-02 10:11:12', '%Y-%m-%d %H:%i:%S'),
+('03-01-03 8:11:2.123456', '%y-%m-%d %H:%i:%S'),
+('0003-01-04 8:11:2.123456', '%Y-%m-%d %H:%i:%S'),
+('03-01-05 8:11:2.123456',   '%Y-%m-%d %H:%i:%S'),
+('2003-01-04 10:11:12 PM', '%Y-%m-%d %h:%i:%S %p'),
+('2003-01-02 01:11:12.12345AM', '%Y-%m-%d %h:%i:%S.%f%p'),
+('2003-01-03 02:11:12.12345AM', '%Y-%m-%d %h:%i:%S.%f %p'),
+('2003-01-02 12:11:12.12345 am', '%Y-%m-%d %h:%i:%S.%f%p'),
+('2003-01-02 11:11:12Pm', '%Y-%m-%d %h:%i:%S%p');
+drop table if exists t1;
+create table t1 (d timestamp primary key);
+insert into t1 values ('2004-07-14'),('2005-07-14');
+select date_format(d,'%d') from t1 order by 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format(d,'%d')	date_format(d,'%d')	253	104	2	Y	0	31	45
+date_format(d,'%d')
+14
+14
+select date_format(d,'%e') from t1 order by 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format(d,'%e')	date_format(d,'%e')	253	104	2	Y	0	31	45
+date_format(d,'%e')
+14
+14
+select date_format(d,'%D') from t1 order by 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format(d,'%D')	date_format(d,'%D')	253	104	4	Y	0	31	45
+date_format(d,'%D')
+14th
+14th
+drop table t1;
+select date_format('2004-01-01','%W (%a), %e %M (%b) %Y');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date_format('2004-01-01','%W (%a), %e %M (%b) %Y')	date_format('2004-01-01','%W (%a), %e %M (%b) %Y')	253	104	36	Y	0	31	45
+date_format('2004-01-01','%W (%a), %e %M (%b) %Y')
+Thursday (Thu), 1 January (Jan) 2004
+create table t1 (f1 datetime primary key);
+insert into t1 (f1) values ('2005-01-01');
+insert into t1 (f1) values ('2005-02-01');
+select date_format(f1, '%m') as d1, date_format(f1, '%M') as d2 from t1 order by date_format(f1, '%M');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				d1	d1	253	104	2	Y	0	31	45
+def				d2	d2	253	104	8	Y	0	31	45
+d1	d2
+02	February
+01	January
+select date_format(f1, '%m') as d1, date_format(f1, '%M') as d2 from t1 where f1='2013' order by date_format(f1, '%M') ;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				d1	d1	253	104	0	Y	0	31	45
+def				d2	d2	253	104	0	Y	0	31	45
+d1	d2
+SELECT DATE_FORMAT('2014-01-01 24:00:00', '%r');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 24:00:00', '%r')	DATE_FORMAT('2014-01-01 24:00:00', '%r')	253	104	0	Y	0	31	45
+DATE_FORMAT('2014-01-01 24:00:00', '%r')
+NULL
+SELECT DATE_FORMAT('2014-01-01 00:00:00', '%r');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 00:00:00', '%r')	DATE_FORMAT('2014-01-01 00:00:00', '%r')	253	104	11	Y	0	31	45
+DATE_FORMAT('2014-01-01 00:00:00', '%r')
+12:00:00 AM
+SELECT DATE_FORMAT('2014-01-01 12:00:00', '%r');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 12:00:00', '%r')	DATE_FORMAT('2014-01-01 12:00:00', '%r')	253	104	11	Y	0	31	45
+DATE_FORMAT('2014-01-01 12:00:00', '%r')
+12:00:00 PM
+SELECT DATE_FORMAT('2014-01-01 15:00:00', '%r');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 15:00:00', '%r')	DATE_FORMAT('2014-01-01 15:00:00', '%r')	253	104	11	Y	0	31	45
+DATE_FORMAT('2014-01-01 15:00:00', '%r')
+03:00:00 PM
+SELECT DATE_FORMAT('2014-01-01 01:00:00', '%r');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 01:00:00', '%r')	DATE_FORMAT('2014-01-01 01:00:00', '%r')	253	104	11	Y	0	31	45
+DATE_FORMAT('2014-01-01 01:00:00', '%r')
+01:00:00 AM
+SELECT DATE_FORMAT('2014-01-01 25:00:00', '%r');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 25:00:00', '%r')	DATE_FORMAT('2014-01-01 25:00:00', '%r')	253	104	0	Y	0	31	45
+DATE_FORMAT('2014-01-01 25:00:00', '%r')
+NULL
+SELECT DATE_FORMAT('2014-01-01 00:00:00', '%l %p');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 00:00:00', '%l %p')	DATE_FORMAT('2014-01-01 00:00:00', '%l %p')	253	104	5	Y	0	31	45
+DATE_FORMAT('2014-01-01 00:00:00', '%l %p')
+12 AM
+SELECT DATE_FORMAT('2014-01-01 01:00:00', '%l %p');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 01:00:00', '%l %p')	DATE_FORMAT('2014-01-01 01:00:00', '%l %p')	253	104	4	Y	0	31	45
+DATE_FORMAT('2014-01-01 01:00:00', '%l %p')
+1 AM
+SELECT DATE_FORMAT('2014-01-01 12:00:00', '%l %p');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 12:00:00', '%l %p')	DATE_FORMAT('2014-01-01 12:00:00', '%l %p')	253	104	5	Y	0	31	45
+DATE_FORMAT('2014-01-01 12:00:00', '%l %p')
+12 PM
+SELECT DATE_FORMAT('2014-01-01 23:00:00', '%l %p');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 23:00:00', '%l %p')	DATE_FORMAT('2014-01-01 23:00:00', '%l %p')	253	104	5	Y	0	31	45
+DATE_FORMAT('2014-01-01 23:00:00', '%l %p')
+11 PM
+SELECT DATE_FORMAT('2014-01-01 24:00:00', '%l %p');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 24:00:00', '%l %p')	DATE_FORMAT('2014-01-01 24:00:00', '%l %p')	253	104	0	Y	0	31	45
+DATE_FORMAT('2014-01-01 24:00:00', '%l %p')
+NULL
+SELECT DATE_FORMAT('2014-01-01 25:00:00', '%l %p');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('2014-01-01 25:00:00', '%l %p')	DATE_FORMAT('2014-01-01 25:00:00', '%l %p')	253	104	0	Y	0	31	45
+DATE_FORMAT('2014-01-01 25:00:00', '%l %p')
+NULL
+SELECT DATE_FORMAT('%Y-%m-%d %H:%i:%s', 1151414896);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT('%Y-%m-%d %H:%i:%s', 1151414896)	DATE_FORMAT('%Y-%m-%d %H:%i:%s', 1151414896)	253	104	0	Y	0	31	45
+DATE_FORMAT('%Y-%m-%d %H:%i:%s', 1151414896)
+NULL
+SELECT DATE_FORMAT('0000-01-01','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	22	Y	0	31	45
+valid_date
+Sunday 01 January 0000
+SELECT DATE_FORMAT('0001-01-01','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	22	Y	0	31	45
+valid_date
+Monday 01 January 0001
+SELECT DATE_FORMAT('-0001-01-01','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	0	Y	0	31	45
+valid_date
+NULL
+SELECT DATE_FORMAT('-4713-01-01','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	0	Y	0	31	45
+valid_date
+NULL
+SELECT DATE_FORMAT('-4712-01-01','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	0	Y	0	31	45
+valid_date
+NULL
+SELECT DATE_FORMAT('-4714-01-01','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	0	Y	0	31	45
+valid_date
+NULL
+SELECT DATE_FORMAT('9999-01-01','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	22	Y	0	31	45
+valid_date
+Friday 01 January 9999
+SELECT DATE_FORMAT('10000-01-01','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	0	Y	0	31	45
+valid_date
+NULL
+SELECT DATE_FORMAT('0000-02-28','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	24	Y	0	31	45
+valid_date
+Tuesday 28 February 0000
+SELECT DATE_FORMAT('0001-02-28','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	26	Y	0	31	45
+valid_date
+Wednesday 28 February 0001
+SELECT DATE_FORMAT('2009-01-01','%W %d %M %Y') as valid_date;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				valid_date	valid_date	253	104	24	Y	0	31	45
+valid_date
+Thursday 01 January 2009
+SELECT CAST(DATE_FORMAT(NULL, '%s') AS CHAR);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				CAST(DATE_FORMAT(NULL, '%s') AS CHAR)	CAST(DATE_FORMAT(NULL, '%s') AS CHAR)	253	104	0	Y	0	31	45
+CAST(DATE_FORMAT(NULL, '%s') AS CHAR)
+NULL
+SELECT CAST(DATE_FORMAT(NULL, '%s') AS DECIMAL(23,6));
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				CAST(DATE_FORMAT(NULL, '%s') AS DECIMAL(23,6))	CAST(DATE_FORMAT(NULL, '%s') AS DECIMAL(23,6))	246	25	0	Y	32896	6	63
+CAST(DATE_FORMAT(NULL, '%s') AS DECIMAL(23,6))
+NULL
+SELECT CAST(DATE_FORMAT(NULL, '%s') AS DATETIME);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				CAST(DATE_FORMAT(NULL, '%s') AS DATETIME)	CAST(DATE_FORMAT(NULL, '%s') AS DATETIME)	12	19	0	Y	128	0	63
+CAST(DATE_FORMAT(NULL, '%s') AS DATETIME)
+NULL
+SELECT DATE_FORMAT(NULL, '%s')+0e0;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT(NULL, '%s')+0e0	DATE_FORMAT(NULL, '%s')+0e0	5	23	0	Y	32896	31	63
+DATE_FORMAT(NULL, '%s')+0e0
+NULL
+drop table t1;
+select  str_to_date('2003-01-02', '%Y-%m-%d') as f3;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				f3	f3	10	10	10	Y	128	0	63
+f3
+2003-01-02
+drop table if exists t1;
+create table t1 (f1 varchar(20) primary key);
+insert into t1 (f1) values ('2005-01-01');
+insert into t1 (f1) values ('2005-02-01');
+select  str_to_date(f1,'%Y-%m-%d') from t1 where f1='2005-01-01';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date(f1,'%Y-%m-%d')	str_to_date(f1,'%Y-%m-%d')	10	10	10	Y	128	0	63
+str_to_date(f1,'%Y-%m-%d')
+2005-01-01
+select  str_to_date(f1,'%Y-%m-%d') from t1 where f1='2005-01-03';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date(f1,'%Y-%m-%d')	str_to_date(f1,'%Y-%m-%d')	10	10	0	Y	128	0	63
+str_to_date(f1,'%Y-%m-%d')
+select str_to_date('04 /30/2004', '%m /%d/%Y');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('04 /30/2004', '%m /%d/%Y')	str_to_date('04 /30/2004', '%m /%d/%Y')	10	10	10	Y	128	0	63
+str_to_date('04 /30/2004', '%m /%d/%Y')
+2004-04-30
+select str_to_date('04/30 /2004', '%m /%d /%Y');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('04/30 /2004', '%m /%d /%Y')	str_to_date('04/30 /2004', '%m /%d /%Y')	10	10	10	Y	128	0	63
+str_to_date('04/30 /2004', '%m /%d /%Y')
+2004-04-30
+select str_to_date('04/30/2004 ', '%m/%d/%Y ');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				str_to_date('04/30/2004 ', '%m/%d/%Y ')	str_to_date('04/30/2004 ', '%m/%d/%Y ')	10	10	10	Y	128	0	63
+str_to_date('04/30/2004 ', '%m/%d/%Y ')
+2004-04-30
+select '+' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'+' + 1	'+' + 1	5	23	1	N	32897	31	63
+'+' + 1
+1
+select '-' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'-' + 1	'-' + 1	5	23	1	N	32897	31	63
+'-' + 1
+1
+select '.' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'.' + 1	'.' + 1	5	23	1	N	32897	31	63
+'.' + 1
+1
+select '_' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'_' + 1	'_' + 1	5	23	1	N	32897	31	63
+'_' + 1
+1
+select '~' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'~' + 1	'~' + 1	5	23	1	N	32897	31	63
+'~' + 1
+1
+select '@' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'@' + 1	'@' + 1	5	23	1	N	32897	31	63
+'@' + 1
+1
+select '#' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'#' + 1	'#' + 1	5	23	1	N	32897	31	63
+'#' + 1
+1
+select '%' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'%' + 1	'%' + 1	5	23	1	N	32897	31	63
+'%' + 1
+1
+select '^' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'^' + 1	'^' + 1	5	23	1	N	32897	31	63
+'^' + 1
+1
+select '$%%%' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'$%%%' + 1	'$%%%' + 1	5	23	1	N	32897	31	63
+'$%%%' + 1
+1
+select '(' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'(' + 1	'(' + 1	5	23	1	N	32897	31	63
+'(' + 1
+1
+select ')' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				')' + 1	')' + 1	5	23	1	N	32897	31	63
+')' + 1
+1
+select '=' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'=' + 1	'=' + 1	5	23	1	N	32897	31	63
+'=' + 1
+1
+select '{' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'{' + 1	'{' + 1	5	23	1	N	32897	31	63
+'{' + 1
+1
+select '}' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'}' + 1	'}' + 1	5	23	1	N	32897	31	63
+'}' + 1
+1
+select '|' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'|' + 1	'|' + 1	5	23	1	N	32897	31	63
+'|' + 1
+1
+select '\'' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'\'' + 1	'\'' + 1	5	23	1	N	32897	31	63
+'\'' + 1
+1
+select '"' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'"' + 1	'"' + 1	5	23	1	N	32897	31	63
+'"' + 1
+1
+select ':' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				':' + 1	':' + 1	5	23	1	N	32897	31	63
+':' + 1
+1
+select '<' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'<' + 1	'<' + 1	5	23	1	N	32897	31	63
+'<' + 1
+1
+select '>' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'>' + 1	'>' + 1	5	23	1	N	32897	31	63
+'>' + 1
+1
+select '?' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'?' + 1	'?' + 1	5	23	1	N	32897	31	63
+'?' + 1
+1
+select '/' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'/' + 1	'/' + 1	5	23	1	N	32897	31	63
+'/' + 1
+1
+select '!@##' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'!@##' + 1	'!@##' + 1	5	23	1	N	32897	31	63
+'!@##' + 1
+1
+select '$^^%%^$%(*&^(*^&*^&)' + 1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				'$^^%%^$%(*&^(*^&*^&)' + 1	'$^^%%^$%(*&^(*^&*^&)' + 1	5	23	1	N	32897	31	63
+'$^^%%^$%(*&^(*^&*^&)' + 1
+1
+select concat(NULL, 'aaa');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				concat(NULL, 'aaa')	concat(NULL, 'aaa')	253	12	0	Y	0	31	45
+concat(NULL, 'aaa')
+NULL
+select concat('aaa', NULL);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				concat('aaa', NULL)	concat('aaa', NULL)	253	12	0	Y	0	31	45
+concat('aaa', NULL)
+NULL
+select concat('aaa','');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				concat('aaa','')	concat('aaa','')	253	12	3	Y	0	31	45
+concat('aaa','')
+aaa
+select concat('','aaa');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				concat('','aaa')	concat('','aaa')	253	12	3	Y	0	31	45
+concat('','aaa')
+aaa
+select 1.1/0.0;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				1.1/0.0	1.1/0.0	246	8	0	Y	32896	5	63
+1.1/0.0
+NULL
+select dump(1.1);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				dump(1.1)	dump(1.1)	253	16	51	Y	0	31	45
+dump(1.1)
+"sign=1 exp=64 se=0xc0 len=2 digits=[1,100000000,]"
+select dump(1);
+ERROR 0A000: Not supported feature or function
+select round(1.1234, 3);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				round(1.1234, 3)	round(1.1234, 3)	246	7	5	N	32897	3	63
+round(1.1234, 3)
+1.123
+select round(1.1234);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				round(1.1234)	round(1.1234)	246	3	1	N	32897	0	63
+round(1.1234)
+1
+select false is true;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				false is true	false is true	3	1	1	N	32897	0	63
+false is true
+0
+select NULL is true;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				NULL is true	NULL is true	3	1	1	N	32897	0	63
+NULL is true
+0
+select true is true;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				true is true	true is true	3	1	1	N	32897	0	63
+true is true
+1
+select true is not  true;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				true is not  true	true is not  true	3	1	1	N	32897	0	63
+true is not  true
+0
+select NULL is NULL;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				NULL is NULL	NULL is NULL	3	1	1	N	32897	0	63
+NULL is NULL
+1
+select NULL is not NULL;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				NULL is not NULL	NULL is not NULL	3	1	1	N	32897	0	63
+NULL is not NULL
+0
+select true is false;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				true is false	true is false	3	1	1	N	32897	0	63
+true is false
+0
+select -'aaa';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				-'aaa'	-'aaa'	5	23	2	N	32897	31	63
+-'aaa'
+-0
+select DATE_ADD(null, INTERVAL 5 DAY);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_ADD(null, INTERVAL 5 DAY)	DATE_ADD(null, INTERVAL 5 DAY)	6	0	0	Y	32896	0	63
+DATE_ADD(null, INTERVAL 5 DAY)
+NULL
+select DATE_sub(null, INTERVAL 5 DAY);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_sub(null, INTERVAL 5 DAY)	DATE_sub(null, INTERVAL 5 DAY)	6	0	0	Y	32896	0	63
+DATE_sub(null, INTERVAL 5 DAY)
+NULL
+select STR_TO_DATE(null, '%Y-%m-%d');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				STR_TO_DATE(null, '%Y-%m-%d')	STR_TO_DATE(null, '%Y-%m-%d')	10	10	0	Y	128	0	63
+STR_TO_DATE(null, '%Y-%m-%d')
+NULL
+select DATE_FORMAT(null, '%Y/%m/%D');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT(null, '%Y/%m/%D')	DATE_FORMAT(null, '%Y/%m/%D')	253	104	0	Y	0	31	45
+DATE_FORMAT(null, '%Y/%m/%D')
+NULL
+select time_to_usec(null);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				time_to_usec(null)	time_to_usec(null)	8	20	0	Y	32896	0	63
+time_to_usec(null)
+NULL
+select usec_to_time(null);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				usec_to_time(null)	usec_to_time(null)	7	26	0	Y	1152	6	63
+usec_to_time(null)
+NULL
+select EXTRACT(DAY FROM null);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				EXTRACT(DAY FROM null)	EXTRACT(DAY FROM null)	8	20	0	Y	32896	0	63
+EXTRACT(DAY FROM null)
+NULL
+select abs(10);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(10)	abs(10)	8	2	2	N	32897	0	63
+abs(10)
+10
+select abs(-10);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(-10)	abs(-10)	8	2	2	N	32897	0	63
+abs(-10)
+10
+select abs(-0);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(-0)	abs(-0)	8	2	1	N	32897	0	63
+abs(-0)
+0
+select abs(0);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(0)	abs(0)	8	2	1	N	32897	0	63
+abs(0)
+0
+select abs(1);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(1)	abs(1)	8	2	1	N	32897	0	63
+abs(1)
+1
+select abs(-1);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(-1)	abs(-1)	8	2	1	N	32897	0	63
+abs(-1)
+1
+select abs(-1000000000000);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(-1000000000000)	abs(-1000000000000)	8	2	13	N	32897	0	63
+abs(-1000000000000)
+1000000000000
+select abs(1000000000000);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(1000000000000)	abs(1000000000000)	8	2	13	N	32897	0	63
+abs(1000000000000)
+1000000000000
+select abs(0.1);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(0.1)	abs(0.1)	246	4	3	N	32897	1	63
+abs(0.1)
+0.1
+select abs(-0.1);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(-0.1)	abs(-0.1)	246	4	3	N	32897	1	63
+abs(-0.1)
+0.1
+select abs(-11.10);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(-11.10)	abs(-11.10)	246	6	5	N	32897	2	63
+abs(-11.10)
+11.10
+select abs(null);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(null)	abs(null)	5	23	0	Y	32896	31	63
+abs(null)
+NULL
+select abs(NULL);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(NULL)	abs(NULL)	5	23	0	Y	32896	31	63
+abs(NULL)
+NULL
+select abs(Null);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(Null)	abs(Null)	5	23	0	Y	32896	31	63
+abs(Null)
+NULL
+select abs(5-5);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(5-5)	abs(5-5)	8	3	1	N	32897	0	63
+abs(5-5)
+0
+select abs(-0.1*3);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abs(-0.1*3)	abs(-0.1*3)	246	5	3	N	32897	1	63
+abs(-0.1*3)
+0.3
+select unhex('434445');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				unhex('434445')	unhex('434445')	253	3	3	Y	128	31	63
+unhex('434445')
+CDE
+select unhex('C434445');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				unhex('C434445')	unhex('C434445')	253	3	4	Y	128	31	63
+unhex('C434445')
+CDE
+select unhex(repeat('4',100));
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				unhex(repeat('4',100))	unhex(repeat('4',100))	253	256	50	Y	128	31	63
+unhex(repeat('4',100))
+DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+select unhex(repeat('1',400));
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				unhex(repeat('1',400))	unhex(repeat('1',400))	253	256	200	Y	128	31	63
+unhex(repeat('1',400))
+
+select unhex(null);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				unhex(null)	unhex(null)	253	0	0	Y	128	31	63
+unhex(null)
+NULL
+select unhex('123');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				unhex('123')	unhex('123')	253	3	2	Y	128	31	63
+unhex('123')
+#
+select unhex(cast(repeat('123',5) as char(1024)));
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				unhex(cast(repeat('123',5) as char(1024)))	unhex(cast(repeat('123',5) as char(1024)))	253	512	8	Y	128	31	63
+unhex(cast(repeat('123',5) as char(1024)))
+#1#1#
+select unhex('');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				unhex('')	unhex('')	253	3	0	Y	128	31	63
+unhex('')
+
+select unhex(repeat('',10));
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				unhex(repeat('',10))	unhex(repeat('',10))	253	256	0	Y	128	31	63
+unhex(repeat('',10))
+
+select SUBSTR( 'Sat' FROM 3 ) , SUBSTR( 'Sat' FROM 3 ) LIKE '%a_';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				SUBSTR( 'Sat' FROM 3 )	SUBSTR( 'Sat' FROM 3 )	253	4	1	Y	0	31	45
+def				SUBSTR( 'Sat' FROM 3 ) LIKE '%a_'	SUBSTR( 'Sat' FROM 3 ) LIKE '%a_'	8	1	1	Y	32896	0	63
+SUBSTR( 'Sat' FROM 3 )	SUBSTR( 'Sat' FROM 3 ) LIKE '%a_'
+t	0
+select DATE_FORMAT( '2014-12-31 19:54:55.000002', '%x%v' ) , DATE_FORMAT( '2023-12-31 19:54:55.000002', '%x%v' );
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				DATE_FORMAT( '2014-12-31 19:54:55.000002', '%x%v' )	DATE_FORMAT( '2014-12-31 19:54:55.000002', '%x%v' )	253	104	6	Y	0	31	45
+def				DATE_FORMAT( '2023-12-31 19:54:55.000002', '%x%v' )	DATE_FORMAT( '2023-12-31 19:54:55.000002', '%x%v' )	253	104	6	Y	0	31	45
+DATE_FORMAT( '2014-12-31 19:54:55.000002', '%x%v' )	DATE_FORMAT( '2023-12-31 19:54:55.000002', '%x%v' )
+201501	202352
+drop table if exists t1;
+create table t1 (a bigint, b datetime(6));
+insert into t1 values(1,now());
+select a from t1 where nvl(null,b) <= now();
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	t1	t1	a	a	8	20	1	Y	32896	0	63
+a
+1
+select a from t1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	t1	t1	a	a	8	20	1	Y	32896	0	63
+a
+1
+select  !w, !!w, !(!w), ! !w, not w, not not w, w is true, w is not false, (not w) is false, not(w is false), if(w,'true','false'), !1+1, !'a', !false, !isnull('a'), !!isnull('a') from (select 0 w union select 1) w;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				!w	!w	8	1	1	N	32897	0	63
+def				!!w	!!w	8	1	1	N	32897	0	63
+def				!(!w)	!(!w)	8	1	1	N	32897	0	63
+def				! !w	! !w	8	1	1	N	32897	0	63
+def				not w	not w	8	1	1	N	32897	0	63
+def				not not w	not not w	8	1	1	N	32897	0	63
+def				w is true	w is true	3	1	1	N	32897	0	63
+def				w is not false	w is not false	3	1	1	N	32897	0	63
+def				(not w) is false	(not w) is false	3	1	1	N	32897	0	63
+def				not(w is false)	not(w is false)	8	1	1	N	32897	0	63
+def				if(w,'true','false')	if(w,'true','false')	253	20	5	N	1	31	45
+def				!1+1	!1+1	8	2	1	N	32897	0	63
+def				!'a'	!'a'	8	1	1	N	32897	0	63
+def				!false	!false	8	1	1	N	32897	0	63
+def				!isnull('a')	!isnull('a')	8	1	1	N	32897	0	63
+def				!!isnull('a')	!!isnull('a')	8	1	1	N	32897	0	63
+!w	!!w	!(!w)	! !w	not w	not not w	w is true	w is not false	(not w) is false	not(w is false)	if(w,'true','false')	!1+1	!'a'	!false	!isnull('a')	!!isnull('a')
+1	0	0	0	1	0	0	0	0	0	false	1	1	1	1	0
+0	1	1	1	0	1	1	1	1	1	true	1	1	1	1	0

@@ -1,0 +1,69 @@
+**************   Case 1   ***************
+	/*	trace_id=ABC	*/rpc_id=xxx
+trace_id: ABC
+**************   Case 2   ***************
+
+/*
+trace_id=ABC
+rpc_id=xxx*/
+trace_id: ABC
+**************   Case 3   ***************
+/*trace_id=ABCrpc_id=xxx*/
+trace_id: ABC
+**************   Case 4   ***************
+/*trace_id=ABCrpc_id=xxx*/
+trace_id: ABC
+**************   Case 5   ***************
+/*trace_id=xxx*/select * from t1;
+trace_id: xxx
+**************   Case 6   ***************
+ /*TrAcE_Id=xxx read*/ select * from t1;
+trace_id: xxx
+**************   Case 7   ***************
+/*+tRaCe_iD=abcd12 * read*/ select * from t1;
+trace_id: abcd12
+**************   Case 8   ***************
+/* trace_id=a12db   rpc_id=xxxxx */ select * from t1;
+trace_id: a12db
+**************   Case 9   ***************
+/*trace_id=xxx,rpc_id=xxx*/select * from t1;
+trace_id: xxx
+**************   Case 10   ***************
+ /*rpc_id=xxx, TrAcE_Id=xxx, read*/ select * from t1;
+trace_id: xxx
+**************   Case 11   ***************
+/*+tRaCe_iD=abcd12* read*/ select * from t1;
+trace_id: abcd12
+**************   Case 12   ***************
+/* trace_id=a12db,   rpc_id=xxxxx */ select * from t1;
+trace_id: a12db
+**************   Case 13   ***************
+/*trace_id=1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc888888889999999 rpc_id=xxx*/ select * from t1;
+trace_id: 1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc88888888
+**************   Case 14   ***************
+/*trace_id=1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc88888888 rpc_id=xxx*/ select * from t1;
+trace_id: 1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc88888888
+**************   Case 15   ***************
+/*trace_id=1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc8888888 rpc_id=xxx*/ select * from t1;
+trace_id: 1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc8888888
+**************   Case 16   ***************
+/*trace_id=1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc888888889 rpc_id=xxx*/ select * from t1;
+trace_id: 1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc88888888
+**************   Case 17   ***************
+/*trace_id=1 rpc_id=xxx*/ select * from t1;
+trace_id: 1
+**************   Case 18   ***************
+/*trace_id=12QA  rpc_id=xxx*/ select * from t1;
+trace_id: 12QA
+**************   Case 19   ***************
+  /*trace_id=12QA  rpc_id=xxx*/ select * from t1;
+trace_id: 12QA
+**************   Case 20   ***************
+select /*trace_id=xx*/ * from t1;
+trace_id: 
+**************   Case 21   ***************
+/*trace_id= abc read*/ select * from t1;
+trace_id: 
+**************   Case 22   ***************
+/*trace_id= abc select * from t1;
+trace_id: 

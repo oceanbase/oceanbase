@@ -1,0 +1,360 @@
+connect  obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection obsys1;
+drop tenant if exists tt1 force;
+drop resource pool if exists mypool1;
+drop resource unit if exists mybox1;
+create resource unit mybox1 max_cpu 1, max_memory 536870912, max_iops 128, max_disk_size 536870912, max_session_num 64, MIN_CPU=1, MIN_MEMORY=536870912, MIN_IOPS=128;
+select * from oceanbase.__all_unit_config where name='mybox1';
+gmt_create	gmt_modified	unit_config_id	name	max_cpu	min_cpu	max_memory	min_memory	max_iops	min_iops	max_disk_size	max_session_num
+create_time	modify_time	unit_config_id	mybox1	1	1	536870912	536870912	128	128	536870912	64
+gmt_create	gmt_modified	resource_pool_id	name	unit_count	unit_config_id	zone_list	tenant_id	replica_type	is_tenant_sys_pool
+create_time	modify_time	resource_pool_id	mypool1	1	unit_config_id	zone	tenant_id	0	0
+select * from oceanbase.__all_tenant where tenant_name='tt1';
+gmt_create	gmt_modified	tenant_id	tenant_name	replica_num	zone_list	primary_zone	locked	collation_type	info	read_only	rewrite_merge_version	locality	logonly_replica_num	previous_locality	storage_format_version	storage_format_work_version	default_tablegroup_id	compatibility_mode	drop_tenant_time	status	in_recyclebin
+create_time	modify_time	tenant_id	tt1	-1	zone	zone	0	0		0	0	locality	logonly_replica_num	previous_locality	storage_format_version	storage_format_work_version	-1	0	-1	TENANT_STATUS_NORMAL	0
+disconnect obsys1;
+connect  conn1,$TE_SERVER_IP,root@tt1,,*NO-ONE*,$TE_SERVER_PORT;
+use information_schema;
+show variables like "%lower%";
+Variable_name	Value
+lower_case_table_names	1
+desc character_sets;
+Field	Type	Null	Key	Default	Extra
+CHARACTER_SET_NAME	varchar(128)	NO			
+DEFAULT_COLLATE_NAME	varchar(128)	NO			
+DESCRIPTION	varchar(64)	NO			
+MAXLEN	bigint(20)	NO			
+desc collation_character_set_applicability;
+Field	Type	Null	Key	Default	Extra
+COLLATION_NAME	varchar(128)	NO			
+CHARACTER_SET_NAME	varchar(128)	NO			
+desc collations;
+Field	Type	Null	Key	Default	Extra
+COLLATION_NAME	varchar(128)	NO			
+CHARACTER_SET_NAME	varchar(128)	NO			
+ID	bigint(20)	NO			
+IS_DEFAULT	varchar(4)	NO			
+IS_COMPILED	varchar(4)	NO			
+SORTLEN	bigint(20)	NO			
+desc columns;
+Field	Type	Null	Key	Default	Extra
+TABLE_CATALOG	varchar(4096)	NO			
+TABLE_SCHEMA	varchar(128)	NO		NULL	
+TABLE_NAME	varchar(256)	NO		NULL	
+COLUMN_NAME	varchar(128)	NO			
+ORDINAL_POSITION	bigint(20) unsigned	NO			
+COLUMN_DEFAULT	varchar(262144)	YES		NULL	
+IS_NULLABLE	varchar(4)	NO			
+DATA_TYPE	varchar(64)	NO			
+CHARACTER_MAXIMUM_LENGTH	bigint(20) unsigned	YES		NULL	
+CHARACTER_OCTET_LENGTH	bigint(20) unsigned	YES		NULL	
+NUMERIC_PRECISION	bigint(20) unsigned	YES		NULL	
+NUMERIC_SCALE	bigint(20) unsigned	YES		NULL	
+DATETIME_PRECISION	bigint(20) unsigned	YES		NULL	
+CHARACTER_SET_NAME	varchar(128)	YES		NULL	
+COLLATION_NAME	varchar(128)	YES		NULL	
+COLUMN_TYPE	varchar(64)	NO		NULL	
+COLUMN_KEY	varchar(3)	NO			
+EXTRA	varchar(4096)	NO			
+PRIVILEGES	varchar(200)	NO			
+COLUMN_COMMENT	varchar(2048)	NO			
+GENERATION_EXPRESSION	varchar(262144)	NO			
+desc global_status;
+Field	Type	Null	Key	Default	Extra
+VARIABLE_NAME	varchar(128)	NO			
+VARIABLE_VALUE	varchar(1024)	YES		NULL	
+desc global_variables;
+Field	Type	Null	Key	Default	Extra
+VARIABLE_NAME	varchar(128)	NO			
+VARIABLE_VALUE	varchar(65536)	YES		NULL	
+desc key_column_usage;
+Field	Type	Null	Key	Default	Extra
+CONSTRAINT_CATALOG	varchar(3)	NO			
+CONSTRAINT_SCHEMA	varchar(128)	NO			
+CONSTRAINT_NAME	varchar(7)	NO			
+TABLE_CATALOG	varchar(3)	NO			
+TABLE_SCHEMA	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+COLUMN_NAME	varchar(128)	NO			
+ORDINAL_POSITION	bigint(20)	NO			
+POSITION_IN_UNIQUE_CONSTRAINT	null	NO			
+REFERENCED_TABLE_SCHEMA	null	NO			
+REFERENCED_TABLE_NAME	null	NO			
+REFERENCED_COLUMN_NAME	null	NO			
+desc partitions;
+Field	Type	Null	Key	Default	Extra
+TABLE_CATALOG	varchar(4096)	NO			
+TABLE_SCHEMA	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+PARTITION_NAME	varchar(64)	YES		NULL	
+SUBPARTITION_NAME	varchar(64)	YES		NULL	
+PARTITION_ORDINAL_POSITION	bigint(20) unsigned	YES		NULL	
+SUBPARTITION_ORDINAL_POSITION	bigint(20) unsigned	YES		NULL	
+PARTITION_METHOD	varchar(18)	YES		NULL	
+SUBPARTITION_METHOD	varchar(18)	YES		NULL	
+PARTITION_EXPRESSION	varchar(4096)	YES		NULL	
+SUBPARTITION_EXPRESSION	varchar(4096)	YES		NULL	
+PARTITION_DESCRIPTION	varchar(1024)	YES		NULL	
+TABLE_ROWS	bigint(20) unsigned	NO		0	
+AVG_ROW_LENGTH	bigint(20) unsigned	NO		0	
+DATA_LENGTH	bigint(20) unsigned	NO		0	
+MAX_DATA_LENGTH	bigint(20) unsigned	YES		NULL	
+INDEX_LENGTH	bigint(20) unsigned	NO		0	
+DATA_FREE	bigint(20) unsigned	NO		0	
+CREATE_TIME	timestamp(6)	YES		NULL	
+UPDATE_TIME	timestamp(6)	YES		NULL	
+CHECK_TIME	timestamp(6)	YES		NULL	
+CHECKSUM	bigint(20)	YES		NULL	
+PARTITION_COMMENT	varchar(1024)	NO			
+NODEGROUP	varchar(12)	NO			
+TABLESPACE_NAME	varchar(128)	YES		NULL	
+desc processlist;
+Field	Type	Null	Key	Default	Extra
+ID	bigint(20) unsigned	NO			
+USER	varchar(32)	NO			
+HOST	varchar(128)	NO			
+DB	varchar(128)	YES		NULL	
+COMMAND	varchar(4096)	NO			
+TIME	bigint(20)	NO			
+STATE	varchar(128)	YES		NULL	
+INFO	varchar(262143)	YES		NULL	
+desc schema_privileges;
+Field	Type	Null	Key	Default	Extra
+GRANTEE	varchar(81)	NO			
+TABLE_CATALOG	varchar(4096)	NO			
+TABLE_SCHEMA	varchar(128)	NO			
+PRIVILEGE_TYPE	varchar(64)	NO			
+IS_GRANTABLE	varchar(3)	NO			
+desc schemata;
+Field	Type	Null	Key	Default	Extra
+CATALOG_NAME	varchar(3)	NO			
+SCHEMA_NAME	varchar(128)	NO			
+DEFAULT_CHARACTER_SET_NAME	varchar(7)	NO			
+DEFAULT_COLLATION_NAME	varchar(18)	NO			
+SQL_PATH	null	NO			
+desc session_status;
+Field	Type	Null	Key	Default	Extra
+VARIABLE_NAME	varchar(128)	NO			
+VARIABLE_VALUE	varchar(1024)	YES		NULL	
+desc session_variables;
+Field	Type	Null	Key	Default	Extra
+VARIABLE_NAME	varchar(128)	NO			
+VARIABLE_VALUE	varchar(1024)	YES		NULL	
+desc statistics;
+Field	Type	Null	Key	Default	Extra
+TABLE_CATALOG	varchar(3)	NO			
+TABLE_SCHEMA	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+NON_UNIQUE	bigint(20)	NO			
+INDEX_SCHEMA	varchar(128)	NO			
+INDEX_NAME	varchar(128)	NO			
+SEQ_IN_INDEX	bigint(20)	NO			
+COLUMN_NAME	varchar(128)	NO			
+COLLATION	varchar(128)	YES		NULL	
+CARDINALITY	bigint(20)	YES		NULL	
+SUB_PART	varchar(256)	YES		NULL	
+PACKED	varchar(256)	YES		NULL	
+NULLABLE	varchar(128)	NO			
+INDEX_TYPE	varchar(128)	NO			
+COMMENT	varchar(4096)	YES		NULL	
+INDEX_COMMENT	varchar(4096)	NO			
+IS_VISIBLE	varchar(3)	NO			
+desc table_constraints;
+Field	Type	Null	Key	Default	Extra
+CONSTRAINT_CATALOG	varchar(4096)	NO			
+CONSTRAINT_SCHEMA	varchar(128)	NO			
+CONSTRAINT_NAME	varchar(128)	NO			
+TABLE_SCHEMA	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+CONSTRAINT_TYPE	varchar(128)	NO			
+desc table_privileges;
+Field	Type	Null	Key	Default	Extra
+GRANTEE	varchar(81)	NO			
+TABLE_CATALOG	varchar(4096)	NO			
+TABLE_SCHEMA	varchar(128)	NO			
+TABLE_NAME	varchar(64)	NO			
+PRIVILEGE_TYPE	varchar(64)	NO			
+IS_GRANTABLE	varchar(3)	NO			
+desc tables;
+Field	Type	Null	Key	Default	Extra
+TABLE_CATALOG	varchar(3)	NO			
+TABLE_SCHEMA	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+TABLE_TYPE	varchar(12)	NO			
+ENGINE	null	NO			
+VERSION	null	NO			
+ROW_FORMAT	null	NO			
+TABLE_ROWS	decimal(20,0)	NO		NULL	
+AVG_ROW_LENGTH	decimal(24,4)	NO			
+DATA_LENGTH	decimal(20,0)	NO		NULL	
+MAX_DATA_LENGTH	null	NO			
+INDEX_LENGTH	null	NO			
+DATA_FREE	null	NO			
+AUTO_INCREMENT	null	NO			
+CREATE_TIME	timestamp(6)	NO		NULL	
+UPDATE_TIME	timestamp(6)	NO		NULL	
+CHECK_TIME	null	NO			
+TABLE_COLLATION	varchar(128)	NO			
+CHECKSUM	bigint(0) unsigned	NO			
+CREATE_OPTIONS	null	NO			
+TABLE_COMMENT	varchar(4096)	NO			
+desc user_privileges;
+Field	Type	Null	Key	Default	Extra
+GRANTEE	varchar(81)	NO			
+TABLE_CATALOG	varchar(4096)	NO			
+PRIVILEGE_TYPE	varchar(64)	NO			
+IS_GRANTABLE	varchar(3)	NO			
+desc views;
+Field	Type	Null	Key	Default	Extra
+TABLE_CATALOG	varchar(3)	NO			
+TABLE_SCHEMA	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+VIEW_DEFINITION	longtext	NO		NULL	
+CHECK_OPTION	varchar(4)	NO			
+IS_UPDATABLE	varchar(3)	NO		NULL	
+DEFINER	varchar(4)	NO			
+SECURITY_TYPE	varchar(4)	NO			
+CHARACTER_SET_CLIENT	varchar(7)	NO		NULL	
+COLLATION_CONNECTION	varchar(18)	NO		NULL	
+show create table  character_sets;
+View	Create View	character_set_client	collation_connection
+CHARACTER_SETS	CREATE VIEW `CHARACTER_SETS` AS    SELECT CHARSET AS CHARACTER_SET_NAME, DEFAULT_COLLATION AS DEFAULT_COLLATE_NAME, DESCRIPTION, max_length AS MAXLEN FROM oceanbase.__tenant_virtual_charset 	utf8mb4	utf8mb4_general_ci
+show create table  collation_character_set_applicability;
+View	Create View	character_set_client	collation_connection
+COLLATION_CHARACTER_SET_APPLICABILITY	CREATE VIEW `COLLATION_CHARACTER_SET_APPLICABILITY` AS select collation as COLLATION_NAME, charset as CHARACTER_SET_NAME from oceanbase.__tenant_virtual_collation 	utf8mb4	utf8mb4_general_ci
+show create table  collations;
+View	Create View	character_set_client	collation_connection
+COLLATIONS	CREATE VIEW `COLLATIONS` AS select collation as COLLATION_NAME, charset as CHARACTER_SET_NAME, id as ID, `is_default` as IS_DEFAULT, is_compiled as IS_COMPILED, sortlen as SORTLEN from oceanbase.__tenant_virtual_collation 	utf8mb4	utf8mb4_general_ci
+show create table  columns;
+View	Create View	character_set_client	collation_connection
+COLUMNS	CREATE VIEW `COLUMNS` AS SELECT TABLE_CATALOG,
+                    TABLE_SCHEMA,
+                    TABLE_NAME,
+                    COLUMN_NAME,
+                    ORDINAL_POSITION,
+                    COLUMN_DEFAULT,
+                    IS_NULLABLE,
+                    DATA_TYPE,
+                    CHARACTER_MAXIMUM_LENGTH,
+                    CHARACTER_OCTET_LENGTH,
+                    NUMERIC_PRECISION,
+                    NUMERIC_SCALE,
+                    DATETIME_PRECISION,
+                    CHARACTER_SET_NAME,
+                    COLLATION_NAME,
+                    COLUMN_TYPE,
+                    COLUMN_KEY,
+                    EXTRA,
+                    PRIVILEGES,
+                    COLUMN_COMMENT,
+                    GENERATION_EXPRESSION
+  		    FROM OCEANBASE.__ALL_VIRTUAL_INFORMATION_COLUMNS	utf8mb4	utf8mb4_general_ci
+show create table  global_status;
+Table	Create Table
+GLOBAL_STATUS	CREATE TABLE `GLOBAL_STATUS` (
+  `VARIABLE_NAME` varchar(128) NOT NULL DEFAULT '',
+  `VARIABLE_VALUE` varchar(1024) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+show create table  global_variables;
+View	Create View	character_set_client	collation_connection
+GLOBAL_VARIABLES	CREATE VIEW `GLOBAL_VARIABLES` AS    SELECT `variable_name` as VARIABLE_NAME, `value` as VARIABLE_VALUE  FROM oceanbase.__tenant_virtual_global_variable 	utf8mb4	utf8mb4_general_ci
+show create table  key_column_usage;
+View	Create View	character_set_client	collation_connection
+KEY_COLUMN_USAGE	CREATE VIEW `KEY_COLUMN_USAGE` AS (select /*+ READ_CONSISTENCY(WEAK) */ 'def' as CONSTRAINT_CATALOG,                     c.database_name as  CONSTRAINT_SCHEMA,                     'PRIMARY' as CONSTRAINT_NAME, 'def' as TABLE_CATALOG,                     c.database_name as TABLE_SCHEMA,                     a.table_name as TABLE_NAME,                     b.column_name as COLUMN_NAME,                     b.rowkey_position as ORDINAL_POSITION,                     NULL as POSITION_IN_UNIQUE_CONSTRAINT,                     NULL as REFERENCED_TABLE_SCHEMA,                     NULL as REFERENCED_TABLE_NAME,                     NULL as REFERENCED_COLUMN_NAME                     from oceanbase.__all_virtual_table a                     inner join oceanbase.__all_virtual_column b on a.table_id = b.table_id                     inner join oceanbase.__all_virtual_database c on a.database_id = c.database_id                     where a.tenant_id = effective_tenant_id() and b.tenant_id = effective_tenant_id() and c.tenant_id = effective_tenant_id() and c.in_recyclebin = 0 and c.database_name != '__recyclebin' and b.rowkey_position > 0 and b.column_id >= 16 and a.table_type != 5 and b.column_flags & (0x1 << 8) = 0)                     union (select /*+ READ_CONSISTENCY(WEAK) */ 'def' as CONSTRAINT_CATALOG,                     d.database_name as CONSTRAINT_SCHEMA,                     substr(a.table_name, 2 + length(substring_index(a.table_name,'_',4))) as CONSTRAINT_NAME,                     'def' as TABLE_CATALOG,                     d.database_name as TABLE_SCHEMA,                     c.table_name as TABLE_NAME,                     b.column_name as COLUMN_NAME,                     b.index_position as ORDINAL_POSITION,                     NULL as POSITION_IN_UNIQUE_CONSTRAINT,                     NULL as REFERENCED_TABLE_SCHEMA,                     NULL as REFERENCED_TABLE_NAME,                     NULL as REFERENCED_COLUMN_NAME                     from oceanbase.__all_virtual_table a                     inner join oceanbase.__all_virtual_column b on a.table_id = b.table_id                     inner join oceanbase.__all_virtual_table c on a.data_table_id = c.table_id                     inner join oceanbase.__all_virtual_database d on c.database_id = d.database_id                     where a.tenant_id = effective_tenant_id() and b.tenant_id = effective_tenant_id() and c.tenant_id = effective_tenant_id() and d.in_recyclebin = 0 and d.tenant_id = effective_tenant_id() and d.database_name != '__recyclebin' and a.table_type = 5 and a.index_type in (2, 4, 8) and b.index_position > 0) 	utf8mb4	utf8mb4_general_ci
+show create table  partitions;
+Table	Create Table
+PARTITIONS	CREATE TABLE `PARTITIONS` (
+  `TABLE_CATALOG` varchar(4096) NOT NULL DEFAULT '',
+  `TABLE_SCHEMA` varchar(128) NOT NULL DEFAULT '',
+  `TABLE_NAME` varchar(256) NOT NULL DEFAULT '',
+  `PARTITION_NAME` varchar(64) DEFAULT NULL,
+  `SUBPARTITION_NAME` varchar(64) DEFAULT NULL,
+  `PARTITION_ORDINAL_POSITION` bigint(20) unsigned DEFAULT NULL,
+  `SUBPARTITION_ORDINAL_POSITION` bigint(20) unsigned DEFAULT NULL,
+  `PARTITION_METHOD` varchar(18) DEFAULT NULL,
+  `SUBPARTITION_METHOD` varchar(18) DEFAULT NULL,
+  `PARTITION_EXPRESSION` varchar(4096) DEFAULT NULL,
+  `SUBPARTITION_EXPRESSION` varchar(4096) DEFAULT NULL,
+  `PARTITION_DESCRIPTION` varchar(1024) DEFAULT NULL,
+  `TABLE_ROWS` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `AVG_ROW_LENGTH` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `DATA_LENGTH` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `MAX_DATA_LENGTH` bigint(20) unsigned DEFAULT NULL,
+  `INDEX_LENGTH` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `DATA_FREE` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `CREATE_TIME` timestamp(6) NULL DEFAULT NULL,
+  `UPDATE_TIME` timestamp(6) NULL DEFAULT NULL,
+  `CHECK_TIME` timestamp(6) NULL DEFAULT NULL,
+  `CHECKSUM` bigint(20) DEFAULT NULL,
+  `PARTITION_COMMENT` varchar(1024) NOT NULL DEFAULT '',
+  `NODEGROUP` varchar(12) NOT NULL DEFAULT '',
+  `TABLESPACE_NAME` varchar(128) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+show create table  processlist;
+View	Create View	character_set_client	collation_connection
+PROCESSLIST	CREATE VIEW `PROCESSLIST` AS SELECT id AS ID, user AS USER, host AS HOST, db AS DB, command AS COMMAND, time AS TIME, state AS STATE, info AS INFO FROM oceanbase.__all_virtual_processlist WHERE  is_serving_tenant(svr_ip, svr_port, effective_tenant_id()) 	utf8mb4	utf8mb4_general_ci
+show create table  schema_privileges;
+Table	Create Table
+SCHEMA_PRIVILEGES	CREATE TABLE `SCHEMA_PRIVILEGES` (
+  `GRANTEE` varchar(81) NOT NULL DEFAULT '',
+  `TABLE_CATALOG` varchar(4096) NOT NULL DEFAULT '',
+  `TABLE_SCHEMA` varchar(128) NOT NULL DEFAULT '',
+  `PRIVILEGE_TYPE` varchar(64) NOT NULL DEFAULT '',
+  `IS_GRANTABLE` varchar(3) NOT NULL DEFAULT ''
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+show create table  schemata;
+View	Create View	character_set_client	collation_connection
+SCHEMATA	CREATE VIEW `SCHEMATA` AS    SELECT 'def' AS CATALOG_NAME, DATABASE_NAME AS SCHEMA_NAME, 'utf8mb4' AS DEFAULT_CHARACTER_SET_NAME, 'utf8mb4_general_ci' AS DEFAULT_COLLATION_NAME, NULL AS SQL_PATH  FROM oceanbase.__all_virtual_database a WHERE a.tenant_id = effective_tenant_id() and in_recyclebin = 0 and database_name != '__recyclebin' 	utf8mb4	utf8mb4_general_ci
+show create table  session_status;
+Table	Create Table
+SESSION_STATUS	CREATE TABLE `SESSION_STATUS` (
+  `VARIABLE_NAME` varchar(128) NOT NULL DEFAULT '',
+  `VARIABLE_VALUE` varchar(1024) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+show create table  session_variables;
+Table	Create Table
+SESSION_VARIABLES	CREATE TABLE `SESSION_VARIABLES` (
+  `VARIABLE_NAME` varchar(128) NOT NULL DEFAULT '',
+  `VARIABLE_VALUE` varchar(1024) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+show create table  statistics;
+View	Create View	character_set_client	collation_connection
+STATISTICS	CREATE VIEW `STATISTICS` AS    SELECT 'def' as TABLE_CATALOG, table_schema AS TABLE_SCHEMA,       `table` as TABLE_NAME, non_unique AS NON_UNIQUE, index_schema as INDEX_SCHEMA,       key_name as INDEX_NAME, seq_in_index as SEQ_IN_INDEX, column_name as COLUMN_NAME,       collation as COLLATION, cardinality as CARDINALITY, sub_part as SUB_PART,       packed as PACKED, `null` as NULLABLE, index_type as INDEX_TYPE, COMMENT,       index_comment as INDEX_COMMENT, is_visible as IS_VISIBLE FROM oceanbase.__tenant_virtual_table_index 	utf8mb4	utf8mb4_general_ci
+show create table  table_constraints;
+Table	Create Table
+TABLE_CONSTRAINTS	CREATE TABLE `TABLE_CONSTRAINTS` (
+  `CONSTRAINT_CATALOG` varchar(4096) NOT NULL DEFAULT '',
+  `CONSTRAINT_SCHEMA` varchar(128) NOT NULL DEFAULT '',
+  `CONSTRAINT_NAME` varchar(128) NOT NULL DEFAULT '',
+  `TABLE_SCHEMA` varchar(128) NOT NULL DEFAULT '',
+  `TABLE_NAME` varchar(256) NOT NULL DEFAULT '',
+  `CONSTRAINT_TYPE` varchar(128) NOT NULL DEFAULT ''
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+show create table  table_privileges;
+Table	Create Table
+TABLE_PRIVILEGES	CREATE TABLE `TABLE_PRIVILEGES` (
+  `GRANTEE` varchar(81) NOT NULL DEFAULT '',
+  `TABLE_CATALOG` varchar(4096) NOT NULL DEFAULT '',
+  `TABLE_SCHEMA` varchar(128) NOT NULL DEFAULT '',
+  `TABLE_NAME` varchar(64) NOT NULL DEFAULT '',
+  `PRIVILEGE_TYPE` varchar(64) NOT NULL DEFAULT '',
+  `IS_GRANTABLE` varchar(3) NOT NULL DEFAULT ''
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+show create table  tables;
+View	Create View	character_set_client	collation_connection
+TABLES	CREATE VIEW `TABLES` AS select /*+ READ_CONSISTENCY(WEAK), use_merge(b, c, d, e)*/ 'def' as TABLE_CATALOG,                     b.database_name as TABLE_SCHEMA,                     a.table_name as TABLE_NAME,                     case when a.database_id & 0xFFFFFFFFFF = 2 then 'SYSTEM VIEW' when (a.table_type = 1 or a.table_type = 4) then 'VIEW' when a.table_type = 2 then 'SYSTEM TABLE' when a.table_type = 1 then 'INDEX' else 'BASE TABLE' end as TABLE_TYPE,                     NULL as ENGINE,                     NULL as VERSION,                     NULL as ROW_FORMAT,                     sum(c.row_count) as TABLE_ROWS,                     case when sum(c.row_count) = 0 then 0 else sum(c.data_size)/sum(c.row_count) end as AVG_ROW_LENGTH,                     sum(c.data_size) as DATA_LENGTH,                     NULL as MAX_DATA_LENGTH,                     NULL as INDEX_LENGTH,                     NULL as DATA_FREE,                     NULL as AUTO_INCREMENT,                     a.gmt_create as CREATE_TIME,                     a.gmt_modified as UPDATE_TIME,                     NULL as CHECK_TIME,                     d.collation as TABLE_COLLATION,                     cast(NULL as unsigned) as CHECKSUM,                     NULL as CREATE_OPTIONS,                     a.comment as TABLE_COMMENT                     from oceanbase.__all_virtual_table a                     inner join oceanbase.__all_virtual_database b on a.database_id = b.database_id                     left join oceanbase.__all_virtual_tenant_partition_meta_table c on a.table_id = c.table_id and c.tenant_id = effective_tenant_id() and a.tenant_id = c.tenant_id and c.role = 1                     inner join oceanbase.__all_collation d on a.collation_type = d.id                     where a.tenant_id = effective_tenant_id() and b.tenant_id = effective_tenant_id() and a.table_type != 5 and b.database_name != '__recyclebin' and b.in_recyclebin = 0                     group by a.table_id, b.database_name, a.table_name, a.table_type, a.gmt_create, a.gmt_modified, d.collation, a.comment 	utf8mb4	utf8mb4_general_ci
+show create table  user_privileges;
+Table	Create Table
+USER_PRIVILEGES	CREATE TABLE `USER_PRIVILEGES` (
+  `GRANTEE` varchar(81) NOT NULL DEFAULT '',
+  `TABLE_CATALOG` varchar(4096) NOT NULL DEFAULT '',
+  `PRIVILEGE_TYPE` varchar(64) NOT NULL DEFAULT '',
+  `IS_GRANTABLE` varchar(3) NOT NULL DEFAULT ''
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+show create table  views;
+View	Create View	character_set_client	collation_connection
+VIEWS	CREATE VIEW `VIEWS` AS select /*+ READ_CONSISTENCY(WEAK) */ 'def' AS TABLE_CATALOG,                    d.database_name as TABLE_SCHEMA,                    t.table_name as TABLE_NAME,                    t.view_definition as VIEW_DEFINITION,                    'NONE' as CHECK_OPTION,                    case t.view_is_updatable when 1 then 'YES' else 'NO' end as IS_UPDATABLE,                    'NONE' as DEFINER,                    'NONE' AS SECURITY_TYPE,                    case t.collation_type when 45 then 'utf8mb4' else 'NONE' end AS CHARACTER_SET_CLIENT,                    case t.collation_type when 45 then 'utf8mb4_general_ci' else 'NONE' end AS COLLATION_CONNECTION                    from oceanbase.__all_virtual_table as t join oceanbase.__all_virtual_database as d on t.tenant_id = effective_tenant_id() and d.tenant_id = effective_tenant_id() and t.database_id = d.database_id                    where (t.table_type = 1 or t.table_type = 4) and d.in_recyclebin = 0 and d.database_name != '__recyclebin' and d.database_name != 'information_schema' and d.database_name != 'oceanbase' 	utf8mb4	utf8mb4_general_ci
+connect  conn_sys,$OBMYSQL_MS0,root@sys,,*NO-ONE*,$OBMYSQL_PORT;
+drop tenant tt1 force;
+drop resource pool mypool1;
+drop resource unit mybox1;

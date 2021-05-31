@@ -1,0 +1,430 @@
+/**
+ * 
+ * Attenation: we only use left style join to generate conflict rules, 
+ * ignore all right style join
+ */
+
+/**
+ * define join comm rule
+ */
+static bool COMM_PROPERTY[MAX_JOIN_TYPE] = 
+{
+    false,  // UNKNOWN_JOIN
+    true,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    true,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+};
+
+/**
+ * define assoc rule
+ */
+static bool ASSOC_PROPERTY[MAX_JOIN_TYPE][MAX_JOIN_TYPE] = {
+//UNKNOWN_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//INNER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    true,   // INNER_JOIN
+    true,   // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    true,   // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    true,   // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//LEFT_OUTER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    true,   // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//RIGHT_OUTER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//FULL_OUTER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    true,   // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    true,   // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//LEFT_SEMI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//RIGHT_SEMI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//LEFT_ANTI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//RIGHT_ANTI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//CONNECT_BY_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+}
+};
+
+/**
+ * define join l-asscom rule
+ */
+static bool L_ASSCOM_PROPERTY[MAX_JOIN_TYPE][MAX_JOIN_TYPE] = {
+//UNKNOWN_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+    //INNER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    true,  // INNER_JOIN
+    true,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    true,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    true,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//LEFT_OUTER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    true,   // INNER_JOIN
+    true,   // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    true,   // FULL_OUTER_JOIN
+    true,   // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    true,   // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//RIGHT_OUTER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//FULL_OUTER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    true,   // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    true,   // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//LEFT_SEMI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    true,   // INNER_JOIN
+    true,   // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    true,   // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    true,   // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//RIGHT_SEMI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//LEFT_ANTI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    true,   // INNER_JOIN
+    true,   // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    true,   // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    true,   // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//RIGHT_ANTI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//CONNECT_BY_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+}
+};
+
+/**
+ * define join r-asscom rule
+ */
+static bool R_ASSCOM_PROPERTY[MAX_JOIN_TYPE][MAX_JOIN_TYPE] = {
+//UNKNOWN_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+    //INNER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    true,   // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//LEFT_OUTER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//RIGHT_OUTER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//FULL_OUTER_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    true,   // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//LEFT_SEMI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//RIGHT_SEMI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//LEFT_ANTI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//RIGHT_ANTI_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+},
+//CONNECT_BY_JOIN
+{
+    false,  // UNKNOWN_JOIN
+    false,  // INNER_JOIN
+    false,  // LEFT_OUTER_JOIN
+    false,  // RIGHT_OUTER_JOIN
+    false,  // FULL_OUTER_JOIN
+    false,  // LEFT_SEMI_JOIN
+    false,  // RIGHT_SEMI_JOIN
+    false,  // LEFT_ANTI_JOIN
+    false,  // RIGHT_ANTI_JOIN
+    false   // CONNECT_BY_JOIN
+}
+};

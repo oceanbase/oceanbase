@@ -1,0 +1,1 @@
+create table t1 (id bigint primary key, value double) DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci

@@ -1,0 +1,183 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT;
+connection conn_admin;
+drop table if exists t1;
+create table t1 (c1 int, c2 int unsigned, 
+c3 tinyint, c4 tinyint unsigned,
+c5 smallint, c6 smallint unsigned,
+c7 mediumint, c8 mediumint unsigned,
+c9 integer, c10 integer unsigned,
+c11 bigint, c12 bigint unsigned,
+c13 float, c14 float unsigned, 
+c15 double, c16 double unsigned, 
+c17 decimal, c18 decimal unsigned, 
+c19 datetime, c20 timestamp, 
+c21 varchar(30), c22 char(30));
+insert into t1 values(1, 2, 
+1, 2, 
+1, 2, 
+1, 2, 
+1, 2, 
+1, 2, 
+3.5, 4.5, 
+5.5, 6.5,
+7.5, 8.5,
+'2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+'9.5', '10.5');
+select @var1, @var2;
+@var1	@var2
+NULL	NULL
+select @var2_1 := @var1_1 := c1 from t1;
+@var2_1 := @var1_1 := c1
+1
+select @var1_1, @var2_1;
+@var1_1	@var2_1
+1	1
+select @var2_2 := @var1_2 := c2 from t1;
+@var2_2 := @var1_2 := c2
+2
+select @var1_2, @var2_2;
+@var1_2	@var2_2
+2	2
+select @var2_3 := @var1_3 := c3 from t1;
+@var2_3 := @var1_3 := c3
+1
+select @var1_3, @var2_3;
+@var1_3	@var2_3
+1	1
+select @var2_4 := @var1_4 := c4 from t1;
+@var2_4 := @var1_4 := c4
+2
+select @var1_4, @var2_4;
+@var1_4	@var2_4
+2	2
+select @var2_5 := @var1_5 := c5 from t1;
+@var2_5 := @var1_5 := c5
+1
+select @var1_5, @var2_5;
+@var1_5	@var2_5
+1	1
+select @var2_6 := @var1_6 := c6 from t1;
+@var2_6 := @var1_6 := c6
+2
+select @var1_6, @var2_6;
+@var1_6	@var2_6
+2	2
+select @var2_7 := @var1_7 := c7 from t1;
+@var2_7 := @var1_7 := c7
+1
+select @var1_7, @var2_7;
+@var1_7	@var2_7
+1	1
+select @var2_8 := @var1_8 := c8 from t1;
+@var2_8 := @var1_8 := c8
+2
+select @var1_8, @var2_8;
+@var1_8	@var2_8
+2	2
+select @var2_9 := @var1_9 := c9 from t1;
+@var2_9 := @var1_9 := c9
+1
+select @var1_9, @var2_9;
+@var1_9	@var2_9
+1	1
+select @var2_10 := @var1_10 := c10 from t1;
+@var2_10 := @var1_10 := c10
+2
+select @var1_10, @var2_10;
+@var1_10	@var2_10
+2	2
+select @var2_11 := @var1_11 := c11 from t1;
+@var2_11 := @var1_11 := c11
+1
+select @var1_11, @var2_11;
+@var1_11	@var2_11
+1	1
+select @var2_12 := @var1_12 := c12 from t1;
+@var2_12 := @var1_12 := c12
+2
+select @var1_12, @var2_12;
+@var1_12	@var2_12
+2	2
+select @var2_13 := @var1_13 := c13 from t1;
+@var2_13 := @var1_13 := c13
+3.5
+select @var1_13, @var2_13;
+@var1_13	@var2_13
+3.5	3.5
+select @var2_14 := @var1_14 := c14 from t1;
+@var2_14 := @var1_14 := c14
+4.5
+select @var1_14, @var2_14;
+@var1_14	@var2_14
+4.5	4.5
+select @var2_15 := @var1_15 := c15 from t1;
+@var2_15 := @var1_15 := c15
+5.5
+select @var1_15, @var2_15;
+@var1_15	@var2_15
+5.5	5.5
+select @var2_16 := @var1_16 := c16 from t1;
+@var2_16 := @var1_16 := c16
+6.5
+select @var1_16, @var2_16;
+@var1_16	@var2_16
+6.5	6.5
+select @var2_17 := @var1_17 := c17 from t1;
+@var2_17 := @var1_17 := c17
+8
+select @var1_17, @var2_17;
+@var1_17	@var2_17
+8	8
+select @var2_18 := @var1_18 := c18 from t1;
+@var2_18 := @var1_18 := c18
+9
+select @var1_18, @var2_18;
+@var1_18	@var2_18
+9	9
+select @var2_19 := @var1_19 := c19 from t1;
+@var2_19 := @var1_19 := c19
+2019-12-01 12:00:00
+select @var1_19, @var2_19;
+@var1_19	@var2_19
+2019-12-01 12:00:00	2019-12-01 12:00:00
+select @var2_20 := @var1_20 := c20 from t1;
+@var2_20 := @var1_20 := c20
+2019-12-03 06:00:00
+select @var1_20, @var2_20;
+@var1_20	@var2_20
+2019-12-03 06:00:00	2019-12-03 06:00:00
+select @var2_21 := @var1_21 := c21 from t1;
+@var2_21 := @var1_21 := c21
+9.5
+select @var1_21, @var2_21;
+@var1_21	@var2_21
+9.5	9.5
+select @var2_22 := @var1_22 := c22 from t1;
+@var2_22 := @var1_22 := c22
+10.5
+select @var1_22, @var2_22;
+@var1_22	@var2_22
+10.5	10.5
+set @a = 1;
+select @a := @someval;
+@a := @someval
+NULL
+select @a;
+@a
+NULL
+drop view if exists vv;
+create view vv as select @a;
+desc vv;
+Field	Type	Null	Key	Default	Extra
+@a	varbinary(1048576)	NO			
+select @a := null;
+@a := null
+NULL
+select @a;
+@a
+NULL
+drop view if exists vv;
+create view vv as select @a;
+desc vv;
+Field	Type	Null	Key	Default	Extra
+@a	varbinary(1048576)	NO			

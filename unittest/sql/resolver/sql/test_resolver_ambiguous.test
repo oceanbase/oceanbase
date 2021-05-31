@@ -1,0 +1,31 @@
+drop database if exists ambiguous;
+create database ambiguous;
+use ambiguous;
+
+drop table if exists t1, t2, t3;
+create table t1(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int);
+create table t3(c1 int primary key, c2 int);
+--error 5206
+select c1, sum(c2) from t1 group by 2;
+
+--error 5207
+select * from t1 join t2 using(c1) join t3 using(c2);
+
+--error 5208
+select * from t1 join t2 using(c1) join t1 using(c2);
+
+--error 5207
+select c2 from t1 join t2 using(c1) join t3 using(c1);
+
+SELECT * FROM t1 RIGHT JOIN (SELECT * FROM t2) as at2  USING (c1)
+--error 5207
+SELECT 12 AS c1, c1 FROM t1 GROUP BY c1;
+SELECT COUNT(c1) AS c2 FROM t1 GROUP BY c2 HAVING c2 = 2;
+select X.c1 from t1 AS X group by X.c2 having (X.c2 = 1);
+select * from (select * from t1) t join t2 using(c1)
+SELECT * FROM t1 LEFT JOIN t2 USING (c1) WHERE c1 IS NULL;
+
+select c2 from t1 left join t2 using(c2);
+
+drop database ambiguous;

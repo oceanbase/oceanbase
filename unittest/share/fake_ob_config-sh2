@@ -1,0 +1,13 @@
+#!/bin/bash
+
+port=${1:-8658}
+
+wrap_json='{"Message": "successful", "Success": true, "Code": 200, "Data":'
+json=''
+while content="$(printf "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s" ${#json} "$json" | nc -l $port)"  ; do
+  if echo "$content" | grep -q '^POST' && echo "$content" | tail -n 1 | grep -q '^\[' ; then
+    json="$wrap_json$(echo "$content" | tail -n 1)}"
+     echo "lichao: $json"
+  fi
+done
+

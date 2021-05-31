@@ -1,0 +1,540 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#--real_sleep 30
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+
+alter system flush plan cache global;
+
+connection default;
+
+--enable_metadata
+--disable_abort_on_error
+--disable_warnings
+drop table if exists build_in_func_test_table;
+#--enable_warnings
+
+
+# test substr()
+create table build_in_func_test_table (varchar_c varchar(128) primary key, date_c datetime(6),v varchar(128));
+insert into build_in_func_test_table values ('hello', '2012-11-01 19:14:32',null);
+##full param
+select substr(varchar_c, 1, 1) from build_in_func_test_table;
+select substr(varchar_c, 0, 1) from build_in_func_test_table;
+select substr(varchar_c, -1, 1) from build_in_func_test_table;
+select substr(varchar_c, -5, 1) from build_in_func_test_table;
+select substr(varchar_c, -6, 1) from build_in_func_test_table;
+select substr(varchar_c, -100, 1) from build_in_func_test_table;
+select substr(varchar_c, 3, 1) from build_in_func_test_table;
+select substr(varchar_c, 5, 1) from build_in_func_test_table;
+select substr(varchar_c, 6, 1) from build_in_func_test_table;
+select substr(varchar_c, 6, -1) from build_in_func_test_table;
+select substr(varchar_c, 5, -1) from build_in_func_test_table;
+select substr(varchar_c, 4, -1) from build_in_func_test_table;
+select substr(varchar_c, -1, -1) from build_in_func_test_table;
+select substr(varchar_c, 0, 5) from build_in_func_test_table;
+select substr(varchar_c, 0, 6) from build_in_func_test_table;
+select substr(varchar_c, 0, 100) from build_in_func_test_table;
+select substr(varchar_c, -6, 10) from build_in_func_test_table;
+select substr(varchar_c, -5, 10) from build_in_func_test_table;
+select substr(varchar_c, -5, 3) from build_in_func_test_table;
+select substr(v,5,10) from build_in_func_test_table;
+select substr(varchar_c,null,10) from build_in_func_test_table;
+select substr(varchar_c,2,null) from build_in_func_test_table;
+##default length
+select substr(varchar_c, -6) from build_in_func_test_table;
+select substr(varchar_c, -5) from build_in_func_test_table;
+select substr(varchar_c, -4) from build_in_func_test_table;
+select substr(varchar_c, -0) from build_in_func_test_table;
+select substr(varchar_c, 1) from build_in_func_test_table;
+select substr(varchar_c, 2) from build_in_func_test_table;
+select substr(varchar_c, 5) from build_in_func_test_table;
+select substr(varchar_c, 6) from build_in_func_test_table;
+select substr(varchar_c,null) from build_in_func_test_table;
+select substr(v,1) from build_in_func_test_table;
+##cast test
+select substr(cast(date_c as char(1024)), 0) from build_in_func_test_table;
+select substr(cast(date_c as char(1024)), 10) from build_in_func_test_table;
+select substr(cast(1024 as char(1024)), 1, 2) from build_in_func_test_table;
+select substr(cast(date_c as char(1024)) from 10) from build_in_func_test_table;
+select substr(cast(date_c as char(1024)) from 10 for 10) from build_in_func_test_table;
+
+
+# coalesce test
+select coalesce(cast(null as signed int), null) from build_in_func_test_table;
+select coalesce(null, 'monkey59', 123) from build_in_func_test_table;
+select coalesce('jasimin', null, 'a,a', 123) from build_in_func_test_table;
+select coalesce(cast(null as signed int), null, 32.23) from build_in_func_test_table;
+
+# to lower/upper case
+select lower('ABC&*03_+abc') from build_in_func_test_table;
+select lower(varchar_c) from build_in_func_test_table;
+select lower(null) from build_in_func_test_table;
+select upper('ABC&*03_+abc') from build_in_func_test_table;
+select upper(varchar_c) from build_in_func_test_table;
+select upper(null) from build_in_func_test_table;
+
+# cast to test
+select cast(12 as  datetime) from build_in_func_test_table;
+select cast('12' as  datetime) from build_in_func_test_table;
+select cast(cast('1970-01-01 08:00:12' as  datetime) as signed int) from build_in_func_test_table;
+select cast('1970-01-01 08:00:12' as signed int) from build_in_func_test_table;
+select cast(cast('12' as decimal) as  datetime) from build_in_func_test_table;
+select cast(cast('12' as decimal) as datetime) from build_in_func_test_table;
+select cast(cast('12' as decimal) as datetime) from build_in_func_test_table;
+select cast(v as signed int) from build_in_func_test_table;
+
+# trim function
+select trim('aba' from 'ababa') from build_in_func_test_table;
+select length(trim('aba' from 'aba')) from build_in_func_test_table;
+select trim('aba' from 'aba') from build_in_func_test_table;
+select trim('  hello  ') from build_in_func_test_table;
+select trim('h' from 'hhhhello!')  from build_in_func_test_table;
+select trim('o!' from 'hhhhello!')  from build_in_func_test_table;
+select trim('h' from 'hhhhaaaahhhh')  from build_in_func_test_table;
+select trim(LEADING 'h' from 'hhhhaaaahhhh') from build_in_func_test_table;
+select trim(TRAILING 'h' from 'hhhhaaaahhhh')  from build_in_func_test_table;
+select trim(BOTH 'h' from 'hhhhaaaahhhh')  from build_in_func_test_table;
+select trim(BOTH  from '  hhhhaaaa  ')  from build_in_func_test_table;
+select trim(123 from 123542) from build_in_func_test_table;
+select trim(2 from cast(12312312 as datetime)) from build_in_func_test_table;
+select length(trim('     hi' || 'dir ')) from build_in_func_test_table;
+select trim(1) from build_in_func_test_table;
+select trim(cast(111 as char(1024))) from build_in_func_test_table;
+select trim(LEADING '1' from cast(111 as char(1024))) from build_in_func_test_table;
+select trim(TRAILING '1' from cast(111 as char(1024))) from build_in_func_test_table;
+select trim(v) from build_in_func_test_table;
+select trim(leading v from 'v'),trim(leading varchar_c from 'he') from build_in_func_test_table;
+
+#utc_timestamp function
+set timestamp = 1456986986;
+select cast(current_timestamp() as signed int) - cast(utc_timestamp() as signed int) from build_in_func_test_table;
+select cast(now() as signed int) - cast(utc_timestamp() as signed int) from build_in_func_test_table;
+select cast(utc_timestamp() as signed int)-cast(utc_timestamp() as signed int) from build_in_func_test_table;
+
+#time_to_usec
+select time_to_usec(current_timestamp()) - time_to_usec(utc_timestamp()) from build_in_func_test_table;
+select time_to_usec(now()) - time_to_usec(utc_timestamp()) from build_in_func_test_table;
+select time_to_usec(utc_timestamp())-time_to_usec(utc_timestamp()) from build_in_func_test_table;
+set timestamp = 0;
+#usec_to_time
+select usec_to_time(12) from build_in_func_test_table;
+select usec_to_time(65535) from build_in_func_test_table;
+
+#date_add function
+#--error 158
+select date_add('invalid date string', INTERVAL 1 DAY) from build_in_func_test_table;
+#--error 158
+select date_add('2003-08', INTERVAL 1 DAY) from build_in_func_test_table;
+select date_add('www   2013\09>23?12&&00^^^00', INTERVAL 1 DAY) from build_in_func_test_table;
+select date_add('www   2013/**/09>23?12&&00^^^00', INTERVAL 1 DAY) from build_in_func_test_table;
+select date_add('2013-09-23 12:00:00', INTERVAL 1 DAY) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL 1 MICROSECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL 1 SECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL 1 minute) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL 1 HOUR) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL 1 DAY) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL 1 MONTH) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL 1 QUARTER) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL 1 YEAR) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '3.2' SECOND_MICROSECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '3:5.2' MINUTE_MICROSECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '3:5' MINUTE_SECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '8:7:3.5' HOUR_MICROSECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '8:7:3' HOUR_SECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '8:7' HOUR_MINUTE) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '2 8:7:6.5' DAY_MICROSECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '2 8:7:6' DAY_SECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '2 8:7' DAY_MINUTE) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '2 8' DAY_HOUR) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '12-25' YEAR_MONTH) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '2 3' DAY_MICROSECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+select date_add('2013-09-23', interval length('date_add function') hour) from build_in_func_test_table;
+select date_add(date_add('2013-09-23', INTERVAL '2' DAY),INTERVAL 5 HOUR) from build_in_func_test_table;
+select date_add('2013-09-25', INTERVAL '2 &&& 8 *** 9' DAY_SECOND) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '-2 3' DAY_HOUR) from build_in_func_test_table;
+select date_add('2013-09-23', INTERVAL '-2-3' DAY_MICROSECOND) from build_in_func_test_table;
+select date_add('10-09-23', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+select date_add('80-09-24', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+select date_add('1970-01-01 08:00:00', INTERVAL -1 MICROSECOND) from build_in_func_test_table;
+select date_add('1970-01-01 07:59:59.2', INTERVAL 800000 MICROSECOND) from build_in_func_test_table;
+select date_add('1970-01-01 00:00:00', INTERVAL 100 MICROSECOND) from build_in_func_test_table;
+--error 1064
+select date_add(CAST(-1 AS TIMESTAMP), INTERVAL 100 MICROSECOND) from build_in_func_test_table;
+--error 1064
+select date_add('1970-01-01 08:00:00', INTERVAL CAST(1000 AS CREATETIME) MICROSECOND) from build_in_func_test_table;
+--error 1064
+select date_add('1970-01-01 08:00:00', INTERVAL CAST(1000 AS MODIFYTIME) MICROSECOND) from build_in_func_test_table;
+select date_add(NULL, INTERVAL 1 DAY);
+select date_add('1970-01-01 08:00:00', INTERVAL NULL MICROSECOND) from build_in_func_test_table;
+
+#date_sub function
+#--error 158
+select date_sub('invalid date string', INTERVAL 1 DAY) from build_in_func_test_table;
+#--error 158
+select date_sub('2003-08', INTERVAL 1 DAY) from build_in_func_test_table;
+select date_sub('www   2013\09>23?12&&00^^^00', INTERVAL 1 DAY) from build_in_func_test_table;
+select date_sub('www   2013/**/09>23?12&&00^^^00', INTERVAL 1 DAY) from build_in_func_test_table;
+select date_sub('2013-09-23 12:00:00', INTERVAL 1 DAY) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL 1 MICROSECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL 1 SECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL 1 minute) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL 1 HOUR) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL 1 WEEK) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL 1 DAY) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL 1 MONTH) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL 1 QUARTER) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL 1 YEAR) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '3.2' SECOND_MICROSECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '3:5.2' MINUTE_MICROSECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '3:5' MINUTE_SECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '8:7:3.5' HOUR_MICROSECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '8:7:3' HOUR_SECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '8:7' HOUR_MINUTE) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '2 8:7:6.5' DAY_MICROSECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '2 8:7:6' DAY_SECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '2 8:7' DAY_MINUTE) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '2 8' DAY_HOUR) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '12-25' YEAR_MONTH) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '21-25' YEAR_MONTH) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '2 3' DAY_MICROSECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+select date_sub('2013-09-23', interval length('date_add function') hour) from build_in_func_test_table;
+select date_sub(date_sub('2013-09-23', INTERVAL '2' DAY),INTERVAL 5 HOUR) from build_in_func_test_table;
+select date_sub('2013-09-25', INTERVAL '2 &&& 8 *** 9' DAY_SECOND) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '-2 3' DAY_HOUR) from build_in_func_test_table;
+select date_sub('2013-09-23', INTERVAL '-2-3' DAY_MICROSECOND) from build_in_func_test_table;
+select date_sub('10-09-23', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+select date_sub('80-09-24', INTERVAL '2 3' DAY_HOUR) from build_in_func_test_table;
+select date_sub('1970-01-01 08:00:00', INTERVAL 1 MICROSECOND) from build_in_func_test_table;
+select date_sub('1970-01-01 00:00:00', INTERVAL 100 MICROSECOND) from build_in_func_test_table;
+select date_sub(USEC_TO_TIME(0), INTERVAL 100 MICROSECOND) from build_in_func_test_table;
+select date_sub(NULL, INTERVAL 1 DAY) from build_in_func_test_table;
+select date_sub('1970-01-01 08:00:00', INTERVAL NULL DAY) from build_in_func_test_table;
+
+#extract(unit FROM date)
+select extract(MICROSECOND FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
+select extract(SECOND FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
+select extract(MINUTE FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
+select extract(HOUR FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
+select extract(DAY FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
+select extract(WEEK FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(MONTH FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(QUARTER FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(YEAR FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(SECOND_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(MINUTE_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(MINUTE_SECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(HOUR_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(DAY_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(DAY_SECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(HOUR_SECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(DAY_HOUR FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(YEAR_MONTH FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
+select extract(MICROSECOND FROM '2012-09-01') from build_in_func_test_table;
+select extract(QUARTER FROM '2012-02-01') from build_in_func_test_table;
+select extract(QUARTER FROM '2012-05-01') from build_in_func_test_table;
+select extract(QUARTER FROM '2012-07-01') from build_in_func_test_table;
+select extract(QUARTER FROM '2012-10-01') from build_in_func_test_table;
+select extract(QUARTER FROM '2012-11-01') from build_in_func_test_table;
+select extract(WEEK FROM '2012-01-01') from build_in_func_test_table;
+select extract(WEEK FROM '2012-05-30') from build_in_func_test_table;
+select extract(WEEK FROM '2012-06-15') from build_in_func_test_table;
+select extract(WEEK FROM '2012-10-25') from build_in_func_test_table;
+select extract(WEEK FROM '2013-01-01') from build_in_func_test_table;
+select extract(WEEK FROM '2019-03-09') from build_in_func_test_table;
+select extract(YEAR FROM '12-09-02') from build_in_func_test_table;
+#select extract(YEAR FROM '99-09-06') from build_in_func_test_table;
+--error 1064
+select extract(HOUR FROM CAST('0' AS TIMESTAMP)) from build_in_func_test_table;
+select extract(HOUR FROM NULL) from build_in_func_test_table;
+
+#date_format(date, format)
+select date_format('2007-10-04 22:23:10.567', '%H:%i:%s');
+select date_format(timestamp'2007-10-04 22:23:10.567', '%H:%i:%s');
+select date_format('2007-10-04 22:23:10.567', '%H %k %I %r %T %S %w');
+select date_format('2007-10-04 22:23:10.567', '%c %d %e %f %H %h %I %i %j %k %l %m %p %r %S %s %T %U %u %V %v %w %X %x %Y %y %%');
+#test week count
+--echo 2007-01-01 year_day=week_day=1
+select date_format('2007-01-01', '%U %u %V-%X %v-%x');
+--echo 2013-01-01 year_day=1, week_day=2 the critical week in this year
+select date_format('2013-01-01', '%U %u %V-%X %v-%x');
+--echo 2015-01-01 year_day=1, week_day=4 the critical week in last year when start with sunday, in this year when start with monday
+select date_format('2015-01-01', '%U %u %V-%X %v-%x');
+--echo 2014-12-31 year_day=365, week_day=3 thi critical week in this year when start with sunday, in next year when start with monday
+select date_format('2014-12-31', '%U %u %V-%X %v-%x');
+select date_format('2014-04-24', '%U %u %V-%X %v-%x');
+select date_format('2014-09-24', NULL);
+select date_format(NULL, '%U %u %V-%X %v-%x');
+#str_to_date(date, format)
+select str_to_date('1970-02-03', '%Y-%m-%d');
+#--error 158
+#select str_to_date('04/31/2004', '%m/%d/%Y');
+select str_to_date('04/30/2004 10:23:24.789', '%m/%d/%Y %T.%f');
+select str_to_date('4/30/2013 PM 09:25:45', '%m/%e/%Y %p %h:%i:%S');
+select str_to_date('1970-02-03 10:56:56', '%Y-%m-%d %T');
+select str_to_date(NULL, '%Y-%m-%d %T');
+select str_to_date('1970-02-03 10:56:56', NULL);
+#all in all test
+select coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxddsd'))), length('dir')) from build_in_func_test_table;
+
+select 'NAME:'||varchar_c,'ADDR:'||v from build_in_func_test_table;
+
+drop table build_in_func_test_table;
+#test date_format
+#--disable_warnings
+drop table if exists test_0;
+#--enable_warnings
+create table test_0 (test_id varchar(10) primary key,name varchar(20),create_date  timestamp(6) default "2012-01-01 12:00:00");
+insert into test_0 values('13','12','2014-03-21');
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0;
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='13';
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='12';
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='13' and name='12';
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='13' and name='11';
+select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='11';
+
+#--disable_warnings
+drop table if exists test_format;
+#--enable_warnings
+create table test_format (datetest varchar(50), pk int primary key);
+insert into test_format values(date_FORMAT('2003-01-02 10:11:12', '%Y-%m-%d %H:%i:%S'),1);
+insert into test_format values(date_FORMAT('2003-01-02 10:11:12', '%Y-%m-%d %H:%i:%S'),2);
+insert into test_format values(date_FORMAT('03-01-02 8:11:2.123456', '%y-%m-%d %H:%i:%S'),3);
+insert into test_format values(date_FORMAT('0003-01-02 8:11:2.123456', '%Y-%m-%d %H:%i:%S'),4);
+insert into test_format values(date_FORMAT('03-01-02 8:11:2.123456',   '%Y-%m-%d %H:%i:%S'),5);
+#insert into test_format values(date_FORMAT('2003-01-02 10:11:12 PM', '%Y-%m-%d %h:%i:%S %p'),6);
+insert into test_format values(date_FORMAT('2003-01-02 01:11:12.12345AM', '%Y-%m-%d %h:%i:%S.%f%p'),7);
+insert into test_format values(date_FORMAT('2003-01-02 02:11:12.12345AM', '%Y-%m-%d %h:%i:%S.%f %p'),8);
+insert into test_format values(date_FORMAT('2003-01-02 12:11:12.12345 am', '%Y-%m-%d %h:%i:%S.%f%p'),9);
+insert into test_format values(date_FORMAT('2003-01-02 11:11:12Pm', '%Y-%m-%d %h:%i:%S%p'),10);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10', '%Y-%m-%d %H:%i:%s'),11);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10', '%Y-%m-%d %h:%i:%s.%f'),12);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10', '%Y-%m-%d %T'),13);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10AM', '%Y-%m-%d %h:%i:%s%p'),14);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10AM', '%Y-%m-%d  %r'),15);
+insert into test_format values(date_FORMAT('2003-01-02 10:20:10.44AM', '%Y-%m-%d %h:%i:%s.%f%p'),16);
+select * from test_format;
+#--disable_warnings
+drop table if exists t1;
+#--enable_warnings
+create table t1 (date1 char(30) primary key, format char(30) not null);
+insert into t1 values
+('2003-01-02 10:11:12', '%Y-%m-%d %H:%i:%S'),
+('03-01-03 8:11:2.123456', '%y-%m-%d %H:%i:%S'),
+('0003-01-04 8:11:2.123456', '%Y-%m-%d %H:%i:%S'),
+('03-01-05 8:11:2.123456',   '%Y-%m-%d %H:%i:%S'),
+('2003-01-04 10:11:12 PM', '%Y-%m-%d %h:%i:%S %p'),
+('2003-01-02 01:11:12.12345AM', '%Y-%m-%d %h:%i:%S.%f%p'),
+('2003-01-03 02:11:12.12345AM', '%Y-%m-%d %h:%i:%S.%f %p'),
+('2003-01-02 12:11:12.12345 am', '%Y-%m-%d %h:%i:%S.%f%p'),
+('2003-01-02 11:11:12Pm', '%Y-%m-%d %h:%i:%S%p');
+#--disable_warnings
+drop table if exists t1;
+#--enable_warnings
+create table t1 (d timestamp primary key);
+insert into t1 values ('2004-07-14'),('2005-07-14');
+select date_format(d,'%d') from t1 order by 1;
+select date_format(d,'%e') from t1 order by 1;
+select date_format(d,'%D') from t1 order by 1;
+drop table t1;
+select date_format('2004-01-01','%W (%a), %e %M (%b) %Y');
+create table t1 (f1 datetime primary key);
+insert into t1 (f1) values ('2005-01-01');
+insert into t1 (f1) values ('2005-02-01');
+select date_format(f1, '%m') as d1, date_format(f1, '%M') as d2 from t1 order by date_format(f1, '%M');
+###temp add error num 5086
+#--error 5086
+select date_format(f1, '%m') as d1, date_format(f1, '%M') as d2 from t1 where f1='2013' order by date_format(f1, '%M') ;
+
+#--error 158
+SELECT DATE_FORMAT('2014-01-01 24:00:00', '%r');
+SELECT DATE_FORMAT('2014-01-01 00:00:00', '%r');
+SELECT DATE_FORMAT('2014-01-01 12:00:00', '%r');
+SELECT DATE_FORMAT('2014-01-01 15:00:00', '%r');
+SELECT DATE_FORMAT('2014-01-01 01:00:00', '%r');
+#--error 158
+SELECT DATE_FORMAT('2014-01-01 25:00:00', '%r');
+
+
+SELECT DATE_FORMAT('2014-01-01 00:00:00', '%l %p');
+SELECT DATE_FORMAT('2014-01-01 01:00:00', '%l %p');
+SELECT DATE_FORMAT('2014-01-01 12:00:00', '%l %p');
+SELECT DATE_FORMAT('2014-01-01 23:00:00', '%l %p');
+#--error 158
+SELECT DATE_FORMAT('2014-01-01 24:00:00', '%l %p');
+#--error 158
+SELECT DATE_FORMAT('2014-01-01 25:00:00', '%l %p');
+#--error 4002
+SELECT DATE_FORMAT('%Y-%m-%d %H:%i:%s', 1151414896);
+#--error 158
+SELECT DATE_FORMAT('0000-01-01','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('0001-01-01','%W %d %M %Y') as valid_date;
+#--error 158
+SELECT DATE_FORMAT('-0001-01-01','%W %d %M %Y') as valid_date;
+#--error 158
+SELECT DATE_FORMAT('-4713-01-01','%W %d %M %Y') as valid_date;
+#--error 158
+SELECT DATE_FORMAT('-4712-01-01','%W %d %M %Y') as valid_date;
+#--error 158
+SELECT DATE_FORMAT('-4714-01-01','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('9999-01-01','%W %d %M %Y') as valid_date;
+#--error 158
+SELECT DATE_FORMAT('10000-01-01','%W %d %M %Y') as valid_date;
+#--error 158
+SELECT DATE_FORMAT('0000-02-28','%W %d %M %Y') as valid_date;
+SELECT DATE_FORMAT('0001-02-28','%W %d %M %Y') as valid_date;
+# show that date within the Gregorian range render correct results: (THU)
+SELECT DATE_FORMAT('2009-01-01','%W %d %M %Y') as valid_date;
+SELECT CAST(DATE_FORMAT(NULL, '%s') AS CHAR);
+SELECT CAST(DATE_FORMAT(NULL, '%s') AS DECIMAL(23,6));
+SELECT CAST(DATE_FORMAT(NULL, '%s') AS DATETIME);
+#--error 5114 
+SELECT DATE_FORMAT(NULL, '%s')+0e0;
+
+
+drop table t1;
+select  str_to_date('2003-01-02', '%Y-%m-%d') as f3;
+#--disable_warnings
+drop table if exists t1;
+#--enable_warnings
+create table t1 (f1 varchar(20) primary key);
+insert into t1 (f1) values ('2005-01-01');
+insert into t1 (f1) values ('2005-02-01');
+select  str_to_date(f1,'%Y-%m-%d') from t1 where f1='2005-01-01';
+select  str_to_date(f1,'%Y-%m-%d') from t1 where f1='2005-01-03';
+
+select str_to_date('04 /30/2004', '%m /%d/%Y');
+select str_to_date('04/30 /2004', '%m /%d /%Y');
+select str_to_date('04/30/2004 ', '%m/%d/%Y ');
+
+#select cast(1.1234 as decimal(12,2));
+#--error 16
+#select date_add(str_to_date(substr('2014-06-05 16:24:54.270374',1,8),'%Y%m%d'),interval 2 day);
+#--error 16
+#select str_to_date('2014-06-','%Y%m%d');
+#--error 5085
+select '+' + 1;
+#--error 5085
+select '-' + 1;
+#--error 5085
+select '.' + 1;
+#--error 5085
+select '_' + 1;
+#--error 5085
+select '~' + 1;
+#--error 5085
+select '@' + 1;
+#--error 5085
+select '#' + 1;
+#--error 5085
+select '%' + 1;
+#--error 5085
+select '^' + 1;
+#--error 5085
+select '$%%%' + 1;
+#--error 5085
+select '(' + 1;
+#--error 5085
+select ')' + 1;
+#--error 5085
+select '=' + 1;
+#--error 5085
+select '{' + 1;
+#--error 5085
+select '}' + 1;
+#--error 5085
+select '|' + 1;
+#--error 5085
+select '\'' + 1;
+#--error 5085
+select '"' + 1;
+#--error 5085
+select ':' + 1;
+#--error 5085
+select '<' + 1;
+#--error 5085
+select '>' + 1;
+#--error 5085
+select '?' + 1;
+#--error 5085
+select '/' + 1;
+#--error 5085
+select '!@##' + 1;
+#--error 5085
+select '$^^%%^$%(*&^(*^&*^&)' + 1;
+select concat(NULL, 'aaa');
+select concat('aaa', NULL);
+select concat('aaa','');
+select concat('','aaa');
+select 1.1/0.0;
+#test dump
+select dump(1.1);
+select dump(1);
+select round(1.1234, 3);
+select round(1.1234);
+select false is true;
+select NULL is true;
+select true is true;
+select true is not  true;
+select NULL is NULL;
+select NULL is not NULL;
+select true is false;
+#--error 5085
+select -'aaa';
+#test null and time func
+select DATE_ADD(null, INTERVAL 5 DAY);
+select DATE_sub(null, INTERVAL 5 DAY);
+select STR_TO_DATE(null, '%Y-%m-%d');
+select DATE_FORMAT(null, '%Y/%m/%D');
+select time_to_usec(null);
+select usec_to_time(null);
+select EXTRACT(DAY FROM null);
+
+####test abs func
+select abs(10);
+select abs(-10);
+select abs(-0);
+select abs(0);
+select abs(1);
+select abs(-1);
+select abs(-1000000000000);
+select abs(1000000000000);
+select abs(0.1);
+select abs(-0.1);
+select abs(-11.10);
+select abs(null);
+select abs(NULL);
+select abs(Null);
+select abs(5-5);
+select abs(-0.1*3);
+select unhex('434445');
+select unhex('C434445');
+select unhex(repeat('4',100));
+#select unhex(repeat('a',101));
+select unhex(repeat('1',400));
+#select unhex(repeat('b',401));
+select unhex(null);
+select unhex('123');
+select unhex(cast(repeat('123',5) as char(1024)));
+select unhex('');
+select unhex(repeat('',10));
+###substr+like
+select SUBSTR( 'Sat' FROM 3 ) , SUBSTR( 'Sat' FROM 3 ) LIKE '%a_';
+###date 
+select DATE_FORMAT( '2014-12-31 19:54:55.000002', '%x%v' ) , DATE_FORMAT( '2023-12-31 19:54:55.000002', '%x%v' );
+###nvl
+#--disable_warnings
+drop table if exists t1;
+#--enable_warnings
+create table t1 (a bigint, b datetime(6));
+insert into t1 values(1,now());
+select a from t1 where nvl(null,b) <= now();
+select a from t1;
+select  !w, !!w, !(!w), ! !w, not w, not not w, w is true, w is not false, (not w) is false, not(w is false), if(w,'true','false'), !1+1, !'a', !false, !isnull('a'), !!isnull('a') from (select 0 w union select 1) w;
+--enable_metadata

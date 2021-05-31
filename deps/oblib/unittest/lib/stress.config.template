@@ -1,0 +1,8 @@
+workload_cnt:2, file_size_gb: 10, file_num: 1
+duration_ms: 10000, multi_disk: 0
+Read: thread_cnt: 16, category: 0, size_kb: 16, iops: 500000, depth: 1, is_sequence: 0
+Write: thread_cnt: 0, category: 0, size_kb: 4, iops: 1, depth: 1, is_sequence: 0
+duration_ms: 10000, multi_disk: 0
+Read: thread_cnt: 0, category: 0, size_kb: 16, iops: 10000, depth: 1, is_sequence: 0
+Write: thread_cnt: 16, category: 0, size_kb: 2048, iops: 10000, depth: 1, is_sequence: 0
+

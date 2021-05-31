@@ -1,0 +1,568 @@
+--disable_query_log
+#set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# 此前union查询要求查询项和索引完全匹配时才能消除sort, 新的优化下, 只要查询项
+# 左匹配于index即可, 如index(c1,c2,c3,c4)
+# select c2, c1, c3 ... union select c2, c1, c3 即可不用sort
+
+--disable_warnings
+drop database if exists union_sort_opt_db;
+--enable_warnings
+create database union_sort_opt_db;
+use union_sort_opt_db;
+
+create table t4(c1 int primary key, c2 int, c3 int);
+insert into t4 values(10,12,3),(4,5,6),(2,13,4),(3,4,25),(7,18,9);
+commit;
+create index idx_t4_c2c3 on t4(c2,c3);
+--source mysql_test/include/check_all_idx_ok.inc
+## set @@session.ob_enable_transformation = 0;
+# trace result set and plan both
+
+
+
+--echo ### 1, 基本测试 表有PK ###
+#1.1 以前就可以
+select* from (select * from t4 union select * from t4) as x order by 1,2,3;
+
+select * from t4 union select * from t4;
+
+--echo #1.2 使用索引c2c3也ok 
+select /*+ index(t4 idx_t4_c2c3) */ * from t4 union
+select /*+ index(t4 idx_t4_c2c3) */ * from t4 order by 1,2,3;
+
+--echo #1.3 顺序一致, 原本就支持
+select /*+ index(t4 idx_t4_c2c3) */ c2,c3 from t4 union 
+select /*+ index(t4 idx_t4_c2c3) */ c2,c3 from t4 order by 2,1;
+
+--echo #1.4 顺序不一致, 修改后支持, 5 
+select /*+ index(t4 idx_t4_c2c3) */ c3,c2 from t4 union 
+select /*+ index(t4 idx_t4_c2c3) */ c3,c2 from t4 order by 1,2;
+
+--echo #1.5 完全一致
+select /*+ index(t4 idx_t4_c2c3) */ c2,c3,c1 from t4 union 
+select /*+ index(t4 idx_t4_c2c3) */ c2,c3,c1 from t4 order by 1,2,3;
+
+--echo #1.5.2 左匹配, 原本就支持
+select /*+ index(t4 idx_t4_c2c3) */ c2  from t4 union
+select /*+ index(t4 idx_t4_c2c3) */ c2  from t4 order by 1;
+--echo #1.5.3 不能优化
+select /*+ index(t4 idx_t4_c2c3) */ c3  from t4 union
+select /*+ index(t4 idx_t4_c2c3) */ c3  from t4 order by 1;
+--echo #1.5.4 不支持
+select /*+ index(t4 idx_t4_c2c3) */ c1  from t4 union
+select /*+ index(t4 idx_t4_c2c3) */ c1  from t4 order by 1;
+
+--echo #1.6 两侧不匹配不能优化, 都加sort 10
+select /*+ index(x idx_t4_c2c3) */ c3,c1,c2 from t4 x union  
+select /*+ index(y idx_t4_c2c3) */ c3,c2,c1 from t4 y order by 1,2,3;
+
+--echo #1.7 两侧不匹配不能优化, 单侧加sort 
+select /*+ index(t4 idx_t4_c2c3) */ c2,c3,c1 from t4 union
+select /*+ index(t4 idx_t4_c2c3) */ c3,c2,c1 from t4 order by 1,2,3;
+
+--echo ### 2, 不包含PK的简单测试, 单key索引  ###
+create table t5(c int, c2 int, c3 int);
+insert into t5 values(1,2,3),(2,3,4),(0,1,2),(3,4,5),(0,2,3),(2,4,5);
+create index idx_t5_c2 on t5(c2);
+--source mysql_test/include/check_all_idx_ok.inc
+
+--echo #2.1 不能优化
+select /*+ index(t5 idx_t5_c2) */ c2,c3 from t5 union 
+select /*+ index(t5 idx_t5_c2) */ c2,c3 from t5 order by 1,2; 
+
+--echo #2.2 原本就可优化
+select /*+ index(t5 idx_t5_c2) */ c2 from t5 union 
+select /*+ index(t5 idx_t5_c2) */ c2  from t5 order by 1;
+
+--echo ### 3, 无PK, 数据有重复, 结果正确性验证1
+create table t6(c1 int, c2 int);
+create index idx_t6_c1c2 on t6(c1,c2);
+--source mysql_test/include/check_all_idx_ok.inc
+
+insert into t6 values(10,20),(10,30),(20,10),(20,5),(10,30),(40,5),(10,8),(10,20),(1,0),(0,1),(20,80),(10,5),(10,5),(30,20),(30,1),(30,5),
+    (10,20),(10,30),(20,10),(20,5),(10,30),(40,5),(10,8),(20,80),(10,5),(10,5),(30,20),(30,1),(1,0),(0,1),(0,0),(30,5);
+--echo #3.1 可以优化, 14 rows
+select c1,c2 from t6 union select c1,c2 from t6 order by 1,2;
+
+--echo #3.2 可以优化, 14 rows
+select c2,c1 from t6 union select c2,c1 from t6 order by 1,2;
+
+--echo #3.3 不能优化 23 rows
+select c2,c1 from t6 union select c1,c2 from t6 order by 1,2; 
+
+--echo #3.4 不能优化, 有计算列的情况, 23 rows, 14
+select c2,c1 from t6 union select 0+c1,c2 from t6 order by 1,2;
+
+select c1,c2,c1,c2 from t6 union select 0+c1,c2,c1,c2 from t6 order by 1,2,3,4;
+
+--echo #4 分区表的测试
+create table t7(c1 varchar(10), c2 decimal(10,2), c3 int, c4 int) partition by hash(c4) partitions 5;
+--disable_result_log
+insert into t7 values('11', 1.2, 1, 7),('22', 2.3, 2, 6),('33', 3.4, 3, 2), ('44', 4.5, 4, 10), ('55', 5.6, 5, 6),
+('12', 1.244, 4, 22),('22', 2.3, 3, 13),('3', 3.4, 2, 0), ('44', 4.5, 4, 1), ('56', 56, 1, 6),('44', 4.5, 4, 10);
+--enable_result_log
+
+create index idx_t7_c2c1 on t7(c2,c1,c3) local;
+--source mysql_test/include/check_all_idx_ok.inc
+
+--echo #4.1 可以优化, 完全匹配, 9 rows
+select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
+select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 where c2 < 10 order by 1,2,3;
+
+--echo #4.2 可以优化, 后续有连接, 15 rows
+select xx.c2,xx.c1 from 
+(select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
+ select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 where c2 < 10) xx,
+t7 yy where xx.c2 = yy.c2 order by 1,2;
+
+--echo #4.3 可以优化, 9 rows
+select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
+select /*+ index(t7 idx_t7_c2c1) */  c2,c1,c3 from t7 order by 1,2,3;
+
+#4.3.2
+select c1 from t7 union select c1 from t7 order by 1;
+#4.3.3
+select /*+ index(t7 idx_t7_c2c1) */  c1,c2,c3 from t7 union
+select /*+ index(t7 idx_t7_c2c1) */ c1,c2,c3 from t7 order by 1,2,3;
+
+--echo #4.4 索引KEY升降序的测试, 目前此功能并不支持, 实际都是ASC
+drop index idx_t7_c2c1 on t7;
+create index idx_t7_c3c2c1 on t7(c3 asc,c2 asc,c1 asc) local;
+--source mysql_test/include/check_all_idx_ok.inc
+
+create table t72(c1 varchar(10), c2 decimal(10,2), c3 int);
+insert into t72 values('11', 1.2, 1),('22', 2.3, 2),('33', 3.4, 3), ('44', 4.5, 4), ('55', 5.6, 5),
+('12', 1.244, 4),('22', 2.3, 3),('3', 3.4, 2), ('44', 4.5, 4), ('56', 56, 1),('44', 4.5, 4);
+create index idx_t72_c3c2c1 on t72(c3 asc,c2 asc,c1 asc);
+--source mysql_test/include/check_all_idx_ok.inc
+
+--echo #4.4.1 两个表上索引升降序一致, 不一一对应但两侧分支匹配, 可以优化, 8 rows
+select /*+ index(t7 idx_t7_c3c2c1) */  c1,c2,c3 from t7 where c3 < 5 union 
+select /*+ index(t72 idx_t72_c3c2c1) */ c1,c2,c3 from t72 where c3 < 5 order by 1,2,3;
+
+--echo #4.4.2 可以优化, 同上
+select /*+ index(t7 idx_t7_c3c2c1) */  c3,c2,c1 from t7 where c3 < 5 union 
+select /*+ index(t72 idx_t72_c3c2c1) */ c3,c2,c1 from t72 where c3 < 5 order by 1,2,3;
+
+drop index idx_t72_c3c2c1 on t72;
+create index idx_t72_c3c2c1 on t72(c3 asc,c2 asc,c1 asc);
+--source mysql_test/include/check_all_idx_ok.inc
+
+--echo #4.4.3 A,D不同, 但是实际存储一样, 所以也能优化, 8 rows
+select /*+ index(t7 idx_t7_c3c2c1) */  c1,c2,c3 from t7 where c3 < 5 union 
+select /*+ index(t72 idx_t72_c3c2c1) */ c1,c2,c3 from t72 where c3 < 5 order by 1,2,3;
+
+--echo #4.4.4 同上, 也能优化
+select /*+ index(t7 idx_t7_c3c2c1) */  c3,c2,c1 from t7 where c3 < 5  union 
+select /*+ index(t72 idx_t72_c3c2c1) */ c3,c2,c1 from t72 where c3 < 5 order by 1,2,3;
+
+--echo #5 结果正确性测试2
+create table test1(c1 int, c2 int);
+create table test2(d1 int, d2 int);
+
+insert into test1 values(1,1),(1,2),(2,1),(2,2),(2,0),(1,3),(1,0),(3,0),(3,2),(3,1),(2,1);
+insert into test2 values(1,1),(1,2),(2,1),(2,2),(2,0),(1,3),(1,0),(3,0),(3,2),(3,1),(2,1);
+commit;
+create index idx_test1_c1c2 on test1(c1 asc, c2 asc);
+--source mysql_test/include/check_all_idx_ok.inc
+
+create index idx_test2_d1d2 on test2(d1 asc, d2 asc);
+--source mysql_test/include/check_all_idx_ok.inc
+
+--echo #5.1 最后加了排序, which can't be optimized...
+select c2, c1 from test1 union select d2,d1 from test2 order by c2,c1;
+
+--echo #5.2 最后的排序可以被优化
+select c2, c1 from test1 union select d2,d1 from test2 order by c1,c2;
+
+--echo #5.3 最后的排序由于是逆序不能被优化掉
+select c2, c1 from test1 union select d2,d1 from test2 order by c1 desc,c2 desc;
+
+--echo #5.4 整数的查询项, 6 rows, 10, 4 rows
+select 1, c1 from test1 union select 2,d1 from test2 order by 1,2;
+
+select 1, c2 from test1 union select d1,d2 from test2 order by 1,2;
+ 
+select mod(c1,2),mod(c2,2) from test1 union select mod(d1,2),mod(d2,2) from test2 order by 1,2;
+
+--echo #6 from mysqltest union1, simply recreate
+create table x1(c1 int, c2 char(10), c3 int);
+create table x2(d1 int, d2 char(10), d3 int, index ix2(d2, d3));
+insert into x1 values(1,'xx2',3),(2,'xxx3',4),(3,'aaa4',5);
+insert into x2 values(11,'xx2',3),(2,'xx3',4),(3,'aaa4',5);
+select c2, c3 from x1 union select /*+ index(x2 ix2) */ d2, d3 from x2 order by 1,2;
+select c3, c2 from x1 union select /*+ index(x2 ix2) */ d3, d2 from x2 order by 1,2;
+
+CREATE TABLE ts1 (c1 VARCHAR(10) NOT NULL, c2 INT NOT NULL);
+CREATE TABLE ts2 (c1 VARCHAR(10) NOT NULL, c2 INT NOT NULL);
+INSERT INTO ts1 (c1, c2) VALUES ('t1a', 1), ('t1a', 2), ('t1a', 3), ('t1b', 2), ('t1b', 1);
+INSERT INTO ts2 (c1, c2) VALUES ('t2a', 1), ('t2a', 2), ('t2a', 3), ('t2b', 2), ('t2b', 1);
+
+SELECT c1, c2 FROM (
+  SELECT c1, c2 FROM ts1
+  UNION
+  (SELECT c1, c2 FROM ts2 ORDER BY c2 DESC, c1 LIMIT 1)
+) AS res order by 1,2;
+
+
+--disable_warnings
+DROP TABLE IF EXISTS T1, T2, T3;
+--enable_warnings
+CREATE TABLE T1 (PK INT PRIMARY KEY, C1 INT, C2 INT);
+CREATE TABLE T2 (PK INT PRIMARY KEY, C1 INT, C2 INT);
+CREATE TABLE T3 (PK INT PRIMARY KEY, C1 INT, C2 INT);
+
+--disable_query_log
+INSERT/**/ INTO T1 VALUES (1, 4, 5);
+INSERT/**/ INTO T1 VALUES (2, 5, 4);
+INSERT/**/ INTO T2 VALUES (1, 1, 1);
+INSERT/**/ INTO T2 VALUES (2, 1, 1);
+INSERT/**/ INTO T3 VALUES (1, 1, 1);
+INSERT/**/ INTO T3 VALUES (2, 1, 1);
+--enable_query_log
+
+SELECT C1, C2, PK FROM T1 ORDER BY PK DESC LIMIT 1 UNION (SELECT C1, C2, PK FROM T2 UNION SELECT C1, C2 ,PK FROM T3);
+
+CREATE TABLE table2_bigint (
+col_decimal_20_0_signed decimal(20,0) signed,
+col_decimal_20_0_unsigned decimal(20,0) unsigned,
+col_char_20 char(20),
+col_decimal_20_0 decimal(20,0),
+pk bigint,
+col_bigint bigint,
+col_timestamp_6 timestamp(6) NULL DEFAULT NULL,
+col_bigint_unsigned bigint unsigned,
+col_bigint_signed bigint signed,
+primary key (pk));
+--disable_query_log
+INSERT/**/ INTO `table2_bigint` VALUES (NULL,NULL,'10',NULL,0,NULL,NULL,0,NULL),
+(0,2,'a',4,1,124,'2009-07-18 10:13:11.062332',25644,4),
+(189,110,'',10256,2,0,'2009-08-25 05:37:00.047908',238,0),
+(NULL,NULL,NULL,NULL,3,1,NULL,NULL,NULL),
+(NULL,NULL,NULL,0,4,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,5,NULL,NULL,NULL,NULL),
+(NULL,NULL,'888888',NULL,6,4444444,NULL,NULL,NULL),
+(1,NULL,NULL,NULL,7,NULL,NULL,NULL,NULL),
+(NULL,NULL,'6',NULL,8,NULL,NULL,44444444,NULL),
+(NULL,NULL,'44444444',2,9,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,19938,10,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,11,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,12,NULL,NULL,NULL,NULL),
+(NULL,NULL,'韩语',0,21,NULL,NULL,NULL,NULL),
+(NULL,NULL,'bthwo',NULL,23,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,25,NULL,'2008-04-23 04:10:58.000000',NULL,NULL),
+(NULL,NULL,NULL,10,30,NULL,NULL,NULL,NULL),
+(NULL,NULL,'ˉˇ¨‘’々～‖∶”’‘〃〔〕《》「」『',NULL,31,NULL,NULL,0,NULL),
+(NULL,NULL,'99',3333333333,33,NULL,NULL,NULL,NULL),
+(NULL,NULL,'tbctr',NULL,39,NULL,NULL,NULL,NULL),
+(NULL,NULL,'0',NULL,41,NULL,NULL,NULL,7777777777),
+(NULL,NULL,NULL,NULL,43,NULL,'2022-12-27 17:00:00.000003',NULL,NULL),
+(NULL,99,'88888',NULL,46,NULL,NULL,NULL,NULL),
+(NULL,NULL,'111111111',NULL,49,NULL,NULL,NULL,18),
+(NULL,NULL,'khf',NULL,51,NULL,NULL,NULL,NULL),
+(NULL,NULL,'9',NULL,56,NULL,NULL,NULL,99),
+(NULL,NULL,'',NULL,60,NULL,NULL,9,NULL),
+(NULL,NULL,'°′〃￡￥‰%℃¤￠',NULL,77,NULL,NULL,NULL,NULL),
+(0,NULL,'░ ▒ ▣ ▤ ▥ ▦ ▧ ▨ ▩ ▪',NULL,84,NULL,NULL,NULL,NULL),
+(NULL,99999,NULL,NULL,91,NULL,NULL,NULL,NULL),
+(NULL,NULL,'key',NULL,93,NULL,NULL,NULL,NULL),
+(NULL,NULL,'ā á ǎ à、ō ó ǒ ò、ê ē',NULL,99,NULL,NULL,NULL,0),
+(NULL,NULL,'bf',NULL,100,NULL,NULL,0,NULL),
+(NULL,4,'omomomom',NULL,105,NULL,NULL,NULL,NULL),
+(NULL,NULL,'0',NULL,109,NULL,NULL,222,NULL),
+(NULL,NULL,'にほんご2008-05-16 23:43',NULL,112,NULL,NULL,NULL,1967616),
+(NULL,NULL,NULL,NULL,118,NULL,NULL,NULL,NULL),
+(5,NULL,'0',NULL,124,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,126,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,132,NULL,NULL,9,NULL),
+(NULL,NULL,NULL,NULL,134,13067264,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,136,NULL,'2008-08-05 16:05:52.009456',NULL,NULL),
+(NULL,NULL,'ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫ①②③④⑤⑥⑦⑧',NULL,138,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,149,235,NULL,NULL,NULL),
+(NULL,0,'111',NULL,150,NULL,NULL,NULL,NULL),
+(NULL,NULL,'fxp┌┍┎┏┐┑┒┓—┄┈├┝┞┟┠┡',NULL,152,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,1,155,NULL,NULL,NULL,NULL),
+(NULL,NULL,'53850',NULL,157,NULL,NULL,88888888,NULL),
+(NULL,NULL,NULL,NULL,161,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,167,NULL,'2020-12-27 17:00:00.000003',NULL,NULL),
+(NULL,NULL,'222',NULL,168,NULL,NULL,NULL,158),
+(NULL,NULL,NULL,NULL,175,99,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,177,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,180,NULL,'2005-12-15 00:04:53.000000',NULL,NULL),
+(NULL,NULL,'·⊙①⊕◎Θ⊙●○¤㊣㈱@の■□★☆◆◇',NULL,188,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,203,NULL,'2001-02-04 16:00:00.000000',NULL,NULL),
+(NULL,NULL,NULL,NULL,211,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,225,NULL,NULL,NULL,3171072),
+(NULL,NULL,NULL,NULL,227,NULL,NULL,NULL,NULL),
+(NULL,NULL,'∷ ∶ ∫ ∮ ∝ ∞ ∧ ∨ ∑ ∏',99,233,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,241,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,243,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,247,NULL,NULL,NULL,NULL),
+(NULL,1,NULL,NULL,2461,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,2676,NULL,'2008-03-12 19:50:53.000000',NULL,NULL),
+(NULL,NULL,NULL,NULL,6438,NULL,NULL,NULL,NULL),
+(NULL,NULL,'10484992',NULL,7301,0,NULL,NULL,NULL),
+(NULL,NULL,'♡. ≥▂≤　≥0≤　≥^≤　≥ω≤　≥',NULL,8387,NULL,NULL,4444444444,NULL),
+(NULL,NULL,NULL,NULL,8422,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,8695,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,8846,NULL,NULL,NULL,99),
+(NULL,134,NULL,NULL,9796,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,10834,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,1,11588,NULL,NULL,NULL,NULL),
+(NULL,NULL,'´´©©>>µµ®®',NULL,11704,NULL,NULL,43670,NULL),
+(NULL,NULL,NULL,1,12027,NULL,NULL,NULL,NULL),
+(444444444,NULL,'lsu',NULL,13252,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,13536,NULL,NULL,NULL,8),
+(NULL,1,NULL,NULL,14163,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,14513,NULL,NULL,0,NULL),
+(NULL,NULL,NULL,NULL,14766,NULL,NULL,NULL,NULL),
+(NULL,NULL,'АБВГДЕЁЖЗИЙКЛМНОПРСТ',NULL,16477,NULL,NULL,NULL,NULL),
+(NULL,NULL,'0',7777777,16937,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,18005,NULL,NULL,NULL,NULL),
+(NULL,NULL,'fsprcppavn',NULL,19197,NULL,NULL,14248960,NULL),
+(NULL,NULL,NULL,1,21100,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,22131,NULL,'2023-06-18 17:00:00.000003',NULL,NULL),
+(NULL,NULL,NULL,NULL,22635,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,22651,NULL,NULL,NULL,NULL),
+(NULL,NULL,'░ ▒ ▣ ▤ ▥ ▦ ▧ ▨ ▩ ▪',NULL,22730,NULL,NULL,NULL,NULL),
+(NULL,NULL,'0',NULL,22836,NULL,NULL,10,NULL),
+(NULL,NULL,NULL,1,23354,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,25949,NULL,NULL,0,NULL),
+(NULL,NULL,NULL,NULL,27393,0,NULL,NULL,NULL),
+(6546688,NULL,NULL,NULL,27875,NULL,NULL,NULL,NULL),
+(NULL,NULL,'yrjpy',NULL,28855,NULL,NULL,NULL,0),
+(NULL,NULL,NULL,NULL,29715,NULL,NULL,NULL,NULL),
+(NULL,NULL,'晴空万里无云',NULL,30642,NULL,NULL,NULL,NULL),
+(NULL,NULL,'g',NULL,31061,NULL,NULL,NULL,NULL),
+(NULL,NULL,'jvv',NULL,31348,NULL,NULL,NULL,99),
+(NULL,NULL,'fot',NULL,32272,NULL,NULL,0,NULL),
+(NULL,1,NULL,NULL,32347,NULL,NULL,NULL,NULL),
+(NULL,NULL,'smndzoxCB89CB87C2A8E',NULL,33516,NULL,NULL,NULL,NULL),
+(NULL,NULL,'♡.ゃōゃ ⊙▂⊙　⊙0⊙　⊙^⊙　⊙ω',NULL,35352,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,35465,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,36891,NULL,'2001-10-09 07:05:09.046346',NULL,NULL),
+(NULL,NULL,NULL,NULL,38227,NULL,NULL,NULL,NULL),
+(NULL,NULL,'mx',NULL,38483,0,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,39803,NULL,'2022-06-18 17:00:00.000003',NULL,NULL),
+(NULL,NULL,'♡.ゃōゃ ⊙▂⊙　⊙0⊙　⊙^⊙　⊙ω',7777777777,40402,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,42490,NULL,NULL,NULL,0),
+(NULL,NULL,NULL,NULL,42970,NULL,'2014-12-31 17:00:00.000001',NULL,NULL),
+(NULL,NULL,'r',NULL,43089,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,43173,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,45699,NULL,NULL,0,NULL),
+(NULL,NULL,NULL,NULL,45983,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,46487,0,NULL,NULL,NULL),
+(NULL,999999999,'0',NULL,50631,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,51853,NULL,NULL,NULL,NULL),
+(0,NULL,'i',NULL,53803,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,54595,NULL,NULL,NULL,NULL),
+(NULL,22222222,'nf',NULL,55039,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,57518,NULL,'2021-12-27 17:00:00.000003',NULL,NULL),
+(NULL,NULL,'0',NULL,60181,1111111111,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,60943,4,NULL,NULL,NULL),
+(NULL,NULL,'清明上河图',NULL,61472,NULL,NULL,NULL,NULL),
+(NULL,NULL,'0',NULL,62260,66666,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,62748,NULL,NULL,0,NULL),
+(NULL,NULL,NULL,NULL,63306,NULL,NULL,NULL,NULL),
+(NULL,NULL,'777',NULL,64195,0,NULL,NULL,NULL),
+(NULL,NULL,'0',NULL,64975,6892544,NULL,NULL,NULL),
+(NULL,NULL,'133120',NULL,99999,NULL,NULL,0,NULL),
+(NULL,NULL,NULL,NULL,737536,NULL,NULL,NULL,NULL),
+(NULL,NULL,'6666',NULL,814848,2,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,1243392,NULL,NULL,NULL,NULL),
+(NULL,1,NULL,NULL,1657856,NULL,NULL,NULL,NULL),
+(NULL,NULL,'6E67656E',NULL,1868800,NULL,NULL,NULL,NULL),
+(NULL,NULL,'3333',NULL,2568704,NULL,NULL,NULL,0),
+(1,NULL,'0',NULL,3039232,NULL,NULL,NULL,NULL),
+(1,NULL,NULL,NULL,3435776,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,3500288,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,1,3657216,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,3753472,NULL,'2019-12-27 17:00:00.000003',NULL,NULL),
+(NULL,NULL,'66',NULL,3993088,NULL,NULL,NULL,2222222),
+(NULL,NULL,'⑴ ⑵ ⑶ ⑷ ⑸ ⑹ ⑺ ⑻ ⑼ ⑽',NULL,4240640,4444,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,5200128,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,5205760,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,5880320,NULL,NULL,NULL,NULL),
+(NULL,NULL,'ug',NULL,6020096,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,6509568,NULL,'2018-12-27 17:00:00.000003',NULL,NULL),
+(NULL,NULL,'6666',NULL,6568192,NULL,NULL,999,NULL),
+(33333,NULL,'766A627972666D64766A',NULL,6950400,NULL,NULL,NULL,NULL),
+(NULL,NULL,'α',NULL,7330816,NULL,NULL,NULL,NULL),
+(NULL,NULL,'1',NULL,7743488,77777,NULL,NULL,NULL),
+(NULL,0,NULL,NULL,7826688,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,7830272,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,9311232,NULL,NULL,0,NULL),
+(NULL,NULL,NULL,NULL,9475584,NULL,NULL,NULL,0),
+(NULL,11753728,NULL,NULL,9727744,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,9771264,NULL,'2015-06-15 02:00:00.000001',NULL,NULL),
+(NULL,NULL,NULL,NULL,10229760,0,NULL,NULL,NULL),
+(NULL,NULL,'kyihikwjs',NULL,10306304,NULL,NULL,NULL,NULL),
+(NULL,555555555,'0',NULL,10717440,NULL,NULL,NULL,NULL),
+(NULL,NULL,'上海',NULL,10970880,NULL,NULL,NULL,NULL),
+(NULL,NULL,'44444444',NULL,11034112,NULL,NULL,NULL,222),
+(NULL,NULL,NULL,NULL,11341824,NULL,NULL,0,NULL),
+(NULL,NULL,'¦¦÷÷¿¿¬¬§§',NULL,11761152,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,11883008,99,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,12004608,NULL,'2021-06-18 17:00:00.000003',NULL,NULL),
+(NULL,NULL,NULL,NULL,12220672,NULL,'2020-06-18 17:00:00.000003',NULL,NULL),
+(NULL,NULL,NULL,NULL,14109440,NULL,NULL,NULL,NULL),
+(NULL,NULL,NULL,NULL,14969344,NULL,'2002-12-27 17:00:00.000003',NULL,NULL),
+(14311168,NULL,'にほん',NULL,15181568,NULL,NULL,NULL,NULL),
+(NULL,NULL,'0',66,15706368,NULL,NULL,NULL,NULL),
+(46,NULL,'o',NULL,16360704,NULL,NULL,NULL,NULL),
+(NULL,NULL,'55',NULL,16741632,NULL,NULL,0,NULL),
+(NULL,NULL,NULL,NULL,16753152,NULL,NULL,NULL,NULL);
+--enable_query_log
+
+CREATE TABLE table100_bigint (
+col_bigint_unsigned bigint unsigned,
+col_decimal_20_0_unsigned decimal(20,0) unsigned,
+col_bigint_signed bigint signed,
+col_bigint bigint,
+pk bigint,
+col_decimal_20_0_signed decimal(20,0) signed,
+col_timestamp_6 timestamp(6) NULL DEFAULT NULL,
+col_char_20 char(20),
+col_decimal_20_0 decimal(20,0),
+/*Indices*/
+primary key (pk)) ;
+
+--disable_query_log
+INSERT/**/ INTO table100_bigint VALUES  (144, NULL, 7, 0, 1, NULL, '2005-12-21 09:57:00.058959', '', 663),
+  (29, 185, 8, 60, 2, 1, '2007-12-15 10:24:25.023068', '', 0),
+  (44352, 194, 37692, 121, 3, 35, '2001-05-25 04:55:51.020735', NULL, 54731),
+  (NULL, 3, 374, 0, 4, 14237, '2005-11-28 15:13:30.012010', 'g', 3),
+  (0, NULL, 158, NULL, 5, 253, '2001-07-16 11:06:04.016585', 'now', 0),
+  (5, 0, 0, 5, 6, 2, '2002-03-24 02:13:58.034278', 'ehsd', 0),
+  (0, 0, 0, 3376, 7, 103, '2002-08-22 22:55:52.055467', 'j', 42725),
+  (1, 41145, 183, NULL, 8, NULL, '2003-07-16 18:05:41.037205', 'who', 43425),
+  (NULL, 0, 0, 219, 9, NULL, '2004-03-12 00:45:06.033692', 'c', 7),
+  (249, 1, 9, 74, 10, 13, '2000-01-03 10:39:47.008191', NULL, 23),
+  (25184, 46079, 0, 0, 11, 3612, '2007-07-09 21:26:43.037049', 'ocehsdeaqozozozriqdn', 161),
+  (9, 7, 40208, NULL, 12, 110, '2003-11-10 05:38:14.065459', 'wocehsdea', 6),
+  (0, 6, 141, 50418, 13, 0, '2009-07-14 03:25:58.014426', 'q', 5),
+  (3, 47835, 0, 89, 14, 56673, '2000-10-12 20:13:58.015945', 'a', 248),
+  (37, 154, 0, NULL, 15, 7129, '2001-06-09 22:15:14.036884', 'h', 211),
+  (54126, 5, NULL, 235, 16, 48565, '2000-07-07 00:49:45.017445', 'v', 0),
+  (57356, 0, 17244, 37993, 17, 40293, '2003-05-10 20:25:19.045487', '', 46595),
+  (0, 2, 5, 4, 18, NULL, '2004-12-09 05:24:05.053142', 'twocehsdeaqozozozri', 3),
+  (8, NULL, 81, 208, 19, 110, '2004-07-23 13:17:23.021106', 'ktwocehsdeaqozozozri', NULL),
+  (214, 0, NULL, NULL, 20, NULL, '2000-09-25 19:18:33.038082', 'it\'s', 32092),
+  (185, 26835, NULL, 0, 21, NULL, '2000-12-27 03:12:12.044124', 'd', 226),
+  (16493, NULL, NULL, 48097, 22, 18078, '2009-06-03 12:09:56.048947', 'vktw', 0),
+  (59, NULL, 9595, 0, 23, 7, '2009-04-21 14:10:48.038149', 'qvktwoc', 250),
+  (20270, 61928, 77, 196, 24, NULL, '2007-11-06 20:28:37.064158', '', 4),
+  (25136, 69, NULL, 3, 25, 111, '2004-08-25 07:23:28.004240', 'xq', NULL),
+  (NULL, 8, 18291, 7, 26, 145, '2007-06-16 10:55:31.008157', 'txqvk', NULL),
+  (NULL, 82, 1, NULL, 27, 1, '2005-04-03 08:52:39.040631', 'e', 37067),
+  (4, 1, 0, 0, 28, NULL, '2004-12-03 12:02:13.064475', 'v', 29074),
+  (4, NULL, NULL, NULL, 29, NULL, '2003-07-01 22:44:23.034420', '', 47),
+  (9, 23389, 0, 0, 30, 0, '2005-12-26 16:49:10.057718', '', 1),
+  (23352, 0, 7, NULL, 31, 3, '2009-08-07 21:28:31.026125', 'really', 178),
+  (NULL, 2, 0, 248, 32, 5, '2001-01-11 20:59:57.021068', 'z', NULL),
+  (0, 70, 36, NULL, 33, NULL, '2002-04-25 14:22:14.019461', 'otxqvktwocehsdea', 0),
+  (0, 0, 115, 190, 34, 4, '2005-06-14 04:27:52.058069', 'q', 0),
+  (3, 0, 22627, 28533, 35, NULL, '2001-03-28 21:39:24.037684', '', NULL),
+  (105, 0, 0, 44430, 36, 2076, '2004-03-16 18:49:34.049896', 'c', NULL),
+  (NULL, 0, 0, 1, 37, 25668, '2002-04-24 07:20:22.022894', '', NULL),
+  (5, NULL, 3270, 39039, 38, 106, '2007-06-28 02:11:58.051534', 'qotxqvktwo', 248),
+  (52623, 88, 55413, 8, 39, 19940, '2006-04-14 22:15:15.063598', 'cqotxqvktwocehs', 19784),
+  (143, 44541, 54, 0, 40, 40305, '2006-11-18 13:16:11.022765', 'h', 31),
+  (50393, NULL, 0, 51776, 41, NULL, '2002-01-01 14:13:39.004976', NULL, 20697),
+  (16, 9, NULL, 0, 42, 26781, '2002-10-12 21:13:58.021745', 'kcqotxqvktwo', 1),
+  (3, 1, 0, NULL, 43, 0, '2007-08-12 18:03:53.056695', NULL, 0),
+  (50532, 0, 1, 198, 44, NULL, '2007-07-11 06:22:50.010281', NULL, NULL),
+  (NULL, 0, 2, 19576, 45, 0, '2009-02-20 11:57:07.029063', 'h', NULL),
+  (0, 136, NULL, 9, 46, 50026, '2007-05-28 22:18:52.063885', '', 52458),
+  (24816, 252, NULL, 251, 47, 0, '2006-01-21 20:07:36.003089', 'zk', 126),
+  (71, 12139, 8754, 20539, 48, 0, '2008-07-05 22:20:50.009947', '', NULL),
+  (0, 0, NULL, 7, 49, 0, '2008-07-01 10:44:37.059616', 'that\'s', 55570),
+  (4, 88, 60161, 5, 50, 206, '2001-06-10 11:56:05.044530', 'yzkcqotxq', 3) ;
+INSERT/**/ INTO table100_bigint VALUES  (NULL, 35789, 70, 33742, 51, 150, '2008-07-15 02:32:31.060567', 'syz', 2),
+  (63491, 0, 107, NULL, 52, 14546, '2006-07-19 21:37:47.061318', NULL, NULL),
+  (NULL, 101, NULL, 8, 53, NULL, '2003-02-10 01:51:03.007111', 'm', 0),
+  (1, 0, 7, 76, 54, 13044, '2001-02-28 16:51:43.013799', '', 173),
+  (0, 126, 44783, 2728, 55, NULL, '2003-05-10 16:58:21.015688', 'g', 203),
+  (0, 19322, 27003, 112, 56, 0, '2005-06-23 00:03:52.047496', 'qsyzkcqotx', 5),
+  (44855, 249, 201, NULL, 57, 2, '2001-10-22 11:54:26.053044', NULL, NULL),
+  (0, 0, 42, 1, 58, 36011, '2004-05-28 10:58:49.042701', '', 62288),
+  (NULL, 9757, NULL, NULL, 59, 53996, '2009-12-28 07:45:18.046295', 'tqsyzkcqotxqvkt', NULL),
+  (3, NULL, NULL, 61721, 60, 0, '2008-12-24 05:53:17.005593', 'ltqsyzk', 0),
+  (5, NULL, 55093, 38002, 61, 87, '2006-12-04 17:29:02.038227', NULL, 19234),
+  (0, NULL, 20313, 34, 62, 14983, '2008-11-17 01:41:59.062082', 'she', 136),
+  (5, 234, NULL, 13380, 63, 54, '2008-06-08 00:53:33.018694', '', 5),
+  (0, 6, 0, 39, 64, 247, '2003-03-04 00:08:02.013467', '', 8),
+  (0, NULL, NULL, 0, 65, 6754, '2006-02-01 13:00:21.044883', 'jltqsyzkcqotxqvktwoc', 16052),
+  (63617, 43, 0, 8, 66, 8, '2004-10-04 22:16:35.060134', '', 4),
+  (0, 5, 8, 7, 67, NULL, '2005-04-10 23:44:37.035831', NULL, 7591),
+  (43347, 0, 208, 154, 68, 2, '2009-03-04 21:19:28.025533', 'to', 28552),
+  (40067, 0, 0, 87, 69, 55696, '2004-04-08 10:29:51.040773', 'with', NULL),
+  (19, NULL, 0, NULL, 70, 251, '2005-08-26 15:38:43.002208', 'r', 2867),
+  (97, 48213, 9, 35407, 71, 0, '2001-07-05 08:31:03.043040', 'a', NULL),
+  (6, 0, 46158, 4, 72, 193, '2004-07-05 19:33:49.055596', 'did', 7497),
+  (9, 9, 0, 0, 73, 175, '2004-10-02 18:00:10.050115', 'who', 23721),
+  (1, NULL, 8, NULL, 74, 237, '2004-10-15 17:27:28.057862', 'm', 0),
+  (4, NULL, NULL, 0, 75, 213, '2003-12-23 09:24:44.007825', 'l', 3),
+  (0, 4, 48868, 5, 76, 2, '2006-12-01 13:50:27.012049', 'i', 8),
+  (183, 0, 26, 2, 77, 225, '2002-10-03 07:41:56.010803', 'qj', 8),
+  (3, 24, 212, NULL, 78, 162, '2000-10-09 05:56:56.001335', 'sqjltqsyzkcqotxqvkt', NULL),
+  (NULL, 8, 9, 5, 79, 9, '2001-08-11 09:16:22.054516', 'j', 34351),
+  (3, NULL, 25372, 0, 80, NULL, '2003-05-06 02:08:16.035233', NULL, 13457),
+  (0, 5, 194, 0, 81, 0, '2006-08-25 23:07:08.059257', NULL, 0),
+  (16331, 64449, 7, 50519, 82, 24628, '2007-08-28 03:39:01.054535', '', 156),
+  (64823, 2, 0, 0, 83, NULL, '2001-03-06 07:44:00.029942', 'w', 0),
+  (NULL, NULL, 7, NULL, 84, 0, '2007-05-07 22:19:05.022705', 'we', 0),
+  (43862, 0, 168, 215, 85, NULL, '2006-09-04 15:32:48.061513', 'rjsqjltqsyzkcqotxq', 7),
+  (NULL, 46552, NULL, 0, 86, 0, '2007-06-28 12:57:39.048302', 'qrjsqjltq', 9),
+  (3, NULL, NULL, 30668, 87, 221, '2000-02-02 16:58:00.025764', NULL, NULL),
+  (8, 135, 9, 0, 88, 3, '2001-05-11 08:46:34.002124', 'lqrjsqjltqsyzkcqot', 33),
+  (0, NULL, 53316, NULL, 89, 44147, '2003-06-15 12:44:36.049462', '', 25327),
+  (NULL, NULL, 51252, 0, 90, NULL, '2008-12-10 13:20:33.002567', NULL, NULL),
+  (53, 41479, NULL, 0, 91, 0, '2005-05-13 17:57:46.019857', 'o', 36399),
+  (33404, 9, 0, 52, 92, 26384, '2006-01-16 13:35:47.058847', 'ok', 29027),
+  (51, 46147, 43801, 53136, 93, 8, '2005-09-23 10:02:30.006898', '', 250),
+  (58092, 0, 25, 0, 94, NULL, '2009-12-01 21:22:19.055403', 'if', 138),
+  (6, 46, 2, NULL, 95, NULL, '2003-04-26 14:23:06.022870', 'if', 6),
+  (0, NULL, 63640, NULL, 96, NULL, '2003-06-18 00:27:46.030472', 'oh', 6),
+  (2, 248, 3758, 0, 97, NULL, '2000-06-26 00:32:50.011478', 'l', 38),
+  (NULL, 135, 65508, 0, 98, 0, '2004-02-26 15:49:24.003395', 'm', 164),
+  (0, 4, 0, 6, 99, 0, '2007-03-22 08:58:44.003544', '', 38337),
+  (0, NULL, NULL, 0, 100, 31536, '2008-04-28 06:24:52.021202', 'f', 56324);
+--enable_query_log
+
+SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
+       FROM
+       (
+        (SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
+         FROM table2_bigint
+         WHERE col_decimal_20_0_unsigned <> 99999
+         ORDER BY pk DESC , 6 DESC , pk
+         LIMIT 1,
+         5)
+        UNION DISTINCT SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
+        FROM (
+            (SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
+             FROM table100_bigint
+             WHERE col_decimal_20_0_signed = ROUND(SIGN(col_decimal_20_0))
+             ORDER BY col_bigint_signed , 6 , col_decimal_20_0 , pk DESC LIMIT 7)
+            UNION DISTINCT
+            (SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
+             FROM table2_bigint
+             WHERE SUBSTR('g', 1, LEAST(58, 20)) <> INSERT('lgeswk', 99, 8, TRIM(SUBSTRING(CONVERT(TRIM(SUBSTR(TRIM(SUBSTR(SUBSTRING('nlge', 1, LEAST(58, 20)), 1, 2)
+                           FROM SUBSTRING('', 1, LEAST(58, 20))), 1, LEAST(58, 20))), CHAR(50)), 1, LEAST(58, 20))))
+             ORDER BY 3 ,
+             col_bigint_unsigned ,
+             pk DESC)) TUT
+             ORDER BY col_bigint,
+             col_bigint_signed,
+             col_bigint_unsigned,
+             col_char_20,
+             col_decimal_20_0,
+             col_decimal_20_0_signed,
+             col_decimal_20_0_unsigned,
+             col_timestamp_6,
+             pk) TUT WHERE pk in (9727744 ,7826688 ,1657856 ,  55039 ,  50631)
+  ORDER BY col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk;
+
+drop database union_sort_opt_db;

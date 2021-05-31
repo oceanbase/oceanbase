@@ -1,0 +1,420 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+##
+#--real_sleep 10
+create table t1 (a varchar(10) primary key, b int default 0);
+#--real_sleep 10
+insert into t1 (a) values ('a'),('abc'),('abcd'),('hello'),('test');
+
+--error 5813
+select * from t1 where a regexp 'a(';
+--error 5813
+select * from t1 where a regexp 'a(b';
+--error 5820
+select * from t1 where a regexp '*';
+--error 5820
+select * from t1 where a regexp '+';
+--error 5820
+select * from t1 where a regexp '?';
+--error 5820
+select * from t1 where a regexp '(*a)';
+--error 5820
+select * from t1 where a regexp '(+a)';
+--error 5824
+select * from t1 where a regexp '(?a)';
+--error 5820
+select * from t1 where a regexp '({1}a)';
+--error 5820
+select * from t1 where a regexp '(a|*b)';
+--error 5820
+select * from t1 where a regexp '(a|+b)';
+--error 5820
+select * from t1 where a regexp '(a|?b)';
+--error 5820
+select * from t1 where a regexp '(a|{1}b)';
+--error 5820
+select * from t1 where a regexp '^*';
+--error 5820
+select * from t1 where a regexp '^+';
+--error 5820
+select * from t1 where a regexp '^?';
+--error 5820
+select * from t1 where a regexp '^{1}';
+--error 5820
+select * from t1 where a regexp '{1';
+--error 5820
+select * from t1 where a regexp '{1}';
+--error 5818
+select * from t1 where a regexp 'a{1';
+--error 5819
+select * from t1 where a regexp 'a{1a';
+--error 5819
+select * from t1 where a regexp 'a{1a}';
+--error 5819
+select * from t1 where a regexp 'a{1,x}';
+--error 5819
+select * from t1 where a regexp 'a{1,x';
+--error 5819
+select * from t1 where a regexp 'a{300}';
+--error 5819
+select * from t1 where a regexp 'a{1,0}';
+--error 5820
+select * from t1 where a regexp 'a++';
+--error 5820
+select * from t1 where a regexp 'a*+';
+--error 5820
+select * from t1 where a regexp 'a+*';
+--error 5820
+select * from t1 where a regexp 'a?*';
+--error 5820
+select * from t1 where a regexp 'a?+';
+--error 5820
+select * from t1 where a regexp 'a{1}{1}';
+--error 5820
+select * from t1 where a regexp 'a*{1}';
+--error 5820
+select * from t1 where a regexp 'a+{1}';
+--error 5820
+select * from t1 where a regexp 'a?{1}';
+--error 5820
+select * from t1 where a regexp 'a{1}*';
+--error 5820
+select * from t1 where a regexp 'a{1}+';
+
+drop table t1;
+
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+#--real_sleep 10
+create table t1 (a datetime primary key);
+#--real_sleep 10
+insert into t1 values ('2004-03-11 12:00:21');
+select * from t1 where a regexp '2004-03-11 12:00:21';
+select * from t1 where a regexp '2004-03-11 ';
+drop table t1;
+
+# A case
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(id int primary key, name varchar(100));
+insert into t1 values(1, 'hello');
+insert into t1 values(2, 'hell');
+insert into t1 values(3, 'hel');
+insert into t1 values(4, 'hello1');
+insert into t1 values(5, 'hell1');
+insert into t1 values(6, 'hel1');
+insert into t1 values(7, 'hel\n1');
+insert into t1 values(8, 'he\bl1');
+insert into t1 values(9, 'hel\t1');
+insert into t1 values(10, 'hel\r\n1o');
+insert into t1 values(11, '111 <title>Hello World</title> 222');
+
+insert into t1 values (138, 'abc');
+insert into t1 values (139, 'abc');
+insert into t1 values (142, 'abc');
+insert into t1 values (146, 'a(');
+insert into t1 values (152, 'a)');
+insert into t1 values (153, ')');
+insert into t1 values (158, 'ab');
+insert into t1 values (163, 'a^b');
+insert into t1 values (165, 'a$b');
+insert into t1 values (170, '""');
+insert into t1 values (173, '""');
+insert into t1 values (174, '""');
+insert into t1 values (192, 'b');
+insert into t1 values (203, 'abc');
+insert into t1 values (272, 'abc');
+insert into t1 values (273, 'abc');
+insert into t1 values (287, 'ab');
+insert into t1 values (289, 'ab');
+insert into t1 values (291, 'aab');
+insert into t1 values (299, 'a{,2}');
+insert into t1 values (301, 'a{,}');
+insert into t1 values (311, 'abcac');
+insert into t1 values (313, 'abcac');
+insert into t1 values (315, 'abbcac');
+insert into t1 values (317, 'acabc');
+insert into t1 values (319, 'acabc');
+insert into t1 values (321, 'abcabbc');
+insert into t1 values (323, 'abcabbc');
+insert into t1 values (325, 'a');
+insert into t1 values (344, 'a{b}');
+insert into t1 values (384, '-%@a?X-');
+insert into t1 values (385, '-%@aX0-');
+insert into t1 values (386, 'aSSTb');
+insert into t1 values (387, 'aNTb');
+insert into t1 values (388, 'a019b');
+insert into t1 values (389, 'Sa%bS');
+insert into t1 values (390, 'AabC');
+insert into t1 values (391, 'NaSbN');
+insert into t1 values (392, 'S%-&T');
+insert into t1 values (393, 'aSNTb');
+insert into t1 values (394, 'aBCd');
+insert into t1 values (395, 'p0f3Cq');
+insert into t1 values (405, 'abc');
+insert into t1 values (406, 'abd');
+insert into t1 values (407, 'abbd');
+insert into t1 values (409, 'aaaaabaaaabaaaabaaaab');
+insert into t1 values (411, 'aaaaabaaaabaaaabaaaab');
+insert into t1 values (413, 'aaaaabaaaabaaaabaaaabweeknights');
+insert into t1 values (415, 'a12345678901234567890123456789b');
+insert into t1 values (416, 'a123456789012345678901234567890b');
+insert into t1 values (417, 'a1234567890123456789012345678901b');
+insert into t1 values (418, 'a12345678901234567890123456789012b');
+insert into t1 values (419, 'a123456789012345678901234567890123b');
+insert into t1 values (421, 'a1234567890123456789012345678901234567890123456789012345678901234567890b');
+insert into t1 values (423, 'xacegikmoq');
+insert into t1 values (424, 'xacegikmoq');
+insert into t1 values (425, 'xacegikmoqy');
+insert into t1 values (426, 'xacegikmoqy');
+insert into t1 values (438, 'abc');
+insert into t1 values (439, 'aba');
+insert into t1 values (440, 'abc');
+insert into t1 values (441, 'abd');
+insert into t1 values (442, 'accd');
+insert into t1 values (443, 'weeknights');
+insert into t1 values (444, 'weeknights');
+insert into t1 values (445, 'xyzaaabcaababdacd');
+insert into t1 values (446, 'aaabc');
+insert into t1 values (452, '/*x*/');
+insert into t1 values (454, '/*x*/y/*z*/');
+insert into t1 values (456, '/*x*/');
+insert into t1 values (457, '/*x*/y/*z*/');
+insert into t1 values (459, '/*x**/y/*z*/');
+insert into t1 values (461, '/*x*/');
+insert into t1 values (462, '/*x*/y/*z*/');
+insert into t1 values (463, '/*x**/y/*z*/');
+insert into t1 values (464, '/*x****/y/*z*/');
+insert into t1 values (465, '/*x**x*/y/*z*/');
+insert into t1 values (466, '/*x***x/y/*z*/');
+insert into t1 values (469, 'abcd');
+insert into t1 values (470, 'abc');
+insert into t1 values (471, 'abd');
+insert into t1 values (472, 'abbd');
+insert into t1 values (473, 'acd');
+insert into t1 values (474, 'ad');
+insert into t1 values (475, 'abc');
+insert into t1 values (476, 'ac');
+insert into t1 values (477, 'abc');
+insert into t1 values (478, 'abbbc');
+insert into t1 values (479, 'ac');
+insert into t1 values (480, 'abcdef');
+insert into t1 values (482, 'abcdefghijk');
+insert into t1 values (483, 'abcdefghijkl');
+insert into t1 values (484, 'abc');
+insert into t1 values (485, 'ac');
+insert into t1 values (486, 'abc');
+insert into t1 values (487, 'abcc');
+insert into t1 values (488, 'abcbc');
+insert into t1 values (489, 'abb');
+insert into t1 values (490, 'abb');
+insert into t1 values (491, 'abbb');
+insert into t1 values (492, 'abbb');
+insert into t1 values (493, 'abcdef');
+insert into t1 values (494, 'bc');
+insert into t1 values (497, 'ad');
+insert into t1 values (498, 'abcd');
+insert into t1 values (499, 'abd');
+insert into t1 values (500, 'abcd');
+insert into t1 values (501, 'ad');
+insert into t1 values (502, 'abcd');
+insert into t1 values (503, 'ad');
+insert into t1 values (504, 'ad');
+insert into t1 values (505, 'abd');
+insert into t1 values (506, 'ad');
+insert into t1 values (507, 'abcd');
+insert into t1 values (508, 'ad');
+insert into t1 values (509, 'abcd');
+insert into t1 values (510, 'abd');
+insert into t1 values (511, 'acd');
+insert into t1 values (512, 'abd');
+insert into t1 values (513, 'abcd');
+insert into t1 values (514, 'abd');
+insert into t1 values (515, 'abcd');
+insert into t1 values (516, 'acbd');
+insert into t1 values (517, 'abcd');
+insert into t1 values (518, 'abcd');
+insert into t1 values (519, 'abcbd');
+insert into t1 values (520, 'abcbcd');
+insert into t1 values (521, 'abcd');
+insert into t1 values (522, 'abcbd');
+insert into t1 values (523, 'abd');
+insert into t1 values (524, 'abcd');
+insert into t1 values (567, 'A1');
+insert into t1 values (571, 'CC11');
+insert into t1 values (573, 'ab');
+select * from t1 where name rlike '.*h.*';
+select * from t1 where name rlike '.*hel.*';
+select * from t1 where name rlike '.*hell.*';
+select * from t1 where name regexp '.*hello.*';
+select * from t1 where name regexp '^h.*';
+
+select * from t1 where name rlike null;
+
+select * from t1 where name regexp 'abc|de';
+select * from t1 where name regexp 'a|b|c';
+select * from t1 where name regexp 'a(b)c';
+select * from t1 where name regexp 'a\\(';
+select * from t1 where name regexp 'a()b';
+select * from t1 where name regexp 'a^b';
+select * from t1 where name regexp 'a$b';
+select * from t1 where name regexp '$^';
+select * from t1 where name regexp '^^';
+select * from t1 where name regexp '$$';
+select * from t1 where name regexp 'a*(^b$)c*';
+select * from t1 where name regexp '()';
+select * from t1 where name regexp 'ab+c';
+select * from t1 where name regexp 'ab?c';
+select * from t1 where name regexp 'a{1}b';
+select * from t1 where name regexp 'a{1,}b';
+select * from t1 where name regexp 'a{1,2}b';
+select * from t1 where name regexp 'a{,2}';
+select * from t1 where name regexp 'a{,}';
+select * from t1 where name regexp 'ab{0,0}c';
+select * from t1 where name regexp 'ab{0,1}c';
+select * from t1 where name regexp 'ab{0,3}c';
+select * from t1 where name regexp 'ab{1,1}c';
+select * from t1 where name regexp 'ab{1,3}c';
+select * from t1 where name regexp 'ab{2,2}c';
+select * from t1 where name regexp 'ab{2,4}c';
+select * from t1 where name regexp '((a{1,10}){1,10}){1,10}';
+select * from t1 where name regexp 'a*{b}';
+select * from t1 where name regexp '[[:alnum:]]+';
+select * from t1 where name regexp '[[:alpha:]]+';
+select * from t1 where name regexp '[[:blank:]]+';
+select * from t1 where name regexp '[[:cntrl:]]+';
+select * from t1 where name regexp '[[:digit:]]+';
+select * from t1 where name regexp '[[:graph:]]+';
+select * from t1 where name regexp '[[:lower:]]+';
+select * from t1 where name regexp '[[:print:]]+';
+select * from t1 where name regexp '[[:punct:]]+';
+select * from t1 where name regexp '[[:space:]]+';
+select * from t1 where name regexp '[[:upper:]]+';
+select * from t1 where name regexp '[[:xdigit:]]+';
+select * from t1 where name regexp 'a(((b)))c';
+select * from t1 where name regexp 'a(b|(c))d';
+select * from t1 where name regexp 'a(b*|c)d';
+select * from t1 where name regexp 'a[ab]{20}';
+select * from t1 where name regexp 'a[ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab]';
+select * from t1 where name regexp 'a[ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab][ab](wee|week)(knights|night)';
+select * from t1 where name regexp '12345678901234567890123456789';
+select * from t1 where name regexp '123456789012345678901234567890';
+select * from t1 where name regexp '1234567890123456789012345678901';
+select * from t1 where name regexp '12345678901234567890123456789012';
+select * from t1 where name regexp '123456789012345678901234567890123';
+select * from t1 where name regexp '1234567890123456789012345678901234567890123456789012345678901234567890';
+select * from t1 where name regexp '[ab][cd][ef][gh][ij][kl][mn]';
+select * from t1 where name regexp '[ab][cd][ef][gh][ij][kl][mn][op]';
+select * from t1 where name regexp '[ab][cd][ef][gh][ij][kl][mn][op][qr]';
+select * from t1 where name regexp '[ab][cd][ef][gh][ij][kl][mn][op][q]';
+select * from t1 where name regexp '[a]b[c]';
+select * from t1 where name regexp '[a]b[a]';
+select * from t1 where name regexp '[abc]b[abc]';
+select * from t1 where name regexp '[abc]b[abd]';
+select * from t1 where name regexp 'a(b?c)+d';
+select * from t1 where name regexp '(wee|week)(knights|night)';
+select * from t1 where name regexp '(we|wee|week|frob)(knights|night|day)';
+select * from t1 where name regexp 'a[bc]d';
+select * from t1 where name regexp 'a[ab]c';
+
+select * from t1 where name regexp null;
+
+select * from t1 where name regexp '/\\*.*\\*/';
+select * from t1 where name regexp '/\\*.*\\*/';
+select * from t1 where name regexp '/\\*([^*]|\\*[^/])*\\*/';
+select * from t1 where name regexp '/\\*([^*]|\\*[^/])*\\*/';
+select * from t1 where name regexp '/\\*([^*]|\\*[^/])*\\*/';
+select * from t1 where name regexp '/\\*([^*]|\\*+[^*/])*\\*+/';
+select * from t1 where name regexp '/\\*([^*]|\\*+[^*/])*\\*+/';
+select * from t1 where name regexp '/\\*([^*]|\\*+[^*/])*\\*+/';
+select * from t1 where name regexp '/\\*([^*]|\\*+[^*/])*\\*+/';
+select * from t1 where name regexp '/\\*([^*]|\\*+[^*/])*\\*+/';
+select * from t1 where name regexp '/\\*([^*]|\\*+[^*/])*\\*+/';
+select * from t1 where name regexp 'a(b)(c)d';
+select * from t1 where name regexp 'a(((b)))c';
+select * from t1 where name regexp 'a(b|(c))d';
+select * from t1 where name regexp 'a(b*|c|e)d';
+select * from t1 where name regexp 'a(b*|c|e)d';
+select * from t1 where name regexp 'a(b*|c|e)d';
+select * from t1 where name regexp 'a(b?)c';
+select * from t1 where name regexp 'a(b?)c';
+select * from t1 where name regexp 'a(b+)c';
+select * from t1 where name regexp 'a(b+)c';
+select * from t1 where name regexp 'a(b*)c';
+select * from t1 where name regexp '(a|ab)(bc([de]+)f|cde)';
+select * from t1 where name regexp 'a(b)(c)(d)(e)(f)(g)(h)(i)(j)k';
+select * from t1 where name regexp 'a(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)l';
+select * from t1 where name regexp 'a([bc]?)c';
+select * from t1 where name regexp 'a([bc]?)c';
+select * from t1 where name regexp 'a([bc]+)c';
+select * from t1 where name regexp 'a([bc]+)c';
+select * from t1 where name regexp 'a([bc]+)bc';
+select * from t1 where name regexp 'a(bb+|b)b';
+select * from t1 where name regexp 'a(bbb+|bb+|b)b';
+select * from t1 where name regexp 'a(bbb+|bb+|b)b';
+select * from t1 where name regexp 'a(bbb+|bb+|b)bb';
+select * from t1 where name regexp '(.*).*';
+select * from t1 where name regexp '(a*)*';
+select * from t1 where name regexp 'a(b|c)*d';
+select * from t1 where name regexp 'a(b|c)*d';
+select * from t1 where name regexp 'a(b|c)+d';
+select * from t1 where name regexp 'a(b|c)+d';
+select * from t1 where name regexp 'a(b|c?)+d';
+select * from t1 where name regexp 'a(b|c?)+d';
+select * from t1 where name regexp 'a(b|c){0,0}d';
+select * from t1 where name regexp 'a(b|c){0,1}d';
+select * from t1 where name regexp 'a(b|c){0,1}d';
+select * from t1 where name regexp 'a(b|c){0,2}d';
+select * from t1 where name regexp 'a(b|c){0,2}d';
+select * from t1 where name regexp 'a(b|c){0,}d';
+select * from t1 where name regexp 'a(b|c){0,}d';
+select * from t1 where name regexp 'a(b|c){1,1}d';
+select * from t1 where name regexp 'a(b|c){1,1}d';
+select * from t1 where name regexp 'a(b|c){1,2}d';
+select * from t1 where name regexp 'a(b|c){1,2}d';
+select * from t1 where name regexp 'a(b|c){1,}d';
+select * from t1 where name regexp 'a(b|c){1,}d';
+select * from t1 where name regexp 'a(b|c){2,2}d';
+select * from t1 where name regexp 'a(b|c){2,2}d';
+select * from t1 where name regexp 'a(b|c){2,4}d';
+select * from t1 where name regexp 'a(b|c){2,4}d';
+select * from t1 where name regexp 'a(b|c){2,4}d';
+select * from t1 where name regexp 'a(b|c){2,}d';
+select * from t1 where name regexp 'a(b|c){2,}d';
+select * from t1 where name regexp 'a(b+|((c)*))+d';
+select * from t1 where name regexp 'a(b+|((c)*))+d';
+select * from t1 where name regexp '(A[1])|(A[2])|(A[3])|(A[4])|(A[5])|(A[6])|(A[7])|(A[8])|(A[9])|(A[A])';
+select * from t1 where name regexp 'CC[13]1|a{21}[23][EO][123][Es][12]a{15}aa[34][EW]aaaaaaa[X]a';
+select * from t1 where name regexp 'a?b';
+
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (a varchar(50) primary key)  ;
+insert into t1 values('abcdef');
+insert into t1 values('_bcdef');
+insert into t1 values('a_cdef');
+insert into t1 values('ab_def');
+insert into t1 values('abc_ef');
+insert into t1 values('abcd_f');
+insert into t1 values('abcde_');
+# should return ab_def
+ select a as c1u from t1 where a rlike 'ab\_def';
+drop table t1;
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+
+create table t (c1 char(20));
+insert into t values ('');
+select c1 regexp 'ddd' from t;

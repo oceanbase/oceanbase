@@ -1,0 +1,35 @@
+drop database if exists aggr_db;
+create database aggr_db;
+use aggr_db;
+
+create table t1(a int, b int);
+create table t2(a int, b int);
+create table t3(a int, b int);
+
+select (select count(t2.a) from t2) from t1;
+select a, (select count(t2.a) from t2) from t1 group by b;
+select count((select count(t2.a) from t2)) from t1;
+--error 5176
+select count((select count(t1.a) from t2)) from t1;
+--error count(t1.a+(select count(t1.a) from t2)) from t1;
+select a as c, b from t1 having b>(select count(t2.a+c) from t2);
+select a as c, b from t1 having b>(select t1.a as d from t2 having count(d)>0);
+select a as c, b from t1 having b>(select t1.a as d from t2 having count(c)>0);
+select a from t1 having a=(select 1+t1.a as c from t2 order by(select count(t1.a) from t3));
+select a from t1 having a=(select 1+t1.a as c from t2 order by(select count(1+t1.a) from t3));
+select a from t1 having a=(select 1+t1.a as c from t2 order by(select count(t1.a+c) from t3));
+select a from t1 having a=(select 1+t1.a as c from t2 order by(select count(c) from t3));
+select a from t1 having a=(select 1+t1.a as c from t2 order by(select count(t1.a+c) from t3));
+select a from t1 having a=(select 1+t1.a as c from t2 order by(select count(t1.a+c) from t3));
+select a from t1 having a=(select 1+t1.a as c from t2 order by(select count(t1.a+t1.a) from t3));
+select a from t1 having a=(select 1+t2.a as c from t2 order by(select count(t1.a+c) from t3));
+--error 5176
+select a from t1 having a=(select 1+t1.a as c from t2 having count(t1.a+(select count(c) from t3))>0);
+select a from t1 having a=(select 1+t1.a as c from t2 having count(t1.a+(select 1+t1.a as cc from t3 having count(cc)>0))>0);
+select a from t1 where exists(select max(t1.a) from t2);
+SELECT t1.a FROM t1 GROUP BY t1.a HAVING t1.a < ALL(SELECT t2.a FROM t2 GROUP BY t2.a HAVING EXISTS(SELECT t3.a FROM t3 GROUP BY t3.a HAVING SUM(t1.a+t2.a) < t3.a/4));
+select (select count(t1.b) from t2 union select 1 from t2 where 12 < 3) from t1 group by t1.a;
+select a from t1 having count(*) > (select 1);
+select * from t1 join t2 on t1.a=(select count(t2.a));
+select * from t1 join (t2, t3) on t1.a=(select count(t2.a));
+select (select count((select t1.a from t2)) from t2) from t1;

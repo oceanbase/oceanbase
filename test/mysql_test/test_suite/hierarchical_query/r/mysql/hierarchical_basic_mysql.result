@@ -1,0 +1,2 @@
+select SYS_CONNECT_BY_PATH(2,1) from dual;
+ERROR 42000: FUNCTION SYS_CONNECT_BY_PATH does not exist

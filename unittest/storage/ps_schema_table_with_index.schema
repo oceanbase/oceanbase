@@ -1,0 +1,5 @@
+create table t1(pk1 bigint, pk2 bigint, c1 bigint, c2 varchar(512), c3 varchar(512), primary key(pk1, pk2)) DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci
+create index idx_pk2 on t1(pk2)
+create index idx_c1_c2 on t1(c1, c2)
+create index idx_c1_store_c3 on t1(c1) storing(c3)
+create unique index unique_c2 on t1(c2)

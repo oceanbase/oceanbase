@@ -1,0 +1,306 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# will consider join order t1,t3,t2,*,*,* only,  now leading hitn function is extended to support bushy tree with () , 
+# leading (t1, t2, (t3, t4)) will get plan like 
+# join __ join __ t1
+#     |       |__ t2
+#     |
+#     |__ join __ t3
+#             |__ t4
+
+--disable_warnings
+drop database if exists bushy_leading_hint_db;
+--enable_warnings
+create database bushy_leading_hint_db;
+use bushy_leading_hint_db;
+
+--disable_warnings
+drop table if exists nn1;
+drop table if exists nn2;
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+--enable_warnings
+
+create table nn1(c1 int, c2 int, c3 varchar(10));
+create table nn2(d1 int, d2 int, d3 varchar(10));
+create table t1(a int, b int, c int);
+create table t2(a int, b int, c int);
+create table t3(a int, b int, c int);
+
+## set @@session.ob_enable_transformation = 0;
+# trace result set and plan both
+
+
+
+--echo ### 1, 基本测试  ###
+#1.1
+select /*+ leading(c,  (b , a) ) */ count(*),sum(a.c1+b.d2*a.c2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5  ;
+
+#1.1.2
+select /*+ leading(c,  (b , a) ) */ count(a.c1), sum(a.c2+b.d2) from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on c.c1 = b.d2 + 1 where a.c2 < 15  ;
+
+#1.2 
+select /*+ leading((c, d), (a , b) ) */ count(*),sum(a.c1),sum(b.d2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
+
+#1.2.2
+select /*+ leading(c, d, (a , b)) */ count(*),sum(a.c1+b.d1+c.c1-d.c2) from 
+nn1 a, nn2 b , nn1 c, nn1 d 
+where a.c1 = b.d2 and b.d1 = c.c1 and d.c2 = c.c2;
+
+#1.3
+select /*+ leading(c,  (a ,d, b) ) use_hash(c,d) */ count(a.c1),sum(b.d1*b.d2-a.c2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
+and d.c2 = a.c1  ;
+
+# 1.3.2 简化 
+select /*+ leading(c,  (d, b) ) */ count(*) 
+from  nn2 b, nn1 c, nn1 d
+where b.d1 = c.c1 and d.c2 = c.c2 and d.c1 = b.d2;
+
+#1.4
+select /*+ leading(t2, (t1, t3), t7, (t8, t9), (t4, t5, t6)) */
+count(*) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1 
+and t1.c3 = 'hello11' and t2.c2 < 4 ;
+
+#1.4.2  构造出左边和右边生成joinorder后，需要对joininfo进行合并的例子
+select /*+ leading(t1,t2,t3,(t4,t5,t6),(t7,t8)) */ count(*),sum(t1.c1+t2.d1+t3.c1+t4.d2-t5.c1+t6.d2-t7.c1-t8.d2)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5 , nn2 t6, nn1 t7, nn2 t8
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and 
+t4.d1 = t1.c1 and t5.c1 = t2.d2 and t6.d2 = t3.c1 AND
+t7.c1 = t2.d1 and t7.c2 = t5.c1 and t8.d1 = t4.d2 and t8.d2 = t6.d2;
+
+#1.5 嵌套情况的基本测试  
+select /*+ leading(c, (d, (a,b))) */ count(a.c1+b.d2+a.c2) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
+
+#1.5.2 右深树测试
+select /*+ leading(t2,  (t1, (t3 , (t7,  (t8, (t9 ,  (t4, (t5, (t6))))))))) */
+count(*),sum(t1.c1+t2.c1+t3.c1+t4.c2-t5.c1+t6.c2-t7.c1-t8.c2)+count(t9.c1)
+from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+
+#1.5.3 join info涉及多个表,对merge join info的考验
+select /*+ leading(t1, ((t2, t3), t4), (t5, t6)) */ count(t1.c1), count(t2.d1 * t3.c1), sum(t4.d1 + t5.c1)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 + t2.d2 = t4.d1 + t1.c2 and 
+ t4.d1 = t5.c1 + t6.d2 and t2.d2 = t5.c1 and t2.d1 = t6.d2 and 
+  t1.c1 + t4.d2 = t5.c2 + t6.d2 - 1;
+
+#1.5.4 上述的简化
+select /*+ leading(t1, ((t2, t3), t4)) */ count(*), sum(t2.d1 * t3.c1 - t4.d2)
+from nn1 t1, nn2 t2, nn1 t3, nn2 t4
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 + t2.d2 = t4.d1 + t1.c2;
+
+#1.5.5 继续简化
+select /*+ leading(t1, (t2, t3)) */ count(*), sum(t2.d1+t3.c2)
+from nn1 t1, nn2 t2, nn1 t3
+where t1.c1 = t2.d1 and t1.c2 = t3.c1 and t1.c1 =t3.c1+t2.d2;
+
+--echo ### 3, 复杂测试(集合、子查询中等)  ###
+#Q3.2 semi jon内部的leading 指定,且是嵌套，和其他hint配合
+SELECT count(*), sum(b.d1) from
+  nn1 a,  nn2 b,  nn1 c
+WHERE
+  a.c1 = b.d1   and b.d2 = c.c1   and c.c2 in (
+    select
+      /*+ leading(x, ((y, z), x2, (y2,y3))) no_use_hash(y2, y3) */
+      x.c1
+    from nn1 x, nn2 y, nn1 z, nn1 x2, nn1 y2, nn1 y3
+    where x.c2 = y.d2 and y.d1 = z.c2 and y2.c1 = y3.c1
+  );
+
+#Q3.3 union每个分支有自己的hint指定 
+#扩展前就不支持，暂时搁置 2018年04月23日21:14:21
+#原始Q3.3的例子 
+select /*+ leading(t6, (t5, t4), (t3, t1), (t2)) */ count(*), sum(t2.c1) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
+where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 44
+union ALL
+select /* leading(t2, t1, (t4, t3, (t6, t5))) */ sum(t1.c1), max(t2.c2)+sum(t5.c1-t6.c2) from nn1 t1, nn1 t2 , nn1 t3, nn1 t4, nn1 t5,  nn1 t6
+where t1.c1 = t2.c1 and t2.c2 = t3.c1 and t3.c2 = t4.c1 and t4.c2 = t5.c1 and t5.c2 = t6.c1 and t5.c2 <> 55;
+
+#Q3.4 9个表，任意两张表间都存在连接条件，注意：如果没有leading hint，修改前explain会报错超时
+select /*+ leading(t9, (t8, t7, (t6, t5), t4), (t3, t1), t2)*/ count(*),sum(t9.c1-t5.c1+t4.d2-t1.c1) from 
+nn1 t1, nn2 t2, nn1 t3, nn2 t4, nn1 t5, nn2 t6, nn1 t7, nn2 t8, nn1 t9
+where mod(t1.c1, 3) = mod(t2.d2,2) and mod(t1.c1,5) = mod(t3.c1,4) and mod(t1.c2, 7) = mod(t4.d1, 3) AND 
+    mod(t1.c2, 5) = mod(t5.c1, 6) and mod(t1.c1, 3) = mod(t6.d2, 2) and mod(t1.c1, 4) = mod(t7.c1,3) AND
+    mod(t1.c1, 7) = mod(t8.d1, 3) and mod(t1.c2, 5) = mod(t9.c1, 4) AND
+      mod(t2.d1,5) = mod(t3.c1,4) and mod(t2.d2, 7) = mod(t4.d1, 3) AND 
+    mod(t2.d2, 5) = mod(t5.c1, 6) and mod(t2.d1, 3) = mod(t6.d2, 2) and mod(t2.d1, 4) = mod(t7.c1,3) AND
+    mod(t2.d1, 7) = mod(t8.d1, 3) and mod(t2.d2, 5) = mod(t9.c1, 4) AND
+     mod(t3.c2, 7) = mod(t4.d1, 3) AND 
+    mod(t3.c2, 5) = mod(t5.c1, 6) and mod(t3.c1, 3) = mod(t6.d2, 2) and mod(t3.c1, 4) = mod(t7.c1,3) AND
+    mod(t3.c1, 7) = mod(t8.d1, 3) and mod(t3.c2, 5) = mod(t9.c1, 4) AND
+mod(t4.d2, 5) = mod(t5.c1, 6) and mod(t4.d1, 3) = mod(t6.d2, 2) and mod(t4.d1, 4) = mod(t7.c1,3) AND
+    mod(t4.d1, 7) = mod(t8.d1, 3) and mod(t4.d2, 5) = mod(t9.c1, 4) and 
+     mod(t5.c1, 2) = mod(t6.d2, 5) and mod(t5.c1, 4) = mod(t7.c1,1) AND
+    mod(t5.c1, 7) = mod(t8.d1, 6) and mod(t5.c2, 5) = mod(t9.c1, 4) AND
+     mod(t6.d1, 4) = mod(t7.c1,3) AND
+    mod(t6.d1, 7) = mod(t8.d1, 3) and mod(t6.d2, 5) = mod(t9.c1, 4) AND
+    mod(t7.c1, 7) = mod(t8.d1, 3) and mod(t7.c2, 5) = mod(t9.c1, 4) AND
+    mod(t8.d2, 5) = mod(t9.c1, 14)    ;
+
+#3.5 对象是视图
+select /*+ leading(a (c ,(b, d))) */ count(*),sum(a.c1) from nn1 a, (select * from nn2) b, 
+(select * from nn1 cc group by c1,c2) c, nn2 d 
+where a.c1 = c.c1 and b.d2 = d.d1 and c.c2 = d.d2;
+
+#3.6 可以转为内连接的外连接查询
+select /*+ leading(a (c ,(b, d))) */count(*), sum(b.d2) from nn1 a left join nn2  b
+on a.c1 = b.d1 left join  nn1 c on b.d2 = c.c1 left join nn2 d on c.c2 = d.d2 
+where a.c1 = b.d1 and b.d2 = c.c1 and c.c2 = d.d2;
+
+#3.7 查询表达式中的leading hint
+select (select /*+ leading(a (c ,(b, d))) */ count(x.c2) from nn1 a left join nn2  b
+on a.c1 = b.d1 left join  nn1 c on b.d2 = c.c1 left join nn2 d on c.c2 = d.d2 
+where a.c1 = b.d1 and b.d2 = c.c1 and c.c2 = d.d2 and x.c1 = a.c1 + b.d1 + c.c2 - d.d2 * 5) as x
+from nn1 x;
+
+#3.8 多个查询表达式出现, 扩展前也仅支持一个leading hint
+select /* leading(t3 (t2 t1)) */ sum(t1.c1) from nn1 t1 , nn1 t2 , nn1 t3  where t2.c2=t1.c2 and t1.c1 = 
+ (select /*+ leading(x,(y z)) */ count(*) from nn1 x, nn2 y, nn1 z where x.c1 = y.d1 and y.d2 = z.c1)
+ and t3.c1 in (1,2);
+
+--echo ### 4, 错误、无效或冗余的指定测试  ###
+#4.1 首部多余的()
+select /*+ leading((d, c), b , a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
+
+#4.2 多余的()
+select /*+ leading((d, (c), (b)) , (a)) */  count(*),sum(a.c1+b.d2+c.c1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d2  and c.c2 = d.d2;
+
+#4.3 不符合规则的()对，会将前b, (c,d)认为是leading，后面a被忽略
+select /*+ leading(b, (c d)) a) */ count(*), sum(b.d1+d.d2) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
+
+#4.4 无效的对象名
+select /*+ leading(b1, (c1 d1 ) a1) */  count(*), sum(b.d2+d.d1*c.c1-a.c1) from nn1 a, nn2 b, nn1 c, nn2 d  
+where a.c1 = b.d1 and c.c2 = d.d1;
+
+#4.5 大量冗余的括号
+select /*+ leading((((t2,t1,t4),t3),t5), (t6),(t7))*/ count(*), sum(t6.c1+t7.c1+t4.c2) from 
+nn1 t1, nn1 t2, nn1 t3, nn1  t4, nn1 t5, nn1 t6, nn1 t7
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1;
+
+#4.6 外连接中的例子, 不支持
+select /*+ leading(t4,t6,t5) */ count(*), sum(t2.c2+t3.c1)
+from nn1 t1 left join nn1 t2 on t1.c1 = t2.c1 left JOIN
+nn1 t3 on t3.c2 IN(1,23,4,2,5,6) join nn1 t4 on t3.c1=t4.c1 join nn1 t5 on t4.c2=t5.c2 
+join nn1 t6 on t5.c1 = t6.c2 left join nn1 t7 on t1.c1=t7.c1;
+
+--echo ### 6, 嵌套hint和hint的print测试  ###
+#6 基本的嵌套hing
+select /*+ leading(c,  (a ,(d, b)) ) */ count(a.c1+b.d2) , sum(b.d2+b.d2*a.c1) from nn1 a  join nn2 b on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5 and d.c1 = b.d2 
+and d.c2 = a.c1  ;
+
+#6.1 修改前就支持的功能，不应该受到影响
+create view v1 as  select /*+ leading(c,  b , a ) use_hash(b a) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2, c.c3 as c_c3 from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view v1;
+
+#6.2 最简单的层次hint
+create view v2 as  select /*+ leading(c,  (b , a)) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2,     c.c3 as c_c3 from nn1 a  join nn2 b on a.c1 = b.d2 join nn1 c on b.d1 = c.c1 where a.c2 < 5  ;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view v2;
+
+#6.3 复杂一些的，后面会带有多个)结束符
+create view v3 as select /*+ leading(c, (d, (a,b))) */ a.c1 as a_c1, a.c2 as a_c2, a.c3 as a_c3, b.d1, b.d2, b.d3, c.c1 as c_c1, c.c2 as c_c2,     c.c3 as c_c3 from nn1 a  join nn2 b 
+on a.c1 = b.d2  
+join nn1 c on b.d1 = c.c1 join nn1 d on d.c2 = c.c2 where a.c2 < 5  ;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view v3;
+
+#6.4 更复杂的例子
+create view v4 as 
+select /*+ leading(t2, (t1, t3), (t7, (t8, t9)), (t4, t5, t6)) */
+t1.c1 as x, t3.c2 as y, t5.c2 as z from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view v4;
+select count(*), sum(x+y-z*4) from v4;
+
+#6.5 上面的简化
+select /*+ leading(t2, (t1, t3), (t7, (t8, t9))) */
+count(*)+sum(t1.c1+t4.c2+t5.c1+t5.c2-5*t9.c1) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+
+#6.6 一个更加复杂的例子
+select /*+ leading(t2, t1, t3, (t4, (t5, t6)), (t8, (t9, t7))) */
+count(*), sum(t1.c1+t5.c1+t6.c1-t7.c1-t8.c2*t9.c1) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 >= t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c2 and t8.c2 = t9.c1 and t8.c1 <= t2.c1 and t1.c1 = t9.c1;
+
+#6.7 非嵌套，一层的例子
+select /*+ leading(t2, (t1, t3), (t7, t8, t9), (t4, t5, t6)) */
+count(*), sum(t1.c1-t7.c2-t8.c1-t9.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+
+#6.8 配合use_hash join hint，分隔符,和空格都用上
+select /*+ leading(t1, (t2  t3), (t4, t5  (t6, t7))) use_hash(t4, t5) use_hash(t6,t7) */
+count(*), sum(t1.c1-t5.c2+t6.c1) - max(t2.c1*t8.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+ 
+#6.9 from项多余leading指定的对象数目
+select /*+ leading(t2  (t7, t1 (t8, t9))) */
+count(*) , sum(t1.c1+t5.c1+t8.c2*t9.c1-t3.c1*4) from nn1 t1, nn1 t2, nn1 t3, nn1 t4, nn1 t5, nn1 t6 , nn1 t7, nn1 t8, nn1 t9
+where t1.c1 = t2.c1 and t1.c1=t3.c2 and t2.c1 = t3.c1 and t3.c1 = t4.c1 and t4.c1 = t5.c1 and t5.c1 = t6.c1 AND 
+t6.c1 = t7.c1 and t7.c1 = t8.c1 and t8.c1 = t9.c1 and t8.c1 = t2.c1 and t1.c1 = t9.c1;
+
+#6.10 指定的leading hint会导致笛卡尔积
+select /*+ leading(t1,t4,(t2,t3)) */
+count(*), sum(t1.c1)-sum(t4.c2) from nn1 t1, nn1 t2, nn1 t3, nn1 t4
+where t1.c1 = t2.c1 and  t3.c1 = t4.c1 and t1.c2 = t3.c2;
+
+--echo ### 7, 带qb_name的测试  ###
+select /*+ LEADING(@x2x (c d), (a b)) */
+* from nn1 x
+where exists (select /*+ qb_name(x2x) */  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+ and c.c2 = d.d1) order by x.c1 asc, x.c2 asc, x.c3 desc;
+
+#7.2 原qb也有自己的，期望被外层覆盖
+select /*+ LEADING(@x2x (c d), (a b)) */
+* from nn1 x
+where exists (select /*+ qb_name(x2x)  LEADING(a c b d)*/  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+ and c.c2 = d.d1) order by x.c1 desc, x.c2 asc, x.c3 desc;
+
+#7.3 扩展前就支持的功能
+select /*+ LEADING(@x3x b d (a c)) */
+* from nn1 x
+where exists (select /*+ qb_name(x3x) */  1 
+from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
+ and c.c2 = d.d1) order by x.c1 desc, x.c3 desc, x.c2 asc ;
+
+--echo ### 8, 通过bushy 扩展能获取较好的计划  ###
+select /*+ leading(t1,t2,(t4,t5))*/ count(*),min(t2.c1)+max(t5.d2) from nn1 t1, nn1 t2,  nn2 t4, nn2 t5 
+where t1.c1 = t2.c1 and 
+      t4.d1 = t5.d1 AND
+      t1.c1 + t2.c1  = t4.d1 + t5.d2 ;
+
+explain select /*+leading(t1 (t2 t3))*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2); #失效
+explain select /*+leading(t2 t3 t1)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2); #失效
+explain select /*+leading(t3 t1 t2)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2); #生效
+explain select /*+leading(t1 t2 t3)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2); #生效
+
+drop table nn1;
+drop table nn2;
+
+drop table t1;
+drop table t2;
+drop table t3;
+
+drop database bushy_leading_hint_db;

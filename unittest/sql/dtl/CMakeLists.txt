@@ -1,0 +1,1 @@
+ob_unittest(test_dtl_rpc_channel)

@@ -1,0 +1,29 @@
+drop database if exists tcl_db;
+create database tcl_db;
+use tcl_db;
+
+create table t1(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int, c3 varchar(32));
+
+###
+start transaction
+start transaction with consistent snapshot
+
+###
+begin
+begin work
+
+###
+commit
+commit work
+
+###
+rollback
+rollback work
+
+###
+#set transaction read only
+#set session transaction read only
+#set global transaction read only
+
+drop database tcl_db;

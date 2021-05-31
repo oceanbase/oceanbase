@@ -1,0 +1,2209 @@
+***************   Case 1   ***************
+
+SQL: use opt; 
+***************   Case 2   ***************
+
+SQL: insert into t1 values(0, 2); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p0)
+  1 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 2(end)  ************** 
+
+***************   Case 3   ***************
+
+SQL: insert into t1 values(1, 2); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p1)
+  3 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 3(end)  ************** 
+
+***************   Case 4   ***************
+
+SQL: insert into t1 values(2, 2); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p2)
+  3 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 4(end)  ************** 
+
+***************   Case 5   ***************
+
+SQL: insert into t1 partition (p3, p0) values(3, 2); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p3)
+  3 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 5(end)  ************** 
+
+***************   Case 6   ***************
+
+SQL: insert into opt.t1 values(4, 2); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p4)
+  3 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 6(end)  ************** 
+
+***************   Case 7   ***************
+
+SQL: insert into t1 values (1,2) on duplicate key update c2 = c2+1; 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT_UP         |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,__values.c1)], [column_conv(INT,PS:(11,0),NULL,__values.c2)]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p1),
+      update([t1.c2=column_conv(INT,PS:(11,0),NULL,t1.c2 + ?)])
+  3 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 7(end)  ************** 
+
+***************   Case 8   ***************
+
+SQL: insert into t2 values (3,4,'test') on duplicate key update t2.c2 = t2.c2 + 1; 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT_UP  |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,__values.c1)], [column_conv(INT,PS:(11,0),NULL,__values.c2)], [column_conv(VARCHAR,utf8mb4_general_ci,length:32,NULL,__values.c3)]), filter(nil), 
+      columns([{t2: ({t2: (t2.c1, t2.c2, t2.c3)})}]), partitions(p0),
+      update([t2.c2=column_conv(INT,PS:(11,0),NULL,t2.c2 + ?)])
+  1 - output([__values.c1], [__values.c2], [__values.c3]), filter(nil)
+      values({?, ?, ?})
+
+*************** Case 8(end)  ************** 
+
+***************   Case 9   ***************
+
+SQL: insert into t1(c1, c2) values(1, 2); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p1)
+  3 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 9(end)  ************** 
+
+***************   Case 10   ***************
+
+SQL: insert into t1(c1) values(1); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [?]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p1)
+  3 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 10(end)  ************** 
+
+***************   Case 11   ***************
+
+SQL: update t1 set c2 = 3 where c1 = 0; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |UPDATE    |    |1        |53  |
+|1 | TABLE GET|t1  |1        |52  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c2=?])
+  1 - output([t1.c1], [t1.c2], [?]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[0 ; 0], 
+      range_cond([t1.c1 = ?])
+
+*************** Case 11(end)  ************** 
+
+***************   Case 12   ***************
+
+SQL: update t1 set c2 = 3 where c1 = 1; 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |53  |
+|1 | EXCHANGE OUT REMOTE|    |1        |53  |
+|2 |  UPDATE            |    |1        |53  |
+|3 |   TABLE GET        |t1  |1        |52  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c2=?])
+  3 - output([t1.c1], [t1.c2], [?]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p1), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[1 ; 1], 
+      range_cond([t1.c1 = ?])
+
+*************** Case 12(end)  ************** 
+
+***************   Case 13   ***************
+
+SQL: update t1 set c2 = 3 where c1 = 2; 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |53  |
+|1 | EXCHANGE OUT REMOTE|    |1        |53  |
+|2 |  UPDATE            |    |1        |53  |
+|3 |   TABLE GET        |t1  |1        |52  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c2=?])
+  3 - output([t1.c1], [t1.c2], [?]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p2), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[2 ; 2], 
+      range_cond([t1.c1 = ?])
+
+*************** Case 13(end)  ************** 
+
+***************   Case 14   ***************
+
+SQL: update t1 set c2 = 3 where c1 = 3; 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |53  |
+|1 | EXCHANGE OUT REMOTE|    |1        |53  |
+|2 |  UPDATE            |    |1        |53  |
+|3 |   TABLE GET        |t1  |1        |52  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c2=?])
+  3 - output([t1.c1], [t1.c2], [?]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p3), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[3 ; 3], 
+      range_cond([t1.c1 = ?])
+
+*************** Case 14(end)  ************** 
+
+***************   Case 15   ***************
+
+SQL: update t1 as t set c2 = 3 where c1 = 4; 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |53  |
+|1 | EXCHANGE OUT REMOTE|    |1        |53  |
+|2 |  UPDATE            |    |1        |53  |
+|3 |   TABLE GET        |t   |1        |52  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output(nil), filter(nil), table_columns([{t1: ({t1: (t.c1, t.c2)})}]),
+      update([t.c2=?])
+  3 - output([t.c1], [t.c2], [?]), filter(nil), 
+      access([t.c1], [t.c2]), partitions(p4), 
+      is_index_back=false, 
+      range_key([t.c1]), range[4 ; 4], 
+      range_cond([t.c1 = ?])
+
+*************** Case 15(end)  ************** 
+
+***************   Case 16   ***************
+
+SQL: update opt.t1 t set c2 = 3 where c1 = 5; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |UPDATE    |    |1        |53  |
+|1 | TABLE GET|t   |1        |52  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t.c1, t.c2)})}]),
+      update([t.c2=?])
+  1 - output([t.c1], [t.c2], [?]), filter(nil), 
+      access([t.c1], [t.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t.c1]), range[5 ; 5], 
+      range_cond([t.c1 = ?])
+
+*************** Case 16(end)  ************** 
+
+***************   Case 17   ***************
+
+SQL: update t10 set c3 = 5 where c2 = 3; 
+
+==============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST |
+----------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1000     |81811|
+|1 | EXCHANGE OUT REMOTE|    |1000     |81811|
+|2 |  UPDATE            |    |1000     |81811|
+|3 |   TABLE SCAN       |t10 |1000     |80811|
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output(nil), filter(nil), table_columns([{t10: ({t10: (t10.c1, t10.c2, t10.c3)})}]),
+      update([t10.c3=?])
+  3 - output([t10.c1], [t10.c2], [t10.c3], [?]), filter([t10.c2 = ?]), 
+      access([t10.c2], [t10.c3], [t10.c1]), partitions(p1), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t10.c1], [t10.c2]), range(MIN,MIN ; MAX,MAX)always true
+
+*************** Case 17(end)  ************** 
+
+***************   Case 18   ***************
+
+SQL: update t1 set c2 = 3 where c1 = 1 order by c1 limit 100; 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |53  |
+|1 | EXCHANGE OUT REMOTE|    |1        |53  |
+|2 |  UPDATE            |    |1        |53  |
+|3 |   TABLE GET        |t1  |1        |52  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c2=?])
+  3 - output([t1.c1], [t1.c2], [?]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p1), 
+      limit(100), offset(nil), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[1 ; 1], 
+      range_cond([t1.c1 = ?])
+
+*************** Case 18(end)  ************** 
+
+***************   Case 19   ***************
+
+SQL: delete from t2 where c1 = 5 order by c3 limit 1; 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |54  |
+|1 | EXCHANGE OUT REMOTE|    |1        |54  |
+|2 |  DELETE            |    |1        |54  |
+|3 |   TABLE GET        |t2  |1        |53  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output(nil), filter(nil), table_columns([{t2: ({t2: (t2.c1, t2.c2, t2.c3)})}])
+  3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p2), 
+      limit(1), offset(nil), 
+      is_index_back=false, 
+      range_key([t2.c1]), range[5 ; 5], 
+      range_cond([t2.c1 = ?])
+
+*************** Case 19(end)  ************** 
+
+***************   Case 20   ***************
+
+SQL: delete from t1 where c1 = 5; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |DELETE    |    |1        |53  |
+|1 | TABLE GET|t1  |1        |52  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[5 ; 5], 
+      range_cond([t1.c1 = ?])
+
+*************** Case 20(end)  ************** 
+
+***************   Case 21   ***************
+
+SQL: insert into t1 values(1,null); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p1)
+  3 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 21(end)  ************** 
+
+***************   Case 22   ***************
+
+SQL: insert into t3(c1) values(1); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [?], [?]), filter(nil), 
+      columns([{t3: ({t3: (t3.c1, t3.c2, t3.c3)})}]), partitions(p1)
+  3 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 22(end)  ************** 
+
+***************   Case 23   ***************
+
+SQL: update t1 set c1 = 1 where c1 = 1; 
+
+===================================================
+|ID|OPERATOR              |NAME    |EST. ROWS|COST|
+---------------------------------------------------
+|0 |MULTI PARTITION UPDATE|        |1        |54  |
+|1 | PX COORDINATOR       |        |1        |53  |
+|2 |  EXCHANGE OUT DISTR  |:EX10000|1        |52  |
+|3 |   TABLE GET          |t1      |1        |52  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c1=?])
+  1 - output([t1.c1], [t1.c2], [?]), filter(nil)
+  2 - output([t1.c1], [t1.c2], [?]), filter(nil), is_single, dop=1
+  3 - output([t1.c1], [t1.c2], [?]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p1), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[1 ; 1], 
+      range_cond([t1.c1 = ?])
+
+*************** Case 23(end)  ************** 
+
+***************   Case 24   ***************
+
+SQL: update t1 set c1 = 1 + 1 where c1 = 2; 
+
+===================================================
+|ID|OPERATOR              |NAME    |EST. ROWS|COST|
+---------------------------------------------------
+|0 |MULTI PARTITION UPDATE|        |1        |54  |
+|1 | PX COORDINATOR       |        |1        |53  |
+|2 |  EXCHANGE OUT DISTR  |:EX10000|1        |52  |
+|3 |   TABLE GET          |t1      |1        |52  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c1=?])
+  1 - output([t1.c1], [t1.c2], [?]), filter(nil)
+  2 - output([t1.c1], [t1.c2], [?]), filter(nil), is_single, dop=1
+  3 - output([t1.c1], [t1.c2], [?]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p2), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[2 ; 2], 
+      range_cond([t1.c1 = ?])
+
+*************** Case 24(end)  ************** 
+
+***************   Case 25   ***************
+
+SQL: insert into t1 partition (p3, p0) values(3, 2); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p3)
+  3 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 25(end)  ************** 
+
+***************   Case 26   ***************
+
+SQL: replace into t1 partition (p3, p0) values(0, 3); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |REPLACE    |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,__values.c1)], [column_conv(INT,PS:(11,0),NULL,__values.c2)]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p0)
+  1 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 26(end)  ************** 
+
+***************   Case 27   ***************
+
+SQL: delete from t1 partition (p0) where c1 = 5; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |DELETE    |    |1        |53  |
+|1 | TABLE GET|t1  |1        |52  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[5 ; 5], 
+      range_cond([t1.c1 = ?])
+
+*************** Case 27(end)  ************** 
+
+***************   Case 28   ***************
+
+SQL: update t1 partition(p3) set c2 = 2 where c1 = 3; 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |53  |
+|1 | EXCHANGE OUT REMOTE|    |1        |53  |
+|2 |  UPDATE            |    |1        |53  |
+|3 |   TABLE GET        |t1  |1        |52  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c2=?])
+  3 - output([t1.c1], [t1.c2], [?]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p3), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[3 ; 3], 
+      range_cond([t1.c1 = ?])
+
+*************** Case 28(end)  ************** 
+
+***************   Case 29   ***************
+
+SQL: insert into t9(c1, c2) values(0, 2); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c1], [__values.c2], [?]), filter(nil), 
+      columns([{t9: ({t9: (t9.c1, t9.c2, t9.c3)})}]), partitions(p0)
+  1 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 29(end)  ************** 
+
+***************   Case 30   ***************
+
+SQL: update t2_no_part set c2 = (c3 = 1 and 1 = 1) where c1 = 1; 
+
+=========================================
+|ID|OPERATOR  |NAME      |EST. ROWS|COST|
+-----------------------------------------
+|0 |UPDATE    |          |1        |54  |
+|1 | TABLE GET|t2_no_part|1        |53  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t2_no_part: ({t2_no_part: (t2_no_part.c1, t2_no_part.c2, t2_no_part.c3)})}]),
+      update([t2_no_part.c2=column_conv(INT,PS:(11,0),NULL,t2_no_part.c3 = ? AND ?)])
+  1 - output([t2_no_part.c1], [t2_no_part.c2], [t2_no_part.c3], [column_conv(INT,PS:(11,0),NULL,t2_no_part.c3 = ? AND ?)]), filter(nil), 
+      access([t2_no_part.c2], [t2_no_part.c3], [t2_no_part.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2_no_part.c1]), range[1 ; 1], 
+      range_cond([t2_no_part.c1 = ?])
+
+*************** Case 30(end)  ************** 
+
+***************   Case 31   ***************
+
+SQL: delete from t7 where c1 in (select c1 from t8 where t7.c2=c2); 
+
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |DELETE         |    |50       |9976|
+|1 | SUBPLAN FILTER|    |50       |9926|
+|2 |  TABLE SCAN   |t7  |100      |90  |
+|3 |  TABLE SCAN   |t8  |1        |99  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}])
+  1 - output([t7.c1], [t7.c2]), filter([t7.c1 = ANY(subquery(1))]), 
+      exec_params_([t7.c2]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c1]), filter([? = t8.c2]), 
+      access([t8.c2], [t8.c1]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 31(end)  ************** 
+
+***************   Case 32   ***************
+
+SQL: update t7 set c1=1 where c1 in (select c1 from t8 where t7.c2=c2); 
+
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |UPDATE         |    |50       |9976|
+|1 | SUBPLAN FILTER|    |50       |9926|
+|2 |  TABLE SCAN   |t7  |100      |90  |
+|3 |  TABLE SCAN   |t8  |1        |99  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c1=?])
+  1 - output([t7.c1], [t7.c2], [?]), filter([t7.c1 = ANY(subquery(1))]), 
+      exec_params_([t7.c2]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c1]), filter([? = t8.c2]), 
+      access([t8.c2], [t8.c1]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 32(end)  ************** 
+
+***************   Case 33   ***************
+
+SQL: update t7 set c1=(select c1 from t8); 
+
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |UPDATE         |    |100      |292 |
+|1 | SUBPLAN FILTER|    |100      |192 |
+|2 |  TABLE SCAN   |t7  |100      |90  |
+|3 |  TABLE SCAN   |t8  |100      |88  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c1=column_conv(INT,PS:(11,0),NOT NULL,?)])
+  1 - output([t7.c1], [t7.c2], [column_conv(INT,PS:(11,0),NOT NULL,?)]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c1]), filter(nil), 
+      access([t8.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 33(end)  ************** 
+
+***************   Case 34   ***************
+
+SQL: update t7 set c1=(select c1 from t8 where t7.c2=c2); 
+
+=========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST |
+-----------------------------------------
+|0 |UPDATE         |    |100      |10026|
+|1 | SUBPLAN FILTER|    |100      |9926 |
+|2 |  TABLE SCAN   |t7  |100      |90   |
+|3 |  TABLE SCAN   |t8  |1        |99   |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c1=column_conv(INT,PS:(11,0),NOT NULL,subquery(1))])
+  1 - output([t7.c1], [t7.c2], [column_conv(INT,PS:(11,0),NOT NULL,subquery(1))]), filter(nil), 
+      exec_params_([t7.c2]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c1]), filter([? = t8.c2]), 
+      access([t8.c2], [t8.c1]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 34(end)  ************** 
+
+***************   Case 35   ***************
+
+SQL: delete from t7 where abs(c1) > 0 order by c1 limit 1; 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |1        |38  |
+|1 | TABLE SCAN|t7  |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}])
+  1 - output([t7.c1], [t7.c2]), filter([abs(t7.c1) > ?]), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      limit(1), offset(nil), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+
+*************** Case 35(end)  ************** 
+
+***************   Case 36   ***************
+
+SQL: update t7 set c1 = 1 where abs(c2) > 0 order by c1 limit 1; 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |1        |38  |
+|1 | TABLE SCAN|t7  |1        |37  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c1=?])
+  1 - output([t7.c1], [t7.c2], [?]), filter([abs(t7.c2) > ?]), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      limit(1), offset(nil), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+
+*************** Case 36(end)  ************** 
+
+***************   Case 37   ***************
+
+SQL: use insert_db; 
+***************   Case 38   ***************
+
+SQL: insert into t1 select * from t2; 
+
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |100      |124 |
+|1 | SUBPLAN SCAN|VIEW1|100      |111 |
+|2 |  TABLE SCAN |t2   |100      |97  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([t2.c1], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.__pk_increment], [t2.__pk_cluster_id], [t2.__pk_partition_id]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+
+*************** Case 38(end)  ************** 
+
+***************   Case 39   ***************
+
+SQL: insert into t2 select * from t1; 
+
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |100      |118 |
+|1 | SUBPLAN SCAN|VIEW1|100      |104 |
+|2 |  TABLE SCAN |t1   |100      |90  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([nextval(1)], [?], [()], [VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      columns([{t2: ({t2: (t2.__pk_increment, t2.__pk_cluster_id, t2.__pk_partition_id, t2.c1, t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+
+*************** Case 39(end)  ************** 
+
+***************   Case 40   ***************
+
+SQL: insert into t1 select * from t1; 
+
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |100      |118 |
+|1 | SUBPLAN SCAN|VIEW1|100      |104 |
+|2 |  TABLE SCAN |t1   |100      |90  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      columns([{t1: ({t1: (t1.c1, t1.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+
+*************** Case 40(end)  ************** 
+
+***************   Case 41   ***************
+
+SQL: insert into t2 select * from t2; 
+
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |100      |124 |
+|1 | SUBPLAN SCAN|VIEW1|100      |111 |
+|2 |  TABLE SCAN |t2   |100      |97  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([nextval(1)], [?], [()], [VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      columns([{t2: ({t2: (t2.__pk_increment, t2.__pk_cluster_id, t2.__pk_partition_id, t2.c1, t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([t2.c1], [t2.c2]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.__pk_increment], [t2.__pk_cluster_id], [t2.__pk_partition_id]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+
+*************** Case 41(end)  ************** 
+
+***************   Case 42   ***************
+
+SQL: insert into t2 select c1, c2 from t3; 
+
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |100      |118 |
+|1 | SUBPLAN SCAN|VIEW1|100      |104 |
+|2 |  TABLE SCAN |t3   |100      |90  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([nextval(1)], [?], [()], [VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      columns([{t2: ({t2: (t2.__pk_increment, t2.__pk_cluster_id, t2.__pk_partition_id, t2.c1, t2.c2)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2])
+  2 - output([t3.c1], [t3.c2]), filter(nil), 
+      access([t3.c1], [t3.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t3.c1]), range(MIN ; MAX)always true
+
+*************** Case 42(end)  ************** 
+
+***************   Case 43   ***************
+
+SQL: insert into t3 select c1, c2, c1 from t2; 
+
+=======================================
+|ID|OPERATOR     |NAME |EST. ROWS|COST|
+---------------------------------------
+|0 |INSERT       |     |100      |124 |
+|1 | SUBPLAN SCAN|VIEW1|100      |111 |
+|2 |  TABLE SCAN |t2   |100      |97  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c1]), filter(nil), 
+      columns([{t3: ({t3: (t3.c1, t3.c2, t3.c3)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c1])
+  2 - output([t2.c1], [t2.c2], [t2.c1]), filter(nil), 
+      access([t2.c1], [t2.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.__pk_increment], [t2.__pk_cluster_id], [t2.__pk_partition_id]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+
+*************** Case 43(end)  ************** 
+
+***************   Case 44   ***************
+
+SQL: use opt; 
+***************   Case 45   ***************
+
+SQL: update t7 set c1 = 1 where exists(select c2+2 from t8); 
+
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |UPDATE         |    |100      |294 |
+|1 | SUBPLAN FILTER|    |100      |194 |
+|2 |  TABLE SCAN   |t7  |100      |90  |
+|3 |  TABLE SCAN   |t8  |100      |90  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c1=?])
+  1 - output([t7.c1], [t7.c2], [?]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c2 + ?]), filter(nil), 
+      access([t8.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 45(end)  ************** 
+
+***************   Case 46   ***************
+
+SQL: update t7 set c1 = 1 where not exists(select c2+2 from t8); 
+
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |UPDATE         |    |100      |294 |
+|1 | SUBPLAN FILTER|    |100      |194 |
+|2 |  TABLE SCAN   |t7  |100      |90  |
+|3 |  TABLE SCAN   |t8  |100      |90  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c1=?])
+  1 - output([t7.c1], [t7.c2], [?]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c2 + ?]), filter(nil), 
+      access([t8.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 46(end)  ************** 
+
+***************   Case 47   ***************
+
+SQL: update t7 set c1 = 1 where exists(select c2+2 from t8 group by c2 order by c2); 
+
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |UPDATE          |    |100      |424 |
+|1 | SUBPLAN FILTER |    |100      |324 |
+|2 |  TABLE SCAN    |t7  |100      |90  |
+|3 |  MERGE GROUP BY|    |100      |220 |
+|4 |   SORT         |    |100      |198 |
+|5 |    TABLE SCAN  |t8  |100      |90  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c1=?])
+  1 - output([t7.c1], [t7.c2], [?]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c2 + ?]), filter(nil), 
+      group([t8.c2]), agg_func(nil)
+  4 - output([t8.c2]), filter(nil), sort_keys([t8.c2, ASC])
+  5 - output([t8.c2]), filter(nil), 
+      access([t8.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 47(end)  ************** 
+
+***************   Case 48   ***************
+
+SQL: update t7 set c1 = 1 where exists(select c2+2 from t8 group by c2 order by c2 limit 2); 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |UPDATE           |    |100      |402 |
+|1 | SUBPLAN FILTER  |    |100      |302 |
+|2 |  TABLE SCAN     |t7  |100      |90  |
+|3 |  LIMIT          |    |2        |199 |
+|4 |   MERGE GROUP BY|    |2        |198 |
+|5 |    SORT         |    |2        |198 |
+|6 |     TABLE SCAN  |t8  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c1=?])
+  1 - output([t7.c1], [t7.c2], [?]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c2 + ?]), filter(nil), limit(2), offset(nil)
+  4 - output([t8.c2]), filter(nil), 
+      group([t8.c2]), agg_func(nil)
+  5 - output([t8.c2]), filter(nil), sort_keys([t8.c2, ASC])
+  6 - output([t8.c2]), filter(nil), 
+      access([t8.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 48(end)  ************** 
+
+***************   Case 49   ***************
+
+SQL: delete from t7 where exists(select c2+2 from t8); 
+
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |DELETE         |    |50       |244 |
+|1 | SUBPLAN FILTER|    |50       |194 |
+|2 |  TABLE SCAN   |t7  |100      |90  |
+|3 |  TABLE SCAN   |t8  |100      |90  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}])
+  1 - output([t7.c1], [t7.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c2 + ?]), filter(nil), 
+      access([t8.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 49(end)  ************** 
+
+***************   Case 50   ***************
+
+SQL: delete from t7 where not exists(select c2+2 from t8); 
+
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |DELETE         |    |50       |244 |
+|1 | SUBPLAN FILTER|    |50       |194 |
+|2 |  TABLE SCAN   |t7  |100      |90  |
+|3 |  TABLE SCAN   |t8  |100      |90  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}])
+  1 - output([t7.c1], [t7.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c2 + ?]), filter(nil), 
+      access([t8.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 50(end)  ************** 
+
+***************   Case 51   ***************
+
+SQL: delete from t7 where exists(select c2+2 from t8 group by c2 order by c2); 
+
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |DELETE          |    |50       |374 |
+|1 | SUBPLAN FILTER |    |50       |324 |
+|2 |  TABLE SCAN    |t7  |100      |90  |
+|3 |  MERGE GROUP BY|    |100      |220 |
+|4 |   SORT         |    |100      |198 |
+|5 |    TABLE SCAN  |t8  |100      |90  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}])
+  1 - output([t7.c1], [t7.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c2 + ?]), filter(nil), 
+      group([t8.c2]), agg_func(nil)
+  4 - output([t8.c2]), filter(nil), sort_keys([t8.c2, ASC])
+  5 - output([t8.c2]), filter(nil), 
+      access([t8.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 51(end)  ************** 
+
+***************   Case 52   ***************
+
+SQL: delete from t7 where exists(select c2+2 from t8 group by c2 order by c2 limit 2); 
+
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |DELETE           |    |50       |352 |
+|1 | SUBPLAN FILTER  |    |50       |302 |
+|2 |  TABLE SCAN     |t7  |100      |90  |
+|3 |  LIMIT          |    |2        |199 |
+|4 |   MERGE GROUP BY|    |2        |198 |
+|5 |    SORT         |    |2        |198 |
+|6 |     TABLE SCAN  |t8  |100      |90  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}])
+  1 - output([t7.c1], [t7.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c2 + ?]), filter(nil), limit(2), offset(nil)
+  4 - output([t8.c2]), filter(nil), 
+      group([t8.c2]), agg_func(nil)
+  5 - output([t8.c2]), filter(nil), sort_keys([t8.c2, ASC])
+  6 - output([t8.c2]), filter(nil), 
+      access([t8.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 52(end)  ************** 
+
+***************   Case 53   ***************
+
+SQL: UPDATE t1 SET c2 = CONCAT(c2, (SELECT c2 FROM t2 where t2.c1=1)) WHERE c1 = 1; 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |106 |
+|1 | EXCHANGE OUT REMOTE|    |1        |106 |
+|2 |  UPDATE            |    |1        |106 |
+|3 |   SUBPLAN FILTER   |    |1        |105 |
+|4 |    TABLE GET       |t1  |1        |52  |
+|5 |    TABLE GET       |t2  |1        |52  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c2=column_conv(INT,PS:(11,0),NULL,CONCAT(t1.c2, ?))])
+  3 - output([t1.c1], [t1.c2], [column_conv(INT,PS:(11,0),NULL,CONCAT(t1.c2, ?))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  4 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p1), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[1 ; 1], 
+      range_cond([t1.c1 = ?])
+  5 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p1), 
+      is_index_back=false, 
+      range_key([t2.c1]), range[1 ; 1], 
+      range_cond([t2.c1 = ?])
+
+*************** Case 53(end)  ************** 
+
+***************   Case 54   ***************
+
+SQL: UPDATE t7 SET c2 = CONCAT(c2, (SELECT c2 FROM t2 where t2.c1=1)); 
+
+==================================================
+|ID|OPERATOR             |NAME    |EST. ROWS|COST|
+--------------------------------------------------
+|0 |UPDATE               |        |100      |256 |
+|1 | SUBPLAN FILTER      |        |100      |156 |
+|2 |  TABLE SCAN         |t7      |100      |90  |
+|3 |  PX COORDINATOR     |        |1        |53  |
+|4 |   EXCHANGE OUT DISTR|:EX10000|1        |52  |
+|5 |    TABLE GET        |t2      |1        |52  |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c2=column_conv(INT,PS:(11,0),NULL,CONCAT(t7.c2, ?))])
+  1 - output([t7.c1], [t7.c2], [column_conv(INT,PS:(11,0),NULL,CONCAT(t7.c2, ?))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  2 - output([t7.c2], [t7.c1]), filter(nil), 
+      access([t7.c2], [t7.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t2.c2]), filter(nil)
+  4 - output([t2.c2]), filter(nil), is_single, dop=1
+  5 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p1), 
+      is_index_back=false, 
+      range_key([t2.c1]), range[1 ; 1], 
+      range_cond([t2.c1 = ?])
+
+*************** Case 54(end)  ************** 
+
+***************   Case 55   ***************
+
+SQL: UPDATE t1 SET c2 = CONCAT(c2, (SELECT c2 FROM t7 limit 1)) WHERE c1 = 0; 
+
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |UPDATE         |    |1        |90  |
+|1 | SUBPLAN FILTER|    |1        |89  |
+|2 |  TABLE GET    |t1  |1        |52  |
+|3 |  TABLE SCAN   |t7  |1        |36  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c2=column_conv(INT,PS:(11,0),NULL,CONCAT(t1.c2, ?))])
+  1 - output([t1.c1], [t1.c2], [column_conv(INT,PS:(11,0),NULL,CONCAT(t1.c2, ?))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[0 ; 0], 
+      range_cond([t1.c1 = ?])
+  3 - output([t7.c2]), filter(nil), 
+      access([t7.c2]), partitions(p0), 
+      limit(1), offset(nil), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+
+*************** Case 55(end)  ************** 
+
+***************   Case 56   ***************
+
+SQL: UPDATE t7 SET c2 = CONCAT(c2, (SELECT c2 FROM t8 limit 1)); 
+
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |UPDATE         |    |100      |240 |
+|1 | SUBPLAN FILTER|    |100      |140 |
+|2 |  TABLE SCAN   |t7  |100      |90  |
+|3 |  TABLE SCAN   |t8  |1        |36  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c2=column_conv(INT,PS:(11,0),NULL,CONCAT(t7.c2, ?))])
+  1 - output([t7.c1], [t7.c2], [column_conv(INT,PS:(11,0),NULL,CONCAT(t7.c2, ?))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  2 - output([t7.c2], [t7.c1]), filter(nil), 
+      access([t7.c2], [t7.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c2]), filter(nil), 
+      access([t8.c2]), partitions(p0), 
+      limit(1), offset(nil), 
+      is_index_back=false, 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 56(end)  ************** 
+
+***************   Case 57   ***************
+
+SQL: UPDATE t1 SET c2 = CONCAT(c2, (SELECT c2 FROM t2 where t2.c1=1)) WHERE c1 = 0; 
+
+==================================================
+|ID|OPERATOR             |NAME    |EST. ROWS|COST|
+--------------------------------------------------
+|0 |UPDATE               |        |1        |106 |
+|1 | SUBPLAN FILTER      |        |1        |105 |
+|2 |  TABLE GET          |t1      |1        |52  |
+|3 |  PX COORDINATOR     |        |1        |53  |
+|4 |   EXCHANGE OUT DISTR|:EX10000|1        |52  |
+|5 |    TABLE GET        |t2      |1        |52  |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t1: ({t1: (t1.c1, t1.c2)})}]),
+      update([t1.c2=column_conv(INT,PS:(11,0),NULL,CONCAT(t1.c2, ?))])
+  1 - output([t1.c1], [t1.c2], [column_conv(INT,PS:(11,0),NULL,CONCAT(t1.c2, ?))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1)]), init_plan_idxs_(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[0 ; 0], 
+      range_cond([t1.c1 = ?])
+  3 - output([t2.c2]), filter(nil)
+  4 - output([t2.c2]), filter(nil), is_single, dop=1
+  5 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p1), 
+      is_index_back=false, 
+      range_key([t2.c1]), range[1 ; 1], 
+      range_cond([t2.c1 = ?])
+
+*************** Case 57(end)  ************** 
+
+***************   Case 58   ***************
+
+SQL: delete from t7 where c1 in (select c1 from t1); 
+
+=======================================================
+|ID|OPERATOR                 |NAME    |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |DELETE                   |        |50       |10583|
+|1 | SUBPLAN FILTER          |        |50       |10533|
+|2 |  TABLE SCAN             |t7      |100      |90   |
+|3 |  PX COORDINATOR         |        |500      |354  |
+|4 |   EXCHANGE OUT DISTR    |:EX10000|500      |331  |
+|5 |    PX PARTITION ITERATOR|        |500      |331  |
+|6 |     TABLE SCAN          |t1      |500      |331  |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}])
+  1 - output([t7.c1], [t7.c2]), filter([t7.c1 = ANY(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  2 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t1.c1]), filter(nil)
+  4 - output([t1.c1]), filter(nil), dop=1
+  5 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p[0-4]), 
+      is_index_back=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+
+*************** Case 58(end)  ************** 
+
+***************   Case 59   ***************
+
+SQL: insert into t_u values(18446744073709551612); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([nextval(1)], [?], [()], [__values.c1]), filter(nil), 
+      columns([{t_u: ({t_u: (t_u.__pk_increment, t_u.__pk_cluster_id, t_u.__pk_partition_id, t_u.c1)})}]), partitions(p1)
+  3 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 59(end)  ************** 
+
+***************   Case 60   ***************
+
+SQL: insert into t_u values(18446744073709551613); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([nextval(1)], [?], [()], [__values.c1]), filter(nil), 
+      columns([{t_u: ({t_u: (t_u.__pk_increment, t_u.__pk_cluster_id, t_u.__pk_partition_id, t_u.c1)})}]), partitions(p0)
+  1 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 60(end)  ************** 
+
+***************   Case 61   ***************
+
+SQL: insert into t_u values(0); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([nextval(1)], [?], [()], [__values.c1]), filter(nil), 
+      columns([{t_u: ({t_u: (t_u.__pk_increment, t_u.__pk_cluster_id, t_u.__pk_partition_id, t_u.c1)})}]), partitions(p0)
+  1 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 61(end)  ************** 
+
+***************   Case 62   ***************
+
+SQL: insert into t_u values(1); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([nextval(1)], [?], [()], [__values.c1]), filter(nil), 
+      columns([{t_u: ({t_u: (t_u.__pk_increment, t_u.__pk_cluster_id, t_u.__pk_partition_id, t_u.c1)})}]), partitions(p1)
+  3 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 62(end)  ************** 
+
+***************   Case 63   ***************
+
+SQL: insert into t_u values(2); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([nextval(1)], [?], [()], [__values.c1]), filter(nil), 
+      columns([{t_u: ({t_u: (t_u.__pk_increment, t_u.__pk_cluster_id, t_u.__pk_partition_id, t_u.c1)})}]), partitions(p2)
+  3 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 63(end)  ************** 
+
+***************   Case 64   ***************
+
+SQL: insert into t_u values(9223372036854775807); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([nextval(1)], [?], [()], [__values.c1]), filter(nil), 
+      columns([{t_u: ({t_u: (t_u.__pk_increment, t_u.__pk_cluster_id, t_u.__pk_partition_id, t_u.c1)})}]), partitions(p1)
+  3 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 64(end)  ************** 
+
+***************   Case 65   ***************
+
+SQL: insert into t_u values(9223372036854775808); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([nextval(1)], [?], [()], [__values.c1]), filter(nil), 
+      columns([{t_u: ({t_u: (t_u.__pk_increment, t_u.__pk_cluster_id, t_u.__pk_partition_id, t_u.c1)})}]), partitions(p1)
+  3 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 65(end)  ************** 
+
+***************   Case 66   ***************
+
+SQL: insert into t_u values(9223372036854775809); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([nextval(1)], [?], [()], [__values.c1]), filter(nil), 
+      columns([{t_u: ({t_u: (t_u.__pk_increment, t_u.__pk_cluster_id, t_u.__pk_partition_id, t_u.c1)})}]), partitions(p1)
+  3 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 66(end)  ************** 
+
+***************   Case 67   ***************
+
+SQL: insert into t_u values(9223372036854775810); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([nextval(1)], [?], [()], [__values.c1]), filter(nil), 
+      columns([{t_u: ({t_u: (t_u.__pk_increment, t_u.__pk_cluster_id, t_u.__pk_partition_id, t_u.c1)})}]), partitions(p0)
+  1 - output([__values.c1]), filter(nil)
+      values({?})
+
+*************** Case 67(end)  ************** 
+
+***************   Case 68   ***************
+
+SQL: select c2 from t7 where c2 >=1 and c2 <= 10 limit 3,4; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t7  |4        |44  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t7.c2]), filter([t7.c2 <= ?], [t7.c2 >= ?]), 
+      access([t7.c2]), partitions(p0), 
+      limit(4), offset(?), 
+      is_index_back=false, filter_before_indexback[false,false], 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+
+*************** Case 68(end)  ************** 
+
+***************   Case 69   ***************
+
+SQL: select c2 from t7 where c2 = 2 limit 2,4; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t7  |0        |107 |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t7.c2]), filter([t7.c2 = ?]), 
+      access([t7.c2]), partitions(p0), 
+      limit(4), offset(?), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+
+*************** Case 69(end)  ************** 
+
+***************   Case 70   ***************
+
+SQL: select * from t8 where c2 in (select c2 from t7 where c2 >=1 and c2 <= 10 limit 3,4); 
+
+==============================================
+|ID|OPERATOR            |NAME |EST. ROWS|COST|
+----------------------------------------------
+|0 |HASH RIGHT SEMI JOIN|     |4        |190 |
+|1 | SUBPLAN SCAN       |VIEW1|4        |45  |
+|2 |  TABLE SCAN        |t7   |4        |44  |
+|3 | TABLE SCAN         |t8   |46       |124 |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.c1], [t8.c2]), filter(nil), 
+      equal_conds([t8.c2 = VIEW1.c2]), other_conds(nil)
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([t7.c2]), filter([t7.c2 <= ?], [t7.c2 >= ?]), 
+      access([t7.c2]), partitions(p0), 
+      limit(4), offset(?), 
+      is_index_back=false, filter_before_indexback[false,false], 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  3 - output([t8.c2], [t8.c1]), filter([t8.c2 <= ?], [t8.c2 >= ?]), 
+      access([t8.c2], [t8.c1]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false,false], 
+      range_key([t8.c1]), range(MIN ; MAX)always true
+
+*************** Case 70(end)  ************** 
+
+***************   Case 71   ***************
+
+SQL: select * from t7 as t limit 789,456; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |0        |90  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t.c1], [t.c2]), filter(nil), 
+      access([t.c1], [t.c2]), partitions(p0), 
+      limit(456), offset(?), 
+      is_index_back=false, 
+      range_key([t.c1]), range(MIN ; MAX)always true
+
+*************** Case 71(end)  ************** 
+
+***************   Case 72   ***************
+
+SQL: select * from t7 as t limit 789,345; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |0        |90  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t.c1], [t.c2]), filter(nil), 
+      access([t.c1], [t.c2]), partitions(p0), 
+      limit(345), offset(?), 
+      is_index_back=false, 
+      range_key([t.c1]), range(MIN ; MAX)always true
+
+*************** Case 72(end)  ************** 
+
+***************   Case 73   ***************
+
+SQL: update t7 set c1 = 2 limit 3,4; 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UPDATE     |    |4        |42  |
+|1 | TABLE SCAN|t7  |4        |38  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}]),
+      update([t7.c1=?])
+  1 - output([t7.c1], [t7.c2], [?]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      limit(4), offset(?), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+
+*************** Case 73(end)  ************** 
+
+***************   Case 74   ***************
+
+SQL: delete from t7 limit 5,6; 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |DELETE     |    |6        |44  |
+|1 | TABLE SCAN|t7  |6        |38  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{t7: ({t7: (t7.c1, t7.c2)})}])
+  1 - output([t7.c1], [t7.c2]), filter(nil), 
+      access([t7.c1], [t7.c2]), partitions(p0), 
+      limit(6), offset(?), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+
+*************** Case 74(end)  ************** 
+
+***************   Case 75   ***************
+
+SQL: insert into t7 select (select c1 from t7)+1, c2 from t7; 
+
+==========================================
+|ID|OPERATOR        |NAME |EST. ROWS|COST|
+------------------------------------------
+|0 |INSERT          |     |100      |219 |
+|1 | SUBPLAN SCAN   |VIEW1|100      |205 |
+|2 |  SUBPLAN FILTER|     |100      |192 |
+|3 |   TABLE SCAN   |t7   |100      |90  |
+|4 |   TABLE SCAN   |t7   |100      |88  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([VIEW1.(select c1 from t7)+1], [VIEW1.c2]), filter(nil), 
+      columns([{t7: ({t7: (t7.c1, t7.c2)})}]), partitions(p0)
+  1 - output([VIEW1.(select c1 from t7)+1], [VIEW1.c2]), filter(nil), 
+      access([VIEW1.(select c1 from t7)+1], [VIEW1.c2])
+  2 - output([?], [t7.c2]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([subquery(1) + ?]), init_plan_idxs_(nil)
+  3 - output([t7.c2]), filter(nil), 
+      access([t7.c2]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+  4 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t7.c1]), range(MIN ; MAX)always true
+
+*************** Case 75(end)  ************** 
+
+***************   Case 76   ***************
+
+SQL: insert into t_s values(1, '2013-10-10'); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t_s: ({t_s: (t_s.c1, t_s.c2)})}]), partitions(p1sp1)
+  1 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 76(end)  ************** 
+
+***************   Case 77   ***************
+
+SQL: insert into t_s values(1, '2013-10-9'), (3, '2013-2-1'); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |2        |1   |
+|1 | EXPRESSION|    |2        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t_s: ({t_s: (t_s.c1, t_s.c2)})}]), partitions(p1sp0)
+  1 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?}, {?, ?})
+
+*************** Case 77(end)  ************** 
+
+***************   Case 78   ***************
+
+SQL: insert into t_s1 values(1, '2016-1-2'); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{t_s1: ({t_s1: (t_s1.c1, t_s1.c2)})}]), partitions(p1sp1)
+  1 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 78(end)  ************** 
+
+***************   Case 79   ***************
+
+SQL: insert into tp values(2, 1); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [__values.c2]), filter(nil), 
+      columns([{tp: ({tp: (tp.c1, tp.c2)})}]), partitions(p2)
+  3 - output([__values.c1], [__values.c2]), filter(nil)
+      values({?, ?})
+
+*************** Case 79(end)  ************** 
+
+***************   Case 80   ***************
+
+SQL: insert into ts2 values(1, '2013-10-13', c1+1, c2); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c3], [__values.c4], [__values.c1], [__values.c2]), filter(nil), 
+      columns([{ts2: ({ts2: (ts2.c3, ts2.c4, ts2.c1, ts2.c2)})}]), partitions(p0sp1)
+  1 - output([__values.c1], [__values.c2], [__values.c3], [__values.c4]), filter(nil)
+      values({column_conv(INT,PS:(11,0),NULL,?), column_conv(DATETIME,PS:(19,0),NULL,?), __values.c1 + ?, __values.c2})
+
+*************** Case 80(end)  ************** 
+
+***************   Case 81   ***************
+
+SQL: insert into ts2 values(1, '2013-10-13', 1, c2); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c3], [__values.c4], [__values.c1], [__values.c2]), filter(nil), 
+      columns([{ts2: ({ts2: (ts2.c3, ts2.c4, ts2.c1, ts2.c2)})}]), partitions(p1sp0)
+  1 - output([__values.c1], [__values.c2], [__values.c3], [__values.c4]), filter(nil)
+      values({?, column_conv(DATETIME,PS:(19,0),NULL,?), ?, __values.c2})
+
+*************** Case 81(end)  ************** 
+
+***************   Case 82   ***************
+
+SQL: insert into ts2 values(1, '2013-10-9', 2, c2); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c3], [__values.c4], [__values.c1], [__values.c2]), filter(nil), 
+      columns([{ts2: ({ts2: (ts2.c3, ts2.c4, ts2.c1, ts2.c2)})}]), partitions(p0sp0)
+  1 - output([__values.c1], [__values.c2], [__values.c3], [__values.c4]), filter(nil)
+      values({?, column_conv(DATETIME,PS:(19,0),NULL,?), ?, __values.c2})
+
+*************** Case 82(end)  ************** 
+
+***************   Case 83   ***************
+
+SQL: insert into ts2 values(1, '2013-10-10', 2, c2); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c3], [__values.c4], [__values.c1], [__values.c2]), filter(nil), 
+      columns([{ts2: ({ts2: (ts2.c3, ts2.c4, ts2.c1, ts2.c2)})}]), partitions(p0sp1)
+  1 - output([__values.c1], [__values.c2], [__values.c3], [__values.c4]), filter(nil)
+      values({?, column_conv(DATETIME,PS:(19,0),NULL,?), ?, __values.c2})
+
+*************** Case 83(end)  ************** 
+
+***************   Case 84   ***************
+
+SQL: insert into ts2 values(1, '2013-10-9', 2, c2), (3, '2013-2-1', 2, c2); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |2        |1   |
+|1 | EXPRESSION|    |2        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c3], [__values.c4], [__values.c1], [__values.c2]), filter(nil), 
+      columns([{ts2: ({ts2: (ts2.c3, ts2.c4, ts2.c1, ts2.c2)})}]), partitions(p0sp0)
+  1 - output([__values.c1], [__values.c2], [__values.c3], [__values.c4]), filter(nil)
+      values({?, column_conv(DATETIME,PS:(19,0),NULL,?), ?, __values.c2}, {?, column_conv(DATETIME,PS:(19,0),NULL,?), ?, __values.c2})
+
+*************** Case 84(end)  ************** 
+
+***************   Case 85   ***************
+
+SQL: update ts set c1 = 1 where c1 = 3 and c2 = '2013-10-10'; 
+
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |MULTI PARTITION UPDATE|    |1        |53  |
+|1 | TABLE GET            |ts  |1        |52  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{ts: ({ts: (ts.c1, ts.c2)})}]),
+      update([ts.c1=?])
+  1 - output([ts.c1], [ts.c2], [?]), filter(nil), 
+      access([ts.c1], [ts.c2]), partitions(p1sp1), 
+      is_index_back=false, 
+      range_key([ts.c1], [ts.c2]), range[3,2013-10-10 00:00:00.000000 ; 3,2013-10-10 00:00:00.000000], 
+      range_cond([ts.c1 = ?], [ts.c2 = ?])
+
+*************** Case 85(end)  ************** 
+
+***************   Case 86   ***************
+
+SQL: update ts set c2 = '2016-3-29' where c1 = 3 and c2 = '2013-10-10'; 
+
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |MULTI PARTITION UPDATE|    |1        |53  |
+|1 | TABLE GET            |ts  |1        |52  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{ts: ({ts: (ts.c1, ts.c2)})}]),
+      update([ts.c2=?])
+  1 - output([ts.c1], [ts.c2], [?]), filter(nil), 
+      access([ts.c1], [ts.c2]), partitions(p1sp1), 
+      is_index_back=false, 
+      range_key([ts.c1], [ts.c2]), range[3,2013-10-10 00:00:00.000000 ; 3,2013-10-10 00:00:00.000000], 
+      range_cond([ts.c1 = ?], [ts.c2 = ?])
+
+*************** Case 86(end)  ************** 
+
+***************   Case 87   ***************
+
+SQL: insert into t15 (c2, c3) values(2,'a'); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([nextval(1)], [?], [()], [?], [__values.c2], [__values.c3]), filter(nil), 
+      columns([{t15: ({t15: (t15.__pk_increment, t15.__pk_cluster_id, t15.__pk_partition_id, t15.c1, t15.c2, t15.c3)})}]), partitions(p3)
+  3 - output([__values.c2], [__values.c3]), filter(nil)
+      values({?, ?})
+
+*************** Case 87(end)  ************** 
+
+***************   Case 88   ***************
+
+SQL: insert into test_insert set c1 = 4, c4 = c1 + 3; 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c4], [__values.c1], [?], [?]), filter(nil), 
+      columns([{test_insert: ({test_insert: (test_insert.c4, test_insert.c1, test_insert.c2, test_insert.c3)})}]), partitions(p1)
+  3 - output([__values.c1], [__values.c4]), filter(nil)
+      values({column_conv(INT,PS:(11,0),NULL,?), ?})
+
+*************** Case 88(end)  ************** 
+
+***************   Case 89   ***************
+
+SQL: insert into tg(c1, c3) values ('bcde', 10); 
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |INSERT     |    |1        |1   |
+|1 | EXPRESSION|    |1        |1   |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([__values.c1], [column_conv(VARCHAR,utf8mb4_general_ci,length:8,NULL,substr(tg.c1, 2))], [__values.c3]), filter(nil), 
+      columns([{tg: ({tg: (tg.c1, tg.c2, tg.c3)})}]), partitions(p0)
+  1 - output([__values.c1], [__values.c3]), filter(nil)
+      values({?, ?})
+
+*************** Case 89(end)  ************** 
+
+***************   Case 90   ***************
+
+SQL: insert into tg(c1, c3) values ('caaaa', 10); 
+
+=============================================
+|ID|OPERATOR            |NAME|EST. ROWS|COST|
+---------------------------------------------
+|0 |EXCHANGE IN REMOTE  |    |1        |1   |
+|1 | EXCHANGE OUT REMOTE|    |1        |1   |
+|2 |  INSERT            |    |1        |1   |
+|3 |   EXPRESSION       |    |1        |1   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil)
+  2 - output([__values.c1], [column_conv(VARCHAR,utf8mb4_general_ci,length:8,NULL,substr(tg.c1, 2))], [__values.c3]), filter(nil), 
+      columns([{tg: ({tg: (tg.c1, tg.c2, tg.c3)})}]), partitions(p1)
+  3 - output([__values.c1], [__values.c3]), filter(nil)
+      values({?, ?})
+
+*************** Case 90(end)  ************** 
+

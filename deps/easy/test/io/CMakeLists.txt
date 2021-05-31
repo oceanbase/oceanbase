@@ -1,0 +1,9 @@
+easy_test(io_test
+easy_baseth_pool_test.c
+easy_client_test.c
+easy_connection_test.c
+easy_file_test.c
+easy_io_test.c
+easy_log_test.c
+easy_request_test.c
+)

@@ -1,0 +1,1797 @@
+***************   Case 0   ***************
+SQL: select * from t1, t2 where t1.c1 > 10 and t1.c1 in (select c2 from t2); 
+===================================================
+|ID|OPERATOR                  |NAME|EST. ROWS|COST|
+---------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN|    |9000     |7858|
+|1 | MERGE SEMI JOIN          |    |90       |853 |
+|2 |  TABLE SCAN              |t1  |100      |54  |
+|3 |  SORT                    |    |100      |162 |
+|4 |   TABLE SCAN             |t2  |100      |54  |
+|5 | MATERIAL                 |    |100      |167 |
+|6 |  TABLE SCAN              |t2  |100      |57  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c1 = t2.c2]), other_conds(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  3 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
+  4 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+  5 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil)
+  6 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+***************   Case 1   ***************
+SQL: select * from t1 where c1 >ANY (select c2 from t2); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN|    |100      |7650|
+|1 | TABLE SCAN          |t1  |100      |54  |
+|2 | TABLE SCAN          |t2  |34       |71  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_([t1.c1])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c2]), filter([? > t2.c2]), 
+      access([t2.c2]), partitions(p0)
+
+***************   Case 2   ***************
+SQL: select * from t1, t2 where t1.c1 In (select c1 from t2); 
+=============================================================
+|ID|OPERATOR                  |NAME          |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN|              |1980     |1832|
+|1 | MERGE JOIN               |              |20       |161 |
+|2 |  TABLE SCAN              |t1            |100      |54  |
+|3 |  SUBPLAN SCAN            |SUBQUERY_TABLE|100      |66  |
+|4 |   TABLE SCAN             |t2            |100      |52  |
+|5 | MATERIAL                 |              |100      |167 |
+|6 |  TABLE SCAN              |t2            |100      |57  |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c1 = SUBQUERY_TABLE.c1]), other_conds(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  3 - output([SUBQUERY_TABLE.c1]), filter(nil), 
+      access([SUBQUERY_TABLE.c1])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  5 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil)
+  6 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+***************   Case 3   ***************
+SQL: select * from t1 where Exists (select c1 from t2); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |104 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 4   ***************
+SQL: select * from t1 where c1 In (select c1 from t2); 
+================================================
+|ID|OPERATOR     |NAME          |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE JOIN   |              |20       |161 |
+|1 | TABLE SCAN  |t1            |100      |54  |
+|2 | SUBPLAN SCAN|SUBQUERY_TABLE|100      |66  |
+|3 |  TABLE SCAN |t2            |100      |52  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c1 = SUBQUERY_TABLE.c1]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([SUBQUERY_TABLE.c1]), filter(nil), 
+      access([SUBQUERY_TABLE.c1])
+  3 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 5   ***************
+SQL: select * from t1 where c1 =ANY (select c1 from t2); 
+================================================
+|ID|OPERATOR     |NAME          |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE JOIN   |              |20       |161 |
+|1 | TABLE SCAN  |t1            |100      |54  |
+|2 | SUBPLAN SCAN|SUBQUERY_TABLE|100      |66  |
+|3 |  TABLE SCAN |t2            |100      |52  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c1 = SUBQUERY_TABLE.c1]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([SUBQUERY_TABLE.c1]), filter(nil), 
+      access([SUBQUERY_TABLE.c1])
+  3 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 6   ***************
+SQL: select * from t1 where c1 >ANY (select c1 from t2); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN|    |100      |4687|
+|1 | TABLE SCAN          |t1  |100      |54  |
+|2 | TABLE SCAN          |t2  |34       |42  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_([t1.c1])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 7   ***************
+SQL: select * from t1 where c1 <ALL (select c1 from t2); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|    |0        |4687|
+|1 | TABLE SCAN          |t1  |100      |54  |
+|2 | TABLE SCAN          |t2  |34       |42  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_([t1.c1])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 8   ***************
+SQL: select * from t1 where c1 <ALL (select c1 from t2 limit 1); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |50       |116 |
+|1 | TABLE SCAN   |t1  |50       |63  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c1 < ALL(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 9   ***************
+SQL: select * from t1 where 1 < ANY(select c1 from t2); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |6624|
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |100      |52  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([? < ANY(subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 10   ***************
+SQL: select * from t1 where 1 < ANY(select c1 from t2 limit 1); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |3673|
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([? < ANY(subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 11   ***************
+SQL: select * from t1 where Exists (select c1 from t2 where c2 >ALL (select c1 from t3)); 
+================================================
+|ID|OPERATOR               |NAME|EST. ROWS|COST|
+------------------------------------------------
+|0 |SUBPLAN FILTER         |    |100      |4903|
+|1 | TABLE SCAN            |t1  |100      |54  |
+|2 | LIMIT                 |    |0        |4835|
+|3 |  NESTED-LOOP ANTI JOIN|    |0        |4835|
+|4 |   TABLE SCAN          |t2  |100      |54  |
+|5 |   TABLE SCAN          |t3  |40       |43  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter(nil), 
+      conds(nil), nl_params_([t2.c2], [(T_OP_IS, t2.c2, NULL, 0)])
+  4 - output([t2.c2], [(T_OP_IS, t2.c2, NULL, 0)]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+  5 - output([t3.c1]), filter([? <= t3.c1 OR ?]), 
+      access([t3.c1]), partitions(p0)
+
+***************   Case 12   ***************
+SQL: select * from t1 where Exists (select c1 from t2 where t1.c2=t2.c2); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |HASH SEMI JOIN|    |90       |884 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |100      |54  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c2 = t2.c2]), other_conds(nil)
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+
+***************   Case 13   ***************
+SQL: select * from t1 where c1 <ALL (select c1 from t2 where t1.c2=t2.c2); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |HASH ANTI JOIN|    |70       |729 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |100      |54  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c2 = t2.c2]), other_conds([t1.c1 >= t2.c1])
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([t2.c2], [t2.c1]), filter(nil), 
+      access([t2.c2], [t2.c1]), partitions(p0)
+
+***************   Case 14   ***************
+SQL: select * from t1 where c1 !=ANY (select c1 from t2 where t1.c2=t2.c2 limit 1); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |50       |1965|
+|1 | TABLE SCAN   |t1  |50       |63  |
+|2 | TABLE SCAN   |t2  |1        |38  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c1 != ANY(subquery(1))]), 
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([t2.c1]), filter([? = t2.c2]), 
+      access([t2.c2], [t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 15   ***************
+SQL: select * from t1 where c1 < (select c1 from t2); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |34       |792 |
+|1 | TABLE SCAN   |t1  |34       |42  |
+|2 | TABLE SCAN   |t2  |100      |52  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c1 < subquery(1)]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 16   ***************
+SQL: select * from t1 where exists (select c1 from t2 where t1.c1 = t2.c1); 
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |MERGE SEMI JOIN|    |90       |743 |
+|1 | TABLE SCAN    |t1  |100      |54  |
+|2 | TABLE SCAN    |t2  |100      |52  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 17   ***************
+SQL: select * from t1 where exists (select c1 from t2); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |104 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 18   ***************
+SQL: select * from t1 where exists (select c1 from t2 limit 10, 2); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |106 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |2        |38  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(2), offset(?)
+
+***************   Case 19   ***************
+SQL: select * from t1 where exists (select c1 from t2 group by c1); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |104 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 20   ***************
+SQL: select * from t1 where (t1.c1, t1.c2) in (select c1,c2 from t2 where c3 = 1); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN|    |1        |8198|
+|1 | TABLE SCAN          |t1  |100      |54  |
+|2 | TABLE GET           |t2  |1        |82  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_([t1.c1], [t1.c2])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c3], [t2.c1], [t2.c2]), filter([(?, ?) = (t2.c1, t2.c2)], [t2.c3 = ?]), 
+      access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
+
+***************   Case 21   ***************
+SQL: select * from t1 where (t1.c1, t1.c2) not in (select c1,c2 from t2 where c3 = 1); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|    |100      |8198|
+|1 | TABLE SCAN          |t1  |100      |54  |
+|2 | TABLE GET           |t2  |1        |82  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_([t1.c1], [t1.c2])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c3], [t2.c1], [t2.c2]), filter([(?, ?) = (t2.c1, t2.c2)], [t2.c3 = ?]), 
+      access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
+
+***************   Case 22   ***************
+SQL: select * from t1 where (t1.c1, t1.c2) = ANY(select c1,c2 from t2 where c3 = 1); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN|    |1        |8198|
+|1 | TABLE SCAN          |t1  |100      |54  |
+|2 | TABLE GET           |t2  |1        |82  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_([t1.c1], [t1.c2])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c3], [t2.c1], [t2.c2]), filter([(?, ?) = (t2.c1, t2.c2)], [t2.c3 = ?]), 
+      access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
+
+***************   Case 23   ***************
+SQL: select * from t1 where (t1.c1, t1.c2) != ANY(select c1,c2 from t2 where c3 = 1); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN|    |41       |8279|
+|1 | TABLE SCAN          |t1  |100      |54  |
+|2 | TABLE SCAN          |t2  |5        |82  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_([t1.c1], [t1.c2])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c3], [t2.c1], [t2.c2]), filter([t2.c3 = ?], [(?, ?) != (t2.c1, t2.c2)]), 
+      access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
+
+***************   Case 24   ***************
+SQL: select * from t1 where (t1.c1, t1.c2) = ALL(select c1,c2 from t2 where c3 = 1); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|    |60       |8279|
+|1 | TABLE SCAN          |t1  |100      |54  |
+|2 | TABLE SCAN          |t2  |5        |82  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_([t1.c1], [t1.c2])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c3], [t2.c1], [t2.c2]), filter([t2.c3 = ?], [(?, ?) != (t2.c1, t2.c2)]), 
+      access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
+
+***************   Case 25   ***************
+SQL: select * from t1 where (t1.c1, t1.c2) != ALL(select c1,c2 from t2 where c3 = 1); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|    |100      |8198|
+|1 | TABLE SCAN          |t1  |100      |54  |
+|2 | TABLE GET           |t2  |1        |82  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_([t1.c1], [t1.c2])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c3], [t2.c1], [t2.c2]), filter([(?, ?) = (t2.c1, t2.c2)], [t2.c3 = ?]), 
+      access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
+
+***************   Case 26   ***************
+SQL: select * from t1 where (t1.c1, t1.c2) != ANY(select c1,c2 from t2 where t1.c2 = t2.c2); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |HASH SEMI JOIN|    |45       |730 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |100      |54  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c2 = t2.c2]), other_conds([(t1.c1, t1.c2) != (t2.c1, t2.c2)])
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([t2.c2], [t2.c1]), filter(nil), 
+      access([t2.c2], [t2.c1]), partitions(p0)
+
+***************   Case 27   ***************
+SQL: select * from t1 where (t1.c1, t1.c2) = ALL(select c1,c2 from t2 where t1.c1 > t2.c1); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|    |0        |4810|
+|1 | TABLE SCAN          |t1  |100      |54  |
+|2 | TABLE SCAN          |t2  |17       |45  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      conds(nil), nl_params_([t1.c1], [t1.c2])
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([t2.c1], [t2.c2]), filter([? > t2.c1], [(?, ?) != (t2.c1, t2.c2)]), 
+      access([t2.c1], [t2.c2]), partitions(p0)
+
+***************   Case 28   ***************
+SQL: select * from t3 where (t3.c1, t3.c2, t3.c3) in (select c1,c2,c3 from t2 where t3.c3 <> t2.c3); 
+===============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST |
+-----------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN|    |1        |11209|
+|1 | TABLE SCAN          |t3  |100      |57   |
+|2 | TABLE GET           |t2  |1        |112  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
+      conds(nil), nl_params_([t3.c1], [t3.c2], [t3.c3])
+  1 - output([t3.c3], [t3.c1], [t3.c2]), filter(nil), 
+      access([t3.c3], [t3.c1], [t3.c2]), partitions(p0)
+  2 - output([t2.c3], [t2.c1], [t2.c2]), filter([(?, ?, ?) = (t2.c1, t2.c2, t2.c3)], [? != t2.c3]), 
+      access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
+
+***************   Case 29   ***************
+SQL: select * from t1 where exists (select 1, round(1.1) from dual); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |69  |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | LIMIT        |    |1        |2   |
+|3 |  EXPRESSION  |    |1        |1   |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1], [?]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter(nil)
+      values({1})
+
+***************   Case 30   ***************
+SQL: select * from t1 where not exists (select 1, round(1.1) from dual); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |69  |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | LIMIT        |    |1        |2   |
+|3 |  EXPRESSION  |    |1        |1   |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1], [?]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter(nil)
+      values({1})
+
+***************   Case 31   ***************
+SQL: select * from t1 where exists (select max(c1) from t2); 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |100      |54  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 32   ***************
+SQL: select * from t1 where not exists (select max(c1) from t2); 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |0        |63  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([0]), startup_filter([0]), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 33   ***************
+SQL: select * from t1 where exists (select max(c1), sum(c1), count(c1)  from t2); 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |100      |54  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 34   ***************
+SQL: select * from t1 where not exists (select max(c1), sum(c1), count(c1)  from t2); 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |0        |63  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([0]), startup_filter([0]), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 35   ***************
+SQL: select * from t1, (select * from t2 where exists(select sum(c1) from t3)) tx where t1.c1 = tx.c1; 
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |MERGE JOIN   |    |20       |165 |
+|1 | TABLE SCAN  |t1  |100      |54  |
+|2 | SUBPLAN SCAN|tx  |100      |70  |
+|3 |  TABLE SCAN |t2  |100      |57  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [tx.c1], [tx.c2], [tx.c3]), filter(nil), 
+      equal_conds([t1.c1 = tx.c1]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([tx.c1], [tx.c2], [tx.c3]), filter(nil), 
+      access([tx.c1], [tx.c2], [tx.c3])
+  3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), startup_filter([1]), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+***************   Case 36   ***************
+SQL: select * from t1 where t1.c1 in (select c1 from t2 where exists(select count(c1) from t3)); 
+================================================
+|ID|OPERATOR     |NAME          |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE JOIN   |              |20       |161 |
+|1 | TABLE SCAN  |t1            |100      |54  |
+|2 | SUBPLAN SCAN|SUBQUERY_TABLE|100      |66  |
+|3 |  TABLE SCAN |t2            |100      |52  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c1 = SUBQUERY_TABLE.c1]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([SUBQUERY_TABLE.c1]), filter(nil), 
+      access([SUBQUERY_TABLE.c1])
+  3 - output([t2.c1]), filter(nil), startup_filter([1]), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 37   ***************
+SQL: select * from t1 where exists (select group_concat(c1, c2) from t2 group by c1) ; 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |104 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 38   ***************
+SQL: select * from t1 where exists (select max(c1), sum(c1), count(c1) from t2 group by c1) ; 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |104 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 39   ***************
+SQL: select * from t1 where exists (select max(c1), sum(c1), count(c1) from t2 group by c1 having c1 > 1); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |104 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 40   ***************
+SQL: select * from t1 where exists (select max(c1), sum(c1), count(c1) from t2 group by c1 having sum(c1) > 1); 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |SUBPLAN FILTER  |    |100      |117 |
+|1 | TABLE SCAN     |t1  |100      |54  |
+|2 | LIMIT          |    |1        |49  |
+|3 |  MERGE GROUP BY|    |1        |49  |
+|4 |   TABLE SCAN   |t2  |30       |41  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter([T_FUN_SUM(t2.c1) > ?]), 
+      group([t2.c1]), agg_func([T_FUN_SUM(t2.c1)])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 41   ***************
+SQL: select * from t1 where exists (select max(c1), sum(c1), count(c1) from t2 group by c1 having sum(c1) > 1 and count(c1) > 0);  select * from t1 where not exists (select group_concat(c1, c2) from t2 group by c1) ; 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |SUBPLAN FILTER  |    |100      |148 |
+|1 | TABLE SCAN     |t1  |100      |54  |
+|2 | LIMIT          |    |1        |80  |
+|3 |  MERGE GROUP BY|    |1        |80  |
+|4 |   TABLE SCAN   |t2  |90       |51  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter([T_FUN_SUM(t2.c1) > ?], [T_FUN_COUNT(t2.c1) > ?]), 
+      group([t2.c1]), agg_func([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 42   ***************
+SQL: select * from t1 where not exists (select max(c1), sum(c1), count(c1) from t2 group by c1) ; 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |104 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 43   ***************
+SQL: select * from t1 where not exists (select max(c1), sum(c1), count(c1) from t2 group by c1 having c1 > 1); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |100      |104 |
+|1 | TABLE SCAN   |t1  |100      |54  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 44   ***************
+SQL: select * from t1 where not exists (select max(c1), sum(c1), count(c1) from t2 group by c1 having sum(c1) > 1); 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |SUBPLAN FILTER  |    |100      |117 |
+|1 | TABLE SCAN     |t1  |100      |54  |
+|2 | LIMIT          |    |1        |49  |
+|3 |  MERGE GROUP BY|    |1        |49  |
+|4 |   TABLE SCAN   |t2  |30       |41  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter([T_FUN_SUM(t2.c1) > ?]), 
+      group([t2.c1]), agg_func([T_FUN_SUM(t2.c1)])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 45   ***************
+SQL: select * from t1 where not exists (select max(c1), sum(c1), count(c1) from t2 group by c1 having sum(c1) > 1 and count(c1) > 0); 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |SUBPLAN FILTER  |    |100      |148 |
+|1 | TABLE SCAN     |t1  |100      |54  |
+|2 | LIMIT          |    |1        |80  |
+|3 |  MERGE GROUP BY|    |1        |80  |
+|4 |   TABLE SCAN   |t2  |90       |51  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter([T_FUN_SUM(t2.c1) > ?], [T_FUN_COUNT(t2.c1) > ?]), 
+      group([t2.c1]), agg_func([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 46   ***************
+SQL: select * from t1 where exists(select max(c1) from t2 group by c1 having max(c1) > 1); 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |SUBPLAN FILTER  |    |100      |117 |
+|1 | TABLE SCAN     |t1  |100      |54  |
+|2 | LIMIT          |    |1        |49  |
+|3 |  MERGE GROUP BY|    |1        |49  |
+|4 |   TABLE SCAN   |t2  |30       |41  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter([T_FUN_MAX(t2.c1) > ?]), 
+      group([t2.c1]), agg_func([T_FUN_MAX(t2.c1)])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 47   ***************
+SQL: select * from t1, (select * from t2 having c1 > 1) as tx where t1.c1 = tx.c1; 
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |MERGE JOIN   |    |20       |165 |
+|1 | TABLE SCAN  |t1  |100      |54  |
+|2 | SUBPLAN SCAN|tx  |100      |70  |
+|3 |  TABLE SCAN |t2  |100      |57  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [tx.c1], [tx.c2], [tx.c3]), filter(nil), 
+      equal_conds([t1.c1 = tx.c1]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([tx.c1], [tx.c2], [tx.c3]), filter(nil), 
+      access([tx.c1], [tx.c2], [tx.c3])
+  3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+***************   Case 48   ***************
+SQL: select * from t1, (select * from t2 where exists(select sum(c1)  from t3 group by c1 having c1 > 1)) as tx where t1.c1 = tx.c1; 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |MERGE JOIN      |    |20       |215 |
+|1 | TABLE SCAN     |t1  |100      |54  |
+|2 | SUBPLAN SCAN   |tx  |100      |120 |
+|3 |  SUBPLAN FILTER|    |100      |106 |
+|4 |   TABLE SCAN   |t2  |100      |57  |
+|5 |   TABLE SCAN   |t3  |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [tx.c1], [tx.c2], [tx.c3]), filter(nil), 
+      equal_conds([t1.c1 = tx.c1]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([tx.c1], [tx.c2], [tx.c3]), filter(nil), 
+      access([tx.c1], [tx.c2], [tx.c3])
+  3 - output([t2.c1], [t2.c2], [t2.c3]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+  5 - output([1]), filter(nil), 
+      access([t3.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 49   ***************
+SQL: select * from t1 where exists (select max(c1) from t2 group by c1 having exists (select * from t3 where t3.c1 > max(t2.c1))); 
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |SUBPLAN FILTER   |    |100      |186 |
+|1 | TABLE SCAN      |t1  |100      |54  |
+|2 | LIMIT           |    |1        |118 |
+|3 |  SUBPLAN FILTER |    |1        |118 |
+|4 |   MERGE GROUP BY|    |1        |41  |
+|5 |    TABLE SCAN   |t2  |10       |38  |
+|6 |   TABLE SCAN    |t3  |34       |73  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter([(T_OP_EXISTS, subquery(1))]), 
+      exec_params_([T_FUN_MAX(t2.c1)]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  4 - output([T_FUN_MAX(t2.c1)]), filter(nil), 
+      group([t2.c1]), agg_func([T_FUN_MAX(t2.c1)])
+  5 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  6 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
+      access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
+
+***************   Case 50   ***************
+SQL: select * from t1 where exists (select sum(c1) from t2 group by c1 having exists (select * from t3 where t3.c1 > sum(t2.c1))); 
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |SUBPLAN FILTER   |    |100      |186 |
+|1 | TABLE SCAN      |t1  |100      |54  |
+|2 | LIMIT           |    |1        |118 |
+|3 |  SUBPLAN FILTER |    |1        |118 |
+|4 |   MERGE GROUP BY|    |1        |41  |
+|5 |    TABLE SCAN   |t2  |10       |38  |
+|6 |   TABLE SCAN    |t3  |34       |73  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  2 - output([1]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter([(T_OP_EXISTS, subquery(1))]), 
+      exec_params_([T_FUN_SUM(t2.c1)]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  4 - output([T_FUN_SUM(t2.c1)]), filter(nil), 
+      group([t2.c1]), agg_func([T_FUN_SUM(t2.c1)])
+  5 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  6 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
+      access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
+
+***************   Case 51   ***************
+SQL: select * from t1 where c2 > exists(select c2 from t2 where c2 > exists(select c2 from t3)); 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |SUBPLAN FILTER  |    |34       |148 |
+|1 | TABLE SCAN     |t1  |34       |71  |
+|2 | LIMIT          |    |1        |73  |
+|3 |  SUBPLAN FILTER|    |1        |73  |
+|4 |   TABLE SCAN   |t2  |1        |37  |
+|5 |   TABLE SCAN   |t3  |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c2 > ?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([1]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter([t2.c2 > ?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  4 - output([t2.c2]), filter(nil), 
+      access([t2.c2]), partitions(p0)
+  5 - output([1]), filter(nil), 
+      access([t3.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 52   ***************
+SQL: select * from t1 where c2 > exists(select c1 from t2 where c2 > exists(select sum(c1) from t3)); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |34       |112 |
+|1 | TABLE SCAN   |t1  |34       |71  |
+|2 | TABLE SCAN   |t2  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c2 > ?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([1]), filter([t2.c2 > 1]), 
+      access([t2.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 53   ***************
+SQL: select * from t1 where c2 > exists(select sum(c1) from t2 where c2 > exists(select sum(c1) from t3)); 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |90       |71  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c2 > 1]), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+
+***************   Case 54   ***************
+SQL: SELECT c1 FROM pullup1 WHERE EXISTS(SELECT DISTINCT c1 FROM pullup2); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |SUBPLAN FILTER|       |100      |104 |
+|1 | TABLE SCAN   |pullup1|100      |54  |
+|2 | TABLE SCAN   |pullup2|1        |36  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([pullup2.pk]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 55   ***************
+SQL: SELECT c1 FROM pullup1 WHERE EXISTS(SELECT DISTINCT c1 FROM pullup2 LIMIT 1); 
+===========================================
+|ID|OPERATOR       |NAME   |EST. ROWS|COST|
+-------------------------------------------
+|0 |SUBPLAN FILTER |       |100      |110 |
+|1 | TABLE SCAN    |pullup1|100      |54  |
+|2 | LIMIT         |       |1        |42  |
+|3 |  HASH DISTINCT|       |1        |42  |
+|4 |   TABLE SCAN  |pullup2|10       |38  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([pullup2.c1]), filter(nil), limit(1), offset(nil)
+  3 - output([pullup2.c1]), filter(nil), 
+      distinct([pullup2.c1])
+  4 - output([pullup2.c1]), filter(nil), 
+      access([pullup2.c1]), partitions(p0)
+
+***************   Case 56   ***************
+SQL: SELECT c1 FROM pullup1 WHERE EXISTS(SELECT DISTINCT c1 FROM pullup2 LIMIT 1 OFFSET 2); 
+===========================================
+|ID|OPERATOR       |NAME   |EST. ROWS|COST|
+-------------------------------------------
+|0 |SUBPLAN FILTER |       |100      |122 |
+|1 | TABLE SCAN    |pullup1|100      |54  |
+|2 | LIMIT         |       |1        |54  |
+|3 |  HASH DISTINCT|       |3        |54  |
+|4 |   TABLE SCAN  |pullup2|30       |42  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([pullup2.c1]), filter(nil), limit(1), offset(?)
+  3 - output([pullup2.c1]), filter(nil), 
+      distinct([pullup2.c1])
+  4 - output([pullup2.c1]), filter(nil), 
+      access([pullup2.c1]), partitions(p0)
+
+***************   Case 57   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pk FROM pullup2); 
+================================================
+|ID|OPERATOR     |NAME          |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE JOIN   |              |20       |269 |
+|1 | SORT        |              |100      |162 |
+|2 |  TABLE SCAN |pullup1       |100      |54  |
+|3 | SUBPLAN SCAN|SUBQUERY_TABLE|100      |66  |
+|4 |  TABLE SCAN |pullup2       |100      |52  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      equal_conds([pullup1.c1 = SUBQUERY_TABLE.pk]), other_conds(nil)
+  1 - output([pullup1.c1]), filter(nil), sort_keys([pullup1.c1, ASC])
+  2 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  3 - output([SUBQUERY_TABLE.pk]), filter(nil), 
+      access([SUBQUERY_TABLE.pk])
+  4 - output([pullup2.pk]), filter(nil), 
+      access([pullup2.pk]), partitions(p0)
+
+***************   Case 58   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pk FROM pullup2 WHERE pullup2.c3 = pullup1.c3); 
+===================================================
+|ID|OPERATOR        |NAME          |EST. ROWS|COST|
+---------------------------------------------------
+|0 |NESTED-LOOP JOIN|              |1        |113 |
+|1 | SUBPLAN SCAN   |SUBQUERY_TABLE|1        |77  |
+|2 |  TABLE SCAN    |pullup2       |100      |54  |
+|3 | TABLE SCAN     |pullup1       |1        |73  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      conds(nil), nl_params_([SUBQUERY_TABLE.pk])
+  1 - output([SUBQUERY_TABLE.pk]), filter([SUBQUERY_TABLE.c3 = SUBQUERY_TABLE.c3]), 
+      access([SUBQUERY_TABLE.pk], [SUBQUERY_TABLE.c3], [SUBQUERY_TABLE.c3])
+  2 - output([pullup2.pk], [pullup2.c3], [pullup1.c3]), filter(nil), 
+      access([pullup2.c3], [pullup2.pk]), partitions(p0)
+  3 - output([pullup1.c1]), filter([pullup1.c1 = ?]), 
+      access([pullup1.c1]), partitions(p0)
+
+***************   Case 59   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pk FROM pullup2 WHERE pullup2.c1 = pullup2.c3); 
+===================================================
+|ID|OPERATOR        |NAME          |EST. ROWS|COST|
+---------------------------------------------------
+|0 |NESTED-LOOP JOIN|              |1        |109 |
+|1 | SUBPLAN SCAN   |SUBQUERY_TABLE|1        |73  |
+|2 |  TABLE SCAN    |pullup2       |1        |73  |
+|3 | TABLE SCAN     |pullup1       |1        |71  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      conds(nil), nl_params_([SUBQUERY_TABLE.pk])
+  1 - output([SUBQUERY_TABLE.pk]), filter(nil), 
+      access([SUBQUERY_TABLE.pk])
+  2 - output([pullup2.pk]), filter([pullup2.c1 = pullup2.c3]), 
+      access([pullup2.c1], [pullup2.c3], [pullup2.pk]), partitions(p0)
+  3 - output([pullup1.c1]), filter([pullup1.c1 = ?]), 
+      access([pullup1.c1]), partitions(p0)
+
+***************   Case 60   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pk FROM pullup2 WHERE pullup2.c1 = pullup1.c3 AND pullup2.c1 = pullup2.c3); 
+===================================================
+|ID|OPERATOR        |NAME          |EST. ROWS|COST|
+---------------------------------------------------
+|0 |NESTED-LOOP JOIN|              |1        |74  |
+|1 | SUBPLAN SCAN   |SUBQUERY_TABLE|1        |74  |
+|2 |  TABLE SCAN    |pullup2       |1        |73  |
+|3 | TABLE SCAN     |pullup1       |1        |73  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      conds(nil), nl_params_([SUBQUERY_TABLE.pk])
+  1 - output([SUBQUERY_TABLE.pk]), filter([SUBQUERY_TABLE.c1 = SUBQUERY_TABLE.c3]), 
+      access([SUBQUERY_TABLE.pk], [SUBQUERY_TABLE.c1], [SUBQUERY_TABLE.c3])
+  2 - output([pullup2.pk], [pullup2.c1], [pullup1.c3]), filter([pullup2.c1 = pullup2.c3]), 
+      access([pullup2.c1], [pullup2.c3], [pullup2.pk]), partitions(p0)
+  3 - output([pullup1.c1]), filter([pullup1.c1 = ?]), 
+      access([pullup1.c1]), partitions(p0)
+
+***************   Case 61   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pk FROM pullup2 ORDER BY pullup2.c3); 
+================================================
+|ID|OPERATOR     |NAME          |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE JOIN   |              |20       |271 |
+|1 | SORT        |              |100      |162 |
+|2 |  TABLE SCAN |pullup1       |100      |54  |
+|3 | SUBPLAN SCAN|SUBQUERY_TABLE|100      |68  |
+|4 |  TABLE SCAN |pullup2       |100      |54  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      equal_conds([pullup1.c1 = SUBQUERY_TABLE.pk]), other_conds(nil)
+  1 - output([pullup1.c1]), filter(nil), sort_keys([pullup1.c1, ASC])
+  2 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  3 - output([SUBQUERY_TABLE.pk]), filter(nil), 
+      access([SUBQUERY_TABLE.pk])
+  4 - output([pullup2.pk]), filter(nil), 
+      access([pullup2.pk]), partitions(p0)
+
+***************   Case 62   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT uniq_c2 FROM pullup2); 
+================================================
+|ID|OPERATOR     |NAME          |EST. ROWS|COST|
+------------------------------------------------
+|0 |HASH JOIN    |              |20       |283 |
+|1 | SUBPLAN SCAN|SUBQUERY_TABLE|100      |68  |
+|2 |  TABLE SCAN |pullup2       |100      |54  |
+|3 | TABLE SCAN  |pullup1       |100      |54  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      equal_conds([pullup1.c1 = SUBQUERY_TABLE.uniq_c2]), other_conds(nil)
+  1 - output([SUBQUERY_TABLE.uniq_c2]), filter(nil), 
+      access([SUBQUERY_TABLE.uniq_c2])
+  2 - output([pullup2.uniq_c2]), filter(nil), 
+      access([pullup2.uniq_c2]), partitions(p0)
+  3 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+
+***************   Case 63   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT uniq_c2 FROM pullup2 WHERE pullup2.c3 = pullup1.c3); 
+===================================================
+|ID|OPERATOR        |NAME          |EST. ROWS|COST|
+---------------------------------------------------
+|0 |NESTED-LOOP JOIN|              |1        |115 |
+|1 | SUBPLAN SCAN   |SUBQUERY_TABLE|1        |79  |
+|2 |  TABLE SCAN    |pullup2       |100      |57  |
+|3 | TABLE SCAN     |pullup1       |1        |73  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      conds(nil), nl_params_([SUBQUERY_TABLE.uniq_c2])
+  1 - output([SUBQUERY_TABLE.uniq_c2]), filter([SUBQUERY_TABLE.c3 = SUBQUERY_TABLE.c3]), 
+      access([SUBQUERY_TABLE.uniq_c2], [SUBQUERY_TABLE.c3], [SUBQUERY_TABLE.c3])
+  2 - output([pullup2.uniq_c2], [pullup2.c3], [pullup1.c3]), filter(nil), 
+      access([pullup2.c3], [pullup2.uniq_c2]), partitions(p0)
+  3 - output([pullup1.c1]), filter([pullup1.c1 = ?]), 
+      access([pullup1.c1]), partitions(p0)
+
+***************   Case 64   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT uniq_c2 FROM pullup2 WHERE pullup2.c1 = pullup2.c3); 
+===================================================
+|ID|OPERATOR        |NAME          |EST. ROWS|COST|
+---------------------------------------------------
+|0 |NESTED-LOOP JOIN|              |1        |111 |
+|1 | SUBPLAN SCAN   |SUBQUERY_TABLE|1        |76  |
+|2 |  TABLE SCAN    |pullup2       |1        |76  |
+|3 | TABLE SCAN     |pullup1       |1        |71  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      conds(nil), nl_params_([SUBQUERY_TABLE.uniq_c2])
+  1 - output([SUBQUERY_TABLE.uniq_c2]), filter(nil), 
+      access([SUBQUERY_TABLE.uniq_c2])
+  2 - output([pullup2.uniq_c2]), filter([pullup2.c1 = pullup2.c3]), 
+      access([pullup2.c1], [pullup2.c3], [pullup2.uniq_c2]), partitions(p0)
+  3 - output([pullup1.c1]), filter([pullup1.c1 = ?]), 
+      access([pullup1.c1]), partitions(p0)
+
+***************   Case 65   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT uniq_c2 FROM pullup2 WHERE pullup2.c1 = pullup1.c3 AND pullup2.c1 = pullup2.c3); 
+===================================================
+|ID|OPERATOR        |NAME          |EST. ROWS|COST|
+---------------------------------------------------
+|0 |NESTED-LOOP JOIN|              |1        |76  |
+|1 | SUBPLAN SCAN   |SUBQUERY_TABLE|1        |76  |
+|2 |  TABLE SCAN    |pullup2       |1        |76  |
+|3 | TABLE SCAN     |pullup1       |1        |73  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      conds(nil), nl_params_([SUBQUERY_TABLE.uniq_c2])
+  1 - output([SUBQUERY_TABLE.uniq_c2]), filter([SUBQUERY_TABLE.c1 = SUBQUERY_TABLE.c3]), 
+      access([SUBQUERY_TABLE.uniq_c2], [SUBQUERY_TABLE.c1], [SUBQUERY_TABLE.c3])
+  2 - output([pullup2.uniq_c2], [pullup2.c1], [pullup1.c3]), filter([pullup2.c1 = pullup2.c3]), 
+      access([pullup2.c1], [pullup2.c3], [pullup2.uniq_c2]), partitions(p0)
+  3 - output([pullup1.c1]), filter([pullup1.c1 = ?]), 
+      access([pullup1.c1]), partitions(p0)
+
+***************   Case 66   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT uniq_c2 FROM pullup2 ORDER BY pullup2.c3); 
+================================================
+|ID|OPERATOR     |NAME          |EST. ROWS|COST|
+------------------------------------------------
+|0 |HASH JOIN    |              |20       |285 |
+|1 | SUBPLAN SCAN|SUBQUERY_TABLE|100      |70  |
+|2 |  TABLE SCAN |pullup2       |100      |57  |
+|3 | TABLE SCAN  |pullup1       |100      |54  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      equal_conds([pullup1.c1 = SUBQUERY_TABLE.uniq_c2]), other_conds(nil)
+  1 - output([SUBQUERY_TABLE.uniq_c2]), filter(nil), 
+      access([SUBQUERY_TABLE.uniq_c2])
+  2 - output([pullup2.uniq_c2]), filter(nil), 
+      access([pullup2.uniq_c2]), partitions(p0)
+  3 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+
+***************   Case 67   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT DISTINCT c1 FROM pullup2); 
+==================================================
+|ID|OPERATOR       |NAME          |EST. ROWS|COST|
+--------------------------------------------------
+|0 |HASH JOIN      |              |2        |198 |
+|1 | SUBPLAN SCAN  |SUBQUERY_TABLE|10       |96  |
+|2 |  HASH DISTINCT|              |10       |94  |
+|3 |   TABLE SCAN  |pullup2       |100      |54  |
+|4 | TABLE SCAN    |pullup1       |100      |54  |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      equal_conds([pullup1.c1 = SUBQUERY_TABLE.c1]), other_conds(nil)
+  1 - output([SUBQUERY_TABLE.c1]), filter(nil), 
+      access([SUBQUERY_TABLE.c1])
+  2 - output([pullup2.c1]), filter(nil), 
+      distinct([pullup2.c1])
+  3 - output([pullup2.c1]), filter(nil), 
+      access([pullup2.c1]), partitions(p0)
+  4 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+
+***************   Case 68   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT DISTINCT c1 FROM pullup2 WHERE pullup2.c1 = pullup2.c3); 
+===================================================
+|ID|OPERATOR        |NAME          |EST. ROWS|COST|
+---------------------------------------------------
+|0 |NESTED-LOOP JOIN|              |1        |77  |
+|1 | SUBPLAN SCAN   |SUBQUERY_TABLE|1        |74  |
+|2 |  HASH DISTINCT |              |1        |74  |
+|3 |   TABLE SCAN   |pullup2       |1        |73  |
+|4 | TABLE SCAN     |pullup1       |1        |71  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      conds(nil), nl_params_([SUBQUERY_TABLE.c1])
+  1 - output([SUBQUERY_TABLE.c1]), filter(nil), 
+      access([SUBQUERY_TABLE.c1])
+  2 - output([pullup2.c1]), filter(nil), 
+      distinct([pullup2.c1])
+  3 - output([pullup2.c1]), filter([pullup2.c1 = pullup2.c3]), 
+      access([pullup2.c1], [pullup2.c3]), partitions(p0)
+  4 - output([pullup1.c1]), filter([pullup1.c1 = ?]), 
+      access([pullup1.c1]), partitions(p0)
+
+***************   Case 69   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT DISTINCT c1 FROM pullup2 WHERE pullup2.c3 = pullup1.c3); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |SUBPLAN FILTER|       |50       |3904|
+|1 | TABLE SCAN   |pullup1|50       |65  |
+|2 | HASH DISTINCT|       |1        |77  |
+|3 |  TABLE SCAN  |pullup2|9        |73  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter([pullup1.c1 = ANY(subquery(1))]), 
+      exec_params_([pullup1.c3]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([pullup1.c3], [pullup1.c1]), filter(nil), 
+      access([pullup1.c3], [pullup1.c1]), partitions(p0)
+  2 - output([pullup2.c1]), filter(nil), 
+      distinct([pullup2.c1])
+  3 - output([pullup2.c1]), filter([pullup2.c3 = ?]), 
+      access([pullup2.c3], [pullup2.c1]), partitions(p0)
+
+***************   Case 70   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pk FROM pullup2 LIMIT 1); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |SUBPLAN FILTER|       |50       |116 |
+|1 | TABLE SCAN   |pullup1|50       |63  |
+|2 | TABLE SCAN   |pullup2|1        |36  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter([pullup1.c1 = ANY(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([pullup2.pk]), filter(nil), 
+      access([pullup2.pk]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 71   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pk FROM pullup2 GROUP BY pullup2.c1); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |SUBPLAN FILTER|       |50       |273 |
+|1 | TABLE SCAN   |pullup1|50       |63  |
+|2 | HASH GROUP BY|       |10       |94  |
+|3 |  TABLE SCAN  |pullup2|100      |54  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter([pullup1.c1 = ANY(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([pullup2.pk]), filter(nil), 
+      group([pullup2.c1]), agg_func(nil)
+  3 - output([pullup2.pk], [pullup2.c1]), filter(nil), 
+      access([pullup2.pk], [pullup2.c1]), partitions(p0)
+
+***************   Case 72   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pk FROM pullup2 UNION ALL SELECT pk FROM pullup3); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |SUBPLAN FILTER|       |50       |5675|
+|1 | TABLE SCAN   |pullup1|50       |63  |
+|2 | UNION ALL    |       |200      |170 |
+|3 |  TABLE SCAN  |pullup2|100      |52  |
+|4 |  TABLE SCAN  |pullup3|100      |52  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter([pullup1.c1 = ANY(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([UNION(pullup2.pk, pullup3.pk)]), filter(nil)
+  3 - output([pullup2.pk]), filter(nil), 
+      access([pullup2.pk]), partitions(p0)
+  4 - output([pullup3.pk]), filter(nil), 
+      access([pullup3.pk]), partitions(p0)
+
+***************   Case 73   ***************
+SQL: SELECT c1 FROM pullup1 WHERE 1 IN (SELECT c1 FROM pullup2); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |SUBPLAN FILTER|       |100      |6844|
+|1 | TABLE SCAN   |pullup1|100      |54  |
+|2 | TABLE SCAN   |pullup2|100      |54  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([? = ANY(subquery(1))]), init_plan_idxs_(nil)
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([pullup2.c1]), filter(nil), 
+      access([pullup2.c1]), partitions(p0)
+
+***************   Case 74   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT 1 FROM pullup2); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |SUBPLAN FILTER|       |50       |1145|
+|1 | TABLE SCAN   |pullup1|50       |63  |
+|2 | TABLE SCAN   |pullup2|100      |52  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter([pullup1.c1 = ANY(subquery(1))]), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([pullup2.pk]), partitions(p0)
+
+***************   Case 75   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT floor(pk) FROM pullup2); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |HASH SEMI JOIN|       |5        |288 |
+|1 | TABLE SCAN   |pullup1|100      |54  |
+|2 | TABLE SCAN   |pullup2|100      |52  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      equal_conds([pullup1.c1 = floor(pullup2.pk)]), other_conds(nil)
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([floor(pullup2.pk)]), filter(nil), 
+      access([pullup2.pk]), partitions(p0)
+
+***************   Case 76   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT c1 FROM pullup2); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |HASH SEMI JOIN|       |90       |865 |
+|1 | TABLE SCAN   |pullup1|100      |54  |
+|2 | TABLE SCAN   |pullup2|100      |54  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      equal_conds([pullup1.c1 = pullup2.c1]), other_conds(nil)
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([pullup2.c1]), filter(nil), 
+      access([pullup2.c1]), partitions(p0)
+
+***************   Case 77   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pullup2.pk FROM pullup2, pullup3); 
+========================================================
+|ID|OPERATOR                   |NAME   |EST. ROWS|COST |
+--------------------------------------------------------
+|0 |MERGE SEMI JOIN            |       |100      |69667|
+|1 | SORT                      |       |100      |162  |
+|2 |  TABLE SCAN               |pullup1|100      |54   |
+|3 | NESTED-LOOP JOIN CARTESIAN|       |10000    |7199 |
+|4 |  TABLE SCAN               |pullup2|100      |52   |
+|5 |  MATERIAL                 |       |100      |71   |
+|6 |   TABLE SCAN              |pullup3|100      |52   |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      equal_conds([pullup1.c1 = pullup2.pk]), other_conds(nil)
+  1 - output([pullup1.c1]), filter(nil), sort_keys([pullup1.c1, ASC])
+  2 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  3 - output([pullup2.pk]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([pullup2.pk]), filter(nil), 
+      access([pullup2.pk]), partitions(p0)
+  5 - output([1]), filter(nil)
+  6 - output([pullup3.pk]), filter(nil), 
+      access([pullup3.pk]), partitions(p0)
+
+***************   Case 78   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pk FROM (select * from pullup2 limit 1)); 
+=================================================
+|ID|OPERATOR             |NAME   |EST. ROWS|COST|
+-------------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN|       |1        |128 |
+|1 | TABLE SCAN          |pullup1|100      |54  |
+|2 | MATERIAL            |       |1        |37  |
+|3 |  SUBPLAN SCAN       |       |1        |37  |
+|4 |   TABLE SCAN        |pullup2|1        |36  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      conds([pullup1.c1 = .pk]), nl_params_(nil)
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([.pk]), filter(nil)
+  3 - output([.pk]), filter(nil), 
+      access([.pk])
+  4 - output([pullup2.pk], [pullup2.c1], [pullup2.uniq_c2], [pullup2.c3]), filter(nil), 
+      access([pullup2.pk], [pullup2.c1], [pullup2.uniq_c2], [pullup2.c3]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 79   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pullup2.pk FROM pullup2 JOIN pullup3 on pullup2.c3 = pullup3.c3); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |HASH SEMI JOIN|       |100      |6814|
+|1 | TABLE SCAN   |pullup1|100      |54  |
+|2 | HASH JOIN    |       |900      |847 |
+|3 |  TABLE SCAN  |pullup2|100      |54  |
+|4 |  TABLE SCAN  |pullup3|100      |54  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      equal_conds([pullup1.c1 = pullup2.pk]), other_conds(nil)
+  1 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  2 - output([pullup2.pk]), filter(nil), 
+      equal_conds([pullup2.c3 = pullup3.c3]), other_conds(nil)
+  3 - output([pullup2.c3], [pullup2.pk]), filter(nil), 
+      access([pullup2.c3], [pullup2.pk]), partitions(p0)
+  4 - output([pullup3.c3]), filter(nil), 
+      access([pullup3.c3]), partitions(p0)
+
+***************   Case 80   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT DISTINCT pullup2.c1 FROM pullup2 WHERE pullup1.c3 = pullup2.c3); 
+==========================================
+|ID|OPERATOR      |NAME   |EST. ROWS|COST|
+------------------------------------------
+|0 |SUBPLAN FILTER|       |50       |3904|
+|1 | TABLE SCAN   |pullup1|50       |65  |
+|2 | HASH DISTINCT|       |1        |77  |
+|3 |  TABLE SCAN  |pullup2|9        |73  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter([pullup1.c1 = ANY(subquery(1))]), 
+      exec_params_([pullup1.c3]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([pullup1.c3], [pullup1.c1]), filter(nil), 
+      access([pullup1.c3], [pullup1.c1]), partitions(p0)
+  2 - output([pullup2.c1]), filter(nil), 
+      distinct([pullup2.c1])
+  3 - output([pullup2.c1]), filter([? = pullup2.c3]), 
+      access([pullup2.c3], [pullup2.c1]), partitions(p0)
+
+***************   Case 81   ***************
+SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT c1 FROM pullup2) ORDER BY c3; 
+===========================================
+|ID|OPERATOR       |NAME   |EST. ROWS|COST|
+-------------------------------------------
+|0 |SORT           |       |90       |999 |
+|1 | HASH SEMI JOIN|       |90       |886 |
+|2 |  TABLE SCAN   |pullup1|100      |57  |
+|3 |  TABLE SCAN   |pullup2|100      |54  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), sort_keys([pullup1.c3, ASC])
+  1 - output([pullup1.c1], [pullup1.c3]), filter(nil), 
+      equal_conds([pullup1.c1 = pullup2.c1]), other_conds(nil)
+  2 - output([pullup1.c1], [pullup1.c3]), filter(nil), 
+      access([pullup1.c1], [pullup1.c3]), partitions(p0)
+  3 - output([pullup2.c1]), filter(nil), 
+      access([pullup2.c1]), partitions(p0)
+
+***************   Case 82   ***************
+SQL: SELECT c1 FROM pullup1 GROUP BY c1 HAVING c1 IN (SELECT c1 FROM pullup2); 
+===========================================
+|ID|OPERATOR       |NAME   |EST. ROWS|COST|
+-------------------------------------------
+|0 |HASH GROUP BY  |       |9        |901 |
+|1 | HASH SEMI JOIN|       |90       |865 |
+|2 |  TABLE SCAN   |pullup1|100      |54  |
+|3 |  TABLE SCAN   |pullup2|100      |54  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup1.c1]), filter(nil), 
+      group([pullup1.c1]), agg_func(nil)
+  1 - output([pullup1.c1]), filter(nil), 
+      equal_conds([pullup1.c1 = pullup2.c1]), other_conds(nil)
+  2 - output([pullup1.c1]), filter(nil), 
+      access([pullup1.c1]), partitions(p0)
+  3 - output([pullup2.c1]), filter(nil), 
+      access([pullup2.c1]), partitions(p0)
+
+***************   Case 83   ***************
+SQL: SELECT * FROM pullup2 WHERE pk IN (SELECT pullup2.pk FROM pullup2 GROUP BY pullup2.pk DESC); 
+===================================================
+|ID|OPERATOR      |NAME            |EST. ROWS|COST|
+---------------------------------------------------
+|0 |MERGE JOIN    |                |20       |273 |
+|1 | TABLE SCAN   |pullup2         |100      |59  |
+|2 | SORT         |                |100      |174 |
+|3 |  SUBPLAN SCAN|SUBQUERY_TABLE  |100      |66  |
+|4 |   TABLE SCAN |pullup2(Reverse)|100      |52  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([pullup2.pk], [pullup2.c1], [pullup2.uniq_c2], [pullup2.c3]), filter(nil), 
+      equal_conds([pullup2.pk = SUBQUERY_TABLE.pk]), other_conds(nil)
+  1 - output([pullup2.pk], [pullup2.c1], [pullup2.uniq_c2], [pullup2.c3]), filter(nil), 
+      access([pullup2.pk], [pullup2.c1], [pullup2.uniq_c2], [pullup2.c3]), partitions(p0)
+  2 - output([SUBQUERY_TABLE.pk]), filter(nil), sort_keys([SUBQUERY_TABLE.pk, ASC])
+  3 - output([SUBQUERY_TABLE.pk]), filter(nil), 
+      access([SUBQUERY_TABLE.pk])
+  4 - output([pullup2.pk]), filter(nil), 
+      access([pullup2.pk]), partitions(p0)
+

@@ -1,0 +1,224 @@
+select date_add('2012-2-29', interval '-12.34' second);
+date_add('2012-2-29', interval '-12.34' second)
+2012-02-28 23:59:47.660000
+select date_add('2012-2-29', interval 1 year);
+date_add('2012-2-29', interval 1 year)
+2013-02-28
+select date_add(20120229, interval '34.56+78=90' day_microsecond);
+date_add(20120229, interval '34.56+78=90' day_microsecond)
+2012-03-01 10:57:18.900000
+select date_sub('2012-2-29', interval '-12.34' second);
+date_sub('2012-2-29', interval '-12.34' second)
+2012-02-29 00:00:12.340000
+select date_sub('2012-2-29', interval 1 year);
+date_sub('2012-2-29', interval 1 year)
+2011-02-28
+select date_sub(20120229, interval '34.56+78=90' day_microsecond);
+date_sub(20120229, interval '34.56+78=90' day_microsecond)
+2012-02-27 13:02:41.100000
+select date_add('2010-01-01', interval 1 day);
+date_add('2010-01-01', interval 1 day)
+2010-01-02
+select date_add('2010-01-01', interval 1 minute);
+date_add('2010-01-01', interval 1 minute)
+2010-01-01 00:01:00
+select date_add('2010-01-01 01:01:01', interval 1 day);
+date_add('2010-01-01 01:01:01', interval 1 day)
+2010-01-02 01:01:01
+select date_add('2010-01-01 01:01:01', interval 1 microsecond);
+date_add('2010-01-01 01:01:01', interval 1 microsecond)
+2010-01-01 01:01:01.000001
+select date_add('9999-12-31 23:59:59',INTERVAL 1 SECOND);
+date_add('9999-12-31 23:59:59',INTERVAL 1 SECOND)
+NULL
+select date_add('9999-12-31 23:59:59',INTERVAL 1000 SECOND);
+date_add('9999-12-31 23:59:59',INTERVAL 1000 SECOND)
+NULL
+select date_add('9999-12-31 23:59:59',INTERVAL 1 MONTH);
+date_add('9999-12-31 23:59:59',INTERVAL 1 MONTH)
+NULL
+drop table if exists t1;
+create table t1(a date);
+insert into t1 values('2010-01-01');
+select date_add(a, interval 1 day) from t1;
+date_add(a, interval 1 day)
+2010-01-02
+select date_add(a, interval 1 minute) from t1;
+date_add(a, interval 1 minute)
+2010-01-01 00:01:00
+select date_add(a, interval 1 microsecond) from t1;
+date_add(a, interval 1 microsecond)
+2010-01-01 00:00:00.000001
+drop table if exists t1;
+create table t1(a datetime);
+insert into t1 values('2010-01-01 01:01:01');
+select date_add(a, interval 1 day) from t1;
+date_add(a, interval 1 day)
+2010-01-02 01:01:01
+select date_add(a, interval 1 minute) from t1;
+date_add(a, interval 1 minute)
+2010-01-01 01:02:01
+select date_add(a, interval 1 microsecond) from t1;
+date_add(a, interval 1 microsecond)
+2010-01-01 01:01:01.000001
+drop table if exists t1;
+create table t1(a datetime(2));
+insert into t1 values('2010-01-01 01:01:01');
+select date_add(a, interval 1 day) from t1;
+date_add(a, interval 1 day)
+2010-01-02 01:01:01.00
+select date_add(a, interval 1 minute) from t1;
+date_add(a, interval 1 minute)
+2010-01-01 01:02:01.00
+select date_add(a, interval 1 microsecond) from t1;
+date_add(a, interval 1 microsecond)
+2010-01-01 01:01:01.000001
+=======
+select adddate('2012-2-29', interval '-12.34' second)
+select adddate('2012-2-29', interval 1 year);
+adddate('2012-2-29', interval 1 year)
+2013-02-28
+select adddate(20120229, interval '34.56+78=90' day_microsecond);
+adddate(20120229, interval '34.56+78=90' day_microsecond)
+2012-03-01 10:57:18.900000
+select subdate('2012-2-29', interval '-12.34' second);
+subdate('2012-2-29', interval '-12.34' second)
+2012-02-29 00:00:12.340000
+select subdate('2012-2-29', interval 1 year);
+subdate('2012-2-29', interval 1 year)
+2011-02-28
+select subdate(20120229, interval '34.56+78=90' day_microsecond);
+subdate(20120229, interval '34.56+78=90' day_microsecond)
+2012-02-27 13:02:41.100000
+select adddate('2010-01-01', interval 1 day);
+adddate('2010-01-01', interval 1 day)
+2010-01-02
+select adddate('2010-01-01', interval 1 minute);
+adddate('2010-01-01', interval 1 minute)
+2010-01-01 00:01:00
+select adddate('2010-01-01 01:01:01', interval 1 day);
+adddate('2010-01-01 01:01:01', interval 1 day)
+2010-01-02 01:01:01
+select adddate('2010-01-01 01:01:01', interval 1 microsecond);
+adddate('2010-01-01 01:01:01', interval 1 microsecond)
+2010-01-01 01:01:01.000001
+select adddate('9999-12-31 23:59:59',INTERVAL 1 SECOND);
+adddate('9999-12-31 23:59:59',INTERVAL 1 SECOND)
+NULL
+select adddate('9999-12-31 23:59:59',INTERVAL 1000 SECOND);
+adddate('9999-12-31 23:59:59',INTERVAL 1000 SECOND)
+NULL
+select adddate('9999-12-31 23:59:59',INTERVAL 1 MONTH);
+adddate('9999-12-31 23:59:59',INTERVAL 1 MONTH)
+NULL
+drop table if exists t1;
+create table t1(a date);
+insert into t1 values('2010-01-01');
+select adddate(a, interval 1 day) from t1;
+adddate(a, interval 1 day)
+2010-01-02
+select adddate(a, interval 1 minute) from t1;
+adddate(a, interval 1 minute)
+2010-01-01 00:01:00
+select adddate(a, interval 1 microsecond) from t1;
+adddate(a, interval 1 microsecond)
+2010-01-01 00:00:00.000001
+drop table if exists t1;
+create table t1(a datetime);
+insert into t1 values('2010-01-01 01:01:01');
+select adddate(a, interval 1 day) from t1;
+adddate(a, interval 1 day)
+2010-01-02 01:01:01
+select adddate(a, interval 1 minute) from t1;
+adddate(a, interval 1 minute)
+2010-01-01 01:02:01
+select adddate(a, interval 1 microsecond) from t1;
+adddate(a, interval 1 microsecond)
+2010-01-01 01:01:01.000001
+drop table if exists t1;
+create table t1(a datetime(2));
+insert into t1 values('2010-01-01 01:01:01');
+select adddate(a, interval 1 day) from t1;
+adddate(a, interval 1 day)
+2010-01-02 01:01:01.00
+select adddate(a, interval 1 minute) from t1;
+adddate(a, interval 1 minute)
+2010-01-01 01:02:01.00
+select adddate(a, interval 1 microsecond) from t1;
+adddate(a, interval 1 microsecond)
+2010-01-01 01:01:01.000001
+=======
+select adddate('2012-2-29',  '-12.34')
+select adddate('2012-2-29',  1);
+adddate('2012-2-29',  1)
+2012-03-01
+select adddate(20120229,  '34.56+78=90');
+adddate(20120229,  '34.56+78=90')
+2012-04-03
+select subdate('2012-2-29',  '-12.34');
+subdate('2012-2-29',  '-12.34')
+2012-03-12
+select subdate('2012-2-29',  1);
+subdate('2012-2-29',  1)
+2012-02-28
+select subdate(20120229,  '34.56+78=90');
+subdate(20120229,  '34.56+78=90')
+2012-01-26
+select adddate('2010-01-01',  1);
+adddate('2010-01-01',  1)
+2010-01-02
+select adddate('2010-01-01',  10);
+adddate('2010-01-01',  10)
+2010-01-11
+select adddate('2010-01-01 01:01:01',  1);
+adddate('2010-01-01 01:01:01',  1)
+2010-01-02 01:01:01
+select adddate('2010-01-01 01:01:01',  30);
+adddate('2010-01-01 01:01:01',  30)
+2010-01-31 01:01:01
+select adddate('9999-12-31 23:59:59', 1);
+adddate('9999-12-31 23:59:59', 1)
+NULL
+select adddate('9999-12-31 23:59:59', 1000);
+adddate('9999-12-31 23:59:59', 1000)
+NULL
+select adddate('9999-12-31 23:59:59', 30);
+adddate('9999-12-31 23:59:59', 30)
+NULL
+drop table if exists t1;
+create table t1(a date);
+insert into t1 values('2010-01-01');
+select adddate(a,  1) from t1;
+adddate(a,  1)
+2010-01-02
+select adddate(a,  2) from t1;
+adddate(a,  2)
+2010-01-03
+select adddate(a,  30) from t1;
+adddate(a,  30)
+2010-01-31
+drop table if exists t1;
+create table t1(a datetime);
+insert into t1 values('2010-01-01 01:01:01');
+select adddate(a,  1) from t1;
+adddate(a,  1)
+2010-01-02 01:01:01
+select adddate(a,  2) from t1;
+adddate(a,  2)
+2010-01-03 01:01:01
+select adddate(a,  30) from t1;
+adddate(a,  30)
+2010-01-31 01:01:01
+drop table if exists t1;
+create table t1(a datetime(2));
+insert into t1 values('2010-01-01 01:01:01');
+select adddate(a,  1) from t1;
+adddate(a,  1)
+2010-01-02 01:01:01.00
+select adddate(a,  2) from t1;
+adddate(a,  2)
+2010-01-03 01:01:01.00
+select adddate(a,  30) from t1;
+adddate(a,  30)
+2010-01-31 01:01:01.00
+drop table t1;

@@ -1,0 +1,202 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# This test  uses grants, which can't get tested for embedded server
+#-- source mysql_test/include/big_test.inc
+-- source mysql_test/include/not_embedded.inc
+
+# check that CSV engine was compiled in, as the result of the test depends
+# on the presence of the log tables (which are CSV-based).
+#--source mysql_test/include/have_csv.inc
+
+let $cpu = 1;
+let $memory = 536870912;
+let $min_memory = 536870912;
+let $disk = 536870912;
+let $iops = 128;
+let $session = 64;
+
+connect (obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys1;
+
+--disable_warnings
+drop tenant if exists tt1 force;
+drop resource pool if exists mypool1;
+drop resource unit if exists mybox1;
+--enable_warnings
+--disable_query_log
+eval create resource unit mybox1 max_cpu $cpu, max_memory $memory, max_iops $iops, max_disk_size $disk, max_session_num $session, MIN_CPU=1, MIN_MEMORY=$min_memory, MIN_IOPS=128;
+--enable_query_log
+let $zone_name=query_get_value(select zone from oceanbase.__all_zone where zone != '' limit 1, zone, 1);
+
+--replace_column 1 create_time 2 modify_time 3 unit_config_id
+select * from oceanbase.__all_unit_config where name='mybox1';
+
+--disable_query_log
+eval create resource pool mypool1 unit = 'mybox1', unit_num = 1, zone_list = ('$zone_name');
+--replace_column 1 create_time 2 modify_time 3 resource_pool_id 6 unit_config_id 7 zone
+select * from oceanbase.__all_resource_pool where name='mypool1';
+
+eval create tenant tt1 replica_num = 1, primary_zone='$zone_name', resource_pool_list=('mypool1') set ob_tcp_invited_nodes='%';
+--source mysql_test/include/check_tenant_sync.inc
+--enable_query_log
+--replace_column 1 create_time 2 modify_time 3 tenant_id 6 zone 7 zone 13 locality 14 logonly_replica_num 15 previous_locality 16 storage_format_version 17 storage_format_work_version
+select * from oceanbase.__all_tenant where tenant_name='tt1';
+#connect (conn1,$OBMYSQL_MS0,admin@tt1,admin,test,$OBMYSQL_PORT);
+let $__tenant_name__ = 'tt1';
+--source mysql_test/include/get_tenant_server.inc
+
+disconnect obsys1;
+
+connect (tt1_root,$TE_SERVER_IP,root@tt1,,*NO-ONE*,$TE_SERVER_PORT);
+connection tt1_root;
+
+create user testtt1 identified by 'testtt1';
+create database tt1_test;
+GRANT ALL ON *.* TO testtt1;
+
+--source mysql_test/include/check_schema_sync.inc
+connect (conn1,$TE_SERVER_IP,testtt1@tt1,testtt1,tt1_test,$TE_SERVER_PORT);
+connection conn1;
+
+--disable_query_log
+set @@session.ob_query_timeout = 30000000;
+--enable_query_log
+use test;
+#
+--disable_warnings
+DROP TABLE IF EXISTS t0,t1,t2,t3,t4,t5;
+--disable_warnings
+DROP VIEW IF EXISTS v1;
+--enable_warnings
+
+
+--echo #
+--echo # Bug#18925: subqueries with MIN/MAX functions on INFORMARTION_SCHEMA
+--echo #
+--sorted_result
+SELECT t.table_name, c1.column_name
+  FROM information_schema.tables t
+       INNER JOIN
+       information_schema.columns c1
+       ON t.table_schema = c1.table_schema AND
+          t.table_name = c1.table_name
+  WHERE t.table_schema = 'information_schema' AND
+        c1.ordinal_position =
+        ( SELECT COALESCE(MIN(c2.ordinal_position),1)
+            FROM information_schema.columns c2
+            WHERE c2.table_schema = t.table_schema AND
+                  c2.table_name = t.table_name AND
+                  c2.column_name LIKE '%SCHEMA%')
+  AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+--sorted_result
+SELECT t.table_name, c1.column_name
+  FROM information_schema.tables t
+       INNER JOIN
+       information_schema.columns c1
+       ON t.table_schema = c1.table_schema AND
+          t.table_name = c1.table_name
+  WHERE t.table_schema = 'information_schema' AND
+        c1.ordinal_position =
+        ( SELECT COALESCE(MIN(c2.ordinal_position),1)
+            FROM information_schema.columns c2
+            WHERE c2.table_schema = 'information_schema' AND
+                  c2.table_name = t.table_name AND
+                  c2.column_name LIKE '%SCHEMA%')
+  AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+connect (conn_root,$OBMYSQL_MS0,root@sys,,*NO-ONE*,$OBMYSQL_PORT);
+connection conn_root;
+--disable_query_log
+set @@session.ob_query_timeout = 30000000;
+--enable_query_log
+--sorted_result
+SELECT t.table_name, c1.column_name
+  FROM information_schema.tables t
+       INNER JOIN
+       information_schema.columns c1
+       ON t.table_schema = c1.table_schema AND
+          t.table_name = c1.table_name
+  WHERE t.table_schema = 'information_schema' AND
+        c1.ordinal_position =
+        ( SELECT COALESCE(MIN(c2.ordinal_position),1)
+            FROM information_schema.columns c2
+            WHERE c2.table_schema = t.table_schema AND
+                  c2.table_name = t.table_name AND
+                  c2.column_name LIKE '%SCHEMA%')
+  AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+--sorted_result
+SELECT t.table_name, c1.column_name
+  FROM information_schema.tables t
+       INNER JOIN
+       information_schema.columns c1
+       ON t.table_schema = c1.table_schema AND
+          t.table_name = c1.table_name
+  WHERE t.table_schema = 'information_schema' AND
+        c1.ordinal_position =
+        ( SELECT COALESCE(MIN(c2.ordinal_position),1)
+            FROM information_schema.columns c2
+            WHERE c2.table_schema = 'information_schema' AND
+                  c2.table_name = t.table_name AND
+                  c2.column_name LIKE '%SCHEMA%')
+  AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+
+select 1;
+connection conn1;
+use test;
+create table if not exists t1(i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3), primary key(i1));
+connection conn1;
+create table if not exists t2(i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3), primary key(i1));
+connection conn1;
+create table if not exists t3(i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3), primary key(i1));
+connection conn1;
+create table if not exists t4(i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3), primary key(i1));
+connection conn1;
+--disable_query_log
+set @@session.ob_query_timeout = 30000000;
+--enable_query_log
+SELECT t.table_name, c1.column_name
+  FROM information_schema.tables t
+       INNER JOIN
+       information_schema.columns c1
+       ON t.table_schema = c1.table_schema AND
+          t.table_name = c1.table_name
+  WHERE t.table_schema = 'information_schema' AND
+        c1.ordinal_position =
+        ( SELECT COALESCE(MIN(c2.ordinal_position),1)
+            FROM information_schema.columns c2
+            WHERE c2.table_schema = t.table_schema AND
+                  c2.table_name = t.table_name AND
+                  c2.column_name LIKE '%SCHEMA%')
+  AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+--sorted_result
+SELECT t.table_name, c1.column_name
+  FROM information_schema.tables t
+       INNER JOIN
+       information_schema.columns c1
+       ON t.table_schema = c1.table_schema AND
+          t.table_name = c1.table_name
+  WHERE t.table_schema = 'information_schema' AND
+        c1.ordinal_position =
+        ( SELECT COALESCE(MIN(c2.ordinal_position),1)
+            FROM information_schema.columns c2
+            WHERE c2.table_schema = 'information_schema' AND
+                  c2.table_name = t.table_name AND
+                  c2.column_name LIKE '%SCHEMA%')
+  AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+
+connect (obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys1;
+
+--disable_warnings
+drop tenant if exists tt1 force;
+drop resource pool if exists mypool1;
+drop resource unit if exists mybox1;
+--enable_warnings
+
+disconnect obsys1;

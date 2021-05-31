@@ -1,0 +1,59 @@
+drop database if exists index_db;
+create database index_db;
+use index_db;
+
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+create table test(c1 int , c2 int, c3 varchar(50), c4 varchar(50), c5 int , c6 double, c7 int, primary key(c1, c2, c3))
+create index test_indx on test(c4, c5)
+
+drop table if exists index_t1;
+#create table index_t1(c1 int primary key, c2 int, c3 int, c4 varchar(50)) partition by hash(c2 + 1) partitions 3;
+create table index_t1(c1 int primary key, c2 int, c3 int, c4 varchar(50));
+create index index_ia1 on index_t1(c2, c3) LOCAL;
+create unique index index_ia2 on index_t1(c2, c3) LOCAL;
+create index index_ia3 on index_t1(c2, c3) GLOBAL;
+create unique index index_ia4 on index_t1(c2, c3) GLOBAL;
+create index index_ib1 on index_t1(c2, c3);
+create unique index index_ib2 on index_t1(c2, c3);
+create index index_i1 on index_t1(c2, c3) BLOCK_SIZE=16384;
+create unique index index_i2 on index_t1(c2, c3) comment 'unique index';
+create index index_i3 on index_t1(c2 asc, c3 desc);
+create index index_i4 on index_t1(c2, c3) comment 'kk contains c2/c3' BLOCK_SIZE=16384;
+create index index_i5 on index_t1(c2, c3) storing(c4);
+create index index_i6 on index_t1(c2, c3) storing(c4) comment 'kk contains c2/c3' BLOCK_SIZE=16384 LOCAL;
+create index index_i7 on index_t1(C2, C3) storing(C4);
+drop index index_ia1 on index_t1;
+drop index index_ia2 on index_t1;
+drop index index_ia3 on index_t1;
+drop index index_ia4 on index_t1;
+drop index index_ib1 on index_t1;
+drop index index_ib2 on index_t1;
+drop index index_i1 on index_t1;
+drop index index_i2 on index_t1;
+drop index index_i3 on index_t1;
+drop index index_i4 on index_t1;
+drop index index_i5 on index_t1;
+drop index index_i6 on index_t1;
+drop index index_i7 on index_t1;
+
+#create index on non-exist column
+--error 5217
+#create index idx1 on t1 (list);
+
+#prefix key
+#--error 5190
+#create index test_idx on test (c3(60));
+#--error 5190
+#create index test_idx2 on test (c1(10), c3);
+#--error 4007
+#create index test_idx3 on test (c1, c3(20));
+--error 5191
+create index test_idx3 on test (c1, c3(0));
+--error 5191
+create index test_idx3 on test (xx(0));
+
+#using hash/btree(only syntax support)
+create index test_idx4 using btree on test(c1) using hash;
+create unique index test_uidx4 using btree on test(c1) using hash;
+
+drop database index_db;

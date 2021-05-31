@@ -1,0 +1,1881 @@
+drop table if exists s,p,p4,no_p,temp_s,temp_p,temp_p4,temp_p5;
+create table s(c1 int primary key, c2 int ,c3 int);
+create table p(c1 int primary key, c2 int ,c3 int) partition by hash(c1)  partitions 4;
+create table p4(c1 int primary key, c2 int ,c3 int) partition by hash(c1)  partitions 4;
+create table no_p(c1 int, c2 int ,c3 int) partition by hash(c1)  partitions 4;
+create table temp_s(c1 int, c2 int, c3 int);
+create table temp_p(c1 int, c2 int ,c3 int) partition by hash(c1)  partitions 4;
+create table temp_p4(c1 int, c2 int ,c3 int) partition by hash(c1)  partitions 4;
+create table temp_p5(c1 int, c2 int ,c3 int) partition by hash(c1)  partitions 5;
+insert into s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+no_use_px*/ from s;
+Query Plan
+=====================
+|ID|OPERATOR   |NAME|
+---------------------
+|0 |DELETE     |    |
+|1 | TABLE SCAN|s   |
+=====================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)})}])
+  1 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      access([s.c1], [s.c2], [s.c3]), partitions(p0)
+
+explain basic delete /*+use_px*/ from s;
+Query Plan
+=====================
+|ID|OPERATOR   |NAME|
+---------------------
+|0 |DELETE     |    |
+|1 | TABLE SCAN|s   |
+=====================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)})}])
+  1 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      access([s.c1], [s.c2], [s.c3]), partitions(p0)
+
+delete /*+use_px*/ from s;
+select * from s order by c1;
+c1	c2	c3
+insert into s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+use_px, parallel(10)*/ from s;
+Query Plan
+==================================
+|ID|OPERATOR            |NAME    |
+----------------------------------
+|0 |DELETE              |        |
+|1 | PX COORDINATOR     |        |
+|2 |  EXCHANGE OUT DISTR|:EX10000|
+|3 |   PX BLOCK ITERATOR|        |
+|4 |    TABLE SCAN      |s       |
+==================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)})}])
+  1 - output([s.c1], [s.c2], [s.c3]), filter(nil)
+  2 - output([s.c1], [s.c2], [s.c3]), filter(nil), dop=10
+  3 - output([s.c1], [s.c2], [s.c3]), filter(nil)
+  4 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      access([s.c1], [s.c2], [s.c3]), partitions(p0)
+
+delete /*+use_px, parallel(10)*/ from s;
+select * from s order by c1;
+c1	c2	c3
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+no_use_px,parallel(10)*/ from p;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   DELETE              |        |
+|4 |    TABLE SCAN         |p       |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  4 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p[0-3])
+
+explain basic delete /*+use_px,parallel(10)*/ from p;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   DELETE              |        |
+|4 |    TABLE SCAN         |p       |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  4 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p[0-3])
+
+delete /*+use_px,parallel(10)*/ from p;
+select * from p order by c1;
+c1	c2	c3
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+no_use_px,parallel(10)*/ from p where c1 >= 5;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   DELETE              |        |
+|4 |    TABLE SCAN         |p       |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  4 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p[0-3])
+
+explain basic delete /*+use_px,parallel(10)*/ from p where c1 >= 5;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   DELETE              |        |
+|4 |    TABLE SCAN         |p       |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  4 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p[0-3])
+
+delete /*+use_px,parallel(10)*/ from p where c1 >= 5;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+delete from p;
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+use_px*/ from p where c1 = 5;
+Query Plan
+====================
+|ID|OPERATOR  |NAME|
+--------------------
+|0 |DELETE    |    |
+|1 | TABLE GET|p   |
+====================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p1)
+
+explain basic delete /*+use_px,parallel(10)*/ from p where c1 = 5;
+Query Plan
+==================================
+|ID|OPERATOR            |NAME    |
+----------------------------------
+|0 |DELETE              |        |
+|1 | PX COORDINATOR     |        |
+|2 |  EXCHANGE OUT DISTR|:EX10000|
+|3 |   PX BLOCK ITERATOR|        |
+|4 |    TABLE GET       |p       |
+==================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  2 - output([p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  3 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  4 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p1)
+
+explain basic delete /*+no_use_px,parallel(10)*/ from p where c1 = 5;
+Query Plan
+==================================
+|ID|OPERATOR            |NAME    |
+----------------------------------
+|0 |DELETE              |        |
+|1 | PX COORDINATOR     |        |
+|2 |  EXCHANGE OUT DISTR|:EX10000|
+|3 |   PX BLOCK ITERATOR|        |
+|4 |    TABLE GET       |p       |
+==================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  2 - output([p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  3 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  4 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p1)
+
+delete /*+use_px,parallel(10)*/ from p where c1 = 5;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+6	6	NULL
+7	7	NULL
+8	8	NULL
+9	9	NULL
+10	10	NULL
+delete from p;
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into p4(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+no_use_px, use_nl(p,p4), parallel(10)*/ p from p,p4 where p.c1 = p4.c1 and p.c1 >= 5;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   DELETE              |        |
+|4 |    NESTED-LOOP JOIN   |        |
+|5 |     TABLE SCAN        |p       |
+|6 |     TABLE GET         |p4      |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  4 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_([p.c1])
+  5 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p[0-3])
+  6 - output([1]), filter(nil), 
+      access([p4.c1]), partitions(p[0-3])
+
+explain basic delete /*+use_px, parallel(10)*/ p from p,p4 where p.c1 = p4.c1 and p.c1 >= 5;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   DELETE              |        |
+|4 |    MERGE JOIN         |        |
+|5 |     TABLE SCAN        |p       |
+|6 |     TABLE SCAN        |p4      |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  4 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      equal_conds([p.c1 = p4.c1]), other_conds(nil)
+  5 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p[0-3])
+  6 - output([p4.c1]), filter(nil), 
+      access([p4.c1]), partitions(p[0-3])
+
+delete /*+use_px, parallel(10)*/ p from p,p4 where p.c1 = p4.c1 and p.c1 >= 5;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+delete from p;
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+no_use_px, parallel(10)*/ p from p,p4 where p.c1 = p4.c2 and p.c1 >= 5;
+Query Plan
+============================================
+|ID|OPERATOR                      |NAME    |
+--------------------------------------------
+|0 |MULTI PARTITION DELETE        |        |
+|1 | PX COORDINATOR               |        |
+|2 |  EXCHANGE OUT DISTR          |:EX10001|
+|3 |   NESTED-LOOP JOIN           |        |
+|4 |    EXCHANGE IN DISTR         |        |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|6 |      PX BLOCK ITERATOR       |        |
+|7 |       TABLE SCAN             |p4      |
+|8 |    PX PARTITION ITERATOR     |        |
+|9 |     TABLE GET                |p       |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)}), hash_distinct}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  2 - output([p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  3 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_([p4.c2])
+  4 - output([p4.c2], [PARTITION_ID]), filter(nil)
+  5 - (#keys=1, [p4.c2]), output([p4.c2], [PARTITION_ID]), filter(nil), dop=10
+  6 - output([p4.c2]), filter(nil)
+  7 - output([p4.c2]), filter([p4.c2 >= 5]), 
+      access([p4.c2]), partitions(p[0-3])
+  8 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  9 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p[0-3])
+
+explain basic delete /*+use_px, parallel(10)*/ p from p,p4 where p.c1 = p4.c2 and p.c1 >= 5;
+Query Plan
+============================================
+|ID|OPERATOR                      |NAME    |
+--------------------------------------------
+|0 |MULTI PARTITION DELETE        |        |
+|1 | PX COORDINATOR               |        |
+|2 |  EXCHANGE OUT DISTR          |:EX10001|
+|3 |   NESTED-LOOP JOIN           |        |
+|4 |    EXCHANGE IN DISTR         |        |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|6 |      PX BLOCK ITERATOR       |        |
+|7 |       TABLE SCAN             |p4      |
+|8 |    PX PARTITION ITERATOR     |        |
+|9 |     TABLE GET                |p       |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)}), hash_distinct}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  2 - output([p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  3 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_([p4.c2])
+  4 - output([p4.c2], [PARTITION_ID]), filter(nil)
+  5 - (#keys=1, [p4.c2]), output([p4.c2], [PARTITION_ID]), filter(nil), dop=10
+  6 - output([p4.c2]), filter(nil)
+  7 - output([p4.c2]), filter([p4.c2 >= 5]), 
+      access([p4.c2]), partitions(p[0-3])
+  8 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  9 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p[0-3])
+
+delete /*+use_px, parallel(10)*/ p from p,p4 where p.c1 = p4.c2 and p.c1 >= 5;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+delete from p;
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+no_use_px,parallel(10)*/ s,p from s,p;
+Query Plan
+==================================================
+|ID|OPERATOR                            |NAME    |
+--------------------------------------------------
+|0 |MULTI PARTITION DELETE              |        |
+|1 | PX COORDINATOR                     |        |
+|2 |  EXCHANGE OUT DISTR                |:EX10001|
+|3 |   NESTED-LOOP JOIN CARTESIAN       |        |
+|4 |    PX BLOCK ITERATOR               |        |
+|5 |     TABLE SCAN                     |s       |
+|6 |    MATERIAL                        |        |
+|7 |     EXCHANGE IN DISTR              |        |
+|8 |      EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|9 |       PX BLOCK ITERATOR            |        |
+|10|        TABLE SCAN                  |p       |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)}), hash_distinct}], [{p: ({p: (p.c1, p.c2, p.c3)}), hash_distinct}])
+  1 - output([s.c1], [s.c2], [s.c3], [p.c1], [p.c2], [p.c3]), filter(nil)
+  2 - output([s.c1], [s.c2], [s.c3], [p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  3 - output([s.c1], [s.c2], [s.c3], [p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([s.c1], [s.c2], [s.c3]), filter(nil)
+  5 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      access([s.c1], [s.c2], [s.c3]), partitions(p0)
+  6 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  7 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  8 - output([p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  9 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  10 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p[0-3])
+
+explain basic delete /*+use_px,parallel(10)*/ s,p from s,p;
+Query Plan
+==================================================
+|ID|OPERATOR                            |NAME    |
+--------------------------------------------------
+|0 |MULTI PARTITION DELETE              |        |
+|1 | PX COORDINATOR                     |        |
+|2 |  EXCHANGE OUT DISTR                |:EX10001|
+|3 |   NESTED-LOOP JOIN CARTESIAN       |        |
+|4 |    PX BLOCK ITERATOR               |        |
+|5 |     TABLE SCAN                     |s       |
+|6 |    MATERIAL                        |        |
+|7 |     EXCHANGE IN DISTR              |        |
+|8 |      EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|9 |       PX BLOCK ITERATOR            |        |
+|10|        TABLE SCAN                  |p       |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)}), hash_distinct}], [{p: ({p: (p.c1, p.c2, p.c3)}), hash_distinct}])
+  1 - output([s.c1], [s.c2], [s.c3], [p.c1], [p.c2], [p.c3]), filter(nil)
+  2 - output([s.c1], [s.c2], [s.c3], [p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  3 - output([s.c1], [s.c2], [s.c3], [p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([s.c1], [s.c2], [s.c3]), filter(nil)
+  5 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      access([s.c1], [s.c2], [s.c3]), partitions(p0)
+  6 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  7 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  8 - output([p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  9 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  10 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p[0-3])
+
+delete /*+use_px,parallel(10)*/ s,p from s,p;
+select * from p order by c1;
+c1	c2	c3
+select * from s order by c1;
+c1	c2	c3
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+no_use_px, parallel(10)*/ s from s,p where p.c1 = s.c1;
+Query Plan
+==============================================
+|ID|OPERATOR                        |NAME    |
+----------------------------------------------
+|0 |DELETE                          |        |
+|1 | PX COORDINATOR                 |        |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|
+|3 |   MERGE JOIN                   |        |
+|4 |    EXCHANGE IN MERGE SORT DISTR|        |
+|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|
+|6 |      PX BLOCK ITERATOR         |        |
+|7 |       TABLE SCAN               |s       |
+|8 |    SORT                        |        |
+|9 |     PX PARTITION ITERATOR      |        |
+|10|      TABLE SCAN                |p       |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)})}])
+  1 - output([s.c1], [s.c2], [s.c3]), filter(nil)
+  2 - output([s.c1], [s.c2], [s.c3]), filter(nil), dop=10
+  3 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      equal_conds([p.c1 = s.c1]), other_conds(nil)
+  4 - output([s.c1], [s.c2], [s.c3]), filter(nil), sort_keys([s.c1, ASC]), Local Order
+  5 - (#keys=1, [s.c1]), output([s.c1], [s.c2], [s.c3]), filter(nil), dop=10
+  6 - output([s.c1], [s.c2], [s.c3]), filter(nil)
+  7 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      access([s.c1], [s.c2], [s.c3]), partitions(p0)
+  8 - output([p.c1]), filter(nil), sort_keys([p.c1, ASC]), local merge sort
+  9 - output([p.c1]), filter(nil)
+  10 - output([p.c1]), filter(nil), 
+      access([p.c1]), partitions(p[0-3])
+
+explain basic delete /*+use_px, parallel(10),leading(s,p),pq_distribute(p,none,broadcast)*/ s from s,p where p.c1 = s.c1;
+Query Plan
+=================================================
+|ID|OPERATOR                           |NAME    |
+-------------------------------------------------
+|0 |DELETE                             |        |
+|1 | PX COORDINATOR                    |        |
+|2 |  EXCHANGE OUT DISTR               |:EX10001|
+|3 |   MERGE JOIN                      |        |
+|4 |    SORT                           |        |
+|5 |     PX BLOCK ITERATOR             |        |
+|6 |      TABLE SCAN                   |s       |
+|7 |    EXCHANGE IN MERGE SORT DISTR   |        |
+|8 |     EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|9 |      PX BLOCK ITERATOR            |        |
+|10|       TABLE SCAN                  |p       |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)})}])
+  1 - output([s.c1], [s.c2], [s.c3]), filter(nil)
+  2 - output([s.c1], [s.c2], [s.c3]), filter(nil), dop=10
+  3 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      equal_conds([p.c1 = s.c1]), other_conds(nil)
+  4 - output([s.c1], [s.c2], [s.c3]), filter(nil), sort_keys([s.c1, ASC]), local merge sort
+  5 - output([s.c1], [s.c2], [s.c3]), filter(nil)
+  6 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      access([s.c1], [s.c2], [s.c3]), partitions(p0)
+  7 - output([p.c1]), filter(nil), sort_keys([p.c1, ASC]), Local Order
+  8 - output([p.c1]), filter(nil), dop=10
+  9 - output([p.c1]), filter(nil)
+  10 - output([p.c1]), filter(nil), 
+      access([p.c1]), partitions(p[0-3])
+
+delete /*+use_px, parallel(10),leading(s,p),pq_distribute(p,none,broadcast)*/ s from s,p where p.c1 = s.c1;
+select * from s order by c1;
+c1	c2	c3
+insert into s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+use_px, parallel(10)*/ s from s,p where p.c1 = s.c1;
+Query Plan
+==============================================
+|ID|OPERATOR                        |NAME    |
+----------------------------------------------
+|0 |DELETE                          |        |
+|1 | PX COORDINATOR                 |        |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|
+|3 |   MERGE JOIN                   |        |
+|4 |    EXCHANGE IN MERGE SORT DISTR|        |
+|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|
+|6 |      PX BLOCK ITERATOR         |        |
+|7 |       TABLE SCAN               |s       |
+|8 |    SORT                        |        |
+|9 |     PX PARTITION ITERATOR      |        |
+|10|      TABLE SCAN                |p       |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)})}])
+  1 - output([s.c1], [s.c2], [s.c3]), filter(nil)
+  2 - output([s.c1], [s.c2], [s.c3]), filter(nil), dop=10
+  3 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      equal_conds([p.c1 = s.c1]), other_conds(nil)
+  4 - output([s.c1], [s.c2], [s.c3]), filter(nil), sort_keys([s.c1, ASC]), Local Order
+  5 - (#keys=1, [s.c1]), output([s.c1], [s.c2], [s.c3]), filter(nil), dop=10
+  6 - output([s.c1], [s.c2], [s.c3]), filter(nil)
+  7 - output([s.c1], [s.c2], [s.c3]), filter(nil), 
+      access([s.c1], [s.c2], [s.c3]), partitions(p0)
+  8 - output([p.c1]), filter(nil), sort_keys([p.c1, ASC]), local merge sort
+  9 - output([p.c1]), filter(nil)
+  10 - output([p.c1]), filter(nil), 
+      access([p.c1]), partitions(p[0-3])
+
+delete /*+use_px, parallel(10)*/ s from s,p where p.c1 = s.c1;
+select * from s order by c1;
+c1	c2	c3
+insert into s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+no_use_px, parallel(10)*/ p from s,p where p.c1 = s.c1 and p.c1 = 1;
+Query Plan
+=================================================
+|ID|OPERATOR                           |NAME    |
+-------------------------------------------------
+|0 |DELETE                             |        |
+|1 | PX COORDINATOR                    |        |
+|2 |  EXCHANGE OUT DISTR               |:EX10001|
+|3 |   NESTED-LOOP JOIN CARTESIAN      |        |
+|4 |    EXCHANGE IN DISTR              |        |
+|5 |     EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|6 |      PX BLOCK ITERATOR            |        |
+|7 |       TABLE GET                   |s       |
+|8 |    PX BLOCK ITERATOR              |        |
+|9 |     TABLE GET                     |p       |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  2 - output([p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  3 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), dop=10
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil), 
+      access([s.c1]), partitions(p0)
+  8 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  9 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p1)
+
+explain basic delete /*+use_px, parallel(1)*/ p from s,p where p.c1 = s.c1 and p.c1 = 1;
+Query Plan
+=====================================
+|ID|OPERATOR                   |NAME|
+-------------------------------------
+|0 |DELETE                     |    |
+|1 | NESTED-LOOP JOIN CARTESIAN|    |
+|2 |  TABLE GET                |s   |
+|3 |  TABLE GET                |p   |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([1]), filter(nil), 
+      access([s.c1]), partitions(p0)
+  3 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p1)
+
+explain basic delete /*+use_px, parallel(10)*/ p from s,p where p.c1 = s.c1 and p.c1 = 1;
+Query Plan
+=================================================
+|ID|OPERATOR                           |NAME    |
+-------------------------------------------------
+|0 |DELETE                             |        |
+|1 | PX COORDINATOR                    |        |
+|2 |  EXCHANGE OUT DISTR               |:EX10001|
+|3 |   NESTED-LOOP JOIN CARTESIAN      |        |
+|4 |    EXCHANGE IN DISTR              |        |
+|5 |     EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|6 |      PX BLOCK ITERATOR            |        |
+|7 |       TABLE GET                   |s       |
+|8 |    PX BLOCK ITERATOR              |        |
+|9 |     TABLE GET                     |p       |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  2 - output([p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  3 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), dop=10
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil), 
+      access([s.c1]), partitions(p0)
+  8 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  9 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p1)
+
+delete /*+use_px, parallel(10)*/ p from s,p where p.c1 = s.c1 and p.c1 = 1;
+select * from p order by c1;
+c1	c2	c3
+2	2	NULL
+3	3	NULL
+4	4	NULL
+5	5	NULL
+6	6	NULL
+7	7	NULL
+8	8	NULL
+9	9	NULL
+10	10	NULL
+delete from p;
+delete from s;
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+no_use_px, parallel(10)*/ p from p4,p where p.c1 = p4.c2 and p4.c2 = 4;
+Query Plan
+==================================================
+|ID|OPERATOR                            |NAME    |
+--------------------------------------------------
+|0 |DELETE                              |        |
+|1 | PX COORDINATOR                     |        |
+|2 |  EXCHANGE OUT DISTR                |:EX10001|
+|3 |   NESTED-LOOP JOIN CARTESIAN       |        |
+|4 |    PX BLOCK ITERATOR               |        |
+|5 |     TABLE GET                      |p       |
+|6 |    MATERIAL                        |        |
+|7 |     EXCHANGE IN DISTR              |        |
+|8 |      EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|9 |       PX BLOCK ITERATOR            |        |
+|10|        TABLE SCAN                  |p4      |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)}), hash_distinct}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  2 - output([p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  3 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  5 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p0)
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil)
+  8 - output([1]), filter(nil), dop=10
+  9 - output([1]), filter(nil)
+  10 - output([1]), filter([p4.c2 = 4]), 
+      access([p4.c2]), partitions(p[0-3])
+
+explain basic delete /*+use_px, parallel(1)*/ p from p4,p where p.c1 = p4.c2 and p4.c2 = 4;
+Query Plan
+=========================================
+|ID|OPERATOR                   |NAME    |
+-----------------------------------------
+|0 |DELETE                     |        |
+|1 | NESTED-LOOP JOIN CARTESIAN|        |
+|2 |  TABLE GET                |p       |
+|3 |  PX COORDINATOR           |        |
+|4 |   EXCHANGE OUT DISTR      |:EX10000|
+|5 |    PX PARTITION ITERATOR  |        |
+|6 |     TABLE SCAN            |p4      |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)}), hash_distinct}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p0)
+  3 - output([1]), filter(nil)
+  4 - output([1]), filter(nil), dop=1
+  5 - output([1]), filter(nil)
+  6 - output([1]), filter([p4.c2 = 4]), 
+      access([p4.c2]), partitions(p[0-3])
+
+delete /*+use_px, parallel(1)*/ p from p4,p where p.c1 = p4.c2 and p4.c2 = 4;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+5	5	NULL
+6	6	NULL
+7	7	NULL
+8	8	NULL
+9	9	NULL
+10	10	NULL
+delete from p;
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic delete /*+use_px, parallel(10)*/ p from p4,p where p.c1 = p4.c2 and p4.c2 = 4;
+Query Plan
+==================================================
+|ID|OPERATOR                            |NAME    |
+--------------------------------------------------
+|0 |DELETE                              |        |
+|1 | PX COORDINATOR                     |        |
+|2 |  EXCHANGE OUT DISTR                |:EX10001|
+|3 |   NESTED-LOOP JOIN CARTESIAN       |        |
+|4 |    PX BLOCK ITERATOR               |        |
+|5 |     TABLE GET                      |p       |
+|6 |    MATERIAL                        |        |
+|7 |     EXCHANGE IN DISTR              |        |
+|8 |      EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|9 |       PX BLOCK ITERATOR            |        |
+|10|        TABLE SCAN                  |p4      |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)}), hash_distinct}])
+  1 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  2 - output([p.c1], [p.c2], [p.c3]), filter(nil), dop=10
+  3 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([p.c1], [p.c2], [p.c3]), filter(nil)
+  5 - output([p.c1], [p.c2], [p.c3]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p0)
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter(nil)
+  8 - output([1]), filter(nil), dop=10
+  9 - output([1]), filter(nil)
+  10 - output([1]), filter([p4.c2 = 4]), 
+      access([p4.c2]), partitions(p[0-3])
+
+delete /*+use_px, parallel(10)*/ p from p4,p where p.c1 = p4.c2 and p4.c2 = 4;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+5	5	NULL
+6	6	NULL
+7	7	NULL
+8	8	NULL
+9	9	NULL
+10	10	NULL
+delete from p;
+delete from p4;
+insert into s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic update /*+no_use_px, parallel(10)*/ s set s.c2 = 20 where s.c1 >= 5;
+Query Plan
+==================================
+|ID|OPERATOR            |NAME    |
+----------------------------------
+|0 |UPDATE              |        |
+|1 | PX COORDINATOR     |        |
+|2 |  EXCHANGE OUT DISTR|:EX10000|
+|3 |   PX BLOCK ITERATOR|        |
+|4 |    TABLE SCAN      |s       |
+==================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)})}]),
+      update([s.c2=?])
+  1 - output([s.c1], [s.c2], [s.c3], [?]), filter(nil)
+  2 - output([s.c2], [s.c1], [s.c3], [?]), filter(nil), dop=10
+  3 - output([s.c2], [s.c1], [s.c3], [?]), filter(nil)
+  4 - output([s.c2], [s.c1], [s.c3], [?]), filter(nil), 
+      access([s.c2], [s.c1], [s.c3]), partitions(p0)
+
+explain basic update /*+use_px, parallel(10)*/ s set s.c2 = 20 where s.c1 >= 5;
+Query Plan
+==================================
+|ID|OPERATOR            |NAME    |
+----------------------------------
+|0 |UPDATE              |        |
+|1 | PX COORDINATOR     |        |
+|2 |  EXCHANGE OUT DISTR|:EX10000|
+|3 |   PX BLOCK ITERATOR|        |
+|4 |    TABLE SCAN      |s       |
+==================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)})}]),
+      update([s.c2=?])
+  1 - output([s.c1], [s.c2], [s.c3], [?]), filter(nil)
+  2 - output([s.c2], [s.c1], [s.c3], [?]), filter(nil), dop=10
+  3 - output([s.c2], [s.c1], [s.c3], [?]), filter(nil)
+  4 - output([s.c2], [s.c1], [s.c3], [?]), filter(nil), 
+      access([s.c2], [s.c1], [s.c3]), partitions(p0)
+
+update /*+use_px, parallel(10)*/ s set s.c2 = 20 where s.c1 >=5;
+select * from s order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+5	20	NULL
+6	20	NULL
+7	20	NULL
+8	20	NULL
+9	20	NULL
+10	20	NULL
+delete from s;
+insert into s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic update /*+no_use_px, parallel(10)*/ s set s.c1 = 20 where s.c2 = 5;
+Query Plan
+==================================
+|ID|OPERATOR            |NAME    |
+----------------------------------
+|0 |UPDATE              |        |
+|1 | PX COORDINATOR     |        |
+|2 |  EXCHANGE OUT DISTR|:EX10000|
+|3 |   PX BLOCK ITERATOR|        |
+|4 |    TABLE SCAN      |s       |
+==================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)})}]),
+      update([s.c1=?])
+  1 - output([s.c1], [s.c2], [s.c3], [?]), filter(nil)
+  2 - output([s.c1], [s.c2], [s.c3], [?]), filter(nil), dop=10
+  3 - output([s.c1], [s.c2], [s.c3], [?]), filter(nil)
+  4 - output([s.c1], [s.c2], [s.c3], [?]), filter([s.c2 = 5]), 
+      access([s.c1], [s.c2], [s.c3]), partitions(p0)
+
+explain basic update /*+use_px, parallel(10)*/ s set s.c1 = 20 where s.c2 = 5;
+Query Plan
+==================================
+|ID|OPERATOR            |NAME    |
+----------------------------------
+|0 |UPDATE              |        |
+|1 | PX COORDINATOR     |        |
+|2 |  EXCHANGE OUT DISTR|:EX10000|
+|3 |   PX BLOCK ITERATOR|        |
+|4 |    TABLE SCAN      |s       |
+==================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{s: ({s: (s.c1, s.c2, s.c3)})}]),
+      update([s.c1=?])
+  1 - output([s.c1], [s.c2], [s.c3], [?]), filter(nil)
+  2 - output([s.c1], [s.c2], [s.c3], [?]), filter(nil), dop=10
+  3 - output([s.c1], [s.c2], [s.c3], [?]), filter(nil)
+  4 - output([s.c1], [s.c2], [s.c3], [?]), filter([s.c2 = 5]), 
+      access([s.c1], [s.c2], [s.c3]), partitions(p0)
+
+update /*+use_px, parallel(10)*/ s set s.c1 = 20 where s.c2 = 5;
+select * from s order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+6	6	NULL
+7	7	NULL
+8	8	NULL
+9	9	NULL
+10	10	NULL
+20	5	NULL
+delete from s;
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic update /*+no_use_px, parallel(10)*/ p set p.c3 = 20 where p.c1 >= 5;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   UPDATE              |        |
+|4 |    TABLE SCAN         |p       |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}]),
+      update([p.c3=?])
+  4 - output([p.c1], [p.c2], [p.c3], [?]), filter(nil), 
+      access([p.c1], [p.c3], [p.c2]), partitions(p[0-3])
+
+explain basic update /*+use_px, parallel(10)*/ p set p.c3 = 20 where p.c1 >= 5;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   UPDATE              |        |
+|4 |    TABLE SCAN         |p       |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}]),
+      update([p.c3=?])
+  4 - output([p.c1], [p.c2], [p.c3], [?]), filter(nil), 
+      access([p.c1], [p.c3], [p.c2]), partitions(p[0-3])
+
+update /*+use_px, parallel(10)*/ p set p.c3 = 20 where p.c1 >= 5;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+5	5	20
+6	6	20
+7	7	20
+8	8	20
+9	9	20
+10	10	20
+delete from p;
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic update /*+no_use_px, parallel(10)*/ p set p.c1 = 20 where p.c1 = 5;
+Query Plan
+====================================
+|ID|OPERATOR              |NAME    |
+------------------------------------
+|0 |MULTI PARTITION UPDATE|        |
+|1 | PX COORDINATOR       |        |
+|2 |  EXCHANGE OUT DISTR  |:EX10000|
+|3 |   PX BLOCK ITERATOR  |        |
+|4 |    TABLE GET         |p       |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}]),
+      update([p.c1=?])
+  1 - output([p.c1], [p.c2], [p.c3], [?]), filter(nil)
+  2 - output([p.c1], [p.c2], [p.c3], [?]), filter(nil), dop=10
+  3 - output([p.c1], [p.c2], [p.c3], [?]), filter(nil)
+  4 - output([p.c1], [p.c2], [p.c3], [?]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p1)
+
+explain basic update /*+use_px, parallel(10)*/ p set p.c1 = 20 where p.c1 = 5;
+Query Plan
+====================================
+|ID|OPERATOR              |NAME    |
+------------------------------------
+|0 |MULTI PARTITION UPDATE|        |
+|1 | PX COORDINATOR       |        |
+|2 |  EXCHANGE OUT DISTR  |:EX10000|
+|3 |   PX BLOCK ITERATOR  |        |
+|4 |    TABLE GET         |p       |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{p: ({p: (p.c1, p.c2, p.c3)})}]),
+      update([p.c1=?])
+  1 - output([p.c1], [p.c2], [p.c3], [?]), filter(nil)
+  2 - output([p.c1], [p.c2], [p.c3], [?]), filter(nil), dop=10
+  3 - output([p.c1], [p.c2], [p.c3], [?]), filter(nil)
+  4 - output([p.c1], [p.c2], [p.c3], [?]), filter(nil), 
+      access([p.c1], [p.c2], [p.c3]), partitions(p1)
+
+update /*+use_px, parallel(10)*/ p set p.c1 = 20 where p.c1 = 5;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+6	6	NULL
+7	7	NULL
+8	8	NULL
+9	9	NULL
+10	10	NULL
+20	5	NULL
+delete from p;
+insert into p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic update /*+no_use_px, parallel(10)*/ p as pp set pp.c3 = 20 where pp.c1 >= 5;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   UPDATE              |        |
+|4 |    TABLE SCAN         |pp      |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output(nil), filter(nil), table_columns([{p: ({p: (pp.c1, pp.c2, pp.c3)})}]),
+      update([pp.c3=?])
+  4 - output([pp.c1], [pp.c2], [pp.c3], [?]), filter(nil), 
+      access([pp.c1], [pp.c3], [pp.c2]), partitions(p[0-3])
+
+explain basic update /*+use_px, parallel(10)*/ p as pp set pp.c3 = 20 where pp.c1 >= 5;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   UPDATE              |        |
+|4 |    TABLE SCAN         |pp      |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output(nil), filter(nil), table_columns([{p: ({p: (pp.c1, pp.c2, pp.c3)})}]),
+      update([pp.c3=?])
+  4 - output([pp.c1], [pp.c2], [pp.c3], [?]), filter(nil), 
+      access([pp.c1], [pp.c3], [pp.c2]), partitions(p[0-3])
+
+update /*+use_px, parallel(10)*/ p as pp set pp.c3 = 20 where pp.c1 >= 5;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+5	5	20
+6	6	20
+7	7	20
+8	8	20
+9	9	20
+10	10	20
+delete from p;
+insert into no_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic update /*+no_use_px, parallel(10)*/ no_p set no_p.c1 = 20 where no_p.c1 >= 5;
+Query Plan
+====================================
+|ID|OPERATOR              |NAME    |
+------------------------------------
+|0 |MULTI PARTITION UPDATE|        |
+|1 | PX COORDINATOR       |        |
+|2 |  EXCHANGE OUT DISTR  |:EX10000|
+|3 |   PX BLOCK ITERATOR  |        |
+|4 |    TABLE SCAN        |no_p    |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{no_p: ({no_p: (no_p.c1, no_p.__pk_increment, no_p.c2, no_p.c3)})}]),
+      update([no_p.c1=?])
+  1 - output([no_p.c1], [no_p.__pk_increment], [no_p.c2], [no_p.c3], [?]), filter(nil)
+  2 - output([no_p.c1], [no_p.__pk_increment], [no_p.c2], [no_p.c3], [?]), filter(nil), dop=10
+  3 - output([no_p.c1], [no_p.__pk_increment], [no_p.c2], [no_p.c3], [?]), filter(nil)
+  4 - output([no_p.c1], [no_p.__pk_increment], [no_p.c2], [no_p.c3], [?]), filter(nil), 
+      access([no_p.c1], [no_p.__pk_increment], [no_p.c2], [no_p.c3]), partitions(p[0-3])
+
+explain basic update /*+use_px, parallel(10)*/ no_p set no_p.c1 = 20 where no_p.c1 >= 5;
+Query Plan
+====================================
+|ID|OPERATOR              |NAME    |
+------------------------------------
+|0 |MULTI PARTITION UPDATE|        |
+|1 | PX COORDINATOR       |        |
+|2 |  EXCHANGE OUT DISTR  |:EX10000|
+|3 |   PX BLOCK ITERATOR  |        |
+|4 |    TABLE SCAN        |no_p    |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil), table_columns([{no_p: ({no_p: (no_p.c1, no_p.__pk_increment, no_p.c2, no_p.c3)})}]),
+      update([no_p.c1=?])
+  1 - output([no_p.c1], [no_p.__pk_increment], [no_p.c2], [no_p.c3], [?]), filter(nil)
+  2 - output([no_p.c1], [no_p.__pk_increment], [no_p.c2], [no_p.c3], [?]), filter(nil), dop=10
+  3 - output([no_p.c1], [no_p.__pk_increment], [no_p.c2], [no_p.c3], [?]), filter(nil)
+  4 - output([no_p.c1], [no_p.__pk_increment], [no_p.c2], [no_p.c3], [?]), filter(nil), 
+      access([no_p.c1], [no_p.__pk_increment], [no_p.c2], [no_p.c3]), partitions(p[0-3])
+
+update /*+use_px, parallel(10)*/ no_p set no_p.c1 = 20 where no_p.c1 >= 5;
+select * from no_p order by c2;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+20	5	NULL
+20	6	NULL
+20	7	NULL
+20	8	NULL
+20	9	NULL
+20	10	NULL
+delete from no_p;
+insert into temp_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into temp_s(c1,c3) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into temp_p4(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+insert into temp_p5(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+explain basic insert /*+no_use_px*/ into s select * from temp_s;
+Query Plan
+=========================
+|ID|OPERATOR     |NAME  |
+-------------------------
+|0 |INSERT       |      |
+|1 | SUBPLAN SCAN|VIEW1 |
+|2 |  TABLE SCAN |temp_s|
+=========================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{s: ({s: (s.c1, s.c2, s.c3)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  2 - output([temp_s.c1], [temp_s.c2], [temp_s.c3]), filter(nil), 
+      access([temp_s.c1], [temp_s.c2], [temp_s.c3]), partitions(p0)
+
+explain basic insert /*+use_px*/ into s select * from temp_s;
+Query Plan
+=========================
+|ID|OPERATOR     |NAME  |
+-------------------------
+|0 |INSERT       |      |
+|1 | SUBPLAN SCAN|VIEW1 |
+|2 |  TABLE SCAN |temp_s|
+=========================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{s: ({s: (s.c1, s.c2, s.c3)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  2 - output([temp_s.c1], [temp_s.c2], [temp_s.c3]), filter(nil), 
+      access([temp_s.c1], [temp_s.c2], [temp_s.c3]), partitions(p0)
+
+insert /*+use_px*/ into s select * from temp_s;
+select * from s order by c1;
+c1	c2	c3
+1	NULL	1
+2	NULL	2
+3	NULL	3
+4	NULL	4
+5	NULL	5
+6	NULL	6
+7	NULL	7
+8	NULL	8
+9	NULL	9
+10	NULL	10
+delete from s;
+explain basic insert /*+no_use_px,parallel(10)*/ into s select * from temp_s;
+Query Plan
+===================================
+|ID|OPERATOR             |NAME    |
+-----------------------------------
+|0 |INSERT               |        |
+|1 | PX COORDINATOR      |        |
+|2 |  EXCHANGE OUT DISTR |:EX10000|
+|3 |   SUBPLAN SCAN      |VIEW1   |
+|4 |    PX BLOCK ITERATOR|        |
+|5 |     TABLE SCAN      |temp_s  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{s: ({s: (s.c1, s.c2, s.c3)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_s.c1], [temp_s.c2], [temp_s.c3]), filter(nil)
+  5 - output([temp_s.c1], [temp_s.c2], [temp_s.c3]), filter(nil), 
+      access([temp_s.c1], [temp_s.c2], [temp_s.c3]), partitions(p0)
+
+explain basic insert /*+use_px,parallel(10)*/ into s select * from temp_s;
+Query Plan
+===================================
+|ID|OPERATOR             |NAME    |
+-----------------------------------
+|0 |INSERT               |        |
+|1 | PX COORDINATOR      |        |
+|2 |  EXCHANGE OUT DISTR |:EX10000|
+|3 |   SUBPLAN SCAN      |VIEW1   |
+|4 |    PX BLOCK ITERATOR|        |
+|5 |     TABLE SCAN      |temp_s  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{s: ({s: (s.c1, s.c2, s.c3)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_s.c1], [temp_s.c2], [temp_s.c3]), filter(nil)
+  5 - output([temp_s.c1], [temp_s.c2], [temp_s.c3]), filter(nil), 
+      access([temp_s.c1], [temp_s.c2], [temp_s.c3]), partitions(p0)
+
+insert /*+use_px,parallel(10)*/ into s select * from temp_s;
+select * from s order by c1;
+c1	c2	c3
+1	NULL	1
+2	NULL	2
+3	NULL	3
+4	NULL	4
+5	NULL	5
+6	NULL	6
+7	NULL	7
+8	NULL	8
+9	NULL	9
+10	NULL	10
+delete from s;
+explain basic insert /*+no_use_px,parallel(10)*/ into s select * from temp_p where temp_p.c2 >= 5;
+Query Plan
+===================================
+|ID|OPERATOR             |NAME    |
+-----------------------------------
+|0 |INSERT               |        |
+|1 | PX COORDINATOR      |        |
+|2 |  EXCHANGE OUT DISTR |:EX10000|
+|3 |   SUBPLAN SCAN      |VIEW1   |
+|4 |    PX BLOCK ITERATOR|        |
+|5 |     TABLE SCAN      |temp_p  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{s: ({s: (s.c1, s.c2, s.c3)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil)
+  5 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter([temp_p.c2 >= 5]), 
+      access([temp_p.c1], [temp_p.c2], [temp_p.c3]), partitions(p[0-3])
+
+explain basic insert /*+use_px,parallel(10)*/ into s select * from temp_p where temp_p.c2 >= 5;
+Query Plan
+===================================
+|ID|OPERATOR             |NAME    |
+-----------------------------------
+|0 |INSERT               |        |
+|1 | PX COORDINATOR      |        |
+|2 |  EXCHANGE OUT DISTR |:EX10000|
+|3 |   SUBPLAN SCAN      |VIEW1   |
+|4 |    PX BLOCK ITERATOR|        |
+|5 |     TABLE SCAN      |temp_p  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{s: ({s: (s.c1, s.c2, s.c3)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil)
+  5 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter([temp_p.c2 >= 5]), 
+      access([temp_p.c1], [temp_p.c2], [temp_p.c3]), partitions(p[0-3])
+
+insert /*+use_px,parallel(10)*/ into s select * from temp_p where temp_p.c2 >= 5;
+select * from s order by c1;
+c1	c2	c3
+5	5	NULL
+6	6	NULL
+7	7	NULL
+8	8	NULL
+9	9	NULL
+10	10	NULL
+delete from s;
+explain basic insert /*+no_use_px,parallel(10)*/ into s select temp_p.c1,temp_p.c2,temp_s.c3 from temp_p,temp_s where temp_p.c1 = temp_s.c1;
+Query Plan
+==============================================
+|ID|OPERATOR                        |NAME    |
+----------------------------------------------
+|0 |INSERT                          |        |
+|1 | PX COORDINATOR                 |        |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|
+|3 |   SUBPLAN SCAN                 |VIEW1   |
+|4 |    MERGE JOIN                  |        |
+|5 |     SORT                       |        |
+|6 |      PX PARTITION ITERATOR     |        |
+|7 |       TABLE SCAN               |temp_p  |
+|8 |     SORT                       |        |
+|9 |      EXCHANGE IN DISTR         |        |
+|10|       EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|11|        PX BLOCK ITERATOR       |        |
+|12|         TABLE SCAN             |temp_s  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{s: ({s: (s.c1, s.c2, s.c3)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_p.c1], [temp_p.c2], [temp_s.c3]), filter(nil), 
+      equal_conds([temp_p.c1 = temp_s.c1]), other_conds(nil)
+  5 - output([temp_p.c1], [temp_p.c2]), filter(nil), sort_keys([temp_p.c1, ASC]), local merge sort
+  6 - output([temp_p.c1], [temp_p.c2]), filter(nil)
+  7 - output([temp_p.c1], [temp_p.c2]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2]), partitions(p[0-3])
+  8 - output([temp_s.c3], [temp_s.c1]), filter(nil), sort_keys([temp_s.c1, ASC])
+  9 - output([temp_s.c1], [temp_s.c3]), filter(nil)
+  10 - (#keys=1, [temp_s.c1]), output([temp_s.c1], [temp_s.c3]), filter(nil), dop=10
+  11 - output([temp_s.c1], [temp_s.c3]), filter(nil)
+  12 - output([temp_s.c1], [temp_s.c3]), filter(nil), 
+      access([temp_s.c1], [temp_s.c3]), partitions(p0)
+
+explain basic insert /*+use_px,parallel(10)*/ into s select temp_p.c1,temp_p.c2,temp_s.c3 from temp_p,temp_s where temp_p.c1 = temp_s.c1;
+Query Plan
+==============================================
+|ID|OPERATOR                        |NAME    |
+----------------------------------------------
+|0 |INSERT                          |        |
+|1 | PX COORDINATOR                 |        |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|
+|3 |   SUBPLAN SCAN                 |VIEW1   |
+|4 |    MERGE JOIN                  |        |
+|5 |     SORT                       |        |
+|6 |      PX PARTITION ITERATOR     |        |
+|7 |       TABLE SCAN               |temp_p  |
+|8 |     SORT                       |        |
+|9 |      EXCHANGE IN DISTR         |        |
+|10|       EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|11|        PX BLOCK ITERATOR       |        |
+|12|         TABLE SCAN             |temp_s  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{s: ({s: (s.c1, s.c2, s.c3)})}]), partitions(p0)
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_p.c1], [temp_p.c2], [temp_s.c3]), filter(nil), 
+      equal_conds([temp_p.c1 = temp_s.c1]), other_conds(nil)
+  5 - output([temp_p.c1], [temp_p.c2]), filter(nil), sort_keys([temp_p.c1, ASC]), local merge sort
+  6 - output([temp_p.c1], [temp_p.c2]), filter(nil)
+  7 - output([temp_p.c1], [temp_p.c2]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2]), partitions(p[0-3])
+  8 - output([temp_s.c3], [temp_s.c1]), filter(nil), sort_keys([temp_s.c1, ASC])
+  9 - output([temp_s.c1], [temp_s.c3]), filter(nil)
+  10 - (#keys=1, [temp_s.c1]), output([temp_s.c1], [temp_s.c3]), filter(nil), dop=10
+  11 - output([temp_s.c1], [temp_s.c3]), filter(nil)
+  12 - output([temp_s.c1], [temp_s.c3]), filter(nil), 
+      access([temp_s.c1], [temp_s.c3]), partitions(p0)
+
+insert /*+use_px,parallel(10)*/ into s select temp_p.c1,temp_p.c2,temp_s.c3 from temp_p,temp_s where temp_p.c1 = temp_s.c1;
+select * from s order by c1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+6	6	6
+7	7	7
+8	8	8
+9	9	9
+10	10	10
+delete from s;
+explain basic insert /*+no_use_px,parallel(10)*/ into p select * from temp_s;
+Query Plan
+====================================
+|ID|OPERATOR              |NAME    |
+------------------------------------
+|0 |MULTI PARTITION INSERT|        |
+|1 | PX COORDINATOR       |        |
+|2 |  EXCHANGE OUT DISTR  |:EX10000|
+|3 |   SUBPLAN SCAN       |VIEW1   |
+|4 |    PX BLOCK ITERATOR |        |
+|5 |     TABLE SCAN       |temp_s  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3])
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_s.c1], [temp_s.c2], [temp_s.c3]), filter(nil)
+  5 - output([temp_s.c1], [temp_s.c2], [temp_s.c3]), filter(nil), 
+      access([temp_s.c1], [temp_s.c2], [temp_s.c3]), partitions(p0)
+
+explain basic insert /*+use_px,parallel(10)*/ into p select * from temp_s;
+Query Plan
+====================================
+|ID|OPERATOR              |NAME    |
+------------------------------------
+|0 |MULTI PARTITION INSERT|        |
+|1 | PX COORDINATOR       |        |
+|2 |  EXCHANGE OUT DISTR  |:EX10000|
+|3 |   SUBPLAN SCAN       |VIEW1   |
+|4 |    PX BLOCK ITERATOR |        |
+|5 |     TABLE SCAN       |temp_s  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3])
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_s.c1], [temp_s.c2], [temp_s.c3]), filter(nil)
+  5 - output([temp_s.c1], [temp_s.c2], [temp_s.c3]), filter(nil), 
+      access([temp_s.c1], [temp_s.c2], [temp_s.c3]), partitions(p0)
+
+insert /*+use_px,parallel(10)*/ into p select * from temp_s;
+select * from p order by c1;
+c1	c2	c3
+1	NULL	1
+2	NULL	2
+3	NULL	3
+4	NULL	4
+5	NULL	5
+6	NULL	6
+7	NULL	7
+8	NULL	8
+9	NULL	9
+10	NULL	10
+delete from p;
+explain basic insert /*+no_use_px,parallel(10)*/ into p select * from temp_p;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   INSERT              |        |
+|4 |    SUBPLAN SCAN       |VIEW1   |
+|5 |     TABLE SCAN        |temp_p  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3])
+  4 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  5 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2], [temp_p.c3]), partitions(p[0-3])
+
+explain basic insert /*+use_px,parallel(10)*/ into p select * from temp_p;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   INSERT              |        |
+|4 |    SUBPLAN SCAN       |VIEW1   |
+|5 |     TABLE SCAN        |temp_p  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3])
+  4 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  5 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2], [temp_p.c3]), partitions(p[0-3])
+
+insert /*+use_px,parallel(10)*/ into p select * from temp_p;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+5	5	NULL
+6	6	NULL
+7	7	NULL
+8	8	NULL
+9	9	NULL
+10	10	NULL
+delete from p;
+explain basic insert /*+no_use_px, parallel(10)*/ into p select temp_p.c1,temp_p.c2,temp_p.c3 from temp_p,temp_p5 where temp_p.c1 = temp_p5.c1;
+Query Plan
+===============================================
+|ID|OPERATOR                         |NAME    |
+-----------------------------------------------
+|0 |MULTI PARTITION INSERT           |        |
+|1 | PX COORDINATOR                  |        |
+|2 |  EXCHANGE OUT DISTR             |:EX10001|
+|3 |   SUBPLAN SCAN                  |VIEW1   |
+|4 |    MERGE JOIN                   |        |
+|5 |     SORT                        |        |
+|6 |      PX PARTITION ITERATOR      |        |
+|7 |       TABLE SCAN                |temp_p  |
+|8 |     EXCHANGE IN MERGE SORT DISTR|        |
+|9 |      EXCHANGE OUT DISTR (PKEY)  |:EX10000|
+|10|       PX BLOCK ITERATOR         |        |
+|11|        TABLE SCAN               |temp_p5 |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3])
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      equal_conds([temp_p.c1 = temp_p5.c1]), other_conds(nil)
+  5 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), sort_keys([temp_p.c1, ASC]), local merge sort
+  6 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil)
+  7 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2], [temp_p.c3]), partitions(p[0-3])
+  8 - output([temp_p5.c1]), filter(nil), sort_keys([temp_p5.c1, ASC]), Local Order
+  9 - (#keys=1, [temp_p5.c1]), output([temp_p5.c1]), filter(nil), dop=10
+  10 - output([temp_p5.c1]), filter(nil)
+  11 - output([temp_p5.c1]), filter(nil), 
+      access([temp_p5.c1]), partitions(p[0-4])
+
+explain basic insert /*+use_px, parallel(10)*/ into p select temp_p.c1,temp_p.c2,temp_p.c3 from temp_p,temp_p5 where temp_p.c1 = temp_p5.c1;
+Query Plan
+===============================================
+|ID|OPERATOR                         |NAME    |
+-----------------------------------------------
+|0 |MULTI PARTITION INSERT           |        |
+|1 | PX COORDINATOR                  |        |
+|2 |  EXCHANGE OUT DISTR             |:EX10001|
+|3 |   SUBPLAN SCAN                  |VIEW1   |
+|4 |    MERGE JOIN                   |        |
+|5 |     SORT                        |        |
+|6 |      PX PARTITION ITERATOR      |        |
+|7 |       TABLE SCAN                |temp_p  |
+|8 |     EXCHANGE IN MERGE SORT DISTR|        |
+|9 |      EXCHANGE OUT DISTR (PKEY)  |:EX10000|
+|10|       PX BLOCK ITERATOR         |        |
+|11|        TABLE SCAN               |temp_p5 |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3])
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      equal_conds([temp_p.c1 = temp_p5.c1]), other_conds(nil)
+  5 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), sort_keys([temp_p.c1, ASC]), local merge sort
+  6 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil)
+  7 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2], [temp_p.c3]), partitions(p[0-3])
+  8 - output([temp_p5.c1]), filter(nil), sort_keys([temp_p5.c1, ASC]), Local Order
+  9 - (#keys=1, [temp_p5.c1]), output([temp_p5.c1]), filter(nil), dop=10
+  10 - output([temp_p5.c1]), filter(nil)
+  11 - output([temp_p5.c1]), filter(nil), 
+      access([temp_p5.c1]), partitions(p[0-4])
+
+insert /*+use_px, parallel(10)*/ into p select temp_p.c1,temp_p.c2,temp_p.c3 from temp_p,temp_p5 where temp_p.c1 = temp_p5.c1;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+5	5	NULL
+6	6	NULL
+7	7	NULL
+8	8	NULL
+9	9	NULL
+10	10	NULL
+delete from p;
+explain basic insert /*+use_px, parallel(10)*/ into p select temp_p.c1,temp_p.c2,temp_p.c3 from temp_p,temp_p5 where temp_p.c1 = temp_p5.c1 and temp_p.c1 = 3;
+Query Plan
+===================================================
+|ID|OPERATOR                             |NAME    |
+---------------------------------------------------
+|0 |INSERT                               |        |
+|1 | PX COORDINATOR                      |        |
+|2 |  EXCHANGE OUT DISTR                 |:EX10001|
+|3 |   SUBPLAN SCAN                      |VIEW1   |
+|4 |    NESTED-LOOP JOIN CARTESIAN       |        |
+|5 |     PX BLOCK ITERATOR               |        |
+|6 |      TABLE SCAN                     |temp_p  |
+|7 |     MATERIAL                        |        |
+|8 |      EXCHANGE IN DISTR              |        |
+|9 |       EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|10|        PX BLOCK ITERATOR            |        |
+|11|         TABLE SCAN                  |temp_p5 |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p3)
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil)
+  6 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2], [temp_p.c3]), partitions(p3)
+  7 - output([1]), filter(nil)
+  8 - output([1]), filter(nil)
+  9 - output([1]), filter(nil), dop=10
+  10 - output([1]), filter(nil)
+  11 - output([1]), filter(nil), 
+      access([temp_p5.c1]), partitions(p3)
+
+insert /*+use_px, parallel(10)*/ into p select temp_p.c1,temp_p.c2,temp_p.c3 from temp_p,temp_p5 where temp_p.c1 = temp_p5.c1 and temp_p.c1 = 3;
+select * from p order by c1;
+c1	c2	c3
+3	3	NULL
+delete from p;
+explain basic insert /*+use_px, parallel(10)*/ into p select  temp_p.c1, temp_p.c2, temp_p.c3 from temp_p, temp_p4 where temp_p.c1 = temp_p4.c1;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   INSERT              |        |
+|4 |    SUBPLAN SCAN       |VIEW1   |
+|5 |     MERGE JOIN        |        |
+|6 |      TABLE SCAN       |temp_p  |
+|7 |      TABLE SCAN       |temp_p4 |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3])
+  4 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  5 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      equal_conds([temp_p.c1 = temp_p4.c1]), other_conds(nil)
+  6 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2], [temp_p.c3]), partitions(p[0-3])
+  7 - output([temp_p4.c1]), filter(nil), 
+      access([temp_p4.c1]), partitions(p[0-3])
+
+insert /*+use_px, parallel(10)*/ into p select  temp_p.c1, temp_p.c2, temp_p.c3 from temp_p, temp_p4 where temp_p.c1 = temp_p4.c1;
+select * from p order by c1;
+c1	c2	c3
+1	1	NULL
+2	2	NULL
+3	3	NULL
+4	4	NULL
+5	5	NULL
+6	6	NULL
+7	7	NULL
+8	8	NULL
+9	9	NULL
+10	10	NULL
+delete from p;
+explain basic insert /*+no_use_px,parallel(10)*/ into p select temp_p.c1,temp_p.c2,temp_s.c3 from temp_p,temp_s where temp_p.c1 = temp_s.c1;
+Query Plan
+==============================================
+|ID|OPERATOR                        |NAME    |
+----------------------------------------------
+|0 |MULTI PARTITION INSERT          |        |
+|1 | PX COORDINATOR                 |        |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|
+|3 |   SUBPLAN SCAN                 |VIEW1   |
+|4 |    MERGE JOIN                  |        |
+|5 |     SORT                       |        |
+|6 |      PX PARTITION ITERATOR     |        |
+|7 |       TABLE SCAN               |temp_p  |
+|8 |     SORT                       |        |
+|9 |      EXCHANGE IN DISTR         |        |
+|10|       EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|11|        PX BLOCK ITERATOR       |        |
+|12|         TABLE SCAN             |temp_s  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3])
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_p.c1], [temp_p.c2], [temp_s.c3]), filter(nil), 
+      equal_conds([temp_p.c1 = temp_s.c1]), other_conds(nil)
+  5 - output([temp_p.c1], [temp_p.c2]), filter(nil), sort_keys([temp_p.c1, ASC]), local merge sort
+  6 - output([temp_p.c1], [temp_p.c2]), filter(nil)
+  7 - output([temp_p.c1], [temp_p.c2]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2]), partitions(p[0-3])
+  8 - output([temp_s.c3], [temp_s.c1]), filter(nil), sort_keys([temp_s.c1, ASC])
+  9 - output([temp_s.c1], [temp_s.c3]), filter(nil)
+  10 - (#keys=1, [temp_s.c1]), output([temp_s.c1], [temp_s.c3]), filter(nil), dop=10
+  11 - output([temp_s.c1], [temp_s.c3]), filter(nil)
+  12 - output([temp_s.c1], [temp_s.c3]), filter(nil), 
+      access([temp_s.c1], [temp_s.c3]), partitions(p0)
+
+explain basic insert /*+use_px,parallel(10)*/ into p select temp_p.c1,temp_p.c2,temp_s.c3 from temp_p,temp_s where temp_p.c1 = temp_s.c1;
+Query Plan
+==============================================
+|ID|OPERATOR                        |NAME    |
+----------------------------------------------
+|0 |MULTI PARTITION INSERT          |        |
+|1 | PX COORDINATOR                 |        |
+|2 |  EXCHANGE OUT DISTR            |:EX10001|
+|3 |   SUBPLAN SCAN                 |VIEW1   |
+|4 |    MERGE JOIN                  |        |
+|5 |     SORT                       |        |
+|6 |      PX PARTITION ITERATOR     |        |
+|7 |       TABLE SCAN               |temp_p  |
+|8 |     SORT                       |        |
+|9 |      EXCHANGE IN DISTR         |        |
+|10|       EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|11|        PX BLOCK ITERATOR       |        |
+|12|         TABLE SCAN             |temp_s  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3])
+  1 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil)
+  2 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), dop=10
+  3 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  4 - output([temp_p.c1], [temp_p.c2], [temp_s.c3]), filter(nil), 
+      equal_conds([temp_p.c1 = temp_s.c1]), other_conds(nil)
+  5 - output([temp_p.c1], [temp_p.c2]), filter(nil), sort_keys([temp_p.c1, ASC]), local merge sort
+  6 - output([temp_p.c1], [temp_p.c2]), filter(nil)
+  7 - output([temp_p.c1], [temp_p.c2]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2]), partitions(p[0-3])
+  8 - output([temp_s.c3], [temp_s.c1]), filter(nil), sort_keys([temp_s.c1, ASC])
+  9 - output([temp_s.c1], [temp_s.c3]), filter(nil)
+  10 - (#keys=1, [temp_s.c1]), output([temp_s.c1], [temp_s.c3]), filter(nil), dop=10
+  11 - output([temp_s.c1], [temp_s.c3]), filter(nil)
+  12 - output([temp_s.c1], [temp_s.c3]), filter(nil), 
+      access([temp_s.c1], [temp_s.c3]), partitions(p0)
+
+insert /*+use_px,parallel(10)*/ into p select temp_p.c1,temp_p.c2,temp_s.c3 from temp_p,temp_s where temp_p.c1 = temp_s.c1;
+select * from p order by c1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+6	6	6
+7	7	7
+8	8	8
+9	9	9
+10	10	10
+delete from p;
+explain basic replace /*+use_px,parallel(10)*/ into p select * from temp_p;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   REPLACE             |        |
+|4 |    SUBPLAN SCAN       |VIEW1   |
+|5 |     TABLE SCAN        |temp_p  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3])
+  4 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  5 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2], [temp_p.c3]), partitions(p[0-3])
+
+explain basic insert /*+use_px,parallel(10)*/ into p select * from temp_p on duplicate key update c3 = 2;
+Query Plan
+=====================================
+|ID|OPERATOR               |NAME    |
+-------------------------------------
+|0 |PX COORDINATOR         |        |
+|1 | EXCHANGE OUT DISTR    |:EX10000|
+|2 |  PX PARTITION ITERATOR|        |
+|3 |   INSERT_UP           |        |
+|4 |    SUBPLAN SCAN       |VIEW1   |
+|5 |     TABLE SCAN        |temp_p  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output(nil), filter(nil)
+  1 - output(nil), filter(nil), dop=10
+  2 - output(nil), filter(nil)
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,VIEW1.c3)]), filter(nil), 
+      columns([{p: ({p: (p.c1, p.c2, p.c3)})}]), partitions(p[0-3]),
+      update([p.c3=?])
+  4 - output([VIEW1.c1], [VIEW1.c2], [VIEW1.c3]), filter(nil), 
+      access([VIEW1.c1], [VIEW1.c2], [VIEW1.c3])
+  5 - output([temp_p.c1], [temp_p.c2], [temp_p.c3]), filter(nil), 
+      access([temp_p.c1], [temp_p.c2], [temp_p.c3]), partitions(p[0-3])
+
+drop table if exists s,p,p4,no_p,temp_s,temp_p,temp_p4,temp_p5;

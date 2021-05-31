@@ -1,0 +1,112 @@
+=============[test] database schema start =============
+{
+  "tenant_id":1000,
+  "database_id":1099511627777001,
+  "schema_version":1456811658412184,
+  "database_name":"test",
+  "replica_num":1,
+  "zone_list": [
+    "test"
+  ],
+  "primary_zone":"test",
+  "charset_type":2,
+  "collation_type":"utf8mb4_general_ci",
+  "name_case_mode":1,
+  "comment":"",
+  "read_only":false,
+  "default_tablegroup_id":-1,
+  "default_tablegroup_name":""
+}
+-------------[txxx1] table schema start -----------
+{
+  "tenant_id":1000,
+  "database_id":1099511627777001,
+  "tablegroup_id":-1,
+  "table_id":1099511627826001,
+  "table_name":"txxx1",
+  "max_used_column_id":16,
+  "rowkey_column_num":1,
+  "index_column_num":0,
+  "rowkey_split_pos":0,
+  "block_size":16384,
+  "is_use_bloomfilter":false,
+  "progressive_merge_num":0,
+  "replica_num":1,
+  "load_type":0,
+  "table_type":3,
+  "index_type":0,
+  "def_type":1,
+  "charset_type":2,
+  "collation_type":45,
+  "data_table_id":0,
+  "create_mem_version":1,
+  "index_status":1,
+  "name_casemode":1,
+  "code_version":1,
+  "schema_version":1456811658452200,
+  "last_modified_frozen_version":0,
+  "part_level":1,
+  "part_expr": {
+    "part_func_type":0,
+    "part_func_expr":"",
+    "part_num":1
+  },
+  "comment":"",
+  "tablegroup_name":"",
+  "compress_func_name":"none",
+  "zone_list": [
+    "test"
+  ],
+  "primary_zone":"test",
+  "expire_info":"",
+  "view_schema": {
+    "view_definition":"",
+    "check_option":"none",
+    "is_updatable":"false"
+  },
+  "autoinc_column_id":0,
+  "auto_increment":0,
+  "read_only":false,
+  "index_tid_array": [
+  ],
+  "column_array": [
+     {
+      "tenant_id":1000,
+      "table_id":1099511627826001,
+      "column_id":16,
+      "schema_version":1456811658452200,
+      "rowkey_position":1,
+      "index_position":0,
+      "order_in_rowkey":0,
+      "partition_key_position":0,
+      "meta_type": {
+        "type":"INT",
+        "collation":"binary",
+        "coercibility":"NUMERIC"
+      },
+      "accuracy": {
+        "length":-1,
+        "precision":11,
+        "scale":0
+      },
+      "is_nullable":false,
+      "is_zero_fill":false,
+      "is_autoincrement":false,
+      "is_hidden":false,
+      "charset_type":1,
+      "on_update_current_timestamp":false,
+      "orig_default_value": {
+        "NULL":"NULL"
+      },
+      "cur_default_value": {
+        "NULL":"NULL"
+      },
+      "column_name":"c1",
+      "comment":""
+    }
+  ]
+}
+-------------[txxx1] table schema end -----------
+
+=============[testdatabase schema end ------------------
+

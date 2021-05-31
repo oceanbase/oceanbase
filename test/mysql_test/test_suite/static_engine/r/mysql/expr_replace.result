@@ -1,0 +1,33 @@
+connect  syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection default;
+drop table if exists t1;
+connection syscon;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select replace('abcdbf', 'b', 'cc');
+replace('abcdbf', 'b', 'cc')
+acccdccf
+select replace('abcdbf', 'b');
+ERROR 42000: Incorrect parameter count in the call to native function 'replace'
+select replace('abcdbf', 'b', '');
+replace('abcdbf', 'b', '')
+acdf
+select replace('abcdbf', '', 'cc');
+replace('abcdbf', '', 'cc')
+abcdbf
+select replace('', 'b', 'cc');
+replace('', 'b', 'cc')
+
+select replace(NULL, 'b', 'cc');
+replace(NULL, 'b', 'cc')
+NULL
+select replace('abcdbf', NULL, 'cc');
+replace('abcdbf', NULL, 'cc')
+NULL
+select replace('abcdbf', 'b', NULL);
+replace('abcdbf', 'b', NULL)
+NULL
+select replace('abc', 'abc', '');
+replace('abc', 'abc', '')
+
+connection syscon;

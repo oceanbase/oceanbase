@@ -1,0 +1,99 @@
+static ObObjType NEG_RESULT_TYPE[ObMaxType] =
+{
+    ObDoubleType,     /*NullType  */
+    ObIntType,        /*TinyIntType  */
+    ObIntType,        /*SmallIntType  */
+    ObIntType,        /*MediumIntType  */
+    ObIntType,        /*Int32Type  */
+    ObIntType,        /*IntType  */
+    ObIntType,        /*UTinyIntType  */
+    ObIntType,        /*USmallIntType  */
+    ObIntType,        /*UMediumIntType  */
+    ObIntType,        /*UInt32Type  */
+    ObIntType,        /*UInt64Type  */
+    ObDoubleType,     /*FloatType  */
+    ObDoubleType,     /*DoubleType  */
+    ObDoubleType,     /*UFloatType  */
+    ObDoubleType,     /*UDoubleType  */
+    ObNumberType,     /*NumberType  */
+    ObNumberType,     /*UNumberType  */
+    ObDoubleType,     /*DateTimeType  */
+    ObDoubleType,     /*TimestampType  */
+    ObDoubleType,     /*DateType  */
+    ObDoubleType,     /*TimeType  */
+    ObIntType,        /*YearType  */
+    ObDoubleType,     /*VarcharType  */
+    ObDoubleType,     /*CharType  */
+    ObDoubleType,     /*HexStringType  */
+    ObMaxType,        /*ExtendType  */
+    ObDoubleType,      /*UnknownType  */
+    ObDoubleType,       /*TinyTextType*/
+    ObDoubleType,       /*TextType*/
+    ObDoubleType,       /*MediumTextType*/
+    ObDoubleType,        /*LongTextType*/
+    ObIntType,        /*BitType  */
+    ObIntType,        /*EnumType  */
+    ObIntType,        /*SetType  */
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType */
+    ObDoubleType,      /*ObTimestampTZType  */
+    ObDoubleType,      /*ObTimestampLTZType  */
+    ObDoubleType,      /*ObTimestampNanoType  */
+    ObDoubleType,      /*ObRawType  */
+    ObMaxType,         /*ObIntervalYMType  */
+    ObMaxType,         /*ObIntervalDSType  */
+    ObMaxType,         /*ObNumberFloatType  */
+    ObMaxType,         /*ObNVarchar2Type  */
+    ObMaxType,         /*ObNCharType  */
+    ObMaxType,         /* ObURowIDType */
+};
+
+static ObObjType NEG_RESULT_TYPE_ORACLE[ObMaxType] =
+{
+    ObNumberType,     /*NullType  */
+    ObNumberType,        /*TinyIntType  */
+    ObNumberType,        /*SmallIntType  */
+    ObNumberType,        /*MediumIntType  */
+    ObNumberType,        /*Int32Type  */
+    ObNumberType,        /*IntType  */
+    ObNumberType,        /*UTinyIntType  */
+    ObNumberType,        /*USmallIntType  */
+    ObNumberType,        /*UMediumIntType  */
+    ObNumberType,        /*UInt32Type  */
+    ObNumberType,        /*UInt64Type  */
+    ObFloatType,     /*FloatType  */
+    ObDoubleType,     /*DoubleType  */
+    ObMaxType,     /*UFloatType  */
+    ObMaxType,     /*UDoubleType  */
+    ObNumberType,     /*NumberType  */
+    ObMaxType,     /*UNumberType  */
+    ObMaxType,     /*DateTimeType  */
+    ObMaxType,     /*TimestampType  */
+    ObMaxType,     /*DateType  */
+    ObMaxType,     /*TimeType  */
+    ObMaxType,        /*YearType  */
+    ObNumberType,     /*VarcharType  */
+    ObNumberType,     /*CharType  */
+    ObNumberType,     /*HexStringType  */
+    ObMaxType,        /*ExtendType  */
+    ObNumberType,      /*UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObMaxType,        /*BitType  */
+    ObMaxType,        /*EnumType  */
+    ObMaxType,        /*SetType  */
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType */
+    ObMaxType,      /*ObTimestampTZType  */
+    ObMaxType,      /*ObTimestampLTZType  */
+    ObMaxType,      /*ObTimestampNanoType  */
+    ObMaxType,      /*ObRawType  */
+    ObMaxType,         /*ObIntervalYMType  */
+    ObMaxType,         /*ObIntervalDSType  */
+    ObNumberType,         /*ObNumberFloatType  */
+    ObMaxType,         /*ObNVarchar2Type  */
+    ObMaxType,         /*ObNCharType  */
+    ObMaxType,         /* ObURowIDType */
+};

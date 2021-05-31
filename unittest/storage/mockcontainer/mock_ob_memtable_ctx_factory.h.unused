@@ -1,0 +1,40 @@
+#ifndef MOCK_OB_MEMTABLE_CTX_FACTORY_H_
+#define MOCK_OB_MEMTABLE_CTX_FACTORY_H_
+
+#include "storage/memtable/ob_memtable_interface.h"
+#include "mock_ob_memtable_ctx.h"
+
+namespace oceanbase
+{
+
+using namespace common;
+using namespace memtable;
+
+namespace transaction
+{
+
+class MockObMemtableCtxFactory : public memtable::ObIMemtableCtxFactory
+{
+public:
+  MockObMemtableCtxFactory() {}
+  ~MockObMemtableCtxFactory() {}
+public:
+  ObIMemtableCtx *alloc()
+  {
+    ObIMemtableCtx *ctx = NULL;
+    ctx = new MockObMemtableCtx;
+    return ctx;
+  }
+  void free(ObIMemtableCtx *ctx)
+  {
+    if (NULL != ctx) {
+      delete ctx;
+      ctx = NULL;
+    }
+  }
+};
+
+} // transaction
+} // oceanbase
+
+#endif

@@ -1,0 +1,59 @@
+c1 = 1 + 2
+c1 = 1 - 2
+c1 = 1 * 2
+c1 = 1 / 2
+c1 = 1 % 2
+c1 = 1 div 2
+c1 = (1 <= 2)
+c1 = (1 < 2)
+c1 = 2
+c1 = (1 >= 2)
+c1 = (1 > 2)
+c1 = (1 != 2)
+c1 = (1 and 0)
+c1 = (1 or 0)
+c1 in (select * from t1)
+c1 = last_insert_id(c1 + 1)
+c1 = locate("bar", "foobarbar")
+c1 = locate("bar", "foobarbar", 4)
+c1 = round(2.55)
+c1 = round(2.55, 2)
+-(1.5)
+-(1)
+c1 like '//' escape '/'
+c1 like '//' escape 2
+c1 like '//' escape '//'
+c1 like '_'
+c1 like 2
+c1 in (select t1 from table1)
+1=(select c1 from table1 where c2>20)
+(t1,t2)=(select c1, c2 from table1)
+exists (select c1 from t1)
+not (not (not exists (select c1 from t1)))
+(select c1 from t1 where (c1, c2) in ((1, 2), (2, 3))) in (select c1 from t1)
+case name  when 'sam' then 'yong'  when 'lee' then 'handsome'  else 'good' end
+case when 1>0 then 'true' else 'false' end
+now()
+utc_timestamp()
+floor(3.14)
+count(*)
+max(c1)
+c1 in (select t1 from table1)
+1=(select c1 from table1 where c2>20)
+(t1,t2)=(select c1, c2 from table1)
+10
+@@auto_increment_increment
+@a
+c1
+10+10
+not 10
+c1+c2=c3+c4
+c1=3
+c1>1
+c1 > c2
+c1 in (1,2,3,4)
+c1 between 2 and 10
+10+10+c1
+c1 = 1 + 2
+c1 between 10+10 and 30
+1+c1 > ? and 'abc' || c2 = 'def'

@@ -1,0 +1,687 @@
+
+drop database if exists select_db;
+create database select_db;
+use select_db;
+
+#schema
+create table emp(emp_id int, emp_name varchar(20), mgr_id int)
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+create table t2(c1 int, c2 int, c3 varchar(32), primary key(c2, c3)) partition by key(c2, c3) partitions 3
+create table t3(c3 int primary key, c4 int)
+create index idx1 on t1(c2) LOCAL
+create table test(c1 int , c2 int, c3 varchar(50), c4 varchar(50), c5 int , c6 double, c7 int, primary key(c1, c2, c3))
+create index test_indx on test(c4, c5)
+create table non_reserved_key_test(value int primary key)
+create table test2(c1 int primary key, c2 varchar(30), c3 timestamp(6) default now(6))
+create table t4(c1 int primary key, c2 int not null, c3 int default 1, c4 int not null default 2)
+create table ta(c1 int primary key, c2 int auto_increment) comment='test', auto_increment= 5
+create table alter_table1(c1 int primary key, c2 varchar(11) not null default 'c2', c3 tinyint default 3, c4 char(11)) partition by hash(c1) partitions 3
+create index idx_c1 on alter_table1(c1) LOCAL
+create table t_auto_inc(c1 int primary key, c2 int auto_increment)
+create table coll_table(c1 varchar(10) collate utf8_general_ci, c2 varchar(10) collate utf8_bin, c3 varchar(10), primary key(c1, c2));
+create table ts(c1 int primary key, c2 timestamp default current_timestamp on update current_timestamp, c3 int);
+CREATE TABLE yu1(c1 char(20), c2 bigint, pk bigint primary key);
+CREATE TABLE yu2(c1 char(20), pk bigint primary key, c2 char(20)) partition by key();
+create table emp1(`level` int);
+
+### common ###
+select c1, sum(c2) from t1 where c1 > 0 and c2 + c1 = 100 group by c2 order by c1 desc limit 0, 1
+select sum(c1) + sum(c3) from t2 group by c2 having sum(c3) > 1
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c2 and t1.c1 > 10 limit 10 offset 10
+
+### all distinct ###
+select all c1 from t1
+select all * from t1
+select distinct c1 from t1
+select distinct * from t1
+
+
+
+###  select ###
+
+#### table not exist
+select 1 + 1;
+select 1 + 1 from dual;
+select @@sql_mode
+select coalesce(NULL,NULL,3,4,5)
+select case 'b' when 'a' then 1 when 'b' then 2 end
+select case when 1>0 then 'true' else 'false' end
+
+#### * star
+
+select * from t1
+select *, t1.* from t1
+select t1.*, t2.* from t1,t2
+select table1.* from t1 table1
+select rongxuan.t1.* from rongxuan.t1
+
+#### duplicate column name
+select c1, c1 from t1
+
+#### table name or alias
+select t1.c1, t2.c1 from t1, t2
+#select c1, t1.c1, table1.c1 from t1 table1	//not support
+select table1.c1, table2.c1 from t1 table1, t2 table2
+
+#### database name
+select rongxuan.t1.c1 from rongxuan.t1
+
+#### as
+select c1 column1 from t1
+select c1 as column1 from t1
+
+#### column name or alias
+select c1 as c2, c2 as c1 from t1
+select t1.c1 as column1, t2.c1 column2 from t1, t2
+
+#### function or expression
+select count(distinct t1.c1), count(distinct t1.c2) from t1 order by c1, c2
+#select -(c1 + 1 - 1.2 + 0), concat(t1.c2, 'test'), 'test', 'test', not (true or false), NULL from t1
+select usec_to_time(c1) as modify_time_us from t1;
+
+#### question mark
+select 1 from t1
+select 1 as c1 from t1
+
+
+
+
+### from ###
+#### as
+select * from t1 table1
+select * from t1 as table1
+
+#### multiple table
+#select t1.*, t2.* from t1, t2
+#select t1.*, t2.* from t1 table1, t2 table2
+#select table1.*, table2.*, c4, c5 from t1 table1, (select * from t2) table2, t1 inner join test on t1.c1 = test.c1
+
+#### join
+select * from t1 join t2 on t1.c1 = t2.c1
+select * from t1 right join t2 on t1.c1 = t2.c1
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 left outer join t2 on t1.c1 = t2.c1
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 left join t2 using (c1)
+#select t1.*, t2.* from t1 left outer join t2 on t1.c1 = t2.c1
+#select t1.*, t2.* from t1 left join t2 using (c1)
+
+select t1.c1, tt.c2 from t1 join (select t1.c1, t2.c2  from t1 join t2 on t1.c1 = t2.c1) tt on t1.c1 = tt.c1
+select t1.c1, tt.c2 from (select t1.c1, t2.c2  from t1 join t2 on t1.c1 = t2.c1) tt join t1 on t1.c1 = tt.c1
+
+select t1.c1,t2.c2,test.c3 from t1 join t2 on t1.c1 =t2.c1 join test on t2.c1 = test.c1
+
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 right outer join t2 on t1.c1 = t2.c1
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 right join t2 using (c1)
+#select t1.*, t2.* from t1 right outer join t2 on t1.c1 = t2.c1
+#select t1.*, t2.* from t1 right join t2 using (c1)
+
+
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 full join t2 on t1.c1 = t2.c1
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 inner join t2 on t1.c1 = t2.c1
+#select t1.*, t2.* from t1 full join t2 on t1.c1 = t2.c1
+#select t1.*, t2.* from t1 inner join t2 on t1.c1 = t2.c1
+
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 join t2 using (c2)
+#select t1.*, t2.* from t1 join t2 using (c1,c2)
+
+#using
+select * from t1 join t2 using (c1)
+select t1.*, * from t1 join t2 using (c2)
+select * from t1 right join t2 using (c1)
+select * from t1 join t2 using (c2,c1)
+
+#natural join natural join
+#select * from t1 nautral join t2 	//not support
+
+#straight join
+#select * from t1 straight_join t2	//not support
+
+#### subquery
+select c1, c2 from (select c1, c2 from t1) t1
+select column1, table1.column2 from (select c1 column1, c2 column2 from t1) table1
+select t1.c1, t1.c2+1 from (select * from t1) t1
+select * from (select * from t1) table1
+
+#### index hint
+select * from t1 use index (idx1)
+select * from t1 ignore index (idx1)
+select * from t1 force index (idx1)
+
+#### partition list
+select * from t1 partition (p1)
+
+### where ###
+
+#### expression or function
+select t1.c1 from t1, t2 where t1.c1 = t2.c1
+select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
+select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
+select * from t2 where c1 * 2 + 3 < c2 and c3 < 'XXXX' and c2 is not null
+select * from t1 where c1 = now()
+select * from t1 where c1 = 'test'
+select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 0 or c1>100) and (c1<-9 or c1>9) and c2 between -99 and 99
+select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 and 10
+select c1, c2 from t1 where (c1, c2) in ((1, 2))
+#select * from t1 where exists(select * from t2 where c1 = 1)
+select * from t1 where not (c1 > 1 and c2 < 10)
+select * from t1 where not (c1 > 1 or c2 < 10)
+select * from t1 where not (not (c1 > 1))
+select * from t1 where not (not (c1 > 1) and c2 < 10)
+select * from t1 where c1 > 1 and (c2 < 10 and c1 <10)
+select * from t1 where c1 > 1 or (c2 < 10 or c1 <10)
+select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
+select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
+
+select t1.c1 from t1,t2,test where t1.c1=test.c1 and t1.c2=t2.c2 and t2.c3=test.c3;
+select t1.c1 from t1,t2,test where t1.c1=t2.c1 and t1.c1+t2.c1=test.c1;
+select t1.c1 from t1,t2,test, t1 tt where t1.c1=test.c1 and t1.c2=tt.c2 and t1.c1+t2.c1=tt.c1;
+
+####calculate and const
+#select c1 from t1 where c2 =  1 + 1 + c1
+select c1 from t1 where c2 = 1+1
+
+#### subquery
+#select c1 from t1 where c1 in (select c2 from t2)
+#select c1 from t1 where (select c2 from t2) in (1,2)
+#select c1 from t1 where c1 exists (select c2 from t2 where t2 = 1)
+#select * from t1 where (c1,c2) in ((1,2), (select c1,c3 from t2))
+
+#### column name or alias
+select c1 from t1 where c1 = 1
+select c1 column1 from t1 where c1 > 2
+#select c1, c2 column2 from t1 where c1 = 1 and column2 = 1
+
+#### table name or alias
+select c1, c2 from t1 table1 where table1.c2 = 1
+#select c1, c2 from t1 table1 where t1.c1 = 1 and table1.c2 = 1	//not support
+
+#### question mark
+select c1, c2 from t1 where 1 >1
+select * from t1 where c1 = 1
+
+#### equal set
+select c1 from t1 where c2 = 1
+select c1 from t1 where 1 = c2
+select c1 from t1 where c1 = 1 and c1 =2
+#select c1 column1 from t1 where c1 = 1 and column1 = 5 //alias name should not in where clause
+select c1 from test where c1 = c2 and c1 = 5 and c7 = c5
+
+
+###group by ###
+#### position
+select * from t2 group by 1
+
+#### column name or alias
+select c1 from t1 group by c1
+select c1, c2 column2 from t1 group by column2
+
+#### table name or alias
+#select * from t1 table1 group by t1.c1		//not support
+select * from t1 table1 group by table1.c1
+
+#### column not in select
+select c1 from t1 group by c2
+
+#### expression or function
+select c1, sum(c2) from t1 group by c1+2
+
+#### question mark this is syntax error
+#select * from t1 group by 1
+
+
+### order by ###
+#### asc, desc
+select * from t2 order by c1, c2 desc, c3 asc
+
+#### position
+select * from t2 order by 1, 2 desc, 3 asc
+(select c1 from t1) except (select c2 from t2) order by 1;
+#select item is not ref column
+select c1+1 from t1 order by 1
+
+#### column name or alias
+select c1, c2 column2 from t1 order by c1, column2
+
+--error 5207
+select c1, c2 as c1 from t1 order by c1
+
+#### table name or alias
+select c1, c2 from t1 table1 order by  table1.c2
+#select c1, c2 from t1 table1 order by t1.c1, table1.c2	//not support
+
+#### column not in select
+select c1 from t1 order by c2
+
+#### column in select item
+#select t1.c1, c1 from t1 order by t1.c1
+
+#### expression or function
+select c1, sum(c2) from t1  order by sum(c2)
+
+
+### having###
+#### column or column alias
+select * from t1 having c1 > 0
+select * from t1 having sum(c1) > 0
+select c1, c2 column2 from t1 having sum(c1) > 1 and sum(column2) > 1
+#select c1, c2 column2 from t1 having column2 > 1 @ TODO
+
+####having column must exist in select items or in group items
+select c1 from t1 group by c2 having c2 > 0
+
+#### table name or table alias
+#the scope is T_AGG_SCOPE,not HAVING_SCOPE
+#select c1, c2 from t1 table1 having sum(t1.c2) < 1
+select c1, c2 from t1 table1 having sum(table1.c2) < 1
+select c1 from t1 having t1.c1 > 1
+select c1 from t1 having c1 > 1
+
+#### column not in select items
+select c1 from t1 having sum(c2)>1
+#select t1.c1 from t1 having sum(t1.c1) > 1
+
+#### function or expression
+select c1, sum(c2) column2 from t1 having sum(c1+1)>1
+
+#### question mark
+select * from t1 having sum(1) > 1
+
+
+### hint ###
+#### read consistency
+select /*+ READ_CONSISTENCY(WEAK)  */ * from t1
+select /*+ READ_CONSISTENCY(STRONG) */ * from t1
+select /*+ READ_CONSISTENCY(FROZEN) FROZEN_VERSION(1) */ * from t1
+#not use
+#select /*+ CLIENT_VERSION */ * from t1
+#select /*+ MYSQL_DRIVER */ * from t1
+select /*+ TOPK(10 2) */ * from t1
+select /*+ HOTSPOT*/ * from t1
+select /*+ LOG_LEVEL('INFO') */ * from t1
+
+select /*+ USE_HASH(t1)*/ * from t1
+select /*+ USE_PLAN_CACHE(default)*/ * from t1
+select /*+ USE_PLAN_CACHE(exact)*/ * from t1
+
+
+#### query timout
+select /*+ QUERY_TIMEOUT(1000) */ * from t1
+
+#### use nl
+select /*+ USE_NL(t1) */ * from t1 join t2 on t1.c1 = t2.c1
+
+#### index
+select /*+ INDEX(t1 INVALID_INDEX) */ c1 from t1;
+
+#### leading
+select /*+ leading(t2 t1 test)*/ * from t1, t2, test where t1.c1=t2.c1 and test.c1 = t2.c1;
+
+#### merge
+select /*+ use_merge(t2)*/ * from t1, t2, test where t1.c1=t2.c1 and test.c1 = t2.c1;
+
+#### orderd
+#111
+select /*+ ordered, use_merge(t2), use_nl(test)*/ * from t1, t2, test where t1.c1=t2.c1 and test.c1 = t2.c1;
+
+#### full
+select /*+ full(t1) */ c1, c2 from t1 where c1 = 2 or c2 =5;
+
+
+### for update ###
+select * from t1 for update
+select * from t1 for update wait 2
+select * from t1 for update wait 1
+select * from t1 for update nowait
+select * from t1 for update wait 1.0
+
+
+### limit ###
+
+#### const
+select c1, c2 from t1 limit 2, 10
+select c1, c2 from t1 limit 10
+select c1, c2 from t1 limit 2 offset 10
+(select c1 from t1 limit 10) limit 20
+
+#### question mark
+select * from t1 limit 1, 1
+select * from t1 limit 1
+select 1 in (c1) , c1 in (c2), 1 in (c1,c2) from t1;
+
+
+### set ###
+
+#### all distinct
+select c1,c2 from t1 union all select c1,c2 from t2
+select c1,c2 from t1 union distinct select c1,c2 from t2
+select c1,c2 from t1 union select c1,c2 from t2
+
+select * from t1 union select * from t1
+select * from t1 union select * from t1 union select * from t1
+select * from t1 union all select * from t1
+
+#select c1, c2 from t1 union all select * from t1 order by t1.c1
+#(select * from t1 union select * from t1) t2 union select * from t1 order by t2.c1
+
+(select c1 from t1) except (select c2 from t2) order by c1;
+(select c1 from t1) intersect (select c2 from t2) order by c1 limit 100;
+(select c1 from t1) union (select c2 from t1) union (select c2 from t2);
+(select c1 from t1) union (select c2 from t1) union (select c2 from t2) order by c1 limit 100;
+(select c1 from t1) union (select c2 from t1) intersect (select c2 from t2) order by c1 limit 100;
+
+(select c5, c7 from test) union ( select t1.c1, t2.c2 from t1 join t2 on t1.c1 = t2.c1)
+#(select c5, c7 from test) union ( select c1, c2 from t1 join t2 on t1.c1 = t2.c1) //error,ambiguous
+## different column between left and right substmt
+--error 5007
+select c1 from t1 union select c1,c2 from t1;
+
+### select into ###
+
+### when just for test
+### select c1 from t1 when ROW_COUNT(update t2 set c1 = 1) @ TODO
+select t1.c1, t2.c2, t2.c3 from t1,t2 where t1.c1 = t2.c1 order by t1.c2;
+
+### sys fun
+select current_timestamp()
+##TODO uncomment this when supported
+##select current_times()
+##select current_date()
+## ``
+select abs(1.8) as `a`;
+select abs(1.8) as "a";
+select abs(1.8) as 'a';
+
+select abs(1.8)  `a`;
+select abs(1.8)  "a";
+select abs(1.8)  'a';
+
+select c1 as "a" from t1;
+select c1 as `a` from t1;
+select c1 as 'a' from t1;
+
+### collation
+## join with no join_condition
+select c1, c2, c1 > c2 from coll_table where c1 < c2 collate utf8_general_ci;
+select 1 collate utf8_general_ci < _utf8 'abcd' collate utf8_general_ci;
+select * from t1 join t2
+select * from t1 inner join t2
+select * from t1 cross join t2
+select * from t1 join t2 join t3
+
+## case alias in group and having clause
+select X.c1 from t1 AS X group by X.c2 having (X.c1 = 1);
+(SELECT * FROM yu1) UNION ALL (SELECT * FROM yu2);
+
+## for coverage
+select * from (select * from t1) t join t2 using(c1) join t4 using(c1)
+select * from (select * from t1) t join t2 using(c1) left  join t4 using(c1)
+select * from (select * from t1) t join t2 using(c1) right join t4 using(c1)
+# @TODO: table_id will be changed, coment out!
+#select * from __idx_1099511631103_idx1
+--error 5019
+select * from t_not_exist
+
+## case insensitive
+--error 5207
+select c1 a, C2 A from t1 order by a
+
+
+select * from (t1);
+select * from (t1,t2);
+select * from (t1,(t2));
+select * from (t3,((t1,t2)));
+select * from t1 join t2 join t3;
+select * from (t1 join t2) join t3;
+select * from (t1 join t2) join (select * from t3) a;
+select * from ((t1 join t2) join (select * from t3) a);
+#select * from (t1,t2) join (t3,t4);
+#select * from (t1 join t2) join (t3,t4);
+
+select * from t1 join t2 on t1.c1=t2.c1, t3 join t4 on t3.c3=t4.c3;
+select * from t1 join t2 using(c1), t3 join t4 using(c3);
+
+select '';
+select '   ';
+select '\n';
+select '\t';
+select ' a';
+select '\t a';
+select '\n a';
+select  ' aa' 'bb';
+select 'aa' ` a`;
+select '111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111122';
+select '  1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111122';
+select '\n\t11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111a22';
+select 'abc' '\n\t11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111a22';
+select 'abc' as '\n\t11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111a22';
+select 'abc' as `  11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111a22`;
+
+SELECT t1.c1 FROM t2 LEFT JOIN t1 ON t2.c2 = t1.c1 ORDER BY c1;
+select default(c1) from t2;
+select default(c3) from test2;
+--error 5217
+select 1 as a from t1,t2 having c1=1;
+--error 5207
+select t1.c1,t2.c1 from t1,t2 having c1=1;
+--error 5207
+select t1.c1,t2.c1 from t1,t2 order by c1;
+--error 5207
+select t1.c1,t2.c1 from t1,t2 group by t1.c1,t2.c1 having c1 =1;
+select 1 from t1,t2 group by t1.c1,t2.c1 having t1.c1 =1;
+select c1 from t1 as x group by x.c1,c1 having c1 =1;
+select c1 from t1 as x group by x.c1,c1 having x.c1 =1;
+--error 5217
+select c1 from t1 having xxx.c1 =1;
+drop database select_db;
+## test comment
+
+/* 0a026f4414465990777471049d5c12/0// */         select 'abc';
+select 'abc' /* 0a026f4414465990777471049d5c12/0// */;
+select /* 0a026f4414465990777471049d5c12/0// */  'abc';
+
+##test validation of column alias
+select   'vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv1111111111111111111111111111256';
+select   'vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv1111111111111111111111111111256aaa';
+select 1 'vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv1111111111111111111111111111256';
+select 1 'vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv1111111111111111111111111111256aaa';
+select (select 'vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv11111111111111111256');
+select (select 'vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv11111111111111111256aaa');
+select concat('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','bbbbbbbbbbbbbbbbbbbbbbcdefghijklmnlzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz');
+select  1+'vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv1111111111111111111111111111256aaa';
+select  c1 +'vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv11111111111111111111111256' from t1;
+select  c1 +'vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvvvvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv11111111111111111111111256a' from t1;
+select c3 from t3 where c3>'1';
+
+##################### test for hierarchical query  ############################
+
+#select emp_id, mgr_id, emp_name from emp connect by nocycle prior emp_id = mgr_id;
+### normal test ###
+#select emp_id, mgr_id, emp_name from emp connect by prior emp_id = mgr_id;
+#select emp_id, mgr_id, emp_name from emp connect by prior emp_id = mgr_id and prior emp_id = emp_name;
+#select emp_id, mgr_id, emp_name from emp connect by prior emp_id = mgr_id or prior emp_id = emp_name;
+#select emp_id, mgr_id, emp_name from emp connect by prior emp_id = mgr_id and emp_id > 10;
+#--error 5313
+#select emp_id, mgr_id, emp_name from emp connect by nocycle prior (select min(c1) from t1) = mgr_id;
+### select emp_id, emp_name, mgr_id from emp connect by prior emp_id = (select min(c1) from t1 where c1 > emp_id);
+#
+#
+#select emp_id, emp_name, mgr_id from emp start with emp_id = 1 connect by prior emp_id = mgr_id;
+#select emp_id, mgr_id, emp_name from emp start with (select min(c1) from t1) = 1 connect by prior emp_id = mgr_id;
+#select emp_id, emp_name, mgr_id from emp start with emp_id = 1 and mgr_id > 1 connect by nocycle prior emp_id = mgr_id;
+#select emp_id, emp_name, mgr_id from emp start with emp_id = 1 or mgr_id > 1 connect by nocycle prior emp_id = mgr_id;
+#
+#### alias name ###
+#--error 5217
+#select emp_id as ee, emp_name, mgr_id from emp start with ee = 1 connect by prior emp_id = mgr_id;
+#--error 5217
+#select emp_id as ee, emp_name, mgr_id from emp start with ee = 1 connect by prior ee = mgr_id;
+#
+#### alias name ###
+#--error 5176
+#select emp_id, emp_name, mgr_id from emp start with max(emp_id) = 1 connect by prior ee = mgr_id;
+#--error 5313
+#select emp_id, emp_name, mgr_id from emp start with emp_id = 1 connect by prior max(emp_id) = mgr_id;
+#--error 5176
+#select emp_id, emp_name, mgr_id from emp start with emp_id = 1 connect by prior emp_id = max(mgr_id);
+#
+#### test for pseudo column ###
+#select level, emp_id from emp connect by prior emp_id = mgr_id;
+#select level, emp_id from emp where level < 1 connect by prior emp_id = mgr_id;
+#select max(level), emp_id from emp where level < 1 connect by prior emp_id = mgr_id;
+#select connect_by_iscycle, emp_id from emp connect by nocycle prior emp_id = mgr_id;
+#select connect_by_iscycle, emp_id from emp where connect_by_iscycle < 1 connect by nocycle prior emp_id = mgr_id;
+#select max(connect_by_iscycle), emp_id from emp where level < 1 connect by nocycle prior emp_id = mgr_id;
+#select connect_by_isleaf, emp_id from emp connect by prior emp_id = mgr_id;
+#select connect_by_isleaf, emp_id from emp where connect_by_isleaf < 1 connect by prior emp_id = mgr_id;
+#select max(connect_by_isleaf), emp_id from emp where connect_by_isleaf < 1 connect by prior emp_id = mgr_id;
+#
+#
+#--error 5312
+#select level from emp;
+#--error 5312
+#select connect_by_iscycle from emp;
+#--error 5312
+#select connect_by_isleaf from emp;
+#--error 5312
+#update t1 set c1 = 1 where level = 1;
+#--error 5312
+#update t1 set c1 = 1 where connect_by_isleaf = 1;
+#
+#--error 5313
+#set @c1 = connect_by_isleaf;
+#--error 5313
+#set @c1 = level + 1;
+#--error 5313
+#set @c1 = connect_by_iscycle;
+#
+#--error 5312
+#select emp_id from emp where level > 1;
+#--error 5312
+#select emp_id from emp where connect_by_isleaf > 1;
+#--error 5312
+#select emp_id from emp where connect_by_iscycle > 1;
+#select `level` from emp1;
+#
+#--error 5313
+#select emp_id from emp connect by level = 1;
+#--error 5313
+#select emp_id from emp start with level = 1 connect by prior emp_id = mgr_id;
+#--error 5313
+#select t1.c1 from t1 join t2 on t1.c1 = t2.c2 and level = 1 connect by prior t1.c1 = t2.c1;
+#--error 5313
+#select emp_id from emp connect by prior level = emp_id;
+#--error 5313
+#select emp_id from emp start with level = 0 connect by prior emp_id = mgr_id;
+#
+#--error 5313
+#select emp_id from emp connect by connect_by_isleaf = 1;
+#--error 5313
+#select emp_id from emp start with connect_by_isleaf = 1 connect by prior emp_id = mgr_id;
+#--error 5313
+#select t1.c1 from t1 join t2 on t1.c1 = t2.c2 and connect_by_isleaf = 1 connect by prior t1.c1 = t2.c1;
+#--error 5313
+#select emp_id from emp connect by prior connect_by_isleaf = emp_id;
+#--error 5313
+#select emp_id from emp start with connect_by_isleaf = 0 connect by prior emp_id = mgr_id;
+#
+#--error 5313
+#select emp_id from emp connect by connect_by_iscycle = 1;
+#--error 5313
+#select emp_id from emp start with connect_by_iscycle = 1 connect by prior emp_id = mgr_id;
+#--error 5313
+#select t1.c1 from t1 join t2 on t1.c1 = t2.c2 and connect_by_iscycle = 1 connect by prior t1.c1 = t2.c1;
+#--error 5313
+#select emp_id from emp connect by prior connect_by_iscycle = emp_id;
+#--error 5313
+#select emp_id from emp start with connect_by_iscycle = 0 connect by prior emp_id = mgr_id;
+#
+#--error 5314
+#select connect_by_iscycle, emp_id from emp connect by prior emp_id = mgr_id;
+#--error 5314
+#select connect_by_iscycle, emp_id from emp where connect_by_iscycle < 1 connect by prior emp_id = mgr_id;
+#--error 5314
+#select max(connect_by_iscycle), emp_id from emp where level < 1 connect by prior emp_id = mgr_id;
+#
+#### test for prior expr ###
+#
+#--error 5313
+#select prior (prior emp_id), mgr_id, emp_name from emp connect by prior emp_id = mgr_id;
+#--error 5313
+#select prior (prior emp_id + 1), mgr_id, emp_name from emp connect by prior emp_id = mgr_id;
+#--error 5313
+#select prior (level), mgr_id, emp_name from emp connect by prior emp_id = mgr_id;
+#--error 5313
+#select prior (connect_by_iscycle), mgr_id, emp_name from emp connect by prior emp_id = mgr_id;
+#--error 5313
+#select prior (connect_by_isleaf), mgr_id, emp_name from emp connect by prior emp_id = mgr_id;
+#--error 5313
+#select prior (max(empr_id)), mgr_id, emp_name from emp connect by prior emp_id = mgr_id;
+#--error 5313
+#select prior (select 1 from t1), mgr_id, emp_name from emp connect by prior emp_id = mgr_id;
+#--error 5313
+#select emp_id, mgr_id from emp start with prior emp_id = 1 connect by prior emp_id = mgr_id;
+#--error 5313
+#select t1.c1 from t1 join t2 on prior t1.c1 = t2.c2 connect by prior t1.c1 = t2.c1;
+#
+#--error 5312
+#update t1 set c1 = 1 where prior c1 = 1;
+#--error 5312
+#set @c1 = prior 1;
+#
+#### test for connect_by_root expr ###
+#select connect_by_root (emp_id) from emp connect by prior emp_id = mgr_id;
+#select emp_id + connect_by_root (emp_id) from emp connect by prior emp_id = mgr_id;
+#--error 5313
+#select emp_id from emp connect by prior emp_id = mgr_id order siblings by connect_by_root (emp_id);
+#
+#### test for sys_connect_by_path expr ###
+#select sys_connect_by_path(emp_id, 1) from emp connect by prior emp_id = mgr_id;
+#select sys_connect_by_path(2, 1) from emp connect by prior emp_id = mgr_id;
+#select sys_connect_by_path(emp_id + 1, 1) from emp connect by prior emp_id = mgr_id;
+#--error 5313
+#select emp_id from emp connect by prior emp_id = mgr_id order siblings by sys_connect_by_path(emp_id, 'a');
+#--error 5313
+#select emp_id from emp start with  sys_connect_by_path (emp_id, 'a') > 1 connect by prior emp_id = mgr_id;
+#--error 5313
+#select emp_id from emp connect by prior emp_id = sys_connect_by_path(emp_id, 'a');
+
+# #test '(+)' symbol
+# select * from t1 right join t2  on t1.c1 = t2.c1;
+# select * from t1 ,t2 where t1.c1(+) = t2.c1;
+# 
+# select * from t1 left join ( t2 left join t3 on t2.c1 = t3.c3) on t1.c1 = t2.c1;
+# select * from t1, t2, t3 where t1.c1 = t2.c1(+) and t2.c1 = t3.c3(+);
+# 
+# select * from t1 left join ( t2 left join t3 on t2.c1 = t3.c3) on t1.c1 = t2.c1, t4 left join ta on t4.c1 = ta.c1;
+# select * from ( t3 right join t2 on t2.c1 = t3.c3) right join t1 on t1.c1 = t2.c1, ta right join t4 on t4.c1 = ta.c1;
+# select * from t1, t2, t3, t4, ta where t1.c1 = t2.c1(+) and t2.c1 = t3.c3(+) and t4.c1 = ta.c1(+);
+# 
+# select * from t1, t2, t3 where t1.c1(+) = t2.c1 and t2.c1(+) = t3.c3;
+# select * from t1 right join (t2 right join t3 on t2.c1 = t3.c3) on t1.c1 = t2.c1;
+# 
+# select * from t1, t2, t3 where t1.c1(+) = t3.c3 and t2.c1 = t3.c3(+);
+# select * from t1 right join (t2 right join t3 on t2.c1 = t3.c3) on t1.c1 = t3.c3;
+
+select grouping(c1),grouping(c2),c1,c2 from t1 group by c1,c2 with rollup;
+--error 4002
+select grouping(c1),grouping(c2),c1 from t1 group by c1 with rollup;
+--error 4002
+select grouping(c1),grouping(c2),c1 from t1 group by c1;
+--error 4002
+select grouping(c1),c1 from t1 group by c1;
+
+## test qp_distribute hint
+
+select /*+ pq_distribute(t2 hash hash) */ * from t1, t2 where t1.c1 = t2.c1;
+select /*+ pq_distribute(t2, hash hash) */ * from t1, t2 where t1.c1 = t2.c1;
+select /*+ pq_distribute(t2, hash, hash) */ * from t1, t2 where t1.c1 = t2.c1;
+select /*+ pq_distribute(@sel$2 t2 hash, hash) */ * from (select t1.c1 from t1, t2 where t1.c1 = t2.c1) a, t3 where a.c1 = t3.c3;
+
+select /*+ pq_distribute(t2  BROADCAST, NONE) */ * from t1, t2 where t1.c1 = t2.c1;
+select /*+ pq_distribute(t2  NONE, BROADCAST) */ * from t1, t2 where t1.c1 = t2.c1;
+select /*+ pq_distribute(t2  PARTITION, NONE) */ * from t1, t2 where t1.c1 = t2.c1;
+select /*+ pq_distribute(t2  NONE, PARTITION) */ * from t1, t2 where t1.c1 = t2.c1;
+select /*+ pq_distribute(t2  NONE, NONE) */ * from t1, t2 where t1.c1 = t2.c1;
+# invalid hint
+select /*+ pq_distribute(t2  NONE, HASH) */ * from t1, t2 where t1.c1 = t2.c1;
+select /*+ pq_distribute(t2  PARTITION, BROADCAST) */ * from t1, t2 where t1.c1 = t2.c1;
+

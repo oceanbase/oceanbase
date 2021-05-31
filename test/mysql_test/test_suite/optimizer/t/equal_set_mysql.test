@@ -1,0 +1,540 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#equal set mainly has two advantages, the first one is to elimiate sort, the other one is to optimize partition_wise_join 
+
+#test equal set in elimiating sort
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(a int primary key, b int, c int, d int, key k1(b,c));
+create table t2(a int primary key, b int, c int, d int, key k2(b,c));
+create table t3(a int primary key, b int, c int, d int, key k3(b,c));
+#test basic table
+explain select/*+index(t1 k1)*/ * from t1 where b = 1 order by b, c;
+explain select/*+index(t1 k1), NO_USE_HASH_AGGREGATION*/ * from t1 where b = 1 group by b, c;
+
+explain select/*+index(t1 k1)*/ * from t1 where b = 1 order by c;
+explain select/*+index(t1 k1), NO_USE_HASH_AGGREGATION*/ * from t1 where b = 1 group by c;
+
+explain select/*+index(t1 k1)*/ * from t1 where b = a order by b, a;
+explain select/*+index(t1 k1), NO_USE_HASH_AGGREGATION*/ * from t1 where b = a group by a, b;
+
+#test inner join
+# test two table inner join
+explain select/*+index(t1 k1), index(t2 k2)*/ * from t1, t2 where t1.b = t2.b and t1.c = t2.c order by t1.b, t1.c;
+explain select/*+index(t1 k1), index(t2 k2), NO_USE_HASH_AGGREGATION*/ * from t1, t2 where t1.b = t2.b and t1.c = t2.c group by t1.b, t1.c;
+
+explain select/*+index(t1 k1), index(t2 k2)*/ * from t1, t2 where t1.b = t2.b and t1.c = t2.c order by t2.b, t2.c;
+explain select/*+index(t1 k1), index(t2 k2), NO_USE_HASH_AGGREGATION*/ * from t1, t2 where t1.b = t2.b and t1.c = t2.c group by t2.b, t2.c;
+
+explain select/*+index(t1 k1), index(t2 k2)*/ * from t1, t2 where t1.b = t2.b and t1.c = t2.c order by t1.b, t1.c, t2.b, t2.c;
+explain select/*+index(t1 k1), index(t2 k2), NO_USE_HASH_AGGREGATION*/ * from t1, t2 where t1.b = t2.b and t1.c = t2.c group by t1.b, t1.c, t2.b, t2.c;
+
+explain select/*+index(t1 k1), index(t2 k2)*/ * from t1, t2 where t1.b = t2.b and t1.c = t2.c order by t1.b, t2.b, t1.c, t2.c;
+explain select/*+index(t1 k1), index(t2 k2), NO_USE_HASH_AGGREGATION*/ * from t1, t2 where t1.b = t2.b and t1.c = t2.c group by t1.b, t2.b, t1.c, t2.c;
+
+# test three table inner join
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3)*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t1.b = t3.b and t1.c = t3.c order by t1.b, t1.c;
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t1.b = t3.b and t1.c = t3.c group by t1.b, t1.c;
+
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3)*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t1.b = t3.b and t1.c = t3.c order by t2.b, t2.c;
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t1.b = t3.b and t1.c = t3.c group by t2.b, t2.c;
+
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3)*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t1.b = t3.b and t1.c = t3.c order by t3.b, t3.c;
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t1.b = t3.b and t1.c = t3.c group by t3.b, t3.c;
+
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3)*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t1.b = t3.b and t1.c = t3.c order by t1.b, t1.c, t2.b, t2.c, t3.b, t3.c;
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t1.b = t3.b and t1.c = t3.c group by t1.b, t1.c, t2.b, t2.c, t3.b, t3.c;
+
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3)*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t2.b = t3.b and t2.c = t3.c order by t1.b, t1.c, t2.b, t2.c, t3.b, t3.c;
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t2.b = t3.b and t2.c = t3.c group by t1.b, t1.c, t2.b, t2.c, t3.b, t3.c;
+
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3)*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t1.b = t3.b and t1.c = t3.c order by t1.b, t2.b, t3.b, t1.c, t2.c, t3.c;
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t1.b = t3.b and t1.c = t3.c group by t1.b, t2.b, t3.b, t1.c, t2.c, t3.c;
+
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3)*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t2.b = t3.b and t2.c = t3.c order by t1.b, t2.b, t3.b, t1.c, t2.c, t3.c;
+explain select/*+leading(t1,t2,t3), index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/* from t1, t2, t3 
+where t1.b = t2.b and t1.c = t2.c and t2.b = t3.b and t2.c = t3.c group by t1.b, t2.b, t3.b, t1.c, t2.c, t3.c;
+
+#test outer join
+## test two table outer join
+explain select/*+index(t1 k1), index(t2 k2)*/ * from t1 left join t2 on t1.b = t2.b and t1.c = t2.c order by t1.b, t1.c;
+explain select/*+index(t1 k1), index(t2 k2), NO_USE_HASH_AGGREGATION*/ * from t1 left join t2 on t1.b = t2.b and t1.c = t2.c group by t1.b, t1.c;
+
+explain select/*+index(t1 k1), index(t2 k2)*/ * from t1 left join t2 on t1.b = t2.b and t1.c = t2.c order by t2.b, t2.c;
+explain select/*+index(t1 k1), index(t2 k2), NO_USE_HASH_AGGREGATION*/ * from t1 left join t2 on t1.b = t2.b and t1.c = t2.c group by t2.b, t2.c;
+
+# the following four cases we can elimiate sort operator, but currently our equal set do not support, to be refined in future
+explain select/*+index(t1 k1), index(t2 k2)*/ * from t1 left join t2 on t1.b = t2.b and t1.c = t2.c order by t1.b, t1.c, t2.b, t2.c;
+explain select/*+index(t1 k1), index(t2 k2)*, NO_USE_HASH_AGGREGATION*/ * from t1 left join t2 on t1.b = t2.b and t1.c = t2.c group by t1.b, t1.c, t2.b, t2.c;
+
+explain select/*+index(t1 k1), index(t2 k2)*/ * from t1 left join t2 on t1.b = t2.b and t1.c = t2.c order by t1.b, t2.b, t1.c, t2.c;
+explain select/*+index(t1 k1), index(t2 k2)*, NO_USE_HASH_AGGREGATION*/ * from t1 left join t2 on t1.b = t2.b and t1.c = t2.c group by t1.b, t2.b, t1.c, t2.c;
+
+##test three table outer join
+explain select/*+leading(t1,t2,t3),index(t1 k1), index(t2 k2), index(t3 k3)*/ * 
+from t1 left join t2 on t1.b = t2.b and t1.c = t2.c left join t3 on t1.b = t3.b and t1.c = t3.c order by t1.b, t1.c;
+explain select/*+leading(t1,t2,t3),index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/ * 
+from t1 left join t2 on t1.b = t2.b and t1.c = t2.c left join t3 on t1.b = t3.b and t1.c = t3.c group by t1.b, t1.c;
+
+explain select/*+leading(t1,t2,t3),index(t1 k1), index(t2 k2), index(t3 k3)*/ * 
+from t1 left join t2 on t1.b = t2.b and t1.c = t2.c left join t3 on t1.b = t3.b and t1.c = t3.c order by t2.b, t2.c;
+explain select/*+leading(t1,t2,t3),index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/ * 
+from t1 left join t2 on t1.b = t2.b and t1.c = t2.c left join t3 on t1.b = t3.b and t1.c = t3.c group by t2.b, t2.c;
+
+explain select/*+leading(t1,t2,t3),index(t1 k1), index(t2 k2), index(t3 k3)*/ * 
+from t1 left join t2 on t1.b = t2.b and t1.c = t2.c left join t3 on t1.b = t3.b and t1.c = t3.c order by t3.b, t3.c;
+explain select/*+leading(t1,t2,t3),index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/ * 
+from t1 left join t2 on t1.b = t2.b and t1.c = t2.c left join t3 on t1.b = t3.b and t1.c = t3.c group by t3.b, t3.c;
+
+# the following two cases we can elimiate sort operator, but currently our equal set do not support, to be refined in future
+explain select/*+leading(t1,t2,t3),index(t1 k1), index(t2 k2), index(t3 k3)*/ * 
+from t1 left join t2 on t1.b = t2.b and t1.c = t2.c left join t3 on t1.b = t3.b and t1.c = t3.c order by t1.b, t1.c, t2.b, t2.c, t3.b, t3.c;
+explain select/*+leading(t1,t2,t3),index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/ * 
+from t1 left join t2 on t1.b = t2.b and t1.c = t2.c left join t3 on t1.b = t3.b and t1.c = t3.c group by t1.b, t1.c, t2.b, t2.c, t3.b, t3.c;
+
+explain select/*+leading(t1,t2,t3),index(t1 k1), index(t2 k2), index(t3 k3)*/ * 
+from t1 left join t2 on t1.b = t2.b and t1.c = t2.c left join t3 on t1.b = t3.b and t1.c = t3.c order by t1.b, t2.b, t3.b, t2.c, t2.c, t3.c;
+explain select/*+leading(t1,t2,t3),index(t1 k1), index(t2 k2), index(t3 k3), NO_USE_HASH_AGGREGATION*/ * 
+from t1 left join t2 on t1.b = t2.b and t1.c = t2.c left join t3 on t1.b = t3.b and t1.c = t3.c group by t1.b, t2.b, t3.b, t2.c, t2.c, t3.c;
+
+#test semi/anti join
+explain select/*+index(t1 k1)*/ * from t1 where t1.b = t1.d and exists (select 1 from t2 where t1.a = t2.a) order by b, d;
+explain select/*+index(t1 k1)*/ * from t1 where t1.b = t1.d and not exists (select 1 from t2 where t1.a = t2.a) order by b, d;
+
+#test equal set in optimizing partition_wise_join
+#test hash partitioning
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(a int, b int, c int) partition by hash(a) partitions 5;
+create table t2(a int, b int, c int) partition by hash(a) partitions 5;
+create table t3(a int, b int, c int) partition by hash(a) partitions 5;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2 where t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t2.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t1.a = t3.a;
+
+explain select/*+leading(t1,t2)*/ * from t1 left join t2 on t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2)*/ * from t1 full join t2 on t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a full join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a full join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a full join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a full join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a inner join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a inner join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a inner join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a inner join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select * from t1 where t1.a in (select t2.a from t2);
+explain select * from t1 where t1.a in (select t2.a from t2) and t1.a in (select t3.a from t3);
+explain select * from t1 where t1.a in (select t2.a from t2 where t2.a in (select t3.a from t3));
+
+#test key partitioning
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(a int, b int, c int) partition by key(a) partitions 5;
+create table t2(a int, b int, c int) partition by key(a) partitions 5;
+create table t3(a int, b int, c int) partition by key(a) partitions 5;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2 where t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t2.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t1.a = t3.a;
+
+explain select/*+leading(t1,t2)*/ * from t1 left join t2 on t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2)*/ * from t1 full join t2 on t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a full join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a full join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a full join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a full join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a inner join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a inner join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a inner join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a inner join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select * from t1 where t1.a in (select t2.a from t2);
+explain select * from t1 where t1.a in (select t2.a from t2) and t1.a in (select t3.a from t3);
+explain select * from t1 where t1.a in (select t2.a from t2 where t2.a in (select t3.a from t3));
+
+#test range partitioning
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(a int, b int) partition by range(a) (
+  partition p0 values less than (100),
+  partition p1 values less than (200));
+create table t2(a int, b int) partition by range(a) (
+  partition p0 values less than (100),
+  partition p1 values less than (200));
+create table t3(a int, b int) partition by range(a) (
+  partition p0 values less than (100),
+  partition p1 values less than (200));
+  
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2 where t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t2.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t1.a = t3.a;
+
+explain select/*+leading(t1,t2)*/ * from t1 left join t2 on t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2)*/ * from t1 full join t2 on t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a full join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a full join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a full join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a full join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a inner join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a inner join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a inner join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a inner join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select * from t1 where t1.a in (select t2.a from t2);
+explain select * from t1 where t1.a in (select t2.a from t2) and t1.a in (select t3.a from t3);
+explain select * from t1 where t1.a in (select t2.a from t2 where t2.a in (select t3.a from t3));
+
+#test range column partitioning
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(a datetime, b int) partition by range columns(a) (
+  partition p0 values less than ('2011-01-01'),
+  partition p1 values less than ('2116-01-01'));
+create table t2(a datetime, b int) partition by range columns(a) (
+  partition p0 values less than ('2011-01-01'),
+  partition p1 values less than ('2116-01-01'));
+create table t3(a datetime, b int) partition by range columns(a) (
+  partition p0 values less than ('2011-01-01'),
+  partition p1 values less than ('2116-01-01'));
+  
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2 where t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t2.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t1.a = t3.a;
+
+explain select/*+leading(t1,t2)*/ * from t1 left join t2 on t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2)*/ * from t1 full join t2 on t1.a = t2.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a full join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a full join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a full join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a full join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a inner join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a inner join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a inner join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a inner join t3 on t2.a = t3.a;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a left join t3 on t1.a = t3.a;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a left join t3 on t2.a = t3.a;
+
+explain select * from t1 where t1.a in (select t2.a from t2);
+explain select * from t1 where t1.a in (select t2.a from t2) and t1.a in (select t3.a from t3);
+explain select * from t1 where t1.a in (select t2.a from t2 where t2.a in (select t3.a from t3));
+
+#test hash + range partitioning
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings 
+create table t1(a int, b datetime, primary key(a, b)) partition by hash(a) 
+	subpartition by range columns(b) 
+	subpartition template (
+			subpartition p0 values less than ('2016-10-10'),  
+			subpartition p1 values less than ('2116-3-30')) partitions 2;
+create table t2(a int, b datetime, primary key(a, b)) partition by hash(a) 
+	subpartition by range columns(b) 
+	subpartition template (
+			subpartition p0 values less than ('2016-10-10'),  
+			subpartition p1 values less than ('2116-3-30')) partitions 2;
+create table t3(a int, b datetime, primary key(a, b)) partition by hash(a) 
+	subpartition by range columns(b) 
+	subpartition template (
+			subpartition p0 values less than ('2016-10-10'),  
+			subpartition p1 values less than ('2116-3-30')) partitions 2;
+			
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2 where t1.a = t2.a and t1.b = t2.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t1.b = t2.b and t2.a = t3.a and t2.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t1.b = t2.b and t1.a = t3.a and t1.b = t3.b;
+
+explain select/*+leading(t1,t2)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b full join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b full join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b full join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b full join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2);
+explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2) and (t1.a, t1.b) in (select t3.a, t3.b from t3);
+explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2 where (t2.a, t2.b) in (select t3.a, t3.b from t3));
+
+#test range + hash partitioning
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings 
+create table t1(a int, b int, c int, d int, primary key(a, b, c)) 
+partition by range columns(a) subpartition by hash(b) subpartitions 5 ( 
+  partition p0 values less than (1),
+  partition p1 values less than (2),
+  partition p2 values less than (3),
+  partition p3 values less than (4),
+  partition p4 values less than (maxvalue)
+);
+create table t2(a int, b int, c int, d int, primary key(a, b, c))
+partition by range columns(a) subpartition by hash(b) subpartitions 5 ( 
+  partition p0 values less than (1),
+  partition p1 values less than (2),
+  partition p2 values less than (3),
+  partition p3 values less than (4),
+  partition p4 values less than (maxvalue)
+);
+create table t3(a int, b int, c int, d int, primary key(a, b, c))
+partition by range columns(a) subpartition by hash(b) subpartitions 5 ( 
+  partition p0 values less than (1),
+  partition p1 values less than (2),
+  partition p2 values less than (3),
+  partition p3 values less than (4),
+  partition p4 values less than (maxvalue)
+);
+
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2 where t1.a = t2.a and t1.b = t2.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t1.b = t2.b and t2.a = t3.a and t2.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1, t2, t3 where t1.a = t2.a and t1.b = t2.b and t1.a = t3.a and t1.b = t3.b;
+
+explain select/*+leading(t1,t2)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b full join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b full join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b full join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b full join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 left join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t1.a = t3.a and t1.b = t3.b;
+explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b left join t3 on t2.a = t3.a and t2.b = t3.b;
+
+explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2);
+explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2) and (t1.a, t1.b) in (select t3.a, t3.b from t3);
+explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2 where (t2.a, t2.b) in (select t3.a, t3.b from t3));
+
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings 
+create table t1(a int, b int) partition by hash(a+1) partitions 5;
+create table t2(a int, b int) partition by hash(a+1) partitions 5;
+create table t3(a int, b int) partition by hash(a+2) partitions 5;
+explain select * from t1, t2 where t1.a = t2.a;
+explain select * from t1, t2 where t1.a + 1 = t2.a + 1;
+explain select * from t1, t3 where t1.a + 1 = t3.a + 2;
+explain select * from t1, t3 where t1.a = t3.a; 
+explain select * from t1, t2, t3 where t1.a + 1 = t2.a + 1 and t1.a + 1 = t3.a + 2;
+explain select * from t1, t2, t3 where t1.a + 1 = t2.a + 1 and t2.a + 1 = t3.a + 2;
+
+# test equal set with set op and partition_wise_join
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(a int, b int, c int) partition by hash(a) partitions 5;
+create table t2(a int, b int, c int) partition by hash(a) partitions 5;
+create table t3(a int, b int, c int) partition by hash(a) partitions 5;
+
+## UNION distinct
+### normal
+explain select a from t1 union distinct select a from t2;
+explain select a from t1 where a = 1 union distinct select a from t2;
+explain select a from t1 union distinct select a from t2 where a = 1;
+explain select a from t1 where a = 1 union distinct select a from t2 where a = 1;
+
+### with filters
+explain select a from t1 union distinct select a from t2 union distinct select b from t3;
+explain select a from t1 where a = 1 union distinct select a from t2 union distinct select b from t3;
+explain select a from t1 union distinct select a from t2 where a = 1 union distinct select b from t3;
+explain select a from t1 where a = 1 union distinct select a from t2 where a = 1 union distinct select b from t3;
+
+### with const
+explain select 1 a union distinct select a from t1 union distinct select a from t2;
+explain select a from t1 union distinct select 1 a union distinct select a from t2;
+explain select a from t1 union distinct select a from t2 union distinct select 1 a;
+
+### with subquery
+explain select * from (select a from t1 union distinct select a from t2) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select a from t1 union distinct select a from t2 union distinct select a from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select a from t1 union distinct select a from t2 union distinct select b from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select a from t1 union distinct select 1 a union distinct select b from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select 1 a union distinct select a from t1 union distinct select b from t2) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select a from t1 union distinct select a from t2 union distinct select 1 a) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select t2.a from t1, t2 where t1.a = t2.a union distinct select a from t1 as t3) as t4, t2 as t5 where t4.a = t5.a;
+
+## UNION ALL
+### normal
+explain select a from t1 union all select a from t2;
+explain select a from t1 where a = 1 union all select a from t2;
+explain select a from t1 union all select a from t2 where a = 1;
+explain select a from t1 where a = 1 union all select a from t2 where a = 1;
+
+### with filters
+explain select a from t1 union all select a from t2 union all select b from t3;
+explain select a from t1 where a = 1 union all select a from t2 union all select b from t3;
+explain select a from t1 union all select a from t2 where a = 1 union all select b from t3;
+explain select a from t1 where a = 1 union all select a from t2 where a = 1 union all select b from t3;
+
+### with const
+explain select 1 a union all select a from t1 union all select a from t2;
+explain select a from t1 union all select 1 a union all select a from t2;
+explain select a from t1 union all select a from t2 union all select 1 a;
+
+### with subquery
+explain select * from (select a from t1 union all select a from t2) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select a from t1 union all select a from t2 union all select a from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select a from t1 union all select a from t2 union all select b from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select a from t1 union all select 1 a union all select b from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select 1 a union all select a from t1 union all select b from t2) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select a from t1 union all select a from t2 union all select 1 a) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select t2.a from t1, t2 where t1.a = t2.a union all select a from t1 as t3) as t4, t2 as t5 where t4.a = t5.a;
+
+## INTERSECT
+### normal
+explain select a from t1 intersect select a from t2;
+explain select a from t1 where a = 1 intersect select a from t2;
+explain select a from t1 intersect select a from t2 where a = 1;
+explain select a from t1 where a = 1 intersect select a from t2 where a = 1;
+
+### with filters
+explain select a from t1 intersect select a from t2 intersect select b from t3;
+explain select a from t1 where a = 1 intersect select a from t2 intersect select b from t3;
+explain select a from t1 intersect select a from t2 where a = 1 intersect select b from t3;
+explain select a from t1 where a = 1 intersect select a from t2 where a = 1 intersect select b from t3;
+
+### with const
+explain select 1 a intersect select a from t1 intersect select a from t2;
+explain select a from t1 intersect select 1 a intersect select a from t2;
+explain select a from t1 intersect select a from t2 intersect select 1 a;
+
+### with subquery
+explain select * from (select a from t1 intersect select a from t2) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select a from t1 intersect select a from t2 intersect select a from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select a from t1 intersect select a from t2 intersect select b from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select a from t1 intersect select 1 a intersect select b from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select 1 a intersect select a from t1 intersect select b from t2) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select a from t1 intersect select a from t2 intersect select 1 a) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select t2.a from t1, t2 where t1.a = t2.a intersect select a from t1 as t3) as t4, t2 as t5 where t4.a = t5.a;
+
+## EXCEPT
+### normal
+explain select a from t1 except select a from t2;
+explain select a from t1 where a = 1 except select a from t2;
+explain select a from t1 except select a from t2 where a = 1;
+explain select a from t1 where a = 1 except select a from t2 where a = 1;
+
+### with filters
+explain select a from t1 except select a from t2 except select b from t3;
+explain select a from t1 where a = 1 except select a from t2 except select b from t3;
+explain select a from t1 except select a from t2 where a = 1 except select b from t3;
+explain select a from t1 where a = 1 except select a from t2 where a = 1 except select b from t3;
+
+### with const
+explain select 1 a except select a from t1 except select a from t2;
+explain select a from t1 except select 1 a except select a from t2;
+explain select a from t1 except select a from t2 except select 1 a;
+
+### with subquery
+explain select * from (select a from t1 except select a from t2) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select a from t1 except select a from t2 except select a from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select a from t1 except select a from t2 except select b from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select a from t1 except select 1 a except select b from t3) as t4, t1 as t5 where t4.a = t5.a;
+explain select * from (select 1 a except select a from t1 except select b from t2) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select a from t1 except select a from t2 except select 1 a) as t3, t1 as t4 where t3.a = t4.a;
+explain select * from (select t2.a from t1, t2 where t1.a = t2.a except select a from t1 as t3) as t4, t2 as t5 where t4.a = t5.a;
+
+explain select * from (select 1 c1, 1 c2) t2 inner join t1 on t2.c1 = t1.a;
+explain select * from (select 1 c1, 1 c2) t2 left join t1 on t2.c1 = t1.a;
+explain select * from (select 1 c1, 1 c2) t2 right join t1 on t2.c1 = t1.a;
+explain select * from (select 1 c1, 1 c2) t2 full join t1 on t2.c1 = t1.a;
+
+explain select * from t1 inner join (select 1 c1, 1 c2) t2 on t2.c1 = t1.a;
+explain select * from t1 left join (select 1 c1, 1 c2) t2 on t2.c1 = t1.a;
+explain select * from t1 right join (select 1 c1, 1 c2) t2 on t2.c1 = t1.a;
+explain select * from t1 full join (select 1 c1, 1 c2) t2 on t2.c1 = t1.a;
+
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings 

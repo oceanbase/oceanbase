@@ -1,0 +1,15 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+use information_schema;
+
+select * from collation_character_set_applicability;
+select COLLATION_NAME, CHARACTER_SET_NAME from collation_character_set_applicability;
+select COLLATION_NAME from collation_character_set_applicability;
+select CHARACTER_SET_NAME from collation_character_set_applicability;
+select * from collation_character_set_applicability where COLLATION_NAME = 'utf8mb4_bin';
+
+desc collation_character_set_applicability;
+
+

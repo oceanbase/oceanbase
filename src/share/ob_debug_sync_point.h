@@ -1,0 +1,278 @@
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+#ifndef OCEANBASE_COMMON_OB_DEBUG_SYNC_POINT_H_
+#define OCEANBASE_COMMON_OB_DEBUG_SYNC_POINT_H_
+
+#include "lib/utility/ob_macro_utils.h"
+
+namespace oceanbase {
+namespace common {
+class ObString;
+
+#define OB_DEBUG_SYNC_POINT_DEF(ACT)                               \
+  ACT(INVALID_DEBUG_SYNC_POINT, = 0)                               \
+  ACT(NOW, )                                                       \
+  ACT(MAJOR_FREEZE_BEFORE_SYS_COORDINATE_COMMIT, )                 \
+  ACT(BEFORE_REBALANCE_TASK_EXECUTE, )                             \
+  ACT(REBALANCE_TASK_MGR_BEFORE_EXECUTE_OVER, )                    \
+  ACT(UNIT_BALANCE_BEFORE_PARTITION_BALANCE, )                     \
+  ACT(BEFORE_UNIT_MANAGER_LOAD, )                                  \
+  ACT(BEFORE_INNER_SQL_COMMIT, )                                   \
+  ACT(BEFORE_ASYNC_PT_UPDATE_TASK_EXECUTE, )                       \
+  ACT(AFTER_ASYNC_PT_UPDATE_TASK_EXECUTE, )                        \
+  ACT(DAILY_MERGE_BEFORE_RESTORE_LEADER_POS, )                     \
+  ACT(SWITCH_LEADER_BEFORE_SYS_COORDINATE_COMMIT, )                \
+  ACT(START_UNIT_BALANCE, )                                        \
+  ACT(BEFORE_TRY_DELETE_SERVERS, )                                 \
+  ACT(BEFORE_TRY_FREEZE_PARTITION_TABLE, )                         \
+  ACT(BEFORE_WRITE_CHECK_POINT, )                                  \
+  ACT(BEFORE_COMMIT_CHECK_POINT, )                                 \
+  ACT(BEFORE_PARTITION_MERGE_COMMIT, )                             \
+  ACT(BEFORE_PARTITION_MIGRATE_COMMIT, )                           \
+  ACT(BEFORE_SEND_UPDATE_INDEX_STATUS, )                           \
+  ACT(AFTER_INSERT_FLAG_REPLICA, )                                 \
+  ACT(OBSERVICE_GET_LEADER_CANDIDATES, )                           \
+  ACT(CHECK_NEW_TENANT, )                                          \
+  ACT(BEFORE_CHECK_MAJOR_FREEZE_DONE, )                            \
+  ACT(SET_FORCE_STOP_HB_DONE, )                                    \
+  ACT(UPDATE_WITH_PARTITION_FLAG_DONE, )                           \
+  ACT(MAJOR_FREEZE_AFTER_SYS_COMMIT, )                             \
+  ACT(MAJOR_FREEZE_AFTER_ROOTSERVER_COMMIT, )                      \
+  ACT(SWITCH_LEADER_AFTER_SYS_COMMIT, )                            \
+  ACT(SWITCH_LEADER_AFTER_ROOTSERVER_COMMIT, )                     \
+  ACT(AFTER_WRITE_MAJOR_FREEZE_COMMIT_LOG, )                       \
+  ACT(BEFORE_AUTO_COORDINATE, )                                    \
+  ACT(DELAY_PARTITION_SERVICE_FREEZE_LOG_TASK, )                   \
+  ACT(MINOR_MERGE_TIMER_TASK, )                                    \
+  ACT(MINOR_MERGE_TASK_PROCESS, )                                  \
+  ACT(MINOR_MERGE_SCHEDULE, )                                      \
+  ACT(DELAY_INDEX_WRITE, )                                         \
+  ACT(BEFORE_MINOR_FREEZE_GET_BASE_STORAGE_INFO, )                 \
+  ACT(BEFORE_IS_IN_SYNC_SET, )                                     \
+  ACT(BEFORE_MIGRATE_PROCESS, )                                    \
+  ACT(BEFORE_MIGRATE_COPY_BASE_DATA, )                             \
+  ACT(BEFORE_MIGRATE_COPY_LOGIC_DATA, )                            \
+  ACT(BEFORE_MIGRATE_WAIT_REPLAY, )                                \
+  ACT(BEFORE_MIGRATE_ENABLE_REPLAY, )                              \
+  ACT(BEFORE_MIGRATE_FINISH, )                                     \
+  ACT(BEFORE_BUILD_LOCAL_INDEX, )                                  \
+  ACT(BEFORE_BALANCE_SEND_RPC, )                                   \
+  ACT(END_PRODUCE_PG_REPLICATE_TASK, )                             \
+  ACT(BEFORE_SWEEP_MACRO_BLOCK, )                                  \
+  ACT(BEFORE_REPORT_BUILD_INDEX, )                                 \
+  ACT(DELAY_SCHEDULE_MERGE, )                                      \
+  ACT(DELAY_WRITE_CHECKPOINT, )                                    \
+  ACT(BEFORE_DO_GLOBAL_MAJOR_FREEZE, )                             \
+  ACT(MAJOR_MERGE_PREPARE, )                                       \
+  ACT(STOP_BALANCE_EXECUTOR, )                                     \
+  ACT(BEFORE_STOP_RS, )                                            \
+  ACT(BEFORE_ANSWER_RS_STATUS, )                                   \
+  ACT(DELAY_CHANGE_REPLICA_CALLBACK, )                             \
+  ACT(AFTER_POST_REMOVE_REPLICA_MC_MSG, )                          \
+  ACT(AFTER_POST_ADD_REPLICA_MC_MSG, )                             \
+  ACT(DELAY_REMOVE_REPLICA, )                                      \
+  ACT(BEFORE_CHECK_ALL_PARTITION_MERGED, )                         \
+  ACT(BEFORE_UPDATE_INDEX_STATUS, )                                \
+  ACT(AFTER_MIGRATION_MARK, )                                      \
+  ACT(BEFORE_CHECK_FREEZING, )                                     \
+  ACT(AFTER_RELEASE_STORES, )                                      \
+  ACT(AFTER_SET_FREEZING, )                                        \
+  ACT(BEFORE_REPORT_SELF, )                                        \
+  ACT(BEFORE_START_RS, )                                           \
+  ACT(BEFORE_MAIN_SSTBALE_FINISH_TASK, )                           \
+  ACT(BEFORE_INDEX_SSTBALE_FINISH_TASK, )                          \
+  ACT(HANG_MERGE, )                                                \
+  ACT(BEFORE_BACKGROUND_WASH, )                                    \
+  ACT(HANG_HEART_BEAT_ON_RS, )                                     \
+  ACT(AFTER_BUILD_INDEX_FINISH, )                                  \
+  ACT(BEFORE_PARTITION_REPORT_CALLBACK, )                          \
+  ACT(BEFORE_REBALANCE_SEND_TASK_RPC, )                            \
+  ACT(BEFORE_BATCH_REMOVE_MEMBER, )                                \
+  ACT(BEFORE_BATCH_ADD_MEMBER, )                                   \
+  ACT(UNIT_MANAGER_WAIT_FOR_TIMEOUT, )                             \
+  ACT(BEFORE_RECYCLE_INTERM_RESULT, )                              \
+  ACT(BEFORE_UPDATE_INDEX_BUILD_VERSION, )                         \
+  ACT(AFTER_GLOBAL_INDEX_GET_SNAPSHOT, )                           \
+  ACT(BEFORE_CHECK_GLOBAL_UNIQUE_INDEX, )                          \
+  ACT(BEFORE_COPY_GLOBAL_INDEX, )                                  \
+  ACT(BEFORE_LOCAL_INDEX_WAIT_TRANS_END, )                         \
+  ACT(BEFORE_LOCAL_INDEX_WAIT_TRANS_END_MID, )                     \
+  ACT(BEFORE_LOCAL_INDEX_WAIT_SNAPSHOT_READY, )                    \
+  ACT(BEFORE_LOCAL_INDEX_WAIT_SNAPSHOT_READY_MID, )                \
+  ACT(BEFORE_LOCAL_INDEX_CHOOSE_BUILD_INDEX_REPLICA, )             \
+  ACT(BEFORE_LOCAL_INDEX_CHOOSE_BUILD_INDEX_REPLICA_MID, )         \
+  ACT(BEFORE_LOCAL_INDEX_WAIT_CHOOSE_OR_BUILD_INDEX_END, )         \
+  ACT(BEFORE_LOCAL_INDEX_WAIT_CHOOSE_OR_BUILD_INDEX_END_MID, )     \
+  ACT(BEFORE_LOCAL_INDEX_COPY_BUILD_INDEX_DATA, )                  \
+  ACT(BEFORE_LOCAL_INDEX_COPY_BUILD_INDEX_DATA_MID, )              \
+  ACT(BEFORE_LOCAL_INDEX_UNIQUE_INDEX_CHECKING, )                  \
+  ACT(BEFORE_LOCAL_INDEX_UNIQUE_INDEX_CHECKING_MID, )              \
+  ACT(BEFORE_LOCAL_INDEX_WAIT_REPORT_STATUS, )                     \
+  ACT(BEFORE_LOCAL_INDEX_WAIT_REPORT_STATUS_MID, )                 \
+  ACT(BEFORE_LOCAL_INDEX_END, )                                    \
+  ACT(BEFORE_LOCAL_INDEX_END_MID, )                                \
+  ACT(DEFORE_OBS_CREATE_PARTITION, )                               \
+  ACT(DEFORE_FETCH_LOGIC_ROW_SRC, )                                \
+  ACT(BEFORE_BUILD_MIGRATE_PARTITION_INFO, )                       \
+  ACT(BEFORE_GET_MAJOR_MGERGE_TABLES, )                            \
+  ACT(BEFORE_GET_MINOR_MGERGE_TABLES, )                            \
+  ACT(BEFORE_GET_MAJOR_MERGE_TABLE_IDS, )                          \
+  ACT(BEFORE_GET_MINOR_MERGE_TABLE_IDS, )                          \
+  ACT(DAILY_MERGE_SCHEDULER_IDLE, )                                \
+  ACT(BEFORE_CHECK_LOCALITY, )                                     \
+  ACT(BLOCK_GARBAGE_COLLECTOR, )                                   \
+  ACT(BEFORE_CREATE_INDEX_TASK, )                                  \
+  ACT(BEFORE_CLEAR_MIGRATE_STATUS, )                               \
+  ACT(BEFORE_MERGE_CHECK_TASK, )                                   \
+  ACT(BEFORE_FINISH_MIGRATE_TASK, )                                \
+  ACT(BEFORE_BUILD_LOCAL_INDEX_SCAN, )                             \
+  ACT(BEFORE_CREATE_TABLE_TRANS_COMMIT, )                          \
+  ACT(AFTER_TENANT_BALANCE_GATHER_STAT, )                          \
+  ACT(BEFORE_RESTORE_PARTITIONS, )                                 \
+  ACT(BEFORE_BATCH_PROCESS_TASK, )                                 \
+  ACT(BEFORE_INSERT_ROWS, )                                        \
+  ACT(BEFORE_BUILD_LOCAL_INDEX_REFRESH_TABLES, )                   \
+  ACT(BEFORE_BUILD_LOCAL_INDEX_REFRESH_TABLES_MID, )               \
+  ACT(BEFORE_SLOG_UPDATE_FLUSH_CURSOR, )                           \
+  ACT(BEFORE_SCHEDULE_ALL_PARTITIONS, )                            \
+  ACT(BEFORE_OBSERVER_SCHEDULE_MIGRATE, )                          \
+  ACT(BEFORE_CREATE_TENANT_TRANS_TWO, )                            \
+  ACT(MERGE_PARTITION_TASK, )                                      \
+  ACT(BEFORE_CHANGE_MEMBER_LIST, )                                 \
+  ACT(BEFORE_FOLLOWER_CLUSTER_SYNC_SCHEMA, )                       \
+  ACT(BEFORE_UPDATE_STANBY_FREEZE_INFO, )                          \
+  ACT(BEFORE_PROCESS_USER_SCHEMA, )                                \
+  ACT(BEFORE_CREATE_TENANT_TRANS_THREE, )                          \
+  ACT(BEFORE_GEN_NEXT_SCHEMA_VERSION, )                            \
+  ACT(BLOCK_CALC_WRS, )                                            \
+  ACT(BEFORE_UPDATE_CORE_TABLE, )                                  \
+  ACT(BEFORE_REPLAY_ADD_PARTITION_TO_PG_CLOG, )                    \
+  ACT(BEFORE_SEND_FLASHBACK_USER_RPC, )                            \
+  ACT(BEFORE_SEND_FLASHBACK_RPC, )                                 \
+  ACT(BEFORE_UPDATE_GLOBAL_INDEX_STATUS, )                         \
+  ACT(BEFORE_UPDATE_LOCAL_INDEX_STATUS, )                          \
+  ACT(FINISH_ABORT_CREATE_INDEX, )                                 \
+  ACT(BEFORE_SWITCHOVER_FROM_PENDING_TO_PRIMARY, )                 \
+  ACT(BEFORE_FAILOVER_FROM_PENDING_TO_FLASHBACK, )                 \
+  ACT(BEFORE_SWITCHOVER_TO_PENDING, )                              \
+  ACT(BEFORE_ADD_SWITCHOVER_TASK, )                                \
+  ACT(BEFORE_WRITE_PARTITION_CHECK_POINT, )                        \
+  ACT(BEFORE_UPDATE_FREEZE_SNAPSHOT_INFO, )                        \
+  ACT(BEFORE_CREATE_PG_PARTITION, )                                \
+  ACT(BEFORE_MERGE_FINISH, )                                       \
+  ACT(BEFORE_FREEZE_ASYNC_TASK, )                                  \
+  ACT(END_SEND_FLASHBACK_INNER_RPC, )                              \
+  ACT(CREATE_TABLE_BEFORE_PUBLISH_SCHEMA, )                        \
+  ACT(BEFORE_DAILY_MERGE_RUN, )                                    \
+  ACT(AFTER_ADD_SWITCHOVER_TASK, )                                 \
+  ACT(HUNG_SWITCH_TASK_QUEUE, )                                    \
+  ACT(FETCH_MACRO_BLOCK, )                                         \
+  ACT(BEFORE_WRITE_START_WORKING, )                                \
+  ACT(BEFORE_SYNC_LOG_SUCCESS, )                                   \
+  ACT(BEFORE_DIST_COMMIT, )                                        \
+  ACT(BLOCK_FREEZE_INFO_UPDATE, )                                  \
+  ACT(BEFROE_DO_ROOT_BACKUP, )                                     \
+  ACT(BEFROE_DO_LOG_ARCHIVE_SCHEDULER, )                           \
+  ACT(WRTIE_EXTERN_LOG_ARCHIVE_BACKUP_INFO, )                      \
+  ACT(FAILED_TO_PROCESS_TO_PRIMARY, )                              \
+  ACT(BEFORE_REFRESH_CLUSTER_ID, )                                 \
+  ACT(BEFORE_FIX_TENANT_SCHEMA_VERSION, )                          \
+  ACT(BACKUP_INFO_PREPARE, )                                       \
+  ACT(BACKUP_INFO_SCHEDULER, )                                     \
+  ACT(BACKUP_INFO_BEFOR_DOING, )                                   \
+  ACT(BACKUP_INFO_BEFOR_CLEANUP, )                                 \
+  ACT(BACKUP_INFO_BEFOR_NORMAL_TENNAT_STOP, )                      \
+  ACT(BACKUP_INFO_BEFOR_SYS_TENNAT_STOP, )                         \
+  ACT(BACKUP_TASK_BEFOR_DOING, )                                   \
+  ACT(BACKUP_TASK_BEFOR_FINISH, )                                  \
+  ACT(BEFORE_PHYSICAL_RESTORE_TENANT, )                            \
+  ACT(BEFORE_PHYSICAL_RESTORE_SYS_REPLICA, )                       \
+  ACT(BEFORE_PHYSICAL_RESTORE_UPGRADE_PRE, )                       \
+  ACT(BEFORE_PHYSICAL_RESTORE_DO_UPGRADE_PRE, )                    \
+  ACT(BEFORE_PHYSICAL_RESTORE_UPGRADE_POST, )                      \
+  ACT(BEFORE_PHYSICAL_RESTORE_DO_UPGRADE_POST, )                   \
+  ACT(BEFORE_PHYSICAL_RESTORE_USER_REPLICA, )                      \
+  ACT(BEFORE_PHYSICAL_RESTORE_REPLICA, )                           \
+  ACT(BEFORE_PHYSICAL_RESTORE_SET_MEMBER_LIST, )                   \
+  ACT(BEFORE_PHYSICAL_RESTORE_MODIFY_SCHEMA, )                     \
+  ACT(BEFORE_PHYSICAL_RESTORE_USER_PARTITIONS, )                   \
+  ACT(BEFORE_PHYSICAL_RESTORE_REBUILD_INDEX, )                     \
+  ACT(BEFORE_PHYSICAL_RESTORE_POST_CHECK, )                        \
+  ACT(BACKUP_BEFROE_CHOOSE_SRC, )                                  \
+  ACT(HANG_UPDATE_RS_LIST, )                                       \
+  ACT(PARTITION_BACKUP_TASK_BEFORE_ADD_TASK_IN_MGR, )              \
+  ACT(HANG_BEFORE_RESOLVER_FINISH, )                               \
+  ACT(AFTER_GET_MERGE_LOG_ID, )                                    \
+  ACT(FAST_MIGRATE_AFTER_MIGRATE_OUT_CREATED, )                    \
+  ACT(FAST_MIGRATE_AFTER_SUSPEND_SRC, )                            \
+  ACT(NOTIFY_START_ARCHIVE_SUCC, )                                 \
+  ACT(LOG_ARCHIVE_SENDER_HANDLE, )                                 \
+  ACT(LOG_ARCHIVE_PUSH_LOG, )                                      \
+  ACT(END_PROCESS_USER_SCHEMA, )                                   \
+  ACT(BEFROE_LOG_ARCHIVE_SCHEDULE_BEGINNING, )                     \
+  ACT(BEFROE_LOG_ARCHIVE_SCHEDULE_DOING, )                         \
+  ACT(BEFROE_LOG_ARCHIVE_SCHEDULE_STOPPING, )                      \
+  ACT(AFTER_FREEZE_BEFORE_MINI_MERGE, )                            \
+  ACT(HUNG_HEARTBEAT_CHECK, )                                      \
+  ACT(BLOCK_WEAK_READ_TIMESTAMP, )                                 \
+  ACT(REPLAY_REDO_LOG, )                                           \
+  ACT(BEFORE_RECYCLE_PHYSICAL_RESTORE_JOB, )                       \
+  ACT(BACKUP_DATA_CLEAN_STATUS_PREPARE, )                          \
+  ACT(BACKUP_DATA_SYS_CLEAN_STATUS_DOING, )                        \
+  ACT(BACKUP_DATA_NORMAL_TENANT_CLEAN_STATUS_DOING, )              \
+  ACT(BACKUP_DATA_CLEAN_STATUS_SCHEDULE, )                         \
+  ACT(BACKUP_DATA_CLEAN_STATUS_DOING, )                            \
+  ACT(SYNC_PG_AND_REPLAY_ENGINE_DEADLOCK, )                        \
+  ACT(BACKUP_DATA_VALIDATE_STATUS_SCHEDULE, )                      \
+  ACT(BACKUP_DATA_VALIDATE_STATUS_DOING, )                         \
+  ACT(MIGRATE_BEFORE_CREATE_REPLICA_SUB, )                         \
+  ACT(MIGRATE_AFTER_CREATE_REPLICA_SUB, )                          \
+  ACT(MIGRATE_AFTER_CREATE_PG_LOCK_DIR, )                          \
+  ACT(MIGRATE_AFTER_CREATE_TASK_FILE, )                            \
+  ACT(MIGRATE_BEFORE_CREATE_MIGRATE_IN, )                          \
+  ACT(MIGRATE_AFTER_CREATE_MIGRATE_IN, )                           \
+  ACT(MIGRATE_BEFORE_MARK_TASK_STATUS, )                           \
+  ACT(MIGRATE_AFTER_MARK_TASK_STATUS, )                            \
+  ACT(MIGRATE_AFTER_DELETE_TASK_FILE, )                            \
+  ACT(MIGRATE_AFTER_DELETE_PG_LOCK_DIR, )                          \
+  ACT(MIGRATE_AFTER_REMOVE_REPLICA_SUB, )                          \
+  ACT(MIGRATE_AFTER_CREATE_MIGRATE_OUT, )                          \
+  ACT(FAST_RECOVER_BEFORE_PREPROCESS, )                            \
+  ACT(FAST_RECOVER_AFTER_PREPROCESS, )                             \
+  ACT(FAST_RECOVER_BEFORE_PROCESS, )                               \
+  ACT(FAST_RECOVER_MID_PROCESS1, )                                 \
+  ACT(FAST_RECOVER_MID_PROCESS2, )                                 \
+  ACT(FAST_RECOVER_MID_PROCESS3, )                                 \
+  ACT(FAST_RECOVER_MID_PROCESS4, )                                 \
+  ACT(FAST_RECOVER_AFTER_PROCESS, )                                \
+  ACT(FAST_RECOVER_REPLAY_CLOG, )                                  \
+  ACT(ADD_TRIGGER_BEFORE_MAP, )                                    \
+  ACT(DEL_TRIGGER_BEFORE_MAP, )                                    \
+  ACT(STANDBY_CLUSTER_PARTITION_CREATE, )                          \
+  ACT(AFTER_PREPARE_TENANT_BEGINNING_STATUS, )                     \
+  ACT(PREPARE_TENANT_BEGINNING_STATUS, )                           \
+  ACT(DOING_MARK_AND_SWEEP, )                                      \
+  ACT(BEFORE_FINISH_SET_PROTECTION_MODE, )                         \
+  ACT(BEFORE_STANDBY_HEARTBEAT, )                                  \
+  ACT(BEFORE_ALTER_TABLE_PARTITION, )                              \
+  ACT(BEFORE_DO_MINOR_FREEZE, )                                    \
+  ACT(BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG, )                    \
+  ACT(SLOW_TXN_DURING_2PC_COMMIT_PHASE_FOR_PHYSICAL_BACKUP_1055, ) \
+  ACT(MAX_DEBUG_SYNC_POINT, )
+
+DECLARE_ENUM(ObDebugSyncPoint, debug_sync_point, OB_DEBUG_SYNC_POINT_DEF);
+
+}  // end namespace common
+}  // end namespace oceanbase
+
+#endif  // OCEANBASE_COMMON_OB_DEBUG_SYNC_POINT_H_

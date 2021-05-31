@@ -1,0 +1,6 @@
+ob_unittest(test_ob_sql_utils)
+ob_unittest(test_ob_end_trans_callback)
+ob_unittest(test_ob_diagnose_info)
+ob_unittest(test_rowkey)
+ob_unittest(test_base64_encode)
+ob_unittest(test_urowid)

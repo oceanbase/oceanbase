@@ -1,0 +1,11 @@
+easy_add_objects(util
+easy_array.c
+easy_buf.c
+easy_hash.c
+easy_inet.c
+easy_mod_stat.c
+easy_pool.c
+easy_string.c
+easy_time.c
+easy_util.c
+)

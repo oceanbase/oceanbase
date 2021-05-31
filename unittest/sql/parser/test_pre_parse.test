@@ -1,0 +1,21 @@
+
+/*trace_id=xxx*/select * from t1;
+ /*TrAcE_Id=xxx read*/ select * from t1;
+/*+tRaCe_iD=abcd12 * read*/ select * from t1;
+/* trace_id=a12db   rpc_id=xxxxx */ select * from t1;
+/*trace_id=xxx,rpc_id=xxx*/select * from t1;
+ /*rpc_id=xxx, TrAcE_Id=xxx, read*/ select * from t1;
+/*+tRaCe_iD=abcd12* read*/ select * from t1;
+/* trace_id=a12db,   rpc_id=xxxxx */ select * from t1;
+/*trace_id=1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc888888889999999 rpc_id=xxx*/ select * from t1;
+/*trace_id=1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc88888888 rpc_id=xxx*/ select * from t1;
+/*trace_id=1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc8888888 rpc_id=xxx*/ select * from t1;
+/*trace_id=1111111122222222aaaaaaaabbbbbbbb5555555566666666cccccccc888888889 rpc_id=xxx*/ select * from t1;
+/*trace_id=1 rpc_id=xxx*/ select * from t1;
+/*trace_id=12QA  rpc_id=xxx*/ select * from t1;
+  /*trace_id=12QA  rpc_id=xxx*/ select * from t1;
+
+select /*trace_id=xx*/ * from t1;
+/*trace_id= abc read*/ select * from t1;
+/*trace_id= abc select * from t1;
+

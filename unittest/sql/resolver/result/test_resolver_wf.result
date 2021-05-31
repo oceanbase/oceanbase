@@ -1,0 +1,46 @@
+***************   Case 1   ***************
+drop database if exists wf_db;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"wf_db",
+  "if_exist":true,
+  "to_recyclebin":false
+}
+***************   Case 2   ***************
+create database wf_db;
+{
+  "create_database_arg":"database_schema",
+  "database_id":-1,
+  "schema_version":1,
+  "database_name":"wf_db",
+  "replica_num":0,
+  "zone_list": [
+  ],
+  "primary_zone":"",
+  "charset_type":2,
+  "collation_type":"utf8mb4_general_ci",
+  "name_case_mode":-1,
+  "comment":"",
+  "read_only":false,
+  "default_tablegroup_id":-1,
+  "default_tablegroup_name":"",
+  "in_recyclebin":false,
+  "primary_zone_array": [
+  ]
+}
+***************   Case 3   ***************
+use wf_db;
+{
+  "stmt_type":97
+}
+***************   Case 4   ***************
+create table t1(c1 int primary key, c2 int, c3 datetime);
+{"ObTableStmt":{"partition_fun_expr":[], "range_values_exprs":[], "list_values_exprs":[], "index_partition_resolve_results":[], "part_type":8}, "stmt_type":20, "create_table_arg":{"if_not_exist":false, "schema":{"simple_table_schema":{"tenant_id":1, "database_id":18446744073709551615, "tablegroup_id":1099511627777, "table_id":18446744073709551615, "table_name":"t1", "replica_num":0, "previous_locality_str":"", "min_partition_id":0, "session_id":0, "index_type":0, "table_type":3, "data_table_id":0, "name_casemode":-1, "schema_version":0, "part_level":0, "part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":0}, "sub_part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":-1}, "locality_str":"", "zone_list":[], "primary_zone":"", "part_num":0, "subpart_num":0, "partition_num":1, "subpartition_num":0, "partition_array":[{"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":0, "name":"p0", "high_bound_val":, "list_row_values":[], "part_idx":0}, "mapping_pg_part_id":-1}], "subpartition_array":null, "index_status":1, "binding":false, "duplicate_scope":0}, "max_used_column_id":18, "max_used_constraint_id":0, "sess_active_time":0, "rowkey_column_num":1, "index_column_num":0, "rowkey_split_pos":0, "block_size":16384, "is_use_bloomfilter":false, "progressive_merge_num":0, "tablet_size":134217728, "pctfree":10, "load_type":0, "index_using_type":0, "def_type":1, "charset_type":2, "collation_type":45, "create_mem_version":0, "index_status":1, "partition_status":0, "code_version":1, "last_modified_frozen_version":0, "comment":"", "pk_comment":"", "create_host":"", "zone_replica_attr_array":[], "region_replica_num_array":[], "tablegroup_name":"", "compress_func_name":"zstd_1.0", "row_store_type":1, "store_format":3, "expire_info":"", "view_schema":{"view_definition":"", "check_option":"none", "is_updatable":"false", "is_materialized":"false"}, "autoinc_column_id":0, "auto_increment":1, "read_only":false, "primary_zone_array":[], "index_tid_array":[], "mv_tid_array":[], "aux_vp_tid_array":[], "base_table_ids":[], "rowkey_info":{"columns":[{"length":0, "column_id":16, "type":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":1}, "partition_key_info":{"columns":null, "capacity":0}, "aux_vp_tid_array":[]}, "index_arg_list":[], "constraint_list":[], "db_name":"wf_db", "last_replay_log_id":0, "foreign_key_arg_list":[], "vertical_partition_arg_list":[]}, "index_arg_list":[]}
+***************   Case 5   ***************
+drop database wf_db;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"wf_db",
+  "if_exist":false,
+  "to_recyclebin":false
+}

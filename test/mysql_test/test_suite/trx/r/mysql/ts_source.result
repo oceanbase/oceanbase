@@ -1,0 +1,41 @@
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection obsys;
+show global variables like 'ob_timestamp_service';
+Variable_name	Value
+ob_timestamp_service	LTS
+set global ob_timestamp_service='GTS';
+ERROR 42000: Variable 'ob_timestamp_service' can't be set to the value of 'GTS'
+show global variables like 'ob_timestamp_service';
+Variable_name	Value
+ob_timestamp_service	LTS
+disconnect obsys;
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection obsys;
+show global variables like 'ob_timestamp_service';
+Variable_name	Value
+ob_timestamp_service	LTS
+connect  obcommon,$OBMYSQL_MS0,root@ts_source_tenant1,,*NO-ONE*,$OBMYSQL_PORT;
+connection obcommon;
+show global variables like 'ob_timestamp_service';
+Variable_name	Value
+ob_timestamp_service	GTS
+set global ob_timestamp_service='LTS';
+show global variables like 'ob_timestamp_service';
+Variable_name	Value
+ob_timestamp_service	LTS
+disconnect obcommon;
+connect  obcommon,$OBMYSQL_MS0,root@ts_source_tenant1,,*NO-ONE*,$OBMYSQL_PORT;
+connection obcommon;
+show global variables like 'ob_timestamp_service';
+Variable_name	Value
+ob_timestamp_service	LTS
+set global ob_timestamp_service='GTS';
+show global variables like 'ob_timestamp_service';
+Variable_name	Value
+ob_timestamp_service	GTS
+disconnect obcommon;
+connect  obcommon,$OBMYSQL_MS0,root@ts_source_tenant1,,*NO-ONE*,$OBMYSQL_PORT;
+connection obcommon;
+show global variables like 'ob_timestamp_service';
+Variable_name	Value
+ob_timestamp_service	GTS

@@ -1,0 +1,100 @@
+#---
+#schema
+#---
+
+#drop database if exists cte_db;
+#create database cte_db;
+#use cte_db;
+#create table emp(id int, name varchar(20), leaderid int);
+#create table t1(c1 int, c2 int, c3 int);
+#create table t2(c1 int, c2 int);
+#create table t3(c3 int primary key, c4 int);
+#
+#
+##---
+##basic cte
+##---
+#with cte(a) as (select count(c1) from t2 group by c2 limit 5) select * from cte;
+#WITH cte1 AS (SELECT c1, c2 FROM t1) select c1 from cte1;
+#WITH cte1 AS (SELECT c1, c2 FROM t1) select c1 from cte1;
+#WITH cte1 (name1, name2) AS (select c1, c2 from t1) select name1 from cte1;
+#WITH cte1 AS (SELECT c1, c2 FROM t1), cte2 AS (SELECT c1, c2 FROM t2) select c1 from cte2;
+#WITH cte1 AS (select * from t1) select c1, c2 from cte1;
+#WITH cte1 (c1)AS(select c1 from t1), cte2 AS (select * from t1) select c1, c2 from cte2;
+#WITH cte0 AS ( select * from t1) select * from cte0 for update;
+#with cte as (select count(*) from t1) select * from cte;
+#with cte as (select count(*) as k from t1) select * from cte where k = 1;
+#with cte (k1) as (select count(*) as k from t1) select * from cte where k1 = 1;
+#with  cte1 (c22, c21) AS (select c1, c2 from t1) select c22 as c21, c21 from cte1 where c21 = 12;
+#with cte1 AS( select * from t1)select * from cte1 left join t2 on cte1.c1=t2.c1 having not (t2.c1 <=> cte1.c1) order by cte1.c1;
+#WITH cte1 (a, b) AS (SELECT c1, c2 FROM t1), cte2 (c, d) AS (SELECT c1, c2 FROM t2) select * from (with cte2 as(select * from t3) select c3 as c11, c4 from cte2) cte1 join cte2 on cte1.c11=cte2.c;
+#WITH cte1 (a, b) AS (SELECT c1, c2 FROM t1), cte2 (c, d) AS (SELECT c1, c2 FROM t2) select * from cte1 left join cte2 on cte1.a=cte2.c having not (cte1.b <=> cte2.d) order by cte1.a;
+#
+##---
+##recursive cte
+##---
+#WITH cte(hello) AS (SELECT c1 FROM t1 UNION ALL select hello from cte) search depth first by hello set abc select hello, abc from cte;
+#WITH cte(n) AS (SELECT c1 FROM t1 UNION ALL select n+1 from cte where n < 10) search depth first  by n set a select n from cte;
+#with cte(n) as (select 1 from dual union all select n+1 from cte where n < 2) select n from cte;
+#with cte(n) as (select 1 from dual union all select n+1 from cte where n < 2) search depth first by n set abc select n,abc from cte;
+#explain with cte (a,b,c) as  (     select id, name, leaderid from emp where emp.id = 1     union all     select emp.id ,emp.name, emp.leaderid from emp, cte where emp.leaderid = cte.a ) search depth first by a set sad  select * from cte;
+#WITH cte(n) AS (SELECT c1 FROM t1 UNION ALL select n from cte) search depth first  by n set a_name cycle n set iscyc to 'n' default 'y' select n from cte;
+#WITH cte(n) AS (SELECT c1 FROM t1 UNION ALL select n from cte) search depth first  by n set a_name select n from cte;
+#WITH cte(n) AS (SELECT c1 FROM t1 UNION ALL select n from cte) select n from cte;
+#WITH fibonacci (n, fib_n, next_fib_n) AS (   SELECT 1, 0, 1 from dual   UNION ALL   SELECT n + 1, next_fib_n, fib_n + next_fib_n   FROM fibonacci WHERE n < 10 ) SELECT * FROM fibonacci;
+#WITH cte(hello) AS (SELECT c1 FROM t1 UNION ALL select hello from cte) search depth first by hello set abc select hello, abc from cte;
+#WITH cte(hello) AS (SELECT c1 FROM t1 UNION ALL select hello from cte) search depth first by hello set abc select * from cte;
+#WITH cte(hello) AS (SELECT c1 FROM t1 UNION ALL select hello+1 from cte where hello < 5) search depth first by hello set abc select hello, abc from cte;
+#with cte (a,b,c) as (select id, name, leaderid from emp where emp.id = 1 union all select emp.id ,emp.name, emp.leaderid from emp, cte where emp.leaderid = cte.a) search breadth first by a set sad select * from cte;
+#with cte (a,b,c) as (select id, name, leaderid from emp where emp.id = 1 union all select emp.id ,emp.name, emp.leaderid from emp, cte where emp.leaderid = cte.a) cycle a set iscyc to 'n' default 'y' select * from cte;
+#explain with cte (a,b,c) as  (     select id, name, leaderid from emp where emp.id = 1     union all     select emp.id ,emp.name, emp.leaderid from emp, cte where emp.leaderid = cte.a ) cycle a set iscyc to 'n' default 'y' select * from cte;
+#with cte (a,b,c) as  (     select id, name, leaderid from emp where emp.id = 1     union all     select emp.id ,emp.name, emp.leaderid from emp, cte where emp.leaderid = cte.a ) cycle c set iscyc to 'n' default 'y' select * from cte;
+##with cte (a,b,c) as (   select id, name, leaderid from emp where emp.id = 1   union all   select emp.id ,emp.name, emp.leaderid from emp, cte where emp.leaderid = cte.a ) search breadth first by a set abc cycle a set iscyc to 'y' default 'n' select max(a) from cte start with a =1 connect by  prior a = c group by level;
+#with cte(n) as (select 1 from dual) search depth first by n set abc select * from cte;
+#WITH cte1 AS (SELECT c1, c2 FROM t1) select c1 from cte1;
+#with cte(a) as (select 1 from dual union all select 2 from dual), cte_1(b) as (select 1 from dual union all select * from cte) select * from cte_1;
+#WITH cte1 (a, b) AS (SELECT c1, c2 FROM t1), cte2 (c, d) AS (SELECT c1, c2 FROM t2) select * from (with cte2 as(select * from t3) select c3 as c11, c4 from cte2) cte1 join cte2 on cte1.c11=cte2.c;
+#--error 5217
+#with cte(n) as ( select 1 from dual union all select n+1 from cte where n < 10 ) search depth first by a set abc select * from cte;
+#with cte(n) as (select 1 from dual) search depth first by n set abc select * from cte;
+#with cte(a,b,c) as (select * from emp) search depth first by a set abc select * from cte;
+#--error 4002
+#with cte(n, x) as (select * from t1) cycle n set iscyc to 'y' default 'n' select * from cte;
+#
+#### common ###
+#with cte(n) as (select 1 union all select n+1 from cte where n < 23) select n from cte;
+#--error 4007
+#with cte(n) AS ( select 1 from cte) select * from cte;
+#--error 4007
+#with cte(n) AS (select 1 from dual UNION ALL select n+1 from (select * from cte) ct1 where n < 3) select * from cte;
+#--error 4007
+#with cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte) select * from cte;
+#--error 4007
+#with cte(n) as (select 1 from dual union all select c1 from t1 union all (with cte(n) as (select c1 from t1) select * from cte)) select * from cte;
+#--error 4007
+#with cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 union all select n+1 from cte where n < 2) select * from cte;
+#--error 4007
+#with cte(n) as (select n from (select 1 from dual union all select n+1 from cte) tmp) select * from cte;
+#--error 4007
+#with cte(n) AS (select 1 from cte UNION all select n+1 from cte where n < 3) select * from cte;
+#--error 4007
+#with cte(n) as (select n+1 from cte where n < 5 union all select c1 from t1) select * from cte;
+#--error 4007
+#with cte(n) as (select 1 from dual union all select * from (select n from cte where n < 5) tmp) select * from cte;
+#--error 4007
+#with cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 order by n ) select * from cte;
+#with cte_recursive (a,b,c) as ( select id, name, leaderid from emp where emp.id = 1 union all select emp.id ,emp.name, emp.leaderid from emp, cte_recursive where emp.leaderid = cte_recursive.A ) search depth first by a set sad cycle b set iscyc to 'y' default 'n', cte as (select * from cte_recursive) select * from cte;
+#--error 5019
+#select * from (with cte as (select * from t2) select * from cte) t3, cte where t3.c21 = cte.c1;
+#--error 5019
+#with cte(a,b,c) as (   select c1,c2,c3 from not_exist where not_exist.c1 < 20   union all   select c1,c2,c3 from not_exist, cte where cte.a = not_exist.c1 and cte.c < 10 ) select * from cte;
+#--error 4007
+#with cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte right join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
+#--error 4007
+#with cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 left join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
+#--error 4007
+#with cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 full join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
+#--error 4007
+#with cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte full join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
+#--error 4002
+#with cte (a,b,c) as (select id, name, leaderid from emp where emp.id = 1 union all select emp.id ,emp.name, emp.leaderid from emp, cte where emp.leaderid = cte.a) search depth first by a set abc cycle a set abc to 'y' default 'n' select * from cte;

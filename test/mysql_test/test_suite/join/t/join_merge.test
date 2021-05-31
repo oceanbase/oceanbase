@@ -1,0 +1,292 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# description:
+# 1. test desc for merge join.
+
+--disable_warnings
+drop table if exists aa;
+drop table if exists bb;
+drop table if exists cc;
+--enable_warnings
+create table aa(a1 int primary key auto_increment, a2 int, a3 int);
+create table bb(b1 int primary key auto_increment, b2 int, b3 int);
+create table cc(c1 int primary key auto_increment, c2 int, c3 int);
+#single layer merge join.
+delete from aa;
+insert into aa(a2, a3) values (10, 15), (10, 14), (10, 12),           (11, 13), (12, 12),           (12, 10);
+delete from bb;
+insert into bb(b2, b3) values           (10, 14),           (11, 14), (11, 13),           (12, 11), (12, 10);
+--sleep 1
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+delete from aa;
+insert into aa(a2, a3) values (10, 15), (10, 14), (10, 12),           (11, 13), (12, 12),           (12, 10);
+delete from bb;
+insert into bb(b2, b3) values           (10, 14),           (11, 14), (11, 13),           (12, 11), (12, 10);
+--sleep 1
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+#double layers merge join.
+delete from cc;
+insert into cc(c2, c3) values (10, 15), (10, 14), (10, 12),           (12, 10);
+--sleep 1
+select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
+explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
+select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and a2 = c2 and b3 = c3 order by c2, c3 desc;
+explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and a2 = c2 and b3 = c3 order by c2, c3 desc;
+--disable_warnings
+drop table if exists tt1,tt2;
+--enable_warnings
+CREATE TABLE `tt1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` varchar(20) DEFAULT NULL,
+  `d` datetime NOT NULL,
+  PRIMARY KEY (`a`)
+);
+CREATE TABLE `tt2` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` varchar(20) DEFAULT NULL,
+  `d` datetime NOT NULL,
+  PRIMARY KEY (`a`)
+);
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.d desc;
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.a desc;
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.c desc;
+--disable_warnings
+drop table if exists tt1,tt2;
+--enable_warnings
+--disable_warnings
+
+--echo == test partitioned table merge join ==
+--disable_warnings
+drop table if exists aa;
+drop table if exists bb;
+drop table if exists cc;
+--enable_warnings
+create table aa(a1 int, a2 int, a3 int) partition by hash(a1) partitions 5;
+create table bb(b1 int, b2 int, b3 int) partition by hash(b1) partitions 5;
+create table cc(c1 int, c2 int, c3 int) partition by hash(c1) partitions 5;
+#single layer merge join.
+delete from aa;
+insert into aa values (1, 10, 15), (2, 10, 14), (3, 10, 12), (4, 11, 13), (5, 12, 12), (6, 12, 10);
+delete from bb;
+insert into bb values (1, 10, 14), (2, 11, 14), (3, 11, 13), (4, 12, 11), (5, 12, 10);
+--sleep 1
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+delete from aa;
+insert into aa values (1, 10, 15), (2, 10, 14), (3, 10, 12), (4, 11, 13), (5, 12, 12), (6, 12, 10);
+delete from bb;
+insert into bb values (1, 10, 14), (2, 11, 14), (3, 11, 13), (4, 12, 11), (5, 12, 10);
+--sleep 1
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+#double layers merge join.
+delete from cc;
+insert into cc values (1, 10, 15), (2, 10, 14), (3, 10, 12), (4, 12, 10);
+--sleep 1
+select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
+explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
+select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and a2 = c2 and b3 = c3 order by c2, c3 desc;
+explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and a2 = c2 and b3 = c3 order by c2, c3 desc;
+--disable_warnings
+drop table if exists tt1,tt2;
+--enable_warnings
+CREATE TABLE `tt1` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` varchar(20) DEFAULT NULL,
+  `d` datetime NOT NULL,
+  PRIMARY KEY (`a`)
+) partition by hash(a) partitions 5;
+CREATE TABLE `tt2` (
+  `a` int(11) NOT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` varchar(20) DEFAULT NULL,
+  `d` datetime NOT NULL,
+  PRIMARY KEY (`a`)
+) partition by hash(a) partitions 5;
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.d desc;
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.a desc;
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.c desc;
+--disable_warnings
+drop table if exists tt1,tt2;
+--enable_warnings
+--disable_warnings
+drop table if exists aa;
+drop table if exists bb;
+drop table if exists cc;
+--enable_warnings
+
+--disable_warnings
+drop table if exists t_r4_01_20;
+--enable_warnings
+
+create table t_r4_01_20(a int, b int, c datetime, primary key (a,b))
+partition by range columns(a)
+(
+  partition p6 values less than (6),
+  partition p11 values less than (11),
+  partition p16 values less than (16),
+  partition pm values less than (MAXVALUE)
+);
+insert into t_r4_01_20 values ( 1,  1, 20161101), ( 2,  2, 20161102), ( 3,  3, 20161103), ( 4,  4, 20161104),
+                              ( 5,  5, 20161105), ( 6,  6, 20161106), ( 7,  7, 20161107), ( 8,  8, 20161108),
+                              ( 9,  9, 20161109), (10, 10, 20161110), (11, 11, 20161111), (12, 12, 20161112),
+                              (13, 13, 20161113), (14, 14, 20161114), (15, 15, 20161115), (16, 16, 20161116),
+                              (17, 17, 20161117), (18, 18, 20161118), (19, 19, 20161119), (20, 20, 20161120);
+--sleep 1
+ 
+
+select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20 t2 on t1.a = t2.a order by t1.a desc, t2.a desc;
+explain basic select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20 t2 on t1.a = t2.a order by t1.a desc, t2.a desc;
+
+explain select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20 t2 on t1.a = t2.a order by t1.a asc, t2.a asc;
+select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20 t2 on t1.a = t2.a order by t1.a asc, t2.a asc;
+--disable_warnings
+drop table if exists t_r4_01_20;
+--enable_warnings
+
+--disable_warnings
+drop table if exists t2, t7;
+--enable_warnings
+create table t2(a int, b varchar(20), c decimal(20,10));
+create table t7(a int(10), b varchar(10), c char(20), d decimal(20,10));
+insert into t2 values(1, "222", 3.33),(2,"222",3.33),(2,"333",2.22),(3,"3333",1.11), (5, "555", 5.55), (6, "6666", 5.5),(1, '1', 1), (1, '2', 2), (2, '2.00', 2.00001), (3, '3.0', 3.00001), (4, "A", 4.33), (5, "B", 5), (6, "AB", 6);
+insert into t7 values(65, '222', '333', 5), (65, '444', '5.550', 1), (66, '3.0', '555', 3.00001), (66, '2', 'B', 2), (67, 'A', '1', 1);
+--sleep 1
+
+--disable_warnings
+drop table if exists t8, t9;
+--enable_warnings
+create table t8(a int primary key, b int, c int, index idx(b,c));
+create table t9(a int primary key, b int, c int, index idx(b,c));
+--disable_query_log
+insert into t8 values (1, 2, 1);
+insert into t8 values (2, 2, 2);
+insert into t8 values (3, 2, 3);
+insert into t8 values (4, 4, 1);
+insert into t8 values (5, 4, 2);
+insert into t8 values (6, 4, 3);
+
+insert into t9 values (1, 2, 1);
+insert into t9 values (2, 2, 2);
+insert into t9 values (3, 2, 3);
+insert into t9 values (4, 3, 1);
+insert into t9 values (5, 4, 1);
+insert into t9 values (6, 4, 2);
+insert into t9 values (7, 4, 3);
+--sleep 1
+--enable_query_log
+
+--echo
+--echo ************ 测试full join
+explain select /*+use_merge(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+select /*+use_merge(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+--echo
+explain select /*+use_hash(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+select /*+use_hash(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+--echo
+explain select /*+use_nl(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+select /*+use_nl(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+
+--echo ************ 测试right join
+--echo
+explain select /*+use_merge(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+select /*+use_merge(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+--echo
+explain select /*+use_hash(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+select /*+use_hash(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+--echo
+explain select /*+use_nl(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+select /*+use_nl(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+
+explain select /*+leading(t8, t9)*/ t8.b,t8.c,t9.b,t9.c from t8 right join t9 on t8.b = t9.b;
+select /*+leading(t8, t9)*/ t8.b,t8.c,t9.b,t9.c from t8 right join t9 on t8.b = t9.b;
+
+--echo ************ 测试left join
+--echo
+explain select /*+use_merge(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+select /*+use_merge(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+--echo
+explain select /*+use_hash(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+select /*+use_hash(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+--echo
+explain select /*+use_nl(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+select /*+use_nl(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+
+
+
+--echo ********** join condition 必须和 ordering 排序一致
+explain select /*+use_merge(t8 t9)*/ * from t8 join t9 on t8.c = t9.c and t8.b = t9.b;
+select /*+use_merge(t8 t9)*/ * from t8 join t9 on t8.c = t9.c and t8.b = t9.b;
+
+explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 join t9 on t8.a = t9.b and t8.b = t9.a;
+select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 join t9 on t8.a = t9.b and t8.b = t9.a;
+
+explain select /*+use_merge(t8 t9)*/ * from t8 left join t9 on t8.c = t9.c and t8.b = t9.b;
+select /*+use_merge(t8 t9)*/ * from t8 left join t9 on t8.c = t9.c and t8.b = t9.b;
+
+explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 left join t9 on t8.a = t9.b and t8.b = t9.a;
+select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 left join t9 on t8.a = t9.b and t8.b = t9.a;
+
+explain select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
+select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
+
+explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 right join t9 on t8.a = t9.b and t8.b = t9.a;
+select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 right join t9 on t8.a = t9.b and t8.b = t9.a;
+
+explain select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
+select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
+
+explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 full join t9 on t8.a = t9.b and t8.b = t9.a;
+select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 full join t9 on t8.a = t9.b and t8.b = t9.a;
+
+--disable_warnings
+drop table if exists BB,CC;
+--enable_warnings
+CREATE TABLE BB ( col_varchar_key varchar (1), col_varchar_10 varchar(10), col_varchar varchar (1), col_int_key int, col_varchar_10_key varchar(10), col_varchar_20_key varchar(20), col_int int, col_varchar_20 varchar(20), pk int, /*Indices*/ key idx3(pk, col_varchar_key ), key idx1(pk, col_int_key ), key idx5(pk, col_varchar_10_key ), key idx7(pk, col_varchar_20_key ), primary key (pk) );
+
+
+CREATE TABLE CC ( col_varchar_key varchar (1), col_varchar_20_key varchar(20), col_varchar_20 varchar(20), col_int_key int, col_int int, pk int, col_varchar_10 varchar(10), col_varchar_10_key varchar(10), col_varchar varchar (1), /*Indices*/ key idx3(pk, col_varchar_key ), key idx7(pk, col_varchar_20_key ), key idx1(pk, col_int_key ), primary key (pk) , key idx5(pk, col_varchar_10_key )) ;
+
+--disable_query_log
+INSERT INTO BB VALUES ('d', 'n', NULL, NULL, 'm', 'p', 2, 'v', 1) , (NULL, 'i', 'w', 6, 'n', 'r', 9, 'f', 2) , ('k', NULL, 'a', 8, 'p', NULL, NULL, 'j', 3) , (NULL, NULL, NULL, 4, 'b', 'b', 4, 'o', 4) , ('b', 'u', 'z', 7, 'k', 'e', 9, 'z', 5) , ('n', 'm', 's', 5, NULL, 'p', 6, 'y', 6) , ('f', 'e', 'f', 9, 'o', 'i', 9, 't', 7) , ('a', 'u', 's', NULL, 'l', 'g', 6, 'k', 8) , ('s', 'd', NULL, 1, 'r', 'g', NULL, 'j', 9) , ('y', NULL, 'j', 8, 'u', 'v', 7, 'b', 10) , ('w', 'i', NULL, 1, 'v', NULL, 1, NULL, 11) , ('t', NULL, NULL, 6, 'v', 'b', 3, NULL, 12) , ('m', 'i', 'd', 6, 'l', NULL, 3, 't', 13) , ('m', 'l', 'z', 6, 'a', 'b', NULL, 'b', 14) , ('d', 'y', 'c', 9, NULL, 'e', 7, 'g', 15) , ('e', 'm', 'w', 4, 'c', 'u', 6, 'a', 16) , ('a', NULL, 'j', 8, 'd', 'z', NULL, 's', 17) , ('h', 'u', NULL, 5, 't', 'p', 4, NULL, 18) , ('p', 'l', 'u', 8, 'e', 's', 6, 'm', 19) , ('l', 'l', 'h', 1, 'b', 'i', 8, 'z', 20) , ('i', 'f', NULL, NULL, 'g', 'e', NULL, 'p', 21) , ('l', 'w', 'p', 9, 'g', 'b', 4, 'k', 22) , ('j', 'd', 'l', 4, 'x', 'z', NULL, 'u', 23) , ('t', 'a', 'y', 8, 'o', 'e', 8, 'a', 24) , (NULL, 'a', 'a', 0, NULL, 'd', 9, 'm', 25) , (NULL, 'b', NULL, 3, 'i', 'r', NULL, 'i', 26) , ('s', 'v', NULL, 4, 'w', NULL, NULL, 'p', 27) , ('m', 'x', 'y', 0, 'n', 'i', 6, 'k', 28) ;
+
+INSERT INTO CC VALUES ('x', 'r', 'v', 7, 8, 1, 't', 'j', 't') , (NULL, 'b', 'z', 2, 9, 2, 'p', 'u', 'y') , (NULL, 'q', 'e', 6, NULL, 3, 'u', 's', 'j') , ('d', NULL, 'n', 4, 3, 4, 'n', NULL, 'm') , ('y', 'u', 'b', 8, NULL, 5, 'z', NULL, 't') , ('p', 'f', 'm', 7, 1, 6, NULL, 'k', 'w') , ('m', 'w', 'f', 2, 9, 7, 't', 'w', 'g') , ('w', 'n', 'm', 3, 8, 8, NULL, 't', 'z') , ('o', 'g', 'i', 5, 0, 9, 't', 'a', NULL) , ('m', 'v', 'm', NULL, 7, 10, NULL, 'h', NULL) , ('u', 'm', 'j', 3, 4, 11, 'f', NULL, 'q') , ('h', 'y', NULL, 7, 4, 12, 'k', 't', NULL) , (NULL, 'h', 'g', NULL, 6, 13, 'v', 'd', 'u') , (NULL, NULL, NULL, 4, 5, 14, NULL, 'v', 'm') , ('f', 'x', 'm', 4, 8, 15, 'd', NULL, NULL) , ('s', 'f', 'x', 0, 2, 16, 'l', NULL, 'f') , ('t', 'o', 's', NULL, 8, 17, 'r', NULL, 'r') , ('h', 's', NULL, NULL, 3, 18, 'd', 'r', 'k') , ('u', 'w', 'r', 7, NULL, 19, 'w', NULL, 'c') , ('i', 'o', NULL, 8, 0, 20, 'n', 'i', 'y') , (NULL, NULL, NULL, 9, NULL, 21, 'm', NULL, 'm') , ('p', 'g', 'k', 9, NULL, 22, 'g', 'x', 'v') , (NULL, 'q', NULL, NULL, 2, 23, 'f', 'g', 's') , (NULL, NULL, 'p', 9, 0, 24, 'e', NULL, 'v') , (NULL, 'q', 'm', 3, 9, 25, 'w', 'i', 'm') , ('e', NULL, 'e', 5, NULL, 26, NULL, 'k', 'f') , ('i', 'm', 'n', 0, 4, 27, 'g', NULL, 'a') , ('r', 'g', 'o', 2, NULL, 28, 'c', NULL, 'u') , ('y', NULL, 'o', 2, NULL, 29, 'h', 'n', 'o') ;
+--enable_query_log
+
+explain SELECT /*+no_rewrite,leading(table1 table2),use_merge(table1 table2)*/   table1 . col_varchar_10_key AS field1  FROM    BB AS table1, CC AS table2    WHERE  table1 . `col_int_key` = table2 . `pk`  and table2 . `col_int_key` = table1 . `pk` ORDER BY table1 . col_int_key DESC;
+
+SELECT /*+no_rewrite,leading(table1 table2),use_merge(table1 table2)*/   table1 . col_varchar_10_key AS field1  FROM    BB AS table1, CC AS table2    WHERE  table1 . `col_int_key` = table2 . `pk`  and table2 . `col_int_key` = table1 . `pk` ORDER BY table1 . col_int_key DESC;
+
+--disable_warnings
+drop table if exists t2, t7, t8, t9, BB, CC;
+--enable_warnings

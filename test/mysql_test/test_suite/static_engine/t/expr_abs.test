@@ -1,0 +1,107 @@
+
+--disable_abort_on_error
+
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+
+--sleep 2
+alter system flush plan cache global;
+
+connection default;
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+
+create table t (t1 tinyint,
+                t2 smallint,
+                t3 mediumint,
+                t4 integer,
+                t5 bigint,
+                t6 tinyint unsigned,
+                t7 smallint unsigned,
+                t8 mediumint unsigned,
+                t9 integer unsigned,
+                t10 bigint unsigned,
+                t11 float,
+                t12 float unsigned,
+                t13 double,
+                t14 double unsigned,
+                t15 number,
+                t16 number unsigned,
+                t17 datetime,
+                t18 timestamp,
+                t19 date,
+                t20 time,
+                t21 year,
+                t22 varchar(255),
+                t23 char(255),
+                t24 tinytext,
+                t25 mediumtext,
+                t26 longtext,
+                t27 bit,
+                t28 enum('a', 'b', 'c'),
+                t29 set('a', 'b', 'c'));
+
+insert into t values (1, -1, 1, -1, 1, 1, 1, 1, 1, 1, -0.2, 0.3, 0.4, 0.5, -0.6, 0.7,
+                     '1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '0.8', '0.9', '1.0', '1.1',
+                     '1.2', 1, 'b', 'b');
+insert into t(t1) values (null);
+
+connection conn_admin;
+
+--sleep 2
+alter system flush plan cache global;
+
+connection default;
+set ob_enable_plan_cache=false;
+
+select abs(1.0);
+explain select abs(1.0);
+select abs(1);
+explain select abs(1);
+select abs(1+2+3-4-1-2+5-5);
+explain select abs(1+2+3-4-1-2+5-5);
+select abs(abs(1+2+3-4-1-2+5-5)-abs(-3));
+explain select abs(abs(1+2+3-4-1-2+5-5)-abs(-3));
+select abs(true and false);
+explain select abs(true and false);
+select abs(10/0);
+SELECT ABS(-9223372036854775808);
+explain SELECT ABS(-9223372036854775808);
+select abs(-9999999999999999999999);
+explain select abs(-9999999999999999999999);
+select abs(9999999999999999999999);
+explain select abs(9999999999999999999999);
+select abs(repeat('1',100));
+explain select abs(repeat('1',100));
+select abs(repeat('1',46));
+explain select abs(repeat('1',46));
+select abs(0-repeat('1',46));
+explain select abs(0-repeat('1',46));
+
+let $cnt=1;
+
+while ($cnt <= 29)
+{
+  eval select abs(t$cnt) from t;
+  eval explain select abs(t$cnt) from t;
+  inc $cnt;
+}
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 decimal unsigned, c2 smallint unsigned);
+insert into t1 values(1, 1);
+select mod(round(abs(c1)), c2) from t1;
+drop table t1;
+
+--echo // abs(hex_string)
+select abs(X'31');
+select abs(binary'-100');
+select abs(_utf8'-100');
+connection conn_admin;
+--sleep 2
+

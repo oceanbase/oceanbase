@@ -1,0 +1,714 @@
+***************   Case 1   ***************
+before : create view v1 as select * from t2;
+after : create view v1 as select `rongxuan`.`t2`.`c1` AS `c1`,`rongxuan`.`t2`.`c2` AS `c2`,`rongxuan`.`t2`.`c3` AS `c3` from `rongxuan`.`t2`
+***************   Case 2   ***************
+before : create view v as select 1, true, false, '', 'test', null, 10.123;
+after : create view v as select 1 AS `1`,1 AS `true`,0 AS `false`,'' AS ``,'test' AS `test`,NULL AS `null`,10.123 AS `10.123`
+***************   Case 3   ***************
+before : create view v as select 1 from DUAL;
+after : create view v as select 1 AS `1`
+***************   Case 4   ***************
+before : create view v as select 1 from DUAL where 2>1;
+after : create view v as select 1 AS `1` from DUAL where (2 > 1)
+***************   Case 5   ***************
+before : create view v as select c1 from t1 where c1 group by c2 having c1 order by c2 limit 1, 10;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where `rongxuan`.`t1`.`c1` group by `rongxuan`.`t1`.`c2` having `rongxuan`.`t1`.`c1` order by `rongxuan`.`t1`.`c2` limit 1,10
+***************   Case 6   ***************
+before : create view v as (select c1 from t1) union (select c2 from t2) order by c1 limit 1
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` union select `rongxuan`.`t2`.`c2` AS `c2` from `rongxuan`.`t2` order by `c1` limit 1
+***************   Case 7   ***************
+before : create view v as select * from t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 8   ***************
+before : create view v as select t1.* from t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 9   ***************
+before : create view v as select t1.*,view_table_2.* from t1, view_table_2;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2`,`rongxuan`.`view_table_2`.`a` AS `a`,`rongxuan`.`view_table_2`.`b` AS `b` from `rongxuan`.`t1`,`rongxuan`.`view_table_2`
+***************   Case 10   ***************
+before : create view v(a,b) as select c1,c2 from t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `a`,`rongxuan`.`t1`.`c2` AS `b` from `rongxuan`.`t1`
+***************   Case 11   ***************
+before : create view v(a,b) as select c1,c2 from t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `a`,`rongxuan`.`t1`.`c2` AS `b` from `rongxuan`.`t1`
+***************   Case 12   ***************
+before : create view v(a,b) as select c1 as alias1, c2 from t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `a`,`rongxuan`.`t1`.`c2` AS `b` from `rongxuan`.`t1`
+***************   Case 13   ***************
+before : create view v as select distinct c1, c2 from t1;
+after : create view v as select distinct `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 14   ***************
+before : create view v as select all c1, c2 from t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 15   ***************
+before : create view v as select * from t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 16   ***************
+before : create view v as select * from t1 a;
+after : create view v as select `rongxuan`.`a`.`c1` AS `c1`,`rongxuan`.`a`.`c2` AS `c2` from `rongxuan`.`t1` `a`
+***************   Case 17   ***************
+before : create view v as select * from t1 as a;
+after : create view v as select `rongxuan`.`a`.`c1` AS `c1`,`rongxuan`.`a`.`c2` AS `c2` from `rongxuan`.`t1` `a`
+***************   Case 18   ***************
+before : create view v as select * from t1 partition(p0,p1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` partition(p0,p1)
+***************   Case 19   ***************
+before : create view v as select * from t1 partition(p0,p1) a;
+after : create view v as select `rongxuan`.`a`.`c1` AS `c1`,`rongxuan`.`a`.`c2` AS `c2` from `rongxuan`.`t1` partition(p0,p1) `a`
+***************   Case 20   ***************
+before : create view v as select * from t1 partition(p0,p1) join t2 partition(p1) a;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2`,`rongxuan`.`a`.`c1` AS `c1`,`rongxuan`.`a`.`c2` AS `c2`,`rongxuan`.`a`.`c3` AS `c3` from (`rongxuan`.`t1` partition(p0,p1) join `rongxuan`.`t2` partition(p1) `a`)
+***************   Case 21   ***************
+before : create view v as select * from v1;
+after : create view v as select `rongxuan`.`v1`.`c1` AS `c1`,`rongxuan`.`v1`.`c2` AS `c2`,`rongxuan`.`v1`.`c3` AS `c3` from `rongxuan`.`v1`
+***************   Case 22   ***************
+before : create view v as select * from v1 a;
+after : create view v as select `rongxuan`.`a`.`c1` AS `c1`,`rongxuan`.`a`.`c2` AS `c2`,`rongxuan`.`a`.`c3` AS `c3` from `rongxuan`.`v1` a
+***************   Case 23   ***************
+before : create view v as select * from v1 as a;
+after : create view v as select `rongxuan`.`a`.`c1` AS `c1`,`rongxuan`.`a`.`c2` AS `c2`,`rongxuan`.`a`.`c3` AS `c3` from `rongxuan`.`v1` a
+***************   Case 24   ***************
+before : create view v as select t1.c1 from t1,t2;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1`,`rongxuan`.`t2`
+***************   Case 25   ***************
+before : create view v as select t1.c1 from t1,t2;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1`,`rongxuan`.`t2`
+***************   Case 26   ***************
+before : create view v as select t1.c1 from t1 join t2;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` join `rongxuan`.`t2`)
+***************   Case 27   ***************
+before : create view v as select t1.c1 from t1 join t2 on t1.c1 = t2.c1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`)))
+***************   Case 28   ***************
+before : create view v as select t1.c1 from t1 inner join t2;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` join `rongxuan`.`t2`)
+***************   Case 29   ***************
+before : create view v as select t1.c1 from t1 inner join t2 on t1.c1 = t2.c1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`)))
+***************   Case 30   ***************
+before : create view v as select t1.c1 from t1 left join t2 on t1.c1 = t2.c1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` left join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`)))
+***************   Case 31   ***************
+before : create view v as select t1.c1 from t1 right join t2 on t1.c1 = t2.c1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` right join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`)))
+***************   Case 32   ***************
+before : create view v as select t1.c1 from t1 full join t2 on t1.c1 = t2.c1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` full join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`)))
+***************   Case 33   ***************
+before : create view v as select * from t1 ,t2;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2`,`rongxuan`.`t2`.`c1` AS `c1`,`rongxuan`.`t2`.`c2` AS `c2`,`rongxuan`.`t2`.`c3` AS `c3` from `rongxuan`.`t1`,`rongxuan`.`t2`
+***************   Case 34   ***************
+before : create view v as select * from t1 where c1=1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` = 1)
+***************   Case 35   ***************
+before : create view v as select * from t1 where c1=1 and c2 = 1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` = 1) and (`rongxuan`.`t1`.`c2` = 1)
+***************   Case 36   ***************
+before : create view v as select * from t1 where c1=1 and c2 =1 and true;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` = 1) and (`rongxuan`.`t1`.`c2` = 1) and 1
+***************   Case 37   ***************
+before : create view v as select * from t1 where c1=1 and (c2 =1 and true);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` = 1) and (`rongxuan`.`t1`.`c2` = 1) and 1
+***************   Case 38   ***************
+before : create view v as select * from t1 where c1=1 or c2 = 1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where ((`rongxuan`.`t1`.`c1` = 1) or (`rongxuan`.`t1`.`c2` = 1))
+***************   Case 39   ***************
+before : create view v as select * from t1 where c1=1 or (c2 =1 or true);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where ((`rongxuan`.`t1`.`c1` = 1) or (`rongxuan`.`t1`.`c2` = 1) or 1)
+***************   Case 40   ***************
+before : create view v as select * from t1 group by c1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 41   ***************
+before : create view v as select * from t1 group by c1,c2;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`,`rongxuan`.`t1`.`c2`
+***************   Case 42   ***************
+before : create view v as select * from t1 group by c1 and c2;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` group by (`rongxuan`.`t1`.`c1` and `rongxuan`.`t1`.`c2`)
+***************   Case 43   ***************
+before : create view v as select * from t1 having c1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` having `rongxuan`.`t1`.`c1`
+***************   Case 44   ***************
+before : create view v as select * from t1 having c1 and c2 and 1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` having `rongxuan`.`t1`.`c1` and `rongxuan`.`t1`.`c2` and 1
+***************   Case 45   ***************
+before : create view v as select * from t1 having c1 and (c2 and true);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` having `rongxuan`.`t1`.`c1` and `rongxuan`.`t1`.`c2` and 1
+***************   Case 46   ***************
+before : create view v as select * from t1 order by c1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` order by `rongxuan`.`t1`.`c1`
+***************   Case 47   ***************
+before : create view v as select * from t1 order by 1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` order by `rongxuan`.`t1`.`c1`
+***************   Case 48   ***************
+before : create view v as select * from t1 order by c1 asc;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` order by `rongxuan`.`t1`.`c1`
+***************   Case 49   ***************
+before : create view v as select * from t1 order by c1 desc;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` order by `rongxuan`.`t1`.`c1`desc
+***************   Case 50   ***************
+before : create view v as select * from t1 order by c1 desc, c2 asc;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` order by `rongxuan`.`t1`.`c1`desc,`rongxuan`.`t1`.`c2`
+***************   Case 51   ***************
+before : create view v as select * from t1 order by 1 desc, c2 asc;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` order by `rongxuan`.`t1`.`c1`desc,`rongxuan`.`t1`.`c2`
+***************   Case 52   ***************
+before : create view v as select * from t1 limit 10;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` limit 10
+***************   Case 53   ***************
+before : create view v as select * from t1 limit 1, 10;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` limit 1,10
+***************   Case 54   ***************
+before : create view v as (select c1 from t1) union (select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` union select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2`
+***************   Case 55   ***************
+before : create view v as (select c1 from t1) union (select c1 from t2) union (select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` union select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2` union select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2` `t2`
+***************   Case 56   ***************
+before : create view v as (select c1 from t1) union (select c1 from t2) order by c1 limit 1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` union select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2` order by `c1` limit 1
+***************   Case 57   ***************
+before : create view v as (select c1 from t1) intersect (select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` intersect select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2`
+***************   Case 58   ***************
+before : create view v as (select c1 from t1) intersect (select c1 from t2) order by c1 limit 1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` intersect select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2` order by `c1` limit 1
+***************   Case 59   ***************
+before : create view v as (select c1 from t1) except (select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` except select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2`
+***************   Case 60   ***************
+before : create view v as (select c1 from t1) except (select c1 from t2) order by c1 limit 1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` except select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2` order by `c1` limit 1
+***************   Case 61   ***************
+before : create view v as select null, 1, +2, -10, 1.9, 'fdf', true, false;
+after : create view v as select NULL AS `null`,1 AS `1`,2 AS `+2`,-10 AS `-10`,1.9 AS `1.9`,'fdf' AS `fdf`,1 AS `true`,0 AS `false`
+***************   Case 62   ***************
+before : create view v as select c1 from t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1`
+***************   Case 63   ***************
+before : create view v as select rongxuan2.t1.c1 from t1, rongxuan2.t1;
+after : create view v as select `rongxuan2`.`t1`.`c1` AS `c1` from `rongxuan`.`t1`,`rongxuan2`.`t1`
+***************   Case 64   ***************
+before : create view rongxuan2.v as select c1 from rongxuan.t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1`
+***************   Case 65   ***************
+before : create view v as select c1 and c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` and `rongxuan`.`t1`.`c2`) AS `c1 and c2` from `rongxuan`.`t1`
+***************   Case 66   ***************
+before : create view v as select c1 && c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` and `rongxuan`.`t1`.`c2`) AS `c1 && c2` from `rongxuan`.`t1`
+***************   Case 67   ***************
+before : create view v as select c1 or c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` or `rongxuan`.`t1`.`c2`) AS `c1 or c2` from `rongxuan`.`t1`
+***************   Case 68   ***************
+before : create view v as select c1 || c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` or `rongxuan`.`t1`.`c2`) AS `c1 || c2` from `rongxuan`.`t1`
+***************   Case 69   ***************
+before : create view v as select c1+c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`) AS `c1+c2` from `rongxuan`.`t1`
+***************   Case 70   ***************
+before : create view v as select c1-c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` - `rongxuan`.`t1`.`c2`) AS `c1-c2` from `rongxuan`.`t1`
+***************   Case 71   ***************
+before : create view v as select c1*c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` * `rongxuan`.`t1`.`c2`) AS `c1*c2` from `rongxuan`.`t1`
+***************   Case 72   ***************
+before : create view v as select c1/c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` / `rongxuan`.`t1`.`c2`) AS `c1/c2` from `rongxuan`.`t1`
+***************   Case 73   ***************
+before : create view v as select pow(c1,c2) from t1;
+after : create view v as select pow(`rongxuan`.`t1`.`c1`,`rongxuan`.`t1`.`c2`) AS `pow(c1,c2)` from `rongxuan`.`t1`
+***************   Case 74   ***************
+before : create view v as select c1^c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` ^ `rongxuan`.`t1`.`c2`) AS `c1^c2` from `rongxuan`.`t1`
+***************   Case 75   ***************
+before : create view v as select c1%c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` % `rongxuan`.`t1`.`c2`) AS `c1%c2` from `rongxuan`.`t1`
+***************   Case 76   ***************
+before : create view v as select c1 div c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` div `rongxuan`.`t1`.`c2`) AS `c1 div c2` from `rongxuan`.`t1`
+***************   Case 77   ***************
+before : create view v as select c1<=c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` <= `rongxuan`.`t1`.`c2`) AS `c1<=c2` from `rongxuan`.`t1`
+***************   Case 78   ***************
+before : create view v as select c1<c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` < `rongxuan`.`t1`.`c2`) AS `c1<c2` from `rongxuan`.`t1`
+***************   Case 79   ***************
+before : create view v as select c1=c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` = `rongxuan`.`t1`.`c2`) AS `c1=c2` from `rongxuan`.`t1`
+***************   Case 80   ***************
+before : create view v as select c1<=>c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` <=> `rongxuan`.`t1`.`c2`) AS `c1<=>c2` from `rongxuan`.`t1`
+***************   Case 81   ***************
+before : create view v as select c1>=c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` >= `rongxuan`.`t1`.`c2`) AS `c1>=c2` from `rongxuan`.`t1`
+***************   Case 82   ***************
+before : create view v as select c1>c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` > `rongxuan`.`t1`.`c2`) AS `c1>c2` from `rongxuan`.`t1`
+***************   Case 83   ***************
+before : create view v as select c1%c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` % `rongxuan`.`t1`.`c2`) AS `c1%c2` from `rongxuan`.`t1`
+***************   Case 84   ***************
+before : create view v as select c1<>c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` <> `rongxuan`.`t1`.`c2`) AS `c1<>c2` from `rongxuan`.`t1`
+***************   Case 85   ***************
+before : create view v as select c1!=c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` <> `rongxuan`.`t1`.`c2`) AS `c1!=c2` from `rongxuan`.`t1`
+***************   Case 86   ***************
+before : create view v as select c1|c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` | `rongxuan`.`t1`.`c2`) AS `c1|c2` from `rongxuan`.`t1`
+***************   Case 87   ***************
+before : create view v as select c1&c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` & `rongxuan`.`t1`.`c2`) AS `c1&c2` from `rongxuan`.`t1`
+***************   Case 88   ***************
+before : create view v as select !c1 from t1;
+after : create view v as select not(`rongxuan`.`t1`.`c1`) AS `!c1` from `rongxuan`.`t1`
+***************   Case 89   ***************
+before : create view v as select !!c1 from t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1`
+***************   Case 90   ***************
+before : create view v as select c1 mod c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` % `rongxuan`.`t1`.`c2`) AS `c1 mod c2` from `rongxuan`.`t1`
+***************   Case 91   ***************
+before : create view v as select c1 div c2 from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` div `rongxuan`.`t1`.`c2`) AS `c1 div c2` from `rongxuan`.`t1`
+***************   Case 92   ***************
+before : create view v as select "fdsfds" regexp "fds*" from t1;
+after : create view v as select ('fdsfds' regexp 'fds*') AS `"fdsfds" regexp "fds*"` from `rongxuan`.`t1`
+***************   Case 93   ***************
+before : create view v as select "fdsfds" not regexp "fds*" from t1;
+after : create view v as select not(('fdsfds' regexp 'fds*')) AS `"fdsfds" not regexp "fds*"` from `rongxuan`.`t1`
+***************   Case 94   ***************
+before : create view v as select c1 from t1 where exists (select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where exists((select `rongxuan`.`t2`.`c1` from `rongxuan`.`t2`))
+***************   Case 95   ***************
+before : create view v as select c1 from t1 where c1 = any(select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` = any (select `rongxuan`.`t2`.`c1` from `rongxuan`.`t2`))
+***************   Case 96   ***************
+before : create view v as select c1 from t1 where c1+c2 > any(select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where ((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`) > any (select `rongxuan`.`t2`.`c1` from `rongxuan`.`t2`))
+***************   Case 97   ***************
+before : create view v as select c1 from t1 where c1 = some(select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` = any (select `rongxuan`.`t2`.`c1` from `rongxuan`.`t2`))
+***************   Case 98   ***************
+before : create view v as select c1 from t1 where c1+c2 > some(select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where ((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`) > any (select `rongxuan`.`t2`.`c1` from `rongxuan`.`t2`))
+***************   Case 99   ***************
+before : create view v as select c1 from t1 where c1 = all(select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` = all (select `rongxuan`.`t2`.`c1` from `rongxuan`.`t2`))
+***************   Case 100   ***************
+before : create view v as select c1 from t1 where c1+c2 > all(select c1 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where ((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`) > all (select `rongxuan`.`t2`.`c1` from `rongxuan`.`t2`))
+***************   Case 101   ***************
+before : create view v as select c1 is true from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` is true) AS `c1 is true` from `rongxuan`.`t1`
+***************   Case 102   ***************
+before : create view v as select c1 is false from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` is false) AS `c1 is false` from `rongxuan`.`t1`
+***************   Case 103   ***************
+before : create view v as select c1 is not true from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` is not true) AS `c1 is not true` from `rongxuan`.`t1`
+***************   Case 104   ***************
+before : create view v as select c1 is not false from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` is not false) AS `c1 is not false` from `rongxuan`.`t1`
+***************   Case 105   ***************
+before : create view v as select c1 is null from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` is null) AS `c1 is null` from `rongxuan`.`t1`
+***************   Case 106   ***************
+before : create view v as select c1 is not null from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` is not null) AS `c1 is not null` from `rongxuan`.`t1`
+***************   Case 107   ***************
+before : create view v as select c1 is unknown from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` is null) AS `c1 is unknown` from `rongxuan`.`t1`
+***************   Case 108   ***************
+before : create view v as select c1 is not unknown from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` is not null) AS `c1 is not unknown` from `rongxuan`.`t1`
+***************   Case 109   ***************
+before : create view v as select c1 from t1 where (c1,c2) in (select c1,c2 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where ((`rongxuan`.`t1`.`c1`,`rongxuan`.`t1`.`c2`) = any (select `rongxuan`.`t2`.`c1`,`rongxuan`.`t2`.`c2` from `rongxuan`.`t2`))
+***************   Case 110   ***************
+before : create view v as select c1 from t1 where (c1,c2) in ((1,2),(2,3));
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where ((`rongxuan`.`t1`.`c1`,`rongxuan`.`t1`.`c2`) in ((1,2),(2,3)))
+***************   Case 111   ***************
+before : create view v as select c1 from t1 where c1 in ((1),2,3);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` in (1,2,3))
+***************   Case 112   ***************
+before : create view v as select c1 from t1 where (c1,c2) in ((1,2),(2,3));
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where ((`rongxuan`.`t1`.`c1`,`rongxuan`.`t1`.`c2`) in ((1,2),(2,3)))
+***************   Case 113   ***************
+before : create view v as select c1 from t1 where (c1,c2) not in (select c1,c2 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where ((`rongxuan`.`t1`.`c1`,`rongxuan`.`t1`.`c2`) <> all (select `rongxuan`.`t2`.`c1`,`rongxuan`.`t2`.`c2` from `rongxuan`.`t2`))
+***************   Case 114   ***************
+before : create view v as select c1 from t1 where (c1,c2) not in (select c1,c2 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where ((`rongxuan`.`t1`.`c1`,`rongxuan`.`t1`.`c2`) <> all (select `rongxuan`.`t2`.`c1`,`rongxuan`.`t2`.`c2` from `rongxuan`.`t2`))
+***************   Case 115   ***************
+before : create view v as select * from t1 where c1 like '%fhlds%';
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` like '%fhlds%')
+***************   Case 116   ***************
+before : create view v as select * from t1 where c1 not like '%fhlds%';
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where not((`rongxuan`.`t1`.`c1` like '%fhlds%'))
+***************   Case 117   ***************
+before : create view v as select * from t1 where c1 between 1 and 10;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` between 1 and 10)
+***************   Case 118   ***************
+before : create view v as select * from t1 where c1 not between 1 and 10;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` not between 1 and 10)
+***************   Case 119   ***************
+before : create view v as select if(c1>10,1,2) from t1;
+after : create view v as select (case when (`rongxuan`.`t1`.`c1` > 10) then 1 else 2 end) AS `if(c1>10,1,2)` from `rongxuan`.`t1`
+***************   Case 120   ***************
+before : create view v as select now() from t1;
+after : create view v as select now() AS `now()` from `rongxuan`.`t1`
+***************   Case 121   ***************
+before : create view v as select now(0) from t1;
+after : create view v as select now() AS `now(0)` from `rongxuan`.`t1`
+***************   Case 122   ***************
+before : create view v as select now(3) from t1;
+after : create view v as select now() AS `now(3)` from `rongxuan`.`t1`
+***************   Case 123   ***************
+before : create view v as select current_timestamp() from t1;
+after : create view v as select now() AS `current_timestamp()` from `rongxuan`.`t1`
+***************   Case 124   ***************
+before : create view v as select current_timestamp(0) from t1;
+after : create view v as select now() AS `current_timestamp(0)` from `rongxuan`.`t1`
+***************   Case 125   ***************
+before : create view v as select current_timestamp(3) from t1;
+after : create view v as select now() AS `current_timestamp(3)` from `rongxuan`.`t1`
+***************   Case 126   ***************
+before : create view v as select localtime() from t1;
+after : create view v as select now() AS `localtime()` from `rongxuan`.`t1`
+***************   Case 127   ***************
+before : create view v as select localtime(0) from t1;
+after : create view v as select now() AS `localtime(0)` from `rongxuan`.`t1`
+***************   Case 128   ***************
+before : create view v as select localtime(3) from t1;
+after : create view v as select now() AS `localtime(3)` from `rongxuan`.`t1`
+***************   Case 129   ***************
+before : create view v as select localtimestamp() from t1;
+after : create view v as select now() AS `localtimestamp()` from `rongxuan`.`t1`
+***************   Case 130   ***************
+before : create view v as select localtimestamp(0) from t1;
+after : create view v as select now() AS `localtimestamp(0)` from `rongxuan`.`t1`
+***************   Case 131   ***************
+before : create view v as select localtimestamp(3) from t1;
+after : create view v as select now() AS `localtimestamp(3)` from `rongxuan`.`t1`
+***************   Case 132   ***************
+before : create view v as select curtime() from t1;
+after : create view v as select curtime() AS `curtime()` from `rongxuan`.`t1`
+***************   Case 133   ***************
+before : create view v as select curtime(0) from t1;
+after : create view v as select curtime() AS `curtime(0)` from `rongxuan`.`t1`
+***************   Case 134   ***************
+before : create view v as select curtime(3) from t1;
+after : create view v as select curtime() AS `curtime(3)` from `rongxuan`.`t1`
+***************   Case 135   ***************
+before : create view v as select current_time from t1;
+after : create view v as select curtime() AS `current_time` from `rongxuan`.`t1`
+***************   Case 136   ***************
+before : create view v as select current_time() from t1;
+after : create view v as select curtime() AS `current_time()` from `rongxuan`.`t1`
+***************   Case 137   ***************
+before : create view v as select current_time(0) from t1;
+after : create view v as select curtime() AS `current_time(0)` from `rongxuan`.`t1`
+***************   Case 138   ***************
+before : create view v as select current_time(3) from t1;
+after : create view v as select curtime() AS `current_time(3)` from `rongxuan`.`t1`
+***************   Case 139   ***************
+before : create view v as select curdate() from t1;
+after : create view v as select curdate() AS `curdate()` from `rongxuan`.`t1`
+***************   Case 140   ***************
+before : create view v as select current_date from t1;
+after : create view v as select curdate() AS `current_date` from `rongxuan`.`t1`
+***************   Case 141   ***************
+before : create view v as select current_date() from t1;
+after : create view v as select curdate() AS `current_date()` from `rongxuan`.`t1`
+***************   Case 142   ***************
+before : create view v as SELECT DATE_ADD('1999-01-01', INTERVAL 1 DAY);
+after : create view v as select ('1999-01-01' + interval 1 day) AS `DATE_ADD('1999-01-01', INTERVAL 1 DAY)`
+***************   Case 143   ***************
+before : create view v as select date_add(current_date(), interval 2 day) from t1;
+after : create view v as select (curdate() + interval 2 day) AS `date_add(current_date(), interval 2 day)` from `rongxuan`.`t1`
+***************   Case 144   ***************
+before : create view v as SELECT DATE_sub('1999-01-01', INTERVAL 1 DAY);
+after : create view v as select ('1999-01-01' - interval 1 day) AS `DATE_sub('1999-01-01', INTERVAL 1 DAY)`
+***************   Case 145   ***************
+before : create view v as select date_sub(current_date(), interval 2 day) from t1;
+after : create view v as select (curdate() - interval 2 day) AS `date_sub(current_date(), interval 2 day)` from `rongxuan`.`t1`
+***************   Case 146   ***************
+before : create view v as SELECT TIMESTAMPDIFF(MONTH,'2009-12-01','2009-09-01');
+after : create view v as select timestampdiff(month,'2009-12-01','2009-09-01') AS `TIMESTAMPDIFF(MONTH,'2009-12-01','2009-09-01')`
+***************   Case 147   ***************
+before : create view v as SELECT extract(MONTH from '2009-12-01');
+after : create view v as select extract(month from '2009-12-01') AS `extract(MONTH from '2009-12-01')`
+***************   Case 148   ***************
+before : create view v as select current_date() from t1;
+after : create view v as select curdate() AS `current_date()` from `rongxuan`.`t1`
+***************   Case 149   ***************
+before : create view v as select utc_timestamp() from t1;
+after : create view v as select utc_timestamp() AS `utc_timestamp()` from `rongxuan`.`t1`
+***************   Case 150   ***************
+before : create view v as select utc_timestamp(3) from t1;
+after : create view v as select utc_timestamp(3) AS `utc_timestamp(3)` from `rongxuan`.`t1`
+***************   Case 151   ***************
+before : create view v as select date(c1) from t1;
+after : create view v as select date(`rongxuan`.`t1`.`c1`) AS `date(c1)` from `rongxuan`.`t1`
+***************   Case 152   ***************
+before : create view v as select month(c1) from t1;
+after : create view v as select month(`rongxuan`.`t1`.`c1`) AS `month(c1)` from `rongxuan`.`t1`
+***************   Case 153   ***************
+before : create view v as SELECT TRIM(leading "a" from ' barbar ');
+after : create view v as select trim(leading 'a' from ' barbar ') AS `TRIM(leading "a" from ' barbar ')`
+***************   Case 154   ***************
+before : create view v as select substring("fdfdsaf" from 2 for 3);
+after : create view v as select substr('fdfdsaf',2,3) AS `substring("fdfdsaf" from 2 for 3)`
+***************   Case 155   ***************
+before : create view v as select coalesce(null, "fdfdsaf");
+after : create view v as select coalesce(NULL,'fdfdsaf') AS `coalesce(null, "fdfdsaf")`
+***************   Case 156   ***************
+before : create view v as select cast(c1 as binary) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as binary(4194303)) AS `cast(c1 as binary)` from `rongxuan`.`t1`
+***************   Case 157   ***************
+before : create view v as select cast(c1 as binary(10)) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as binary(10)) AS `cast(c1 as binary(10))` from `rongxuan`.`t1`
+***************   Case 158   ***************
+before : create view v as select cast(c1 as character) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as character(4194303)) AS `cast(c1 as character)` from `rongxuan`.`t1`
+***************   Case 159   ***************
+before : create view v as select cast(c1 as character(10)) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as character(10)) AS `cast(c1 as character(10))` from `rongxuan`.`t1`
+***************   Case 160   ***************
+before : create view v as select cast(c1 as char) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as character(4194303)) AS `cast(c1 as char)` from `rongxuan`.`t1`
+***************   Case 161   ***************
+before : create view v as select cast(c1 as char(10)) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as character(10)) AS `cast(c1 as char(10))` from `rongxuan`.`t1`
+***************   Case 162   ***************
+before : create view v as select convert(1, binary);
+after : create view v as select cast(1 as binary(4194303)) AS `convert(1, binary)`
+***************   Case 163   ***************
+before : create view v as select convert(1, binary(10));
+after : create view v as select cast(1 as binary(10)) AS `convert(1, binary(10))`
+***************   Case 164   ***************
+before : create view v as select convert(1, character);
+after : create view v as select cast(1 as character(4194303)) AS `convert(1, character)`
+***************   Case 165   ***************
+before : create view v as select convert(1, character(10));
+after : create view v as select cast(1 as character(10)) AS `convert(1, character(10))`
+***************   Case 166   ***************
+before : create view v as select convert(1, char);
+after : create view v as select cast(1 as character(4194303)) AS `convert(1, char)`
+***************   Case 167   ***************
+before : create view v as select convert(1, char(10));
+after : create view v as select cast(1 as character(10)) AS `convert(1, char(10))`
+***************   Case 168   ***************
+before : create view v as select convert(1 using binary);
+after : create view v as select convert(1 using 'binary') AS `convert(1 using binary)`
+***************   Case 169   ***************
+before : create view v as select convert(1 using utf8mb4);
+after : create view v as select convert(1 using 'utf8mb4') AS `convert(1 using utf8mb4)`
+***************   Case 170   ***************
+before : create view v as select cast(c1 as number(3,2)) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as number(3,2)) AS `cast(c1 as number(3,2))` from `rongxuan`.`t1`
+***************   Case 171   ***************
+before : create view v as select cast(c1 as datetime) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as datetime) AS `cast(c1 as datetime)` from `rongxuan`.`t1`
+***************   Case 172   ***************
+before : create view v as select cast(c1 as date) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as date) AS `cast(c1 as date)` from `rongxuan`.`t1`
+***************   Case 173   ***************
+before : create view v as select cast(c1 as time) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as time) AS `cast(c1 as time)` from `rongxuan`.`t1`
+***************   Case 174   ***************
+before : create view v as select cast(c1 as signed) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as signed) AS `cast(c1 as signed)` from `rongxuan`.`t1`
+***************   Case 175   ***************
+before : create view v as select cast(c1 as unsigned) from t1;
+after : create view v as select cast(`rongxuan`.`t1`.`c1` as unsigned) AS `cast(c1 as unsigned)` from `rongxuan`.`t1`
+***************   Case 176   ***************
+before : create view v as select concat(c1,c2,'fds') from t1
+after : create view v as select concat(`rongxuan`.`t1`.`c1`,`rongxuan`.`t1`.`c2`,'fds') AS `concat(c1,c2,'fds')` from `rongxuan`.`t1`
+***************   Case 177   ***************
+before : create view v as select binary c1+c2 from t1;
+after : create view v as select (cast(`rongxuan`.`t1`.`c1` as binary(4194303)) + `rongxuan`.`t1`.`c2`) AS `binary c1+c2` from `rongxuan`.`t1`
+***************   Case 178   ***************
+before : create view v as select isnull(c1) from t1;
+after : create view v as select (`rongxuan`.`t1`.`c1` is null) AS `isnull(c1)` from `rongxuan`.`t1`
+***************   Case 179   ***************
+before : create view v as select hex(c1) from t1;
+after : create view v as select hex(`rongxuan`.`t1`.`c1`) AS `hex(c1)` from `rongxuan`.`t1`
+***************   Case 180   ***************
+before : create view v as select unhex(c1) from t1;
+after : create view v as select unhex(`rongxuan`.`t1`.`c1`) AS `unhex(c1)` from `rongxuan`.`t1`
+***************   Case 181   ***************
+before : create view v as select count(*) from t1 group by c1;
+after : create view v as select count(0) AS `count(*)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 182   ***************
+before : create view v as select count(c1) from t1 group by c1;
+after : create view v as select count(`rongxuan`.`t1`.`c1`) AS `count(c1)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 183   ***************
+before : create view v as select count(c1+10) from t1;
+after : create view v as select count((`rongxuan`.`t1`.`c1` + 10)) AS `count(c1+10)` from `rongxuan`.`t1`
+***************   Case 184   ***************
+before : create view v as select count(distinct c1+10,c2-10) from t1;
+after : create view v as select count(distinct (`rongxuan`.`t1`.`c1` + 10),(`rongxuan`.`t1`.`c2` - 10)) AS `count(distinct c1+10,c2-10)` from `rongxuan`.`t1`
+***************   Case 185   ***************
+before : create view v as select sum(c1+c2) from t1 group by c1;
+after : create view v as select sum((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `sum(c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 186   ***************
+before : create view v as select sum(all c1+c2) from t1 group by c1;
+after : create view v as select sum((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `sum(all c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 187   ***************
+before : create view v as select sum(distinct c1+c2) from t1 group by c1;
+after : create view v as select sum(distinct (`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `sum(distinct c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 188   ***************
+before : create view v as select min(c1+c2) from t1 group by c1;
+after : create view v as select min((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `min(c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 189   ***************
+before : create view v as select min(all c1+c2) from t1 group by c1;
+after : create view v as select min((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `min(all c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 190   ***************
+before : create view v as select min(distinct c1+c2) from t1 group by c1;
+after : create view v as select min(distinct (`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `min(distinct c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 191   ***************
+before : create view v as select max(c1+c2) from t1 group by c1;
+after : create view v as select max((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `max(c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 192   ***************
+before : create view v as select max(all c1+c2) from t1 group by c1;
+after : create view v as select max((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `max(all c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 193   ***************
+before : create view v as select max(distinct c1+c2) from t1 group by c1;
+after : create view v as select max(distinct (`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `max(distinct c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 194   ***************
+before : create view v as select avg(c1+c2) from t1 group by c1;
+after : create view v as select avg((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `avg(c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 195   ***************
+before : create view v as select avg(all c1+c2) from t1 group by c1;
+after : create view v as select avg((`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `avg(all c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 196   ***************
+before : create view v as select avg(distinct c1+c2) from t1 group by c1;
+after : create view v as select avg(distinct (`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`)) AS `avg(distinct c1+c2)` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 197   ***************
+before : create view v as select group_concat(distinct c1+c2,c2 order by c2, 1 desc separator ',') from t1 group by c1;
+after : create view v as select group_concat(distinct (`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`),`rongxuan`.`t1`.`c2`,`rongxuan`.`t1`.`c2`,(`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`) order by `rongxuan`.`t1`.`c2`,(`rongxuan`.`t1`.`c1` + `rongxuan`.`t1`.`c2`) desc  separator ',') AS `group_concat(distinct c1+c2,c2 order by c2, 1 desc separator ',')` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1`
+***************   Case 198   ***************
+before : create view v as select case when c1 > 3 then 1 when c1 > 2 then 2 else 1 end from t1;
+after : create view v as select (case when (`rongxuan`.`t1`.`c1` > 3) then 1 when (`rongxuan`.`t1`.`c1` > 2) then 2 else 1 end) AS `case when c1 > 3 then 1 when c1 > 2 then 2 else 1 end` from `rongxuan`.`t1`
+***************   Case 199   ***************
+before : create view v as select c1 from t1 where (select c1) = (select c1 from t2 limit 1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where ((select `rongxuan`.`t1`.`c1`) = (select `rongxuan`.`t2`.`c1` from `rongxuan`.`t2` limit 1))
+***************   Case 200   ***************
+before : create view v as select c1 from t1 order by (select c1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` order by (select `rongxuan`.`t1`.`c1`)
+***************   Case 201   ***************
+before : create view v as select c1 from t1 group by (select c1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` group by (select `rongxuan`.`t1`.`c1`)
+***************   Case 202   ***************
+before : create view v as select c1 from t1 having (select c1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` having (select `rongxuan`.`t1`.`c1`)
+***************   Case 203   ***************
+before : create view v as select t1.c1 from t1 full join t2 on t1.c1 = (select c2 from t2 limit 1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` full join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = (select `rongxuan`.`t2`.`c2` from `rongxuan`.`t2` `t2` limit 1))))
+***************   Case 204   ***************
+before : create view v as select t1.c1 from t1 left join t2 on t1.c1 = (select c2 from t2 limit 1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` left join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = (select `rongxuan`.`t2`.`c2` from `rongxuan`.`t2` `t2` limit 1))))
+***************   Case 205   ***************
+before : create view v as select t1.c1 from t1 right join t2 on t1.c1 = any(select c2 from t2);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` right join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = any (select `rongxuan`.`t2`.`c2` from `rongxuan`.`t2` `t2`))))
+***************   Case 206   ***************
+before : create view v as select t1.c1 from t1 join t2 on t1.c1=t2.c1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`)))
+***************   Case 207   ***************
+before : create view v as select t1.c1 from t1 join t2 on t1.c1= t2.c1 or t1.c1 > (select 10);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` join `rongxuan`.`t2` on (((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`) or (`rongxuan`.`t1`.`c1` > (select 10)))))
+***************   Case 208   ***************
+before : create view v as select t1.c1 from t1 join t2 on t1.c1=t2.c1 join t3 on t1.c1=0;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from ((`rongxuan`.`t1` join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`))) join `rongxuan`.`t3` on ((`rongxuan`.`t1`.`c1` = 0)))
+***************   Case 209   ***************
+before : create view v as select t1.c1 from t1 join t2 on t1.c1=t2.c1 inner join t3 on t1.c1=0 left join t4 on t1.c1 > t4.c1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (((`rongxuan`.`t1` join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`))) join `rongxuan`.`t3` on ((`rongxuan`.`t1`.`c1` = 0))) left join `rongxuan`.`t4` on ((`rongxuan`.`t1`.`c1` > `rongxuan`.`t4`.`c1`)))
+***************   Case 210   ***************
+before : create view v as select t1.c1 from t1 join t2 on t1.c1=t2.c1 join t3 on t1.c1=0;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from ((`rongxuan`.`t1` join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`))) join `rongxuan`.`t3` on ((`rongxuan`.`t1`.`c1` = 0)))
+***************   Case 211   ***************
+before : create view v as select t1.c1 from t1 join t2 a on t1.c1=a.c1 join t3 b on a.c1 != 10;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from ((`rongxuan`.`t1` join `rongxuan`.`t2` `a` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`a`.`c1`))) join `rongxuan`.`t3` `b` on ((`rongxuan`.`a`.`c1` <> 10)))
+***************   Case 212   ***************
+before : create view v as select  c2 from t1 where c1 > all((select c1 from t1) union (select c1 from t2));
+after : create view v as select `rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` > all ((select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` `t1`) union (select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2`)))
+***************   Case 213   ***************
+before : create view v as select  c2 from t1 where c1 > all((select c1 from t1) except (select c1 from t2));
+after : create view v as select `rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` > all ((select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` `t1`) except (select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2`)))
+***************   Case 214   ***************
+before : create view v as select c1 from t1 where c1 > (select c2 from t1 limit 1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` > (select `rongxuan`.`t1`.`c2` from `rongxuan`.`t1` `t1` limit 1))
+***************   Case 215   ***************
+before : create view v as select c1 from t1 where c1 > (select c2 from t2 limit 1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` > (select `rongxuan`.`t2`.`c2` from `rongxuan`.`t2` limit 1))
+***************   Case 216   ***************
+before : create view v as select c1 from t1 where c1 > (select c2 from t1 tt limit 1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` > (select `rongxuan`.`tt`.`c2` from `rongxuan`.`t1` `tt` limit 1))
+***************   Case 217   ***************
+before : create view v as select c1 from t1 where c1 > (select c2 from t1 as tt limit 1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` > (select `rongxuan`.`tt`.`c2` from `rongxuan`.`t1` `tt` limit 1))
+***************   Case 218   ***************
+before : create view v as select t1.c1 from t1 join t2 on t1.c1 > (select c2 from t2 limit 1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` > (select `rongxuan`.`t2`.`c2` from `rongxuan`.`t2` `t2` limit 1))))
+***************   Case 219   ***************
+before : create view v as select c1 from t1 group by c1 having c1 > (select c1 from t2 limit 1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` group by `rongxuan`.`t1`.`c1` having (`rongxuan`.`t1`.`c1` > (select `rongxuan`.`t2`.`c1` from `rongxuan`.`t2` limit 1))
+***************   Case 220   ***************
+before : create view v as select c1 from t1 where c1 > (select t1.c2 from t1 join t2 on t1.c1 = t2.c1 limit 1);
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` > (select `rongxuan`.`t1`.`c2` from (`rongxuan`.`t1` `t1` join `rongxuan`.`t2` on ((`rongxuan`.`t1`.`c1` = `rongxuan`.`t2`.`c1`))) limit 1))
+***************   Case 221   ***************
+before : create view v as select c1, (select c2 from t2 limit 1) from t1;
+after : create view v as select `rongxuan`.`t1`.`c1` AS `c1`,(select `rongxuan`.`t2`.`c2` from `rongxuan`.`t2` limit 1) AS `(select c2 from t2 limit 1)` from `rongxuan`.`t1`
+***************   Case 222   ***************
+before : create view v as select /*+ NO_REWRITE */ * from t1;
+after : create view v as select /*+ NO_REWRITE */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 223   ***************
+before : create view v as select /*+ READ_CONSISTENCY(frozen) */ * from t1;
+after : create view v as select /*+ READ_CONSISTENCY(FROZEN) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 224   ***************
+before : create view v as select /*+ READ_CONSISTENCY(weak) */ * from t1;
+after : create view v as select /*+ READ_CONSISTENCY(WEAK) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 225   ***************
+before : create view v as select /*+ READ_CONSISTENCY(strong) */ * from t1;
+after : create view v as select /*+ READ_CONSISTENCY(STRONG) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 226   ***************
+before : create view v as select /*+ INDEX(t1 c1) */ * from t1;
+after : create view v as select /*+ INDEX(t1 c1) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 227   ***************
+before : create view v as select /*+ FULL(t1) */ * from t1;
+after : create view v as select /*+ FULL(t1) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 228   ***************
+before : create view v as select /*+ QUERY_TIMEOUT(100000) */ * from t1;
+after : create view v as select /*+ QUERY_TIMEOUT(100000) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 229   ***************
+before : create view v as select /*+ LEADING(t1,t2) */ t1.* from t1,t2;
+after : create view v as select /*+ LEADING(t1 t2) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`,`rongxuan`.`t2`
+***************   Case 230   ***************
+before : create view v as select /*+ USE_MERGE(t1,t2) */ t1.* from t1,t2;
+after : create view v as select /*+ USE_MERGE(t1 t2) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`,`rongxuan`.`t2`
+***************   Case 231   ***************
+before : create view v as select /*+ USE_HASH(t1,t2) */ t1.* from t1,t2;
+after : create view v as select /*+ USE_HASH(t1 t2) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`,`rongxuan`.`t2`
+***************   Case 232   ***************
+before : create view v as select /*+ USE_NL(t1,t2) */ t1.* from t1,t2;
+after : create view v as select /*+ USE_NL(t1 t2) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`,`rongxuan`.`t2`
+***************   Case 233   ***************
+before : create view v as select /*+ USE_PLAN_CACHE(default) */ * from t1;
+after : create view v as select /*+ USE_PLAN_CACHE(default) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 234   ***************
+before : create view v as select /*+ USE_PLAN_CACHE(exact) */ * from t1;
+after : create view v as select /*+ USE_PLAN_CACHE(exact) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 235   ***************
+before : create view v as select /*+ ORDERED */ * from t1;
+after : create view v as select /*+ ORDERED */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 236   ***************
+before : create view v as select /*+ NO_REWRITE, READ_CONSISTENCY(weak), index(t1 c1), full(t1), QUERY_TIMEOUT(1000000), LEADING(t1), USE_MERGE(t1), USE_HASH(t1),USE_NL(t1), USE_PLAN_CACHE(default), ORDERED */ * from t1;
+after : create view v as select /*+ NO_REWRITE READ_CONSISTENCY(WEAK) QUERY_TIMEOUT(1000000) USE_PLAN_CACHE(default) ORDERED INDEX(t1 c1) FULL(t1) LEADING(t1) USE_MERGE(t1) USE_HASH(t1) USE_NL(t1) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 237   ***************
+before : create view v as select /*+ USE_HASH(@sel1 t1,t2) */ t1.* from t1,t2;
+after : create view v as select /*+ USE_HASH(@sel1 t1 t2) */`rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`,`rongxuan`.`t2`
+***************   Case 238   ***************
+before : create view v as select t1.c1 from t1 where c1 in (select/*+FULL(@sel1 t1)*/ c1 from t2);
+after : create view v as select /*+ FULL(@sel1 t1) */`rongxuan`.`t1`.`c1` AS `c1` from `rongxuan`.`t1` where (`rongxuan`.`t1`.`c1` = any (select `rongxuan`.`t2`.`c1` from `rongxuan`.`t2`))

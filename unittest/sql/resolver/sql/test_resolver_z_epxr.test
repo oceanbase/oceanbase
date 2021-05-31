@@ -1,0 +1,29 @@
+
+# 1. opt assert failed: code_generator/ob_expr_generator_impl.cpp:119
+select (select c1 from t1) as field from t1 GROUP BY field;
+select (select c3 from t1 where 1000 > c3) as 'x'  from t3;
+
+# 2. CG vistor invalid idx
+select c1 as a FROM t1 GROUP BY (SELECT 1 FROM t1 HAVING a=1);
+--error  5217
+SELECT (SELECT 1) a, (select A)
+
+# 3. resolver failed due to searching scope
+SELECT c1 as a, c1 as b FROM t1 GROUP BY (SELECT a) ORDER BY (SELECT c2*1);
+SELECT c1 as a, c2 as b FROM t2 GROUP BY (SELECT a) ORDER BY (SELECT c3);
+--error 5217
+select c1 as ca from t1 where (select (select ca)) > 1;
+
+# works, expected error 1054
+--error 5217
+select c1, c1 DD, DD||'kaka' KK, KK || 'haha' from t1;
+--error 5217
+select c1, c1 DD, concat(DD,'kaka') KK, concat(KK,'haha') from t1;
+
+# 5. OPT  all_expr_produced (ob_logical_operator.cpp:1372) [13112][Y8B7E0A7DE005-6C91B] failed to produce expression
+--error 5217
+SELECT 1 FROM (SELECT c1 FROM t1) b HAVING (SELECT b.c1)=1
+
+select c1 as a, c1 as b,  (select count(*) from t1 WHERE c1>5) cc from t1;
+select c1 as a, c1 as b,  (select count(*) from t1 HAVING c1>5) cc from t1;
+

@@ -1,0 +1,2546 @@
+***************   Case 0   ***************
+SQL: select max(c1) from t1; 
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |SCALAR GROUP BY|           |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1      |1        |37  |
+|2 |  TABLE SCAN   |t1(Reverse)|1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 1   ***************
+SQL: select min(c1) from t1; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t1   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 2   ***************
+SQL: select max(c1) as max from t1; 
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |SCALAR GROUP BY|           |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1      |1        |37  |
+|2 |  TABLE SCAN   |t1(Reverse)|1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 3   ***************
+SQL: select min(c1) as min from t1; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t1   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 4   ***************
+SQL: select max(c2) from t9; 
+======================================================
+|ID|OPERATOR       |NAME              |EST. ROWS|COST|
+------------------------------------------------------
+|0 |SCALAR GROUP BY|                  |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1             |1        |37  |
+|2 |  TABLE SCAN   |t9(idx_t9,Reverse)|1        |37  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c2)])
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 5   ***************
+SQL: select max(c3) from t10; 
+========================================================
+|ID|OPERATOR       |NAME                |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |SCALAR GROUP BY|                    |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1               |1        |37  |
+|2 |  TABLE SCAN   |t10(idx_t10,Reverse)|1        |36  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c3)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c3)])
+  1 - output([VIEW1.c3]), filter(nil), 
+      access([VIEW1.c3])
+  2 - output([t10.c3]), filter(nil), 
+      access([t10.c3]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 6   ***************
+SQL: select * from t9 where c2 = (select max(c2) from t9); 
+========================================================
+|ID|OPERATOR         |NAME              |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |NESTED-LOOP JOIN |                  |1        |126 |
+|1 | SUBPLAN SCAN    |VIEW4             |1        |37  |
+|2 |  SCALAR GROUP BY|                  |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW5             |1        |37  |
+|4 |    TABLE SCAN   |t9(idx_t9,Reverse)|1        |37  |
+|5 | TABLE SCAN      |t9(idx_t9)        |1        |89  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t9.c1], [t9.c2], [t9.c3], [t9.c4]), filter(nil), 
+      conds(nil), nl_params_([VIEW4.max(c2)])
+  1 - output([VIEW4.max(c2)]), filter(nil), 
+      access([VIEW4.max(c2)])
+  2 - output([T_FUN_MAX(VIEW5.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW5.c2)])
+  3 - output([VIEW5.c2]), filter(nil), 
+      access([VIEW5.c2])
+  4 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t9.c2], [t9.c1], [t9.c3], [t9.c4]), filter(nil), 
+      access([t9.c2], [t9.c1], [t9.c3], [t9.c4]), partitions(p0)
+
+***************   Case 7   ***************
+SQL: select max(c1) from t1 as tmp; 
+================================================
+|ID|OPERATOR       |NAME        |EST. ROWS|COST|
+------------------------------------------------
+|0 |SCALAR GROUP BY|            |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1       |1        |37  |
+|2 |  TABLE SCAN   |tmp(Reverse)|1        |36  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([tmp.c1]), filter(nil), 
+      access([tmp.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 8   ***************
+SQL: select c1 from t1 where c1 > (select max(c1) from t1); 
+=================================================
+|ID|OPERATOR         |NAME       |EST. ROWS|COST|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN |           |34       |100 |
+|1 | SUBPLAN SCAN    |VIEW1      |1        |37  |
+|2 |  SCALAR GROUP BY|           |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2      |1        |37  |
+|4 |    TABLE SCAN   |t1(Reverse)|1        |36  |
+|5 | TABLE SCAN      |t1         |34       |42  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.max(c1)])
+  1 - output([VIEW1.max(c1)]), filter(nil), 
+      access([VIEW1.max(c1)])
+  2 - output([T_FUN_MAX(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 9   ***************
+SQL: select max(c1) as max from t1 having max(c1) > 1; 
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |SCALAR GROUP BY|           |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1      |1        |37  |
+|2 |  TABLE SCAN   |t1(Reverse)|1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter([T_FUN_MAX(VIEW1.c1) > ?]), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 10   ***************
+SQL: select min(c1) as min from t1 having min(c1) > 1; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t1   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter([T_FUN_MIN(VIEW1.c1) > ?]), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 11   ***************
+SQL: select max(c1) as max from t1 having max(c1); 
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |SCALAR GROUP BY|           |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1      |1        |37  |
+|2 |  TABLE SCAN   |t1(Reverse)|1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter([T_FUN_MAX(VIEW1.c1)]), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 12   ***************
+SQL: select min(c1) as min from t1 having true; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t1   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter([1]), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 13   ***************
+SQL: select max(c1) from t7 having false; 
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |SCALAR GROUP BY|           |0        |37  |
+|1 | SUBPLAN SCAN  |VIEW1      |1        |37  |
+|2 |  TABLE SCAN   |t7(Reverse)|1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter([0]), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 14   ***************
+SQL: select max(c1) from pt2; 
+==============================================================
+|ID|OPERATOR                     |NAME        |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |SCALAR GROUP BY              |            |1        |37  |
+|1 | SUBPLAN SCAN                |VIEW1       |1        |37  |
+|2 |  LIMIT                      |            |1        |37  |
+|3 |   PX COORDINATOR MERGE SORT |            |1        |37  |
+|4 |    EXCHANGE OUT DISTR       |:EX10000    |1        |37  |
+|5 |     SORT                    |            |1        |37  |
+|6 |      PX PARTITION ITERATOR  |            |1        |36  |
+|7 |       TABLE SCAN            |pt2(Reverse)|1        |36  |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC])
+  4 - output([pt2.c1]), filter(nil), dop=1
+  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), local merge sort
+  6 - output([pt2.c1]), filter(nil)
+  7 - output([pt2.c1]), filter(nil), 
+      access([pt2.c1]), partitions(p[0-2]), 
+      limit(1), offset(nil)
+
+***************   Case 15   ***************
+SQL: select max(c1) as max from pt2; 
+==============================================================
+|ID|OPERATOR                     |NAME        |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |SCALAR GROUP BY              |            |1        |37  |
+|1 | SUBPLAN SCAN                |VIEW1       |1        |37  |
+|2 |  LIMIT                      |            |1        |37  |
+|3 |   PX COORDINATOR MERGE SORT |            |1        |37  |
+|4 |    EXCHANGE OUT DISTR       |:EX10000    |1        |37  |
+|5 |     SORT                    |            |1        |37  |
+|6 |      PX PARTITION ITERATOR  |            |1        |36  |
+|7 |       TABLE SCAN            |pt2(Reverse)|1        |36  |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC])
+  4 - output([pt2.c1]), filter(nil), dop=1
+  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), local merge sort
+  6 - output([pt2.c1]), filter(nil)
+  7 - output([pt2.c1]), filter(nil), 
+      access([pt2.c1]), partitions(p[0-2]), 
+      limit(1), offset(nil)
+
+***************   Case 16   ***************
+SQL: select min(c1) from pt2; 
+==========================================================
+|ID|OPERATOR                     |NAME    |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |SCALAR GROUP BY              |        |1        |37  |
+|1 | SUBPLAN SCAN                |VIEW1   |1        |37  |
+|2 |  LIMIT                      |        |1        |37  |
+|3 |   PX COORDINATOR MERGE SORT |        |1        |37  |
+|4 |    EXCHANGE OUT DISTR       |:EX10000|1        |37  |
+|5 |     SORT                    |        |1        |37  |
+|6 |      PX PARTITION ITERATOR  |        |1        |36  |
+|7 |       TABLE SCAN            |pt2     |1        |36  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC])
+  4 - output([pt2.c1]), filter(nil), dop=1
+  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), local merge sort
+  6 - output([pt2.c1]), filter(nil)
+  7 - output([pt2.c1]), filter(nil), 
+      access([pt2.c1]), partitions(p[0-2]), 
+      limit(1), offset(nil)
+
+***************   Case 17   ***************
+SQL: select min(c1) as min from pt2; 
+==========================================================
+|ID|OPERATOR                     |NAME    |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |SCALAR GROUP BY              |        |1        |37  |
+|1 | SUBPLAN SCAN                |VIEW1   |1        |37  |
+|2 |  LIMIT                      |        |1        |37  |
+|3 |   PX COORDINATOR MERGE SORT |        |1        |37  |
+|4 |    EXCHANGE OUT DISTR       |:EX10000|1        |37  |
+|5 |     SORT                    |        |1        |37  |
+|6 |      PX PARTITION ITERATOR  |        |1        |36  |
+|7 |       TABLE SCAN            |pt2     |1        |36  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC])
+  4 - output([pt2.c1]), filter(nil), dop=1
+  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), local merge sort
+  6 - output([pt2.c1]), filter(nil)
+  7 - output([pt2.c1]), filter(nil), 
+      access([pt2.c1]), partitions(p[0-2]), 
+      limit(1), offset(nil)
+
+***************   Case 18   ***************
+SQL: select * from (select max(c1) from pt2) as tmp_table; 
+==============================================================
+|ID|OPERATOR                     |NAME        |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |SCALAR GROUP BY              |            |1        |37  |
+|1 | SUBPLAN SCAN                |VIEW1       |1        |37  |
+|2 |  LIMIT                      |            |1        |37  |
+|3 |   PX COORDINATOR MERGE SORT |            |1        |37  |
+|4 |    EXCHANGE OUT DISTR       |:EX10000    |1        |37  |
+|5 |     SORT                    |            |1        |37  |
+|6 |      PX PARTITION ITERATOR  |            |1        |36  |
+|7 |       TABLE SCAN            |pt2(Reverse)|1        |36  |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC])
+  4 - output([pt2.c1]), filter(nil), dop=1
+  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), local merge sort
+  6 - output([pt2.c1]), filter(nil)
+  7 - output([pt2.c1]), filter(nil), 
+      access([pt2.c1]), partitions(p[0-2]), 
+      limit(1), offset(nil)
+
+***************   Case 19   ***************
+SQL: select * from t2 where t2.c1 > (select max(c1) from pt2); 
+================================================================
+|ID|OPERATOR                       |NAME        |EST. ROWS|COST|
+----------------------------------------------------------------
+|0 |NESTED-LOOP JOIN               |            |34       |102 |
+|1 | SUBPLAN SCAN                  |VIEW1       |1        |38  |
+|2 |  SCALAR GROUP BY              |            |1        |37  |
+|3 |   SUBPLAN SCAN                |VIEW2       |1        |37  |
+|4 |    LIMIT                      |            |1        |37  |
+|5 |     PX COORDINATOR MERGE SORT |            |1        |37  |
+|6 |      EXCHANGE OUT DISTR       |:EX10000    |1        |37  |
+|7 |       SORT                    |            |1        |37  |
+|8 |        PX PARTITION ITERATOR  |            |1        |36  |
+|9 |         TABLE SCAN            |pt2(Reverse)|1        |36  |
+|10| TABLE SCAN                    |t2          |34       |43  |
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.max(c1)])
+  1 - output([VIEW1.max(c1)]), filter(nil), 
+      access([VIEW1.max(c1)])
+  2 - output([T_FUN_MAX(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC])
+  6 - output([pt2.c1]), filter(nil), dop=1
+  7 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), local merge sort
+  8 - output([pt2.c1]), filter(nil)
+  9 - output([pt2.c1]), filter(nil), 
+      access([pt2.c1]), partitions(p[0-2]), 
+      limit(1), offset(nil)
+  10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+***************   Case 20   ***************
+SQL: select * from (select min(c1) as min from pt2) as tmp_table; 
+==========================================================
+|ID|OPERATOR                     |NAME    |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |SCALAR GROUP BY              |        |1        |37  |
+|1 | SUBPLAN SCAN                |VIEW1   |1        |37  |
+|2 |  LIMIT                      |        |1        |37  |
+|3 |   PX COORDINATOR MERGE SORT |        |1        |37  |
+|4 |    EXCHANGE OUT DISTR       |:EX10000|1        |37  |
+|5 |     SORT                    |        |1        |37  |
+|6 |      PX PARTITION ITERATOR  |        |1        |36  |
+|7 |       TABLE SCAN            |pt2     |1        |36  |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC])
+  4 - output([pt2.c1]), filter(nil), dop=1
+  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), local merge sort
+  6 - output([pt2.c1]), filter(nil)
+  7 - output([pt2.c1]), filter(nil), 
+      access([pt2.c1]), partitions(p[0-2]), 
+      limit(1), offset(nil)
+
+***************   Case 21   ***************
+SQL: select * from t2 where t2.c1 > (select min(c1) as min from pt2); 
+============================================================
+|ID|OPERATOR                       |NAME    |EST. ROWS|COST|
+------------------------------------------------------------
+|0 |NESTED-LOOP JOIN               |        |34       |102 |
+|1 | SUBPLAN SCAN                  |VIEW1   |1        |38  |
+|2 |  SCALAR GROUP BY              |        |1        |37  |
+|3 |   SUBPLAN SCAN                |VIEW2   |1        |37  |
+|4 |    LIMIT                      |        |1        |37  |
+|5 |     PX COORDINATOR MERGE SORT |        |1        |37  |
+|6 |      EXCHANGE OUT DISTR       |:EX10000|1        |37  |
+|7 |       SORT                    |        |1        |37  |
+|8 |        PX PARTITION ITERATOR  |        |1        |36  |
+|9 |         TABLE SCAN            |pt2     |1        |36  |
+|10| TABLE SCAN                    |t2      |34       |43  |
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.min])
+  1 - output([VIEW1.min]), filter(nil), 
+      access([VIEW1.min])
+  2 - output([T_FUN_MIN(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC])
+  6 - output([pt2.c1]), filter(nil), dop=1
+  7 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), local merge sort
+  8 - output([pt2.c1]), filter(nil)
+  9 - output([pt2.c1]), filter(nil), 
+      access([pt2.c1]), partitions(p[0-2]), 
+      limit(1), offset(nil)
+  10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+***************   Case 22   ***************
+SQL: select * from (select max(c1) from t1) as tmp_table; 
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |SCALAR GROUP BY|           |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1      |1        |37  |
+|2 |  TABLE SCAN   |t1(Reverse)|1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 23   ***************
+SQL: select * from t2 where t2.c1 > (select max(c1) from t1); 
+=================================================
+|ID|OPERATOR         |NAME       |EST. ROWS|COST|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN |           |34       |101 |
+|1 | SUBPLAN SCAN    |VIEW1      |1        |37  |
+|2 |  SCALAR GROUP BY|           |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2      |1        |37  |
+|4 |    TABLE SCAN   |t1(Reverse)|1        |36  |
+|5 | TABLE SCAN      |t2         |34       |43  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.max(c1)])
+  1 - output([VIEW1.max(c1)]), filter(nil), 
+      access([VIEW1.max(c1)])
+  2 - output([T_FUN_MAX(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+***************   Case 24   ***************
+SQL: select * from (select max(c1) as max from t1) as tmp_table; 
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |SCALAR GROUP BY|           |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1      |1        |37  |
+|2 |  TABLE SCAN   |t1(Reverse)|1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 25   ***************
+SQL: select * from t2 where t2.c1 > (select max(c1) as max from t1); 
+=================================================
+|ID|OPERATOR         |NAME       |EST. ROWS|COST|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN |           |34       |101 |
+|1 | SUBPLAN SCAN    |VIEW1      |1        |37  |
+|2 |  SCALAR GROUP BY|           |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2      |1        |37  |
+|4 |    TABLE SCAN   |t1(Reverse)|1        |36  |
+|5 | TABLE SCAN      |t2         |34       |43  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.max])
+  1 - output([VIEW1.max]), filter(nil), 
+      access([VIEW1.max])
+  2 - output([T_FUN_MAX(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+***************   Case 26   ***************
+SQL: select * from (select min(c1) from t1) as tmp_table; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t1   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 27   ***************
+SQL: select * from t2 where t2.c1 > (select min(c1) from t1); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |NESTED-LOOP JOIN |     |34       |101 |
+|1 | SUBPLAN SCAN    |VIEW1|1        |37  |
+|2 |  SCALAR GROUP BY|     |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2|1        |37  |
+|4 |    TABLE SCAN   |t1   |1        |36  |
+|5 | TABLE SCAN      |t2   |34       |43  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.min(c1)])
+  1 - output([VIEW1.min(c1)]), filter(nil), 
+      access([VIEW1.min(c1)])
+  2 - output([T_FUN_MIN(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+***************   Case 28   ***************
+SQL: select * from (select min(c1) as min from t1) as tmp_table; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t1   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 29   ***************
+SQL: select * from t2 where t2.c1 > (select min(c1) as min from t1); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |NESTED-LOOP JOIN |     |34       |101 |
+|1 | SUBPLAN SCAN    |VIEW1|1        |37  |
+|2 |  SCALAR GROUP BY|     |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2|1        |37  |
+|4 |    TABLE SCAN   |t1   |1        |36  |
+|5 | TABLE SCAN      |t2   |34       |43  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.min])
+  1 - output([VIEW1.min]), filter(nil), 
+      access([VIEW1.min])
+  2 - output([T_FUN_MIN(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+***************   Case 30   ***************
+SQL: select max(c1) from t7; 
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |SCALAR GROUP BY|           |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1      |1        |37  |
+|2 |  TABLE SCAN   |t7(Reverse)|1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 31   ***************
+SQL: select min(c1) from t7; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t7   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 32   ***************
+SQL: select max(c1 + 1) + 1 from t1 limit 1; 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |LIMIT           |    |1        |107 |
+|1 | SCALAR GROUP BY|    |1        |107 |
+|2 |  TABLE SCAN    |t1  |100      |88  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(t1.c1 + ?) + ?]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_MAX(t1.c1 + ?)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(t1.c1 + ?)])
+  2 - output([t1.c1 + ?]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 33   ***************
+SQL: select max(c1) from t1 limit 1; 
+================================================
+|ID|OPERATOR        |NAME       |EST. ROWS|COST|
+------------------------------------------------
+|0 |LIMIT           |           |1        |37  |
+|1 | SCALAR GROUP BY|           |1        |37  |
+|2 |  SUBPLAN SCAN  |VIEW1      |1        |37  |
+|3 |   TABLE SCAN   |t1(Reverse)|1        |36  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  2 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  3 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 34   ***************
+SQL: select min(c1) from t1 limit 1; 
+==========================================
+|ID|OPERATOR        |NAME |EST. ROWS|COST|
+------------------------------------------
+|0 |LIMIT           |     |1        |37  |
+|1 | SCALAR GROUP BY|     |1        |37  |
+|2 |  SUBPLAN SCAN  |VIEW1|1        |37  |
+|3 |   TABLE SCAN   |t1   |1        |36  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  2 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  3 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 35   ***************
+SQL: select min(c1) as min from t1 limit 1; 
+==========================================
+|ID|OPERATOR        |NAME |EST. ROWS|COST|
+------------------------------------------
+|0 |LIMIT           |     |1        |37  |
+|1 | SCALAR GROUP BY|     |1        |37  |
+|2 |  SUBPLAN SCAN  |VIEW1|1        |37  |
+|3 |   TABLE SCAN   |t1   |1        |36  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  2 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  3 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 36   ***************
+SQL: select min(c1 + 1) + 1 from t1 limit 1; 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |LIMIT           |    |1        |107 |
+|1 | SCALAR GROUP BY|    |1        |107 |
+|2 |  TABLE SCAN    |t1  |100      |88  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(t1.c1 + ?) + ?]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_MIN(t1.c1 + ?)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(t1.c1 + ?)])
+  2 - output([t1.c1 + ?]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 37   ***************
+SQL: select max(c1) as max from t1 limit 1; 
+================================================
+|ID|OPERATOR        |NAME       |EST. ROWS|COST|
+------------------------------------------------
+|0 |LIMIT           |           |1        |37  |
+|1 | SCALAR GROUP BY|           |1        |37  |
+|2 |  SUBPLAN SCAN  |VIEW1      |1        |37  |
+|3 |   TABLE SCAN   |t1(Reverse)|1        |36  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  2 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  3 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 38   ***************
+SQL: select max(c1 + 1) + 1 as max from t1 limit 1; 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |LIMIT           |    |1        |107 |
+|1 | SCALAR GROUP BY|    |1        |107 |
+|2 |  TABLE SCAN    |t1  |100      |88  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(t1.c1 + ?) + ?]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_MAX(t1.c1 + ?)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(t1.c1 + ?)])
+  2 - output([t1.c1 + ?]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 39   ***************
+SQL: select min(c1 + 1) + 1 as min from t1 limit 1; 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |LIMIT           |    |1        |107 |
+|1 | SCALAR GROUP BY|    |1        |107 |
+|2 |  TABLE SCAN    |t1  |100      |88  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(t1.c1 + ?) + ?]), filter(nil), limit(1), offset(nil)
+  1 - output([T_FUN_MIN(t1.c1 + ?)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(t1.c1 + ?)])
+  2 - output([t1.c1 + ?]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 40   ***************
+SQL: select max(c1) as max from t1 having min(c1) > 1; 
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |112 |
+|1 | TABLE SCAN    |t1  |100      |88  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(t1.c1)]), filter([T_FUN_MIN(t1.c1) > ?]), 
+      group(nil), agg_func([T_FUN_MAX(t1.c1)], [T_FUN_MIN(t1.c1)])
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 41   ***************
+SQL: select min(c1) as min from t1 having max(c1) > 1; 
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |112 |
+|1 | TABLE SCAN    |t1  |100      |88  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(t1.c1)]), filter([T_FUN_MAX(t1.c1) > ?]), 
+      group(nil), agg_func([T_FUN_MIN(t1.c1)], [T_FUN_MAX(t1.c1)])
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 42   ***************
+SQL: select max(c1) from t1 having 1 in (select c1 from t2); 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |SUBPLAN FILTER  |    |1        |195 |
+|1 | SCALAR GROUP BY|    |1        |107 |
+|2 |  TABLE SCAN    |t1  |100      |88  |
+|3 | TABLE SCAN     |t2  |100      |88  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(t1.c1)]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([? = ANY(subquery(1))]), init_plan_idxs_(nil)
+  1 - output([T_FUN_MAX(t1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(t1.c1)])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  3 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 43   ***************
+SQL: select * from (select * from t1 where c1 + c2 in (select c2 from t3) and not exists(select c1 from t2 where c1 > 5 group by c1)) as v where v.c1 in (select c3 from t2); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |SUBPLAN FILTER   |     |25       |874 |
+|1 | HASH JOIN       |     |50       |831 |
+|2 |  HASH JOIN      |     |50       |480 |
+|3 |   SUBPLAN SCAN  |VIEW4|100      |208 |
+|4 |    HASH DISTINCT|     |100      |195 |
+|5 |     TABLE SCAN  |t3   |100      |90  |
+|6 |   TABLE SCAN    |t1   |100      |90  |
+|7 |  SUBPLAN SCAN   |VIEW3|100      |208 |
+|8 |   HASH DISTINCT |     |100      |195 |
+|9 |    TABLE SCAN   |t2   |100      |90  |
+|10| TABLE SCAN      |t2   |1        |36  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c1 = VIEW3.VIEW1.c3]), other_conds(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([t1.c1 + t1.c2 = VIEW4.VIEW2.c2]), other_conds(nil)
+  3 - output([VIEW4.VIEW2.c2]), filter(nil), 
+      access([VIEW4.VIEW2.c2])
+  4 - output([t3.c2]), filter(nil), 
+      distinct([t3.c2])
+  5 - output([t3.c2]), filter(nil), 
+      access([t3.c2]), partitions(p0)
+  6 - output([t1.c1], [t1.c2], [t1.c1 + t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  7 - output([VIEW3.VIEW1.c3]), filter(nil), 
+      access([VIEW3.VIEW1.c3])
+  8 - output([cast(t2.c3, INT(11, 0))]), filter(nil), 
+      distinct([cast(t2.c3, INT(11, 0))])
+  9 - output([cast(t2.c3, INT(11, 0))]), filter(nil), 
+      access([t2.c3]), partitions(p0)
+  10 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 44   ***************
+SQL: select max(c4) from t9; 
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |114 |
+|1 | TABLE SCAN    |t9  |100      |95  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(t9.c4)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(t9.c4)])
+  1 - output([t9.c4]), filter(nil), 
+      access([t9.c4]), partitions(p0)
+
+***************   Case 45   ***************
+SQL: select min(999) from t7 having max(c1) > 0; 
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |115 |
+|1 | TABLE SCAN    |t7  |100      |90  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(?)]), filter([T_FUN_MAX(t7.c1) > ?]), 
+      group(nil), agg_func([T_FUN_MIN(?)], [T_FUN_MAX(t7.c1)])
+  1 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+
+***************   Case 46   ***************
+SQL: select min(999) from t7 group by c1; 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |MERGE GROUP BY|    |100      |112 |
+|1 | TABLE SCAN   |t7  |100      |90  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil), 
+      group([t7.c1]), agg_func(nil)
+  1 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+
+***************   Case 47   ***************
+SQL: select max(999+abs(-1)) from t7 group by c2; 
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |HASH GROUP BY|    |100      |195 |
+|1 | TABLE SCAN  |t7  |100      |90  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil), 
+      group([t7.c2]), agg_func(nil)
+  1 - output([t7.c2]), filter(nil), 
+      access([t7.c2]), partitions(p0)
+
+***************   Case 48   ***************
+SQL: select max(1+2) from t7 limit 10; 
+==========================================
+|ID|OPERATOR        |NAME |EST. ROWS|COST|
+------------------------------------------
+|0 |LIMIT           |     |1        |37  |
+|1 | SCALAR GROUP BY|     |1        |37  |
+|2 |  SUBPLAN SCAN  |VIEW1|1        |37  |
+|3 |   TABLE SCAN   |t7   |1        |36  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.subquery_col_alias)]), filter(nil), limit(10), offset(nil)
+  1 - output([T_FUN_MAX(VIEW1.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.subquery_col_alias)])
+  2 - output([VIEW1.subquery_col_alias]), filter(nil), 
+      access([VIEW1.subquery_col_alias])
+  3 - output([?]), filter(nil), 
+      access([t7.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 49   ***************
+SQL: select max(1+2) from t7; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t7   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.subquery_col_alias)])
+  1 - output([VIEW1.subquery_col_alias]), filter(nil), 
+      access([VIEW1.subquery_col_alias])
+  2 - output([?]), filter(nil), 
+      access([t7.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 50   ***************
+SQL: select min(1+2) from t7 where c2 = 1; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |107 |
+|1 | SUBPLAN SCAN  |VIEW1|1        |107 |
+|2 |  TABLE SCAN   |t7   |1        |107 |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.subquery_col_alias)])
+  1 - output([VIEW1.subquery_col_alias]), filter(nil), 
+      access([VIEW1.subquery_col_alias])
+  2 - output([?]), filter([t7.c2 = ?]), 
+      access([t7.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 51   ***************
+SQL: select max(1+2), 3 from t7; 
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |109 |
+|1 | TABLE SCAN    |t7  |100      |90  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(?)], [?]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(?)])
+  1 - output([1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+
+***************   Case 52   ***************
+SQL: select max(1+2) from t7,t8 where t7.c1 = t8.c1; 
+=============================================
+|ID|OPERATOR           |NAME |EST. ROWS|COST|
+---------------------------------------------
+|0 |SCALAR GROUP BY    |     |1        |74  |
+|1 | SUBPLAN SCAN      |VIEW1|1        |73  |
+|2 |  LIMIT            |     |1        |73  |
+|3 |   NESTED-LOOP JOIN|     |1        |73  |
+|4 |    TABLE SCAN     |t8   |1        |36  |
+|5 |    TABLE SCAN     |t7   |1        |36  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.subquery_col_alias)])
+  1 - output([VIEW1.subquery_col_alias]), filter(nil), 
+      access([VIEW1.subquery_col_alias])
+  2 - output([?]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter(nil), 
+      conds(nil), nl_params_([t8.c1])
+  4 - output([t8.c1]), filter(nil), 
+      access([t8.c1]), partitions(p0)
+  5 - output([1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+
+***************   Case 53   ***************
+SQL: select min(1+2) from t7 inner join t8 on t7.c1=t8.c1; 
+=============================================
+|ID|OPERATOR           |NAME |EST. ROWS|COST|
+---------------------------------------------
+|0 |SCALAR GROUP BY    |     |1        |74  |
+|1 | SUBPLAN SCAN      |VIEW1|1        |73  |
+|2 |  LIMIT            |     |1        |73  |
+|3 |   NESTED-LOOP JOIN|     |1        |73  |
+|4 |    TABLE SCAN     |t8   |1        |36  |
+|5 |    TABLE SCAN     |t7   |1        |36  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.subquery_col_alias)])
+  1 - output([VIEW1.subquery_col_alias]), filter(nil), 
+      access([VIEW1.subquery_col_alias])
+  2 - output([?]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter(nil), 
+      conds(nil), nl_params_([t8.c1])
+  4 - output([t8.c1]), filter(nil), 
+      access([t8.c1]), partitions(p0)
+  5 - output([1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+
+***************   Case 54   ***************
+SQL: select max(1+2) from t7 left join t8 using(c1); 
+============================================
+|ID|OPERATOR          |NAME |EST. ROWS|COST|
+--------------------------------------------
+|0 |SCALAR GROUP BY   |     |1        |161 |
+|1 | SUBPLAN SCAN     |VIEW1|1        |161 |
+|2 |  LIMIT           |     |1        |161 |
+|3 |   HASH OUTER JOIN|     |1        |161 |
+|4 |    SUBPLAN SCAN  |VIEW2|1        |37  |
+|5 |     TABLE SCAN   |t7   |1        |36  |
+|6 |    TABLE SCAN    |t8   |100      |90  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.subquery_col_alias)])
+  1 - output([VIEW1.subquery_col_alias]), filter(nil), 
+      access([VIEW1.subquery_col_alias])
+  2 - output([?]), filter(nil), limit(1), offset(nil)
+  3 - output([1]), filter(nil), 
+      equal_conds([VIEW2.t7.c1 = t8.c1]), other_conds(nil)
+  4 - output([VIEW2.t7.c1]), filter(nil), 
+      access([VIEW2.t7.c1])
+  5 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  6 - output([t8.c1]), filter(nil), 
+      access([t8.c1]), partitions(p0)
+
+***************   Case 55   ***************
+SQL: select * from t7 where exists(select max(t7.c2) from t8); 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t7  |100      |92  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), startup_filter([1]), 
+      access([t7.c2], [t7.c1], [t7.c3]), partitions(p0)
+
+***************   Case 56   ***************
+SQL: select * from t7 where exists(select max(t7.c2 + 1) from t8); 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t7  |100      |92  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), startup_filter([1]), 
+      access([t7.c2], [t7.c1], [t7.c3]), partitions(p0)
+
+***************   Case 57   ***************
+SQL: select * from t7 where exists(select min(999+1) from t8 group by t8.c2); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |50       |142 |
+|1 | TABLE SCAN   |t7  |100      |92  |
+|2 | TABLE SCAN   |t8  |1        |36  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t7.c1], [t7.c2], [t7.c3]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), 
+      access([t7.c1], [t7.c2], [t7.c3]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t8.c3]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 58   ***************
+SQL: select * from t7 where exists(select min(999+1) from t8 where t8.c1 = 1 and t8.c2 = 1 group by t8.c2); 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |SUBPLAN FILTER|    |50       |232 |
+|1 | TABLE SCAN   |t7  |100      |92  |
+|2 | TABLE SCAN   |t8  |1        |126 |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t7.c1], [t7.c2], [t7.c3]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), 
+      access([t7.c1], [t7.c2], [t7.c3]), partitions(p0)
+  2 - output([1]), filter([t8.c1 = ?], [t8.c2 = ?]), 
+      access([t8.c1], [t8.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 59   ***************
+SQL: select * from t7 where c1 in (select max(999+1) from t8); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |NESTED-LOOP JOIN |     |1        |74  |
+|1 | SUBPLAN SCAN    |VIEW1|1        |37  |
+|2 |  SCALAR GROUP BY|     |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2|1        |37  |
+|4 |    TABLE SCAN   |t8   |1        |36  |
+|5 | TABLE SCAN      |t7   |1        |36  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.max(999+1)])
+  1 - output([VIEW1.max(999+1)]), filter(nil), 
+      access([VIEW1.max(999+1)])
+  2 - output([T_FUN_MAX(VIEW2.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.subquery_col_alias)])
+  3 - output([VIEW2.subquery_col_alias]), filter(nil), 
+      access([VIEW2.subquery_col_alias])
+  4 - output([?]), filter(nil), 
+      access([t8.c3]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), 
+      access([t7.c1], [t7.c2], [t7.c3]), partitions(p0)
+
+***************   Case 60   ***************
+SQL: select * from t7 where c1 in (select max(999+1) from t8 where t8.c1=2 and t8.c2=3); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |NESTED-LOOP JOIN |     |1        |163 |
+|1 | SUBPLAN SCAN    |VIEW1|1        |126 |
+|2 |  SCALAR GROUP BY|     |1        |126 |
+|3 |   SUBPLAN SCAN  |VIEW2|1        |126 |
+|4 |    TABLE SCAN   |t8   |1        |126 |
+|5 | TABLE SCAN      |t7   |1        |36  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.max(999+1)])
+  1 - output([VIEW1.max(999+1)]), filter(nil), 
+      access([VIEW1.max(999+1)])
+  2 - output([T_FUN_MAX(VIEW2.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.subquery_col_alias)])
+  3 - output([VIEW2.subquery_col_alias]), filter(nil), 
+      access([VIEW2.subquery_col_alias])
+  4 - output([?]), filter([t8.c1 = ?], [t8.c2 = ?]), 
+      access([t8.c1], [t8.c2]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), 
+      access([t7.c1], [t7.c2], [t7.c3]), partitions(p0)
+
+***************   Case 61   ***************
+SQL: select * from t7 where c1 > any(select min(999+1) from t8 group by t8.c2); 
+===============================================
+|ID|OPERATOR             |NAME |EST. ROWS|COST|
+-----------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN|     |34       |3993|
+|1 | TABLE SCAN          |t7   |100      |92  |
+|2 | MATERIAL            |     |100      |227 |
+|3 |  SUBPLAN SCAN       |VIEW1|100      |208 |
+|4 |   HASH GROUP BY     |     |100      |195 |
+|5 |    TABLE SCAN       |t8   |100      |90  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), 
+      conds([t7.c1 > VIEW1.min(999+1)]), nl_params_(nil)
+  1 - output([t7.c1], [t7.c2], [t7.c3]), filter(nil), 
+      access([t7.c1], [t7.c2], [t7.c3]), partitions(p0)
+  2 - output([VIEW1.min(999+1)]), filter(nil)
+  3 - output([VIEW1.min(999+1)]), filter(nil), 
+      access([VIEW1.min(999+1)])
+  4 - output([?]), filter(nil), 
+      group([t8.c2]), agg_func(nil)
+  5 - output([t8.c2]), filter(nil), 
+      access([t8.c2]), partitions(p0)
+
+***************   Case 62   ***************
+SQL: select max(1) from t7 order by 1; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t7   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.subquery_col_alias)])
+  1 - output([VIEW1.subquery_col_alias]), filter(nil), 
+      access([VIEW1.subquery_col_alias])
+  2 - output([?]), filter(nil), 
+      access([t7.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 63   ***************
+SQL: select max(1+2) from t7 order by c1; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t7   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.subquery_col_alias)])
+  1 - output([VIEW1.subquery_col_alias]), filter(nil), 
+      access([VIEW1.subquery_col_alias])
+  2 - output([?]), filter(nil), 
+      access([t7.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 64   ***************
+SQL: select max(1+2) from t7 order by c2,c3; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1|1        |37  |
+|2 |  TABLE SCAN   |t7   |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.subquery_col_alias)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.subquery_col_alias)])
+  1 - output([VIEW1.subquery_col_alias]), filter(nil), 
+      access([VIEW1.subquery_col_alias])
+  2 - output([?]), filter(nil), 
+      access([t7.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 65   ***************
+SQL: select max(1 + 1) from t7 group by c1 order by 1; 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |MERGE GROUP BY|    |100      |112 |
+|1 | TABLE SCAN   |t7  |100      |90  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil), 
+      group([t7.c1]), agg_func(nil)
+  1 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+
+***************   Case 66   ***************
+SQL: select min(1 + 1) from t7 group by c1 order by 1; 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |MERGE GROUP BY|    |100      |112 |
+|1 | TABLE SCAN   |t7  |100      |90  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil), 
+      group([t7.c1]), agg_func(nil)
+  1 - output([t7.c1]), filter(nil), 
+      access([t7.c1]), partitions(p0)
+
+***************   Case 67   ***************
+SQL: select c1 from t1 where c1 > any (select c1 from t2); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |NESTED-LOOP JOIN |     |34       |100 |
+|1 | SUBPLAN SCAN    |VIEW1|1        |37  |
+|2 |  SCALAR GROUP BY|     |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2|1        |37  |
+|4 |    TABLE SCAN   |t2   |1        |36  |
+|5 | TABLE SCAN      |t1   |34       |42  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.c1])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([T_FUN_MIN(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 68   ***************
+SQL: select c1 from t1 where c1 < some (select c1 from t2); 
+=================================================
+|ID|OPERATOR         |NAME       |EST. ROWS|COST|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN |           |34       |100 |
+|1 | SUBPLAN SCAN    |VIEW1      |1        |37  |
+|2 |  SCALAR GROUP BY|           |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2      |1        |37  |
+|4 |    TABLE SCAN   |t2(Reverse)|1        |36  |
+|5 | TABLE SCAN      |t1         |34       |42  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.c1])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([T_FUN_MAX(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 69   ***************
+SQL: select c1 from t1 where c1 > all (select c1 from t2); 
+=====================================================
+|ID|OPERATOR             |NAME       |EST. ROWS|COST|
+-----------------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|           |67       |143 |
+|1 | TABLE SCAN          |t1         |100      |88  |
+|2 | MATERIAL            |           |1        |37  |
+|3 |  SUBPLAN SCAN       |VIEW1      |1        |37  |
+|4 |   SCALAR GROUP BY   |           |1        |37  |
+|5 |    SUBPLAN SCAN     |VIEW2      |1        |37  |
+|6 |     TABLE SCAN      |t2(Reverse)|1        |36  |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds([t1.c1 <= VIEW1.c1]), nl_params_(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  2 - output([VIEW1.c1]), filter(nil)
+  3 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  4 - output([T_FUN_MAX(VIEW2.c1)]), filter([(T_OP_IS_NOT, T_FUN_MAX(VIEW2.c1), NULL, 0)]), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.c1)])
+  5 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  6 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 70   ***************
+SQL: select c1 from t1 where c1 < all (select c1 from t2); 
+===============================================
+|ID|OPERATOR             |NAME |EST. ROWS|COST|
+-----------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|     |67       |143 |
+|1 | TABLE SCAN          |t1   |100      |88  |
+|2 | MATERIAL            |     |1        |37  |
+|3 |  SUBPLAN SCAN       |VIEW1|1        |37  |
+|4 |   SCALAR GROUP BY   |     |1        |37  |
+|5 |    SUBPLAN SCAN     |VIEW2|1        |37  |
+|6 |     TABLE SCAN      |t2   |1        |36  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds([t1.c1 >= VIEW1.c1]), nl_params_(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  2 - output([VIEW1.c1]), filter(nil)
+  3 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  4 - output([T_FUN_MIN(VIEW2.c1)]), filter([(T_OP_IS_NOT, T_FUN_MIN(VIEW2.c1), NULL, 0)]), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c1)])
+  5 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  6 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 71   ***************
+SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1 from t3 where t1.c2=t3.c1)); 
+=============================================
+|ID|OPERATOR          |NAME |EST. ROWS|COST |
+---------------------------------------------
+|0 |SUBPLAN FILTER    |     |50       |17101|
+|1 | TABLE SCAN       |t1   |100      |90   |
+|2 | NESTED-LOOP JOIN |     |34       |166  |
+|3 |  SUBPLAN SCAN    |VIEW1|1        |37   |
+|4 |   SCALAR GROUP BY|     |1        |37   |
+|5 |    SUBPLAN SCAN  |VIEW2|1        |37   |
+|6 |     TABLE GET    |t3   |1        |36   |
+|7 |  TABLE SCAN      |t2   |100      |90   |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter([t1.c1 = ANY(subquery(1))]), 
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([t2.c1]), filter(nil), 
+      conds([t2.c2 >= VIEW1.c1]), nl_params_(nil)
+  3 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  4 - output([T_FUN_MIN(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c1)])
+  5 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  6 - output([t3.c1]), filter(nil), 
+      access([t3.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  7 - output([t2.c2], [t2.c1]), filter(nil), 
+      access([t2.c2], [t2.c1]), partitions(p0)
+
+***************   Case 72   ***************
+SQL: select c1 from t1 where c1 > any (select c1 from t2 where c2 >= some(select c1 from t3 where t1.c2=t3.c1)); 
+==============================================
+|ID|OPERATOR           |NAME |EST. ROWS|COST |
+----------------------------------------------
+|0 |SUBPLAN FILTER     |     |50       |17291|
+|1 | TABLE SCAN        |t1   |100      |90   |
+|2 | SCALAR GROUP BY   |     |1        |172  |
+|3 |  NESTED-LOOP JOIN |     |34       |166  |
+|4 |   SUBPLAN SCAN    |VIEW1|1        |37   |
+|5 |    SCALAR GROUP BY|     |1        |37   |
+|6 |     SUBPLAN SCAN  |VIEW2|1        |37   |
+|7 |      TABLE GET    |t3   |1        |36   |
+|8 |   TABLE SCAN      |t2   |100      |90   |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter([t1.c1 > ANY(subquery(1))]), 
+      exec_params_([t1.c2]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+  2 - output([T_FUN_MIN(t2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(t2.c1)])
+  3 - output([t2.c1]), filter(nil), 
+      conds([t2.c2 >= VIEW1.c1]), nl_params_(nil)
+  4 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  5 - output([T_FUN_MIN(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c1)])
+  6 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  7 - output([t3.c1]), filter(nil), 
+      access([t3.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  8 - output([t2.c2], [t2.c1]), filter(nil), 
+      access([t2.c2], [t2.c1]), partitions(p0)
+
+***************   Case 73   ***************
+SQL: select c1 from t1 group by c1 > any (select c1 from t2); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |HASH GROUP BY    |     |100      |263 |
+|1 | SUBPLAN FILTER  |     |100      |158 |
+|2 |  TABLE SCAN     |t1   |100      |88  |
+|3 |  SCALAR GROUP BY|     |1        |37  |
+|4 |   SUBPLAN SCAN  |VIEW1|1        |37  |
+|5 |    TABLE SCAN   |t2   |1        |36  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      group([t1.c1 > ANY(subquery(1))]), agg_func(nil)
+  1 - output([t1.c1], [t1.c1 > ANY(subquery(1))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  3 - output([T_FUN_MIN(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  4 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  5 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 74   ***************
+SQL: select c1 from t1 having c1 < any (select c1 from t2); 
+=================================================
+|ID|OPERATOR         |NAME       |EST. ROWS|COST|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN |           |34       |100 |
+|1 | SUBPLAN SCAN    |VIEW1      |1        |37  |
+|2 |  SCALAR GROUP BY|           |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2      |1        |37  |
+|4 |    TABLE SCAN   |t2(Reverse)|1        |36  |
+|5 | TABLE SCAN      |t1         |34       |42  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.c1])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([T_FUN_MAX(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 75   ***************
+SQL: select c1 from t1 order by c1 > all (select c1 from t2); 
+=================================================
+|ID|OPERATOR         |NAME       |EST. ROWS|COST|
+-------------------------------------------------
+|0 |SORT             |           |100      |247 |
+|1 | SUBPLAN FILTER  |           |100      |139 |
+|2 |  TABLE SCAN     |t1         |100      |88  |
+|3 |  SCALAR GROUP BY|           |1        |37  |
+|4 |   SUBPLAN SCAN  |VIEW1      |1        |37  |
+|5 |    TABLE SCAN   |t2(Reverse)|1        |36  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), sort_keys([t1.c1 > ALL(subquery(1)), ASC])
+  1 - output([t1.c1], [t1.c1 > ALL(subquery(1))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  3 - output([T_FUN_MAX(VIEW1.c1)]), filter([(T_OP_IS_NOT, T_FUN_MAX(VIEW1.c1), NULL, 0)]), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  4 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  5 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 76   ***************
+SQL: select c1 from t1 order by c1 < all (select c1 from t2); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |SORT             |     |100      |247 |
+|1 | SUBPLAN FILTER  |     |100      |139 |
+|2 |  TABLE SCAN     |t1   |100      |88  |
+|3 |  SCALAR GROUP BY|     |1        |37  |
+|4 |   SUBPLAN SCAN  |VIEW1|1        |37  |
+|5 |    TABLE SCAN   |t2   |1        |36  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), sort_keys([t1.c1 < ALL(subquery(1)), ASC])
+  1 - output([t1.c1], [t1.c1 < ALL(subquery(1))]), filter(nil), 
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1])
+  2 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  3 - output([T_FUN_MIN(VIEW1.c1)]), filter([(T_OP_IS_NOT, T_FUN_MIN(VIEW1.c1), NULL, 0)]), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c1)])
+  4 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  5 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 77   ***************
+SQL: select c1 from t1 where c1 + 1 > any (select c1 from t2); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |NESTED-LOOP JOIN |     |34       |172 |
+|1 | SUBPLAN SCAN    |VIEW1|1        |37  |
+|2 |  SCALAR GROUP BY|     |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2|1        |37  |
+|4 |    TABLE SCAN   |t2   |1        |36  |
+|5 | TABLE SCAN      |t1   |100      |88  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds([t1.c1 + ? > VIEW1.c1]), nl_params_(nil)
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([T_FUN_MIN(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 78   ***************
+SQL: select c1 from t1 where abs(c1) < some (select c1 from t2); 
+=================================================
+|ID|OPERATOR         |NAME       |EST. ROWS|COST|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN |           |34       |172 |
+|1 | SUBPLAN SCAN    |VIEW1      |1        |37  |
+|2 |  SCALAR GROUP BY|           |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2      |1        |37  |
+|4 |    TABLE SCAN   |t2(Reverse)|1        |36  |
+|5 | TABLE SCAN      |t1         |100      |88  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds([abs(t1.c1) < VIEW1.c1]), nl_params_(nil)
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([T_FUN_MAX(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 79   ***************
+SQL: select c1 from t1 where c1 + (1 < any (select c1 from t2)); 
+================================================
+|ID|OPERATOR        |NAME       |EST. ROWS|COST|
+------------------------------------------------
+|0 |SUBPLAN FILTER  |           |50       |140 |
+|1 | TABLE SCAN     |t1         |50       |96  |
+|2 | SCALAR GROUP BY|           |1        |37  |
+|3 |  SUBPLAN SCAN  |VIEW1      |1        |37  |
+|4 |   TABLE SCAN   |t2(Reverse)|1        |36  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      exec_params_(nil), onetime_exprs_([? < ANY(subquery(1))]), init_plan_idxs_(nil)
+  1 - output([t1.c1]), filter([t1.c1 + ?]), 
+      access([t1.c1]), partitions(p0)
+  2 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  3 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 80   ***************
+SQL: select c1 from t1 where c1 > any (select c2 from t9); 
+================================================
+|ID|OPERATOR         |NAME      |EST. ROWS|COST|
+------------------------------------------------
+|0 |NESTED-LOOP JOIN |          |34       |100 |
+|1 | SUBPLAN SCAN    |VIEW1     |1        |37  |
+|2 |  SCALAR GROUP BY|          |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2     |1        |37  |
+|4 |    TABLE SCAN   |t9(idx_t9)|1        |37  |
+|5 | TABLE SCAN      |t1        |34       |42  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.c2])
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([T_FUN_MIN(VIEW2.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c2)])
+  3 - output([VIEW2.c2]), filter(nil), 
+      access([VIEW2.c2])
+  4 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 81   ***************
+SQL: select c1 from t1 where c1 < any (select c2 from t9); 
+========================================================
+|ID|OPERATOR         |NAME              |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |NESTED-LOOP JOIN |                  |34       |100 |
+|1 | SUBPLAN SCAN    |VIEW1             |1        |37  |
+|2 |  SCALAR GROUP BY|                  |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2             |1        |37  |
+|4 |    TABLE SCAN   |t9(idx_t9,Reverse)|1        |37  |
+|5 | TABLE SCAN      |t1                |34       |42  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.c2])
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([T_FUN_MAX(VIEW2.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW2.c2)])
+  3 - output([VIEW2.c2]), filter(nil), 
+      access([VIEW2.c2])
+  4 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 82   ***************
+SQL: select max(c3) from t9 where c2 = 1; 
+======================================================
+|ID|OPERATOR       |NAME              |EST. ROWS|COST|
+------------------------------------------------------
+|0 |SCALAR GROUP BY|                  |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1             |1        |37  |
+|2 |  TABLE SCAN   |t9(idx_t9,Reverse)|1        |37  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c3)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c3)])
+  1 - output([VIEW1.c3]), filter(nil), 
+      access([VIEW1.c3])
+  2 - output([t9.c3]), filter([(T_OP_IS_NOT, t9.c3, NULL, 0)]), 
+      access([t9.c3]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 83   ***************
+SQL: select max(c3) from t9 where 1 = c2; 
+======================================================
+|ID|OPERATOR       |NAME              |EST. ROWS|COST|
+------------------------------------------------------
+|0 |SCALAR GROUP BY|                  |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1             |1        |37  |
+|2 |  TABLE SCAN   |t9(idx_t9,Reverse)|1        |37  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c3)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c3)])
+  1 - output([VIEW1.c3]), filter(nil), 
+      access([VIEW1.c3])
+  2 - output([t9.c3]), filter([(T_OP_IS_NOT, t9.c3, NULL, 0)]), 
+      access([t9.c3]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 84   ***************
+SQL: select max(c3) from t9 where c2 is TRUE; 
+======================================================
+|ID|OPERATOR       |NAME              |EST. ROWS|COST|
+------------------------------------------------------
+|0 |SCALAR GROUP BY|                  |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1             |1        |37  |
+|2 |  TABLE SCAN   |t9(idx_t9,Reverse)|1        |37  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c3)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c3)])
+  1 - output([VIEW1.c3]), filter(nil), 
+      access([VIEW1.c3])
+  2 - output([t9.c3]), filter([(T_OP_IS, t9.c2, 1, 0)], [(T_OP_IS_NOT, t9.c3, NULL, 0)]), 
+      access([t9.c2], [t9.c3]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 85   ***************
+SQL: select max(c3) from t9 where c2 = 1 and c1 = 1; 
+=========================================
+|ID|OPERATOR       |NAME |EST. ROWS|COST|
+-----------------------------------------
+|0 |SCALAR GROUP BY|     |1        |151 |
+|1 | SUBPLAN SCAN  |VIEW1|1        |150 |
+|2 |  LIMIT        |     |1        |150 |
+|3 |   TOP-N SORT  |     |1        |150 |
+|4 |    TABLE SCAN |t9   |1        |149 |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c3)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c3)])
+  1 - output([VIEW1.c3]), filter(nil), 
+      access([VIEW1.c3])
+  2 - output([t9.c3]), filter(nil), limit(1), offset(nil)
+  3 - output([t9.c3]), filter(nil), sort_keys([t9.c3, DESC]), topn(1)
+  4 - output([t9.c3]), filter([t9.c2 = ?], [t9.c1 = ?], [(T_OP_IS_NOT, t9.c3, NULL, 0)]), 
+      access([t9.c2], [t9.c1], [t9.c3]), partitions(p0)
+
+***************   Case 86   ***************
+SQL: select max(c3) from t9 where c2 != 1; 
+==============================================
+|ID|OPERATOR       |NAME      |EST. ROWS|COST|
+----------------------------------------------
+|0 |SCALAR GROUP BY|          |1        |160 |
+|1 | TABLE SCAN    |t9(idx_t9)|200      |122 |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(t9.c3)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(t9.c3)])
+  1 - output([t9.c3]), filter(nil), 
+      access([t9.c3]), partitions(p0)
+
+***************   Case 87   ***************
+SQL: select max(c3) from t9 where c2 >1; 
+==============================================
+|ID|OPERATOR       |NAME      |EST. ROWS|COST|
+----------------------------------------------
+|0 |SCALAR GROUP BY|          |1        |80  |
+|1 | TABLE SCAN    |t9(idx_t9)|100      |61  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(t9.c3)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(t9.c3)])
+  1 - output([t9.c3]), filter(nil), 
+      access([t9.c3]), partitions(p0)
+
+***************   Case 88   ***************
+SQL: select max(c3) from t9 where c2 <1; 
+==============================================
+|ID|OPERATOR       |NAME      |EST. ROWS|COST|
+----------------------------------------------
+|0 |SCALAR GROUP BY|          |1        |80  |
+|1 | TABLE SCAN    |t9(idx_t9)|100      |61  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(t9.c3)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(t9.c3)])
+  1 - output([t9.c3]), filter(nil), 
+      access([t9.c3]), partitions(p0)
+
+***************   Case 89   ***************
+SQL: select c1 from t1 where c1 > any (select c2 from t9); 
+================================================
+|ID|OPERATOR         |NAME      |EST. ROWS|COST|
+------------------------------------------------
+|0 |NESTED-LOOP JOIN |          |34       |100 |
+|1 | SUBPLAN SCAN    |VIEW1     |1        |37  |
+|2 |  SCALAR GROUP BY|          |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2     |1        |37  |
+|4 |    TABLE SCAN   |t9(idx_t9)|1        |37  |
+|5 | TABLE SCAN      |t1        |34       |42  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.c2])
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([T_FUN_MIN(VIEW2.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c2)])
+  3 - output([VIEW2.c2]), filter(nil), 
+      access([VIEW2.c2])
+  4 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 90   ***************
+SQL: select c1 from t1 where c1 > any (select c1 + 1 from t2); 
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN|    |34       |3868|
+|1 | TABLE SCAN          |t1  |100      |88  |
+|2 | MATERIAL            |    |100      |106 |
+|3 |  TABLE SCAN         |t2  |100      |88  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds([t1.c1 > t2.c1 + ?]), nl_params_(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  2 - output([t2.c1]), filter(nil)
+  3 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 91   ***************
+SQL: select c1 from t1 where c1 > any (select c1 from t2 having c1 > 1); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |NESTED-LOOP JOIN |     |34       |100 |
+|1 | SUBPLAN SCAN    |VIEW1|1        |37  |
+|2 |  SCALAR GROUP BY|     |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2|1        |37  |
+|4 |    TABLE SCAN   |t2   |1        |36  |
+|5 | TABLE SCAN      |t1   |34       |42  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.c1])
+  1 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  2 - output([T_FUN_MIN(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 92   ***************
+SQL: select c1 from t1 where c1 > any (select max(c1) from t2 group by c1); 
+===========================================
+|ID|OPERATOR         |NAME |EST. ROWS|COST|
+-------------------------------------------
+|0 |NESTED-LOOP JOIN |     |34       |100 |
+|1 | SUBPLAN SCAN    |VIEW1|1        |37  |
+|2 |  SCALAR GROUP BY|     |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW2|1        |37  |
+|4 |    TABLE SCAN   |t2   |1        |36  |
+|5 | TABLE SCAN      |t1   |34       |42  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([VIEW1.max(c1)])
+  1 - output([VIEW1.max(c1)]), filter(nil), 
+      access([VIEW1.max(c1)])
+  2 - output([T_FUN_MIN(VIEW2.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.c1)])
+  3 - output([VIEW2.c1]), filter(nil), 
+      access([VIEW2.c1])
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      limit(1), offset(nil)
+  5 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+***************   Case 93   ***************
+SQL: select c1 from t1 where c1 > any (select c1 from t2 union select c1 from t2); 
+================================================
+|ID|OPERATOR              |NAME |EST. ROWS|COST|
+------------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN |     |34       |7283|
+|1 | TABLE SCAN           |t1   |100      |88  |
+|2 | SUBPLAN SCAN         |VIEW1|1        |72  |
+|3 |  MERGE UNION DISTINCT|     |1        |72  |
+|4 |   TABLE SCAN         |t2   |1        |36  |
+|5 |   TABLE SCAN         |t2   |1        |36  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([t1.c1])
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([VIEW1.c1])
+  3 - output([UNION([1])]), filter(nil)
+  4 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+  5 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+***************   Case 94   ***************
+SQL: select c1 from t1 where c1 > all (select c2 from t9); 
+====================================================
+|ID|OPERATOR             |NAME      |EST. ROWS|COST|
+----------------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|          |67       |3730|
+|1 | TABLE SCAN          |t1        |100      |88  |
+|2 | TABLE SCAN          |t9(idx_t9)|1        |36  |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([t1.c1])
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t9.c2]), partitions(p0)
+
+***************   Case 95   ***************
+SQL: select c1 from t1 where c1 < all (select c2 from t9); 
+====================================================
+|ID|OPERATOR             |NAME      |EST. ROWS|COST|
+----------------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|          |67       |3730|
+|1 | TABLE SCAN          |t1        |100      |88  |
+|2 | TABLE SCAN          |t9(idx_t9)|1        |36  |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      conds(nil), nl_params_([t1.c1])
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  2 - output([1]), filter(nil), 
+      access([t9.c2]), partitions(p0)
+
+***************   Case 96   ***************
+SQL: SELECT MIN(1) FROM agg_t2 ORDER BY (SELECT AVG(c2) FROM agg_t1); 
+===========================================
+|ID|OPERATOR        |NAME  |EST. ROWS|COST|
+-------------------------------------------
+|0 |SUBPLAN FILTER  |      |1        |230 |
+|1 | SCALAR GROUP BY|      |1        |124 |
+|2 |  TABLE SCAN    |agg_t2|100      |95  |
+|3 | TABLE SCAN     |agg_t1|100      |92  |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(?)]), filter(nil), 
+      exec_params_([T_FUN_SUM(agg_t2.c2) / T_FUN_COUNT(agg_t2.c2)]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([T_FUN_MIN(?)], [T_FUN_SUM(agg_t2.c2)], [T_FUN_COUNT(agg_t2.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(?)], [T_FUN_SUM(agg_t2.c2)], [T_FUN_COUNT(agg_t2.c2)])
+  2 - output([agg_t2.c2]), filter(nil), 
+      access([agg_t2.c2]), partitions(p0)
+  3 - output([?]), filter(nil), 
+      access([agg_t1.__pk_increment]), partitions(p0)
+
+***************   Case 97   ***************
+SQL: SELECT MIN(DISTINCT OUTR . `col_varchar_10`) AS X FROM B AS OUTR WHERE (OUTR . `col_varchar_10_key` , OUTR . `col_varchar_20_key`) IN (SELECT DISTINCT INNR . `col_varchar_10` AS X , INNR . `col_varchar_10_key` AS Y FROM CC AS INNR2 LEFT JOIN CC AS INNR ON (INNR2 . `col_int` > INNR . `pk`) WHERE INNR . `pk` = INNR . `col_int_key` AND OUTR . `col_datetime` IS NOT NULL) AND OUTR . `col_varchar_20` = 'b' HAVING X = NULL ORDER BY OUTR . `col_date_key` , OUTR . `pk`; 
+========================================================
+|ID|OPERATOR                 |NAME      |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |SCALAR GROUP BY          |          |0        |401 |
+|1 | SUBPLAN SCAN            |VIEW4     |1        |401 |
+|2 |  LIMIT                  |          |1        |401 |
+|3 |   TOP-N SORT            |          |1        |401 |
+|4 |    NESTED-LOOP SEMI JOIN|          |1        |398 |
+|5 |     TABLE SCAN          |OUTR      |1        |201 |
+|6 |     SUBPLAN SCAN        |VIEW1     |1        |197 |
+|7 |      NESTED-LOOP JOIN   |          |1        |197 |
+|8 |       TABLE SCAN        |INNR(idx3)|1        |89  |
+|9 |       MATERIAL          |          |100      |109 |
+|10|        TABLE SCAN       |INNR2     |100      |90  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW4.col_varchar_10)]), filter([0]), 
+      group(nil), agg_func([T_FUN_MIN(VIEW4.col_varchar_10)])
+  1 - output([VIEW4.col_varchar_10]), filter(nil), 
+      access([VIEW4.col_varchar_10])
+  2 - output([OUTR.col_varchar_10]), filter(nil), limit(1), offset(nil)
+  3 - output([OUTR.col_varchar_10]), filter(nil), sort_keys([OUTR.col_varchar_10, ASC]), topn(1)
+  4 - output([OUTR.col_varchar_10]), filter(nil), 
+      conds(nil), nl_params_([OUTR.col_varchar_10_key], [OUTR.col_varchar_20_key])
+  5 - output([OUTR.col_varchar_10_key], [OUTR.col_varchar_20_key], [OUTR.col_varchar_10]), filter([OUTR.col_varchar_20 = ?], [(T_OP_IS_NOT, OUTR.col_varchar_10, NULL, 0)], [(T_OP_IS_NOT, OUTR.col_datetime, NULL, 0)]), 
+      access([OUTR.col_datetime], [OUTR.col_varchar_10_key], [OUTR.col_varchar_20_key], [OUTR.col_varchar_20], [OUTR.col_varchar_10]), partitions(p0)
+  6 - output([1]), filter(nil), 
+      access([VIEW1.INNR.col_varchar_10], [VIEW1.INNR.col_varchar_10_key])
+  7 - output([INNR.col_varchar_10], [INNR.col_varchar_10_key]), filter(nil), 
+      conds([INNR2.col_int > INNR.pk]), nl_params_(nil)
+  8 - output([INNR.pk], [INNR.col_varchar_10], [INNR.col_varchar_10_key]), filter([INNR.pk = INNR.col_int_key], [? = INNR.col_varchar_10]), 
+      access([INNR.pk], [INNR.col_int_key], [INNR.col_varchar_10], [INNR.col_varchar_10_key]), partitions(p0)
+  9 - output([INNR2.col_int]), filter(nil)
+  10 - output([INNR2.col_int]), filter(nil), 
+      access([INNR2.col_int]), partitions(p0)
+
+***************   Case 98   ***************
+SQL: select 5, max(c2) from t9; 
+======================================================
+|ID|OPERATOR       |NAME              |EST. ROWS|COST|
+------------------------------------------------------
+|0 |SCALAR GROUP BY|                  |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1             |1        |37  |
+|2 |  TABLE SCAN   |t9(idx_t9,Reverse)|1        |37  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?], [T_FUN_MAX(VIEW1.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c2)])
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 99   ***************
+SQL: select max(c2), 5 from t9; 
+======================================================
+|ID|OPERATOR       |NAME              |EST. ROWS|COST|
+------------------------------------------------------
+|0 |SCALAR GROUP BY|                  |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1             |1        |37  |
+|2 |  TABLE SCAN   |t9(idx_t9,Reverse)|1        |37  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(VIEW1.c2)], [?]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c2)])
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 100   ***************
+SQL: select 5, min(c2) from t9; 
+==============================================
+|ID|OPERATOR       |NAME      |EST. ROWS|COST|
+----------------------------------------------
+|0 |SCALAR GROUP BY|          |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1     |1        |37  |
+|2 |  TABLE SCAN   |t9(idx_t9)|1        |37  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?], [T_FUN_MIN(VIEW1.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c2)])
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 101   ***************
+SQL: select min(c2), 5 from t9; 
+==============================================
+|ID|OPERATOR       |NAME      |EST. ROWS|COST|
+----------------------------------------------
+|0 |SCALAR GROUP BY|          |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1     |1        |37  |
+|2 |  TABLE SCAN   |t9(idx_t9)|1        |37  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MIN(VIEW1.c2)], [?]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c2)])
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 102   ***************
+SQL: select 5, 5, min(c2), 7 + 5, floor(5) from t9; 
+==============================================
+|ID|OPERATOR       |NAME      |EST. ROWS|COST|
+----------------------------------------------
+|0 |SCALAR GROUP BY|          |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1     |1        |37  |
+|2 |  TABLE SCAN   |t9(idx_t9)|1        |37  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?], [?], [T_FUN_MIN(VIEW1.c2)], [?], [?]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW1.c2)])
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 103   ***************
+SQL: select abs(-55), max(c2), 3 + 2, 5 from t9; 
+======================================================
+|ID|OPERATOR       |NAME              |EST. ROWS|COST|
+------------------------------------------------------
+|0 |SCALAR GROUP BY|                  |1        |37  |
+|1 | SUBPLAN SCAN  |VIEW1             |1        |37  |
+|2 |  TABLE SCAN   |t9(idx_t9,Reverse)|1        |37  |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?], [T_FUN_MAX(VIEW1.c2)], [?], [?]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c2)])
+  1 - output([VIEW1.c2]), filter(nil), 
+      access([VIEW1.c2])
+  2 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
+      access([t9.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 104   ***************
+SQL: select 5, max(c2), c1 from t9; 
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |116 |
+|1 | TABLE SCAN    |t9  |100      |97  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?], [T_FUN_MAX(t9.c2)], [t9.c1]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(t9.c2)])
+  1 - output([t9.c2], [t9.c1]), filter(nil), 
+      access([t9.c2], [t9.c1]), partitions(p0)
+
+***************   Case 105   ***************
+SQL: select c1, min(c2), 233333 from t9; 
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SCALAR GROUP BY|    |1        |116 |
+|1 | TABLE SCAN    |t9  |100      |97  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t9.c1], [T_FUN_MIN(t9.c2)], [?]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(t9.c2)])
+  1 - output([t9.c1], [t9.c2]), filter(nil), 
+      access([t9.c1], [t9.c2]), partitions(p0)
+
+***************   Case 106   ***************
+SQL: select * from (select c1 as col from t1) as L where col = (select max(c1) from t1 where L.col > 5); 
+================================================
+|ID|OPERATOR        |NAME       |EST. ROWS|COST|
+------------------------------------------------
+|0 |SUBPLAN FILTER  |           |1        |3739|
+|1 | TABLE SCAN     |t1         |100      |88  |
+|2 | SCALAR GROUP BY|           |1        |37  |
+|3 |  SUBPLAN SCAN  |VIEW1      |1        |37  |
+|4 |   TABLE SCAN   |t1(Reverse)|1        |36  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter([t1.c1 = subquery(1)]), 
+      exec_params_([t1.c1 > ?]), onetime_exprs_(nil), init_plan_idxs_(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+  2 - output([T_FUN_MAX(VIEW1.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW1.c1)])
+  3 - output([VIEW1.c1]), filter(nil), 
+      access([VIEW1.c1])
+  4 - output([t1.c1]), filter(nil), startup_filter([?]), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 107   ***************
+SQL: select * from (select a.acctnbr as l1, a.timeuniqueextn as l2  from cb_loan_acctacctstathist_11 a left join cb_loan_acctloaninfotemp_11 b on a.acctnbr = b.acctnbr where a.acctstatcd not in ('CLS', 'DENI') and b.acctnbr is null) as l where l.l2 = (select max(a2.timeuniqueextn) from cb_loan_acctacctstathist_11 a2 where a2.acctnbr = l.l1 and a2.postdate <= '2018-11-10'); 
+============================================
+|ID|OPERATOR          |NAME |EST. ROWS|COST|
+--------------------------------------------
+|0 |MERGE OUTER JOIN  |     |14       |505 |
+|1 | SORT             |     |14       |389 |
+|2 |  HASH JOIN       |     |14       |333 |
+|3 |   SUBPLAN SCAN   |VIEW1|14       |108 |
+|4 |    MERGE GROUP BY|     |14       |107 |
+|5 |     TABLE SCAN   |a2   |14       |103 |
+|6 |   TABLE SCAN     |a    |98       |103 |
+|7 | TABLE SCAN       |b    |100      |88  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.acctnbr], [a.timeuniqueextn]), filter([(T_OP_IS, b.acctnbr, NULL, 0)]), 
+      equal_conds([a.acctnbr = b.acctnbr]), other_conds(nil)
+  1 - output([a.acctnbr], [a.timeuniqueextn]), filter(nil), sort_keys([a.acctnbr, ASC])
+  2 - output([a.acctnbr], [a.timeuniqueextn]), filter(nil), 
+      equal_conds([a.timeuniqueextn = VIEW1.max(a2.timeuniqueextn)], [VIEW1.a2.acctnbr = a.acctnbr]), other_conds(nil)
+  3 - output([VIEW1.max(a2.timeuniqueextn)], [VIEW1.a2.acctnbr]), filter(nil), 
+      access([VIEW1.max(a2.timeuniqueextn)], [VIEW1.a2.acctnbr])
+  4 - output([T_FUN_MAX(a2.timeuniqueextn)], [a2.acctnbr]), filter(nil), 
+      group([a2.acctnbr]), agg_func([T_FUN_MAX(a2.timeuniqueextn)])
+  5 - output([a2.acctnbr], [a2.timeuniqueextn]), filter([a2.postdate <= ?]), 
+      access([a2.acctnbr], [a2.postdate], [a2.timeuniqueextn]), partitions(p0)
+  6 - output([a.acctnbr], [a.timeuniqueextn]), filter([(T_OP_NOT_IN, a.acctstatcd, (?, ?))]), 
+      access([a.acctnbr], [a.acctstatcd], [a.timeuniqueextn]), partitions(p0)
+  7 - output([b.acctnbr]), filter(nil), 
+      access([b.acctnbr]), partitions(p0)
+

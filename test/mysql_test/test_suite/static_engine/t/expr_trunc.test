@@ -1,0 +1,81 @@
+
+--disable_abort_on_error
+
+
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn_admin;
+
+set @@ob_enable_plan_cache = 0;
+#set @@ob_log_level='debug';
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30), c_null int);
+    
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5', null);
+insert into t1 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '-9.5', '10.5', null);
+# int
+insert into t1(c1) values(100), (123), (151);
+# double
+insert into t1(c15) values(100.156), (123.111), (151);
+# float
+insert into t1(c13) values(100.156), (123.111), (151);
+
+--sleep 1
+
+
+select truncate(c_null, c_null) from t1;
+select truncate(1.11, c_null) from t1;
+select truncate(c_null, -1) from t1;
+
+## truncate(c20, c16) 结果与mysql不一致，cast(c16 as signed)的结果发生变化导致truncate的结果变化
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select c$left, c$right, truncate(c$left, c$right) from t1;
+    eval select c$left, truncate(c$left, -3), truncate(c$left, -2), truncate(c$left, -1), truncate(c$left, 0), truncate(c$left, 1), truncate(c$left, 2), truncate(c$left, 3), truncate(c$left, 4) from t1;
+    inc $right;
+  }
+  inc $left;
+}
+
+
+--sleep 2

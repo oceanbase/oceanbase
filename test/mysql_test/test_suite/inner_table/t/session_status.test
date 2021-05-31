@@ -1,0 +1,13 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+use information_schema;
+
+#basic
+select count(*) from global_status;
+
+#show
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table global_status;
+desc global_status;

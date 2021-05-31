@@ -1,0 +1,114 @@
+drop database if exists expr_db;
+create database expr_db;
+use expr_db;
+
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+create table t2(c1 int, c2 int, c3 varchar(32), primary key(c2, c3)) partition by key(c2, c3) partitions 3
+create table t3(c3 int primary key, c4 int)
+create index idx1 on t1(c2) LOCAL
+create table test(c1 int , c2 int, c3 varchar(50), c4 varchar(50), c5 int , c6 double, c7 int, primary key(c1, c2, c3))
+create index test_indx on test(c4, c5)
+create table non_reserved_key_test(value int primary key)
+create table test2(c1 int primary key, c2 varchar(30), c3 timestamp(6) default now(6))
+create table t4(c1 int primary key, c2 int not null, c3 int default 1, c4 int not null default 2)
+create table ta(c1 int primary key, c2 int auto_increment) comment='test', auto_increment= 5
+create table alter_table1(c1 int primary key, c2 varchar(11) not null default 'c2', c3 tinyint default 3, c4 char(11)) partition by hash(c1) partitions 3
+create index idx_c1 on alter_table1(c1) LOCAL
+create table t_auto_inc(c1 int primary key, c2 int auto_increment)
+create table coll_table(c1 varchar(10) collate utf8_general_ci, c2 varchar(10) collate utf8_bin, c3 varchar(10), primary key(c1, c2));
+create table ts(c1 int primary key, c2 timestamp default current_timestamp on update current_timestamp, c3 int);
+
+set @var_name = "varchar"
+set auto_increment_offset = 2
+show collation like "utf%"
+insert t1 values(3, default)
+
+select -(5)
+select -(1.5)
+select -(1231*-23)
+select -(-(-3.45*23.23))
+select -(-1)
+select (-1) + 1
+select +1 + 1
+select (-1) - 1
+select (-1) / 1
+select (-5) * 5
+select (-1) div 1
+select 5 % 2
+select 1 < 2
+select 1 >= 2
+select 1 > 2
+select 1 >= 2
+select 1 != 2
+
+select (1 < 2) or ((3 > 5) and (1 != 1))
+select (1 and (1 and (1 or 0)) or (1 and (0 and 1)) and (1 or 0))
+select (1 and (1 and (1 and 0)))
+select 1 or (1 and 0)
+select 1 and (1 and 0)
+select 1 or (1 and 0) or (1 or 2)
+select not(not(1>2))
+select c1,c2,sum(c1 + c2) as c4 from t2 group by c1
+select c1,c2,c3 from t2 order by c1 desc limit 3,3
+select * from t2 where not(c1 > 1 and c2 > 1)
+select * from t2 where (c1 > 1 and c2 > 1) and c3 >1
+select * from t2 where (c1 > 1 or c2 > 1) and c3 >1
+select * from t2 where c1 > 1 or (c1 > 1 and c2 > 1)
+select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 > 1)
+
+select c1, c2 from t1 where c1 <= all(select c2 from t1)
+select c1, c2 from t1 where c1 <= any(select c2 from t1)
+select c1, c2 from t2 where c1 <= some(select c2 from t2)
+select count(*) from t2 where t2.c2 in (select c1 from t2)
+select count(*) from t2 where t2.c1 not in (select c1 from t2)
+select count(*) from t2 where exists (select c1 from t2)
+
+select c1,c2 from t2 where c2!=100
+select c1,c2 from t2 where c2 = -(100%3)
+select c1,c2 from t2 where c3 = NULL
+select c1,c2 from t2 where c1 between 100 and 200
+select c1,c2 from t2 where c2 <> 100
+select c1,c2 from t2 where c2 <> 100 or c1 = 100
+select c1,c2 from t2 where c2 != 100 or c1 = 100 and c3 = "aa"
+select c1,c2 from t2 where c1 in(10,100)
+select c1,c2 from t2 where c2 not in (10,100)
+
+select * from t2 where c3 regexp '^a'
+select * from t2 where c3 not regexp 'm'
+select c1 from t2 where c3 regexp '1000|2000'
+select * from t2 where c3 like '%m%'
+select * from t2 where c3 not like '_'
+select * from t2 where c3 not like "ss"
+select * from t2 where c3 not like 2
+select * from t2 where c3 like "//" ESCAPE "/"
+select * from t2 where c3 like '//' escape 2
+
+select c1,c2 from t2 where c1 between 1 and 10
+select c1,c2 from t2 where c1 not between 1 and 10
+select c1,c2 from t2 where c3 not between "aaa" and "bbb"
+select CASE c3 WHEN 'name1' THEN 'name2' WHEN 'name2' THEN 'name3' ELSE 'name4' END as c3 from t2;
+
+select * from t2 order by c1 
+select avg(c1) as avg_c1 from t2 where c2 > 10
+select avg(distinct c1) as ds from t2 where c3 = "aa"
+select count(*) from (select c1 from t2) as cc where cc.c1 = 1
+select count(c1) from t2 where c3 = "aa"
+select max(c1) from t2 where c1 not in (select c2 from t2)
+select min(c1) from t2 where c1 not in (select c2 from t2)
+select sum(c1) as sum_c1 from t2 where c1 > 10
+### select sum(c1*c2) as total from t2 where c2 < (select 10+10) ###
+select count(*) as num, min(c1) as c1_min, max(c1) as max_c1, avg(c1) as c1_avg from t2 where c3 = "aa"
+select concat (c3, '(', c2 ,')') as ncc from t2 order by c1
+
+update t2 set c3 = "aaa" where c1 > all(select c1 from t1)
+
+select c1 as cc1 from t2 where c1 > (select c2 as cc2 from t2)
+select * from (select c2 , case c3 when 'aa' then 'bb' when 'cc' then 'dd' else 'ee' end cc3 from t2) as tt where tt.cc3 > 10
+### select c1 from t1 where c1 not in(select c1 from t2 where c2 not in (select c2 from t2)) ###
+select c1 from t1 where c2 not in (select c2 as cc2 from t2)
+select * from t2 where (c1, c2, c3) in ((0, 1, 2), (3, 4, 5))
+###select * from t2 where (c1, c2, c3) in ((0, 1, 2), (3, 5))###
+select * from t2 where c1 in (1, 2, c2)
+select * from t2 where c1 in (select count(*) from t1)
+
+drop database expr_db;

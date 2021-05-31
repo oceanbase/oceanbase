@@ -1,0 +1,16 @@
+create database hualong
+use hualong
+create table t1(c1 int primary key, c2 int not null default 2);
+alter table t1 add column c3 char(10) not null default 3
+alter table t1 change c3 column3 char(11) not null default 'column3'
+alter table t1 alter column3 drop default
+alter table t1 alter column3 set default 'xxxxx'
+alter table t1 modify column3 char(12) default 'yyyyy'
+alter table t1 drop column3
+alter table t1 add column (c3 int, c4 int default 4)
+alter table t1 add index idxt1 (c2,c3)
+alter table t1 add index idxt2 (c3,c4)
+alter table t1 add unique uidx (c2,c4)
+alter table t1 drop index uidx
+alter table t1 set comment = 'I am table t1'
+alter table t1 rename to table1

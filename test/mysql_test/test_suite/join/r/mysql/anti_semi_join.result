@@ -1,0 +1,1624 @@
+drop table if exists xy_t1, xy_t2;
+create table xy_t1(c1 int, c2 int);
+create table xy_t2(c1 int, c2 int);
+insert/*insert trace*/ into xy_t1 values(0, 0), (1,1), (2,2), (5,5), (5,5), (6,7), (6,6), (7,7);
+insert/*insert trace*/ into xy_t2 values(1,1), (3,3), (5,5), (5,5), (6,6);
+
+# ************** 测试anti仅含equal condition的情况 *******
+select /*+ USE_NL(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
+c1	c2
+0	0
+2	2
+7	7
+
+select /*+ USE_MERGE(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
+c1	c2
+0	0
+2	2
+7	7
+
+select /*+ USE_HASH(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
+c1	c2
+0	0
+2	2
+7	7
+# *************  end *******************
+
+# ************** 测试anti含other condition的情况 *******
+select /*+ USE_NL(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2
+0	0
+1	1
+2	2
+5	5
+5	5
+6	6
+7	7
+
+select /*+ USE_MERGE(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2
+0	0
+1	1
+2	2
+5	5
+5	5
+6	6
+7	7
+
+select /*+ USE_HASH(xy_t1, xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2
+0	0
+1	1
+2	2
+5	5
+5	5
+6	6
+7	7
+# ************** end *********
+
+# ************** 测试semi仅含equal condition的情况 *******
+select /*+ USE_NL(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
+c1	c2
+1	1
+5	5
+5	5
+6	7
+6	6
+
+select /*+ USE_MERGE(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
+c1	c2
+1	1
+5	5
+5	5
+6	7
+6	6
+
+select /*+ USE_HASH(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1);
+c1	c2
+1	1
+5	5
+5	5
+6	7
+6	6
+# *************  end *******************
+
+# ************** 测试semi join含other condition的情况 *******
+select /*+ USE_NL(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2
+6	7
+
+select /*+ USE_MERGE(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2
+6	7
+
+select /*+ USE_HASH(xy_t1, xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2
+6	7
+# ************** end *********
+
+# ************** 测试上层算子需要投影的情况 ********
+select /*+ USE_NL(xy_t1, xy_t2)*/ c1, c2, c1, c2  from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2	c1	c2
+0	0	0	0
+1	1	1	1
+2	2	2	2
+5	5	5	5
+5	5	5	5
+6	6	6	6
+7	7	7	7
+
+select /*+ USE_MERGE(xy_t1, xy_t2)*/ c1, c2, c1, c2  from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2	c1	c2
+0	0	0	0
+1	1	1	1
+2	2	2	2
+5	5	5	5
+5	5	5	5
+6	6	6	6
+7	7	7	7
+
+select /*+ USE_HASH(xy_t1, xy_t2)*/ c1, c2, c1, c2  from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2	c1	c2
+0	0	0	0
+1	1	1	1
+2	2	2	2
+5	5	5	5
+5	5	5	5
+6	6	6	6
+7	7	7	7
+
+select /*+ USE_NL(xy_t1, xy_t2)*/  c1, c2, c1, c2 from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2	c1	c2
+6	7	6	7
+
+select /*+ USE_MERGE(xy_t1, xy_t2)*/ c1, c2, c1, c2 from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2	c1	c2
+6	7	6	7
+
+select /*+ USE_HASH(xy_t1, xy_t2)*/ c1, c2, c1, c2 from xy_t1 where exists (select 1 from xy_t2 where xy_t1.c1 = xy_t2.c1 and xy_t1.c2 > xy_t2.c2);
+c1	c2	c1	c2
+6	7	6	7
+# ************** end ********
+drop table xy_t1, xy_t2;
+drop table if exists xy_x_t, xy_y_t;
+create table xy_x_t(x1 int, x2 varchar(100));
+create table xy_y_t(y1 int, y2 varchar(100));
+insert/*insert trace*/ into xy_x_t values(NULL,"VECPQ"),(NULL,"bdarkyzh"),(NULL,"it"),(NULL,"tgn"),(NULL,"had"),(NULL,"b"),(NULL,"g"),(NULL,"it's"),(NULL,"r"),(NULL,"KSZCK"),(NULL,"s"),(NULL,"UJRXI"),(NULL,"HLKDP"),(NULL,"about"),(NULL,"ROITX"),(NULL,"OEJAP"),(NULL,"u"),(NULL,"egisjnib"),(NULL,"ozkegisjn"),(NULL,"oh"),(NULL,"lrlmds"),(NULL,"r"),(NULL,"a"),(NULL,"here"),(NULL,"ihrad"),(NULL,"good"),(-2139029504,"eyqjoq"),(-2061369344,"GSUGA"),(-1882128384,"there"),(-1552613376,"d"),(-1511981056,"and"),(-1504706560,"and"),(-1259929600,"o"),(-973340672,"at"),(-918945792,"DNMFW"),(-778960896,"r"),(-753336320,"PKGAE"),(-593821696,"UGSPN"),(-457179136,"got"),(-314638336,"will"),(-233701376,"o"),(-104202240,"SUEUH"),(0,"yzh"),(0,"i"),(1,"TQOYB"),(1,"FFHTJ"),(2,"it's"),(2,"ezcuilyxac"),(2,"VZLUW"),(2,"want"),(2,"think"),(3,"prsazev"),(3,"get"),(3,"out"),(4,"a"),(4,"PVYPZ"),(4,"k"),(4,"bpqswbeyqj"),(4,"isjn"),(4,"that's"),(4,"well"),(5,"arkyz"),(5,"w"),(5,"with"),(5,"just"),(5,"PFBCU"),(6,"uyslpcybda"),(6,"co"),(6,"u"),(6,"j"),(6,"g"),(7,"cybdark"),(7,"BKWPE"),(8,"lmdsl"),(8,"NNIGT"),(8,"of"),(9,"etu"),(9,"TBMEI"),(9,"QPPLC"),(9,"mdsl"),(27262976,"n"),(162267136,"to"),(199884800,"y"),(334364672,"h"),(597295104,"did"),(748814336,"rhljip"),(769916928,"OQKEV"),(839778304,"USTRY"),(947585024,"hey"),(1210777600,"want"),(1232601088,"azev"),(1250689024,"a"),(1329463296,"QAMOL"),(1573126144,"zcuilyx"),(1594753024,"yeah"),(1730215936,"PMUMX"),(1925709824,"g"),(2048262144,"b"),(2082275328,"k"),(2131492864,"was");
+insert/*insert trace*/ into xy_y_t values(NULL,"mmkfu"),(NULL,"c"),(NULL,"know"),(NULL,"ZYTQH"),(NULL,"j"),(NULL,"y"),(NULL,"what"),(NULL,"SXXNL"),(NULL,"b"),(NULL,"NFZFZ"),(-1992359936,"not"),(-1711210496,"uoorvy"),(-1150287872,"BKNFS"),(-926613504,"was"),(-858128384,"y"),(-549126144,"v"),(-537198592,"now"),(-491651072,"t"),(-66125824,"here"),(0,"XCYGJ"),(1,"YGHBI"),(2,"g"),(6,"kfuoorvyvn"),(7,"EGBLS"),(9,"jsnsdfm"),(1584463872,"face");
+
+select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
+x1	x2
+0	yzh
+2	it's
+2	VZLUW
+2	want
+2	think
+6	uyslpcybda
+6	u
+9	TBMEI
+9	QPPLC
+9	mdsl
+select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
+x1	x2
+0	yzh
+2	think
+2	want
+2	VZLUW
+2	it's
+6	uyslpcybda
+6	u
+9	TBMEI
+9	QPPLC
+9	mdsl
+select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
+x1	x2
+0	yzh
+2	it's
+2	VZLUW
+2	want
+2	think
+6	uyslpcybda
+6	u
+9	TBMEI
+9	QPPLC
+9	mdsl
+
+drop table xy_x_t, xy_y_t;
+create table xy_x_t(x1 int not null, x2 varchar(100) not null);
+create table xy_y_t(y1 int not null, y2 varchar(100) not null);
+insert/*insert trace*/ into xy_x_t values(-2139029504,"eyqjoq"),(-2061369344,"GSUGA"),(-1882128384,"there"),(-1552613376,"d"),(-1511981056,"and"),(-1504706560,"and"),(-1259929600,"o"),(-973340672,"at"),(-918945792,"DNMFW"),(-778960896,"r"),(-753336320,"PKGAE"),(-593821696,"UGSPN"),(-457179136,"got"),(-314638336,"will"),(-233701376,"o"),(-104202240,"SUEUH"),(0,"yzh"),(0,"i"),(1,"TQOYB"),(1,"FFHTJ"),(2,"it's"),(2,"ezcuilyxac"),(2,"VZLUW"),(2,"want"),(2,"think"),(3,"prsazev"),(3,"get"),(3,"out"),(4,"a"),(4,"PVYPZ"),(4,"k"),(4,"bpqswbeyqj"),(4,"isjn"),(4,"that's"),(4,"well"),(5,"arkyz"),(5,"w"),(5,"with"),(5,"just"),(5,"PFBCU"),(6,"uyslpcybda"),(6,"co"),(6,"u"),(6,"j"),(6,"g"),(7,"cybdark"),(7,"BKWPE"),(8,"lmdsl"),(8,"NNIGT"),(8,"of"),(9,"etu"),(9,"TBMEI"),(9,"QPPLC"),(9,"mdsl"),(27262976,"n"),(162267136,"to"),(199884800,"y"),(334364672,"h"),(597295104,"did"),(748814336,"rhljip"),(769916928,"OQKEV"),(839778304,"USTRY"),(947585024,"hey"),(1210777600,"want"),(1232601088,"azev"),(1250689024,"a"),(1329463296,"QAMOL"),(1573126144,"zcuilyx"),(1594753024,"yeah"),(1730215936,"PMUMX"),(1925709824,"g"),(2048262144,"b"),(2082275328,"k"),(2131492864,"was");
+insert/*insert trace*/ into xy_y_t values(-1992359936,"not"),(-1711210496,"uoorvy"),(-1150287872,"BKNFS"),(-926613504,"was"),(-858128384,"y"),(-549126144,"v"),(-537198592,"now"),(-491651072,"t"),(-66125824,"here"),(0,"XCYGJ"),(1,"YGHBI"),(2,"g"),(6,"kfuoorvyvn"),(7,"EGBLS"),(9,"jsnsdfm"),(1584463872,"face");
+select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
+x1	x2
+-2139029504	eyqjoq
+-2061369344	GSUGA
+-1882128384	there
+-1552613376	d
+-1511981056	and
+-1504706560	and
+-1259929600	o
+-973340672	at
+-918945792	DNMFW
+-778960896	r
+-753336320	PKGAE
+-593821696	UGSPN
+-457179136	got
+-314638336	will
+-233701376	o
+-104202240	SUEUH
+0	i
+1	TQOYB
+1	FFHTJ
+2	ezcuilyxac
+3	prsazev
+3	get
+3	out
+4	a
+4	PVYPZ
+4	k
+4	bpqswbeyqj
+4	isjn
+4	that's
+4	well
+5	arkyz
+5	w
+5	with
+5	just
+5	PFBCU
+6	co
+6	j
+6	g
+7	cybdark
+7	BKWPE
+8	lmdsl
+8	NNIGT
+8	of
+9	etu
+27262976	n
+162267136	to
+199884800	y
+334364672	h
+597295104	did
+748814336	rhljip
+769916928	OQKEV
+839778304	USTRY
+947585024	hey
+1210777600	want
+1232601088	azev
+1250689024	a
+1329463296	QAMOL
+1573126144	zcuilyx
+1594753024	yeah
+1730215936	PMUMX
+1925709824	g
+2048262144	b
+2082275328	k
+2131492864	was
+select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
+x1	x2
+-2139029504	eyqjoq
+-2061369344	GSUGA
+-1882128384	there
+-1552613376	d
+-1511981056	and
+-1504706560	and
+-1259929600	o
+-973340672	at
+-918945792	DNMFW
+-778960896	r
+-753336320	PKGAE
+-593821696	UGSPN
+-457179136	got
+-314638336	will
+-233701376	o
+-104202240	SUEUH
+0	i
+1	TQOYB
+1	FFHTJ
+2	ezcuilyxac
+3	prsazev
+3	get
+3	out
+4	a
+4	PVYPZ
+4	k
+4	bpqswbeyqj
+4	isjn
+4	that's
+4	well
+5	PFBCU
+5	just
+5	with
+5	arkyz
+5	w
+6	co
+6	j
+6	g
+7	cybdark
+7	BKWPE
+8	NNIGT
+8	of
+8	lmdsl
+9	etu
+27262976	n
+162267136	to
+199884800	y
+334364672	h
+597295104	did
+748814336	rhljip
+769916928	OQKEV
+839778304	USTRY
+947585024	hey
+1210777600	want
+1232601088	azev
+1250689024	a
+1329463296	QAMOL
+1573126144	zcuilyx
+1594753024	yeah
+1730215936	PMUMX
+1925709824	g
+2048262144	b
+2082275328	k
+2131492864	was
+select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
+x1	x2
+-2139029504	eyqjoq
+-2061369344	GSUGA
+-1882128384	there
+-1552613376	d
+-1511981056	and
+-1504706560	and
+-1259929600	o
+-973340672	at
+-918945792	DNMFW
+-778960896	r
+-753336320	PKGAE
+-593821696	UGSPN
+-457179136	got
+-314638336	will
+-233701376	o
+-104202240	SUEUH
+0	i
+1	TQOYB
+1	FFHTJ
+2	ezcuilyxac
+3	prsazev
+3	get
+3	out
+4	a
+4	PVYPZ
+4	k
+4	bpqswbeyqj
+4	isjn
+4	that's
+4	well
+5	arkyz
+5	w
+5	with
+5	just
+5	PFBCU
+6	co
+6	j
+6	g
+7	cybdark
+7	BKWPE
+8	lmdsl
+8	NNIGT
+8	of
+9	etu
+27262976	n
+162267136	to
+199884800	y
+334364672	h
+597295104	did
+748814336	rhljip
+769916928	OQKEV
+839778304	USTRY
+947585024	hey
+1210777600	want
+1232601088	azev
+1250689024	a
+1329463296	QAMOL
+1573126144	zcuilyx
+1594753024	yeah
+1730215936	PMUMX
+1925709824	g
+2048262144	b
+2082275328	k
+2131492864	was
+drop table xy_x_t, xy_y_t;
+drop table if exists xy_t1, xy_t2, xy_t3, xy_t4;
+create table xy_t1(c1 int, c2 int, key idx_c2(c2, c1));
+create table xy_t2(c1 int, c2 int, key idx_c2(c2, c1));
+create table xy_t3(c1 int, c2 int, key idx_c2(c2, c1));
+create table xy_t4(c1 int, c2 int, key idx_c2(c2, c1));
+insert/*insert trace*/ into xy_t1 values(0, 0), (1,1), (2, null),(2,2), (5,5), (5,5), (5,7),(6,7), (6,6), (6, null),(7,7), (7, 0), (8,0), (8,8), (8, 5), (9, 0), (9, 7), (10,10), (null, 1), (1,1), (3,3), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (0, 0), (1,1), (2, null),(2,2), (5,5), (5,5), (5,7),(6,7), (6,6), (6, null),(7,7), (7, 0), (8,0), (8,8), (8, 5), (9, 0), (9, 7), (10,10), (null, 1), (1,1), (3,3), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (0, 0), (1,1), (2, null),(2,2), (5,5), (5,5), (5,7),(6,7), (6,6), (6, null),(7,7), (7, 0), (8,0), (8,8), (8, 5), (9, 0), (9, 7), (10,10), (null, 1), (1,1), (3,3), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (0, 0), (1,1), (2, null),(2,2), (5,5), (5,5), (5,7),(6,7), (6,6), (6, null),(7,7), (7, 0), (8,0), (8,8), (8, 5), (9, 0), (9, 7), (10,10), (null, 1), (1,1), (3,3), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1), (20,1);
+insert/*insert trace*/ into xy_t2 values(null, 1), (1,1), (3,3), (5,5), (5,6), (5,4), (6,6), (9,9);
+insert/*insert trace*/ into xy_t3 values(1,1), (3,3), (5,5), (5,6), (5,4), (6,6), (9,9), (5,7),(6,7), (6,6), (6, null),(7,7);
+insert/*insert trace*/ into xy_t4 values(1,1), (3,3);
+
+***************** RIGHT HASH SEMI 最优
+select * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+select /*+ use_nl(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+select /*+ use_hash(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+3	3
+3	3
+3	3
+3	3
+5	7
+5	7
+5	5
+5	5
+5	5
+5	5
+5	5
+5	7
+5	5
+5	5
+5	5
+5	7
+6	NULL
+6	7
+6	NULL
+6	6
+6	7
+6	6
+6	NULL
+6	7
+6	6
+6	NULL
+6	6
+6	7
+9	7
+9	0
+9	0
+9	7
+9	7
+9	0
+9	0
+9	7
+select /*+ no_rewrite */ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+
+***************** HASH SEMI 最优
+select * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+9	9
+1	1
+6	6
+3	3
+5	4
+5	6
+5	5
+select /*+ use_nl(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+1	1
+3	3
+5	5
+5	6
+5	4
+6	6
+9	9
+select /*+ use_hash(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+9	9
+1	1
+6	6
+3	3
+5	4
+5	6
+5	5
+select /*+ use_merge(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+1	1
+3	3
+5	5
+5	6
+5	4
+6	6
+9	9
+
+****************  NL SEMI 最优
+select * from xy_t4 where exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
+c1	c2
+1	1
+3	3
+select /*+ use_nl(xy_t4 xy_t1)*/ * from xy_t4 where exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
+c1	c2
+1	1
+3	3
+select /*+ use_hash(xy_t4 xy_t1)*/ * from xy_t4 where exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
+c1	c2
+3	3
+1	1
+select /*+ use_merge(xy_t4 xy_t1)*/ * from xy_t4 where exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
+c1	c2
+1	1
+3	3
+
+****************  MERGE SEMI 最优
+select * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
+c1	c2
+NULL	1
+1	1
+3	3
+5	5
+5	6
+6	6
+select /*+ use_nl(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
+c1	c2
+NULL	1
+1	1
+3	3
+5	5
+5	6
+6	6
+select /*+ use_hash(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
+c1	c2
+1	1
+NULL	1
+6	6
+5	6
+3	3
+5	5
+select /*+ use_merge(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
+c1	c2
+NULL	1
+1	1
+3	3
+5	5
+5	6
+6	6
+
+***************** RIGHT HASH ANTI 最优
+select * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+select /*+ use_nl(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+select /*+ use_hash(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+NULL	1
+NULL	1
+NULL	1
+NULL	1
+0	0
+0	0
+0	0
+0	0
+2	NULL
+2	NULL
+2	2
+2	2
+2	2
+2	2
+2	NULL
+2	NULL
+7	7
+7	0
+7	7
+7	7
+7	0
+7	0
+7	7
+7	0
+8	5
+8	5
+8	5
+8	8
+8	0
+8	0
+8	0
+8	5
+8	8
+8	8
+8	0
+8	8
+10	10
+10	10
+10	10
+10	10
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+select /*+ no_rewrite */ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+
+***************** HASH ANTI 最优
+select * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+NULL	1
+select /*+ use_nl(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+NULL	1
+select /*+ use_hash(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+NULL	1
+select /*+ use_merge(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+NULL	1
+
+****************  NL ANTI 最优
+select * from xy_t4 where not exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
+c1	c2
+select /*+ use_nl(xy_t4 xy_t1)*/ * from xy_t4 where not exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
+c1	c2
+select /*+ use_hash(xy_t4 xy_t1)*/ * from xy_t4 where not exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
+c1	c2
+select /*+ use_merge(xy_t4 xy_t1)*/ * from xy_t4 where not exists (select 1 from xy_t1 where xy_t4.c1 = xy_t1.c2);
+c1	c2
+
+****************  MERGE ANTI 最优
+select * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
+c1	c2
+5	4
+9	9
+select /*+ use_nl(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
+c1	c2
+5	4
+9	9
+select /*+ use_hash(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
+c1	c2
+9	9
+5	4
+select /*+ use_merge(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
+c1	c2
+5	4
+9	9
+
+*************** 测试3表情况
+select sum(c1), sum(c2) from xy_t1 where exists (select 1 from xy_t3 where c1 = xy_t1.c1) and  exists (select 1 from xy_t2 where c1 = xy_t1.c1);
+sum(c1)	sum(c2)
+224	168
+select /*+ use_hash(xy_t3, xy_t1) use_hash(xy_t2, xy_t1)*/ sum(c1), sum(c2) from xy_t1 where exists (select 1 from xy_t3 where c1 = xy_t1.c1) and  exists (select 1 from xy_t2 where c1 = xy_t1.c1);
+sum(c1)	sum(c2)
+224	168
+select /*+ no_rewrite*/ sum(c1), sum(c2) from xy_t1 where exists (select 1 from xy_t3 where c1 = xy_t1.c1) and  exists (select 1 from xy_t2 where c1 = xy_t1.c1);
+sum(c1)	sum(c2)
+224	168
+
+select sum(c1), sum(c2) from xy_t1 where not exists (select 1 from xy_t3 where c2 = xy_t1.c2) and  exists (select 1 from xy_t2 where c2 = xy_t1.c2);
+sum(c1)	sum(c2)
+NULL	NULL
+select /*+ no_rewrite*/ sum(c1), sum(c2) from xy_t1 where not exists (select 1 from xy_t3 where c2 = xy_t1.c2) and  exists (select 1 from xy_t2 where c2 = xy_t1.c2);
+sum(c1)	sum(c2)
+NULL	NULL
+
+*************** 测试limit下压 HASH RIGHT SEMI加limit后情况, limit 小时, SEMI代价会小, limit 太大后代价不影响
+select * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+select * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1) limit 3;
+c1	c2
+1	1
+5	5
+5	5
+select * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1) limit 1000;
+c1	c2
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+1	1
+5	5
+5	5
+5	7
+6	7
+6	6
+6	NULL
+9	0
+9	7
+1	1
+3	3
+
+*************** 测试limit下压 HASH LEFT SEMI加limit后情况, limit不影响SEMI代价
+select * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+9	9
+1	1
+6	6
+3	3
+5	4
+5	6
+5	5
+select * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1) limit 3;
+c1	c2
+9	9
+1	1
+6	6
+select * from xy_t2 where exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1) limit 1000;
+c1	c2
+9	9
+1	1
+6	6
+3	3
+5	4
+5	6
+5	5
+
+*************** 测试limit下压 HASH RIGHT ANTI加limit后情况, limit 小时, ANTI代价会小, limit 太大后代价不影响
+select * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+select * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1) limit 3;
+c1	c2
+0	0
+2	NULL
+2	2
+select * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1) limit 1000;
+c1	c2
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+0	0
+2	NULL
+2	2
+7	7
+7	0
+8	0
+8	8
+8	5
+10	10
+NULL	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+20	1
+
+*************** 测试limit下压 HASH LEFT ANTI加limit后情况, limit 不影响ANTI代价
+select * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1);
+c1	c2
+NULL	1
+select * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1) limit 3;
+c1	c2
+NULL	1
+select * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c1 = xy_t1.c1) limit 1000;
+c1	c2
+NULL	1
+drop table xy_t1, xy_t2, xy_t3;
+
+************** 测试SEMI/ANTI 含unique order的场景
+create table xy_t1(c1 int primary key, c2 int, c3 int);
+create table xy_t2(c1 int primary key, c2 int, c3 int);
+insert/*insert trace*/ into xy_t1 values(0, 0, 0), (1,1, 1), (2,2, 2), (3,5, 5), (5,5, 5), (6,7,7), (7,6, 6), (8, 7,8);
+insert/*insert trace*/ into xy_t2 values(1,1, 1), (3,3,3), (4,5,5), (5,5, 5), (6,6,7);
+
+//两边都无序hash right
+select /*+ use_hash(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where c2 in (select c2 from xy_t2 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+6	6
+select /*+ use_merge(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where c2 in (select c2 from xy_t2 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+6	6
+select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where c2 in (select c2 from xy_t2 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+6	6
+select /*+ no_rewrite*/ c2, c3 from xy_t1 where c2 in (select c2 from xy_t2 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+6	6
+
+//两边都无序hash left
+select /*+ use_hash(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where c2 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+6	7
+select /*+ use_merge(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where c2 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+6	7
+select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where c2 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+6	7
+select /*+ no_rewrite*/ c2, c3 from xy_t2 where c2 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+6	7
+
+//两边唯一有序, 改写为inner join
+select /*+ use_hash(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
+c1	c2
+select /*+ use_merge(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
+c1	c2
+select /*+ no_rewrite*/ c1, c2 from xy_t2 where c1 in (select c1 from xy_t1 where xy_t1.c2 < xy_t2.c2) order by 1,2;
+c1	c2
+
+// 一边唯一有序
+select /*+ use_hash(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c1	c2
+6	6
+select /*+ use_merge(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c1	c2
+6	6
+select /*+ use_nl(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where c1 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c1	c2
+6	6
+select /*+ no_rewrite*/ c1, c2 from xy_t2 where c1 in (select c2 from xy_t1 where xy_t1.c3 < xy_t2.c3) order by 1,2;
+c1	c2
+6	6
+
+//两边都无序hash right
+select /*+ use_hash(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c2 = xy_t2.c2 and xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+0	0
+1	1
+2	2
+5	5
+5	5
+7	7
+7	8
+select /*+ use_merge(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c2 = xy_t2.c2 and xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+0	0
+1	1
+2	2
+5	5
+5	5
+7	7
+7	8
+select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c2 = xy_t2.c2 and xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+0	0
+1	1
+2	2
+5	5
+5	5
+7	7
+7	8
+select /*+ no_rewrite*/ c2, c3 from xy_t1 where not exists (select 1 from xy_t2 where xy_t1.c2 = xy_t2.c2 and xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+0	0
+1	1
+2	2
+5	5
+5	5
+7	7
+7	8
+
+//两边都无序hash left
+select /*+ use_hash(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c2 = xy_t2.c2 and  xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+1	1
+3	3
+5	5
+5	5
+select /*+ use_merge(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c2 = xy_t2.c2 and  xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+1	1
+3	3
+5	5
+5	5
+select /*+ use_nl(xy_t1 xy_t2)*/ c2, c3 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c2 = xy_t2.c2 and  xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+1	1
+3	3
+5	5
+5	5
+select /*+ no_rewrite*/ c2, c3 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c2 = xy_t2.c2 and  xy_t1.c3 < xy_t2.c3) order by 1,2;
+c2	c3
+1	1
+3	3
+5	5
+5	5
+
+// 两边唯一有序
+select /*+ use_hash(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c1 and xy_t1.c3 < xy_t2.c3) order by 1,2;
+c1	c2
+1	1
+3	3
+4	5
+5	5
+6	6
+select /*+ use_merge(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c1 and xy_t1.c3 < xy_t2.c3) order by 1,2;
+c1	c2
+1	1
+3	3
+4	5
+5	5
+6	6
+select /*+ use_nl(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c1 and xy_t1.c3 < xy_t2.c3) order by 1,2;
+c1	c2
+1	1
+3	3
+4	5
+5	5
+6	6
+select /*+ no_rewrite*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c1 and xy_t1.c3 < xy_t2.c3) order by 1,2;
+c1	c2
+1	1
+3	3
+4	5
+5	5
+6	6
+
+//一边唯一有序
+select /*+ use_hash(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c2 and xy_t1.c2 < xy_t2.c2) order by 1,2;
+c1	c2
+1	1
+3	3
+4	5
+5	5
+6	6
+select /*+ use_merge(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c2 and xy_t1.c2 < xy_t2.c2) order by 1,2;
+c1	c2
+1	1
+3	3
+4	5
+5	5
+6	6
+select /*+ use_nl(xy_t1 xy_t2)*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c2 and xy_t1.c2 < xy_t2.c2) order by 1,2;
+c1	c2
+1	1
+3	3
+4	5
+5	5
+6	6
+select /*+ no_rewrite*/ c1, c2 from xy_t2 where not exists (select 1 from xy_t1 where xy_t1.c1 = xy_t2.c2 and xy_t1.c2 < xy_t2.c2) order by 1,2;
+c1	c2
+1	1
+3	3
+4	5
+5	5
+6	6
+drop table xy_t1, xy_t2;

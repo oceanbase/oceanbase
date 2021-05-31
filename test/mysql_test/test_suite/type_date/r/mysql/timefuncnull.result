@@ -1,0 +1,33 @@
+drop table if exists t1;
+create table t1 (pk int primary key, t datetime(6));
+insert into t1 values(1,'2014-10-02 19:42:00');
+insert into t1 values(2,'2014-10-04 19:42:00');
+insert into t1 values(3,'2014-10-05 19:42:00');
+insert into t1 values(4,'2014-10-06 19:42:00');
+insert into t1 values(5,'2014-10-07 19:42:00');
+insert into t1 values(6,'2014-10-08 19:42:00');
+insert into t1 values(7,'2014-10-09 19:42:00');
+insert into t1 values(8,'2014-10-12 19:42:00');
+insert into t1 values(9,'2014-10-23 19:42:00');
+insert into t1 values(10,null);
+select DATE_ADD(null, INTERVAL 5 DAY);
+DATE_ADD(null, INTERVAL 5 DAY)
+NULL
+select DATE_sub(null, INTERVAL 5 DAY);
+DATE_sub(null, INTERVAL 5 DAY)
+NULL
+select STR_TO_DATE(null, '%Y-%m-%d');
+STR_TO_DATE(null, '%Y-%m-%d')
+NULL
+select DATE_FORMAT(null, '%Y/%m/%D');
+DATE_FORMAT(null, '%Y/%m/%D')
+NULL
+select time_to_usec(null);
+time_to_usec(null)
+NULL
+select usec_to_time(null);
+usec_to_time(null)
+NULL
+select EXTRACT(DAY FROM null);
+EXTRACT(DAY FROM null)
+NULL

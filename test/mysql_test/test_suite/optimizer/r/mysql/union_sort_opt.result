@@ -1,0 +1,550 @@
+drop database if exists union_sort_opt_db;
+create database union_sort_opt_db;
+use union_sort_opt_db;
+create table t4(c1 int primary key, c2 int, c3 int);
+insert into t4 values(10,12,3),(4,5,6),(2,13,4),(3,4,25),(7,18,9);
+commit;
+create index idx_t4_c2c3 on t4(c2,c3);
+### 1, 基本测试 表有PK ###
+select* from (select * from t4 union select * from t4) as x order by 1,2,3;
+c1	c2	c3
+2	13	4
+3	4	25
+4	5	6
+7	18	9
+10	12	3
+select * from t4 union select * from t4;
+c1	c2	c3
+2	13	4
+3	4	25
+4	5	6
+7	18	9
+10	12	3
+#1.2 使用索引c2c3也ok 
+select /*+ index(t4 idx_t4_c2c3) */ * from t4 union
+select /*+ index(t4 idx_t4_c2c3) */ * from t4 order by 1,2,3;
+c1	c2	c3
+2	13	4
+3	4	25
+4	5	6
+7	18	9
+10	12	3
+#1.3 顺序一致, 原本就支持
+select /*+ index(t4 idx_t4_c2c3) */ c2,c3 from t4 union 
+select /*+ index(t4 idx_t4_c2c3) */ c2,c3 from t4 order by 2,1;
+c2	c3
+12	3
+13	4
+5	6
+18	9
+4	25
+#1.4 顺序不一致, 修改后支持, 5 
+select /*+ index(t4 idx_t4_c2c3) */ c3,c2 from t4 union 
+select /*+ index(t4 idx_t4_c2c3) */ c3,c2 from t4 order by 1,2;
+c3	c2
+3	12
+4	13
+6	5
+9	18
+25	4
+#1.5 完全一致
+select /*+ index(t4 idx_t4_c2c3) */ c2,c3,c1 from t4 union 
+select /*+ index(t4 idx_t4_c2c3) */ c2,c3,c1 from t4 order by 1,2,3;
+c2	c3	c1
+4	25	3
+5	6	4
+12	3	10
+13	4	2
+18	9	7
+#1.5.2 左匹配, 原本就支持
+select /*+ index(t4 idx_t4_c2c3) */ c2  from t4 union
+select /*+ index(t4 idx_t4_c2c3) */ c2  from t4 order by 1;
+c2
+4
+5
+12
+13
+18
+#1.5.3 不能优化
+select /*+ index(t4 idx_t4_c2c3) */ c3  from t4 union
+select /*+ index(t4 idx_t4_c2c3) */ c3  from t4 order by 1;
+c3
+3
+4
+6
+9
+25
+#1.5.4 不支持
+select /*+ index(t4 idx_t4_c2c3) */ c1  from t4 union
+select /*+ index(t4 idx_t4_c2c3) */ c1  from t4 order by 1;
+c1
+2
+3
+4
+7
+10
+#1.6 两侧不匹配不能优化, 都加sort 10
+select /*+ index(x idx_t4_c2c3) */ c3,c1,c2 from t4 x union  
+select /*+ index(y idx_t4_c2c3) */ c3,c2,c1 from t4 y order by 1,2,3;
+c3	c1	c2
+3	10	12
+3	12	10
+4	2	13
+4	13	2
+6	4	5
+6	5	4
+9	7	18
+9	18	7
+25	3	4
+25	4	3
+#1.7 两侧不匹配不能优化, 单侧加sort 
+select /*+ index(t4 idx_t4_c2c3) */ c2,c3,c1 from t4 union
+select /*+ index(t4 idx_t4_c2c3) */ c3,c2,c1 from t4 order by 1,2,3;
+c2	c3	c1
+3	12	10
+4	13	2
+4	25	3
+5	6	4
+6	5	4
+9	18	7
+12	3	10
+13	4	2
+18	9	7
+25	4	3
+### 2, 不包含PK的简单测试, 单key索引  ###
+create table t5(c int, c2 int, c3 int);
+insert into t5 values(1,2,3),(2,3,4),(0,1,2),(3,4,5),(0,2,3),(2,4,5);
+create index idx_t5_c2 on t5(c2);
+#2.1 不能优化
+select /*+ index(t5 idx_t5_c2) */ c2,c3 from t5 union 
+select /*+ index(t5 idx_t5_c2) */ c2,c3 from t5 order by 1,2;
+c2	c3
+1	2
+2	3
+3	4
+4	5
+#2.2 原本就可优化
+select /*+ index(t5 idx_t5_c2) */ c2 from t5 union 
+select /*+ index(t5 idx_t5_c2) */ c2  from t5 order by 1;
+c2
+1
+2
+3
+4
+### 3, 无PK, 数据有重复, 结果正确性验证1
+create table t6(c1 int, c2 int);
+create index idx_t6_c1c2 on t6(c1,c2);
+insert into t6 values(10,20),(10,30),(20,10),(20,5),(10,30),(40,5),(10,8),(10,20),(1,0),(0,1),(20,80),(10,5),(10,5),(30,20),(30,1),(30,5),
+(10,20),(10,30),(20,10),(20,5),(10,30),(40,5),(10,8),(20,80),(10,5),(10,5),(30,20),(30,1),(1,0),(0,1),(0,0),(30,5);
+#3.1 可以优化, 14 rows
+select c1,c2 from t6 union select c1,c2 from t6 order by 1,2;
+c1	c2
+0	0
+0	1
+1	0
+10	5
+10	8
+10	20
+10	30
+20	5
+20	10
+20	80
+30	1
+30	5
+30	20
+40	5
+#3.2 可以优化, 14 rows
+select c2,c1 from t6 union select c2,c1 from t6 order by 1,2;
+c2	c1
+0	0
+0	1
+1	0
+1	30
+5	10
+5	20
+5	30
+5	40
+8	10
+10	20
+20	10
+20	30
+30	10
+80	20
+#3.3 不能优化 23 rows
+select c2,c1 from t6 union select c1,c2 from t6 order by 1,2;
+c2	c1
+0	0
+0	1
+1	0
+1	30
+5	10
+5	20
+5	30
+5	40
+8	10
+10	5
+10	8
+10	20
+10	30
+20	5
+20	10
+20	30
+20	80
+30	1
+30	5
+30	10
+30	20
+40	5
+80	20
+#3.4 不能优化, 有计算列的情况, 23 rows, 14
+select c2,c1 from t6 union select 0+c1,c2 from t6 order by 1,2;
+c2	c1
+0	0
+0	1
+1	0
+1	30
+5	10
+5	20
+5	30
+5	40
+8	10
+10	5
+10	8
+10	20
+10	30
+20	5
+20	10
+20	30
+20	80
+30	1
+30	5
+30	10
+30	20
+40	5
+80	20
+select c1,c2,c1,c2 from t6 union select 0+c1,c2,c1,c2 from t6 order by 1,2,3,4;
+c1	c2	c1	c2
+0	0	0	0
+0	1	0	1
+1	0	1	0
+10	5	10	5
+10	8	10	8
+10	20	10	20
+10	30	10	30
+20	5	20	5
+20	10	20	10
+20	80	20	80
+30	1	30	1
+30	5	30	5
+30	20	30	20
+40	5	40	5
+#4 分区表的测试
+create table t7(c1 varchar(10), c2 decimal(10,2), c3 int, c4 int) partition by hash(c4) partitions 5;
+insert into t7 values('11', 1.2, 1, 7),('22', 2.3, 2, 6),('33', 3.4, 3, 2), ('44', 4.5, 4, 10), ('55', 5.6, 5, 6),
+('12', 1.244, 4, 22),('22', 2.3, 3, 13),('3', 3.4, 2, 0), ('44', 4.5, 4, 1), ('56', 56, 1, 6),('44', 4.5, 4, 10);
+create index idx_t7_c2c1 on t7(c2,c1,c3) local;
+#4.1 可以优化, 完全匹配, 9 rows
+select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
+select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 where c2 < 10 order by 1,2,3;
+c2	c1	c3
+1.20	11	1
+1.24	12	4
+2.30	22	2
+2.30	22	3
+3.40	3	2
+3.40	33	3
+4.50	44	4
+5.60	55	5
+56.00	56	1
+#4.2 可以优化, 后续有连接, 15 rows
+select xx.c2,xx.c1 from 
+(select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
+select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 where c2 < 10) xx,
+t7 yy where xx.c2 = yy.c2 order by 1,2;
+c2	c1
+1.20	11
+1.24	12
+2.30	22
+2.30	22
+2.30	22
+2.30	22
+3.40	3
+3.40	3
+3.40	33
+3.40	33
+4.50	44
+4.50	44
+4.50	44
+5.60	55
+56.00	56
+#4.3 可以优化, 9 rows
+select /*+ index(t7 idx_t7_c2c1) */ c2,c1,c3 from t7 union 
+select /*+ index(t7 idx_t7_c2c1) */  c2,c1,c3 from t7 order by 1,2,3;
+c2	c1	c3
+1.20	11	1
+1.24	12	4
+2.30	22	2
+2.30	22	3
+3.40	3	2
+3.40	33	3
+4.50	44	4
+5.60	55	5
+56.00	56	1
+select c1 from t7 union select c1 from t7 order by 1;
+c1
+11
+12
+22
+3
+33
+44
+55
+56
+select /*+ index(t7 idx_t7_c2c1) */  c1,c2,c3 from t7 union
+select /*+ index(t7 idx_t7_c2c1) */ c1,c2,c3 from t7 order by 1,2,3;
+c1	c2	c3
+11	1.20	1
+12	1.24	4
+22	2.30	2
+22	2.30	3
+3	3.40	2
+33	3.40	3
+44	4.50	4
+55	5.60	5
+56	56.00	1
+#4.4 索引KEY升降序的测试, 目前此功能并不支持, 实际都是ASC
+drop index idx_t7_c2c1 on t7;
+create index idx_t7_c3c2c1 on t7(c3 asc,c2 asc,c1 asc) local;
+create table t72(c1 varchar(10), c2 decimal(10,2), c3 int);
+insert into t72 values('11', 1.2, 1),('22', 2.3, 2),('33', 3.4, 3), ('44', 4.5, 4), ('55', 5.6, 5),
+('12', 1.244, 4),('22', 2.3, 3),('3', 3.4, 2), ('44', 4.5, 4), ('56', 56, 1),('44', 4.5, 4);
+create index idx_t72_c3c2c1 on t72(c3 asc,c2 asc,c1 asc);
+#4.4.1 两个表上索引升降序一致, 不一一对应但两侧分支匹配, 可以优化, 8 rows
+select /*+ index(t7 idx_t7_c3c2c1) */  c1,c2,c3 from t7 where c3 < 5 union 
+select /*+ index(t72 idx_t72_c3c2c1) */ c1,c2,c3 from t72 where c3 < 5 order by 1,2,3;
+c1	c2	c3
+11	1.20	1
+12	1.24	4
+22	2.30	2
+22	2.30	3
+3	3.40	2
+33	3.40	3
+44	4.50	4
+56	56.00	1
+#4.4.2 可以优化, 同上
+select /*+ index(t7 idx_t7_c3c2c1) */  c3,c2,c1 from t7 where c3 < 5 union 
+select /*+ index(t72 idx_t72_c3c2c1) */ c3,c2,c1 from t72 where c3 < 5 order by 1,2,3;
+c3	c2	c1
+1	1.20	11
+1	56.00	56
+2	2.30	22
+2	3.40	3
+3	2.30	22
+3	3.40	33
+4	1.24	12
+4	4.50	44
+drop index idx_t72_c3c2c1 on t72;
+create index idx_t72_c3c2c1 on t72(c3 asc,c2 asc,c1 asc);
+#4.4.3 A,D不同, 但是实际存储一样, 所以也能优化, 8 rows
+select /*+ index(t7 idx_t7_c3c2c1) */  c1,c2,c3 from t7 where c3 < 5 union 
+select /*+ index(t72 idx_t72_c3c2c1) */ c1,c2,c3 from t72 where c3 < 5 order by 1,2,3;
+c1	c2	c3
+11	1.20	1
+12	1.24	4
+22	2.30	2
+22	2.30	3
+3	3.40	2
+33	3.40	3
+44	4.50	4
+56	56.00	1
+#4.4.4 同上, 也能优化
+select /*+ index(t7 idx_t7_c3c2c1) */  c3,c2,c1 from t7 where c3 < 5  union 
+select /*+ index(t72 idx_t72_c3c2c1) */ c3,c2,c1 from t72 where c3 < 5 order by 1,2,3;
+c3	c2	c1
+1	1.20	11
+1	56.00	56
+2	2.30	22
+2	3.40	3
+3	2.30	22
+3	3.40	33
+4	1.24	12
+4	4.50	44
+#5 结果正确性测试2
+create table test1(c1 int, c2 int);
+create table test2(d1 int, d2 int);
+insert into test1 values(1,1),(1,2),(2,1),(2,2),(2,0),(1,3),(1,0),(3,0),(3,2),(3,1),(2,1);
+insert into test2 values(1,1),(1,2),(2,1),(2,2),(2,0),(1,3),(1,0),(3,0),(3,2),(3,1),(2,1);
+commit;
+create index idx_test1_c1c2 on test1(c1 asc, c2 asc);
+create index idx_test2_d1d2 on test2(d1 asc, d2 asc);
+#5.1 最后加了排序, which can't be optimized...
+select c2, c1 from test1 union select d2,d1 from test2 order by c2,c1;
+c2	c1
+0	1
+0	2
+0	3
+1	1
+1	2
+1	3
+2	1
+2	2
+2	3
+3	1
+#5.2 最后的排序可以被优化
+select c2, c1 from test1 union select d2,d1 from test2 order by c1,c2;
+c2	c1
+0	1
+1	1
+2	1
+3	1
+0	2
+1	2
+2	2
+0	3
+1	3
+2	3
+#5.3 最后的排序由于是逆序不能被优化掉
+select c2, c1 from test1 union select d2,d1 from test2 order by c1 desc,c2 desc;
+c2	c1
+2	3
+1	3
+0	3
+2	2
+1	2
+0	2
+3	1
+2	1
+1	1
+0	1
+#5.4 整数的查询项, 6 rows, 10, 4 rows
+select 1, c1 from test1 union select 2,d1 from test2 order by 1,2;
+1	c1
+1	1
+1	2
+1	3
+2	1
+2	2
+2	3
+select 1, c2 from test1 union select d1,d2 from test2 order by 1,2;
+1	c2
+1	0
+1	1
+1	2
+1	3
+2	0
+2	1
+2	2
+3	0
+3	1
+3	2
+select mod(c1,2),mod(c2,2) from test1 union select mod(d1,2),mod(d2,2) from test2 order by 1,2;
+mod(c1,2)	mod(c2,2)
+0	0
+0	1
+1	0
+1	1
+#6 from mysqltest union1, simply recreate
+create table x1(c1 int, c2 char(10), c3 int);
+create table x2(d1 int, d2 char(10), d3 int, index ix2(d2, d3));
+insert into x1 values(1,'xx2',3),(2,'xxx3',4),(3,'aaa4',5);
+insert into x2 values(11,'xx2',3),(2,'xx3',4),(3,'aaa4',5);
+select c2, c3 from x1 union select /*+ index(x2 ix2) */ d2, d3 from x2 order by 1,2;
+c2	c3
+aaa4	5
+xx2	3
+xx3	4
+xxx3	4
+select c3, c2 from x1 union select /*+ index(x2 ix2) */ d3, d2 from x2 order by 1,2;
+c3	c2
+3	xx2
+4	xx3
+4	xxx3
+5	aaa4
+CREATE TABLE ts1 (c1 VARCHAR(10) NOT NULL, c2 INT NOT NULL);
+CREATE TABLE ts2 (c1 VARCHAR(10) NOT NULL, c2 INT NOT NULL);
+INSERT INTO ts1 (c1, c2) VALUES ('t1a', 1), ('t1a', 2), ('t1a', 3), ('t1b', 2), ('t1b', 1);
+INSERT INTO ts2 (c1, c2) VALUES ('t2a', 1), ('t2a', 2), ('t2a', 3), ('t2b', 2), ('t2b', 1);
+SELECT c1, c2 FROM (
+SELECT c1, c2 FROM ts1
+UNION
+(SELECT c1, c2 FROM ts2 ORDER BY c2 DESC, c1 LIMIT 1)
+) AS res order by 1,2;
+c1	c2
+t1a	1
+t1a	2
+t1a	3
+t1b	1
+t1b	2
+t2a	3
+DROP TABLE IF EXISTS T1, T2, T3;
+CREATE TABLE T1 (PK INT PRIMARY KEY, C1 INT, C2 INT);
+CREATE TABLE T2 (PK INT PRIMARY KEY, C1 INT, C2 INT);
+CREATE TABLE T3 (PK INT PRIMARY KEY, C1 INT, C2 INT);
+SELECT C1, C2, PK FROM T1 ORDER BY PK DESC LIMIT 1 UNION (SELECT C1, C2, PK FROM T2 UNION SELECT C1, C2 ,PK FROM T3);
+C1	C2	PK
+5	4	2
+1	1	1
+1	1	2
+CREATE TABLE table2_bigint (
+col_decimal_20_0_signed decimal(20,0) signed,
+col_decimal_20_0_unsigned decimal(20,0) unsigned,
+col_char_20 char(20),
+col_decimal_20_0 decimal(20,0),
+pk bigint,
+col_bigint bigint,
+col_timestamp_6 timestamp(6) NULL DEFAULT NULL,
+col_bigint_unsigned bigint unsigned,
+col_bigint_signed bigint signed,
+primary key (pk));
+CREATE TABLE table100_bigint (
+col_bigint_unsigned bigint unsigned,
+col_decimal_20_0_unsigned decimal(20,0) unsigned,
+col_bigint_signed bigint signed,
+col_bigint bigint,
+pk bigint,
+col_decimal_20_0_signed decimal(20,0) signed,
+col_timestamp_6 timestamp(6) NULL DEFAULT NULL,
+col_char_20 char(20),
+col_decimal_20_0 decimal(20,0),
+/*Indices*/
+primary key (pk)) ;
+SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
+FROM
+(
+(SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
+FROM table2_bigint
+WHERE col_decimal_20_0_unsigned <> 99999
+ORDER BY pk DESC , 6 DESC , pk
+LIMIT 1,
+5)
+UNION DISTINCT SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
+FROM (
+(SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
+FROM table100_bigint
+WHERE col_decimal_20_0_signed = ROUND(SIGN(col_decimal_20_0))
+ORDER BY col_bigint_signed , 6 , col_decimal_20_0 , pk DESC LIMIT 7)
+UNION DISTINCT
+(SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk
+FROM table2_bigint
+WHERE SUBSTR('g', 1, LEAST(58, 20)) <> INSERT('lgeswk', 99, 8, TRIM(SUBSTRING(CONVERT(TRIM(SUBSTR(TRIM(SUBSTR(SUBSTRING('nlge', 1, LEAST(58, 20)), 1, 2)
+FROM SUBSTRING('', 1, LEAST(58, 20))), 1, LEAST(58, 20))), CHAR(50)), 1, LEAST(58, 20))))
+ORDER BY 3 ,
+col_bigint_unsigned ,
+pk DESC)) TUT
+ORDER BY col_bigint,
+col_bigint_signed,
+col_bigint_unsigned,
+col_char_20,
+col_decimal_20_0,
+col_decimal_20_0_signed,
+col_decimal_20_0_unsigned,
+col_timestamp_6,
+pk) TUT WHERE pk in (9727744 ,7826688 ,1657856 ,  55039 ,  50631)
+ORDER BY col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk;
+col_bigint	col_bigint_signed	col_bigint_unsigned	col_char_20	col_decimal_20_0	col_decimal_20_0_signed	col_decimal_20_0_unsigned	col_timestamp_6	pk
+NULL	NULL	NULL	NULL	NULL	NULL	0	NULL	7826688
+NULL	NULL	NULL	NULL	NULL	NULL	1	NULL	1657856
+NULL	NULL	NULL	NULL	NULL	NULL	11753728	NULL	9727744
+NULL	NULL	NULL	0	NULL	NULL	999999999	NULL	50631
+NULL	NULL	NULL	nf	NULL	NULL	22222222	NULL	55039
+drop database union_sort_opt_db;

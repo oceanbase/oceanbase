@@ -1,0 +1,449 @@
+drop database if exists createtable;
+create database createtable;
+use createtable;
+
+#create table
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+
+#create table locality
+create table wenduo(pk int primary key) locality = "f@zone1, f,l@region1";
+
+#index scope when partition_num > 1
+##create table
+create table ad1(c1 int primary key, c2 int, index(c2))partition by key(c1) partitions 2;
+create table ad2(c1 int primary key, c2 int, index(c2) GLOBAL)partition by key(c1) partitions 2;
+create table ad3(c1 int primary key, c2 int, index(c2) LOCAL)partition by key(c1) partitions 2;
+create table ad4(c1 int primary key, c2 int, index(c2))partition by key(c1) partitions 1;
+create table ad5(c1 int primary key, c2 int, index(c2) GLOBAL)partition by key(c1) partitions 1;
+create table ad6(c1 int primary key, c2 int, index(c2) LOCAL)partition by key(c1) partitions 1;
+##create index
+#create table ad7(c1 int primary key, c2 int) partition by key(c1) partitions 2;
+#--error 4016
+#create index __idx1_ad7 on ad7(c1);
+#--error 4016
+#create index __idx2_ad7 on ad7(c1) GLOBAL;
+#create index __idx3_ad7 on ad7(c1) LOCAL;
+create table ad8(c1 int primary key, c2 int) partition by key(c1) partitions 1;
+create index __idx1_ad8 on ad8(c1);
+create index __idx2_ad8 on ad8(c1) GLOBAL;
+create index __idx3_ad8 on ad8(c1) LOCAL;
+
+#table exist
+--error 5020
+create table t1(c1 int primary key);
+
+#unique [key]
+create table ac1(c1 int primary key, c2 int unique);
+create table ac2(c1 int primary key, c2 int unique key);
+create table ac3(c1 int primary key, c2 int, index c3(c2), c3 int unique);
+create table ac4(c1 int primary key unique);
+create table ac5(c1 int primary key unique key);
+
+#index on varchar
+create table ab1(c1 int primary key,c2 varchar(4096),index(c2))
+--error 5196
+create table ab2(c1 int primary key,c2 varchar(4097),index(c2))
+#Uppercase and lowercase
+CREATE TABLE z001 ( id varchar(34) NOT NULL, primary key (ID) );
+CREATE TABLE Z002 ( C1 varchar(34) NOT NULL, C2 int, primary key (c1) );
+
+#duplicate primary key
+--error 5024
+create table s001(c1 int primary key,c2 int, primary key(c2));
+#INTEGER_PRECISION_OVERFLOW
+--error 5173
+create table s002(c1 decimal(5,3) default 512.3476, c2 int, primary key(c2))
+
+##INVALID DEFAULT VALUE
+--error 5173
+CREATE TABLE s003(c1 int primary key default 'a' not null);
+
+##if not exists
+CREATE TABLE if not exists b001 (c1 int primary key)
+
+##date type
+##int
+create table w001(c1 int primary key, c2 tinyint, c3 smallint, c4 mediumint, c5 int, c6 integer, c7 bigint);
+create table w002(c1 int primary key, c2 tinyint(5) unsigned zerofill, c3 smallint(5) unsigned zerofill, c4 mediumint(5) unsigned zerofill, c5 int(5) unsigned zerofill, c6 integer(5) unsigned zerofill, c7 bigint(5) unsigned zerofill);
+create table w003(c1 int primary key, c2 tinyint(5) unsigned zerofill, c3 smallint(5) unsigned zerofill, c4 mediumint(5) unsigned zerofill, c5 int(5) unsigned zerofill, c6 integer(5) unsigned zerofill, c7 bigint(5) unsigned zerofill);
+##double
+create table w011(c1 int primary key, c2 real, c3 double, c4 float, c5 decimal, c6 numeric);
+create table w012(c1 int primary key, c2 real(5,2), c3 double(5,2), c4 float(5,2), c5 decimal(5,2), c6 numeric(5,2));
+create table w013(c1 int primary key, c2 real(5,2) unsigned zerofill, c3 double(5,2) unsigned zerofill, c4 float(5,2) unsigned zerofill, c5 decimal(5,2) unsigned zerofill, c6 numeric(5,2) unsigned zerofill);
+##time
+create table w021(c1 int primary key,c2 date, c3 year, c4 time, c5 timestamp, c6 datetime);
+create table w022(c1 int primary key,c2 date, c3 year(4), c4 time(3), c5 timestamp(6), c6 datetime(6));
+##char
+create table w031(c1 int primary key,c2 char, c3 char(10), c4 varchar(10));
+--error 5143
+create table w032(c1 int primary key,c2 char CHARACTER SET 'utf8' collate 'cla',c3 varchar(10) CHARACTER SET 'utf8' collate 'cla');
+##binary
+create table w041(c1 int primary key, c2 binary, c3 binary(10), c4 varbinary(10));
+
+##null && not null
+CREATE TABLE x001 (c1 int primary key, c2 varchar(50) NOT NULL)
+CREATE TABLE x002 (c1 int primary key, c2 varchar(50) NULL)
+
+##default value
+CREATE TABLE y001 (c1 int primary key, c2 tinyint default 0, c3 smallint default 0, c4 mediumint default 0, c5 int default 0, c6 integer default 0, c7 bigint default 0)
+CREATE TABLE y002 (c1 int primary key, c2 real default 123.45, c3 double default 99.3, c4 float default 10.33, c5 decimal default 10.43430, c6 numeric default 3443)
+create table y005 (c1 decimal(5,3) default 12.34, c2 int, primary key(c2))
+##default value of date and year not support
+##CREATE TABLE y003 (c1 int primary key, c2 date default '2012-10-12', c3 year default '2015', c4 time default '10:11:12', c5 timestamp DEFAULT  '15-12-31 23:59:59.000000', c6 datetime default '2015-12-31 23:59:59.000000')
+CREATE TABLE y003 (c1 int primary key, c4 time default '10:11:12', c5 timestamp DEFAULT  '15-12-31 23:59:59.000000', c6 datetime default '2015-12-31 23:59:59.000000')
+CREATE TABLE y004 (c1 int primary key, c2 binary default 'f', c3 binary(10) default 1323, c4 varbinary(50) DEFAULT 'fffdfdfd')
+create table y013(c1 date default date'2015.11.11');
+create table y006(c1 varchar(100) default date'2015.11.11');
+create table y007(c1 time default time'10:12:10');
+create table y008(c1 varchar(100) default time'10:12:10');
+create table y009(c1 timestamp default timestamp'2015.11.11 10:12:10');
+create table y010(c1 varchar(100) default timestamp'2015.11.11 10:12:10');
+
+##auto_increment
+CREATE TABLE d001 (c1 int primary key AUTO_INCREMENT, c2 varchar(50))
+--error 5165
+CREATE TABLE d002 (c1 int primary key, c2 varchar(50) AUTO_INCREMENT)
+
+##key
+##without index_name
+CREATE TABLE s001 (c1 int primary key, c2 varchar(50), c3 int,key(c1))
+CREATE TABLE s002 (c1 int primary key, c2 varchar(50), c3 int,key (c1))
+
+##with index_name
+CREATE TABLE s003 (c1 int primary key, c2 varchar(50), c3 int,key k1(c1))
+##specify order
+CREATE TABLE s004 (c1 int primary key, c2 varchar(50), c3 int,key k1(c1 DESC))
+##mul cols
+CREATE TABLE s005 (c1 int primary key, c2 varchar(50), c3 int,key k1(c1,c2))
+CREATE TABLE s006 (c1 int primary key, c2 varchar(50), c3 int,key k1(c1,c2 DESC))
+CREATE TABLE s007 (c1 int primary key, c2 varchar(50), c3 int,key k1(c1 ASC,c2 DESC))
+##mul indexs
+CREATE TABLE s008 (c1 int primary key, c2 varchar(50), c3 int,key k1(c1), key k2(c2))
+##index_option
+CREATE TABLE s009 (c1 int primary key, c2 varchar(50), c3 int,key k1(c1) GLOBAL)
+CREATE TABLE s010 (c1 int primary key, c2 varchar(50), c3 int,key k1(c1) GLOBAL COMMENT 'string' BLOCK_SIZE 16384 STORING(c1,c2))
+CREATE TABLE s011 (c1 int primary key, c2 varchar(50), c3 int,key k1(c1) GLOBAL COMMENT 'string' BLOCK_SIZE = 16384 STORING(c1,c2))
+##complex
+CREATE TABLE s012 (c1 int primary key, c2 varchar(50), c3 int,c4 int, key k1(c1 DESC,c2) COMMENT 'string' BLOCK_SIZE 16384 STORING(c1,c2), key k2(c3), key(c4))
+##index naming
+CREATE TABLE s013 (c1 int primary key, c2 varchar(50), c3 int,c4 int, key (c1), key (c1,c2), key (c1,c3))
+create table s014 (a int primary key, b int, c int, key(b), key(b, c), key(c));
+
+#index option should not specify compress method
+CREATE TABLE s015 (c1 int primary key, index idx(c1))compression='lz4_1.0';
+
+##index
+##without index_name
+CREATE TABLE t001 (c1 int primary key, c2 varchar(50), c3 int,index(c1))
+CREATE TABLE t002 (c1 int primary key, c2 varchar(50), c3 int,index (c1))
+##with index_name
+CREATE TABLE t003 (c1 int primary key, c2 varchar(50), c3 int,index idx1(c1))
+##specify order
+CREATE TABLE t004 (c1 int primary key, c2 varchar(50), c3 int,index idx1(c1 DESC))
+##mul cols
+CREATE TABLE t005 (c1 int primary key, c2 varchar(50), c3 int,index idx1(c1,c2))
+CREATE TABLE t006 (c1 int primary key, c2 varchar(50), c3 int,index idx1(c1,c2 DESC))
+CREATE TABLE t007 (c1 int primary key, c2 varchar(50), c3 int,index idx1(c1 ASC,c2 DESC))
+##mul indexs
+CREATE TABLE t008 (c1 int primary key, c2 varchar(50), c3 int,index idx1(c1), index idx2(c2))
+##index_option
+CREATE TABLE t009 (c1 int primary key, c2 varchar(50), c3 int,index idx1(c1) GLOBAL)
+CREATE TABLE t010 (c1 int primary key, c2 varchar(50), c3 int,index idx1(c1) GLOBAL COMMENT 'string' BLOCK_SIZE 16384 STORING(c1,c2))
+CREATE TABLE t011 (c1 int primary key, c2 varchar(50), c3 int,index idx1(c1) GLOBAL COMMENT 'string' BLOCK_SIZE = 16384 STORING(c1,c2))
+##complex
+CREATE TABLE t012 (c1 int primary key, c2 varchar(50), c3 int,c4 int, index idx1(c1 DESC,c2) COMMENT 'string' BLOCK_SIZE 16384 STORING(c1,c2), index idx2(c3), index(c4))
+
+##unique key
+CREATE TABLE u001 (c1 int primary key, c2 varchar(50), c3 int,unique key uk1(c1))
+CREATE TABLE u002 (c1 int primary key, c2 varchar(50), c3 int,unique uk1(c1))
+CREATE TABLE u003 (c1 int primary key, c2 varchar(50), c3 int,unique(c1))
+CREATE TABLE u004 (c1 int primary key, c2 varchar(50), c3 int,unique (c1))
+CREATE TABLE u005 (c1 int primary key, c2 varchar(50), c3 int,c4 int, unique key uk1(c1 DESC,c2) GLOBAL COMMENT 'string' BLOCK_SIZE 16384 STORING(c1,c2), unique uk2(c3), unique(c4))
+
+##unique index
+CREATE TABLE v001 (c1 int primary key, c2 varchar(50), c3 int,unique index uidx1(c1))
+CREATE TABLE v002 (c1 int primary key, c2 varchar(50), c3 int,unique uidx1(c1))
+CREATE TABLE v003 (c1 int primary key, c2 varchar(50), c3 int,unique(c1))
+CREATE TABLE v004 (c1 int primary key, c2 varchar(50), c3 int,unique (c1),unique(c2))
+CREATE TABLE v005 (c1 int primary key, c2 varchar(50), c3 int,c4 int, unique index uidx1(c1 DESC,c2) GLOBAL COMMENT 'string' BLOCK_SIZE 16384 STORING(c1,c2), unique uidx2(c3), unique(c4))
+
+##primary key
+CREATE TABLE a001 (c1 int primary key)
+CREATE TABLE a002 (c1 int primary key, c2 varchar(50))
+CREATE TABLE a003 (c1 int, c2 varchar(50), primary key(c1))
+CREATE TABLE a004 (c1 int, c2 varchar(50), c3 int , primary key(c1,c2))
+## [primary] key and unique [key]
+# primary key
+create table a011(c1 int primary key);
+create table a012(c1 int key);
+# unqiue key
+create table a013(c1 int unique);
+create table a014(c1 int unique key);
+# primary key + unique key
+create table a015(c1 int primary key unique key);
+create table a016(c1 int key unique key);
+create table a017(c1 int key unique);
+# unique key + primary key
+create table a018(c1 int unique key primary key);
+create table a019(c1 int unique primary key);
+
+##comment(on column)
+CREATE TABLE e001 (c1 int primary key, c2 varchar(50) comment 'the column of c2')
+
+##table_option
+
+CREATE TABLE f001 (c1 int primary key, c2 varchar(50)) CHARACTER SET = 'utf8'
+CREATE TABLE f002 (c1 int primary key, c2 varchar(50)) DEFAULT CHARACTER SET = 'utf8'
+CREATE TABLE f003 (c1 int primary key, c2 varchar(50)) CHARACTER SET 'utf8'
+CREATE TABLE f004 (c1 int primary key, c2 varchar(50)) DEFAULT CHARACTER SET 'utf8'
+CREATE TABLE f005 (c1 int primary key, c2 varchar(50)) CHARSET = 'utf8'
+CREATE TABLE f006 (c1 int primary key, c2 varchar(50)) DEFAULT CHARSET = 'utf8'
+CREATE TABLE f007 (c1 int primary key, c2 varchar(50)) CHARSET 'utf8'
+CREATE TABLE f008 (c1 int primary key, c2 varchar(50)) DEFAULT CHARSET 'utf8'
+
+##comment (on table)
+CREATE TABLE g001 (c1 int primary key, c2 varchar(50))COMMENT = 'the table_name of tt1'
+CREATE TABLE g002 (c1 int primary key, c2 varchar(50))COMMENT 'the table_name of tt1'
+
+
+CREATE TABLE h001 (c1 int primary key, c2 varchar(50))COMPRESSION = 'none'
+CREATE TABLE h002 (c1 int primary key, c2 varchar(50))COMPRESSION 'none'
+CREATE TABLE h003 (c1 int primary key, c2 varchar(50))COMPRESSION 'lz4_1.0'
+CREATE TABLE h004 (c1 int primary key, c2 varchar(50))COMPRESSION 'LZ4_1.0'
+--error 4002
+CREATE TABLE h005 (c1 int primary key, c2 varchar(50))COMPRESSION 'abc'
+
+##CONSISTENT_MODE  static,frozen,weak,strong
+#CREATE TABLE t021 (c1 int primary key, c2 varchar(50))CONSISTENT_MODE = 'static'
+
+##EXPIRE_INFO
+#--error 4007
+#CREATE TABLE i001 (c1 int primary key, c2 varchar(50))EXPIRE_INFO = (c1<100)
+#--error 4007
+#CREATE TABLE i002 (c1 int primary key, c2 varchar(50))EXPIRE_INFO (c1<100)
+
+##REPLICA_NUM
+CREATE TABLE j001 (c1 int primary key, c2 varchar(50))REPLICA_NUM = 3
+CREATE TABLE j002 (c1 int primary key, c2 varchar(50))REPLICA_NUM 3
+
+##TABLE_ID
+CREATE TABLE k001 (c1 int primary key, c2 varchar(50))TABLE_ID = 4000
+CREATE TABLE k002 (c1 int primary key, c2 varchar(50))TABLE_ID 4000
+
+##BLOCK_SIZE
+CREATE TABLE l001 (c1 int primary key, c2 varchar(50))BLOCK_SIZE = 16384
+CREATE TABLE l002 (c1 int primary key, c2 varchar(50))BLOCK_SIZE 16384
+
+##USE_BLOOM_FILTER
+CREATE TABLE m001 (c1 int primary key, c2 varchar(50))USE_BLOOM_FILTER = false
+CREATE TABLE m002 (c1 int primary key, c2 varchar(50))USE_BLOOM_FILTER false
+
+##progressive_merge_num
+CREATE TABLE n001 (c1 int primary key, c2 varchar(50))progressive_merge_num = 5
+CREATE TABLE n002 (c1 int primary key, c2 varchar(50))progressive_merge_num 5
+
+##AUTO_INCREMENT
+CREATE TABLE o001 (c1 int primary key, c2 varchar(50))AUTO_INCREMENT = 1
+CREATE TABLE o002 (c1 int primary key, c2 varchar(50))AUTO_INCREMENT 1
+
+##TABLEGROUP
+CREATE TABLE p001 (c1 int primary key, c2 varchar(50))tablegroup = 'tablegroup_name'
+CREATE TABLE p002 (c1 int primary key, c2 varchar(50))tablegroup 'tablegroup_name'
+
+##ZONE_LIST
+#CREATE TABLE q001 (c1 int primary key, c2 varchar(50))ZONE_LIST = ('a','b','c')
+#CREATE TABLE q002 (c1 int primary key, c2 varchar(50))ZONE_LIST ('a','b','c')
+
+##PRIMARY_ZONE
+CREATE TABLE r001 (c1 int primary key, c2 varchar(50))PRIMARY_ZONE = 'a'
+CREATE TABLE r002 (c1 int primary key, c2 varchar(50))PRIMARY_ZONE 'a'
+
+#PARTITION
+CREATE TABLE r003 (c1 int not null primary key, c2 char(30)) PARTITION BY hash(c1) PARTITIONS 3;
+CREATE TABLE r004 (c1 int not null primary key, c2 float) PARTITION BY hash(c1+3);
+CREATE TABLE r005 (c1 int not null primary key, c2 varchar(30)) PARTITION BY KEY();
+CREATE TABLE r006 (c1 int not null, c2 varchar(11) not null, c3 char(11), primary key(c1,c2)) PARTITION BY KEY() PARTITIONS 2;
+--error 5188
+CREATE TABLE r007 (c1 int primary key, c2 int) PARTITION BY KEY(C1) PARTITIONS 10000000000;
+--error 5189
+CREATE TABLE r008 (c1 int primary key, c2 int) PARTITION BY KEY(C1) PARTITIONS 0;
+
+#prefix key
+--error 5190
+CREATE TABLE r009 (a varchar(11) primary key,  b int,  UNIQUE (a(20), b));
+--error 5190
+CREATE TABLE r009 (a varchar(11) primary key,  b int,  UNIQUE (a, b(20)));
+CREATE TABLE r010 (a varchar(11) primary key,  b int,  UNIQUE (a(5), b));
+--error 5191
+CREATE TABLE r009 (a varchar(11) primary key,  b int,  UNIQUE (a(0)));
+--error 5191
+CREATE TABLE r009 (a varchar(11) primary key, b int, UNIQUE (x(0)));
+
+##boolean type
+create table r011(a int primary key, b boolean);
+create table r012(a int primary key, b bool);
+
+
+##
+## Boundary testing start
+##
+
+#database name length
+create database tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt;
+--error 5179
+create database tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt1tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt1;
+
+#table name length
+create table tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt(c1 int primary key);
+--error 5179
+create table tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt1tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt1(c1 int primary key);
+
+#column name length
+create table t005_(c1 int primary key,tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt int);
+--error 5179
+create table t006_(c1 int primary key,tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt11 int);
+
+#index name length(create table)
+create table t007_(c1 int primary key,c2 int,index tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt(c2));
+--error 5179
+create table t008_(c1 int primary key,c2 int, index tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt11(c2));
+
+#index name lenth(create index)
+create index tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt on t1(c2) LOCAL;
+--error 5179
+create index ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt1 on t1(c2) LOCAL;
+
+#view name length
+create view vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv as select * from t1;
+--error 5179
+create view vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv as select * from t1;
+
+#alias_name length
+select c1 as tttttttttttttttttttttttttttttttttttttttttttt from t1;
+
+#tablegroup name length
+create tablegroup tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt;
+--error 5179
+create tablegroup  tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt1tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt1tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt1;
+
+#pk data length
+create table r017(c1 int,c2 varchar(4096) primary key);
+--error 5196
+create table r017_(c1 int,c2 varchar(4097) primary key);
+create table r018(c1 int,c2 varchar(4000), c3 varchar(96), primary key(c2, c3));
+--error 5196
+create table r018_(c1 int,c2 varchar(4000), c3 varchar(97), primary key(c2, c3));
+#index data length
+create table r019(c1 int primary key,c2 varchar(4096) unique key);
+--error 5196
+create table r019_(c1 int primary key,c2 varchar(4097) unique key);
+create table r020(c1 int primary key, c2 varchar(4000), c3 varchar(96), index(c2, c3));
+--error 5196
+create table r020_(c1 int primary key, c2 varchar(4000), c3 varchar(97), index(c2, c3));
+
+#char max length
+create table r22(c1 int primary key,c2 char(256))
+--error 5198
+create table r22_(c1 int primary key,c2 char(257))
+#varchar max length
+create table r24(c1 int primary key,c2 varchar(262144))
+--error 5198
+create table r24_(c1 int primary key,c2 varchar(262145))
+#binary max length
+create table r23(c1 int primary key,c2 binary(256))
+--error 5198
+create table r23_(c1 int primary key,c2 binary(257))
+
+--error 5208
+drop table t1,t1;
+##
+## Boundary testing end
+##
+
+
+##
+##charset and collate
+##
+#table charset and collate
+create table r25(c1 varchar(2))charset=utf8, collate=utf8mb4_general_ci;
+create table r26(c1 varchar(2))charset=utf8mb4, collate=utf8mb4_general_ci;
+create table r27(c1 varchar(2))charset=utf8mb4;
+create table r28(c1 varchar(2))collate=utf8mb4_general_ci;
+create table r29(c1 varchar(2))charset=utf8mb4, collate=utf8mb4_bin;
+create table r30(c1 varchar(2))collate=utf8mb4_bin;
+--error 5142
+create table r31(c1 varchar(2))charset=test;
+--error 5143
+create table r32(c1 varchar(2))charset=utf8mb4, collate=test;
+--error 5143
+create table r33(c1 varchar(2))collate=test;
+--error 5142
+create table r34(c1 varchar(2))charset=test, collate=test;
+#column charset and collate
+create table r35(c1 varchar(2));
+create table r36(c1 varchar(2) charset utf8 collate utf8mb4_general_ci);
+create table r37(c1 varchar(2) charset utf8mb4 collate utf8mb4_general_ci);
+create table r38(c1 varchar(2) charset utf8mb4);
+create table r39(c1 varchar(2) collate utf8mb4_general_ci);
+create table r40(c1 varchar(2) charset utf8mb4 collate utf8mb4_bin);
+create table r41(c1 varchar(2) collate utf8mb4_bin);
+--error 5142
+create table r42(c1 varchar(2)) charset test;
+--error 5143
+create table r43(c1 varchar(2) collate test);
+--error 5143
+create table r44(c1 varchar(2) charset utf8mb4 collate test);
+--error 5142
+create table r45(c1 varchar(2) charset test collate test);
+#together
+create table r46(c1 varchar(2) charset utf8mb4)charset=utf8mb4, collate=utf8mb4_general_ci;
+create table r47(c1 varchar(2) collate utf8mb4_general_ci)charset=utf8mb4;
+create table r48(c1 varchar(2) collate utf8mb4_bin)charset=utf8mb4;
+create table r49(c1 varchar(2) charset utf8)collate=utf8mb4_general_ci;
+
+
+create table r50(c1 varchar(3) default 'abc');
+create table r51(c1 varchar(3) default '支付宝');
+create table r52(c1 varchar(4) default 'a支付宝');
+--error 5173
+create table r53(c1 varchar(3) default 'abcd');
+--error 5173
+create table r54(c1 varchar(3) default '支付宝d');
+--error 5173
+create table r55(c1 varchar(4) default 'a支付宝d');
+
+##binary
+create table r56(c1 varchar(3) binary);
+create table r57(c1 varchar(3) binary charset utf8mb4);
+create table r58(c1 varchar(3) binary charset utf8mb4 collate utf8mb4_general_ci);
+
+#using hash/btree(only syntax support)
+create table r59(c1 int primary key,c2 int ,index idx using btree(c1) using hash);
+create table r60(c1 int primary key,c2 int ,unique index uidx using btree(c1) using hash);
+create table r61(c1 int primary key, c2 int, index idx using hash(c1), index idx2(c2) using btree);
+create table r62(c1 int, primary key using hash (c1));
+
+create table t_bit_1(c1 bit);
+create table t_bit_2(c1 bit(1));
+create table t_bit_3(c1 bit(63));
+
+####################### test for synonym ###############################
+create synonym stbit for t_bit_1;
+drop synonym stbit;
+
+#constraint for primary key and unique key
+create table wang_01(c1 int, c2 varchar(30), primary key(c2));
+create table wang_02(c1 int, c2 varchar(30), constraint primary key(c2));
+create table wang_03(c1 int, c2 varchar(30), constraint cons_name primary key(c2));
+create table wang_04(c1 int, c2 varchar(30), unique key(c2));
+create table wang_05(c1 int, c2 varchar(30), constraint unique key(c2));
+create table wang_06(c1 int, c2 varchar(30), constraint cons_name unique key(c2));
+create table wang_07(c1 int, c2 varchar(30), constraint unique key (c2));
+create table wang_08(c1 int, c2 varchar(30), constraint unique key uk_name(c2));
+create table wang_09(c1 int, c2 varchar(30), constraint cons_name unique key (c2));
+create table wang_10(c1 int, c2 varchar(30), constraint cons_name unique key uk_name(c2));
+create table wang_11(c1 int, c2 varchar(30), constraint primary key(c1), constraint unique key uk_name(c2));
+create table wang_12(c1 int, c2 varchar(30), constraint cons_name primary key(c1), constraint cons_name unique key uk_name(c2));
+create table wang_13(c1 int, c2 varchar(30), primary key(c1), unique key (c2));
+
+drop database createtable;

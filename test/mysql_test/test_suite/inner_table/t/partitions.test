@@ -1,0 +1,12 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+--disable_warnings
+drop table if exists pt1;
+--enable_warnings
+create table pt1 (c1 int primary key, c2 int) partition by key(c1) partitions 3;
+select * from information_schema.partitions where table_name = 'pt1';
+select table_schema, table_name from information_schema.partitions where table_name = 'pt1';
+desc information_schema.partitions;
+drop table pt1;

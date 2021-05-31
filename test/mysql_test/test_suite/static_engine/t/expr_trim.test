@@ -1,0 +1,56 @@
+
+--disable_abort_on_error
+
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection default;
+
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select trim('          abc        ') x from dual;
+select trim(leading from '          abc        ') x from dual;
+select trim(trailing from '          abc        ') x from dual;
+select trim(both from '          abc        ') x from dual;
+select trim(both '' from '          abc        ') x from dual;
+select trim(both ' ' from '          abc        ') x from dual;
+select trim(both 'abc' from 'abcabdefabcabc') x from dual;
+select trim(both ' ' from '          abc        ') x from dual;
+select trim(both NULL from '          abc        ') x from dual;
+select trim(both ' ' from NULL) x from dual;
+select trim(both 1 from 112311) x from dual;
+
+select ltrim('          abc             ') x from dual;
+select ltrim('          ') x from dual;
+select ltrim(NULL) x from dual;
+select rtrim('          abc             ') x from dual;
+select rtrim('          ') x from dual;
+select rtrim(NULL) x from dual;
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v1;
+--enable_warnings
+create view v1 as select nullif(trim(repeat('abc', 1+1)), 'a');
+desc v1;
+select * from v1;
+
+create table t1(c1 longtext, c2 varchar(100));
+insert into t1 values('abababa', 'a');
+--echo // c1 and c2 will cast to longtext
+select trim(leading c2 from c1) from t1;
+
+drop view v1;
+drop table t1;
+
+connection syscon;
+--sleep 2

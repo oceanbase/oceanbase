@@ -1,0 +1,1014 @@
+static const ObObjTypeClass DIV_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
+{
+  {
+    /*null -> XXX*/
+    ObNullTC,/*null*/
+    ObNullTC,/*int*/
+    ObNullTC,/*uint*/
+    ObNullTC,/*float*/
+    ObNullTC,/*double*/
+    ObNullTC,/*number*/
+    ObNullTC,/*datetime*/
+    ObNullTC,/*date*/
+    ObNullTC,/*time*/
+    ObNullTC,/*year*/
+    ObNullTC,/*string*/
+    ObNullTC,/*extend*/
+    ObNullTC, /*unknown*/
+    ObNullTC, /*text*/
+    ObNullTC, /*bit*/
+    ObNullTC, /*enum, set*/
+    ObNullTC, /*inner_enum, inner_set*/
+    ObNullTC, /*oracle timestamp*/
+    ObNullTC, /*raw*/
+    ObNullTC, /*interval*/
+    ObNullTC, /*rowid*/
+  },
+  {
+    /*int -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObDoubleTC,/*float*/
+    ObDoubleTC,/*double*/
+    ObNumberTC,/*number*/
+    ObNumberTC,/*datetime*/
+    ObNumberTC,/*date*/
+    ObNumberTC,/*time*/
+    ObNumberTC,/*year*/
+    ObDoubleTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObDoubleTC, /*unknown*/
+    ObDoubleTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObNumberTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*uint -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObDoubleTC,/*float*/
+    ObDoubleTC,/*double*/
+    ObNumberTC,/*number*/
+    ObNumberTC,/*datetime*/
+    ObNumberTC,/*date*/
+    ObNumberTC,/*time*/
+    ObNumberTC,/*year*/
+    ObDoubleTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObDoubleTC, /*unknown*/
+    ObDoubleTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObNumberTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*float -> XXX*/
+    ObNullTC,/*null*/
+    ObDoubleTC,/*int*/
+    ObDoubleTC,/*uint*/
+    ObDoubleTC,/*float*/
+    ObDoubleTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObDoubleTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObDoubleTC, /*unknown*/
+    ObDoubleTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*double -> XXX*/
+    ObNullTC,/*null*/
+    ObDoubleTC,/*int*/
+    ObDoubleTC,/*uint*/
+    ObDoubleTC,/*float*/
+    ObDoubleTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObDoubleTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObDoubleTC, /*unknown*/
+    ObDoubleTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*number -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObNumberTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObNumberTC, /*unknown*/
+    ObNumberTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*datetime -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*date -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*time -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*year -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*string -> XXX*/
+    ObNullTC,/*null*/
+    ObDoubleTC,/*int*/
+    ObDoubleTC,/*uint*/
+    ObDoubleTC,/*float*/
+    ObDoubleTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObDoubleTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObDoubleTC, /*unknown*/
+    ObDoubleTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*extend -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*unknown -> XXX*/
+    ObNullTC,/*null*/
+    ObDoubleTC,/*int*/
+    ObDoubleTC,/*uint*/
+    ObDoubleTC,/*float*/
+    ObDoubleTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObDoubleTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObDoubleTC, /*unknown*/
+    ObDoubleTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*text -> XXX*/
+    ObNullTC,/*null*/
+    ObDoubleTC,/*int*/
+    ObDoubleTC,/*uint*/
+    ObDoubleTC,/*float*/
+    ObDoubleTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObDoubleTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObDoubleTC, /*unknown*/
+    ObDoubleTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*bit -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*enum, set -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*inner_enum, inner_set -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*oracle timestamp -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*raw -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*interval -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*rowid -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+};
+ static const ObObjTypeClass DIV_TYPE_INT_DIV_CLASS_PROMOTION[ObMaxTC][ObMaxTC] =
+{
+  {
+    /*null -> XXX*/
+    ObNullTC,/*null*/
+    ObNullTC,/*int*/
+    ObNullTC,/*uint*/
+    ObNullTC,/*float*/
+    ObNullTC,/*double*/
+    ObNullTC,/*number*/
+    ObNullTC,/*datetime*/
+    ObNullTC,/*date*/
+    ObNullTC,/*time*/
+    ObNullTC,/*year*/
+    ObNullTC,/*string*/
+    ObNullTC,/*extend*/
+    ObNullTC, /*unknown*/
+    ObNullTC, /*text*/
+    ObNullTC, /*bit*/
+    ObNullTC, /*enum, set*/
+    ObNullTC, /*inner_enum, inner_set*/
+    ObNullTC, /*oracle timestamp*/
+    ObNullTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*int -> XXX*/
+    ObNullTC,/*null*/
+    ObIntTC,/*int*/
+    ObIntUintTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObNumberTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObNumberTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*uint -> XXX*/
+    ObNullTC,/*null*/
+    ObIntUintTC,/*int*/
+    ObUIntTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObNumberTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObNumberTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*float -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObNumberTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObNumberTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*double -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObNumberTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObNumberTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*number -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObNumberTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObNumberTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*datetime -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*date -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*time -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*year -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*string -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObNumberTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObNumberTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*extend -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*unknown -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*text -> XXX*/
+    ObNullTC,/*null*/
+    ObNumberTC,/*int*/
+    ObNumberTC,/*uint*/
+    ObNumberTC,/*float*/
+    ObNumberTC,/*double*/
+    ObNumberTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObNumberTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObNumberTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*bit -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*enum, set -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*inner_enum, inner_set -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*oracle timestamp -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*raw -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*interval -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+  {
+    /*rowid -> XXX*/
+    ObNullTC,/*null*/
+    ObMaxTC,/*int*/
+    ObMaxTC,/*uint*/
+    ObMaxTC,/*float*/
+    ObMaxTC,/*double*/
+    ObMaxTC,/*number*/
+    ObMaxTC,/*datetime*/
+    ObMaxTC,/*date*/
+    ObMaxTC,/*time*/
+    ObMaxTC,/*year*/
+    ObMaxTC,/*string*/
+    ObMaxTC,/*extend*/
+    ObMaxTC, /*unknown*/
+    ObMaxTC, /*text*/
+    ObMaxTC, /*bit*/
+    ObMaxTC, /*enum, set*/
+    ObMaxTC, /*inner_enum, inner_set*/
+    ObMaxTC, /*oracle timestamp*/
+    ObMaxTC, /*raw*/
+    ObMaxTC, /*interval*/
+    ObMaxTC, /*rowid*/
+  },
+};

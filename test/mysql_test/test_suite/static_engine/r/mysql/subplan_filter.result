@@ -1,0 +1,258 @@
+connect  syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection default;
+drop table if exists t1;
+drop table if exists t2;
+create table t1 (c1 int primary key, c2 decimal, c3 int, c4 varchar(20));
+create table t2 (c1 int primary key, c2 decimal, c3 int, c4 varchar(20));
+insert into t1 (c1, c2, c3, c4) values (1, 1, 1, 'a');
+insert into t1 (c1, c2, c3, c4) values (2, 2, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (3, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (1, 1, 1, 'a');
+insert into t2 (c1, c2, c3, c4) values (2, 2, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (3, 3, null, 'a');
+connection syscon;
+connection default;
+set @@ob_enable_plan_cache = 0;
+set ob_enable_transformation = off;
+select (1, 1) = (1, 0);
+(1, 1) = (1, 0)
+0
+select (1, 1) = (1, 1);
+(1, 1) = (1, 1)
+1
+select 1 <=> 1;
+1 <=> 1
+1
+select 1 <=> 0;
+1 <=> 0
+0
+select 1 <=> null;
+1 <=> null
+0
+select null <=> 1;
+null <=> 1
+0
+select null <=> null;
+null <=> null
+1
+select (1, 1) <=> (1, 1);
+(1, 1) <=> (1, 1)
+1
+select (1, null) <=> (1, 1);
+(1, null) <=> (1, 1)
+0
+select (1, null) <=> (1, null);
+(1, null) <=> (1, null)
+1
+select (1, null) <=> (null, null);
+(1, null) <=> (null, null)
+0
+select (null, null) <=> (null, null);
+(null, null) <=> (null, null)
+1
+select (select c1, c2 from t1 where c1 = 1) = (1, 1) from t2 where c1 = 1;
+(select c1, c2 from t1 where c1 = 1) = (1, 1)
+1
+select (select c1, c2 from t1 where c1 = 1) = (c2, c1) from t2 where c1 = 1;
+(select c1, c2 from t1 where c1 = 1) = (c2, c1)
+1
+select (select c1 from t1 where c1 = 1) + 1 from t2 where c1 = 1;
+(select c1 from t1 where c1 = 1) + 1
+2
+select (select c1 from t1 where 1 = 0) + 1 from t2 where c1 = 1;
+(select c1 from t1 where 1 = 0) + 1
+NULL
+select c2 in (select c2 from t2) from t1;
+c2 in (select c2 from t2)
+1
+1
+1
+select c2 = any(select c2 from t2) from t1;
+c2 = any(select c2 from t2)
+1
+1
+1
+select c2 != any(select c2 from t2) from t1;
+c2 != any(select c2 from t2)
+1
+1
+1
+select c2 < any(select c2 from t2) from t1;
+c2 < any(select c2 from t2)
+1
+1
+0
+select c2 <= any(select c2 from t2) from t1;
+c2 <= any(select c2 from t2)
+1
+1
+1
+select c2 > any(select c2 from t2) from t1;
+c2 > any(select c2 from t2)
+0
+1
+1
+select c2 >= any(select c2 from t2) from t1;
+c2 >= any(select c2 from t2)
+1
+1
+1
+select c2 <=> any(select c2 from t2) from t1;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '(select c2 from t2) from t1' at line 1
+select exists (select * from t2), not exists (select * from t2) from t1;
+exists (select * from t2)	not exists (select * from t2)
+1	0
+1	0
+1	0
+select exists (select * from t2 where 1 = 0), not exists (select * from t2 where 1 = 0) from t1;
+exists (select * from t2 where 1 = 0)	not exists (select * from t2 where 1 = 0)
+0	1
+0	1
+0	1
+select c2 = all (select c2 from t2) from t1;
+c2 = all (select c2 from t2)
+0
+0
+0
+select c2 = any (select c2 from t2) from t1;
+c2 = any (select c2 from t2)
+1
+1
+1
+select c2 = all (select c3 from t2) from t1;
+c2 = all (select c3 from t2)
+NULL
+0
+0
+select c2 = any (select c3 from t2) from t1;
+c2 = any (select c3 from t2)
+1
+NULL
+NULL
+select c3 = all (select c2 from t2) from t1;
+c3 = all (select c2 from t2)
+0
+NULL
+NULL
+select c3 = any (select c2 from t2) from t1;
+c3 = any (select c2 from t2)
+1
+NULL
+NULL
+select c3 <=> (select c2 from t2) from t1;
+ERROR 21000: Subquery returns more than 1 row
+select (c1, c3) = all (select c1, c2 from t2) from t1;
+(c1, c3) = all (select c1, c2 from t2)
+0
+0
+0
+select (c1, c3) = any (select c1, c2 from t2) from t1;
+(c1, c3) = any (select c1, c2 from t2)
+1
+NULL
+NULL
+select (c1, c3) <=> (select c1, c2 from t2) from t1;
+ERROR 21000: Subquery returns more than 1 row
+select exists (select 1);
+exists (select 1)
+1
+select not exists (select 1);
+not exists (select 1)
+0
+select 1 from dual where exists (select c1 from t2);
+1
+1
+select 1 from dual where not exists (select c1 from t2);
+1
+select * from t1 where exists (select * from t2 where c1 < 0);
+c1	c2	c3	c4
+select * from t1 where exists (select * from t2 where c1 > 0);
+c1	c2	c3	c4
+1	1	1	a
+2	2	NULL	a
+3	3	NULL	a
+select (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 1);
+(select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 1)
+1
+select (select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 1);
+(select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 1)
+NULL
+select (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 0);
+(select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 = 0)
+NULL
+select (select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 0);
+(select c1, c2 from t1 where c1 = 0) = (select c1, c2 from t2 where c1 = 0)
+NULL
+select (select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 1);
+(select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 1)
+1
+select (select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 1);
+(select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 1)
+0
+select (select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 0);
+(select c1, c2 from t1 where c1 = 1) <=> (select c1, c2 from t2 where c1 = 0)
+0
+select (select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 0);
+(select c1, c2 from t1 where c1 = 0) <=> (select c1, c2 from t2 where c1 = 0)
+1
+select (select c1, c2 from t1 where c1 > 1) = (select c1, c2 from t2 where c1 = 1);
+ERROR 21000: Subquery returns more than 1 row
+select (select c1, c2 from t1 where c1 = 1) = (select c1, c2 from t2 where c1 > 1);
+ERROR 21000: Subquery returns more than 1 row
+select (select c1, c2 from t1 where c1 > 1) = (select c1, c2 from t2 where c1 > 1);
+ERROR 21000: Subquery returns more than 1 row
+select c1 + (select c2 from t2 where c1 = 2), c2 in (select c3 from t2) from t1;
+c1 + (select c2 from t2 where c1 = 2)	c2 in (select c3 from t2)
+3	1
+4	NULL
+5	NULL
+select c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) from t1;
+c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2)
+2
+NULL
+NULL
+select * from t1 where c1 + (select c2 from t2 where c1 = t1.c2 and c3 <= t1.c2) < 10;
+c1	c2	c3	c4
+1	1	1	a
+select (select c1, c2 from t2 where c1 = 1) = (c2, c1) from t1;
+(select c1, c2 from t2 where c1 = 1) = (c2, c1)
+1
+0
+0
+select (select c1, c2 from t2 where c1 = 1) = (c1, c2) from t1;
+(select c1, c2 from t2 where c1 = 1) = (c1, c2)
+1
+0
+0
+select (c2, c1) <= (select c1, c2 from t2 where c1 = 1) from t1;
+(c2, c1) <= (select c1, c2 from t2 where c1 = 1)
+1
+0
+0
+select (c1, c2) <= (select c1, c2 from t2 where c1 = 1) from t1;
+(c1, c2) <= (select c1, c2 from t2 where c1 = 1)
+1
+0
+0
+select (select c2, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) from t1;
+(select c2, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1)
+1
+1
+1
+select (select c1, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1) from t1;
+(select c1, c1 from t2 where c1 = 2) >= (select c1, c2 from t2 where c1 = 1)
+1
+1
+1
+select c2 > (select c1 from t2 where c3 is not null) from t1;
+c2 > (select c1 from t2 where c3 is not null)
+0
+1
+1
+select * from t1 where c2 + (select c1 from t2 where c1 = t1.c2) < 10;
+c1	c2	c3	c4
+1	1	1	a
+2	2	NULL	a
+3	3	NULL	a
+set ob_enable_transformation = on;
+connection syscon;

@@ -1,0 +1,19 @@
+#
+# Need to alloc material operator to make producer/consumer threads mode schedulable.
+#
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+
+create table t1 (c1 int, c2 int, c3 int);
+create table t2 (c1 int, c2 int, c3 int);
+
+# need material above hash join. (but root DFO not needed)
+explain select /*+ use_px parallel(2) use_hash(c d) */ * from (select a.c2, b.c3 from  (select /*+ use_hash(a, b) */ c1, c2, count(*) c3 from t1 group by 1, 2) a, (select c1, c2, count(*) c3 from t1 group by 1, 2) b where a.c1 = b.c1) c, (select c1, c2, count(*) c3 from t1 group by 1, 2) d where c.c2 = d.c2;
+
+# need material on left child, if has right DFO.
+explain select /*+ use_px parallel(2) use_merge(a b) */ b.c2, sum(a.c3) from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1 group by 1;
+
+# no material needed for root DFO.
+explain select /*+ use_px parallel(2) use_merge(a b) */ * from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1;
+

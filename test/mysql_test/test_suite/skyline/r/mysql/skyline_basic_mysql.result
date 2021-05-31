@@ -1,0 +1,3514 @@
+drop database if exists hualong;
+create database hualong;
+use hualong;
+create table t1 (pk1 int primary key, a int, b int, c int, d int,
+key idx_a(a),
+key idx_b(b),
+key idx_c(c),
+key idx_a_b(a, b),
+key idx_b_c(b, c),
+key idx_c_a(c, a),
+key idx_a_b_c(a, b, c),
+key idx_b_c_a(b, c, a),
+key idx_c_a_b(c, a, b));
+create table t2 (pk2 int primary key, x int, y int, z int,
+key idx_x_y_z(x, y, z));
+create table t3 (pk1 int primary key, a int, b int, c int, d int,
+key idx_a(a),
+key idx_b(b),
+key idx_c(c),
+key idx_a_b(a, b),
+key idx_b_c(b, c),
+key idx_c_a(c, a),
+key idx_a_b_c(a, b, c) storing (d),
+key idx_b_c_a(b, c, a) storing (d),
+key idx_c_a_b(c, a, b) storing (d));
+create table t4 (
+a1 char(64), a2 char(64), b char(16), c char(16) not null, d char(16), dummy char(248) default ' ',
+index idx_t1_0 (a1),
+index idx_t1_1 (a1,a2,b,c),
+index idx_t1_2 (a1,a2,b));
+create table t5 (pk int primary key, v1 int, v2 int, index idx_v1(v1), index idx_v2(v2));
+create table t6 (pk int primary key, a int, b int, c int, d int, e int,
+index idx_b_c(b, c),
+index idx_b_a_c(b, a, c),
+index idx_b_e_d_c_a(b, e, d, c, a));
+create table t7(a int, b int, c int, d int, e int, f int, key k1(a,c,b), key k2(a,b,c,d,e));
+create table t8(a int primary key, b int, c int, d int, e int, f int, index k1(b,c,e), index k2(c,d,e,f));
+create table tmp (pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int,
+index idx_c1_c2(c1, c2),
+index idx_c1_c2_c3(c1, c2 ,c3),
+index idx_c1_c2_c3_c4(c1, c2, c3, c4));
+create table t9 (c1 int primary key, c2 int, c3 int, c4 varchar(100), c5 int,
+index idx_c2_c5    (c2, c5),
+index idx_c2_c3_c5 (c2, c3, c5),
+index idx_c4_c5    (c4, c5),
+index idx_c4_c3_c5 (c4, c3, c5));
+explain select b from t1;
+Query Plan
+=========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST |
+-----------------------------------------
+|0 |TABLE SCAN|t1(idx_b)|100000   |35694|
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b]), filter(nil), 
+      access([t1.b]), partitions(p0)
+
+explain select b,c from t1;
+Query Plan
+===========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST |
+-------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c)|100000   |46622|
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select * from t1;
+Query Plan
+====================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST |
+------------------------------------
+|0 |TABLE SCAN|t1  |100000   |68478|
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), 
+      access([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0)
+
+explain select b from t1 group by b;
+Query Plan
+=============================================
+|ID|OPERATOR      |NAME     |EST. ROWS|COST |
+---------------------------------------------
+|0 |MERGE GROUP BY|         |101      |57869|
+|1 | TABLE SCAN   |t1(idx_b)|100000   |35694|
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b]), filter(nil), 
+      group([t1.b]), agg_func(nil)
+  1 - output([t1.b]), filter(nil), 
+      access([t1.b]), partitions(p0)
+
+explain select b, c from t1 group by b,c;
+Query Plan
+===============================================
+|ID|OPERATOR      |NAME       |EST. ROWS|COST |
+-----------------------------------------------
+|0 |MERGE GROUP BY|           |10001    |77169|
+|1 | TABLE SCAN   |t1(idx_b_c)|100000   |46622|
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      group([t1.b], [t1.c]), agg_func(nil)
+  1 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select a, b, c from t1 group by b,c;
+Query Plan
+=================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST |
+-------------------------------------------------
+|0 |MERGE GROUP BY|             |10001    |88097|
+|1 | TABLE SCAN   |t1(idx_b_c_a)|100000   |57550|
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      group([t1.b], [t1.c]), agg_func(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+
+explain select b, c from t1 group by c,b;
+Query Plan
+===============================================
+|ID|OPERATOR      |NAME       |EST. ROWS|COST |
+-----------------------------------------------
+|0 |MERGE GROUP BY|           |10001    |77169|
+|1 | TABLE SCAN   |t1(idx_b_c)|100000   |46622|
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      group([t1.b], [t1.c]), agg_func(nil)
+  1 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select a, b, c from t1 group by c,b;
+Query Plan
+=================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST |
+-------------------------------------------------
+|0 |MERGE GROUP BY|             |10001    |88097|
+|1 | TABLE SCAN   |t1(idx_b_c_a)|100000   |57550|
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      group([t1.b], [t1.c]), agg_func(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+
+explain select * from t1 where b = 100 group by c,b limit 100;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |LIMIT          |           |100      |6313|
+|1 | MERGE GROUP BY|           |100      |6300|
+|2 |  TABLE SCAN   |t1(idx_b_c)|990      |6080|
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), limit(100), offset(nil)
+  1 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), 
+      group([t1.c]), agg_func(nil)
+  2 - output([t1.b], [t1.pk1], [t1.a], [t1.c], [t1.d]), filter(nil), 
+      access([t1.b], [t1.pk1], [t1.a], [t1.c], [t1.d]), partitions(p0)
+
+explain select distinct(b) from t1;
+Query Plan
+=============================================
+|ID|OPERATOR      |NAME     |EST. ROWS|COST |
+---------------------------------------------
+|0 |MERGE DISTINCT|         |101      |57869|
+|1 | TABLE SCAN   |t1(idx_b)|100000   |35694|
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b]), filter(nil), 
+      distinct([t1.b])
+  1 - output([t1.b]), filter(nil), 
+      access([t1.b]), partitions(p0)
+
+explain select distinct(b),c from t1;
+Query Plan
+===============================================
+|ID|OPERATOR      |NAME       |EST. ROWS|COST |
+-----------------------------------------------
+|0 |MERGE DISTINCT|           |10001    |77169|
+|1 | TABLE SCAN   |t1(idx_b_c)|100000   |46622|
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      distinct([t1.b], [t1.c])
+  1 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select distinct(b),c from t1 where a > 100;
+Query Plan
+================================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST |
+------------------------------------------------
+|0 |HASH DISTINCT|             |10000    |16787|
+|1 | TABLE SCAN  |t1(idx_a_b_c)|10000    |5766 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      distinct([t1.b], [t1.c])
+  1 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select distinct(c),b from t1;
+Query Plan
+===============================================
+|ID|OPERATOR      |NAME       |EST. ROWS|COST |
+-----------------------------------------------
+|0 |MERGE DISTINCT|           |10001    |77169|
+|1 | TABLE SCAN   |t1(idx_b_c)|100000   |46622|
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c], [t1.b]), filter(nil), 
+      distinct([t1.b], [t1.c])
+  1 - output([t1.c], [t1.b]), filter(nil), 
+      access([t1.c], [t1.b]), partitions(p0)
+
+explain select distinct(c),b, d from t1 where b > 200 limit 100;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME       |EST. ROWS|COST|
+----------------------------------------------
+|0 |LIMIT         |           |100      |751 |
+|1 | HASH DISTINCT|           |100      |737 |
+|2 |  TABLE SCAN  |t1(idx_b_c)|100      |621 |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c], [t1.b], [t1.d]), filter(nil), limit(100), offset(nil)
+  1 - output([t1.c], [t1.b], [t1.d]), filter(nil), 
+      distinct([t1.c], [t1.b], [t1.d])
+  2 - output([t1.b], [t1.c], [t1.d]), filter(nil), 
+      access([t1.b], [t1.c], [t1.d]), partitions(p0)
+
+explain select b from t1 order by b;
+Query Plan
+=========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST |
+-----------------------------------------
+|0 |TABLE SCAN|t1(idx_b)|100000   |35694|
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b]), filter(nil), 
+      access([t1.b]), partitions(p0)
+
+explain select b, c from t1 order by b, c;
+Query Plan
+===========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST |
+-------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c)|100000   |46622|
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select a, b, c from t1 order by b, c, a;
+Query Plan
+=============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST |
+---------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c_a)|100000   |57550|
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+
+explain select a, b, c, d from t1 where b in (100, 200) order by b, c, a limit 100;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c_a)|100      |630 |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c], [t1.d]), partitions(p0), 
+      limit(100), offset(nil)
+
+explain select b from t1 where b = 100;
+Query Plan
+========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST|
+----------------------------------------
+|0 |TABLE SCAN|t1(idx_b)|990      |360 |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b]), filter(nil), 
+      access([t1.b]), partitions(p0)
+
+explain select b, c from t1 where b = 100;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST|
+------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c)|990      |489 |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select b, c, a from t1 where b = 100;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c_a)|990      |582 |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select * from t1 where b = 100 limit 100;
+Query Plan
+========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST|
+----------------------------------------
+|0 |TABLE SCAN|t1(idx_b)|100      |630 |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), 
+      access([t1.b], [t1.pk1], [t1.a], [t1.c], [t1.d]), partitions(p0), 
+      limit(100), offset(nil)
+
+explain select b, c from t1 where b = 100 and c = 200;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST|
+------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c)|10       |38  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select b, c from t1 where b = 100 or c = 200;
+Query Plan
+=============================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST|
+---------------------------------------------
+|0 |UNION ALL  |             |1485     |1698|
+|1 | TABLE SCAN|t1(idx_b_c)  |990      |489 |
+|2 | TABLE SCAN|t1(idx_c_a_b)|495      |643 |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+  2 - output([t1.b], [t1.c]), filter([lnnvl(cast(t1.b = 100, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select b, c from t1 where b + c = 100;
+Query Plan
+===========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST |
+-------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c)|500      |54994|
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter([t1.b + t1.c = 100]), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select b from t1 where b in (1, 2, 3);
+Query Plan
+========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST|
+----------------------------------------
+|0 |TABLE SCAN|t1(idx_b)|2970     |1078|
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b]), filter(nil), 
+      access([t1.b]), partitions(p0)
+
+explain select b, c from t1 where b in (1, 2, 3);
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST|
+------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c)|2970     |1393|
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select b, c, a from t1 where b in (1, 2, 3);
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c_a)|2970     |1745|
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select * from t1 where b in (1, 2, 3) limit 100;
+Query Plan
+========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST|
+----------------------------------------
+|0 |TABLE SCAN|t1(idx_b)|100      |630 |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), 
+      access([t1.b], [t1.pk1], [t1.a], [t1.c], [t1.d]), partitions(p0), 
+      limit(100), offset(nil)
+
+explain select b from t1 where b < 100;
+Query Plan
+========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST|
+----------------------------------------
+|0 |TABLE SCAN|t1(idx_b)|10000    |3573|
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b]), filter(nil), 
+      access([t1.b]), partitions(p0)
+
+explain select b, c from t1 where b < 100;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST|
+------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c)|10000    |4688|
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select b, c, a from t1 where b < 100;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c_a)|10000    |5766|
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select * from t1 where b < 100 limit 100;
+Query Plan
+========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST|
+----------------------------------------
+|0 |TABLE SCAN|t1(idx_b)|100      |630 |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), 
+      access([t1.b], [t1.pk1], [t1.a], [t1.c], [t1.d]), partitions(p0), 
+      limit(100), offset(nil)
+
+explain select b from t1 where b > 0 and b < 100;
+Query Plan
+========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST|
+----------------------------------------
+|0 |TABLE SCAN|t1(idx_b)|5000     |1805|
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b]), filter(nil), 
+      access([t1.b]), partitions(p0)
+
+explain select b, c from t1 where b > 0 and b < 100;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST|
+------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c)|5000     |2344|
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select b, c, a from t1 where b > 0 and b < 100;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c_a)|5000     |2883|
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select * from t1 where b > 0 and b < 100 limit 100;
+Query Plan
+========================================
+|ID|OPERATOR  |NAME     |EST. ROWS|COST|
+----------------------------------------
+|0 |TABLE SCAN|t1(idx_b)|100      |630 |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), 
+      access([t1.b], [t1.pk1], [t1.a], [t1.c], [t1.d]), partitions(p0), 
+      limit(100), offset(nil)
+
+explain select b, c from t1 where b = 100 and c > 0 and c < 100;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST|
+------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c)|50       |46  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c]), partitions(p0)
+
+explain select * from t1 where b = 100 and c > 0 and c < 100 limit 100;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST|
+------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c)|50       |354 |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), 
+      access([t1.b], [t1.c], [t1.pk1], [t1.a], [t1.d]), partitions(p0), 
+      limit(100), offset(nil)
+
+explain select a, b, c from t1 where b = 100 and a > 0 and a < 100 and c > 100;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c_a)|5        |92  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter([t1.a > 0], [t1.a < 100]), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+
+explain select a, b, c from t1 where b = 100 and a > 0 and a < 100 and c = 200;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c_a)|1        |36  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+
+explain select a, b, c from t1 where b = 100 or c = 100 or a = 100 group by c, b;
+Query Plan
+===============================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST|
+-----------------------------------------------
+|0 |HASH GROUP BY|             |1733     |4896|
+|1 | SUBPLAN SCAN|VIEW1        |1733     |2986|
+|2 |  UNION ALL  |             |1733     |2747|
+|3 |   TABLE SCAN|t1(idx_b_c_a)|990      |582 |
+|4 |   TABLE SCAN|t1(idx_c_a_b)|495      |665 |
+|5 |   TABLE SCAN|t1(idx_a_b_c)|248      |748 |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([VIEW1.t1.a], [VIEW1.t1.b], [VIEW1.t1.c]), filter(nil), 
+      group([VIEW1.t1.c], [VIEW1.t1.b]), agg_func(nil)
+  1 - output([VIEW1.t1.b], [VIEW1.t1.c], [VIEW1.t1.a]), filter(nil), 
+      access([VIEW1.t1.b], [VIEW1.t1.c], [VIEW1.t1.a])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  3 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  4 - output([t1.b], [t1.c], [t1.a]), filter([lnnvl(cast(t1.b = 100, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  5 - output([t1.b], [t1.c], [t1.a]), filter([lnnvl(cast(t1.b = 100, TINYINT(-1, 0)))], [lnnvl(cast(t1.c = 100, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select a, b, c from t1 where b in (100, 200, 300) or c in (100, 200, 300) or a in (100, 200, 300) group by c, b;
+Query Plan
+================================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST |
+------------------------------------------------
+|0 |HASH GROUP BY|             |5198     |14686|
+|1 | SUBPLAN SCAN|VIEW1        |5198     |8958 |
+|2 |  UNION ALL  |             |5198     |8241 |
+|3 |   TABLE SCAN|t1(idx_b_c_a)|2970     |1745 |
+|4 |   TABLE SCAN|t1(idx_c_a_b)|1485     |1994 |
+|5 |   TABLE SCAN|t1(idx_a_b_c)|743      |2242 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([VIEW1.t1.a], [VIEW1.t1.b], [VIEW1.t1.c]), filter(nil), 
+      group([VIEW1.t1.c], [VIEW1.t1.b]), agg_func(nil)
+  1 - output([VIEW1.t1.b], [VIEW1.t1.c], [VIEW1.t1.a]), filter(nil), 
+      access([VIEW1.t1.b], [VIEW1.t1.c], [VIEW1.t1.a])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  3 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  4 - output([t1.b], [t1.c], [t1.a]), filter([lnnvl(cast(t1.b IN (100, 200, 300), TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  5 - output([t1.b], [t1.c], [t1.a]), filter([lnnvl(cast(t1.b IN (100, 200, 300), TINYINT(-1, 0)))], [lnnvl(cast(t1.c IN (100, 200, 300), TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select a, b, c from t1 where (b > 100 or b < 200) or (c > 100 or c < 200) or (c > 100 or c < 200) group by c, b;
+Query Plan
+================================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST |
+------------------------------------------------
+|0 |HASH GROUP BY|             |10001    |72661|
+|1 | SUBPLAN SCAN|VIEW1        |20000    |57776|
+|2 |  UNION ALL  |             |20000    |55016|
+|3 |   TABLE SCAN|t1(idx_b_c_a)|10000    |5766 |
+|4 |   TABLE SCAN|t1(idx_b_c_a)|5000     |6603 |
+|5 |   TABLE SCAN|t1(idx_c_a_b)|2500     |7441 |
+|6 |   TABLE SCAN|t1(idx_c_a_b)|1250     |8278 |
+|7 |   TABLE SCAN|t1(idx_c_a_b)|625      |9115 |
+|8 |   TABLE SCAN|t1(idx_c_a_b)|625      |9115 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([VIEW1.t1.a], [VIEW1.t1.b], [VIEW1.t1.c]), filter(nil), 
+      group([VIEW1.t1.c], [VIEW1.t1.b]), agg_func(nil)
+  1 - output([VIEW1.t1.b], [VIEW1.t1.c], [VIEW1.t1.a]), filter(nil), 
+      access([VIEW1.t1.b], [VIEW1.t1.c], [VIEW1.t1.a])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  3 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  4 - output([t1.b], [t1.c], [t1.a]), filter([lnnvl(cast(t1.b > 100, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  5 - output([t1.b], [t1.c], [t1.a]), filter([lnnvl(cast(t1.b > 100, TINYINT(-1, 0)))], [lnnvl(cast(t1.b < 200, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  6 - output([t1.b], [t1.c], [t1.a]), filter([lnnvl(cast(t1.b > 100, TINYINT(-1, 0)))], [lnnvl(cast(t1.b < 200, TINYINT(-1, 0)))], [lnnvl(cast(t1.c > 100, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  7 - output([t1.b], [t1.c], [t1.a]), filter([lnnvl(cast(t1.b > 100, TINYINT(-1, 0)))], [lnnvl(cast(t1.b < 200, TINYINT(-1, 0)))], [lnnvl(cast(t1.c > 100, TINYINT(-1, 0)))], [lnnvl(cast(t1.c < 200, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  8 - output([t1.b], [t1.c], [t1.a]), filter([lnnvl(cast(t1.b > 100, TINYINT(-1, 0)))], [lnnvl(cast(t1.b < 200, TINYINT(-1, 0)))], [lnnvl(cast(t1.c > 100, TINYINT(-1, 0)))], [lnnvl(cast(t1.c < 200, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select a, b, c, d from t1 where b = 100 and a > 0 and a < 100 and c = 200 limit 100;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t1(idx_b_c_a)|1        |89  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c], [t1.d]), partitions(p0), 
+      limit(100), offset(nil)
+
+explain select * from t1 join t2 on t1.pk1 = t2.pk2;
+Query Plan
+======================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST  |
+--------------------------------------
+|0 |MERGE JOIN |    |100001   |221661|
+|1 | TABLE SCAN|t1  |100000   |68478 |
+|2 | TABLE SCAN|t2  |100000   |66272 |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d], [t2.pk2], [t2.x], [t2.y], [t2.z]), filter(nil), 
+      equal_conds([t1.pk1 = t2.pk2]), other_conds(nil)
+  1 - output([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), 
+      access([t1.pk1], [t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0)
+  2 - output([t2.pk2], [t2.x], [t2.y], [t2.z]), filter(nil), 
+      access([t2.pk2], [t2.x], [t2.y], [t2.z]), partitions(p0)
+
+explain select a, b, c from t1 join t2 on t1.b = t2.x;
+Query Plan
+=================================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST    |
+-------------------------------------------------
+|0 |MERGE JOIN |             |98010000 |58274960|
+|1 | TABLE SCAN|t1(idx_b_c_a)|100000   |57550   |
+|2 | TABLE SCAN|t2(idx_x_y_z)|100000   |61860   |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x]), other_conds(nil)
+  1 - output([t1.b], [t1.a], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+  2 - output([t2.x]), filter(nil), 
+      access([t2.x]), partitions(p0)
+
+explain select a, b, c from t1 join t2 where t1.b = t2.x;
+Query Plan
+=================================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST    |
+-------------------------------------------------
+|0 |MERGE JOIN |             |98010000 |58274960|
+|1 | TABLE SCAN|t1(idx_b_c_a)|100000   |57550   |
+|2 | TABLE SCAN|t2(idx_x_y_z)|100000   |61860   |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x]), other_conds(nil)
+  1 - output([t1.b], [t1.a], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+  2 - output([t2.x]), filter(nil), 
+      access([t2.x]), partitions(p0)
+
+explain select a, b, c from t1 join t2 on t1.b = t2.x and t1.c = t2.y;
+Query Plan
+===============================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST  |
+-----------------------------------------------
+|0 |MERGE JOIN |             |960597   |799357|
+|1 | TABLE SCAN|t1(idx_b_c_a)|100000   |57550 |
+|2 | TABLE SCAN|t2(idx_x_y_z)|100000   |64066 |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x], [t1.c = t2.y]), other_conds(nil)
+  1 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  2 - output([t2.x], [t2.y]), filter(nil), 
+      access([t2.x], [t2.y]), partitions(p0)
+
+explain select a, b, c from t1 join t2 where t1.b = t2.x and t1.c = t2.y;
+Query Plan
+===============================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST  |
+-----------------------------------------------
+|0 |MERGE JOIN |             |960597   |799357|
+|1 | TABLE SCAN|t1(idx_b_c_a)|100000   |57550 |
+|2 | TABLE SCAN|t2(idx_x_y_z)|100000   |64066 |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x], [t1.c = t2.y]), other_conds(nil)
+  1 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  2 - output([t2.x], [t2.y]), filter(nil), 
+      access([t2.x], [t2.y]), partitions(p0)
+
+explain select a, b, c from t1 join t2 on t1.b = t2.x and t1.c = t2.y and t1.a = t2.z;
+Query Plan
+===============================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST  |
+-----------------------------------------------
+|0 |MERGE JOIN |             |94149    |223028|
+|1 | TABLE SCAN|t1(idx_b_c_a)|100000   |57550 |
+|2 | TABLE SCAN|t2(idx_x_y_z)|100000   |66272 |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x], [t1.c = t2.y], [t1.a = t2.z]), other_conds(nil)
+  1 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  2 - output([t2.x], [t2.y], [t2.z]), filter(nil), 
+      access([t2.x], [t2.y], [t2.z]), partitions(p0)
+
+explain select a, b, c from t1 join t2 where t1.b = t2.x and t1.c = t2.y and t1.a = t2.z;
+Query Plan
+===============================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST  |
+-----------------------------------------------
+|0 |MERGE JOIN |             |94149    |223028|
+|1 | TABLE SCAN|t1(idx_b_c_a)|100000   |57550 |
+|2 | TABLE SCAN|t2(idx_x_y_z)|100000   |66272 |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x], [t1.c = t2.y], [t1.a = t2.z]), other_conds(nil)
+  1 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  2 - output([t2.x], [t2.y], [t2.z]), filter(nil), 
+      access([t2.x], [t2.y], [t2.z]), partitions(p0)
+
+explain select t.a, t.b, t.c from t1 as t join t1 as tt join t1 as ttt on t.b = tt.c and t.c = tt.a and ttt.c > 100;
+Query Plan
+==================================================================
+|ID|OPERATOR                  |NAME        |EST. ROWS |COST      |
+------------------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN|            |9605960100|6798342429|
+|1 | MERGE JOIN               |            |960597    |781913    |
+|2 |  TABLE SCAN              |t(idx_b_c_a)|100000    |57550     |
+|3 |  TABLE SCAN              |tt(idx_c_a) |100000    |46622     |
+|4 | MATERIAL                 |            |10000     |5411      |
+|5 |  TABLE SCAN              |ttt(idx_c)  |10000     |3573      |
+==================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t.a], [t.b], [t.c]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([t.a], [t.b], [t.c]), filter(nil), 
+      equal_conds([t.b = tt.c], [t.c = tt.a]), other_conds(nil)
+  2 - output([t.b], [t.c], [t.a]), filter(nil), 
+      access([t.b], [t.c], [t.a]), partitions(p0)
+  3 - output([tt.c], [tt.a]), filter(nil), 
+      access([tt.c], [tt.a]), partitions(p0)
+  4 - output([1]), filter(nil)
+  5 - output([1]), filter(nil), 
+      access([ttt.c]), partitions(p0)
+
+explain select a, b, c from t1 left join t2 on t1.b = t2.x order by b, c;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME         |EST. ROWS|COST    |
+------------------------------------------------------
+|0 |MERGE OUTER JOIN|             |98010000 |58274960|
+|1 | TABLE SCAN     |t1(idx_b_c_a)|100000   |57550   |
+|2 | TABLE SCAN     |t2(idx_x_y_z)|100000   |61860   |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x]), other_conds(nil)
+  1 - output([t1.b], [t1.a], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+  2 - output([t2.x]), filter(nil), 
+      access([t2.x]), partitions(p0)
+
+explain select a, b, c from t2 left join t1 on t1.b = t2.x order by b, c;
+Query Plan
+========================================================
+|ID|OPERATOR         |NAME         |EST. ROWS|COST     |
+--------------------------------------------------------
+|0 |SORT             |             |98010000 |386359245|
+|1 | MERGE OUTER JOIN|             |98010000 |58274960 |
+|2 |  TABLE SCAN     |t2(idx_x_y_z)|100000   |61860    |
+|3 |  TABLE SCAN     |t1(idx_b_c_a)|100000   |57550    |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), sort_keys([t1.b, ASC], [t1.c, ASC])
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x]), other_conds(nil)
+  2 - output([t2.x]), filter(nil), 
+      access([t2.x]), partitions(p0)
+  3 - output([t1.b], [t1.a], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+
+explain select a, b, c from t1 union select x, y, z from t2;
+Query Plan
+========================================================
+|ID|OPERATOR            |NAME         |EST. ROWS|COST  |
+--------------------------------------------------------
+|0 |MERGE UNION DISTINCT|             |200000   |210824|
+|1 | TABLE SCAN         |t1(idx_a_b_c)|100000   |57550 |
+|2 | TABLE SCAN         |t2(idx_x_y_z)|100000   |66272 |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+  2 - output([t2.x], [t2.y], [t2.z]), filter(nil), 
+      access([t2.x], [t2.y], [t2.z]), partitions(p0)
+
+explain select a, b, c from t1 order by c, b, a union select x, y, z from t2;
+Query Plan
+========================================================
+|ID|OPERATOR            |NAME         |EST. ROWS|COST  |
+--------------------------------------------------------
+|0 |MERGE UNION DISTINCT|             |200000   |210824|
+|1 | TABLE SCAN         |t1(idx_a_b_c)|100000   |57550 |
+|2 | TABLE SCAN         |t2(idx_x_y_z)|100000   |66272 |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+  2 - output([t2.x], [t2.y], [t2.z]), filter(nil), 
+      access([t2.x], [t2.y], [t2.z]), partitions(p0)
+
+explain select b, c, a from t1 where b > 100 union select x, y, z from t2 where x > 100;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME         |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |MERGE UNION DISTINCT|             |20000    |21126|
+|1 | TABLE SCAN         |t1(idx_b_c_a)|10000    |5766 |
+|2 | TABLE SCAN         |t2(idx_x_y_z)|10000    |6660 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  2 - output([t2.x], [t2.y], [t2.z]), filter(nil), 
+      access([t2.x], [t2.y], [t2.z]), partitions(p0)
+
+explain select b, c, a from t1 where b > 100 and b < 200 union select x, y, z from t2 where x > 100 and x < 200;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME         |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |MERGE UNION DISTINCT|             |10000    |10581|
+|1 | TABLE SCAN         |t1(idx_b_c_a)|5000     |2883 |
+|2 | TABLE SCAN         |t2(idx_x_y_z)|5000     |3348 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  2 - output([t2.x], [t2.y], [t2.z]), filter(nil), 
+      access([t2.x], [t2.y], [t2.z]), partitions(p0)
+
+explain select a, b, c from t1 where b = 100 group by c;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE GROUP BY|             |100      |801 |
+|1 | TABLE SCAN   |t1(idx_b_c_a)|990      |582 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      group([t1.c]), agg_func(nil)
+  1 - output([t1.b], [t1.a], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+
+explain select a, b, c from t1 where b > 100 and b < 200 group by c, b;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE GROUP BY|             |5000     |4411|
+|1 | TABLE SCAN   |t1(idx_b_c_a)|5000     |2883|
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      group([t1.b], [t1.c]), agg_func(nil)
+  1 - output([t1.b], [t1.a], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+
+explain select a, b, c from t1 where b > 100 and b < 200 group by c, b having sum(c) > 1000;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE GROUP BY|             |250      |4676|
+|1 | TABLE SCAN   |t1(idx_b_c_a)|5000     |2883|
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter([T_FUN_SUM(t1.c) > ?]), 
+      group([t1.b], [t1.c]), agg_func([T_FUN_SUM(t1.c)])
+  1 - output([t1.b], [t1.a], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+
+explain select distinct a, b, c from t1 where b = 100 order by b;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE DISTINCT|             |990      |884 |
+|1 | TABLE SCAN   |t1(idx_b_c_a)|990      |582 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      distinct([t1.c], [t1.a])
+  1 - output([t1.b], [t1.a], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+
+explain select distinct a, b, c from t1 where (b > 100 and b < 200) or (a < 200 and a > 100) order by b desc;
+Query Plan
+========================================================
+|ID|OPERATOR             |NAME         |EST. ROWS|COST |
+--------------------------------------------------------
+|0 |SORT                 |             |7500     |29002|
+|1 | MERGE UNION DISTINCT|             |7500     |14105|
+|2 |  TABLE SCAN         |t1(idx_b_c_a)|5000     |2883 |
+|3 |  SORT               |             |2500     |7960 |
+|4 |   TABLE SCAN        |t1(idx_a_b_c)|2500     |3302 |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), sort_keys([UNION([2]), DESC])
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  2 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+  3 - output([t1.a], [t1.b], [t1.c]), filter(nil), sort_keys([t1.b, ASC], [t1.c, ASC], [t1.a, ASC])
+  4 - output([t1.b], [t1.a], [t1.c]), filter([lnnvl(cast(t1.b > 100 AND t1.b < 200, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+
+explain select distinct a, b, c from t1 where b = 100 or c = 200 order by b desc, c desc;
+Query Plan
+=======================================================
+|ID|OPERATOR             |NAME         |EST. ROWS|COST|
+-------------------------------------------------------
+|0 |SORT                 |             |1485     |4564|
+|1 | MERGE UNION DISTINCT|             |1485     |1892|
+|2 |  TABLE SCAN         |t1(idx_b_c_a)|990      |582 |
+|3 |  TABLE SCAN         |t1(idx_c_a_b)|495      |665 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), sort_keys([UNION([2]), DESC], [UNION([3]), DESC])
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  2 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  3 - output([t1.a], [t1.b], [t1.c]), filter([lnnvl(cast(t1.b = 100, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select /*+index(t1 idx_b_c)*/ distinct a, b, c from t1 where b = 100 or c = 200 order by b desc, c desc;
+Query Plan
+=======================================================
+|ID|OPERATOR      |NAME               |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |MERGE DISTINCT|                   |1971     |64130|
+|1 | SORT         |                   |1971     |63364|
+|2 |  TABLE SCAN  |t1(idx_b_c,Reverse)|1971     |61574|
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      distinct([t1.b], [t1.c], [t1.a])
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), sort_keys([t1.b, DESC], [t1.c, DESC], [t1.a, ASC]), prefix_pos(2)
+  2 - output([t1.b], [t1.c], [t1.a]), filter([t1.b = 100 OR t1.c = 200]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select /*+index(t1 idx_b_c_a)*/ distinct a, b, c from t1 where b = 100 or c = 200 order by b desc, c desc;
+Query Plan
+=========================================================
+|ID|OPERATOR      |NAME                 |EST. ROWS|COST |
+---------------------------------------------------------
+|0 |MERGE DISTINCT|                     |1971     |66689|
+|1 | TABLE SCAN   |t1(idx_b_c_a,Reverse)|1971     |65922|
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      distinct([t1.b], [t1.c], [t1.a])
+  1 - output([t1.b], [t1.c], [t1.a]), filter([t1.b = 100 OR t1.c = 200]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select distinct a, b, c from t1 where b in (100, 200) or c in (200, 400) order by b desc, c desc;
+Query Plan
+========================================================
+|ID|OPERATOR             |NAME         |EST. ROWS|COST |
+--------------------------------------------------------
+|0 |SORT                 |             |2970     |11112|
+|1 | MERGE UNION DISTINCT|             |2970     |5517 |
+|2 |  TABLE SCAN         |t1(idx_b_c_a)|1980     |1163 |
+|3 |  SORT               |             |990      |3062 |
+|4 |   TABLE SCAN        |t1(idx_c_a_b)|990      |1329 |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), sort_keys([UNION([2]), DESC], [UNION([3]), DESC])
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  2 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  3 - output([t1.a], [t1.b], [t1.c]), filter(nil), sort_keys([t1.b, ASC], [t1.c, ASC], [t1.a, ASC])
+  4 - output([t1.b], [t1.c], [t1.a]), filter([lnnvl(cast(t1.b IN (100, 200), TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select distinct b, c, a from t1 where b > 100 and b < 200 and c > 100 and a > 100 order by b, c;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE DISTINCT|             |51       |4577|
+|1 | TABLE SCAN   |t1(idx_b_c_a)|51       |4558|
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      distinct([t1.b], [t1.c], [t1.a])
+  1 - output([t1.b], [t1.c], [t1.a]), filter([t1.c > 100], [t1.a > 100]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+
+explain select distinct a, b, c from t1 group by c, b order by c;
+Query Plan
+===================================================
+|ID|OPERATOR       |NAME         |EST. ROWS|COST  |
+---------------------------------------------------
+|0 |SORT           |             |10001    |108306|
+|1 | MERGE GROUP BY|             |10001    |88097 |
+|2 |  TABLE SCAN   |t1(idx_b_c_a)|100000   |57550 |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), sort_keys([t1.c, ASC])
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      group([t1.b], [t1.c]), agg_func(nil)
+  2 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+
+explain select distinct a, b, c from t1 join t2 where t1.b = t2.x and t1.c = t2.y group by c, b order by b, c;
+Query Plan
+===================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST   |
+---------------------------------------------------
+|0 |MERGE GROUP BY|             |10001    |1092790|
+|1 | MERGE JOIN   |             |960597   |799357 |
+|2 |  TABLE SCAN  |t1(idx_b_c_a)|100000   |57550  |
+|3 |  TABLE SCAN  |t2(idx_x_y_z)|100000   |64066  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      group([t1.b], [t1.c]), agg_func(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x], [t1.c = t2.y]), other_conds(nil)
+  2 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  3 - output([t2.x], [t2.y]), filter(nil), 
+      access([t2.x], [t2.y]), partitions(p0)
+
+explain select a, b, c from t1 join t2 on t1.b != t2.x group by c, b;
+Query Plan
+==========================================================
+|ID|OPERATOR         |NAME         |EST. ROWS |COST      |
+----------------------------------------------------------
+|0 |MERGE GROUP BY   |             |10001     |6894337182|
+|1 | NESTED-LOOP JOIN|             |5000000000|5366985335|
+|2 |  TABLE SCAN     |t1(idx_b_c_a)|100000    |57550     |
+|3 |  MATERIAL       |             |100000    |80235     |
+|4 |   TABLE SCAN    |t2           |100000    |61860     |
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      group([t1.b], [t1.c]), agg_func(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      conds([t1.b != t2.x]), nl_params_(nil)
+  2 - output([t1.b], [t1.a], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+  3 - output([t2.x]), filter(nil)
+  4 - output([t2.x]), filter(nil), 
+      access([t2.x]), partitions(p0)
+
+explain select a, b, c from t1 join t2 on t1.b = t2.x and t1.c = t2.y group by c, b;
+Query Plan
+===================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST   |
+---------------------------------------------------
+|0 |MERGE GROUP BY|             |10001    |1092790|
+|1 | MERGE JOIN   |             |960597   |799357 |
+|2 |  TABLE SCAN  |t1(idx_b_c_a)|100000   |57550  |
+|3 |  TABLE SCAN  |t2(idx_x_y_z)|100000   |64066  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      group([t1.b], [t1.c]), agg_func(nil)
+  1 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x], [t1.c = t2.y]), other_conds(nil)
+  2 - output([t1.b], [t1.c], [t1.a]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+  3 - output([t2.x], [t2.y]), filter(nil), 
+      access([t2.x], [t2.y]), partitions(p0)
+
+explain select a, b, c from t1 join t2 on t1.b = t2.x order by b, c;
+Query Plan
+=================================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST    |
+-------------------------------------------------
+|0 |MERGE JOIN |             |98010000 |58274960|
+|1 | TABLE SCAN|t1(idx_b_c_a)|100000   |57550   |
+|2 | TABLE SCAN|t2(idx_x_y_z)|100000   |61860   |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      equal_conds([t1.b = t2.x]), other_conds(nil)
+  1 - output([t1.b], [t1.a], [t1.c]), filter(nil), 
+      access([t1.b], [t1.a], [t1.c]), partitions(p0)
+  2 - output([t2.x]), filter(nil), 
+      access([t2.x]), partitions(p0)
+
+explain select a,b,c from t3 where d in (select pk2 from t2) group by a,b;
+Query Plan
+=================================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST  |
+-------------------------------------------------
+|0 |HASH GROUP BY|             |10001    |374643|
+|1 | HASH JOIN   |             |99000    |329234|
+|2 |  TABLE SCAN |t2           |100000   |59654 |
+|3 |  TABLE SCAN |t3(idx_a_b_c)|100000   |68478 |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      group([t3.a], [t3.b]), agg_func(nil)
+  1 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t3.d = t2.pk2]), other_conds(nil)
+  2 - output([t2.pk2]), filter(nil), 
+      access([t2.pk2]), partitions(p0)
+  3 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
+
+explain select a,b,c from t3 where d not in (select pk2 from t2) group by a,b;
+Query Plan
+==============================================================
+|ID|OPERATOR              |NAME         |EST. ROWS|COST      |
+--------------------------------------------------------------
+|0 |MERGE GROUP BY        |             |990      |2820256941|
+|1 | NESTED-LOOP ANTI JOIN|             |990      |2820256638|
+|2 |  TABLE SCAN          |t3(idx_a_b_c)|100000   |68478     |
+|3 |  MATERIAL            |             |100000   |78030     |
+|4 |   TABLE SCAN         |t2           |100000   |59654     |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      group([t3.a], [t3.b]), agg_func(nil)
+  1 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      conds([t3.d = t2.pk2 OR (T_OP_IS, t3.d, NULL, 0)]), nl_params_(nil)
+  2 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
+  3 - output([t2.pk2]), filter(nil)
+  4 - output([t2.pk2]), filter(nil), 
+      access([t2.pk2]), partitions(p0)
+
+explain select a,b,c from t3 where d in (select pk2 from t2) order by a,b;
+Query Plan
+================================================
+|ID|OPERATOR    |NAME         |EST. ROWS|COST  |
+------------------------------------------------
+|0 |SORT        |             |99000    |596550|
+|1 | HASH JOIN  |             |99000    |329234|
+|2 |  TABLE SCAN|t2           |100000   |59654 |
+|3 |  TABLE SCAN|t3(idx_a_b_c)|100000   |68478 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c]), filter(nil), sort_keys([t3.a, ASC], [t3.b, ASC])
+  1 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t3.d = t2.pk2]), other_conds(nil)
+  2 - output([t2.pk2]), filter(nil), 
+      access([t2.pk2]), partitions(p0)
+  3 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
+
+explain select a,b,c from t3 where d not in (select pk2 from t2) order by a,b;
+Query Plan
+=============================================================
+|ID|OPERATOR             |NAME         |EST. ROWS|COST      |
+-------------------------------------------------------------
+|0 |NESTED-LOOP ANTI JOIN|             |990      |2820256638|
+|1 | TABLE SCAN          |t3(idx_a_b_c)|100000   |68478     |
+|2 | MATERIAL            |             |100000   |78030     |
+|3 |  TABLE SCAN         |t2           |100000   |59654     |
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      conds([t3.d = t2.pk2 OR (T_OP_IS, t3.d, NULL, 0)]), nl_params_(nil)
+  1 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
+  2 - output([t2.pk2]), filter(nil)
+  3 - output([t2.pk2]), filter(nil), 
+      access([t2.pk2]), partitions(p0)
+
+explain select distinct a,b,c from t3 where d in (select pk2 from t2);
+Query Plan
+=================================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST  |
+-------------------------------------------------
+|0 |HASH DISTINCT|             |99000    |444097|
+|1 | HASH JOIN   |             |99000    |329234|
+|2 |  TABLE SCAN |t2           |100000   |59654 |
+|3 |  TABLE SCAN |t3(idx_a_b_c)|100000   |68478 |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      distinct([t3.a], [t3.b], [t3.c])
+  1 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t3.d = t2.pk2]), other_conds(nil)
+  2 - output([t2.pk2]), filter(nil), 
+      access([t2.pk2]), partitions(p0)
+  3 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
+
+explain select distinct a,b,c from t3 where d not in (select pk2 from t2);
+Query Plan
+==============================================================
+|ID|OPERATOR              |NAME         |EST. ROWS|COST      |
+--------------------------------------------------------------
+|0 |MERGE DISTINCT        |             |990      |2820257024|
+|1 | NESTED-LOOP ANTI JOIN|             |990      |2820256638|
+|2 |  TABLE SCAN          |t3(idx_a_b_c)|100000   |68478     |
+|3 |  MATERIAL            |             |100000   |78030     |
+|4 |   TABLE SCAN         |t2           |100000   |59654     |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      distinct([t3.a], [t3.b], [t3.c])
+  1 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      conds([t3.d = t2.pk2 OR (T_OP_IS, t3.d, NULL, 0)]), nl_params_(nil)
+  2 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
+  3 - output([t2.pk2]), filter(nil)
+  4 - output([t2.pk2]), filter(nil), 
+      access([t2.pk2]), partitions(p0)
+
+explain select distinct a,b,c from t3 where d in (select pk2 from t2) union select x,y,z from t2;
+Query Plan
+=======================================================
+|ID|OPERATOR           |NAME         |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |HASH UNION DISTINCT|             |199000   |626392|
+|1 | HASH JOIN         |             |99000    |329234|
+|2 |  TABLE SCAN       |t2           |100000   |59654 |
+|3 |  TABLE SCAN       |t3(idx_a_b_c)|100000   |68478 |
+|4 | TABLE SCAN        |t2(idx_x_y_z)|100000   |66272 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      equal_conds([t3.d = t2.pk2]), other_conds(nil)
+  2 - output([t2.pk2]), filter(nil), 
+      access([t2.pk2]), partitions(p0)
+  3 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
+  4 - output([t2.x], [t2.y], [t2.z]), filter(nil), 
+      access([t2.x], [t2.y], [t2.z]), partitions(p0)
+
+explain select distinct a,b,c from t3 where d > any (select pk2 from t2);
+Query Plan
+=======================================================
+|ID|OPERATOR           |NAME         |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |MERGE DISTINCT     |             |33334    |126666|
+|1 | NESTED-LOOP JOIN  |             |33334    |113693|
+|2 |  TABLE SCAN       |t3(idx_a_b_c)|100000   |68478 |
+|3 |  MATERIAL         |             |1        |37    |
+|4 |   SUBPLAN SCAN    |VIEW1        |1        |37    |
+|5 |    SCALAR GROUP BY|             |1        |37    |
+|6 |     SUBPLAN SCAN  |VIEW2        |1        |37    |
+|7 |      TABLE SCAN   |t2           |1        |36    |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      distinct([t3.a], [t3.b], [t3.c])
+  1 - output([t3.a], [t3.b], [t3.c]), filter(nil), 
+      conds([t3.d > VIEW1.pk2]), nl_params_(nil)
+  2 - output([t3.d], [t3.a], [t3.b], [t3.c]), filter(nil), 
+      access([t3.d], [t3.a], [t3.b], [t3.c]), partitions(p0)
+  3 - output([VIEW1.pk2]), filter(nil)
+  4 - output([VIEW1.pk2]), filter(nil), 
+      access([VIEW1.pk2])
+  5 - output([T_FUN_MIN(VIEW2.pk2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MIN(VIEW2.pk2)])
+  6 - output([VIEW2.pk2]), filter(nil), 
+      access([VIEW2.pk2])
+  7 - output([t2.pk2]), filter(nil), 
+      access([t2.pk2]), partitions(p0), 
+      limit(1), offset(nil)
+
+explain select a, b, c from t1 where b = 100 and c < 100 and c > 100 order by c desc limit 0, 100;
+Query Plan
+====================================================
+|ID|OPERATOR  |NAME                 |EST. ROWS|COST|
+----------------------------------------------------
+|0 |TABLE SCAN|t1(idx_c_a_b,Reverse)|0        |37  |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c]), filter([t1.b = 100]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0), 
+      limit(100), offset(0)
+
+explain select a, b, c from t1 where b = 100 or (b = 200 and c = 300) order by c desc limit 0, 100;
+Query Plan
+=======================================================
+|ID|OPERATOR     |NAME                 |EST. ROWS|COST|
+-------------------------------------------------------
+|0 |LIMIT        |                     |100      |286 |
+|1 | TOP-N SORT  |                     |100      |273 |
+|2 |  UNION ALL  |                     |105      |143 |
+|3 |   TABLE SCAN|t1(idx_b_c_a,Reverse)|100      |59  |
+|4 |   TABLE SCAN|t1(idx_b_c_a)        |5        |39  |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), limit(100), offset(0)
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), sort_keys([UNION([3]), DESC]), topn(100 + 0)
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  3 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0), 
+      limit(?), offset(nil)
+  4 - output([t1.a], [t1.b], [t1.c]), filter([lnnvl(cast(t1.b = 100, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0), 
+      limit(?), offset(nil)
+
+explain select a, b, c from t1 where (b = 200 and c = 300) or (b = 100) order by c desc limit 0, 100;
+Query Plan
+=======================================================
+|ID|OPERATOR     |NAME                 |EST. ROWS|COST|
+-------------------------------------------------------
+|0 |LIMIT        |                     |100      |368 |
+|1 | TOP-N SORT  |                     |100      |354 |
+|2 |  UNION ALL  |                     |110      |220 |
+|3 |   TABLE SCAN|t1(idx_b_c_a)        |10       |38  |
+|4 |   TABLE SCAN|t1(idx_b_c_a,Reverse)|100      |134 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), limit(100), offset(0)
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), sort_keys([UNION([3]), DESC]), topn(100 + 0)
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  3 - output([t1.a], [t1.b], [t1.c]), filter(nil), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0), 
+      limit(?), offset(nil)
+  4 - output([t1.a], [t1.b], [t1.c]), filter([lnnvl(cast(t1.b = 200 AND t1.c = 300, TINYINT(-1, 0)))]), 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0), 
+      limit(?), offset(nil)
+
+explain select a1, a2, b, min(c), max(c) from t4 group by a1, a2, b;
+Query Plan
+=================================================
+|ID|OPERATOR      |NAME        |EST. ROWS|COST  |
+-------------------------------------------------
+|0 |MERGE GROUP BY|            |100000   |105520|
+|1 | TABLE SCAN   |t4(idx_t1_1)|100000   |56002 |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t4.a1], [t4.a2], [t4.b], [T_FUN_MIN(t4.c)], [T_FUN_MAX(t4.c)]), filter(nil), 
+      group([t4.a1], [t4.a2], [t4.b]), agg_func([T_FUN_MIN(t4.c)], [T_FUN_MAX(t4.c)])
+  1 - output([t4.a1], [t4.a2], [t4.b], [t4.c]), filter(nil), 
+      access([t4.a1], [t4.a2], [t4.b], [t4.c]), partitions(p0)
+
+explain select v1, pk from t5 where pk = 100 and v1 = 100 order by v1 desc;
+Query Plan
+==================================
+|ID|OPERATOR |NAME|EST. ROWS|COST|
+----------------------------------
+|0 |TABLE GET|t5  |1        |53  |
+==================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t5.v1], [t5.pk]), filter([t5.v1 = 100]), 
+      access([t5.pk], [t5.v1]), partitions(p0)
+
+explain select v1, pk from t5 where pk = 100 and v1 = 200 order by v1 desc;
+Query Plan
+==================================
+|ID|OPERATOR |NAME|EST. ROWS|COST|
+----------------------------------
+|0 |TABLE GET|t5  |1        |53  |
+==================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t5.v1], [t5.pk]), filter([t5.v1 = 200]), 
+      access([t5.pk], [t5.v1]), partitions(p0)
+
+explain select a from t6 where b = 1 order by c desc limit 9;
+Query Plan
+==================================================
+|ID|OPERATOR  |NAME               |EST. ROWS|COST|
+--------------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_c,Reverse)|9        |132 |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0), 
+      limit(9), offset(nil)
+
+explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 order by c desc limit 9;
+Query Plan
+==================================================
+|ID|OPERATOR  |NAME               |EST. ROWS|COST|
+--------------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_c,Reverse)|9        |132 |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0), 
+      limit(9), offset(nil)
+
+explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 order by c desc limit 9;
+Query Plan
+==============================================
+|ID|OPERATOR    |NAME         |EST. ROWS|COST|
+----------------------------------------------
+|0 |LIMIT       |             |9        |1222|
+|1 | TOP-N SORT |             |9        |1221|
+|2 |  TABLE SCAN|t6(idx_b_a_c)|990      |546 |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), limit(9), offset(nil)
+  1 - output([t6.a]), filter(nil), sort_keys([t6.c, DESC]), topn(9)
+  2 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select b, c from t6 where a = 1 order by b, c;
+Query Plan
+=============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST |
+---------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_a_c)|990      |68468|
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ b, c from t6 where a = 1 order by b, c;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST  |
+--------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_c)|990      |605407|
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ b, c from t6 where a = 1 order by b, c;
+Query Plan
+=============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST |
+---------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_a_c)|990      |68468|
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+
+explain select a from t6 where b = 1 and a = 2 order by c;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_a_c)|10       |38  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 and a = 2 order by c;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME       |EST. ROWS|COST|
+------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_c)|10       |6073|
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter([t6.a = 2]), 
+      access([t6.a]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 and a = 2 order by c;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_a_c)|10       |38  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select a from t6 where b = 1 or b = 2 order by a;
+Query Plan
+=============================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST|
+---------------------------------------------
+|0 |SORT       |             |1980     |4242|
+|1 | TABLE SCAN|t6(idx_b_a_c)|1980     |1012|
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), sort_keys([t6.a, ASC])
+  1 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select a from t6 where b = 1 and c = 2 order by a;
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME       |EST. ROWS|COST|
+-------------------------------------------
+|0 |SORT       |           |10       |148 |
+|1 | TABLE SCAN|t6(idx_b_c)|10       |136 |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), sort_keys([t6.a, ASC])
+  1 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 and c = 2 order by a;
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME       |EST. ROWS|COST|
+-------------------------------------------
+|0 |SORT       |           |10       |148 |
+|1 | TABLE SCAN|t6(idx_b_c)|10       |136 |
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), sort_keys([t6.a, ASC])
+  1 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 and c = 2 order by a;
+Query Plan
+============================================
+|ID|OPERATOR  |NAME         |EST. ROWS|COST|
+--------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_a_c)|10       |712 |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter([t6.c = 2]), 
+      access([t6.c], [t6.a]), partitions(p0)
+
+explain select a from t6 where b = 1 order by a, c desc;
+Query Plan
+=============================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST|
+---------------------------------------------
+|0 |SORT       |             |990      |1446|
+|1 | TABLE SCAN|t6(idx_b_a_c)|990      |546 |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), sort_keys([t6.a, ASC], [t6.c, DESC]), prefix_pos(1)
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 order by a, c desc;
+Query Plan
+===========================================
+|ID|OPERATOR   |NAME       |EST. ROWS|COST|
+-------------------------------------------
+|0 |SORT       |           |990      |7639|
+|1 | TABLE SCAN|t6(idx_b_c)|990      |5907|
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), sort_keys([t6.a, ASC], [t6.c, DESC])
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 order by a, c desc;
+Query Plan
+=============================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST|
+---------------------------------------------
+|0 |SORT       |             |990      |1446|
+|1 | TABLE SCAN|t6(idx_b_a_c)|990      |546 |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), sort_keys([t6.a, ASC], [t6.c, DESC]), prefix_pos(1)
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select a from t6 where b > 1 order by c desc;
+Query Plan
+==============================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST |
+----------------------------------------------
+|0 |SORT       |             |10000    |25404|
+|1 | TABLE SCAN|t6(idx_b_a_c)|10000    |5194 |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), sort_keys([t6.c, DESC])
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select a from t6 where b = 1 and d = 2 order by e, c, a;
+Query Plan
+================================================
+|ID|OPERATOR  |NAME             |EST. ROWS|COST|
+------------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_e_d_c_a)|10       |899 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter([t6.d = 2]), 
+      access([t6.d], [t6.a]), partitions(p0)
+
+explain select a from t6 where e = 1 and c = 2 order by b, d, a;
+Query Plan
+==================================================
+|ID|OPERATOR  |NAME             |EST. ROWS|COST  |
+--------------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_e_d_c_a)|10       |104173|
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.a]), partitions(p0)
+
+explain select  /*+index(t6 idx_b_c)*/ a from t6 where e = 1 and c = 2 order by b, d, a;
+Query Plan
+============================================
+|ID|OPERATOR   |NAME       |EST. ROWS|COST |
+--------------------------------------------
+|0 |SORT       |           |10       |60451|
+|1 | TABLE SCAN|t6(idx_b_c)|10       |60439|
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), sort_keys([t6.b, ASC], [t6.d, ASC], [t6.a, ASC]), prefix_pos(1)
+  1 - output([t6.a], [t6.b], [t6.d]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.a], [t6.b], [t6.d]), partitions(p0)
+
+explain select  /*+index(t6 idx_b_e_d_c_a)*/ a from t6 where e = 1 and c = 2 order by b, d, a;
+Query Plan
+==================================================
+|ID|OPERATOR  |NAME             |EST. ROWS|COST  |
+--------------------------------------------------
+|0 |TABLE SCAN|t6(idx_b_e_d_c_a)|10       |104173|
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.a]), partitions(p0)
+
+explain select a from t6 where b = 1 and a > 2 order by c;
+Query Plan
+=============================================
+|ID|OPERATOR   |NAME         |EST. ROWS|COST|
+---------------------------------------------
+|0 |SORT       |             |99       |204 |
+|1 | TABLE SCAN|t6(idx_b_a_c)|99       |59  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), sort_keys([t6.c, ASC])
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select a from t6 where b = 1 group by c limit 9;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |LIMIT          |           |9        |584 |
+|1 | MERGE GROUP BY|           |9        |582 |
+|2 |  TABLE SCAN   |t6(idx_b_c)|90       |563 |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), limit(9), offset(nil)
+  1 - output([t6.a]), filter(nil), 
+      group([t6.c]), agg_func(nil)
+  2 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 group by c limit 9;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |LIMIT          |           |9        |584 |
+|1 | MERGE GROUP BY|           |9        |582 |
+|2 |  TABLE SCAN   |t6(idx_b_c)|90       |563 |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), limit(9), offset(nil)
+  1 - output([t6.a]), filter(nil), 
+      group([t6.c]), agg_func(nil)
+  2 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 group by c limit 9;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |LIMIT         |             |9        |879 |
+|1 | HASH GROUP BY|             |9        |878 |
+|2 |  TABLE SCAN  |t6(idx_b_a_c)|990      |546 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), limit(9), offset(nil)
+  1 - output([t6.a]), filter(nil), 
+      group([t6.c]), agg_func(nil)
+  2 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select b, c from t6 where a = 1 group by b, c;
+Query Plan
+=================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST |
+-------------------------------------------------
+|0 |MERGE GROUP BY|             |990      |68771|
+|1 | TABLE SCAN   |t6(idx_b_a_c)|990      |68468|
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.c]), filter(nil), 
+      group([t6.b], [t6.c]), agg_func(nil)
+  1 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ b, c from t6 where a = 1 group by b, c;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME       |EST. ROWS|COST  |
+------------------------------------------------
+|0 |MERGE GROUP BY|           |990      |605709|
+|1 | TABLE SCAN   |t6(idx_b_c)|990      |605407|
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.c]), filter(nil), 
+      group([t6.b], [t6.c]), agg_func(nil)
+  1 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ b, c from t6 where a = 1 group by b, c;
+Query Plan
+=================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST |
+-------------------------------------------------
+|0 |MERGE GROUP BY|             |990      |68771|
+|1 | TABLE SCAN   |t6(idx_b_a_c)|990      |68468|
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.c]), filter(nil), 
+      group([t6.b], [t6.c]), agg_func(nil)
+  1 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+
+explain select a from t6 where b = 1 and a = 2 group by c;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE GROUP BY|             |10       |41  |
+|1 | TABLE SCAN   |t6(idx_b_a_c)|10       |38  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.c]), agg_func(nil)
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 and a = 2 group by c;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME       |EST. ROWS|COST|
+----------------------------------------------
+|0 |MERGE GROUP BY|           |10       |6075|
+|1 | TABLE SCAN   |t6(idx_b_c)|10       |6073|
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.c]), agg_func(nil)
+  1 - output([t6.a], [t6.c]), filter([t6.a = 2]), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 and a = 2 group by c;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE GROUP BY|             |10       |41  |
+|1 | TABLE SCAN   |t6(idx_b_a_c)|10       |38  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.c]), agg_func(nil)
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select a from t6 where b = 1 or b = 2 group by a;
+Query Plan
+===============================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST|
+-----------------------------------------------
+|0 |HASH GROUP BY|             |100      |1734|
+|1 | TABLE SCAN  |t6(idx_b_a_c)|1980     |1012|
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.a]), agg_func(nil)
+  1 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select a from t6 where b = 1 and c = 2 group by a;
+Query Plan
+=============================================
+|ID|OPERATOR     |NAME       |EST. ROWS|COST|
+---------------------------------------------
+|0 |HASH GROUP BY|           |10       |146 |
+|1 | TABLE SCAN  |t6(idx_b_c)|10       |136 |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.a]), agg_func(nil)
+  1 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 and c = 2 group by a;
+Query Plan
+=============================================
+|ID|OPERATOR     |NAME       |EST. ROWS|COST|
+---------------------------------------------
+|0 |HASH GROUP BY|           |10       |146 |
+|1 | TABLE SCAN  |t6(idx_b_c)|10       |136 |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.a]), agg_func(nil)
+  1 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 and c = 2 group by a;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE GROUP BY|             |10       |714 |
+|1 | TABLE SCAN   |t6(idx_b_a_c)|10       |712 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.a]), agg_func(nil)
+  1 - output([t6.a]), filter([t6.c = 2]), 
+      access([t6.c], [t6.a]), partitions(p0)
+
+explain select a from t6 where b = 1 group by a, c;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE GROUP BY|             |990      |849 |
+|1 | TABLE SCAN   |t6(idx_b_a_c)|990      |546 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.a], [t6.c]), agg_func(nil)
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 group by a, c;
+Query Plan
+=============================================
+|ID|OPERATOR     |NAME       |EST. ROWS|COST|
+---------------------------------------------
+|0 |HASH GROUP BY|           |990      |6998|
+|1 | TABLE SCAN  |t6(idx_b_c)|990      |5907|
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.a], [t6.c]), agg_func(nil)
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 group by a, c;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE GROUP BY|             |990      |849 |
+|1 | TABLE SCAN   |t6(idx_b_a_c)|990      |546 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.a], [t6.c]), agg_func(nil)
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select a from t6 where b > 1 group by c desc;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |SORT          |             |101      |8695|
+|1 | HASH GROUP BY|             |101      |8548|
+|2 |  TABLE SCAN  |t6(idx_b_a_c)|10000    |5194|
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), sort_keys([t6.c, DESC])
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      group([t6.c]), agg_func(nil)
+  2 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select a from t6 where b = 1 and d = 2 group by e, c, a;
+Query Plan
+====================================================
+|ID|OPERATOR      |NAME             |EST. ROWS|COST|
+----------------------------------------------------
+|0 |MERGE GROUP BY|                 |10       |902 |
+|1 | TABLE SCAN   |t6(idx_b_e_d_c_a)|10       |899 |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.e], [t6.c], [t6.a]), agg_func(nil)
+  1 - output([t6.a], [t6.e], [t6.c]), filter([t6.d = 2]), 
+      access([t6.d], [t6.a], [t6.e], [t6.c]), partitions(p0)
+
+explain select a from t6 where e = 1 and c = 2 group by b, d, a;
+Query Plan
+================================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST |
+------------------------------------------------
+|0 |HASH GROUP BY|             |10       |67800|
+|1 | TABLE SCAN  |t6(idx_b_a_c)|10       |67789|
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.b], [t6.d], [t6.a]), agg_func(nil)
+  1 - output([t6.a], [t6.b], [t6.d]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.a], [t6.b], [t6.d]), partitions(p0)
+
+explain select  /*+index(t6 idx_b_c)*/ a from t6 where e = 1 and c = 2 group by b, d, a;
+Query Plan
+==============================================
+|ID|OPERATOR     |NAME       |EST. ROWS|COST |
+----------------------------------------------
+|0 |HASH GROUP BY|           |10       |60450|
+|1 | TABLE SCAN  |t6(idx_b_c)|10       |60439|
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.b], [t6.d], [t6.a]), agg_func(nil)
+  1 - output([t6.a], [t6.b], [t6.d]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.a], [t6.b], [t6.d]), partitions(p0)
+
+explain select  /*+index(t6 idx_b_e_d_c_a)*/ a from t6 where e = 1 and c = 2 group by b, d, a;
+Query Plan
+======================================================
+|ID|OPERATOR      |NAME             |EST. ROWS|COST  |
+------------------------------------------------------
+|0 |MERGE GROUP BY|                 |10       |104177|
+|1 | TABLE SCAN   |t6(idx_b_e_d_c_a)|10       |104173|
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.b], [t6.d], [t6.a]), agg_func(nil)
+  1 - output([t6.a], [t6.b], [t6.d]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.a], [t6.b], [t6.d]), partitions(p0)
+
+explain select a from t6 where b = 1 and a > 2 group by c;
+Query Plan
+===============================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST|
+-----------------------------------------------
+|0 |HASH GROUP BY|             |63       |136 |
+|1 | TABLE SCAN  |t6(idx_b_a_c)|99       |59  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      group([t6.c]), agg_func(nil)
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select distinct c from t6 where b = 1 limit 9;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |LIMIT          |           |9        |75  |
+|1 | MERGE DISTINCT|           |9        |74  |
+|2 |  TABLE SCAN   |t6(idx_b_c)|90       |54  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.c]), filter(nil), limit(9), offset(nil)
+  1 - output([t6.c]), filter(nil), 
+      distinct([t6.c])
+  2 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ distinct c from t6 where b = 1 limit 9;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME       |EST. ROWS|COST|
+-----------------------------------------------
+|0 |LIMIT          |           |9        |75  |
+|1 | MERGE DISTINCT|           |9        |74  |
+|2 |  TABLE SCAN   |t6(idx_b_c)|90       |54  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.c]), filter(nil), limit(9), offset(nil)
+  1 - output([t6.c]), filter(nil), 
+      distinct([t6.c])
+  2 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ distinct c from t6 where b = 1 limit 9;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |LIMIT         |             |9        |91  |
+|1 | HASH DISTINCT|             |9        |90  |
+|2 |  TABLE SCAN  |t6(idx_b_a_c)|90       |54  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.c]), filter(nil), limit(9), offset(nil)
+  1 - output([t6.c]), filter(nil), 
+      distinct([t6.c])
+  2 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+
+explain select distinct b, c from t6 where a = 1;
+Query Plan
+=================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST |
+-------------------------------------------------
+|0 |MERGE DISTINCT|             |990      |68771|
+|1 | TABLE SCAN   |t6(idx_b_a_c)|990      |68468|
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.c]), filter(nil), 
+      distinct([t6.b], [t6.c])
+  1 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ distinct b, c from t6 where a = 1;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME       |EST. ROWS|COST  |
+------------------------------------------------
+|0 |MERGE DISTINCT|           |990      |605709|
+|1 | TABLE SCAN   |t6(idx_b_c)|990      |605407|
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.c]), filter(nil), 
+      distinct([t6.b], [t6.c])
+  1 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ distinct b, c from t6 where a = 1;
+Query Plan
+=================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST |
+-------------------------------------------------
+|0 |MERGE DISTINCT|             |990      |68771|
+|1 | TABLE SCAN   |t6(idx_b_a_c)|990      |68468|
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.c]), filter(nil), 
+      distinct([t6.b], [t6.c])
+  1 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+
+explain select distinct c from t6 where b = 1 and a = 2;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE DISTINCT|             |10       |41  |
+|1 | TABLE SCAN   |t6(idx_b_a_c)|10       |38  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.c]), filter(nil), 
+      distinct([t6.c])
+  1 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ distinct c from t6 where b = 1 and a = 2;
+Query Plan
+==============================================
+|ID|OPERATOR      |NAME       |EST. ROWS|COST|
+----------------------------------------------
+|0 |MERGE DISTINCT|           |10       |6075|
+|1 | TABLE SCAN   |t6(idx_b_c)|10       |6073|
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.c]), filter(nil), 
+      distinct([t6.c])
+  1 - output([t6.c]), filter([t6.a = 2]), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ distinct c from t6 where b = 1 and a = 2;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE DISTINCT|             |10       |41  |
+|1 | TABLE SCAN   |t6(idx_b_a_c)|10       |38  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.c]), filter(nil), 
+      distinct([t6.c])
+  1 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+
+explain select distinct a from t6 where b = 1 or b = 2;
+Query Plan
+===============================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST|
+-----------------------------------------------
+|0 |HASH DISTINCT|             |100      |1734|
+|1 | TABLE SCAN  |t6(idx_b_a_c)|1980     |1012|
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      distinct([t6.a])
+  1 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select distinct a from t6 where b = 1 and c = 2;
+Query Plan
+=============================================
+|ID|OPERATOR     |NAME       |EST. ROWS|COST|
+---------------------------------------------
+|0 |HASH DISTINCT|           |10       |146 |
+|1 | TABLE SCAN  |t6(idx_b_c)|10       |136 |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      distinct([t6.a])
+  1 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ distinct a from t6 where b = 1 and c = 2;
+Query Plan
+=============================================
+|ID|OPERATOR     |NAME       |EST. ROWS|COST|
+---------------------------------------------
+|0 |HASH DISTINCT|           |10       |146 |
+|1 | TABLE SCAN  |t6(idx_b_c)|10       |136 |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      distinct([t6.a])
+  1 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ distinct a from t6 where b = 1 and c = 2;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE DISTINCT|             |10       |714 |
+|1 | TABLE SCAN   |t6(idx_b_a_c)|10       |712 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a]), filter(nil), 
+      distinct([t6.a])
+  1 - output([t6.a]), filter([t6.c = 2]), 
+      access([t6.c], [t6.a]), partitions(p0)
+
+explain select distinct a, c from t6 where b = 1;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE DISTINCT|             |990      |849 |
+|1 | TABLE SCAN   |t6(idx_b_a_c)|990      |546 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a], [t6.c]), filter(nil), 
+      distinct([t6.a], [t6.c])
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ distinct a, c from t6 where b = 1;
+Query Plan
+=============================================
+|ID|OPERATOR     |NAME       |EST. ROWS|COST|
+---------------------------------------------
+|0 |HASH DISTINCT|           |990      |6998|
+|1 | TABLE SCAN  |t6(idx_b_c)|990      |5907|
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a], [t6.c]), filter(nil), 
+      distinct([t6.a], [t6.c])
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ distinct a, c from t6 where b = 1;
+Query Plan
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |MERGE DISTINCT|             |990      |849 |
+|1 | TABLE SCAN   |t6(idx_b_a_c)|990      |546 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.a], [t6.c]), filter(nil), 
+      distinct([t6.a], [t6.c])
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+
+explain select distinct c from t6 where b > 1;
+Query Plan
+=============================================
+|ID|OPERATOR     |NAME       |EST. ROWS|COST|
+---------------------------------------------
+|0 |HASH DISTINCT|           |101      |7613|
+|1 | TABLE SCAN  |t6(idx_b_c)|10000    |4259|
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.c]), filter(nil), 
+      distinct([t6.c])
+  1 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+
+explain select distinct e, c, a from t6 where b = 1 and d = 2;
+Query Plan
+====================================================
+|ID|OPERATOR      |NAME             |EST. ROWS|COST|
+----------------------------------------------------
+|0 |MERGE DISTINCT|                 |10       |902 |
+|1 | TABLE SCAN   |t6(idx_b_e_d_c_a)|10       |899 |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.e], [t6.c], [t6.a]), filter(nil), 
+      distinct([t6.e], [t6.c], [t6.a])
+  1 - output([t6.e], [t6.c], [t6.a]), filter([t6.d = 2]), 
+      access([t6.d], [t6.e], [t6.c], [t6.a]), partitions(p0)
+
+explain select distinct b, d, a from t6 where e = 1 and c = 2;
+Query Plan
+================================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST |
+------------------------------------------------
+|0 |HASH DISTINCT|             |10       |67800|
+|1 | TABLE SCAN  |t6(idx_b_a_c)|10       |67789|
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.d], [t6.a]), filter(nil), 
+      distinct([t6.b], [t6.d], [t6.a])
+  1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
+
+explain select  /*+index(t6 idx_b_c)*/ distinct b, d, a from t6 where e = 1 and c = 2;
+Query Plan
+==============================================
+|ID|OPERATOR     |NAME       |EST. ROWS|COST |
+----------------------------------------------
+|0 |HASH DISTINCT|           |10       |60450|
+|1 | TABLE SCAN  |t6(idx_b_c)|10       |60439|
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.d], [t6.a]), filter(nil), 
+      distinct([t6.b], [t6.d], [t6.a])
+  1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
+
+explain select  /*+index(t6 idx_b_a_c)*/ distinct b, d, a from t6 where e = 1 and c = 2;
+Query Plan
+================================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST |
+------------------------------------------------
+|0 |HASH DISTINCT|             |10       |67800|
+|1 | TABLE SCAN  |t6(idx_b_a_c)|10       |67789|
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.d], [t6.a]), filter(nil), 
+      distinct([t6.b], [t6.d], [t6.a])
+  1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
+
+explain select  /*+index(t6 idx_b_e_d_c_a)*/ distinct b, d, a from t6 where e = 1 and c = 2;
+Query Plan
+======================================================
+|ID|OPERATOR      |NAME             |EST. ROWS|COST  |
+------------------------------------------------------
+|0 |MERGE DISTINCT|                 |10       |104177|
+|1 | TABLE SCAN   |t6(idx_b_e_d_c_a)|10       |104173|
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.b], [t6.d], [t6.a]), filter(nil), 
+      distinct([t6.b], [t6.d], [t6.a])
+  1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
+
+explain select distinct c from t6 where b = 1 and a > 2;
+Query Plan
+===============================================
+|ID|OPERATOR     |NAME         |EST. ROWS|COST|
+-----------------------------------------------
+|0 |HASH DISTINCT|             |63       |136 |
+|1 | TABLE SCAN  |t6(idx_b_a_c)|99       |59  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t6.c]), filter(nil), 
+      distinct([t6.c])
+  1 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+
+explain select c from t6 where b = 1 limit 9 union select pk from tmp;
+Query Plan
+=====================================================
+|ID|OPERATOR            |NAME       |EST. ROWS|COST |
+-----------------------------------------------------
+|0 |MERGE UNION DISTINCT|           |100009   |92598|
+|1 | TABLE SCAN         |t6(idx_b_c)|9        |38   |
+|2 | TABLE SCAN         |tmp        |100000   |59654|
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0), 
+      limit(9), offset(nil)
+  2 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ c from t6 where b = 1 limit 9 union select pk from tmp;
+Query Plan
+=====================================================
+|ID|OPERATOR            |NAME       |EST. ROWS|COST |
+-----------------------------------------------------
+|0 |MERGE UNION DISTINCT|           |100009   |92598|
+|1 | TABLE SCAN         |t6(idx_b_c)|9        |38   |
+|2 | TABLE SCAN         |tmp        |100000   |59654|
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0), 
+      limit(9), offset(nil)
+  2 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ c from t6 where b = 1 limit 9 union select pk from tmp;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME         |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |MERGE UNION DISTINCT|             |100009   |92607|
+|1 | SORT               |             |9        |47   |
+|2 |  TABLE SCAN        |t6(idx_b_a_c)|9        |38   |
+|3 | TABLE SCAN         |tmp          |100000   |59654|
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.c]), filter(nil), sort_keys([t6.c, ASC])
+  2 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0), 
+      limit(9), offset(nil)
+  3 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select b, c from t6 where a = 1 union select c1, c2 from tmp;
+Query Plan
+=========================================================
+|ID|OPERATOR            |NAME          |EST. ROWS|COST  |
+---------------------------------------------------------
+|0 |MERGE UNION DISTINCT|              |100990   |149309|
+|1 | TABLE SCAN         |t6(idx_b_a_c) |990      |68468 |
+|2 | TABLE SCAN         |tmp(idx_c1_c2)|100000   |42261 |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+  2 - output([tmp.c1], [tmp.c2]), filter(nil), 
+      access([tmp.c1], [tmp.c2]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ b, c from t6 where a = 1 union select c1, c2 from tmp;
+Query Plan
+=========================================================
+|ID|OPERATOR            |NAME          |EST. ROWS|COST  |
+---------------------------------------------------------
+|0 |MERGE UNION DISTINCT|              |100990   |686248|
+|1 | TABLE SCAN         |t6(idx_b_c)   |990      |605407|
+|2 | TABLE SCAN         |tmp(idx_c1_c2)|100000   |42261 |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+  2 - output([tmp.c1], [tmp.c2]), filter(nil), 
+      access([tmp.c1], [tmp.c2]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ b, c from t6 where a = 1 union select c1, c2 from tmp;
+Query Plan
+=========================================================
+|ID|OPERATOR            |NAME          |EST. ROWS|COST  |
+---------------------------------------------------------
+|0 |MERGE UNION DISTINCT|              |100990   |149309|
+|1 | TABLE SCAN         |t6(idx_b_a_c) |990      |68468 |
+|2 | TABLE SCAN         |tmp(idx_c1_c2)|100000   |42261 |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t6.b], [t6.c]), filter([t6.a = 1]), 
+      access([t6.a], [t6.b], [t6.c]), partitions(p0)
+  2 - output([tmp.c1], [tmp.c2]), filter(nil), 
+      access([tmp.c1], [tmp.c2]), partitions(p0)
+
+explain select c from t6 where b = 1 and a = 2 union select pk from tmp;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME         |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |MERGE UNION DISTINCT|             |100010   |92599|
+|1 | TABLE SCAN         |t6(idx_b_a_c)|10       |38   |
+|2 | TABLE SCAN         |tmp          |100000   |59654|
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+  2 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ c from t6 where b = 1 and a = 2 union select pk from tmp;
+Query Plan
+=====================================================
+|ID|OPERATOR            |NAME       |EST. ROWS|COST |
+-----------------------------------------------------
+|0 |MERGE UNION DISTINCT|           |100010   |98633|
+|1 | TABLE SCAN         |t6(idx_b_c)|10       |6073 |
+|2 | TABLE SCAN         |tmp        |100000   |59654|
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.c]), filter([t6.a = 2]), 
+      access([t6.a], [t6.c]), partitions(p0)
+  2 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ c from t6 where b = 1 and a = 2 union select pk from tmp;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME         |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |MERGE UNION DISTINCT|             |100010   |92599|
+|1 | TABLE SCAN         |t6(idx_b_a_c)|10       |38   |
+|2 | TABLE SCAN         |tmp          |100000   |59654|
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+  2 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select a from t6 where b = 1 or b = 2 union select pk from tmp;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME         |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |MERGE UNION DISTINCT|             |101980   |97451|
+|1 | SORT               |             |1980     |4242 |
+|2 |  TABLE SCAN        |t6(idx_b_a_c)|1980     |1012 |
+|3 | TABLE SCAN         |tmp          |100000   |59654|
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.a]), filter(nil), sort_keys([t6.a, ASC])
+  2 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+  3 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select a from t6 where b = 1 and c = 2 union select pk from tmp;
+Query Plan
+=====================================================
+|ID|OPERATOR            |NAME       |EST. ROWS|COST |
+-----------------------------------------------------
+|0 |MERGE UNION DISTINCT|           |100010   |92708|
+|1 | SORT               |           |10       |148  |
+|2 |  TABLE SCAN        |t6(idx_b_c)|10       |136  |
+|3 | TABLE SCAN         |tmp        |100000   |59654|
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.a]), filter(nil), sort_keys([t6.a, ASC])
+  2 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+  3 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ a from t6 where b = 1 and c = 2 union select pk from tmp;
+Query Plan
+=====================================================
+|ID|OPERATOR            |NAME       |EST. ROWS|COST |
+-----------------------------------------------------
+|0 |MERGE UNION DISTINCT|           |100010   |92708|
+|1 | SORT               |           |10       |148  |
+|2 |  TABLE SCAN        |t6(idx_b_c)|10       |136  |
+|3 | TABLE SCAN         |tmp        |100000   |59654|
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.a]), filter(nil), sort_keys([t6.a, ASC])
+  2 - output([t6.a]), filter(nil), 
+      access([t6.a]), partitions(p0)
+  3 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ a from t6 where b = 1 and c = 2 union select pk from tmp;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME         |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |MERGE UNION DISTINCT|             |100010   |93272|
+|1 | TABLE SCAN         |t6(idx_b_a_c)|10       |712  |
+|2 | TABLE SCAN         |tmp          |100000   |59654|
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.a]), filter([t6.c = 2]), 
+      access([t6.c], [t6.a]), partitions(p0)
+  2 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select a, c from t6 where b = 1 union select c1, c2 from tmp;
+Query Plan
+========================================================
+|ID|OPERATOR            |NAME          |EST. ROWS|COST |
+--------------------------------------------------------
+|0 |MERGE UNION DISTINCT|              |100990   |81387|
+|1 | TABLE SCAN         |t6(idx_b_a_c) |990      |546  |
+|2 | TABLE SCAN         |tmp(idx_c1_c2)|100000   |42261|
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+  2 - output([tmp.c1], [tmp.c2]), filter(nil), 
+      access([tmp.c1], [tmp.c2]), partitions(p0)
+
+explain select /*+index(t6 idx_b_c)*/ a, c from t6 where b = 1 union select c1, c2 from tmp;
+Query Plan
+========================================================
+|ID|OPERATOR            |NAME          |EST. ROWS|COST |
+--------------------------------------------------------
+|0 |MERGE UNION DISTINCT|              |100990   |88480|
+|1 | SORT               |              |990      |7639 |
+|2 |  TABLE SCAN        |t6(idx_b_c)   |990      |5907 |
+|3 | TABLE SCAN         |tmp(idx_c1_c2)|100000   |42261|
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t6.a], [t6.c]), filter(nil), sort_keys([t6.a, ASC], [t6.c, ASC])
+  2 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+  3 - output([tmp.c1], [tmp.c2]), filter(nil), 
+      access([tmp.c1], [tmp.c2]), partitions(p0)
+
+explain select /*+index(t6 idx_b_a_c)*/ a, c from t6 where b = 1 union select c1, c2 from tmp;
+Query Plan
+========================================================
+|ID|OPERATOR            |NAME          |EST. ROWS|COST |
+--------------------------------------------------------
+|0 |MERGE UNION DISTINCT|              |100990   |81387|
+|1 | TABLE SCAN         |t6(idx_b_a_c) |990      |546  |
+|2 | TABLE SCAN         |tmp(idx_c1_c2)|100000   |42261|
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t6.a], [t6.c]), filter(nil), 
+      access([t6.a], [t6.c]), partitions(p0)
+  2 - output([tmp.c1], [tmp.c2]), filter(nil), 
+      access([tmp.c1], [tmp.c2]), partitions(p0)
+
+explain select c from t6 where b > 1 union select pk from tmp;
+Query Plan
+======================================================
+|ID|OPERATOR            |NAME       |EST. ROWS|COST  |
+------------------------------------------------------
+|0 |MERGE UNION DISTINCT|           |110000   |118374|
+|1 | SORT               |           |10000    |22526 |
+|2 |  TABLE SCAN        |t6(idx_b_c)|10000    |4259  |
+|3 | TABLE SCAN         |tmp        |100000   |59654 |
+======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.c]), filter(nil), sort_keys([t6.c, ASC])
+  2 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+  3 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select e, c, a from t6 where b = 1 and d = 2 union select c1, c2, c3 from tmp;
+Query Plan
+===========================================================
+|ID|OPERATOR            |NAME             |EST. ROWS|COST |
+-----------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                 |100010   |96127|
+|1 | TABLE SCAN         |t6(idx_b_e_d_c_a)|10       |899  |
+|2 | TABLE SCAN         |tmp(idx_c1_c2_c3)|100000   |51723|
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([t6.e], [t6.c], [t6.a]), filter([t6.d = 2]), 
+      access([t6.d], [t6.e], [t6.c], [t6.a]), partitions(p0)
+  2 - output([tmp.c1], [tmp.c2], [tmp.c3]), filter(nil), 
+      access([tmp.c1], [tmp.c2], [tmp.c3]), partitions(p0)
+
+explain select b, d, a from t6 where e = 1 and c = 2 union select c1, c2, c3 from tmp;
+Query Plan
+============================================================
+|ID|OPERATOR            |NAME             |EST. ROWS|COST  |
+------------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                 |100010   |163030|
+|1 | SORT               |                 |10       |67801 |
+|2 |  TABLE SCAN        |t6(idx_b_a_c)    |10       |67789 |
+|3 | TABLE SCAN         |tmp(idx_c1_c2_c3)|100000   |51723 |
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([t6.b], [t6.d], [t6.a]), filter(nil), sort_keys([t6.b, ASC], [t6.d, ASC], [t6.a, ASC]), prefix_pos(1)
+  2 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
+  3 - output([tmp.c1], [tmp.c2], [tmp.c3]), filter(nil), 
+      access([tmp.c1], [tmp.c2], [tmp.c3]), partitions(p0)
+
+explain select  /*+index(t6 idx_b_c)*/ b, d, a from t6 where e = 1 and c = 2 union select c1, c2, c3 from tmp;
+Query Plan
+============================================================
+|ID|OPERATOR            |NAME             |EST. ROWS|COST  |
+------------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                 |100010   |155680|
+|1 | SORT               |                 |10       |60451 |
+|2 |  TABLE SCAN        |t6(idx_b_c)      |10       |60439 |
+|3 | TABLE SCAN         |tmp(idx_c1_c2_c3)|100000   |51723 |
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([t6.b], [t6.d], [t6.a]), filter(nil), sort_keys([t6.b, ASC], [t6.d, ASC], [t6.a, ASC]), prefix_pos(1)
+  2 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
+  3 - output([tmp.c1], [tmp.c2], [tmp.c3]), filter(nil), 
+      access([tmp.c1], [tmp.c2], [tmp.c3]), partitions(p0)
+
+explain select  /*+index(t6 idx_b_a_c)*/ b, d, a from t6 where e = 1 and c = 2 union select c1, c2, c3 from tmp;
+Query Plan
+============================================================
+|ID|OPERATOR            |NAME             |EST. ROWS|COST  |
+------------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                 |100010   |163030|
+|1 | SORT               |                 |10       |67801 |
+|2 |  TABLE SCAN        |t6(idx_b_a_c)    |10       |67789 |
+|3 | TABLE SCAN         |tmp(idx_c1_c2_c3)|100000   |51723 |
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([t6.b], [t6.d], [t6.a]), filter(nil), sort_keys([t6.b, ASC], [t6.d, ASC], [t6.a, ASC]), prefix_pos(1)
+  2 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
+  3 - output([tmp.c1], [tmp.c2], [tmp.c3]), filter(nil), 
+      access([tmp.c1], [tmp.c2], [tmp.c3]), partitions(p0)
+
+explain select  /*+index(t6 idx_b_e_d_c_a)*/ b, d, a from t6 where e = 1 and c = 2 union select c1, c2, c3 from tmp;
+Query Plan
+============================================================
+|ID|OPERATOR            |NAME             |EST. ROWS|COST  |
+------------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                 |100010   |199402|
+|1 | TABLE SCAN         |t6(idx_b_e_d_c_a)|10       |104173|
+|2 | TABLE SCAN         |tmp(idx_c1_c2_c3)|100000   |51723 |
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([t6.b], [t6.d], [t6.a]), filter([t6.e = 1], [t6.c = 2]), 
+      access([t6.e], [t6.c], [t6.b], [t6.d], [t6.a]), partitions(p0)
+  2 - output([tmp.c1], [tmp.c2], [tmp.c3]), filter(nil), 
+      access([tmp.c1], [tmp.c2], [tmp.c3]), partitions(p0)
+
+explain select c from t6 where b = 1 and a > 2 union select pk from tmp;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME         |EST. ROWS|COST |
+-------------------------------------------------------
+|0 |MERGE UNION DISTINCT|             |100099   |92793|
+|1 | SORT               |             |99       |204  |
+|2 |  TABLE SCAN        |t6(idx_b_a_c)|99       |59   |
+|3 | TABLE SCAN         |tmp          |100000   |59654|
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([t6.c]), filter(nil), sort_keys([t6.c, ASC])
+  2 - output([t6.c]), filter(nil), 
+      access([t6.c]), partitions(p0)
+  3 - output([tmp.pk]), filter(nil), 
+      access([tmp.pk]), partitions(p0)
+
+explain select * from t7 where a >= 0 and a <= 5 and b = 1;
+Query Plan
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t7(k1)|50       |3208|
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t7.a], [t7.b], [t7.c], [t7.d], [t7.e], [t7.f]), filter([t7.b = 1]), 
+      access([t7.a], [t7.b], [t7.c], [t7.d], [t7.e], [t7.f]), partitions(p0)
+
+explain select * from t8 where e = 1 order by b;
+Query Plan
+======================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST |
+--------------------------------------
+|0 |TABLE SCAN|t8(k1)|990      |67623|
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t8.d], [t8.e], [t8.f]), filter([t8.e = 1]), 
+      access([t8.e], [t8.a], [t8.b], [t8.c], [t8.d], [t8.f]), partitions(p0)
+
+explain select * from t8 where e = 1 or f = 1 order by b;
+Query Plan
+=======================================
+|ID|OPERATOR   |NAME  |EST. ROWS|COST |
+---------------------------------------
+|0 |SORT       |      |1971     |77146|
+|1 | TABLE SCAN|t8(k2)|1971     |72403|
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t8.d], [t8.e], [t8.f]), filter(nil), sort_keys([t8.b, ASC])
+  1 - output([t8.e], [t8.f], [t8.a], [t8.b], [t8.c], [t8.d]), filter([t8.e = 1 OR t8.f = 1]), 
+      access([t8.e], [t8.f], [t8.a], [t8.b], [t8.c], [t8.d]), partitions(p0)
+
+explain select * from t8 where d = 1 order by b;
+Query Plan
+=======================================
+|ID|OPERATOR   |NAME  |EST. ROWS|COST |
+---------------------------------------
+|0 |SORT       |      |990      |77310|
+|1 | TABLE SCAN|t8(k2)|990      |75009|
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t8.d], [t8.e], [t8.f]), filter(nil), sort_keys([t8.b, ASC])
+  1 - output([t8.d], [t8.a], [t8.b], [t8.c], [t8.e], [t8.f]), filter([t8.d = 1]), 
+      access([t8.d], [t8.a], [t8.b], [t8.c], [t8.e], [t8.f]), partitions(p0)
+
+explain select avg(c1) over (partition by c2) from t9 order by c1;
+Query Plan
+====================================================
+|ID|OPERATOR        |NAME         |EST. ROWS|COST  |
+----------------------------------------------------
+|0 |SORT            |             |100000   |274006|
+|1 | WINDOW FUNCTION|             |100000   |63517 |
+|2 |  TABLE SCAN    |t9(idx_c2_c5)|100000   |44416 |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+  2 - output([t9.c1], [t9.c2]), filter(nil), 
+      access([t9.c1], [t9.c2]), partitions(p0)
+
+explain select avg(c1) over (partition by c2, c3) from t9 order by c1;
+Query Plan
+=======================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SORT            |                |100000   |304353|
+|1 | WINDOW FUNCTION|                |100000   |74445 |
+|2 |  TABLE SCAN    |t9(idx_c2_c3_c5)|100000   |55344 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2], [t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2], [t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+  2 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), 
+      access([t9.c1], [t9.c2], [t9.c3]), partitions(p0)
+
+explain select avg(c1) over (partition by c3) from t9 order by c1;
+Query Plan
+=======================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SORT            |                |100000   |493216|
+|1 | WINDOW FUNCTION|                |100000   |282728|
+|2 |  SORT          |                |100000   |263627|
+|3 |   TABLE SCAN   |t9(idx_c2_c3_c5)|100000   |53138 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+  2 - output([t9.c1], [t9.c3]), filter(nil), sort_keys([t9.c3, ASC])
+  3 - output([t9.c1], [t9.c3]), filter(nil), 
+      access([t9.c1], [t9.c3]), partitions(p0)
+
+explain select avg(c1) over (partition by c3) from t9 where c2 = 2 order by c1;
+Query Plan
+=====================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST|
+-----------------------------------------------------
+|0 |SORT            |                |990      |2473|
+|1 | WINDOW FUNCTION|                |990      |749 |
+|2 |  TABLE SCAN    |t9(idx_c2_c3_c5)|990      |560 |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c3]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+  2 - output([t9.c1], [t9.c3]), filter(nil), 
+      access([t9.c1], [t9.c3]), partitions(p0)
+
+explain select avg(c1) over (order by c2, c3) from t9 order by c1;
+Query Plan
+=======================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SORT            |                |100000   |304353|
+|1 | WINDOW FUNCTION|                |100000   |74445 |
+|2 |  TABLE SCAN    |t9(idx_c2_c3_c5)|100000   |55344 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c2, ASC], [t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by(nil), order_by([t9.c2, ASC], [t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), 
+      access([t9.c1], [t9.c2], [t9.c3]), partitions(p0)
+
+explain select avg(c1) over (order by c2, c3 desc) from t9 order by c1;
+Query Plan
+=======================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SORT            |                |100000   |423011|
+|1 | WINDOW FUNCTION|                |100000   |193103|
+|2 |  SORT          |                |100000   |174002|
+|3 |   TABLE SCAN   |t9(idx_c2_c3_c5)|100000   |55344 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c2, ASC], [t9.c3, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by(nil), order_by([t9.c2, ASC], [t9.c3, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), sort_keys([t9.c2, ASC], [t9.c3, DESC]), prefix_pos(1)
+  3 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), 
+      access([t9.c1], [t9.c2], [t9.c3]), partitions(p0)
+
+explain select avg(c1) over (order by c2 desc, c3 desc) from t9 order by c1;
+Query Plan
+===============================================================
+|ID|OPERATOR        |NAME                    |EST. ROWS|COST  |
+---------------------------------------------------------------
+|0 |SORT            |                        |100000   |304353|
+|1 | WINDOW FUNCTION|                        |100000   |74445 |
+|2 |  TABLE SCAN    |t9(idx_c2_c3_c5,Reverse)|100000   |55344 |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c2, DESC], [t9.c3, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by(nil), order_by([t9.c2, DESC], [t9.c3, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), 
+      access([t9.c1], [t9.c2], [t9.c3]), partitions(p0)
+
+explain select avg(c1) over (order by c3) from t9 where c2 = 2 order by c1;
+Query Plan
+=====================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST|
+-----------------------------------------------------
+|0 |SORT            |                |990      |2473|
+|1 | WINDOW FUNCTION|                |990      |749 |
+|2 |  TABLE SCAN    |t9(idx_c2_c3_c5)|990      |560 |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by(nil), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c3]), filter(nil), 
+      access([t9.c1], [t9.c3]), partitions(p0)
+
+explain select avg(c1) over (partition by c2 order by c3) from t9 order by c1;
+Query Plan
+=======================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SORT            |                |100000   |304353|
+|1 | WINDOW FUNCTION|                |100000   |74445 |
+|2 |  TABLE SCAN    |t9(idx_c2_c3_c5)|100000   |55344 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c2], [t9.c3]), filter(nil), 
+      access([t9.c1], [t9.c2], [t9.c3]), partitions(p0)
+
+explain select avg(c1) over (partition by c2 order by c3, c5) from t9 order by c1;
+Query Plan
+=======================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SORT            |                |100000   |325979|
+|1 | WINDOW FUNCTION|                |100000   |76651 |
+|2 |  TABLE SCAN    |t9(idx_c2_c3_c5)|100000   |57550 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c2], [t9.c3], [t9.c5]), filter(nil), 
+      access([t9.c1], [t9.c2], [t9.c3], [t9.c5]), partitions(p0)
+
+explain select avg(c1) over (partition by c2 order by c3, c5 desc) from t9 order by c1;
+Query Plan
+=======================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SORT            |                |100000   |436244|
+|1 | WINDOW FUNCTION|                |100000   |186916|
+|2 |  SORT          |                |100000   |167815|
+|3 |   TABLE SCAN   |t9(idx_c2_c3_c5)|100000   |57550 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC], [t9.c5, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC], [t9.c5, DESC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c2], [t9.c3], [t9.c5]), filter(nil), sort_keys([t9.c2, ASC], [t9.c3, ASC], [t9.c5, DESC]), prefix_pos(2)
+  3 - output([t9.c1], [t9.c2], [t9.c3], [t9.c5]), filter(nil), 
+      access([t9.c1], [t9.c2], [t9.c3], [t9.c5]), partitions(p0)
+
+explain select avg(c1) over (partition by c3 order by c5) from t9 where c2 = 2 order by c1;
+Query Plan
+=====================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST|
+-----------------------------------------------------
+|0 |SORT            |                |990      |2688|
+|1 | WINDOW FUNCTION|                |990      |771 |
+|2 |  TABLE SCAN    |t9(idx_c2_c3_c5)|990      |582 |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c3], [t9.c5]), filter(nil), 
+      access([t9.c1], [t9.c3], [t9.c5]), partitions(p0)
+
+explain select avg(c1) over (partition by c3, c5) from t9 order by c1;
+Query Plan
+=======================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SORT            |                |100000   |535652|
+|1 | WINDOW FUNCTION|                |100000   |305744|
+|2 |  SORT          |                |100000   |286643|
+|3 |   TABLE SCAN   |t9(idx_c2_c3_c5)|100000   |55344 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+  2 - output([t9.c1], [t9.c3], [t9.c5]), filter(nil), sort_keys([t9.c3, ASC], [t9.c5, ASC])
+  3 - output([t9.c1], [t9.c3], [t9.c5]), filter(nil), 
+      access([t9.c1], [t9.c3], [t9.c5]), partitions(p0)
+
+explain select avg(c1) over (partition by c3, c5) from t9 order by c4;
+Query Plan
+========================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST   |
+--------------------------------------------------------
+|0 |SORT            |                |100000   |1662235|
+|1 | WINDOW FUNCTION|                |100000   |550698 |
+|2 |  SORT          |                |100000   |531597 |
+|3 |   TABLE SCAN   |t9(idx_c4_c3_c5)|100000   |57550  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c4, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)], [t9.c4]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+  2 - output([t9.c1], [t9.c3], [t9.c5], [t9.c4]), filter(nil), sort_keys([t9.c3, ASC], [t9.c5, ASC])
+  3 - output([t9.c1], [t9.c3], [t9.c5], [t9.c4]), filter(nil), 
+      access([t9.c1], [t9.c3], [t9.c5], [t9.c4]), partitions(p0)
+
+explain select avg(c1) over (order by c3, c5) from t9 order by c1;
+Query Plan
+=======================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SORT            |                |100000   |535652|
+|1 | WINDOW FUNCTION|                |100000   |305744|
+|2 |  SORT          |                |100000   |286643|
+|3 |   TABLE SCAN   |t9(idx_c2_c3_c5)|100000   |55344 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by(nil), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c3], [t9.c5]), filter(nil), sort_keys([t9.c3, ASC], [t9.c5, ASC])
+  3 - output([t9.c1], [t9.c3], [t9.c5]), filter(nil), 
+      access([t9.c1], [t9.c3], [t9.c5]), partitions(p0)
+
+explain select avg(c1) over (order by c3, c5) from t9 order by c4;
+Query Plan
+========================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST   |
+--------------------------------------------------------
+|0 |SORT            |                |100000   |1662235|
+|1 | WINDOW FUNCTION|                |100000   |550698 |
+|2 |  SORT          |                |100000   |531597 |
+|3 |   TABLE SCAN   |t9(idx_c4_c3_c5)|100000   |57550  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))]), filter(nil), sort_keys([t9.c4, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)], [t9.c4]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by(nil), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by(nil), order_by([t9.c3, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c3], [t9.c5], [t9.c4]), filter(nil), sort_keys([t9.c3, ASC], [t9.c5, ASC])
+  3 - output([t9.c1], [t9.c3], [t9.c5], [t9.c4]), filter(nil), 
+      access([t9.c1], [t9.c3], [t9.c5], [t9.c4]), partitions(p0)
+
+create index idx_c3_c2_c5 on t9(c3, c2, c5);
+explain select avg(c1) over (partition by c2 order by c3),
+max(c1) over (partition by c2, c3, c5)
+from t9 order by c1;
+Query Plan
+=======================================================
+|ID|OPERATOR        |NAME            |EST. ROWS|COST  |
+-------------------------------------------------------
+|0 |SORT            |                |100000   |325979|
+|1 | WINDOW FUNCTION|                |100000   |76651 |
+|2 |  TABLE SCAN    |t9(idx_c2_c3_c5)|100000   |57550 |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))], [T_FUN_MAX(t9.c1)]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)], [T_FUN_MAX(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_MAX(t9.c1)), partition_by([t9.c2], [t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c2], [t9.c3], [t9.c5]), filter(nil), 
+      access([t9.c1], [t9.c2], [t9.c3], [t9.c5]), partitions(p0)
+
+explain select avg(c1) over (partition by c2 order by c3),
+max(c1) over (partition by c3 order by c2, c5)
+from t9 order by c1;
+Query Plan
+=========================================================
+|ID|OPERATOR          |NAME            |EST. ROWS|COST  |
+---------------------------------------------------------
+|0 |SORT              |                |100000   |595799|
+|1 | WINDOW FUNCTION  |                |100000   |346471|
+|2 |  SORT            |                |100000   |327370|
+|3 |   WINDOW FUNCTION|                |100000   |76651 |
+|4 |    TABLE SCAN    |t9(idx_c3_c2_c5)|100000   |57550 |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))], [T_FUN_MAX(t9.c1)]), filter(nil), sort_keys([t9.c1, ASC])
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c1], [T_FUN_COUNT(t9.c1)], [T_FUN_MAX(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c2]), order_by([t9.c3, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c2], [t9.c3], [T_FUN_MAX(t9.c1)]), filter(nil), sort_keys([t9.c2, ASC], [t9.c3, ASC])
+  3 - output([t9.c1], [t9.c2], [t9.c3], [T_FUN_MAX(t9.c1)]), filter(nil), 
+      win_expr(T_FUN_MAX(t9.c1)), partition_by([t9.c3]), order_by([t9.c2, ASC], [t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  4 - output([t9.c1], [t9.c2], [t9.c3], [t9.c5]), filter(nil), 
+      access([t9.c1], [t9.c2], [t9.c3], [t9.c5]), partitions(p0)
+
+explain select avg(c1) over (partition by c3 order by c5),
+max(c1) over (partition by c2, c3, c5)
+from t9 order by c3, c2, c5;
+Query Plan
+=========================================================
+|ID|OPERATOR          |NAME            |EST. ROWS|COST  |
+---------------------------------------------------------
+|0 |SORT              |                |100000   |344095|
+|1 | WINDOW FUNCTION  |                |100000   |233830|
+|2 |  SORT            |                |100000   |214729|
+|3 |   WINDOW FUNCTION|                |100000   |76651 |
+|4 |    TABLE SCAN    |t9(idx_c3_c2_c5)|100000   |57550 |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(t9.c1) / cast(T_FUN_COUNT(t9.c1), DECIMAL(20, 0))], [T_FUN_MAX(t9.c1)]), filter(nil), sort_keys([t9.c3, ASC], [t9.c2, ASC], [t9.c5, ASC]), prefix_pos(1)
+  1 - output([T_FUN_SUM(t9.c1)], [t9.c3], [t9.c5], [T_FUN_COUNT(t9.c1)], [T_FUN_MAX(t9.c1)], [t9.c2]), filter(nil), 
+      win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+      win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
+  2 - output([t9.c1], [t9.c3], [t9.c5], [T_FUN_MAX(t9.c1)], [t9.c2]), filter(nil), sort_keys([t9.c3, ASC], [t9.c5, ASC]), prefix_pos(1)
+  3 - output([t9.c1], [t9.c3], [t9.c5], [T_FUN_MAX(t9.c1)], [t9.c2]), filter(nil), 
+      win_expr(T_FUN_MAX(t9.c1)), partition_by([t9.c2], [t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED FOLLOWING)
+  4 - output([t9.c1], [t9.c3], [t9.c5], [t9.c2]), filter(nil), 
+      access([t9.c1], [t9.c3], [t9.c5], [t9.c2]), partitions(p0)
+
+set @@recyclebin = 'off';
+drop database hualong;

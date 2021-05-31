@@ -1,0 +1,20 @@
+connect  syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection syscon;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select lnnvl(1) from dual;
+lnnvl(1)
+0
+select lnnvl(-1) from dual;
+lnnvl(-1)
+0
+select lnnvl(0) from dual;
+lnnvl(0)
+1
+select lnnvl(NULL) from dual;
+lnnvl(NULL)
+1
+select lnnvl('abc') from dual;
+lnnvl('abc')
+1
+connection syscon;

@@ -1,0 +1,252 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# ....yzf....Fri, 21 Aug 2015....17:55....
+
+# set-up
+--disable_warnings
+drop table if exists coll_test;
+--enable_warnings
+create table coll_test(pk bigint primary key, uc varchar(10) collate utf8_general_ci, ub varchar(10) collate utf8_bin, b varbinary(10));
+--source mysql_test/include/show_create_table_old_version.inc
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table coll_test;
+insert into coll_test values (1314, 'abc', 'def', 'xyz');
+select * from coll_test;
+################################################################
+# concat
+select collation(concat(null)) from coll_test;
+select collation(concat(uc, ub)) from coll_test;
+select collation(concat(uc, b)) from coll_test;
+select collation(concat(uc, x'41')) from coll_test;
+select collation(concat('abc', x'41')) from coll_test;
+select collation(concat('abc' collate utf8mb4_general_ci, x'41')) from coll_test;
+select collation(concat(1, 2)) from coll_test;
+select collation(concat(1, null)) from coll_test;
+
+# group_concat
+select collation(group_concat(null)) from coll_test;
+select collation(group_concat(uc, ub)) from coll_test;
+select collation(group_concat(uc, b)) from coll_test;
+select collation(group_concat(uc, x'41')) from coll_test;
+select collation(group_concat('abc', x'41')) from coll_test;
+select collation(group_concat('abc' collate utf8mb4_general_ci, x'41')) from coll_test;
+select collation(group_concat(1, 2)) from coll_test;
+select collation(group_concat(1, null)) from coll_test;
+
+# concat_ws
+select collation(concat_ws(',', null)) from coll_test;
+select collation(concat_ws(',', uc, ub)) from coll_test;
+select collation(concat_ws(',', uc, b)) from coll_test;
+select collation(concat_ws(',', uc, x'41')) from coll_test;
+select collation(concat_ws(',', 'abc', x'41')) from coll_test;
+select collation(concat_ws(',', 'abc' collate utf8mb4_general_ci, x'41')) from coll_test;
+select collation(concat_ws(',', 1, 2)) from coll_test;
+select collation(concat_ws(',', 1, null)) from coll_test;
+
+# reverse
+select collation(reverse(null)) from coll_test;
+select collation(reverse(uc)) from coll_test;
+select collation(reverse(ub)) from coll_test;
+select collation(reverse(b)) from coll_test;
+select collation(reverse(pk)) from coll_test;
+select collation(reverse(X'41')) from coll_test;
+
+# lower
+select collation(lower(null)) from coll_test;
+select collation(lower(uc)) from coll_test;
+select collation(lower(ub)) from coll_test;
+select collation(lower(b)) from coll_test;
+select collation(lower(pk)) from coll_test;
+select collation(lower(X'41')) from coll_test;
+
+# upper
+select collation(upper(null)) from coll_test;
+select collation(upper(uc)) from coll_test;
+select collation(upper(ub)) from coll_test;
+select collation(upper(b)) from coll_test;
+select collation(upper(pk)) from coll_test;
+select collation(upper(X'41')) from coll_test;
+
+# right
+select collation(right(null, 2)) from coll_test;
+select collation(right(uc, 2)) from coll_test;
+select collation(right(ub, 2)) from coll_test;
+select collation(right(b, 2)) from coll_test;
+select collation(right(pk, 2)) from coll_test;
+select collation(right(X'41', 2)) from coll_test;
+
+#substr
+select collation(substr(null, 2)) from coll_test;
+select collation(substr(uc, 2)) from coll_test;
+select collation(substr(ub, 2)) from coll_test;
+select collation(substr(b, 2)) from coll_test;
+select collation(substr(pk, 2)) from coll_test;
+select collation(substr(X'41', 2)) from coll_test;
+
+#trim
+select collation(trim('a' from null)) from coll_test;
+select collation(trim('a' from uc)) from coll_test;
+select collation(trim('a' from ub)) from coll_test;
+select collation(trim('a' from b)) from coll_test;
+select collation(trim('a' from pk)) from coll_test;
+select collation(trim('a' from X'41')) from coll_test;
+
+#repeat
+select collation(repeat(null, 2)) from coll_test;
+select collation(repeat(uc, 2)) from coll_test;
+select collation(repeat(ub, 2)) from coll_test;
+select collation(repeat(b, 2)) from coll_test;
+select collation(repeat(pk, 2)) from coll_test;
+select collation(repeat(X'41', 2)) from coll_test;
+
+# rpad
+select collation(rpad(null, 2, 'a')) from coll_test;
+select collation(rpad(uc, 2, ub)) from coll_test;
+select collation(rpad(ub, 2, b)) from coll_test;
+select collation(rpad(b, 2, uc)) from coll_test;
+select collation(rpad(pk, 2, uc)) from coll_test;
+select collation(rpad(X'41', 2, uc)) from coll_test;
+
+#replace
+select collation(replace(null, b, 'a')) from coll_test;
+select collation(replace(uc, b, ub)) from coll_test;
+select collation(replace(ub, uc, ub)) from coll_test;
+select collation(replace(uc, 'a', 'b')) from coll_test;
+select collation(replace(pk, 1, 2)) from coll_test;
+select collation(replace(X'41', 'a', 'b')) from coll_test;
+
+#replace
+select collation(replace(null, b, 'a')) from coll_test;
+select collation(replace(uc, b, ub)) from coll_test;
+select collation(replace(ub, uc, ub)) from coll_test;
+select collation(replace(uc, 'a', 'b')) from coll_test;
+select collation(replace(pk, 1, 2)) from coll_test;
+select collation(replace(X'41', 'a', 'b')) from coll_test;
+
+#substring_index
+select collation(substring_index(null, b, 2)) from coll_test;
+select collation(substring_index(uc, b, 2)) from coll_test;
+select collation(substring_index(ub, uc, 2)) from coll_test;
+select collation(substring_index(ub, b, 2)) from coll_test;
+select collation(substring_index(uc, 'a', 2)) from coll_test;
+select collation(substring_index(pk, 1, 2)) from coll_test;
+select collation(substring_index(X'41', 'a', 2)) from coll_test;
+
+# locate
+select cmp_meta(locate('b' collate utf8mb4_general_ci, 'aBc' collate utf8mb4_general_ci));
+select cmp_meta(locate('b' collate utf8mb4_bin, 'aBc' collate utf8mb4_bin));
+select cmp_meta(locate('b', 'aBc'));
+select cmp_meta(locate('b' collate utf8mb4_general_ci, 'aBc' collate utf8mb4_general_ci, 1));
+select cmp_meta(locate('b' collate utf8mb4_bin, 'aBc' collate utf8mb4_bin, 1));
+select cmp_meta(locate('b', 'aBc', 1));
+select cmp_meta(locate(uc, ub)) from coll_test;
+select cmp_meta(locate(uc, b)) from coll_test;
+select cmp_meta(locate(b, b)) from coll_test;
+select cmp_meta(locate(b, pk)) from coll_test;
+
+# instr
+select cmp_meta(instr('abc' collate utf8_bin, 'B' collate utf8_bin));
+select cmp_meta(instr('abc' collate utf8_general_ci, 'B' collate utf8_general_ci));
+select cmp_meta(instr('abc', 'B'));
+
+# current_user
+select collation(current_user());
+select coercibility(current_user());
+
+# database
+select collation(database());
+select coercibility(database());
+
+# conv
+select collation(conv(null, 10, 8));
+select collation(conv(1024, 10, 8));
+
+# bin
+select collation(bin(null));
+select collation(bin(uc)) from coll_test;
+select collation(bin(pk))  from coll_test;
+select collation(bin(b))  from coll_test;
+
+# effective_tenant
+select collation(effective_tenant());
+select coercibility(effective_tenant());
+
+# like
+select collation(uc like b) from coll_test;
+select cmp_meta(uc like b) from coll_test;
+select cmp_meta(uc like ub) from coll_test;
+select cmp_meta(b like b) from coll_test;
+select cmp_meta(uc like b) from coll_test;
+
+# cast
+select collation(cast(uc as binary)) from coll_test;
+select collation(cast(pk as char)) from coll_test;
+select uc, collation(binary uc) from coll_test;
+select collation(binary binary uc collate utf8_bin) from coll_test;
+
+# user
+select collation(user());
+select coercibility(user());
+
+# version
+select collation(version());
+select coercibility(version());
+
+# unhex
+select collation(unhex('42'));
+select collation(unhex(null));
+
+# regexp
+select collation(uc regexp b) from coll_test;
+select cmp_meta(uc regexp b) from coll_test;
+select cmp_meta(uc regexp ub) from coll_test;
+select cmp_meta(b regexp b) from coll_test;
+select cmp_meta(uc regexp b) from coll_test;
+select cmp_meta(uc regexp 'abc') from coll_test;
+
+# quote
+select collation(quote(uc)) from coll_test;
+select collation(quote(ub)) from coll_test;
+select collation(quote(b)) from coll_test;
+select collation(quote(pk)) from coll_test;
+select collation(quote(null)) from coll_test;
+
+# md5
+select collation(md5(uc)) from coll_test;
+select collation(md5(ub)) from coll_test;
+select collation(md5(b)) from coll_test;
+select collation(md5(pk)) from coll_test;
+select collation(md5(null)) from coll_test;
+
+# dump
+select collation(dump(null)) from coll_test;
+
+# hex
+select collation(hex(uc)) from coll_test;
+select collation(hex(ub)) from coll_test;
+select collation(hex(b)) from coll_test;
+select collation(hex(pk)) from coll_test;
+select collation(hex(null)) from coll_test;
+
+# int2ip
+select collation(int2ip(pk)) from coll_test;
+select collation(int2ip(null)) from coll_test;
+
+# date_format
+SELECT collation(DATE_FORMAT('2009-10-04 22:23:00', '%W %M %Y'));
+
+# all implicit cast should use the connection_collation as the result collation
+set collation_connection = utf8mb4_general_ci;
+select collation(cast(1 as char));
+SELECT collation(DATE_FORMAT('2009-10-04 22:23:00', '%W %M %Y'));
+select collation(cast('A' as char)), cast('A' as char) < 'a';
+
+set collation_connection = utf8mb4_bin;
+select collation(cast(1 as char));
+SELECT collation(DATE_FORMAT('2009-10-04 22:23:00', '%W %M %Y'));
+select collation(cast('A' as char)), cast('A' as char) < 'a';
+
+################################################################
+# tear-down
+drop table coll_test;

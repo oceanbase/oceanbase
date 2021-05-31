@@ -1,0 +1,458 @@
+***************   Case 1   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(t1, t2) USE_HASH(t1, t2) */ t1.c1 from t1, t2 where t1.c1 = t2.c1;
+
+=====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST |
+-------------------------------------
+|0 |HASH JOIN  |    |14250    |24667|
+|1 | TABLE SCAN|t1  |10000    |3818 |
+|2 | TABLE SCAN|t2  |2000     |785  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+
+*************** Case 1(end)  ************** 
+
+***************   Case 2   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(t1, t2) USE_HASH(t1, t2) */ t1.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1;
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |2        |1496|
+|1 | TABLE GET |t1  |1        |52  |
+|2 | TABLE SCAN|t2  |2000     |785 |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[1 ; 1], 
+      range_cond([t1.c1 = 1])
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+
+*************** Case 2(end)  ************** 
+
+***************   Case 3   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(t1, t2) USE_HASH(t1, t2) */ t1.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 > 1;
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |144      |1688|
+|1 | TABLE SCAN|t1  |100      |52  |
+|2 | TABLE SCAN|t2  |2000     |785 |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range(1 ; MAX), 
+      range_cond([t1.c1 > 1])
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+
+*************** Case 3(end)  ************** 
+
+***************   Case 4   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(t1, t2) USE_HASH(t1, t2) */ t1.c1 from t1, t2 where t1.c1 = t2.c1 and t2.c1 = 1;
+
+=====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST |
+-------------------------------------
+|0 |HASH JOIN  |    |10       |14832|
+|1 | TABLE SCAN|t1  |10000    |3818 |
+|2 | TABLE GET |t2  |1        |52   |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.c1]), range[1 ; 1], 
+      range_cond([t2.c1 = 1])
+
+*************** Case 4(end)  ************** 
+
+***************   Case 5   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(t1, t2) USE_HASH(t1, t2) */ t1.c1 from t1, t2 where t1.c1 = t2.c1 and t2.c1 > 1;
+
+=====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST |
+-------------------------------------
+|0 |HASH JOIN  |    |927      |15408|
+|1 | TABLE SCAN|t1  |10000    |3818 |
+|2 | TABLE SCAN|t2  |100      |52   |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.c1]), range(1 ; MAX), 
+      range_cond([t2.c1 > 1])
+
+*************** Case 5(end)  ************** 
+
+***************   Case 6   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(t1, t2) USE_HASH(t1, t2) */ t1.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1 and t2.c1 = 1;
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |HASH JOIN |    |1        |106 |
+|1 | TABLE GET|t1  |1        |52  |
+|2 | TABLE GET|t2  |1        |52  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[1 ; 1], 
+      range_cond([t1.c1 = 1])
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.c1]), range[1 ; 1], 
+      range_cond([t2.c1 = 1])
+
+*************** Case 6(end)  ************** 
+
+***************   Case 7   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(t1, t2) USE_HASH(t1, t2) */ t1.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 > 1 and t2.c1 = 1;
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |1        |215 |
+|1 | TABLE SCAN|t1  |100      |52  |
+|2 | TABLE GET |t2  |1        |52  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range(1 ; MAX), 
+      range_cond([t1.c1 > 1])
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.c1]), range[1 ; 1], 
+      range_cond([t2.c1 = 1])
+
+*************** Case 7(end)  ************** 
+
+***************   Case 8   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(t1, t2) USE_HASH(t1, t2) */ t1.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1 and t2.c1 > 1;
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |1        |139 |
+|1 | TABLE GET |t1  |1        |52  |
+|2 | TABLE SCAN|t2  |100      |52  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range[1 ; 1], 
+      range_cond([t1.c1 = 1])
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.c1]), range(1 ; MAX), 
+      range_cond([t2.c1 > 1])
+
+*************** Case 8(end)  ************** 
+
+***************   Case 9   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(t1, t2) USE_HASH(t1, t2) */ t1.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 > 1 and t2.c1 > 1;
+
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |HASH JOIN  |    |96       |303 |
+|1 | TABLE SCAN|t1  |100      |52  |
+|2 | TABLE SCAN|t2  |100      |52  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t1.c1]), range(1 ; MAX), 
+      range_cond([t1.c1 > 1])
+  2 - output([t2.c1]), filter(nil), 
+      access([t2.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t2.c1]), range(1 ; MAX), 
+      range_cond([t2.c1 > 1])
+
+*************** Case 9(end)  ************** 
+
+***************   Case 10   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(a, b, c) USE_HASH(a, b, c) */ c.c1 from t1 a, t1 b, t1 c where b.c1 = c.c1;
+
+=========================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST     |
+---------------------------------------------------------
+|0 |HASH JOIN                  |    |949995250|762142938|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |100000000|70773404 |
+|2 |  TABLE SCAN               |a   |10000    |3818     |
+|3 |  MATERIAL                 |    |10000    |5655     |
+|4 |   TABLE SCAN              |b   |10000    |3818     |
+|5 | TABLE SCAN                |c   |10000    |3818     |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([c.c1]), filter(nil), 
+      equal_conds([b.c1 = c.c1]), other_conds(nil)
+  1 - output([b.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([a.c1]), range(MIN ; MAX)always true
+  3 - output([b.c1]), filter(nil)
+  4 - output([b.c1]), filter(nil), 
+      access([b.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([b.c1]), range(MIN ; MAX)always true
+  5 - output([c.c1]), filter(nil), 
+      access([c.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([c.c1]), range(MIN ; MAX)always true
+
+*************** Case 10(end)  ************** 
+
+***************   Case 11   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(a, b, c) USE_HASH(a, b, c) */ c.c1 from t1 a, t1 b, t1 c where b.c1 = c.c1 and c.c1 = 1;
+
+=========================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST     |
+---------------------------------------------------------
+|0 |HASH JOIN                  |    |100000   |198770318|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |100000000|70773404 |
+|2 |  TABLE SCAN               |a   |10000    |3818     |
+|3 |  MATERIAL                 |    |10000    |5655     |
+|4 |   TABLE SCAN              |b   |10000    |3818     |
+|5 | TABLE GET                 |c   |1        |52       |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([c.c1]), filter(nil), 
+      equal_conds([b.c1 = c.c1]), other_conds(nil)
+  1 - output([b.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([a.c1]), range(MIN ; MAX)always true
+  3 - output([b.c1]), filter(nil)
+  4 - output([b.c1]), filter(nil), 
+      access([b.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([b.c1]), range(MIN ; MAX)always true
+  5 - output([c.c1]), filter(nil), 
+      access([c.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([c.c1]), range[1 ; 1], 
+      range_cond([c.c1 = 1])
+
+*************** Case 11(end)  ************** 
+
+***************   Case 12   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(a, b, c) USE_HASH(a, b, c) */ c.c1 from t1 a, t1 b, t1 c where b.c1 = c.c1 and c.c1 > 1;
+
+=========================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST     |
+---------------------------------------------------------
+|0 |HASH JOIN                  |    |9561745  |204381939|
+|1 | NESTED-LOOP JOIN CARTESIAN|    |100000000|70773404 |
+|2 |  TABLE SCAN               |a   |10000    |3818     |
+|3 |  MATERIAL                 |    |10000    |5655     |
+|4 |   TABLE SCAN              |b   |10000    |3818     |
+|5 | TABLE SCAN                |c   |100      |52       |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([c.c1]), filter(nil), 
+      equal_conds([b.c1 = c.c1]), other_conds(nil)
+  1 - output([b.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([a.c1]), range(MIN ; MAX)always true
+  3 - output([b.c1]), filter(nil)
+  4 - output([b.c1]), filter(nil), 
+      access([b.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([b.c1]), range(MIN ; MAX)always true
+  5 - output([c.c1]), filter(nil), 
+      access([c.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([c.c1]), range(1 ; MAX), 
+      range_cond([c.c1 > 1])
+
+*************** Case 12(end)  ************** 
+
+***************   Case 13   ***************
+min = 1001, max = 10000, ndv = 1000, null_num = 500
+t1 row count = 10000, t2 row count = 2000
+t1 not null frac is (10000-500)/10000 = 0.95
+t2 not null frac is (2000-500)/2000 = 0.75
+
+SQL: select /*+ LEADING(a, b, c) USE_HASH(a, b, c) */ c.c1 from t1 a, t1 b, t1 c where b.c1 = c.c1 and a.c1 = 1 and b.c1 = 1 and c.c1 = 1;
+
+====================================================
+|ID|OPERATOR                   |NAME|EST. ROWS|COST|
+----------------------------------------------------
+|0 |HASH JOIN                  |    |1        |159 |
+|1 | NESTED-LOOP JOIN CARTESIAN|    |1        |105 |
+|2 |  TABLE GET                |a   |1        |52  |
+|3 |  TABLE GET                |b   |1        |52  |
+|4 | TABLE GET                 |c   |1        |52  |
+====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([c.c1]), filter(nil), 
+      equal_conds([b.c1 = c.c1]), other_conds(nil)
+  1 - output([b.c1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  2 - output([a.c1]), filter(nil), 
+      access([a.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([a.c1]), range[1 ; 1], 
+      range_cond([a.c1 = 1])
+  3 - output([b.c1]), filter(nil), 
+      access([b.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([b.c1]), range[1 ; 1], 
+      range_cond([b.c1 = 1])
+  4 - output([c.c1]), filter(nil), 
+      access([c.c1]), partitions(p0), 
+      is_index_back=false, 
+      range_key([c.c1]), range[1 ; 1], 
+      range_cond([c.c1 = 1])
+
+*************** Case 13(end)  ************** 
+

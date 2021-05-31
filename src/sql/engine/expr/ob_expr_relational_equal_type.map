@@ -1,0 +1,2194 @@
+static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] = 
+{
+  /*NullType*/
+  {
+    ObMaxType,        /* NullType  */
+    ObMaxType,     /* TinyIntType  */
+    ObMaxType,    /* SmallIntType  */
+    ObMaxType,   /* MediumIntType  */
+    ObMaxType,       /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,    /* UTinyIntType  */
+    ObMaxType,   /* USmallIntType  */
+    ObMaxType,  /* UMediumIntType  */
+    ObMaxType,      /* UInt32Type  */
+    ObMaxType,      /* UIntType  */
+    ObMaxType,       /* FloatType  */
+    ObMaxType,      /* DoubleType  */
+    ObMaxType,      /* UFloatType  */
+    ObMaxType,     /* UDoubleType  */
+    ObMaxType,      /* NumberType  */
+    ObMaxType,     /* UNumberType  */
+    ObMaxType,    /* DateTimeType  */
+    ObMaxType,   /* TimestampType  */
+    ObMaxType,        /* DateType  */
+    ObMaxType,        /* TimeType  */
+    ObMaxType,        /* YearType  */
+    ObMaxType,     /* VarcharType  */
+    ObMaxType,        /* CharType  */
+    ObMaxType,   /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMaxType,       /*TinyTextType*/
+    ObMaxType,       /*TextType*/
+    ObMaxType,       /*MediumTextType*/
+    ObMaxType,        /*LongTextType*/
+    ObMaxType,        /*BitType*/
+    ObMaxType,        /*EnumType*/
+    ObMaxType,        /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
+    ObMaxType,        /* ObTimestampTZType */
+    ObMaxType,        /* ObTimestampLTZType */
+    ObMaxType,        /* ObTimestampNanoType */
+    ObMaxType,        /* ObRawType */
+    ObMaxType,        /* ObIntervalYMType */
+    ObMaxType,        /* ObIntervalDSType */
+    ObMaxType,        /* ObNumberFloatType */
+    ObMaxType,        /* ObNVarchar2Type */
+    ObMaxType,        /* ObNCharType */
+  },
+
+  /*TinyIntType*/
+  {
+    ObMaxType,     /* NullType  */
+    ObNumberType,         /* TinyIntType  */
+    ObNumberType,         /* SmallIntType  */
+    ObNumberType,         /* MediumIntType  */
+    ObNumberType,         /* Int32Type  */
+    ObNumberType,         /* IntType  */
+    ObNumberType,         /* UTinyIntType  */
+    ObNumberType,         /* USmallIntType  */
+    ObNumberType,         /* UMediumIntType  */
+    ObNumberType,         /* UInt32Type  */
+    ObNumberType,         /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,         /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*SmallIntType*/
+  {
+    ObMaxType,    /* NullType  */
+    ObNumberType,         /* TinyIntType  */
+    ObNumberType,         /* SmallIntType  */
+    ObNumberType,         /* MediumIntType  */
+    ObNumberType,         /* Int32Type  */
+    ObNumberType,         /* IntType  */
+    ObNumberType,         /* UTinyIntType  */
+    ObNumberType,         /* USmallIntType  */
+    ObNumberType,         /* UMediumIntType  */
+    ObNumberType,         /* UInt32Type  */
+    ObNumberType,         /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,         /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*MediumIntType*/
+  {
+    ObMaxType,   /* NullType  */
+    ObNumberType,         /* TinyIntType  */
+    ObNumberType,         /* SmallIntType  */
+    ObNumberType,         /* MediumIntType  */
+    ObNumberType,         /* Int32Type  */
+    ObNumberType,         /* IntType  */
+    ObNumberType,         /* UTinyIntType  */
+    ObNumberType,         /* USmallIntType  */
+    ObNumberType,         /* UMediumIntType  */
+    ObNumberType,         /* UInt32Type  */
+    ObNumberType,         /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,         /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*Int32Type*/
+  {
+    ObMaxType,       /* NullType  */
+    ObNumberType,         /* TinyIntType  */
+    ObNumberType,         /* SmallIntType  */
+    ObNumberType,         /* MediumIntType  */
+    ObNumberType,         /* Int32Type  */
+    ObNumberType,         /* IntType  */
+    ObNumberType,         /* UTinyIntType  */
+    ObNumberType,         /* USmallIntType  */
+    ObNumberType,         /* UMediumIntType  */
+    ObNumberType,         /* UInt32Type  */
+    ObNumberType,         /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,         /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*IntType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObNumberType,         /* TinyIntType  */
+    ObNumberType,         /* SmallIntType  */
+    ObNumberType,         /* MediumIntType  */
+    ObNumberType,         /* Int32Type  */
+    ObNumberType,         /* IntType  */
+    ObNumberType,         /* UTinyIntType  */
+    ObNumberType,         /* USmallIntType  */
+    ObNumberType,         /* UMediumIntType  */
+    ObNumberType,         /* UInt32Type  */
+    ObNumberType,         /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,         /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+  /*UTinyIntType*/
+  {
+    ObMaxType,    /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*USmallIntType*/
+  {
+    ObMaxType,   /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*UMediumIntType*/
+  {
+    ObMaxType,  /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*UInt32Type*/
+  {
+    ObMaxType,      /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,         /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*UInt64Type*/
+  {
+    ObMaxType,      /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*FloatType*/
+  {
+    ObMaxType,       /* NullType  */
+    ObDoubleType,      /* TinyIntType  */
+    ObDoubleType,      /* SmallIntType  */
+    ObDoubleType,      /* MediumIntType  */
+    ObDoubleType,      /* Int32Type  */
+    ObDoubleType,      /* IntType  */
+    ObDoubleType,      /* UTinyIntType  */
+    ObDoubleType,      /* USmallIntType  */
+    ObDoubleType,      /* UMediumIntType  */
+    ObDoubleType,      /* UInt32Type  */
+    ObDoubleType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObDoubleType,      /* NumberType  */
+    ObDoubleType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObDoubleType,      /* YearType  */
+    ObDoubleType,      /* VarcharType  */
+    ObDoubleType,      /* CharType  */
+    ObDoubleType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObDoubleType,       /*TinyTextType*/
+    ObDoubleType,       /*TextType*/
+    ObDoubleType,       /*MediumTextType*/
+    ObDoubleType,        /*LongTextType*/
+    ObDoubleType,      /* BitType  */
+    ObMaxType,      /* EnumType  */
+    ObMaxType,      /* SetType  */
+    ObMaxType,      /* EnumInnerType  */
+    ObMaxType,      /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObDoubleType,        /* ObNumberFloatType */
+    ObNVarchar2Type,     /* ObNVarchar2Type */
+    ObNCharType,         /* ObNCharType */
+  },
+
+  /*DoubleType*/
+  {
+    ObMaxType,      /* NullType  */
+    ObDoubleType,      /* TinyIntType  */
+    ObDoubleType,      /* SmallIntType  */
+    ObDoubleType,      /* MediumIntType  */
+    ObDoubleType,      /* Int32Type  */
+    ObDoubleType,      /* IntType  */
+    ObDoubleType,      /* UTinyIntType  */
+    ObDoubleType,      /* USmallIntType  */
+    ObDoubleType,      /* UMediumIntType  */
+    ObDoubleType,      /* UInt32Type  */
+    ObDoubleType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObDoubleType,      /* NumberType  */
+    ObDoubleType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObDoubleType,      /* YearType  */
+    ObDoubleType,      /* VarcharType  */
+    ObDoubleType,      /* CharType  */
+    ObDoubleType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObDoubleType,       /*TinyTextType*/
+    ObDoubleType,       /*TextType*/
+    ObDoubleType,       /*MediumTextType*/
+    ObDoubleType,        /*LongTextType*/
+    ObDoubleType,      /* BitType  */
+    ObMaxType,      /* EnumType  */
+    ObMaxType,      /* SetType  */
+    ObMaxType,      /* EnumInnerType  */
+    ObMaxType,      /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObDoubleType,        /* ObNumberFloatType */
+    ObDoubleType,         /* ObNVarchar2Type */
+    ObDoubleType,         /* ObNCharType */
+  },
+
+  /*UFloatType*/
+  {
+    ObMaxType,      /* NullType  */
+    ObDoubleType,      /* TinyIntType  */
+    ObDoubleType,      /* SmallIntType  */
+    ObDoubleType,      /* MediumIntType  */
+    ObDoubleType,      /* Int32Type  */
+    ObDoubleType,      /* IntType  */
+    ObDoubleType,      /* UTinyIntType  */
+    ObDoubleType,      /* USmallIntType  */
+    ObDoubleType,      /* UMediumIntType  */
+    ObDoubleType,      /* UInt32Type  */
+    ObDoubleType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObDoubleType,      /* NumberType  */
+    ObDoubleType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObDoubleType,      /* YearType  */
+    ObDoubleType,      /* VarcharType  */
+    ObDoubleType,      /* CharType  */
+    ObDoubleType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObDoubleType,       /*TinyTextType*/
+    ObDoubleType,       /*TextType*/
+    ObDoubleType,       /*MediumTextType*/
+    ObDoubleType,        /*LongTextType*/
+    ObDoubleType,      /* BitType  */
+    ObMaxType,      /* EnumType  */
+    ObMaxType,      /* SetType  */
+    ObMaxType,      /* EnumInnerType  */
+    ObMaxType,      /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObDoubleType,        /* ObNumberFloatType */
+    ObDoubleType,         /* ObNVarchar2Type */
+    ObDoubleType,         /* ObNCharType */
+  },
+
+  /*UDoubleType*/
+  {
+    ObMaxType,     /* NullType  */
+    ObDoubleType,      /* TinyIntType  */
+    ObDoubleType,      /* SmallIntType  */
+    ObDoubleType,      /* MediumIntType  */
+    ObDoubleType,      /* Int32Type  */
+    ObDoubleType,      /* IntType  */
+    ObDoubleType,      /* UTinyIntType  */
+    ObDoubleType,      /* USmallIntType  */
+    ObDoubleType,      /* UMediumIntType  */
+    ObDoubleType,      /* UInt32Type  */
+    ObDoubleType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObDoubleType,      /* NumberType  */
+    ObDoubleType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObDoubleType,      /* YearType  */
+    ObDoubleType,      /* VarcharType  */
+    ObDoubleType,      /* CharType  */
+    ObDoubleType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObDoubleType,       /*TinyTextType*/
+    ObDoubleType,       /*TextType*/
+    ObDoubleType,       /*MediumTextType*/
+    ObDoubleType,        /*LongTextType*/
+    ObDoubleType,      /* BitType  */
+    ObMaxType,      /* EnumType  */
+    ObMaxType,      /* SetType  */
+    ObMaxType,      /* EnumInnerType  */
+    ObMaxType,      /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObDoubleType,        /* ObNumberFloatType */
+    ObDoubleType,         /* ObNVarchar2Type */
+    ObDoubleType,         /* ObNCharType */
+  },
+
+  /*NumberType*/
+  {
+    ObMaxType,      /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*UNumberType*/
+  {
+    ObMaxType,     /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,     /* UTinyIntType  */
+    ObNumberType,     /* USmallIntType  */
+    ObNumberType,     /* UMediumIntType  */
+    ObNumberType,     /* UInt32Type  */
+    ObNumberType,     /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,         /* ObNVarchar2Type */
+    ObNumberType,         /* ObNCharType */
+  },
+
+  /*DateTimeType*/
+  {
+    ObMaxType,    /* NullType  */
+    ObDateTimeType,    /* TinyIntType  */
+    ObDateTimeType,    /* SmallIntType  */
+    ObDateTimeType,    /* MediumIntType  */
+    ObDateTimeType,    /* Int32Type  */
+    ObDateTimeType,    /* IntType  */
+    ObDateTimeType,    /* UTinyIntType  */
+    ObDateTimeType,    /* USmallIntType  */
+    ObDateTimeType,    /* UMediumIntType  */
+    ObDateTimeType,    /* UInt32Type  */
+    ObDateTimeType,    /* UIntType  */
+    ObDateTimeType,    /* FloatType  */
+    ObDateTimeType,    /* DoubleType  */
+    ObDateTimeType,    /* UFloatType  */
+    ObDateTimeType,    /* UDoubleType  */
+    ObDateTimeType,    /* NumberType  */
+    ObDateTimeType,    /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObDateTimeType,    /* TimestampType  */
+    ObDateTimeType,    /* DateType  */
+    ObDateTimeType,    /* TimeType  */
+    ObVarcharType,     /* YearType  */
+    ObDateTimeType,    /* VarcharType  */
+    ObDateTimeType,    /* CharType  */
+    ObDateTimeType,    /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObDateTimeType,       /*TinyTextType*/
+    ObDateTimeType,       /*TextType*/
+    ObDateTimeType,       /*MediumTextType*/
+    ObDateTimeType,       /*LongTextType*/
+    ObDateTimeType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObDateTimeType,        /* ObNumberFloatType */
+    ObDateTimeType,        /* ObNVarchar2Type */
+    ObDateTimeType,        /* ObNCharType */
+  },
+
+  /*TimestampType*/
+  {
+    ObMaxType,   /* NullType  */
+    ObTimestampType,   /* TinyIntType  */
+    ObTimestampType,   /* SmallIntType  */
+    ObTimestampType,   /* MediumIntType  */
+    ObTimestampType,   /* Int32Type  */
+    ObTimestampType,   /* IntType  */
+    ObTimestampType,   /* UTinyIntType  */
+    ObTimestampType,   /* USmallIntType  */
+    ObTimestampType,   /* UMediumIntType  */
+    ObTimestampType,   /* UInt32Type  */
+    ObTimestampType,   /* UIntType  */
+    ObTimestampType,   /* FloatType  */
+    ObTimestampType,   /* DoubleType  */
+    ObTimestampType,   /* UFloatType  */
+    ObTimestampType,   /* UDoubleType  */
+    ObTimestampType,   /* NumberType  */
+    ObTimestampType,   /* UNumberType  */
+    ObDateTimeType,   /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObTimestampType,   /* DateType  */
+    ObTimestampType,   /* TimeType  */
+    ObVarcharType,     /* YearType  */
+    ObTimestampType,   /* VarcharType  */
+    ObTimestampType,   /* CharType  */
+    ObTimestampType,   /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObTimestampType,       /*TinyTextType*/
+    ObTimestampType,       /*TextType*/
+    ObTimestampType,       /*MediumTextType*/
+    ObTimestampType,        /*LongTextType*/
+    ObTimestampType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObTimestampType,        /* ObNumberFloatType */
+    ObTimestampType,        /* ObNVarchar2Type */
+    ObTimestampType,        /* ObNCharType */
+  },
+
+  /*DateType*/
+  {
+    ObMaxType,        /* NullType  */
+    ObDateType,        /* TinyIntType  */
+    ObDateType,        /* SmallIntType  */
+    ObDateType,        /* MediumIntType  */
+    ObDateType,        /* Int32Type  */
+    ObDateType,        /* IntType  */
+    ObDateType,        /* UTinyIntType  */
+    ObDateType,        /* USmallIntType  */
+    ObDateType,        /* UMediumIntType  */
+    ObDateType,        /* UInt32Type  */
+    ObDateType,        /* UIntType  */
+    ObDateType,        /* FloatType  */
+    ObDateType,        /* DoubleType  */
+    ObDateType,        /* UFloatType  */
+    ObDateType,        /* UDoubleType  */
+    ObDateType,        /* NumberType  */
+    ObDateType,        /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObDateTimeType,    /* TimeType  */
+    ObVarcharType,     /* YearType  */
+    ObDateTimeType,    /* VarcharType  */
+    ObDateTimeType,    /* CharType  */
+    ObDateTimeType,    /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObDateTimeType,       /*TinyTextType*/
+    ObDateTimeType,       /*TextType*/
+    ObDateTimeType,       /*MediumTextType*/
+    ObDateTimeType,        /*LongTextType*/
+    ObDateType,    /* BitType  */
+    ObMaxType,    /* EnumType  */
+    ObMaxType,    /* SetType  */
+    ObMaxType,         /*EnumInnerType*/
+    ObMaxType,         /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObDateType,        /* ObNumberFloatType */
+    ObDateTimeType,        /* ObNVarchar2Type */
+    ObDateTimeType,        /* ObNCharType */
+  },
+
+  /*TimeType*/
+  {
+    ObMaxType,        /* NullType  */
+    ObTimeType,        /* TinyIntType  */
+    ObTimeType,        /* SmallIntType  */
+    ObTimeType,        /* MediumIntType  */
+    ObTimeType,        /* Int32Type  */
+    ObTimeType,        /* IntType  */
+    ObTimeType,        /* UTinyIntType  */
+    ObTimeType,        /* USmallIntType  */
+    ObTimeType,        /* UMediumIntType  */
+    ObTimeType,        /* UInt32Type  */
+    ObTimeType,        /* UIntType  */
+    ObTimeType,        /* FloatType  */
+    ObTimeType,        /* DoubleType  */
+    ObTimeType,        /* UFloatType  */
+    ObTimeType,        /* UDoubleType  */
+    ObTimeType,        /* NumberType  */
+    ObTimeType,        /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,    /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObTimeType,        /* VarcharType  */
+    ObTimeType,        /* CharType  */
+    ObTimeType,        /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObTimeType,       /*TinyTextType*/
+    ObTimeType,       /*TextType*/
+    ObTimeType,       /*MediumTextType*/
+    ObTimeType,        /*LongTextType*/
+    ObTimeType,        /* BitType  */
+    ObMaxType,        /* EnumType  */
+    ObMaxType,        /* SetType  */
+    ObMaxType,        /* EnumInnerType  */
+    ObMaxType,        /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObTimeType,        /* ObNumberFloatType */
+    ObTimeType,        /* ObNVarchar2Type */
+    ObTimeType,        /* ObNCharType */
+  },
+
+  /*YearType*/
+  {
+    ObMaxType,        /* NullType  */
+    ObNumberType,         /* TinyIntType  */
+    ObNumberType,         /* SmallIntType  */
+    ObNumberType,         /* MediumIntType  */
+    ObNumberType,         /* Int32Type  */
+    ObNumberType,         /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObVarcharType,     /* DateTimeType  */
+    ObVarcharType,     /* TimestampType  */
+    ObVarcharType,     /* DateType  */
+    ObNumberType,      /* TimeType  */
+    ObYearType,        /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,        /*BitType*/
+    ObMaxType,        /*EnumType*/
+    ObMaxType,        /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
+    ObVarcharType,    /* ObTimestampTZType */
+    ObVarcharType,    /* ObTimestampLTZType */
+    ObVarcharType,    /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,        /* ObNVarchar2Type */
+    ObNumberType,        /* ObNCharType */
+  },
+
+  /*VarcharType*/
+  {
+    ObMaxType,     /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,    /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObVarcharType,     /* VarcharType  */
+    ObVarcharType,     /* CharType  */
+    ObVarcharType,     /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMediumTextType,       /*TinyTextType*/
+    ObMediumTextType,       /*TextType*/
+    ObMediumTextType,       /*MediumTextType*/
+    ObMediumTextType,        /*LongTextType*/
+    ObNumberType,     /* BitType  */
+    ObMaxType,     /* EnumType  */
+    ObMaxType,     /* SetType  */
+    ObMaxType,     /* EnumInnerType  */
+    ObMaxType,     /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObVarcharType,        /* ObNVarchar2Type */
+    ObVarcharType,        /* ObNCharType */
+  },
+
+  /*CharType*/
+  {
+    ObMaxType,        /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,    /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObVarcharType,     /* VarcharType  */
+    ObVarcharType,     /* CharType  */
+    ObVarcharType,     /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMediumTextType,       /*TinyTextType*/
+    ObMediumTextType,       /*TextType*/
+    ObMediumTextType,       /*MediumTextType*/
+    ObMediumTextType,        /*LongTextType*/
+    ObNumberType,     /* BitType  */
+    ObMaxType,     /* EnumType  */
+    ObMaxType,     /* SetType  */
+    ObMaxType,     /* EnumInnerType  */
+    ObMaxType,     /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObVarcharType,        /* ObNVarchar2Type */
+    ObVarcharType,        /* ObNCharType */
+  },
+
+  /*HexStringType*/
+  {
+    ObMaxType,   /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,    /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObVarcharType,     /* VarcharType  */
+    ObVarcharType,     /* CharType  */
+    ObVarcharType,     /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMediumTextType,       /*TinyTextType*/
+    ObMediumTextType,       /*TextType*/
+    ObMediumTextType,       /*MediumTextType*/
+    ObMediumTextType,        /*LongTextType*/
+    ObNumberType,     /* BitType  */
+    ObMaxType,     /* EnumType  */
+    ObMaxType,     /* SetType  */
+    ObMaxType,     /* EnumInnerType  */
+    ObMaxType,     /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObVarcharType,        /* ObNVarchar2Type */
+    ObVarcharType,        /* ObNCharType */
+  },
+
+  /*ExtendType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UIntType  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMaxType,       /*TinyTextType*/
+    ObMaxType,       /*TextType*/
+    ObMaxType,       /*MediumTextType*/
+    ObMaxType,        /*LongTextType*/
+    ObMaxType,        /*BitType*/
+    ObMaxType,        /*EnumType*/
+    ObMaxType,        /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
+    ObMaxType,        /* ObTimestampTZType */
+    ObMaxType,        /* ObTimestampLTZType */
+    ObMaxType,        /* ObTimestampNanoType */
+    ObMaxType,            /* ObRawType */
+    ObMaxType,     /* ObIntervalYMType */
+    ObMaxType,     /* ObIntervalDSType */
+    ObMaxType,        /* ObNumberFloatType */
+    ObMaxType,        /* ObNVarchar2Type */
+    ObMaxType,        /* ObNCharType */
+  },
+
+  /*UnknownType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UIntType  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMaxType,       /*TinyTextType*/
+    ObMaxType,       /*TextType*/
+    ObMaxType,       /*MediumTextType*/
+    ObMaxType,        /*LongTextType*/
+    ObMaxType,        /*BitType*/
+    ObMaxType,        /*EnumType*/
+    ObMaxType,        /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
+    ObMaxType,        /* ObTimestampTZType */
+    ObMaxType,        /* ObTimestampLTZType */
+    ObMaxType,        /* ObTimestampNanoType */
+    ObMaxType,            /* ObRawType */
+    ObMaxType,     /* ObIntervalYMType */
+    ObMaxType,     /* ObIntervalDSType */
+    ObMaxType,        /* ObNumberFloatType */
+    ObMaxType,        /* ObNVarchar2Type */
+    ObMaxType,        /* ObNCharType */
+  },
+  /*TinyTextType*/
+  {
+    ObMaxType,     /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,    /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObVarcharType,     /* VarcharType  */
+    ObVarcharType,     /* CharType  */
+    ObVarcharType,     /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObVarcharType,       /*TinyTextType*/
+    ObVarcharType,       /*TextType*/
+    ObVarcharType,       /*MediumTextType*/
+    ObVarcharType,        /*LongTextType*/
+    ObNumberType,     /* BitType  */
+    ObMaxType,     /* EnumType  */
+    ObMaxType,     /* SetType  */
+    ObMaxType,     /* EnumInnerType  */
+    ObMaxType,     /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObVarcharType,        /* ObNVarchar2Type */
+    ObVarcharType,        /* ObNCharType */
+  },
+  /*TextType*/
+  {
+    ObMaxType,     /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,    /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObVarcharType,     /* VarcharType  */
+    ObVarcharType,     /* CharType  */
+    ObVarcharType,     /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObVarcharType,       /*TinyTextType*/
+    ObVarcharType,       /*TextType*/
+    ObVarcharType,       /*MediumTextType*/
+    ObVarcharType,        /*LongTextType*/
+    ObNumberType,     /* BitType  */
+    ObMaxType,     /* EnumType  */
+    ObMaxType,     /* SetType  */
+    ObMaxType,     /* EnumInnerType  */
+    ObMaxType,     /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObVarcharType,        /* ObNVarchar2Type */
+    ObVarcharType,        /* ObNCharType */
+  },
+  /*MediumTextType*/
+  {
+    ObMaxType,     /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,    /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObVarcharType,     /* VarcharType  */
+    ObVarcharType,     /* CharType  */
+    ObVarcharType,     /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObVarcharType,       /*TinyTextType*/
+    ObVarcharType,       /*TextType*/
+    ObVarcharType,       /*MediumTextType*/
+    ObVarcharType,        /*LongTextType*/
+    ObNumberType,     /* BitType  */
+    ObMaxType,     /* EnumType  */
+    ObMaxType,     /* SetType  */
+    ObMaxType,     /* EnumInnerType  */
+    ObMaxType,     /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObVarcharType,        /* ObNVarchar2Type */
+    ObVarcharType,        /* ObNCharType */
+  },
+  /*LongTextType*/
+  {
+    ObMaxType,     /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,    /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObVarcharType,     /* VarcharType  */
+    ObVarcharType,     /* CharType  */
+    ObVarcharType,     /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObVarcharType,       /*TinyTextType*/
+    ObVarcharType,       /*TextType*/
+    ObVarcharType,       /*MediumTextType*/
+    ObVarcharType,        /*LongTextType*/
+    ObNumberType,     /* BitType  */
+    ObMaxType,     /* EnumType  */
+    ObMaxType,     /* SetType  */
+    ObMaxType,     /* EnumInnerType  */
+    ObMaxType,     /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObVarcharType,        /* ObNVarchar2Type */
+    ObVarcharType,        /* ObNCharType */
+  },
+   /*BitType*/
+  {
+    ObMaxType,      /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,      /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,      /* DateType  */
+    ObTimeType,      /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,       /*LongTextType*/
+    ObNumberType,      /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,        /* ObNVarchar2Type */
+    ObNumberType,        /* ObNCharType */
+  },
+  /*EnumType*/
+  {
+    ObMaxType,      /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObVarcharType,      /* VarcharType  */
+    ObVarcharType,      /* CharType  */
+    ObVarcharType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObVarcharType,       /*TinyTextType*/
+    ObVarcharType,       /*TextType*/
+    ObVarcharType,       /*MediumTextType*/
+    ObVarcharType,        /*LongTextType*/
+    ObNumberType,      /*BitType*/
+    ObMaxType,      /*EnumType*/
+    ObMaxType,      /*SetType*/
+    ObMaxType,      /*EnumSetInnerType*/
+    ObMaxType,      /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObVarcharType,        /* ObNVarchar2Type */
+    ObVarcharType,        /* ObNCharType */
+  },
+  /*SetType*/
+  {
+    ObMaxType,      /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObVarcharType,      /* VarcharType  */
+    ObVarcharType,      /* CharType  */
+    ObVarcharType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObVarcharType,       /*TinyTextType*/
+    ObVarcharType,       /*TextType*/
+    ObVarcharType,       /*MediumTextType*/
+    ObVarcharType,        /*LongTextType*/
+    ObNumberType,      /*BitType*/
+    ObMaxType,      /*EnumType*/
+    ObMaxType,      /*SetType*/
+    ObMaxType,      /*EnumSetInnerType*/
+    ObMaxType,      /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObVarcharType,        /* ObNVarchar2Type */
+    ObVarcharType,        /* ObNCharType */
+  },
+  /*EnumInnerType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UIntType  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMaxType,       /*TinyTextType*/
+    ObMaxType,       /*TextType*/
+    ObMaxType,       /*MediumTextType*/
+    ObMaxType,        /*LongTextType*/
+    ObMaxType,        /*BitType*/
+    ObMaxType,        /*EnumType*/
+    ObMaxType,        /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
+    ObMaxType,        /* ObTimestampTZType */
+    ObMaxType,        /* ObTimestampLTZType */
+    ObMaxType,        /* ObTimestampNanoType */
+    ObMaxType,        /* ObRawType */
+    ObMaxType,        /* ObIntervalYMType */
+    ObMaxType,        /* ObIntervalDSType */
+    ObMaxType,        /* ObNumberFloatType */
+    ObMaxType,        /* ObNVarchar2Type */
+    ObMaxType,        /* ObNCharType */
+  },
+  /*SetInnerType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UIntType  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMaxType,       /*TinyTextType*/
+    ObMaxType,       /*TextType*/
+    ObMaxType,       /*MediumTextType*/
+    ObMaxType,        /*LongTextType*/
+    ObMaxType,        /*BitType*/
+    ObMaxType,        /*EnumType*/
+    ObMaxType,        /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
+    ObMaxType,        /* ObTimestampTZType */
+    ObMaxType,        /* ObTimestampLTZType */
+    ObMaxType,        /* ObTimestampNanoType */
+    ObMaxType,        /* ObRawType */
+    ObMaxType,     /* ObIntervalYMType */
+    ObMaxType,     /* ObIntervalDSType */
+    ObMaxType,        /* ObNumberFloatType */
+    ObMaxType,        /* ObNVarchar2Type */
+    ObMaxType,        /* ObNCharType */
+  },
+  /*ObTimestampTZType*/
+  {
+    ObMaxType,           /* NullType  */
+    ObTimestampTZType,   /* TinyIntType  */
+    ObTimestampTZType,   /* SmallIntType  */
+    ObTimestampTZType,   /* MediumIntType  */
+    ObTimestampTZType,   /* Int32Type  */
+    ObTimestampTZType,   /* IntType  */
+    ObTimestampTZType,   /* UTinyIntType  */
+    ObTimestampTZType,   /* USmallIntType  */
+    ObTimestampTZType,   /* UMediumIntType  */
+    ObTimestampTZType,   /* UInt32Type  */
+    ObTimestampTZType,   /* UIntType  */
+    ObTimestampTZType,   /* FloatType  */
+    ObTimestampTZType,   /* DoubleType  */
+    ObTimestampTZType,   /* UFloatType  */
+    ObTimestampTZType,   /* UDoubleType  */
+    ObTimestampTZType,   /* NumberType  */
+    ObTimestampTZType,   /* UNumberType  */
+    ObTimestampTZType,   /* DateTimeType  */
+    ObTimestampTZType,   /* TimestampType  */
+    ObTimestampTZType,   /* DateType  */
+    ObTimestampTZType,   /* TimeType  */
+    ObVarcharType,       /* YearType  */
+    ObTimestampTZType,   /* VarcharType  */
+    ObTimestampTZType,   /* CharType  */
+    ObTimestampTZType,   /* HexStringType  */
+    ObMaxType,           /* ExtendType  */
+    ObMaxType,           /* UnknownType  */
+    ObTimestampTZType,   /*TinyTextType*/
+    ObTimestampTZType,   /*TextType*/
+    ObTimestampTZType,   /*MediumTextType*/
+    ObTimestampTZType,   /*LongTextType*/
+    ObTimestampTZType,   /*BitType*/
+    ObMaxType,           /*EnumType*/
+    ObMaxType,           /*SetType*/
+    ObMaxType,           /*EnumInnerType*/
+    ObMaxType,           /*SetInnerType*/
+    ObTimestampTZType,   /* ObTimestampTZType */
+    ObTimestampLTZType,  /* ObTimestampLTZType */
+    ObTimestampNanoType, /* ObTimestampNanoType */
+    ObRawType,           /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObTimestampTZType,        /* ObNumberFloatType */
+    ObTimestampTZType,        /* ObNVarchar2Type */
+    ObTimestampTZType,        /* ObNCharType */
+  },
+  /*ObTimestampLTZType*/
+  {
+    ObMaxType,            /* NullType  */
+    ObTimestampLTZType,   /* TinyIntType  */
+    ObTimestampLTZType,   /* SmallIntType  */
+    ObTimestampLTZType,   /* MediumIntType  */
+    ObTimestampLTZType,   /* Int32Type  */
+    ObTimestampLTZType,   /* IntType  */
+    ObTimestampLTZType,   /* UTinyIntType  */
+    ObTimestampLTZType,   /* USmallIntType  */
+    ObTimestampLTZType,   /* UMediumIntType  */
+    ObTimestampLTZType,   /* UInt32Type  */
+    ObTimestampLTZType,   /* UIntType  */
+    ObTimestampLTZType,   /* FloatType  */
+    ObTimestampLTZType,   /* DoubleType  */
+    ObTimestampLTZType,   /* UFloatType  */
+    ObTimestampLTZType,   /* UDoubleType  */
+    ObTimestampLTZType,   /* NumberType  */
+    ObTimestampLTZType,   /* UNumberType  */
+    ObTimestampLTZType,   /* DateTimeType  */
+    ObTimestampLTZType,   /* TimestampType  */
+    ObTimestampLTZType,   /* DateType  */
+    ObTimestampLTZType,   /* TimeType  */
+    ObVarcharType,        /* YearType  */
+    ObTimestampLTZType,   /* VarcharType  */
+    ObTimestampLTZType,   /* CharType  */
+    ObTimestampLTZType,   /* HexStringType  */
+    ObMaxType,            /* ExtendType  */
+    ObMaxType,            /* UnknownType  */
+    ObTimestampLTZType,   /*TinyTextType*/
+    ObTimestampLTZType,   /*TextType*/
+    ObTimestampLTZType,   /*MediumTextType*/
+    ObTimestampLTZType,   /*LongTextType*/
+    ObTimestampLTZType,   /*BitType*/
+    ObMaxType,            /*EnumType*/
+    ObMaxType,            /*SetType*/
+    ObMaxType,            /*EnumInnerType*/
+    ObMaxType,            /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampTZType,    /* ObTimestampNanoType */
+    ObRawType,           /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObTimestampLTZType,        /* ObNumberFloatType */
+    ObTimestampLTZType,        /* ObNVarchar2Type */
+    ObTimestampLTZType,        /* ObNCharType */
+  },
+  /*ObTimestampNanoType*/
+  {
+    ObMaxType,             /* NullType  */
+    ObTimestampNanoType,   /* TinyIntType  */
+    ObTimestampNanoType,   /* SmallIntType  */
+    ObTimestampNanoType,   /* MediumIntType  */
+    ObTimestampNanoType,   /* Int32Type  */
+    ObTimestampNanoType,   /* IntType  */
+    ObTimestampNanoType,   /* UTinyIntType  */
+    ObTimestampNanoType,   /* USmallIntType  */
+    ObTimestampNanoType,   /* UMediumIntType  */
+    ObTimestampNanoType,   /* UInt32Type  */
+    ObTimestampNanoType,   /* UIntType  */
+    ObTimestampNanoType,   /* FloatType  */
+    ObTimestampNanoType,   /* DoubleType  */
+    ObTimestampNanoType,   /* UFloatType  */
+    ObTimestampNanoType,   /* UDoubleType  */
+    ObTimestampNanoType,   /* NumberType  */
+    ObTimestampNanoType,   /* UNumberType  */
+    ObTimestampNanoType,   /* DateTimeType  */
+    ObTimestampNanoType,   /* TimestampType  */
+    ObTimestampNanoType,   /* DateType  */
+    ObTimestampNanoType,   /* TimeType  */
+    ObVarcharType,         /* YearType  */
+    ObTimestampNanoType,   /* VarcharType  */
+    ObTimestampNanoType,   /* CharType  */
+    ObTimestampNanoType,   /* HexStringType  */
+    ObMaxType,             /* ExtendType  */
+    ObMaxType,             /* UnknownType  */
+    ObTimestampNanoType,   /*TinyTextType*/
+    ObTimestampNanoType,   /*TextType*/
+    ObTimestampNanoType,   /*MediumTextType*/
+    ObTimestampNanoType,   /*LongTextType*/
+    ObTimestampNanoType,   /*BitType*/
+    ObMaxType,             /*EnumType*/
+    ObMaxType,             /*SetType*/
+    ObMaxType,             /*EnumInnerType*/
+    ObMaxType,             /*SetInnerType*/
+    ObTimestampTZType,     /* ObTimestampTZType */
+    ObTimestampLTZType,    /* ObTimestampLTZType */
+    ObTimestampNanoType,   /* ObTimestampNanoType */
+    ObRawType,           /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObTimestampNanoType,        /* ObNumberFloatType */
+    ObTimestampNanoType,        /* ObNVarchar2Type */
+    ObTimestampNanoType,        /* ObNCharType */
+  },
+  /*ObRawType*/
+  {
+    ObMaxType,   /* NullType  */
+    ObRawType,   /* TinyIntType  */
+    ObRawType,   /* SmallIntType  */
+    ObRawType,   /* MediumIntType  */
+    ObRawType,   /* Int32Type  */
+    ObRawType,   /* IntType  */
+    ObRawType,   /* UTinyIntType  */
+    ObRawType,   /* USmallIntType  */
+    ObRawType,   /* UMediumIntType  */
+    ObRawType,   /* UInt32Type  */
+    ObRawType,   /* UIntType  */
+    ObRawType,   /* FloatType  */
+    ObRawType,   /* DoubleType  */
+    ObRawType,   /* UFloatType  */
+    ObRawType,   /* UDoubleType  */
+    ObRawType,   /* NumberType  */
+    ObRawType,   /* UNumberType  */
+    ObRawType,   /* DateTimeType  */
+    ObRawType,   /* TimestampType  */
+    ObRawType,   /* DateType  */
+    ObRawType,   /* TimeType  */
+    ObRawType,   /* YearType  */
+    ObRawType,   /* VarcharType  */
+    ObRawType,   /* CharType  */
+    ObRawType,   /* HexStringType  */
+    ObMaxType,   /* ExtendType  */
+    ObMaxType,   /* UnknownType  */
+    ObRawType,   /* TinyTextType*/
+    ObRawType,   /* TextType*/
+    ObRawType,   /* MediumTextType*/
+    ObRawType,   /* LongTextType*/
+    ObRawType,   /* BitType*/
+    ObMaxType,   /* EnumType*/
+    ObMaxType,   /* SetType*/
+    ObMaxType,   /* EnumInnerType*/
+    ObMaxType,   /* SetInnerType*/
+    ObRawType,   /* ObTimestampTZType */
+    ObRawType,   /* ObTimestampLTZType */
+    ObRawType,   /* ObTimestampNanoType */
+    ObRawType,   /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObRawType,        /* ObNumberFloatType */
+    ObRawType,        /* ObNVarchar2Type */
+    ObRawType,        /* ObNCharType */
+  },
+  /*ObIntervalYMType*/
+  {
+    ObMaxType,   /* NullType  */
+    ObIntervalYMType,   /* TinyIntType  */
+    ObIntervalYMType,   /* SmallIntType  */
+    ObIntervalYMType,   /* MediumIntType  */
+    ObIntervalYMType,   /* Int32Type  */
+    ObIntervalYMType,   /* IntType  */
+    ObIntervalYMType,   /* UTinyIntType  */
+    ObIntervalYMType,   /* USmallIntType  */
+    ObIntervalYMType,   /* UMediumIntType  */
+    ObIntervalYMType,   /* UInt32Type  */
+    ObIntervalYMType,   /* UIntType  */
+    ObIntervalYMType,   /* FloatType  */
+    ObIntervalYMType,   /* DoubleType  */
+    ObIntervalYMType,   /* UFloatType  */
+    ObIntervalYMType,   /* UDoubleType  */
+    ObIntervalYMType,   /* NumberType  */
+    ObIntervalYMType,   /* UNumberType  */
+    ObIntervalYMType,   /* DateTimeType  */
+    ObIntervalYMType,   /* TimestampType  */
+    ObIntervalYMType,   /* DateType  */
+    ObIntervalYMType,   /* TimeType  */
+    ObIntervalYMType,   /* YearType  */
+    ObIntervalYMType,   /* VarcharType  */
+    ObIntervalYMType,   /* CharType  */
+    ObIntervalYMType,   /* HexStringType  */
+    ObMaxType,   /* ExtendType  */
+    ObMaxType,   /* UnknownType  */
+    ObIntervalYMType,   /* TinyTextType*/
+    ObIntervalYMType,   /* TextType*/
+    ObIntervalYMType,   /* MediumTextType*/
+    ObIntervalYMType,   /* LongTextType*/
+    ObIntervalYMType,   /* BitType*/
+    ObMaxType,   /* EnumType*/
+    ObMaxType,   /* SetType*/
+    ObMaxType,   /* EnumInnerType*/
+    ObMaxType,   /* SetInnerType*/
+    ObIntervalYMType,   /* ObTimestampTZType */
+    ObIntervalYMType,   /* ObTimestampLTZType */
+    ObIntervalYMType,   /* ObTimestampNanoType */
+    ObIntervalYMType,   /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalYMType,     /* ObIntervalDSType */
+    ObIntervalYMType,        /* ObNumberFloatType */
+    ObIntervalYMType,        /* ObNVarchar2Type */
+    ObIntervalYMType,        /* ObNCharType */
+  },
+  /*ObIntervalDSType*/
+  {
+    ObMaxType,   /* NullType  */
+    ObIntervalDSType,   /* TinyIntType  */
+    ObIntervalDSType,   /* SmallIntType  */
+    ObIntervalDSType,   /* MediumIntType  */
+    ObIntervalDSType,   /* Int32Type  */
+    ObIntervalDSType,   /* IntType  */
+    ObIntervalDSType,   /* UTinyIntType  */
+    ObIntervalDSType,   /* USmallIntType  */
+    ObIntervalDSType,   /* UMediumIntType  */
+    ObIntervalDSType,   /* UInt32Type  */
+    ObIntervalDSType,   /* UIntType  */
+    ObIntervalDSType,   /* FloatType  */
+    ObIntervalDSType,   /* DoubleType  */
+    ObIntervalDSType,   /* UFloatType  */
+    ObIntervalDSType,   /* UDoubleType  */
+    ObIntervalDSType,   /* NumberType  */
+    ObIntervalDSType,   /* UNumberType  */
+    ObIntervalDSType,   /* DateTimeType  */
+    ObIntervalDSType,   /* TimestampType  */
+    ObIntervalDSType,   /* DateType  */
+    ObIntervalDSType,   /* TimeType  */
+    ObIntervalDSType,   /* YearType  */
+    ObIntervalDSType,   /* VarcharType  */
+    ObIntervalDSType,   /* CharType  */
+    ObIntervalDSType,   /* HexStringType  */
+    ObMaxType,   /* ExtendType  */
+    ObMaxType,   /* UnknownType  */
+    ObIntervalDSType,   /* TinyTextType*/
+    ObIntervalDSType,   /* TextType*/
+    ObIntervalDSType,   /* MediumTextType*/
+    ObIntervalDSType,   /* LongTextType*/
+    ObIntervalDSType,   /* BitType*/
+    ObMaxType,   /* EnumType*/
+    ObMaxType,   /* SetType*/
+    ObMaxType,   /* EnumInnerType*/
+    ObMaxType,   /* SetInnerType*/
+    ObIntervalDSType,   /* ObTimestampTZType */
+    ObIntervalDSType,   /* ObTimestampLTZType */
+    ObIntervalDSType,   /* ObTimestampNanoType */
+    ObIntervalDSType,   /* ObRawType */
+    ObIntervalDSType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObIntervalDSType,        /* ObNumberFloatType */
+    ObIntervalDSType,        /* ObNVarchar2Type */
+    ObIntervalDSType,        /* ObNCharType */
+  },
+
+    /*NumberFloatType*/
+  {
+    ObMaxType,      /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateType,        /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNumberType,      /* VarcharType  */
+    ObNumberType,      /* CharType  */
+    ObNumberType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObNumberType,       /*TinyTextType*/
+    ObNumberType,       /*TextType*/
+    ObNumberType,       /*MediumTextType*/
+    ObNumberType,        /*LongTextType*/
+    ObNumberType,       /*BitType*/
+    ObMaxType,       /*EnumType*/
+    ObMaxType,       /*SetType*/
+    ObMaxType,       /*EnumInnerType*/
+    ObMaxType,       /*SetInnerType*/
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNumberType,        /* ObNVarchar2Type */
+    ObNumberType,        /* ObNCharType */
+  },
+
+  /*NVarchar2Type*/
+  {
+    ObMaxType,     /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,    /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNVarchar2Type,     /* VarcharType  */
+    ObNVarchar2Type,     /* CharType  */
+    ObNVarchar2Type,     /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMediumTextType,       /*TinyTextType*/
+    ObMediumTextType,       /*TextType*/
+    ObMediumTextType,       /*MediumTextType*/
+    ObMediumTextType,        /*LongTextType*/
+    ObNumberType,     /* BitType  */
+    ObMaxType,     /* EnumType  */
+    ObMaxType,     /* SetType  */
+    ObMaxType,     /* EnumInnerType  */
+    ObMaxType,     /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNVarchar2Type,        /* ObNVarchar2Type */
+    ObNVarchar2Type,        /* ObNCharType */
+  },
+
+  /*NCharType*/
+  {
+    ObMaxType,        /* NullType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObDateTimeType,    /* DateTimeType  */
+    ObTimestampType,   /* TimestampType  */
+    ObDateTimeType,    /* DateType  */
+    ObTimeType,        /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObNVarchar2Type,     /* VarcharType  */
+    ObNCharType,     /* CharType  */
+    ObVarcharType,     /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMediumTextType,       /*TinyTextType*/
+    ObMediumTextType,       /*TextType*/
+    ObMediumTextType,       /*MediumTextType*/
+    ObMediumTextType,        /*LongTextType*/
+    ObNumberType,     /* BitType  */
+    ObMaxType,     /* EnumType  */
+    ObMaxType,     /* SetType  */
+    ObMaxType,     /* EnumInnerType  */
+    ObMaxType,     /* SetInnerType  */
+    ObTimestampTZType,    /* ObTimestampTZType */
+    ObTimestampLTZType,   /* ObTimestampLTZType */
+    ObTimestampNanoType,  /* ObTimestampNanoType */
+    ObRawType,            /* ObRawType */
+    ObIntervalYMType,     /* ObIntervalYMType */
+    ObIntervalDSType,     /* ObIntervalDSType */
+    ObNumberType,        /* ObNumberFloatType */
+    ObNVarchar2Type,        /* ObNVarchar2Type */
+    ObNCharType,        /* ObNCharType */
+  },
+};
+
+
+

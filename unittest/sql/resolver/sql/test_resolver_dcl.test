@@ -1,0 +1,57 @@
+drop database if exists dbdcl;
+create database dbdcl;
+use dbdcl;
+
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+### create
+create user 'hualong' identified by '123456'
+#create user 'hualong' identified by password '123456'
+create user 'hualong' identified by '123456', '' identified by '123456'
+
+### drop
+drop user 'hualong'
+
+### set password
+#set password '111111'
+set password for 'hualong' = password('111111')
+alter user 'hualong' identified by '111111'
+
+### rename
+rename user 'hualong' to 'hualong01'
+
+
+###lock user
+alter user 'hualong','zdy' account lock
+alter user 'xiaohua','zdy' account unlock
+
+###grant
+#### to
+grant all privileges on * to 'hualong'
+grant all privileges on *.*  to 'hualong'
+grant all privileges on rongxuan.* to 'hualong'
+grant all privileges on rongxuan.t1 to 'hualong'
+grant all privileges on t1 to 'hualong'
+
+#### table priviledge
+grant all privileges on rongxuan.t1 to 'hualong'
+grant alter on rongxuan.t1 to 'hualong'
+grant create on rongxuan.t1 to 'hualong'
+grant drop on rongxuan.t1 to 'hualong'
+grant select on rongxuan.t1 to 'hualong'
+grant update on rongxuan.t1 to 'hualong'
+grant insert on rongxuan.t1 to 'hualong'
+grant delete on rongxuan.t1 to 'hualong'
+grant index on rongxuan.t1 to 'hualong'
+#grant show databases on rongxuan.t1 to 'hualong'
+
+
+###revoke
+revoke all privileges on rongxuan.t1 from 'hualong'
+revoke all privileges, grant option from 'hualong'
+revoke all privileges on * from 'hualong'
+
+###show grants
+#show grants for 'hualong'
+
+
+drop database dbdcl;

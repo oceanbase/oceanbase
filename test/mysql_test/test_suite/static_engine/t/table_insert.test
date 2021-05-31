@@ -1,0 +1,108 @@
+
+--disable_abort_on_error
+
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+alter system set enable_async_syslog = false;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+
+create table t1 (c1 int primary key, c2 int unsigned,
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned,
+    c15 double, c16 double unsigned,
+    c17 decimal, c18 decimal unsigned,
+    c19 datetime, c20 timestamp,
+    c21 varchar(30), c22 char(30));
+
+insert into t1 values(1, 1, 1, 1, -1, 6, 7, 8, 9, 10, -11, 12, -13.1, 14.2, -15.01, 16.10, 17.001, 18.002, '2019-10-10 10:00:00', '2019-10-10 10:00:00', '21varchar', '22char');
+insert into t1 values('2', '1', '1', '1', '-1', '6', '7', '8', '9', '10', '-11', '12', '-13.1', '14.2', '-15.01', '16.10', '17.001', '18.002', '2019-10-10 10:00:00', '2019-10-10 10:00:00', '21varchar', '22char');
+insert into t1 values('3', '1', '1', '1', '-1', '6', '7', '8', '9', '10', '-11', '12', '-13.1', '14.2', '-15.01', '16.10', '17.001', '18.002', '2019-10-10 10:00:00', '2019-10-10 10:00:00', '21varchar', '22char'), ('4', '1', '1', '1', '-1', '16', '17', '18', '19', '11', '-11', '121', '-13.11', '14.21', '-15.011', '16.101', '17.1001', '18.1002', '2019-10-10 10:00:00.00', '2019-10-10 10:00:00.000', '21varchar1', '22char1');
+
+
+select * from t1;
+
+
+set @@ob_enable_plan_cache = 1;
+--echo // test ObDatumCaster::to_type() in ObExprValuesOp
+drop table t1;
+create table t1(c1 varchar(100) collate utf16_bin,
+                c2 varchar(100) collate utf8_general_ci,
+                c3 char(100) collate utf16_bin,
+                c4 char(100) collate utf8_general_ci);
+--echo // different value type, but will use same plan, so will to ObDatumCaster::to_type()
+insert into t1 values(123, 123, 123, 123);
+insert into t1 values(null, 123, null, 123);
+insert into t1 values('123', '123', '123', 123);
+insert into t1 values('', '123', '123', 123);
+select c1, length(c1),
+       c2, length(c2),
+       c3, length(c3),
+       c4, length(c4) from t1;
+
+--echo // insert decimal/int using different collation string
+delete from t1;
+insert into t1 values('123.123', '123.123', '123.123', '123.123');
+create table t2(c1 decimal(10, 1), c2 int unsigned, c3 int);
+insert into t2 values(null, null, 1);
+insert into t2 select null, null, null from dual;
+insert into t2 select c1, c1, c1 from t1;
+insert into t2 select c2, c2, c2 from t1;
+insert into t2 select c3, c3, c3 from t1;
+insert into t2 select c4, c4, c4 from t1;
+select * from t2;
+
+--echo // test enumset
+drop table t1;
+create table t1(c1 enum('a', 'b', 'c'), c2 set('a', 'b', 'c'));
+insert into t1 values(1, 1), (2, 2);
+select * from t1;
+drop table t2;
+create table t2(col_utf16 varchar(100) collate utf16_bin,
+                col_gbk varchar(100) collate gbk_chinese_ci,
+                col_utf8 varchar(100) collate utf8_general_ci);
+insert into t2 values('a', 'a', 'a');
+--echo // insert enum/set using different collation string
+insert into t1 select col_utf16, col_utf16 from t2;
+insert into t1 select col_gbk, col_gbk from t2;
+insert into t1 select col_utf8, col_utf8 from t2;
+select * from t1;
+
+delete from t1;
+delete from t2;
+insert into t1 values('a', 'b'), ('b', 'c');
+select * from t1;
+--echo // insert different collation string using enum/set
+insert into t2 select c1, c1, c1 from t1;
+insert into t2 select c2, c2, c2 from t1;
+select * from t2;
+delete from t2;
+--echo // test again(using different column)
+insert into t2 select c1, c2, c1 from t1;
+insert into t2 select c2, c2, c1 from t1;
+insert into t2 select c1, c1, c2 from t1;
+select * from t2;
+
+drop table t1;
+drop table t2;
+
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+create table t2 (c1 int primary key, c2 int) partition by hash(c1) partitions 3;
+insert into t2 select -127,30 from dual;
+select * from t2 partition (p1);
+drop table t2;
+
+connection conn_admin;
+--sleep 2

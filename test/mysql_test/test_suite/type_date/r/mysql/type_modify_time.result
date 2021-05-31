@@ -1,0 +1,12 @@
+drop table if exists t1;
+create table t1(pk int primary key, b datetime default now());
+insert into t1(pk) values(1);
+insert into t1(pk) values(2);
+select pk,b from t1;
+pk	b
+1	searched
+2	searched
+replace into t1(pk) values(1);
+replace into t1(pk) values(2);
+pk	b
+1	searched

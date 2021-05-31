@@ -1,0 +1,45 @@
+static ObObjType ROUND_RESULT_TYPE[ObMaxType] =
+{
+    ObDoubleType,     /* NullType  */
+    ObIntType,        /* TinyIntType  */
+    ObIntType,        /* SmallIntType  */
+    ObIntType,        /* MediumIntType  */
+    ObIntType,        /* Int32Type  */
+    ObIntType,        /* IntType  */
+    ObUInt64Type,     /* UTinyIntType  */
+    ObUInt64Type,     /* USmallIntType  */
+    ObUInt64Type,     /* UMediumIntType  */
+    ObUInt64Type,     /* UInt32Type  */
+    ObUInt64Type,     /* UInt64Type  */
+    ObDoubleType,     /* FloatType  */
+    ObDoubleType,     /* DoubleType  */
+    ObDoubleType,     /* UFloatType  */
+    ObDoubleType,     /* UDoubleType  */
+    ObNumberType,     /* NumberType  */
+    ObUNumberType,    /* UNumberType  */
+    ObDoubleType,     /* DateTimeType  */
+    ObDoubleType,     /* TimestampType  */
+    ObDoubleType,     /* DateType  */
+    ObDoubleType,     /* TimeType  */
+    ObUInt64Type,     /* YearType  */
+    ObDoubleType,     /* VarcharType  */
+    ObDoubleType,     /* CharType  */
+    ObDoubleType,     /* HexStringType  */
+    ObMaxType,        /* ExtendType  */
+    ObDoubleType,     /* UnknownType  */
+    ObDoubleType,     /* TinyTextType*/
+    ObDoubleType,     /* TextType*/
+    ObDoubleType,     /* MediumTextType*/
+    ObDoubleType,     /* LongTextType*/
+    ObUInt64Type,     /* BitType  */
+    ObDoubleType,     /* EnumType*/
+    ObDoubleType,     /* SetType*/
+    ObMaxType,        /* EnumInnerType*/
+    ObMaxType,        /* SetInnerType*/
+    ObDoubleType,     /* ObTimestampTZType  */
+    ObDoubleType,     /* ObTimestampLTZType  */
+    ObDoubleType,     /* ObTimestampNanoType  */
+    ObDoubleType,     /* ObRawType  */
+    ObMaxType,        /* ObIntervalYMType  */
+    ObMaxType,        /* ObIntervalDSType  */
+};

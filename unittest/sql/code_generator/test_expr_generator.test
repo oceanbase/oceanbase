@@ -1,0 +1,7 @@
+c1 > c2
+c1 > 10 and c2 < 100
+c1+c2+100
+sum(c1+c2)
+case c1 when 1 then 'a' when 2 then 'b' else 'c' end
+case when c1 > 1 then 'a' when c1 < 100 then 'b' else 'c' end
+(c1, c2) >= (1, 2)

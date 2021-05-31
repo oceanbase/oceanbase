@@ -1,0 +1,21 @@
+create database information_schema;
+create database mysql;
+create database rongxuan;
+use rongxuan;
+
+CREATE TABLE T1(C1 DECIMAL PRIMARY KEY, C2 DECIMAL, C3 DECIMAL);
+CREATE TABLE T2(C1 INT PRIMARY KEY, C2 INT, C3 VARCHAR(32))
+CREATE TABLE TEST(A SMALLINT NOT NULL PRIMARY KEY, B CHAR(10));
+CREATE TABLE tt (pk bigint, col_char_12_key char(12), col_bigint bigint, col_char_12 char(12), col_bigint_key bigint, primary key (pk), key idx1(col_bigint_key )) ;
+CREATE TABLE t3 (a timestamp, b int, c int primary key);
+CREATE TABLE yu1(c1 char(20), c2 bigint, pk bigint primary key);
+CREATE TABLE yu2(c1 char(20), pk bigint primary key, c2 char(20)) partition by key();
+create table yu3 (id int primary key);
+create table yu4(id int primary key, binaryvalue varbinary(255));
+create table tt1(c1 int primary key auto_increment, c2 int, c3 int)
+create table t5(c1 int primary key, c2 int, c3 int, unique key(c2) storing (c4), c4 int);
+create table t0(pk int primary key, c1 int, c2 int, a3 int);
+create table t7(c1 int primary key, c2 int);
+create table t8(c1 int primary key, c2 int);
+create table t9(c1 int primary key, c2 int not null default 1, c3 int default 2);
+create table insert_distributed(c1 int, c2 int, primary key(c1, c2)) partition by hash(c2) partitions 5;

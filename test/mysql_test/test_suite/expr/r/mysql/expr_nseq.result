@@ -1,0 +1,81 @@
+drop table if exists t1,t2;
+create table t1(a int, b int, c int, d int, primary key(a));
+insert into t1 values(1,2,3,4);
+insert into t1 values(2,null,3,4);
+insert into t1 values(3,null,null,4);
+insert into t1 values(4,2,null,null);
+create table t2(a int, b int, c int, d int, primary key(a,b));
+insert into t2 values(1,2,3,4);
+insert into t2 values(2,2,3,4);
+insert into t2 values(3,3,null,4);
+insert into t2 values(4,2,null,null);
+select 1<=>1;
+1<=>1
+1
+select 1<=>null;
+1<=>null
+0
+select null<=>1;
+null<=>1
+0
+select null<=>null;
+null<=>null
+1
+select 1.0<=>1.0;
+1.0<=>1.0
+1
+select 1.0<=>null;
+1.0<=>null
+0
+select null<=>1.0;
+null<=>1.0
+0
+select 'abc'<=>null;
+'abc'<=>null
+0
+select 'abc'<=>'abc';
+'abc'<=>'abc'
+1
+select 'null'<=>null;
+'null'<=>null
+0
+select (1,2,3)<=>(1,2,3);
+(1,2,3)<=>(1,2,3)
+1
+select (1,null, 3) <=> (1,null,3);
+(1,null, 3) <=> (1,null,3)
+1
+select (1,null,'abc')<=>(1,null,'abc');
+(1,null,'abc')<=>(1,null,'abc')
+1
+select * from t1 where b<=>null;
+a	b	c	d
+2	NULL	3	4
+3	NULL	NULL	4
+select * from t1 where a<=>2;
+a	b	c	d
+2	NULL	3	4
+select * from t1 where a<=>2 and b<=>null;
+a	b	c	d
+2	NULL	3	4
+select * from t1 where b<=>null and c<=>null;
+a	b	c	d
+3	NULL	NULL	4
+select * from t1 where b=null and c=null;
+a	b	c	d
+select * from t1 where b<=>null and c=null;
+a	b	c	d
+select * from t1 join t2 on t1.a=t2.a;
+a	b	c	d	a	b	c	d
+1	2	3	4	1	2	3	4
+2	NULL	3	4	2	2	3	4
+3	NULL	NULL	4	3	3	NULL	4
+4	2	NULL	NULL	4	2	NULL	NULL
+select * from t1 join t2 on t1.a=t2.a where t1.b<=>null and t2.b<=>null;
+a	b	c	d	a	b	c	d
+select * from t1 join t2 on t1.a<=>t2.a;
+a	b	c	d	a	b	c	d
+1	2	3	4	1	2	3	4
+2	NULL	3	4	2	2	3	4
+3	NULL	NULL	4	3	3	NULL	4
+4	2	NULL	NULL	4	2	NULL	NULL

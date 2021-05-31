@@ -1,0 +1,20 @@
+=============[oceanbase] database schema start =============
+{
+  "tenant_id":1,
+  "database_id":1099511627777,
+  "schema_version":1456811658272224,
+  "database_name":"oceanbase",
+  "replica_num":0,
+  "zone_list": [
+  ],
+  "primary_zone":"test",
+  "charset_type":0,
+  "collation_type":"invalid_type",
+  "name_case_mode":2,
+  "comment":"default db",
+  "read_only":false,
+  "default_tablegroup_id":-1,
+  "default_tablegroup_name":""
+}
+=============[oceanbasedatabase schema end ------------------
+

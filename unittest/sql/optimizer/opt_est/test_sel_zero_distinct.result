@@ -1,0 +1,776 @@
+******************CASE0******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0.2 HALF_OPEN_RANGE_SEL.
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > 1000 or (c1 > 2000 and c1 < 3000);
+SELECTIVITY = 0.2
+
+******************CASE1******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where 1;
+SELECTIVITY = 1
+
+******************CASE2******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where 1 > 0;
+SELECTIVITY = 1
+
+******************CASE3******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where 0;
+SELECTIVITY = 0
+
+******************CASE4******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where null;
+SELECTIVITY = 0
+
+******************CASE5******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1/500*0.99;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = 999;
+SELECTIVITY = 0.00198
+
+******************CASE6******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1/500*0.99;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = 10001;
+SELECTIVITY = 0.00198
+
+******************CASE7******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1/500*0.99;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = 1000;
+SELECTIVITY = 0.00198
+
+******************CASE8******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0.01
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 <=> null;
+SELECTIVITY = 0.01
+
+******************CASE9******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = null;
+SELECTIVITY = 0
+
+******************CASE10******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1/500*0.99;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 + 1 = 1000;
+SELECTIVITY = 0.00198
+
+******************CASE11******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1/500*0.99;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 * 2 = 1000;
+SELECTIVITY = 0.00198
+
+******************CASE12******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0.005(DEFAULT_EQ_SEL)
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 / 2 = 1000;
+SELECTIVITY = 0.005
+
+******************CASE13******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1/500*0.99;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 - 100 = 1000;
+SELECTIVITY = 0.00198
+
+******************CASE14******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > null;
+SELECTIVITY = 0
+
+******************CASE15******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > null or 1 > 0;
+SELECTIVITY = 1
+
+******************CASE16******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > null or 1 > 2;
+SELECTIVITY = 0
+
+******************CASE17******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 < null;
+SELECTIVITY = 0
+
+******************CASE18******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > 30;
+SELECTIVITY = 0.2
+
+******************CASE19******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 < 50;
+SELECTIVITY = 0.2
+
+******************CASE20******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1.0/3.0 as not calc
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 + 1 > 5;
+SELECTIVITY = 0.333333
+
+******************CASE21******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > 2000;
+SELECTIVITY = 0.2
+
+******************CASE22******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 >= 2000;
+SELECTIVITY = 0.2
+
+******************CASE23******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 < 5000;
+SELECTIVITY = 0.2
+
+******************CASE24******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 <= 5000;
+SELECTIVITY = 0.2
+
+******************CASE25******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 <= 500;
+SELECTIVITY = 0.2
+
+******************CASE26******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 >= 10000;
+SELECTIVITY = 0.2
+
+******************CASE27******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 != 500;
+SELECTIVITY = 0.98802
+
+******************CASE28******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 != 50;
+SELECTIVITY = 0.98802
+
+******************CASE29******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 + 1 != 50;
+SELECTIVITY = 0.98802
+
+******************CASE30******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 * 2 != 50;
+SELECTIVITY = 0.98802
+
+******************CASE31******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0.5
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 / 2 != 50;
+SELECTIVITY = 0.5
+
+******************CASE32******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > 2000 and c1 < 3000;
+SELECTIVITY = 0.0099
+
+******************CASE33******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > 10000 and c1 > 500;
+SELECTIVITY = 0.2
+
+******************CASE34******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 < 10000 and c1 > 500;
+SELECTIVITY = 0.0099
+
+******************CASE35******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 < 500 or c1 > 10000;
+SELECTIVITY = 0.4
+
+******************CASE36******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > 2000 or c1 < 1000;
+SELECTIVITY = 0.4
+
+******************CASE37******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > 2000 or c1 < 1000 or c1 < 500;
+SELECTIVITY = 0.4
+
+******************CASE38******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > 2000 or (c1 < 1000 and c1 > 500);
+SELECTIVITY = 0.2099
+
+******************CASE39******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 < 1000 and c1 > 500;
+SELECTIVITY = 0.0099
+
+******************CASE40******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 < 1000 or (c1 > 9000 and c1 > 2000 and c1 < 8000);
+SELECTIVITY = 0.2
+
+******************CASE41******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 < 500 or (c1 > 10000 and c1 > 10001 and c1 < 499);
+SELECTIVITY = 0.2
+
+******************CASE42******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 is null;
+SELECTIVITY = 0.01
+
+******************CASE43******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 is false;
+SELECTIVITY = 0.00198
+
+******************CASE44******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 is true;
+SELECTIVITY = 0.98802
+
+******************CASE45******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 is not null;
+SELECTIVITY = 0.99
+
+******************CASE46******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 is not false;
+SELECTIVITY = 0.99802
+
+******************CASE47******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 is not true;
+SELECTIVITY = 0.01198
+
+******************CASE48******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select * from t1 where not 1;
+SELECTIVITY = 0
+
+******************CASE49******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1;
+----------------------------------------------------------
+EXPR_STR: select * from t1 where not 0;
+SELECTIVITY = 1
+
+******************CASE50******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select * from t1 where not c1 > 2000;
+SELECTIVITY = 0.2
+
+******************CASE51******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select * from t1 where not (c1 > 2000 and c1 < 3000);
+SELECTIVITY = 0.4
+
+******************CASE52******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select * from t1 where not c1 in (2000, 3000);
+SELECTIVITY = 0.98604
+
+******************CASE53******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 in (500, 8000, 10000);
+SELECTIVITY = 0.00594
+
+******************CASE54******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (c1,c2) in ((500, 8000), (8000, 10000));
+SELECTIVITY = 7.8408e-06
+
+******************CASE55******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (200) in (100, 200);
+SELECTIVITY = 1
+
+******************CASE56******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (200) in (100, 300, 400, 200);
+SELECTIVITY = 1
+
+******************CASE57******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (200) in (100, 300, 400, 500);
+SELECTIVITY = 0
+
+******************CASE58******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (200) in (c1, 300, 400, 500);
+SELECTIVITY = 0.00198
+
+******************CASE59******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (c1) in (c1, 300, 400, 500);
+SELECTIVITY = 0.99594
+
+******************CASE60******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 not in (500, 8000, 10000);
+SELECTIVITY = 0.98406
+
+******************CASE61******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 not in (500, 1000);
+SELECTIVITY = 0.98604
+
+******************CASE62******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0(should be)
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (c1,c2) not in ((500, 8000), (8000, 10000));
+SELECTIVITY = 0.999992
+
+******************CASE63******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 between 1000 and 10000;
+SELECTIVITY = 0.0099
+
+******************CASE64******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 not between 1000 and 10000;
+SELECTIVITY = 0.4
+
+******************CASE65******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 between 1000 and 1000;
+SELECTIVITY = 0.00198
+
+******************CASE66******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 not between 1000 and 1000;
+SELECTIVITY = 0.4
+
+******************CASE67******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 between 10000 and 1000;
+SELECTIVITY = 0
+
+******************CASE68******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 not between 10000 and 1000;
+SELECTIVITY = 0.2
+
+******************CASE69******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 >= 10000 and c1<=1000;
+SELECTIVITY = 0
+
+******************CASE70******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where 1000 between c1 and 1000;
+SELECTIVITY = 0.2
+
+******************CASE71******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where 1000 not between c1 and 1000;
+SELECTIVITY = 0.333333
+
+******************CASE72******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where 1000 between 10000 and c1;
+SELECTIVITY = 0.2
+
+******************CASE73******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where 2000 between 1000 and c1;
+SELECTIVITY = 0.2
+
+******************CASE74******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where 1 between 0 and 1;
+SELECTIVITY = 1
+
+******************CASE75******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where 100 between 0 and 1;
+SELECTIVITY = 0
+
+******************CASE76******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select t1.c1 from t1,t2 where t1.c1 = t2.c1;
+SELECTIVITY = 0.0019602
+
+******************CASE77******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select t1.c1 from t1,t2 where t1.c1 + 1 = t2.c1;
+SELECTIVITY = 0.00198
+
+******************CASE78******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select t1.c1 from t1,t2 where t1.c1 + 1 = t2.c1 + 1;
+SELECTIVITY = 0.00198
+
+******************CASE79******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select t1.c1 from t1,t2 where t1.c1 * 2 = t2.c1 + 1;
+SELECTIVITY = 0.00198
+
+******************CASE80******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select t1.c1 from t1,t2 where t1.c1 / 2 = t2.c1 + 1;
+SELECTIVITY = 0.00198
+
+******************CASE81******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select t1.c1 from t1,t2 where t1.c1 = t2.c1 and t1.c2 > t2.c2;
+SELECTIVITY = 0.0006534
+
+******************CASE82******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1/3;
+----------------------------------------------------------
+EXPR_STR: select t1.c1 from t1, t2 where t1.c1 < t2.c2;
+SELECTIVITY = 0.333333
+
+******************CASE83******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0.5;
+----------------------------------------------------------
+EXPR_STR: select t1.c1 from t1, t2 where t1.c1 != t2.c2;
+SELECTIVITY = 0.5
+
+******************CASE84******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = (select c2 from t1 where c2 >= 10000);
+SELECTIVITY = 0.00198
+
+******************CASE85******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 1.0 / 3.0 DEFAULT_INEQ_SEL
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > (select c2 from t1 where c2 >= 10000);
+SELECTIVITY = 0.333333
+
+******************CASE86******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 != (select c2 from t1 where c2 >= 10000);
+SELECTIVITY = 0.98802
+
+******************CASE87******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :todo. DEFAULT_SEL
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 in (select c2 from t1 where c2 = 10000);
+SELECTIVITY = 0.5
+
+******************CASE88******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :todo. DEFAULT_SEL
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = ANY (select c2 from t1 where c2 > 1000);
+SELECTIVITY = 0.5
+
+******************CASE89******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :todo. DEFAULT_SEL
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 != ANY (select c2 from t1 where c2 > 1000);
+SELECTIVITY = 0.5
+
+******************CASE90******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :todo. DEFAULT_SEL
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = SOME (select c2 from t1 where c2 > 1000);
+SELECTIVITY = 0.5
+
+******************CASE91******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :todo. DEFAULT_SEL
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 != SOME (select c2 from t1 where c2 > 1000);
+SELECTIVITY = 0.5
+
+******************CASE92******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :todo. DEFAULT_SEL
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = ALL (select c2 from t1 where c2 > 1000);
+SELECTIVITY = 0.5
+
+******************CASE93******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :todo. DEFAULT_SEL
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 != ALL (select c2 from t1 where c2 > 1000);
+SELECTIVITY = 0.5
+
+******************CASE94******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (c1, c2) = (2000, 10000);
+SELECTIVITY = 3.9204e-06
+
+******************CASE95******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :todo. 0.5
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (c1, c2) != (2000, 10000);
+SELECTIVITY = 0.5
+
+******************CASE96******************
+min = MIN, max = MAX, ndv = 0, null_num = 10000
+the ratio of not null row is 0.0
+EXPECTED RESULT :select 0;
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (c1, c2) > (2000, 10000);
+SELECTIVITY = 0.2
+

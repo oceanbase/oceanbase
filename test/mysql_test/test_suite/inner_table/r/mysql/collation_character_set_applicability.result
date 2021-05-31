@@ -1,0 +1,28 @@
+use information_schema;
+select * from collation_character_set_applicability;
+COLLATION_NAME	CHARACTER_SET_NAME
+utf8mb4_general_ci	utf8mb4
+utf8mb4_bin	utf8mb4
+binary	binary
+select COLLATION_NAME, CHARACTER_SET_NAME from collation_character_set_applicability;
+COLLATION_NAME	CHARACTER_SET_NAME
+utf8mb4_general_ci	utf8mb4
+utf8mb4_bin	utf8mb4
+binary	binary
+select COLLATION_NAME from collation_character_set_applicability;
+COLLATION_NAME
+utf8mb4_general_ci
+utf8mb4_bin
+binary
+select CHARACTER_SET_NAME from collation_character_set_applicability;
+CHARACTER_SET_NAME
+utf8mb4
+utf8mb4
+binary
+select * from collation_character_set_applicability where COLLATION_NAME = 'utf8mb4_bin';
+COLLATION_NAME	CHARACTER_SET_NAME
+utf8mb4_bin	utf8mb4
+desc collation_character_set_applicability;
+Field	Type	Null	Key	Default	Extra
+COLLATION_NAME	varchar(128)	NO			
+CHARACTER_SET_NAME	varchar(128)	NO			

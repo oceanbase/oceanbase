@@ -1,0 +1,139 @@
+select c1, c1+c2 from t1 where c1 > 100 limit 1, 10
+select c1, c1+c2 from t1 where c3 > 100 order by c2, c1
+select c1, sum(c1+c2) from t1 where c3 > 100 group by c2, c1
+insert into t1 values (1, 2, 3), (4, 5, 6);
+delete from t1 where c1 > 5
+select * from t1,t2 where t1.c1+1= t2.c1
+select t1.c1, t2.c2, t2.c3 from t1,t2 where t1.c1 > t2.c1 + t2.c2
+update t1 vt1 set c2=c1+1 where c1 > 1 order by c1 desc limit 0, 10
+UPDATE oceanbase.__all_root_table SET sql_port = 51997, zone = 'test', partition_cnt = 1, role = 0, row_count = 0, data_size = 0, data_version = 1, data_checksum = 0, row_checksum = 0, column_checksum = '' WHERE tenant_id = 1 AND table_id = 2 AND partition_id = 0 AND svr_ip = '10.232.36.175' AND svr_port = 51951;
+select distinct c2, c1+c2 from t1;
+select * from t1 union select * from t2;
+select * from t1 union all select * from t2;
+select * from t1 except select * from t2;
+select * from t1 intersect select * from t2;
+select /*+ frozen_version(10) */ * from t1;
+#select * from t1 order by c1 desc;
+select * from t1 where exists(select c1 from t2 limit 0);
+select * from t1 where c1>(select c1 from t2 limit 1);
+select * from (select c1, c2 from t1 limit 1) t;
+select max(a) from test where a < (select max(a) from test);
+select * from test where b = trim(' abc ') and b = trim(' xyz ');
+(select a, b, c+1 from t3) union (select a, b, c+1 from t3);
+insert into t1 values(1,2,3),(2,3,4) on duplicate key update c2=values(c1) + values(c2);
+insert into tt1 values(),();
+insert into tt1() values(),();
+select (select 1, 2, 3)=ROW(1, 2, 3);
+select (select 1)=ANY(select 1);
+(select * from yu1) union all (select * from yu2);
+select yu3.id, (select yu4.binaryvalue from yu4 where yu4.id=yu3.id) as value from yu3;
+select (case c1 when 1 then 2 else 2 end) d  from t1 order by d;
+select c1, c1 from t1 union select c1, c2 from t1;
+select c1, c1 from t1 union all select c1, c2 from t1;
+select c2, c2 as c from t1 union select c2, c2 from t1;
+select c1 from t1 having (select count(t1.c1) from t2)>0;
+select c1 from t1 where (select count(t1.c1) from t2)>0;
+select c1 as cc from t1 order by (select cc from t2);
+select c1 from t1 where c1 > (select c1 from t2 where t2.c1 >t1.c1 and t2.c2 >t1.c2);
+select c1 from t1 where  (select c1 from t2)  > 1 and 1< (select 1);
+select c3 from t5 where c2 > 10;
+select c3,c4 from t5 where c2 > 10;
+
+######################### test for hierarchical query ###################################
+### single table ###
+# same output #
+#select prior c2, c1 from t0 start with c1 = 1 connect by prior c1 = c2;
+#select prior c2, c2 from t0 connect by prior (c1 + 1) = (c1 + 1);
+#select prior (c2 + 1), (c2 + 1) from t0 connect by prior c1 = c1;
+#select prior 1 from t0 where prior (c2 + 1) = (c2 + 1) connect by prior c1 = c1;
+#
+## overlap output #
+#select prior pk from t0 where c1 = 0 start with c1 = 1 connect by prior c1 = c2;
+#
+## different output #
+#select prior a3, pk from t0 start with c1 = 1 connect by prior c1 = c2;
+#
+## complex output #
+#select c1 + c2 from t0 where prior c2 = c1 connect by prior c1 = c2;
+#select prior(c1 + c2) from t0 where prior c2 = c1 connect by prior c1 = c2;
+#select abs(a3) + a3 from t0 where prior c2 = c1 connect by prior c1 = c2;
+#select prior (abs(a3) + a3) from t0 where prior c2 = c1 connect by prior c1 = c2;
+#
+#select c1 + c2 from t0 where prior c2 < c1 connect by prior c1 > c2;
+#select prior(c1 + c2) from t0 where prior c2 < c1 connect by prior c1 > c2;
+#select prior(c1 + c2), (c1 + c2) from t0 where prior c2 < c1 connect by prior c1 > c2;
+#select abs(a3) + a3 from t0 where prior c2 < c1 connect by prior c1 > c2;
+#select prior (abs(a3) + a3) from t0 where prior c2 < c1 connect by prior c1 > c2;
+#
+#### multi table  ###
+#
+## same output #
+#select prior t9.c3, t0.pk from t0 join t9 connect by prior t0.pk = t9.c3;
+#select prior t0.a3, t0.pk from t0 join t9 connect by prior t0.pk = t0.a3;
+#
+## overlap output #
+#select prior t9.c3, t0.pk, prior t0.c2  from t0 join t9 where t9.c1 > 1 connect by prior t0.pk = t9.c3;
+#select t9.c1 from t0 join t9 where prior t9.c3 + t0.pk + prior t0.c2 connect by prior t0.pk = t9.c3;
+#
+## different output #
+#select prior t0.c1, t9.c2 from t0 join t9 connect by prior t0.pk = t9.c3;
+#select prior t0.c1 from t0 join t9 where t9.c2 > 1 connect by prior t0.pk = t9.c3;
+#select t0.c1, prior t9.c2 from t0 join t9 connect by prior t0.pk = t9.c3;
+#select t0.c1 from t0 join t9 where prior t9.c2 > 1 connect by prior t0.pk = t9.c3;
+#
+## complex output #
+#select prior (t0.c1 + t0.c2) from t0 join t9 where t0.pk > prior t9.c3 connect by prior t0.pk = t9.c3;
+#select prior (t0.c1 + t9.c2) from t0 join t9 where t0.pk > prior t9.c3 connect by prior t0.pk = t9.c3;
+#select t0.c1 + t0.c2 from t0 join t9 where t0.pk > prior t9.c3 connect by prior t0.pk = t9.c3;
+#select t0.c1 + t9.c2 from t0 join t9 where t0.pk > prior t9.c3 connect by prior t0.pk = t9.c3;
+#
+#### test for pseudo column ###
+### bug select 1 from t0 connect by prior 1 = 1;
+### bug select level from t0 connect by prior 1 = 1;
+#select level, c1 from t0 connect by prior 1 = 1;
+#select level from t0 connect by prior c1 = c2;
+#
+##select level + 1 from t0 connect by prior 1 = 1;
+#select max(level) - 1 , c1 from t0 connect by prior 1 = 1;
+#select level from t0 where level > 1 connect by prior c1 = c2;
+#
+#select level, t0.c1 from t0 join t9 connect by prior 1  = 1;
+#select level from t0 join t9 connect by prior t0.c1  = t0.c2;
+#select t0.c1 from t0 join t9 where level > 1 connect by prior t0.c1  = t0.c2;
+#select max(level + t0.c1) from t0 join t9 connect by prior t0.c1  = t0.c2;
+#select max(level-1) from t0 join t9 where level > 1 connect by prior t0.c1  = t0.c2;
+#
+#
+## test different where condition #
+#select c1 from t0 where level connect by prior c1 = c2;
+#select c1 from t0 where level > 1 and level < 2 connect by prior c1 = c2;
+#select c1 from t0 where level > 1 or level < 2 connect by prior c1 = c2;
+#select c1 from t0 where level > 1 or level < 2 and level < 2*level connect by prior c1 = c2;
+#select c1 from t0 where level > level * c2 or level < c1 connect by prior c1 = c2;
+#
+## test same output #
+#select c1 from t0 where level + 1 connect by prior c1 = c2;
+#select c1 from t0 where level + c1 > 1 connect by prior c1 = c2;
+#select max(c1 + level) from t0 where level + c1 > 1 connect by prior c1 = c2;
+#select max(c1 + level +abs(level)) from t0 where level + c1 > 1 connect by prior c1 = c2;
+#select level + 1 from t0 where level + c1 > 1 connect by prior c1 = c2;
+#
+#select c1 from t0 where connect_by_isleaf + 1 connect by prior c1 = c2;
+#select c1 from t0 where connect_by_isleaf + c1 > 1 connect by prior c1 = c2;
+#select max(c1 + connect_by_isleaf) from t0 where connect_by_isleaf + c1 > 1 connect by prior c1 = c2;
+#select max(c1 + connect_by_isleaf +abs(connect_by_isleaf)) from t0 where connect_by_isleaf + c1 > 1 connect by prior c1 = c2;
+#select connect_by_isleaf + 1 from t0 where connect_by_isleaf + c1 > 1 connect by prior c1 = c2;
+#
+#select c1 from t0 where connect_by_iscycle + 1 connect by nocycle prior c1 = c2;
+#select c1 from t0 where connect_by_iscycle + c1 > 1 connect by nocycle prior c1 = c2;
+#select max(c1 + connect_by_iscycle) from t0 where connect_by_iscycle + c1 > 1 connect by nocycle prior c1 = c2;
+#select max(c1 + connect_by_iscycle +abs(connect_by_iscycle)) from t0 where connect_by_iscycle + c1 > 1 connect by nocycle prior c1 = c2;
+#select connect_by_iscycle + 1 from t0 where connect_by_iscycle + c1 > 1 connect by nocycle prior c1 = c2;
+#
+#select 1 from t0 connect by prior 1 = 1;
+#select 1 from t0 join t7 on 1 = 1 connect by prior 1 = 1;
+#select 1 from t0 left join t7 on 1 = 1 connect by prior 1 = 1;
+#
+## test for connect by prior expr #
+#select 1 from t0 connect by prior (c1 + c2) = c2;
+#select 1 from t0 connect by prior (abs(c1)) = c2;

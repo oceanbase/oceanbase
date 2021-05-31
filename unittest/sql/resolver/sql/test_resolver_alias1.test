@@ -1,0 +1,36 @@
+drop database if exists alias1;
+create database alias1;
+use alias1;
+
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3;
+
+# having #
+select c1, c1 from t1 having c1 is null;
+select c1, c1 from t1 having c1 is null;
+select c1, (c1) from t1 having c1 is null;
+select c1, c1 as c1 from t1 having c1 is null;
+--error 5207
+select c1, c2 as c1 from t1 having c1 is null;
+--error 5207
+select c1, c2+3 as c1 from t1 having c1 is null;
+--error 5207
+select c1, c2+c1 as c1 from t1 having c1 is null;
+select "cc1", c1 from t1 having c1 is null;
+--error 5207
+select "cccc1" as c1, c1 from t1 having c1 is null;
+
+# order by#
+select c1, c1 from t1 order by c1;
+select c1, (c1) from t1 order by c1;
+select c1, c1 as c1 from t1 order by c1;
+--error 5207
+select c1, c2 as c1 from t1 order by c1;
+--error 5207
+select c1, c2+3 as c1 from t1 order by c1;
+--error 5207
+select c1, c2+c1 as c1 from t1 order by c1;
+select "cc1", c1 from t1 order by c1;
+--error 5207
+select "cccc1" as c1, c1 from t1 order by c1;
+
+drop database alias1;

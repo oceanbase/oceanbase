@@ -1,0 +1,412 @@
+drop database if exists enum_db;
+create database enum_db;
+use enum_db;
+#schema
+
+create table t1(c1 int primary key, c2 set('a', 'b', 'c')) partition by hash(c1 + 1) partitions 3
+create table t2(c1 int, c2 int, c3 set('a', 'b', 'c'), primary key(c2, c3)) partition by key(c2, c3) partitions 3
+create table t22(c1 int, c2 int, c3 set('a', 'b', 'c'), primary key(c2, c3)) partition by key(c2, c3) partitions 3
+create table t3(c3 int primary key, c4 set('a', 'b', 'c'))
+create table t4(c1 int primary key, c3 set('a', 'b', 'c'))
+create table coll_table(c1 varchar(10) collate utf8_general_ci, c2 set('a', 'b', 'c'), c3 varchar(10), primary key(c1, c2));
+
+### common ###
+select c1, sum(c2) from t1 where c1 > 0 and c2 + c1 = 100 group by c2 order by c1 desc limit 0, 1
+select sum(c1) + sum(c3) from t2 group by c2 having sum(c3) > 1
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c2 and t1.c1 > 10 limit 10 offset 10
+
+### all distinct ###
+select all c1 from t1
+select all * from t1
+select distinct c1 from t1
+select distinct * from t1
+
+#### * star
+select * from t1
+select *, t1.* from t1
+select t1.*, t2.* from t1,t2
+select table1.* from t1 table1
+
+#### duplicate column name
+select c1, c1 from t1
+
+#### table name or alias
+select t1.c1, t2.c1 from t1, t2
+#select c1, t1.c1, table1.c1 from t1 table1	//not support
+select table1.c1, table2.c1 from t1 table1, t2 table2
+
+#### database name
+select rongxuan.t1.c1 from rongxuan.t1
+
+#### as
+select c1 column1 from t1
+select c1 as column1 from t1
+
+#### column name or alias
+select c1 as c2, c2 as c1 from t1
+select t1.c1 as column1, t2.c1 column2 from t1, t2
+
+#### function or expression
+select count(distinct t1.c1), count(distinct t1.c2) from t1 order by c1, c2
+#select -(c1 + 1 - 1.2 + 0), concat(t1.c2, 'test'), 'test', 'test', not (true or false), NULL from t1
+select usec_to_time(c1) as modify_time_us from t1;
+
+#### question mark
+select 1 from t1
+select 1 as c1 from t1
+
+
+### from ###
+#### as
+select * from t1 table1
+select * from t1 as table1
+
+
+#### join
+select * from t1 join t2 on t1.c1 = t2.c1
+select * from t1 right join t2 on t1.c1 = t2.c1
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 left outer join t2 on t1.c1 = t2.c1
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 left join t2 using (c1)
+#select t1.*, t2.* from t1 left outer join t2 on t1.c1 = t2.c1
+#select t1.*, t2.* from t1 left join t2 using (c1)
+
+select t1.c1, tt.c2 from t1 join (select t1.c1, t2.c2  from t1 join t2 on t1.c1 = t2.c1) tt on t1.c1 = tt.c1
+select t1.c1, tt.c2 from (select t1.c1, t2.c2  from t1 join t2 on t1.c1 = t2.c1) tt join t1 on t1.c1 = tt.c1
+
+select t1.c1,t2.c2,t4.c3 from t1 join t2 on t1.c1 =t2.c1 join t4 on t2.c1 = t4.c1
+
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 right outer join t2 on t1.c1 = t2.c1
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 right join t2 using (c1)
+#select t1.*, t2.* from t1 right outer join t2 on t1.c1 = t2.c1
+#select t1.*, t2.* from t1 right join t2 using (c1)
+
+
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 full join t2 on t1.c1 = t2.c1
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 inner join t2 on t1.c1 = t2.c1
+#select t1.*, t2.* from t1 full join t2 on t1.c1 = t2.c1
+#select t1.*, t2.* from t1 inner join t2 on t1.c1 = t2.c1
+
+select t1.c1, t1.c2, t2.c2, t2.c3 from t1 join t2 using (c2)
+#select t1.*, t2.* from t1 join t2 using (c1,c2)
+
+#using
+select * from t1 join t2 using (c1)
+select t1.*, * from t1 join t2 using (c2)
+select * from t1 right join t2 using (c1)
+select * from t1 join t2 using (c2,c1)
+
+#natural join natural join
+#select * from t1 nautral join t2 	//not support
+
+#straight join
+#select * from t1 straight_join t2	//not support
+
+#### subquery
+select c1, c2 from (select c1, c2 from t1) t1
+select column1, table1.column2 from (select c1 column1, c2 column2 from t1) table1
+select t1.c1, t1.c2+1 from (select * from t1) t1
+select * from (select * from t1) table1
+
+#### index hint
+select * from t1 use index (idx1)
+select * from t1 ignore index (idx1)
+select * from t1 force index (idx1)
+
+#### partition list
+select * from t1 partition (p1)
+
+### where ###
+
+#### expression or function
+select t1.c1 from t1, t2 where t1.c1 = t2.c1
+select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
+select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
+select * from t2 where c1 * 2 + 3 < c2 and c3 < 'XXXX' and c2 is not null
+select * from t1 where c1 = now()
+select * from t1 where c1 = 'test'
+select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 0 or c1>100) and (c1<-9 or c1>9) and c2 between -99 and 99
+select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 and 10
+select c1, c2 from t1 where (c1, c2) in ((1, 2))
+#select * from t1 where exists(select * from t2 where c1 = 1)
+select * from t1 where not (c1 > 1 and c2 < 10)
+select * from t1 where not (c1 > 1 or c2 < 10)
+select * from t1 where not (not (c1 > 1))
+select * from t1 where not (not (c1 > 1) and c2 < 10)
+select * from t1 where c1 > 1 and (c2 < 10 and c1 <10)
+select * from t1 where c1 > 1 or (c2 < 10 or c1 <10)
+select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
+select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
+
+select t1.c1 from t1,t2,t4 where t1.c1=t4.c1 and t1.c2=t2.c2 and t2.c3=t4.c3;
+select t1.c1 from t1,t2,t4 where t1.c1=t2.c1 and t1.c1+t2.c1=t4.c1;
+select t1.c1 from t1,t2,t4, t1 tt where t1.c1=t4.c1 and t1.c2=tt.c2 and t1.c1+t2.c1=tt.c1;
+
+####calculate and const
+#select c1 from t1 where c2 =  1 + 1 + c1
+select c1 from t1 where c2 = 1+1
+
+#### subquery
+#select c1 from t1 where c1 in (select c2 from t2)
+#select c1 from t1 where (select c2 from t2) in (1,2)
+#select c1 from t1 where c1 exists (select c2 from t2 where t2 = 1)
+#select * from t1 where (c1,c2) in ((1,2), (select c1,c3 from t2))
+
+#### column name or alias
+select c1 from t1 where c1 = 1
+select c1 column1 from t1 where c1 > 2
+#select c1, c2 column2 from t1 where c1 = 1 and column2 = 1
+
+#### table name or alias
+select c1, c2 from t1 table1 where table1.c2 = 1
+#select c1, c2 from t1 table1 where t1.c1 = 1 and table1.c2 = 1	//not support
+
+#### question mark
+select c1, c2 from t1 where 1 >1
+select * from t1 where c1 = 1
+
+#### equal set
+select c1 from t1 where c2 = 1
+select c1 from t1 where 1 = c2
+select c1 from t1 where c1 = 1 and c1 =2
+#select c1 column1 from t1 where c1 = 1 and column1 = 5 //alias name should not in where clause
+
+
+###group by ###
+#### position
+select * from t2 group by 1
+
+#### column name or alias
+select c1 from t1 group by c1
+select c1, c2 column2 from t1 group by column2
+
+#### table name or alias
+#select * from t1 table1 group by t1.c1		//not support
+select * from t1 table1 group by table1.c1
+
+#### column not in select
+select c1 from t1 group by c2
+
+#### expression or function
+select c1, sum(c2) from t1 group by c1+2
+
+#### question mark this is syntax error
+#select * from t1 group by 1
+
+
+### order by ###
+#### asc, desc
+select * from t2 order by c1, c2 desc, c3 asc
+
+#### position
+select * from t2 order by 1, 2 desc, 3 asc
+(select c1 from t1) except (select c2 from t2) order by 1;
+#select item is not ref column
+select c1+1 from t1 order by 1
+
+#### column name or alias
+select c1, c2 column2 from t1 order by c1, column2
+
+--error 5207
+select c1, c2 as c1 from t1 order by c1
+
+#### table name or alias
+select c1, c2 from t1 table1 order by  table1.c2
+#select c1, c2 from t1 table1 order by t1.c1, table1.c2	//not support
+
+#### column not in select
+select c1 from t1 order by c2
+
+#### column in select item
+#select t1.c1, c1 from t1 order by t1.c1
+
+#### expression or function
+select c1, sum(c2) from t1  order by sum(c2)
+
+
+### having###
+#### column or column alias
+select * from t1 having c1 > 0
+select * from t1 having sum(c1) > 0
+select c1, c2 column2 from t1 having sum(c1) > 1 and sum(column2) > 1
+#select c1, c2 column2 from t1 having column2 > 1 @ TODO
+
+####having column must exist in select items or in group items
+select c1 from t1 group by c2 having c2 > 0
+
+#### table name or table alias
+#the scope is T_AGG_SCOPE,not HAVING_SCOPE
+#select c1, c2 from t1 table1 having sum(t1.c2) < 1
+select c1, c2 from t1 table1 having sum(table1.c2) < 1
+select c1 from t1 having t1.c1 > 1
+select c1 from t1 having c1 > 1
+
+#### column not in select items
+select c1 from t1 having sum(c2)>1
+#select t1.c1 from t1 having sum(t1.c1) > 1
+
+#### function or expression
+select c1, sum(c2) column2 from t1 having sum(c1+1)>1
+
+#### question mark
+select * from t1 having sum(1) > 1
+
+
+### hint ###
+#### read consistency
+select /*+ READ_CONSISTENCY(WEAK)  */ * from t1
+select /*+ READ_CONSISTENCY(STRONG) */ * from t1
+select /*+ READ_CONSISTENCY(FROZEN) FROZEN_VERSION(1) */ * from t1
+#not use
+#select /*+ CLIENT_VERSION */ * from t1
+#select /*+ MYSQL_DRIVER */ * from t1
+select /*+ TOPK(10 2) */ * from t1
+select /*+ HOTSPOT*/ * from t1
+select /*+ LOG_LEVEL('INFO') */ * from t1
+
+select /*+ USE_HASH(t1)*/ * from t1
+select /*+ USE_PLAN_CACHE(default)*/ * from t1
+select /*+ USE_PLAN_CACHE(exact)*/ * from t1
+
+
+#### query timout
+select /*+ QUERY_TIMEOUT(1000) */ * from t1
+
+#### use nl
+select /*+ USE_NL(t1) */ * from t1 join t2 on t1.c1 = t2.c1
+
+#### index
+select /*+ INDEX(t1 INVALID_INDEX) */ c1 from t1;
+
+#### full
+select /*+ full(t1) */ c1, c2 from t1 where c1 = 2 or c2 =5;
+
+
+### for update ###
+select * from t1 for update
+select * from t1 for update wait 2
+select * from t1 for update wait 1
+select * from t1 for update nowait
+select * from t1 for update wait 1.0
+
+
+### limit ###
+
+#### const
+select c1, c2 from t1 limit 2, 10
+select c1, c2 from t1 limit 10
+select c1, c2 from t1 limit 2 offset 10
+(select c1 from t1 limit 10) limit 20
+
+#### question mark
+select * from t1 limit 1, 1
+select * from t1 limit 1
+select 1 in (c1) , c1 in (c2), 1 in (c1,c2) from t1;
+
+
+### set ###
+
+#### all distinct
+select c1,c2 from t1 union all select c1,c2 from t2
+select c1,c2 from t1 union distinct select c1,c2 from t2
+select c1,c2 from t1 union select c1,c2 from t2
+
+select * from t1 union select * from t1
+select * from t1 union select * from t1 union select * from t1
+select * from t1 union all select * from t1
+
+#select c1, c2 from t1 union all select * from t1 order by t1.c1
+#(select * from t1 union select * from t1) t2 union select * from t1 order by t2.c1
+
+(select c1 from t1) except (select c2 from t2) order by c1;
+(select c1 from t1) intersect (select c2 from t2) order by c1 limit 100;
+(select c1 from t1) union (select c2 from t1) union (select c2 from t2);
+(select c1 from t1) union (select c2 from t1) union (select c2 from t2) order by c1 limit 100;
+(select c1 from t1) union (select c2 from t1) intersect (select c2 from t2) order by c1 limit 100;
+
+(select c4, c3 from t3) union ( select t1.c1, t2.c3 from t1 join t2 on t1.c1 = t2.c1)
+#(select c5, c7 from test) union ( select c1, c2 from t1 join t2 on t1.c1 = t2.c1) //error,ambiguous
+## different column between left and right substmt
+--error 5007
+select c1 from t1 union select c1,c2 from t1;
+
+### select into ###
+
+### when just for test
+### select c1 from t1 when ROW_COUNT(update t2 set c1 = 1) @ TODO
+select t1.c1, t2.c2, t2.c3 from t1,t2 where t1.c1 = t2.c1 order by t1.c2;
+
+### sys fun
+select current_timestamp()
+##TODO uncomment this when supported
+##select current_times()
+##select current_date()
+## ``
+select c1 as "a" from t1;
+select c1 as `a` from t1;
+select c1 as 'a' from t1;
+
+### collation
+## join with no join_condition
+select c1, c2, c1 > c2 from coll_table where c1 < c2 collate utf8_general_ci;
+select 1 collate utf8_general_ci < _utf8 'abcd' collate utf8_general_ci;
+select * from t1 join t2
+select * from t1 inner join t2
+select * from t1 cross join t2
+select * from t1 join t2 join t3
+
+## case alias in group and having clause
+select X.c1 from t1 AS X group by X.c2 having (X.c1 = 1);
+(SELECT * FROM t1) UNION ALL (SELECT c1,c2 FROM t2);
+
+## for coverage
+select * from (select * from t1) t join t2 using(c1) join t4 using(c1)
+select * from (select * from t1) t join t2 using(c1) left  join t4 using(c1)
+select * from (select * from t1) t join t2 using(c1) right join t4 using(c1)
+# @TODO: table_id will be changed, coment out!
+#select * from __idx_1099511631103_idx1
+--error 5019
+select * from t_not_exist
+
+## case insensitive
+--error 5207
+select c1 a, C2 A from t1 order by a
+
+select * from (t1);
+select * from (t1,t2);
+select * from (t1,(t2));
+select * from (t3,((t1,t2)));
+select * from t1 join t2 join t3;
+select * from (t1 join t2) join t3;
+###YYYYselect * from (t1 join t2) join (select * from t3) a;
+####YYYYselect * from ((t1 join t2) join (select * from t3) a);
+#select * from (t1,t2) join (t3,t4);
+#select * from (t1 join t2) join (t3,t4);
+
+select * from t1 join t2 on t1.c1=t2.c1, t3 join t4 on t3.c3=t4.c3;
+select * from t1 join t2 using(c1), t3 join t4 using(c3);
+
+SELECT t1.c1 FROM t2 LEFT JOIN t1 ON t2.c2 = t1.c1 ORDER BY c1;
+select default(c1) from t2;
+--error 5217
+select 1 as a from t1,t2 having c1=1;
+--error 5207
+select t1.c1,t2.c1 from t1,t2 having c1=1;
+--error 5207
+select t1.c1,t2.c1 from t1,t2 order by c1;
+--error 5207
+select t1.c1,t2.c1 from t1,t2 group by t1.c1,t2.c1 having c1 =1;
+select 1 from t1,t2 group by t1.c1,t2.c1 having t1.c1 =1;
+select c1 from t1 as x group by x.c1,c1 having c1 =1;
+select c1 from t1 as x group by x.c1,c1 having x.c1 =1;
+--error 5217
+select c1 from t1 having xxx.c1 =1;
+drop database enum_db;
+
+select c3 from t3 where c3>'1';
+## add for enum
+select * from (select t1.c2, t2.c3 from t1, t2) as a;
+select  (1, '2') in (select c1,c2 from t1 union select c2,c3 from t2);
+select * from (select c1,c2 from t1 union select c2,c3 from t2) as a;
+select c2,c3 from t2 union select c2,c3 from t2 union select c1,c2 from t1;
+select (select c2 from t1) > 1 from t1;
+select * from t2 where (1) in (c2, (select c2 from t1));

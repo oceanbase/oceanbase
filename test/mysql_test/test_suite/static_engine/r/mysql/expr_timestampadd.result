@@ -1,0 +1,4665 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT;
+connection conn_admin;
+drop table if exists t1;
+create table t1 (c1 int, c2 int unsigned, 
+c3 tinyint, c4 tinyint unsigned,
+c5 smallint, c6 smallint unsigned,
+c7 mediumint, c8 mediumint unsigned,
+c9 integer, c10 integer unsigned,
+c11 bigint, c12 bigint unsigned,
+c13 float, c14 float unsigned, 
+c15 double, c16 double unsigned, 
+c17 decimal, c18 decimal unsigned, 
+c19 datetime, c20 timestamp, 
+c21 varchar(30), c22 char(30));
+insert into t1 values(1, 2, 
+1, 2, 
+1, 2, 
+1, 2, 
+1, 2, 
+1, 2, 
+3.5, 4.5, 
+5.5, 6.5,
+7.5, 8.5,
+'2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+'9.5', '10.5');
+// Case1: normal test.测试各种类型组合, 跟不开新引擎开关进行对比
+alter system flush plan cache global;
+set @@ob_enable_plan_cache = 0;
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c1, c1) from t1;
+timestampadd(second, c1, c1)
+NULL
+select timestampadd(year, c1, c1) from t1;
+timestampadd(year, c1, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c1, c2) from t1;
+timestampadd(second, c1, c2)
+NULL
+select timestampadd(year, c1, c2) from t1;
+timestampadd(year, c1, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c1, c3) from t1;
+timestampadd(second, c1, c3)
+NULL
+select timestampadd(year, c1, c3) from t1;
+timestampadd(year, c1, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c1, c4) from t1;
+timestampadd(second, c1, c4)
+NULL
+select timestampadd(year, c1, c4) from t1;
+timestampadd(year, c1, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c1, c5) from t1;
+timestampadd(second, c1, c5)
+NULL
+select timestampadd(year, c1, c5) from t1;
+timestampadd(year, c1, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c1, c6) from t1;
+timestampadd(second, c1, c6)
+NULL
+select timestampadd(year, c1, c6) from t1;
+timestampadd(year, c1, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c1, c7) from t1;
+timestampadd(second, c1, c7)
+NULL
+select timestampadd(year, c1, c7) from t1;
+timestampadd(year, c1, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c1, c8) from t1;
+timestampadd(second, c1, c8)
+NULL
+select timestampadd(year, c1, c8) from t1;
+timestampadd(year, c1, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c1, c9) from t1;
+timestampadd(second, c1, c9)
+NULL
+select timestampadd(year, c1, c9) from t1;
+timestampadd(year, c1, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c1, c10) from t1;
+timestampadd(second, c1, c10)
+NULL
+select timestampadd(year, c1, c10) from t1;
+timestampadd(year, c1, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c1, c11) from t1;
+timestampadd(second, c1, c11)
+NULL
+select timestampadd(year, c1, c11) from t1;
+timestampadd(year, c1, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c1, c12) from t1;
+timestampadd(second, c1, c12)
+NULL
+select timestampadd(year, c1, c12) from t1;
+timestampadd(year, c1, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c1, c13) from t1;
+timestampadd(second, c1, c13)
+NULL
+select timestampadd(year, c1, c13) from t1;
+timestampadd(year, c1, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c1, c14) from t1;
+timestampadd(second, c1, c14)
+NULL
+select timestampadd(year, c1, c14) from t1;
+timestampadd(year, c1, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c1, c15) from t1;
+timestampadd(second, c1, c15)
+NULL
+select timestampadd(year, c1, c15) from t1;
+timestampadd(year, c1, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c1, c16) from t1;
+timestampadd(second, c1, c16)
+NULL
+select timestampadd(year, c1, c16) from t1;
+timestampadd(year, c1, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c1, c17) from t1;
+timestampadd(second, c1, c17)
+NULL
+select timestampadd(year, c1, c17) from t1;
+timestampadd(year, c1, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c1, c18) from t1;
+timestampadd(second, c1, c18)
+NULL
+select timestampadd(year, c1, c18) from t1;
+timestampadd(year, c1, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c1, c19) from t1;
+timestampadd(second, c1, c19)
+2019-12-01 12:00:01
+select timestampadd(year, c1, c19) from t1;
+timestampadd(year, c1, c19)
+2020-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c1, c20) from t1;
+timestampadd(second, c1, c20)
+2019-12-03 06:00:01
+select timestampadd(year, c1, c20) from t1;
+timestampadd(year, c1, c20)
+2020-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c1, c21) from t1;
+timestampadd(second, c1, c21)
+NULL
+select timestampadd(year, c1, c21) from t1;
+timestampadd(year, c1, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c1, c22) from t1;
+timestampadd(second, c1, c22)
+NULL
+select timestampadd(year, c1, c22) from t1;
+timestampadd(year, c1, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c2, c1) from t1;
+timestampadd(second, c2, c1)
+NULL
+select timestampadd(year, c2, c1) from t1;
+timestampadd(year, c2, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c2, c2) from t1;
+timestampadd(second, c2, c2)
+NULL
+select timestampadd(year, c2, c2) from t1;
+timestampadd(year, c2, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c2, c3) from t1;
+timestampadd(second, c2, c3)
+NULL
+select timestampadd(year, c2, c3) from t1;
+timestampadd(year, c2, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c2, c4) from t1;
+timestampadd(second, c2, c4)
+NULL
+select timestampadd(year, c2, c4) from t1;
+timestampadd(year, c2, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c2, c5) from t1;
+timestampadd(second, c2, c5)
+NULL
+select timestampadd(year, c2, c5) from t1;
+timestampadd(year, c2, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c2, c6) from t1;
+timestampadd(second, c2, c6)
+NULL
+select timestampadd(year, c2, c6) from t1;
+timestampadd(year, c2, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c2, c7) from t1;
+timestampadd(second, c2, c7)
+NULL
+select timestampadd(year, c2, c7) from t1;
+timestampadd(year, c2, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c2, c8) from t1;
+timestampadd(second, c2, c8)
+NULL
+select timestampadd(year, c2, c8) from t1;
+timestampadd(year, c2, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c2, c9) from t1;
+timestampadd(second, c2, c9)
+NULL
+select timestampadd(year, c2, c9) from t1;
+timestampadd(year, c2, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c2, c10) from t1;
+timestampadd(second, c2, c10)
+NULL
+select timestampadd(year, c2, c10) from t1;
+timestampadd(year, c2, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c2, c11) from t1;
+timestampadd(second, c2, c11)
+NULL
+select timestampadd(year, c2, c11) from t1;
+timestampadd(year, c2, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c2, c12) from t1;
+timestampadd(second, c2, c12)
+NULL
+select timestampadd(year, c2, c12) from t1;
+timestampadd(year, c2, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c2, c13) from t1;
+timestampadd(second, c2, c13)
+NULL
+select timestampadd(year, c2, c13) from t1;
+timestampadd(year, c2, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c2, c14) from t1;
+timestampadd(second, c2, c14)
+NULL
+select timestampadd(year, c2, c14) from t1;
+timestampadd(year, c2, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c2, c15) from t1;
+timestampadd(second, c2, c15)
+NULL
+select timestampadd(year, c2, c15) from t1;
+timestampadd(year, c2, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c2, c16) from t1;
+timestampadd(second, c2, c16)
+NULL
+select timestampadd(year, c2, c16) from t1;
+timestampadd(year, c2, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c2, c17) from t1;
+timestampadd(second, c2, c17)
+NULL
+select timestampadd(year, c2, c17) from t1;
+timestampadd(year, c2, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c2, c18) from t1;
+timestampadd(second, c2, c18)
+NULL
+select timestampadd(year, c2, c18) from t1;
+timestampadd(year, c2, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c2, c19) from t1;
+timestampadd(second, c2, c19)
+2019-12-01 12:00:02
+select timestampadd(year, c2, c19) from t1;
+timestampadd(year, c2, c19)
+2021-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c2, c20) from t1;
+timestampadd(second, c2, c20)
+2019-12-03 06:00:02
+select timestampadd(year, c2, c20) from t1;
+timestampadd(year, c2, c20)
+2021-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c2, c21) from t1;
+timestampadd(second, c2, c21)
+NULL
+select timestampadd(year, c2, c21) from t1;
+timestampadd(year, c2, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c2, c22) from t1;
+timestampadd(second, c2, c22)
+NULL
+select timestampadd(year, c2, c22) from t1;
+timestampadd(year, c2, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c3, c1) from t1;
+timestampadd(second, c3, c1)
+NULL
+select timestampadd(year, c3, c1) from t1;
+timestampadd(year, c3, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c3, c2) from t1;
+timestampadd(second, c3, c2)
+NULL
+select timestampadd(year, c3, c2) from t1;
+timestampadd(year, c3, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c3, c3) from t1;
+timestampadd(second, c3, c3)
+NULL
+select timestampadd(year, c3, c3) from t1;
+timestampadd(year, c3, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c3, c4) from t1;
+timestampadd(second, c3, c4)
+NULL
+select timestampadd(year, c3, c4) from t1;
+timestampadd(year, c3, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c3, c5) from t1;
+timestampadd(second, c3, c5)
+NULL
+select timestampadd(year, c3, c5) from t1;
+timestampadd(year, c3, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c3, c6) from t1;
+timestampadd(second, c3, c6)
+NULL
+select timestampadd(year, c3, c6) from t1;
+timestampadd(year, c3, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c3, c7) from t1;
+timestampadd(second, c3, c7)
+NULL
+select timestampadd(year, c3, c7) from t1;
+timestampadd(year, c3, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c3, c8) from t1;
+timestampadd(second, c3, c8)
+NULL
+select timestampadd(year, c3, c8) from t1;
+timestampadd(year, c3, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c3, c9) from t1;
+timestampadd(second, c3, c9)
+NULL
+select timestampadd(year, c3, c9) from t1;
+timestampadd(year, c3, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c3, c10) from t1;
+timestampadd(second, c3, c10)
+NULL
+select timestampadd(year, c3, c10) from t1;
+timestampadd(year, c3, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c3, c11) from t1;
+timestampadd(second, c3, c11)
+NULL
+select timestampadd(year, c3, c11) from t1;
+timestampadd(year, c3, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c3, c12) from t1;
+timestampadd(second, c3, c12)
+NULL
+select timestampadd(year, c3, c12) from t1;
+timestampadd(year, c3, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c3, c13) from t1;
+timestampadd(second, c3, c13)
+NULL
+select timestampadd(year, c3, c13) from t1;
+timestampadd(year, c3, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c3, c14) from t1;
+timestampadd(second, c3, c14)
+NULL
+select timestampadd(year, c3, c14) from t1;
+timestampadd(year, c3, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c3, c15) from t1;
+timestampadd(second, c3, c15)
+NULL
+select timestampadd(year, c3, c15) from t1;
+timestampadd(year, c3, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c3, c16) from t1;
+timestampadd(second, c3, c16)
+NULL
+select timestampadd(year, c3, c16) from t1;
+timestampadd(year, c3, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c3, c17) from t1;
+timestampadd(second, c3, c17)
+NULL
+select timestampadd(year, c3, c17) from t1;
+timestampadd(year, c3, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c3, c18) from t1;
+timestampadd(second, c3, c18)
+NULL
+select timestampadd(year, c3, c18) from t1;
+timestampadd(year, c3, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c3, c19) from t1;
+timestampadd(second, c3, c19)
+2019-12-01 12:00:01
+select timestampadd(year, c3, c19) from t1;
+timestampadd(year, c3, c19)
+2020-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c3, c20) from t1;
+timestampadd(second, c3, c20)
+2019-12-03 06:00:01
+select timestampadd(year, c3, c20) from t1;
+timestampadd(year, c3, c20)
+2020-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c3, c21) from t1;
+timestampadd(second, c3, c21)
+NULL
+select timestampadd(year, c3, c21) from t1;
+timestampadd(year, c3, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c3, c22) from t1;
+timestampadd(second, c3, c22)
+NULL
+select timestampadd(year, c3, c22) from t1;
+timestampadd(year, c3, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c4, c1) from t1;
+timestampadd(second, c4, c1)
+NULL
+select timestampadd(year, c4, c1) from t1;
+timestampadd(year, c4, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c4, c2) from t1;
+timestampadd(second, c4, c2)
+NULL
+select timestampadd(year, c4, c2) from t1;
+timestampadd(year, c4, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c4, c3) from t1;
+timestampadd(second, c4, c3)
+NULL
+select timestampadd(year, c4, c3) from t1;
+timestampadd(year, c4, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c4, c4) from t1;
+timestampadd(second, c4, c4)
+NULL
+select timestampadd(year, c4, c4) from t1;
+timestampadd(year, c4, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c4, c5) from t1;
+timestampadd(second, c4, c5)
+NULL
+select timestampadd(year, c4, c5) from t1;
+timestampadd(year, c4, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c4, c6) from t1;
+timestampadd(second, c4, c6)
+NULL
+select timestampadd(year, c4, c6) from t1;
+timestampadd(year, c4, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c4, c7) from t1;
+timestampadd(second, c4, c7)
+NULL
+select timestampadd(year, c4, c7) from t1;
+timestampadd(year, c4, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c4, c8) from t1;
+timestampadd(second, c4, c8)
+NULL
+select timestampadd(year, c4, c8) from t1;
+timestampadd(year, c4, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c4, c9) from t1;
+timestampadd(second, c4, c9)
+NULL
+select timestampadd(year, c4, c9) from t1;
+timestampadd(year, c4, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c4, c10) from t1;
+timestampadd(second, c4, c10)
+NULL
+select timestampadd(year, c4, c10) from t1;
+timestampadd(year, c4, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c4, c11) from t1;
+timestampadd(second, c4, c11)
+NULL
+select timestampadd(year, c4, c11) from t1;
+timestampadd(year, c4, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c4, c12) from t1;
+timestampadd(second, c4, c12)
+NULL
+select timestampadd(year, c4, c12) from t1;
+timestampadd(year, c4, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c4, c13) from t1;
+timestampadd(second, c4, c13)
+NULL
+select timestampadd(year, c4, c13) from t1;
+timestampadd(year, c4, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c4, c14) from t1;
+timestampadd(second, c4, c14)
+NULL
+select timestampadd(year, c4, c14) from t1;
+timestampadd(year, c4, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c4, c15) from t1;
+timestampadd(second, c4, c15)
+NULL
+select timestampadd(year, c4, c15) from t1;
+timestampadd(year, c4, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c4, c16) from t1;
+timestampadd(second, c4, c16)
+NULL
+select timestampadd(year, c4, c16) from t1;
+timestampadd(year, c4, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c4, c17) from t1;
+timestampadd(second, c4, c17)
+NULL
+select timestampadd(year, c4, c17) from t1;
+timestampadd(year, c4, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c4, c18) from t1;
+timestampadd(second, c4, c18)
+NULL
+select timestampadd(year, c4, c18) from t1;
+timestampadd(year, c4, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c4, c19) from t1;
+timestampadd(second, c4, c19)
+2019-12-01 12:00:02
+select timestampadd(year, c4, c19) from t1;
+timestampadd(year, c4, c19)
+2021-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c4, c20) from t1;
+timestampadd(second, c4, c20)
+2019-12-03 06:00:02
+select timestampadd(year, c4, c20) from t1;
+timestampadd(year, c4, c20)
+2021-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c4, c21) from t1;
+timestampadd(second, c4, c21)
+NULL
+select timestampadd(year, c4, c21) from t1;
+timestampadd(year, c4, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c4, c22) from t1;
+timestampadd(second, c4, c22)
+NULL
+select timestampadd(year, c4, c22) from t1;
+timestampadd(year, c4, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c5, c1) from t1;
+timestampadd(second, c5, c1)
+NULL
+select timestampadd(year, c5, c1) from t1;
+timestampadd(year, c5, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c5, c2) from t1;
+timestampadd(second, c5, c2)
+NULL
+select timestampadd(year, c5, c2) from t1;
+timestampadd(year, c5, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c5, c3) from t1;
+timestampadd(second, c5, c3)
+NULL
+select timestampadd(year, c5, c3) from t1;
+timestampadd(year, c5, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c5, c4) from t1;
+timestampadd(second, c5, c4)
+NULL
+select timestampadd(year, c5, c4) from t1;
+timestampadd(year, c5, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c5, c5) from t1;
+timestampadd(second, c5, c5)
+NULL
+select timestampadd(year, c5, c5) from t1;
+timestampadd(year, c5, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c5, c6) from t1;
+timestampadd(second, c5, c6)
+NULL
+select timestampadd(year, c5, c6) from t1;
+timestampadd(year, c5, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c5, c7) from t1;
+timestampadd(second, c5, c7)
+NULL
+select timestampadd(year, c5, c7) from t1;
+timestampadd(year, c5, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c5, c8) from t1;
+timestampadd(second, c5, c8)
+NULL
+select timestampadd(year, c5, c8) from t1;
+timestampadd(year, c5, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c5, c9) from t1;
+timestampadd(second, c5, c9)
+NULL
+select timestampadd(year, c5, c9) from t1;
+timestampadd(year, c5, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c5, c10) from t1;
+timestampadd(second, c5, c10)
+NULL
+select timestampadd(year, c5, c10) from t1;
+timestampadd(year, c5, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c5, c11) from t1;
+timestampadd(second, c5, c11)
+NULL
+select timestampadd(year, c5, c11) from t1;
+timestampadd(year, c5, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c5, c12) from t1;
+timestampadd(second, c5, c12)
+NULL
+select timestampadd(year, c5, c12) from t1;
+timestampadd(year, c5, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c5, c13) from t1;
+timestampadd(second, c5, c13)
+NULL
+select timestampadd(year, c5, c13) from t1;
+timestampadd(year, c5, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c5, c14) from t1;
+timestampadd(second, c5, c14)
+NULL
+select timestampadd(year, c5, c14) from t1;
+timestampadd(year, c5, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c5, c15) from t1;
+timestampadd(second, c5, c15)
+NULL
+select timestampadd(year, c5, c15) from t1;
+timestampadd(year, c5, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c5, c16) from t1;
+timestampadd(second, c5, c16)
+NULL
+select timestampadd(year, c5, c16) from t1;
+timestampadd(year, c5, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c5, c17) from t1;
+timestampadd(second, c5, c17)
+NULL
+select timestampadd(year, c5, c17) from t1;
+timestampadd(year, c5, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c5, c18) from t1;
+timestampadd(second, c5, c18)
+NULL
+select timestampadd(year, c5, c18) from t1;
+timestampadd(year, c5, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c5, c19) from t1;
+timestampadd(second, c5, c19)
+2019-12-01 12:00:01
+select timestampadd(year, c5, c19) from t1;
+timestampadd(year, c5, c19)
+2020-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c5, c20) from t1;
+timestampadd(second, c5, c20)
+2019-12-03 06:00:01
+select timestampadd(year, c5, c20) from t1;
+timestampadd(year, c5, c20)
+2020-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c5, c21) from t1;
+timestampadd(second, c5, c21)
+NULL
+select timestampadd(year, c5, c21) from t1;
+timestampadd(year, c5, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c5, c22) from t1;
+timestampadd(second, c5, c22)
+NULL
+select timestampadd(year, c5, c22) from t1;
+timestampadd(year, c5, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c6, c1) from t1;
+timestampadd(second, c6, c1)
+NULL
+select timestampadd(year, c6, c1) from t1;
+timestampadd(year, c6, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c6, c2) from t1;
+timestampadd(second, c6, c2)
+NULL
+select timestampadd(year, c6, c2) from t1;
+timestampadd(year, c6, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c6, c3) from t1;
+timestampadd(second, c6, c3)
+NULL
+select timestampadd(year, c6, c3) from t1;
+timestampadd(year, c6, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c6, c4) from t1;
+timestampadd(second, c6, c4)
+NULL
+select timestampadd(year, c6, c4) from t1;
+timestampadd(year, c6, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c6, c5) from t1;
+timestampadd(second, c6, c5)
+NULL
+select timestampadd(year, c6, c5) from t1;
+timestampadd(year, c6, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c6, c6) from t1;
+timestampadd(second, c6, c6)
+NULL
+select timestampadd(year, c6, c6) from t1;
+timestampadd(year, c6, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c6, c7) from t1;
+timestampadd(second, c6, c7)
+NULL
+select timestampadd(year, c6, c7) from t1;
+timestampadd(year, c6, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c6, c8) from t1;
+timestampadd(second, c6, c8)
+NULL
+select timestampadd(year, c6, c8) from t1;
+timestampadd(year, c6, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c6, c9) from t1;
+timestampadd(second, c6, c9)
+NULL
+select timestampadd(year, c6, c9) from t1;
+timestampadd(year, c6, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c6, c10) from t1;
+timestampadd(second, c6, c10)
+NULL
+select timestampadd(year, c6, c10) from t1;
+timestampadd(year, c6, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c6, c11) from t1;
+timestampadd(second, c6, c11)
+NULL
+select timestampadd(year, c6, c11) from t1;
+timestampadd(year, c6, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c6, c12) from t1;
+timestampadd(second, c6, c12)
+NULL
+select timestampadd(year, c6, c12) from t1;
+timestampadd(year, c6, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c6, c13) from t1;
+timestampadd(second, c6, c13)
+NULL
+select timestampadd(year, c6, c13) from t1;
+timestampadd(year, c6, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c6, c14) from t1;
+timestampadd(second, c6, c14)
+NULL
+select timestampadd(year, c6, c14) from t1;
+timestampadd(year, c6, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c6, c15) from t1;
+timestampadd(second, c6, c15)
+NULL
+select timestampadd(year, c6, c15) from t1;
+timestampadd(year, c6, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c6, c16) from t1;
+timestampadd(second, c6, c16)
+NULL
+select timestampadd(year, c6, c16) from t1;
+timestampadd(year, c6, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c6, c17) from t1;
+timestampadd(second, c6, c17)
+NULL
+select timestampadd(year, c6, c17) from t1;
+timestampadd(year, c6, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c6, c18) from t1;
+timestampadd(second, c6, c18)
+NULL
+select timestampadd(year, c6, c18) from t1;
+timestampadd(year, c6, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c6, c19) from t1;
+timestampadd(second, c6, c19)
+2019-12-01 12:00:02
+select timestampadd(year, c6, c19) from t1;
+timestampadd(year, c6, c19)
+2021-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c6, c20) from t1;
+timestampadd(second, c6, c20)
+2019-12-03 06:00:02
+select timestampadd(year, c6, c20) from t1;
+timestampadd(year, c6, c20)
+2021-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c6, c21) from t1;
+timestampadd(second, c6, c21)
+NULL
+select timestampadd(year, c6, c21) from t1;
+timestampadd(year, c6, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c6, c22) from t1;
+timestampadd(second, c6, c22)
+NULL
+select timestampadd(year, c6, c22) from t1;
+timestampadd(year, c6, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c7, c1) from t1;
+timestampadd(second, c7, c1)
+NULL
+select timestampadd(year, c7, c1) from t1;
+timestampadd(year, c7, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c7, c2) from t1;
+timestampadd(second, c7, c2)
+NULL
+select timestampadd(year, c7, c2) from t1;
+timestampadd(year, c7, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c7, c3) from t1;
+timestampadd(second, c7, c3)
+NULL
+select timestampadd(year, c7, c3) from t1;
+timestampadd(year, c7, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c7, c4) from t1;
+timestampadd(second, c7, c4)
+NULL
+select timestampadd(year, c7, c4) from t1;
+timestampadd(year, c7, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c7, c5) from t1;
+timestampadd(second, c7, c5)
+NULL
+select timestampadd(year, c7, c5) from t1;
+timestampadd(year, c7, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c7, c6) from t1;
+timestampadd(second, c7, c6)
+NULL
+select timestampadd(year, c7, c6) from t1;
+timestampadd(year, c7, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c7, c7) from t1;
+timestampadd(second, c7, c7)
+NULL
+select timestampadd(year, c7, c7) from t1;
+timestampadd(year, c7, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c7, c8) from t1;
+timestampadd(second, c7, c8)
+NULL
+select timestampadd(year, c7, c8) from t1;
+timestampadd(year, c7, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c7, c9) from t1;
+timestampadd(second, c7, c9)
+NULL
+select timestampadd(year, c7, c9) from t1;
+timestampadd(year, c7, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c7, c10) from t1;
+timestampadd(second, c7, c10)
+NULL
+select timestampadd(year, c7, c10) from t1;
+timestampadd(year, c7, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c7, c11) from t1;
+timestampadd(second, c7, c11)
+NULL
+select timestampadd(year, c7, c11) from t1;
+timestampadd(year, c7, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c7, c12) from t1;
+timestampadd(second, c7, c12)
+NULL
+select timestampadd(year, c7, c12) from t1;
+timestampadd(year, c7, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c7, c13) from t1;
+timestampadd(second, c7, c13)
+NULL
+select timestampadd(year, c7, c13) from t1;
+timestampadd(year, c7, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c7, c14) from t1;
+timestampadd(second, c7, c14)
+NULL
+select timestampadd(year, c7, c14) from t1;
+timestampadd(year, c7, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c7, c15) from t1;
+timestampadd(second, c7, c15)
+NULL
+select timestampadd(year, c7, c15) from t1;
+timestampadd(year, c7, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c7, c16) from t1;
+timestampadd(second, c7, c16)
+NULL
+select timestampadd(year, c7, c16) from t1;
+timestampadd(year, c7, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c7, c17) from t1;
+timestampadd(second, c7, c17)
+NULL
+select timestampadd(year, c7, c17) from t1;
+timestampadd(year, c7, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c7, c18) from t1;
+timestampadd(second, c7, c18)
+NULL
+select timestampadd(year, c7, c18) from t1;
+timestampadd(year, c7, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c7, c19) from t1;
+timestampadd(second, c7, c19)
+2019-12-01 12:00:01
+select timestampadd(year, c7, c19) from t1;
+timestampadd(year, c7, c19)
+2020-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c7, c20) from t1;
+timestampadd(second, c7, c20)
+2019-12-03 06:00:01
+select timestampadd(year, c7, c20) from t1;
+timestampadd(year, c7, c20)
+2020-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c7, c21) from t1;
+timestampadd(second, c7, c21)
+NULL
+select timestampadd(year, c7, c21) from t1;
+timestampadd(year, c7, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c7, c22) from t1;
+timestampadd(second, c7, c22)
+NULL
+select timestampadd(year, c7, c22) from t1;
+timestampadd(year, c7, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c8, c1) from t1;
+timestampadd(second, c8, c1)
+NULL
+select timestampadd(year, c8, c1) from t1;
+timestampadd(year, c8, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c8, c2) from t1;
+timestampadd(second, c8, c2)
+NULL
+select timestampadd(year, c8, c2) from t1;
+timestampadd(year, c8, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c8, c3) from t1;
+timestampadd(second, c8, c3)
+NULL
+select timestampadd(year, c8, c3) from t1;
+timestampadd(year, c8, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c8, c4) from t1;
+timestampadd(second, c8, c4)
+NULL
+select timestampadd(year, c8, c4) from t1;
+timestampadd(year, c8, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c8, c5) from t1;
+timestampadd(second, c8, c5)
+NULL
+select timestampadd(year, c8, c5) from t1;
+timestampadd(year, c8, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c8, c6) from t1;
+timestampadd(second, c8, c6)
+NULL
+select timestampadd(year, c8, c6) from t1;
+timestampadd(year, c8, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c8, c7) from t1;
+timestampadd(second, c8, c7)
+NULL
+select timestampadd(year, c8, c7) from t1;
+timestampadd(year, c8, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c8, c8) from t1;
+timestampadd(second, c8, c8)
+NULL
+select timestampadd(year, c8, c8) from t1;
+timestampadd(year, c8, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c8, c9) from t1;
+timestampadd(second, c8, c9)
+NULL
+select timestampadd(year, c8, c9) from t1;
+timestampadd(year, c8, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c8, c10) from t1;
+timestampadd(second, c8, c10)
+NULL
+select timestampadd(year, c8, c10) from t1;
+timestampadd(year, c8, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c8, c11) from t1;
+timestampadd(second, c8, c11)
+NULL
+select timestampadd(year, c8, c11) from t1;
+timestampadd(year, c8, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c8, c12) from t1;
+timestampadd(second, c8, c12)
+NULL
+select timestampadd(year, c8, c12) from t1;
+timestampadd(year, c8, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c8, c13) from t1;
+timestampadd(second, c8, c13)
+NULL
+select timestampadd(year, c8, c13) from t1;
+timestampadd(year, c8, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c8, c14) from t1;
+timestampadd(second, c8, c14)
+NULL
+select timestampadd(year, c8, c14) from t1;
+timestampadd(year, c8, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c8, c15) from t1;
+timestampadd(second, c8, c15)
+NULL
+select timestampadd(year, c8, c15) from t1;
+timestampadd(year, c8, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c8, c16) from t1;
+timestampadd(second, c8, c16)
+NULL
+select timestampadd(year, c8, c16) from t1;
+timestampadd(year, c8, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c8, c17) from t1;
+timestampadd(second, c8, c17)
+NULL
+select timestampadd(year, c8, c17) from t1;
+timestampadd(year, c8, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c8, c18) from t1;
+timestampadd(second, c8, c18)
+NULL
+select timestampadd(year, c8, c18) from t1;
+timestampadd(year, c8, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c8, c19) from t1;
+timestampadd(second, c8, c19)
+2019-12-01 12:00:02
+select timestampadd(year, c8, c19) from t1;
+timestampadd(year, c8, c19)
+2021-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c8, c20) from t1;
+timestampadd(second, c8, c20)
+2019-12-03 06:00:02
+select timestampadd(year, c8, c20) from t1;
+timestampadd(year, c8, c20)
+2021-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c8, c21) from t1;
+timestampadd(second, c8, c21)
+NULL
+select timestampadd(year, c8, c21) from t1;
+timestampadd(year, c8, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c8, c22) from t1;
+timestampadd(second, c8, c22)
+NULL
+select timestampadd(year, c8, c22) from t1;
+timestampadd(year, c8, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c9, c1) from t1;
+timestampadd(second, c9, c1)
+NULL
+select timestampadd(year, c9, c1) from t1;
+timestampadd(year, c9, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c9, c2) from t1;
+timestampadd(second, c9, c2)
+NULL
+select timestampadd(year, c9, c2) from t1;
+timestampadd(year, c9, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c9, c3) from t1;
+timestampadd(second, c9, c3)
+NULL
+select timestampadd(year, c9, c3) from t1;
+timestampadd(year, c9, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c9, c4) from t1;
+timestampadd(second, c9, c4)
+NULL
+select timestampadd(year, c9, c4) from t1;
+timestampadd(year, c9, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c9, c5) from t1;
+timestampadd(second, c9, c5)
+NULL
+select timestampadd(year, c9, c5) from t1;
+timestampadd(year, c9, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c9, c6) from t1;
+timestampadd(second, c9, c6)
+NULL
+select timestampadd(year, c9, c6) from t1;
+timestampadd(year, c9, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c9, c7) from t1;
+timestampadd(second, c9, c7)
+NULL
+select timestampadd(year, c9, c7) from t1;
+timestampadd(year, c9, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c9, c8) from t1;
+timestampadd(second, c9, c8)
+NULL
+select timestampadd(year, c9, c8) from t1;
+timestampadd(year, c9, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c9, c9) from t1;
+timestampadd(second, c9, c9)
+NULL
+select timestampadd(year, c9, c9) from t1;
+timestampadd(year, c9, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c9, c10) from t1;
+timestampadd(second, c9, c10)
+NULL
+select timestampadd(year, c9, c10) from t1;
+timestampadd(year, c9, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c9, c11) from t1;
+timestampadd(second, c9, c11)
+NULL
+select timestampadd(year, c9, c11) from t1;
+timestampadd(year, c9, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c9, c12) from t1;
+timestampadd(second, c9, c12)
+NULL
+select timestampadd(year, c9, c12) from t1;
+timestampadd(year, c9, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c9, c13) from t1;
+timestampadd(second, c9, c13)
+NULL
+select timestampadd(year, c9, c13) from t1;
+timestampadd(year, c9, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c9, c14) from t1;
+timestampadd(second, c9, c14)
+NULL
+select timestampadd(year, c9, c14) from t1;
+timestampadd(year, c9, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c9, c15) from t1;
+timestampadd(second, c9, c15)
+NULL
+select timestampadd(year, c9, c15) from t1;
+timestampadd(year, c9, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c9, c16) from t1;
+timestampadd(second, c9, c16)
+NULL
+select timestampadd(year, c9, c16) from t1;
+timestampadd(year, c9, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c9, c17) from t1;
+timestampadd(second, c9, c17)
+NULL
+select timestampadd(year, c9, c17) from t1;
+timestampadd(year, c9, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c9, c18) from t1;
+timestampadd(second, c9, c18)
+NULL
+select timestampadd(year, c9, c18) from t1;
+timestampadd(year, c9, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c9, c19) from t1;
+timestampadd(second, c9, c19)
+2019-12-01 12:00:01
+select timestampadd(year, c9, c19) from t1;
+timestampadd(year, c9, c19)
+2020-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c9, c20) from t1;
+timestampadd(second, c9, c20)
+2019-12-03 06:00:01
+select timestampadd(year, c9, c20) from t1;
+timestampadd(year, c9, c20)
+2020-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c9, c21) from t1;
+timestampadd(second, c9, c21)
+NULL
+select timestampadd(year, c9, c21) from t1;
+timestampadd(year, c9, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c9, c22) from t1;
+timestampadd(second, c9, c22)
+NULL
+select timestampadd(year, c9, c22) from t1;
+timestampadd(year, c9, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c10, c1) from t1;
+timestampadd(second, c10, c1)
+NULL
+select timestampadd(year, c10, c1) from t1;
+timestampadd(year, c10, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c10, c2) from t1;
+timestampadd(second, c10, c2)
+NULL
+select timestampadd(year, c10, c2) from t1;
+timestampadd(year, c10, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c10, c3) from t1;
+timestampadd(second, c10, c3)
+NULL
+select timestampadd(year, c10, c3) from t1;
+timestampadd(year, c10, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c10, c4) from t1;
+timestampadd(second, c10, c4)
+NULL
+select timestampadd(year, c10, c4) from t1;
+timestampadd(year, c10, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c10, c5) from t1;
+timestampadd(second, c10, c5)
+NULL
+select timestampadd(year, c10, c5) from t1;
+timestampadd(year, c10, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c10, c6) from t1;
+timestampadd(second, c10, c6)
+NULL
+select timestampadd(year, c10, c6) from t1;
+timestampadd(year, c10, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c10, c7) from t1;
+timestampadd(second, c10, c7)
+NULL
+select timestampadd(year, c10, c7) from t1;
+timestampadd(year, c10, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c10, c8) from t1;
+timestampadd(second, c10, c8)
+NULL
+select timestampadd(year, c10, c8) from t1;
+timestampadd(year, c10, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c10, c9) from t1;
+timestampadd(second, c10, c9)
+NULL
+select timestampadd(year, c10, c9) from t1;
+timestampadd(year, c10, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c10, c10) from t1;
+timestampadd(second, c10, c10)
+NULL
+select timestampadd(year, c10, c10) from t1;
+timestampadd(year, c10, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c10, c11) from t1;
+timestampadd(second, c10, c11)
+NULL
+select timestampadd(year, c10, c11) from t1;
+timestampadd(year, c10, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c10, c12) from t1;
+timestampadd(second, c10, c12)
+NULL
+select timestampadd(year, c10, c12) from t1;
+timestampadd(year, c10, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c10, c13) from t1;
+timestampadd(second, c10, c13)
+NULL
+select timestampadd(year, c10, c13) from t1;
+timestampadd(year, c10, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c10, c14) from t1;
+timestampadd(second, c10, c14)
+NULL
+select timestampadd(year, c10, c14) from t1;
+timestampadd(year, c10, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c10, c15) from t1;
+timestampadd(second, c10, c15)
+NULL
+select timestampadd(year, c10, c15) from t1;
+timestampadd(year, c10, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c10, c16) from t1;
+timestampadd(second, c10, c16)
+NULL
+select timestampadd(year, c10, c16) from t1;
+timestampadd(year, c10, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c10, c17) from t1;
+timestampadd(second, c10, c17)
+NULL
+select timestampadd(year, c10, c17) from t1;
+timestampadd(year, c10, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c10, c18) from t1;
+timestampadd(second, c10, c18)
+NULL
+select timestampadd(year, c10, c18) from t1;
+timestampadd(year, c10, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c10, c19) from t1;
+timestampadd(second, c10, c19)
+2019-12-01 12:00:02
+select timestampadd(year, c10, c19) from t1;
+timestampadd(year, c10, c19)
+2021-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c10, c20) from t1;
+timestampadd(second, c10, c20)
+2019-12-03 06:00:02
+select timestampadd(year, c10, c20) from t1;
+timestampadd(year, c10, c20)
+2021-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c10, c21) from t1;
+timestampadd(second, c10, c21)
+NULL
+select timestampadd(year, c10, c21) from t1;
+timestampadd(year, c10, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c10, c22) from t1;
+timestampadd(second, c10, c22)
+NULL
+select timestampadd(year, c10, c22) from t1;
+timestampadd(year, c10, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c11, c1) from t1;
+timestampadd(second, c11, c1)
+NULL
+select timestampadd(year, c11, c1) from t1;
+timestampadd(year, c11, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c11, c2) from t1;
+timestampadd(second, c11, c2)
+NULL
+select timestampadd(year, c11, c2) from t1;
+timestampadd(year, c11, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c11, c3) from t1;
+timestampadd(second, c11, c3)
+NULL
+select timestampadd(year, c11, c3) from t1;
+timestampadd(year, c11, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c11, c4) from t1;
+timestampadd(second, c11, c4)
+NULL
+select timestampadd(year, c11, c4) from t1;
+timestampadd(year, c11, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c11, c5) from t1;
+timestampadd(second, c11, c5)
+NULL
+select timestampadd(year, c11, c5) from t1;
+timestampadd(year, c11, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c11, c6) from t1;
+timestampadd(second, c11, c6)
+NULL
+select timestampadd(year, c11, c6) from t1;
+timestampadd(year, c11, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c11, c7) from t1;
+timestampadd(second, c11, c7)
+NULL
+select timestampadd(year, c11, c7) from t1;
+timestampadd(year, c11, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c11, c8) from t1;
+timestampadd(second, c11, c8)
+NULL
+select timestampadd(year, c11, c8) from t1;
+timestampadd(year, c11, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c11, c9) from t1;
+timestampadd(second, c11, c9)
+NULL
+select timestampadd(year, c11, c9) from t1;
+timestampadd(year, c11, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c11, c10) from t1;
+timestampadd(second, c11, c10)
+NULL
+select timestampadd(year, c11, c10) from t1;
+timestampadd(year, c11, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c11, c11) from t1;
+timestampadd(second, c11, c11)
+NULL
+select timestampadd(year, c11, c11) from t1;
+timestampadd(year, c11, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c11, c12) from t1;
+timestampadd(second, c11, c12)
+NULL
+select timestampadd(year, c11, c12) from t1;
+timestampadd(year, c11, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c11, c13) from t1;
+timestampadd(second, c11, c13)
+NULL
+select timestampadd(year, c11, c13) from t1;
+timestampadd(year, c11, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c11, c14) from t1;
+timestampadd(second, c11, c14)
+NULL
+select timestampadd(year, c11, c14) from t1;
+timestampadd(year, c11, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c11, c15) from t1;
+timestampadd(second, c11, c15)
+NULL
+select timestampadd(year, c11, c15) from t1;
+timestampadd(year, c11, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c11, c16) from t1;
+timestampadd(second, c11, c16)
+NULL
+select timestampadd(year, c11, c16) from t1;
+timestampadd(year, c11, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c11, c17) from t1;
+timestampadd(second, c11, c17)
+NULL
+select timestampadd(year, c11, c17) from t1;
+timestampadd(year, c11, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c11, c18) from t1;
+timestampadd(second, c11, c18)
+NULL
+select timestampadd(year, c11, c18) from t1;
+timestampadd(year, c11, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c11, c19) from t1;
+timestampadd(second, c11, c19)
+2019-12-01 12:00:01
+select timestampadd(year, c11, c19) from t1;
+timestampadd(year, c11, c19)
+2020-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c11, c20) from t1;
+timestampadd(second, c11, c20)
+2019-12-03 06:00:01
+select timestampadd(year, c11, c20) from t1;
+timestampadd(year, c11, c20)
+2020-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c11, c21) from t1;
+timestampadd(second, c11, c21)
+NULL
+select timestampadd(year, c11, c21) from t1;
+timestampadd(year, c11, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c11, c22) from t1;
+timestampadd(second, c11, c22)
+NULL
+select timestampadd(year, c11, c22) from t1;
+timestampadd(year, c11, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c12, c1) from t1;
+timestampadd(second, c12, c1)
+NULL
+select timestampadd(year, c12, c1) from t1;
+timestampadd(year, c12, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c12, c2) from t1;
+timestampadd(second, c12, c2)
+NULL
+select timestampadd(year, c12, c2) from t1;
+timestampadd(year, c12, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c12, c3) from t1;
+timestampadd(second, c12, c3)
+NULL
+select timestampadd(year, c12, c3) from t1;
+timestampadd(year, c12, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c12, c4) from t1;
+timestampadd(second, c12, c4)
+NULL
+select timestampadd(year, c12, c4) from t1;
+timestampadd(year, c12, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c12, c5) from t1;
+timestampadd(second, c12, c5)
+NULL
+select timestampadd(year, c12, c5) from t1;
+timestampadd(year, c12, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c12, c6) from t1;
+timestampadd(second, c12, c6)
+NULL
+select timestampadd(year, c12, c6) from t1;
+timestampadd(year, c12, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c12, c7) from t1;
+timestampadd(second, c12, c7)
+NULL
+select timestampadd(year, c12, c7) from t1;
+timestampadd(year, c12, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c12, c8) from t1;
+timestampadd(second, c12, c8)
+NULL
+select timestampadd(year, c12, c8) from t1;
+timestampadd(year, c12, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c12, c9) from t1;
+timestampadd(second, c12, c9)
+NULL
+select timestampadd(year, c12, c9) from t1;
+timestampadd(year, c12, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c12, c10) from t1;
+timestampadd(second, c12, c10)
+NULL
+select timestampadd(year, c12, c10) from t1;
+timestampadd(year, c12, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c12, c11) from t1;
+timestampadd(second, c12, c11)
+NULL
+select timestampadd(year, c12, c11) from t1;
+timestampadd(year, c12, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c12, c12) from t1;
+timestampadd(second, c12, c12)
+NULL
+select timestampadd(year, c12, c12) from t1;
+timestampadd(year, c12, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c12, c13) from t1;
+timestampadd(second, c12, c13)
+NULL
+select timestampadd(year, c12, c13) from t1;
+timestampadd(year, c12, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c12, c14) from t1;
+timestampadd(second, c12, c14)
+NULL
+select timestampadd(year, c12, c14) from t1;
+timestampadd(year, c12, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c12, c15) from t1;
+timestampadd(second, c12, c15)
+NULL
+select timestampadd(year, c12, c15) from t1;
+timestampadd(year, c12, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c12, c16) from t1;
+timestampadd(second, c12, c16)
+NULL
+select timestampadd(year, c12, c16) from t1;
+timestampadd(year, c12, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c12, c17) from t1;
+timestampadd(second, c12, c17)
+NULL
+select timestampadd(year, c12, c17) from t1;
+timestampadd(year, c12, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c12, c18) from t1;
+timestampadd(second, c12, c18)
+NULL
+select timestampadd(year, c12, c18) from t1;
+timestampadd(year, c12, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c12, c19) from t1;
+timestampadd(second, c12, c19)
+2019-12-01 12:00:02
+select timestampadd(year, c12, c19) from t1;
+timestampadd(year, c12, c19)
+2021-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c12, c20) from t1;
+timestampadd(second, c12, c20)
+2019-12-03 06:00:02
+select timestampadd(year, c12, c20) from t1;
+timestampadd(year, c12, c20)
+2021-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c12, c21) from t1;
+timestampadd(second, c12, c21)
+NULL
+select timestampadd(year, c12, c21) from t1;
+timestampadd(year, c12, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c12, c22) from t1;
+timestampadd(second, c12, c22)
+NULL
+select timestampadd(year, c12, c22) from t1;
+timestampadd(year, c12, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c13, c1) from t1;
+timestampadd(second, c13, c1)
+NULL
+select timestampadd(year, c13, c1) from t1;
+timestampadd(year, c13, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c13, c2) from t1;
+timestampadd(second, c13, c2)
+NULL
+select timestampadd(year, c13, c2) from t1;
+timestampadd(year, c13, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c13, c3) from t1;
+timestampadd(second, c13, c3)
+NULL
+select timestampadd(year, c13, c3) from t1;
+timestampadd(year, c13, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c13, c4) from t1;
+timestampadd(second, c13, c4)
+NULL
+select timestampadd(year, c13, c4) from t1;
+timestampadd(year, c13, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c13, c5) from t1;
+timestampadd(second, c13, c5)
+NULL
+select timestampadd(year, c13, c5) from t1;
+timestampadd(year, c13, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c13, c6) from t1;
+timestampadd(second, c13, c6)
+NULL
+select timestampadd(year, c13, c6) from t1;
+timestampadd(year, c13, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c13, c7) from t1;
+timestampadd(second, c13, c7)
+NULL
+select timestampadd(year, c13, c7) from t1;
+timestampadd(year, c13, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c13, c8) from t1;
+timestampadd(second, c13, c8)
+NULL
+select timestampadd(year, c13, c8) from t1;
+timestampadd(year, c13, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c13, c9) from t1;
+timestampadd(second, c13, c9)
+NULL
+select timestampadd(year, c13, c9) from t1;
+timestampadd(year, c13, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c13, c10) from t1;
+timestampadd(second, c13, c10)
+NULL
+select timestampadd(year, c13, c10) from t1;
+timestampadd(year, c13, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c13, c11) from t1;
+timestampadd(second, c13, c11)
+NULL
+select timestampadd(year, c13, c11) from t1;
+timestampadd(year, c13, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c13, c12) from t1;
+timestampadd(second, c13, c12)
+NULL
+select timestampadd(year, c13, c12) from t1;
+timestampadd(year, c13, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c13, c13) from t1;
+timestampadd(second, c13, c13)
+NULL
+select timestampadd(year, c13, c13) from t1;
+timestampadd(year, c13, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c13, c14) from t1;
+timestampadd(second, c13, c14)
+NULL
+select timestampadd(year, c13, c14) from t1;
+timestampadd(year, c13, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c13, c15) from t1;
+timestampadd(second, c13, c15)
+NULL
+select timestampadd(year, c13, c15) from t1;
+timestampadd(year, c13, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c13, c16) from t1;
+timestampadd(second, c13, c16)
+NULL
+select timestampadd(year, c13, c16) from t1;
+timestampadd(year, c13, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c13, c17) from t1;
+timestampadd(second, c13, c17)
+NULL
+select timestampadd(year, c13, c17) from t1;
+timestampadd(year, c13, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c13, c18) from t1;
+timestampadd(second, c13, c18)
+NULL
+select timestampadd(year, c13, c18) from t1;
+timestampadd(year, c13, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c13, c19) from t1;
+timestampadd(second, c13, c19)
+2019-12-01 12:00:04
+select timestampadd(year, c13, c19) from t1;
+timestampadd(year, c13, c19)
+2023-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c13, c20) from t1;
+timestampadd(second, c13, c20)
+2019-12-03 06:00:04
+select timestampadd(year, c13, c20) from t1;
+timestampadd(year, c13, c20)
+2023-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c13, c21) from t1;
+timestampadd(second, c13, c21)
+NULL
+select timestampadd(year, c13, c21) from t1;
+timestampadd(year, c13, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c13, c22) from t1;
+timestampadd(second, c13, c22)
+NULL
+select timestampadd(year, c13, c22) from t1;
+timestampadd(year, c13, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c14, c1) from t1;
+timestampadd(second, c14, c1)
+NULL
+select timestampadd(year, c14, c1) from t1;
+timestampadd(year, c14, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c14, c2) from t1;
+timestampadd(second, c14, c2)
+NULL
+select timestampadd(year, c14, c2) from t1;
+timestampadd(year, c14, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c14, c3) from t1;
+timestampadd(second, c14, c3)
+NULL
+select timestampadd(year, c14, c3) from t1;
+timestampadd(year, c14, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c14, c4) from t1;
+timestampadd(second, c14, c4)
+NULL
+select timestampadd(year, c14, c4) from t1;
+timestampadd(year, c14, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c14, c5) from t1;
+timestampadd(second, c14, c5)
+NULL
+select timestampadd(year, c14, c5) from t1;
+timestampadd(year, c14, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c14, c6) from t1;
+timestampadd(second, c14, c6)
+NULL
+select timestampadd(year, c14, c6) from t1;
+timestampadd(year, c14, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c14, c7) from t1;
+timestampadd(second, c14, c7)
+NULL
+select timestampadd(year, c14, c7) from t1;
+timestampadd(year, c14, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c14, c8) from t1;
+timestampadd(second, c14, c8)
+NULL
+select timestampadd(year, c14, c8) from t1;
+timestampadd(year, c14, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c14, c9) from t1;
+timestampadd(second, c14, c9)
+NULL
+select timestampadd(year, c14, c9) from t1;
+timestampadd(year, c14, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c14, c10) from t1;
+timestampadd(second, c14, c10)
+NULL
+select timestampadd(year, c14, c10) from t1;
+timestampadd(year, c14, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c14, c11) from t1;
+timestampadd(second, c14, c11)
+NULL
+select timestampadd(year, c14, c11) from t1;
+timestampadd(year, c14, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c14, c12) from t1;
+timestampadd(second, c14, c12)
+NULL
+select timestampadd(year, c14, c12) from t1;
+timestampadd(year, c14, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c14, c13) from t1;
+timestampadd(second, c14, c13)
+NULL
+select timestampadd(year, c14, c13) from t1;
+timestampadd(year, c14, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c14, c14) from t1;
+timestampadd(second, c14, c14)
+NULL
+select timestampadd(year, c14, c14) from t1;
+timestampadd(year, c14, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c14, c15) from t1;
+timestampadd(second, c14, c15)
+NULL
+select timestampadd(year, c14, c15) from t1;
+timestampadd(year, c14, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c14, c16) from t1;
+timestampadd(second, c14, c16)
+NULL
+select timestampadd(year, c14, c16) from t1;
+timestampadd(year, c14, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c14, c17) from t1;
+timestampadd(second, c14, c17)
+NULL
+select timestampadd(year, c14, c17) from t1;
+timestampadd(year, c14, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c14, c18) from t1;
+timestampadd(second, c14, c18)
+NULL
+select timestampadd(year, c14, c18) from t1;
+timestampadd(year, c14, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c14, c19) from t1;
+timestampadd(second, c14, c19)
+2019-12-01 12:00:04
+select timestampadd(year, c14, c19) from t1;
+timestampadd(year, c14, c19)
+2023-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c14, c20) from t1;
+timestampadd(second, c14, c20)
+2019-12-03 06:00:04
+select timestampadd(year, c14, c20) from t1;
+timestampadd(year, c14, c20)
+2023-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c14, c21) from t1;
+timestampadd(second, c14, c21)
+NULL
+select timestampadd(year, c14, c21) from t1;
+timestampadd(year, c14, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c14, c22) from t1;
+timestampadd(second, c14, c22)
+NULL
+select timestampadd(year, c14, c22) from t1;
+timestampadd(year, c14, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c15, c1) from t1;
+timestampadd(second, c15, c1)
+NULL
+select timestampadd(year, c15, c1) from t1;
+timestampadd(year, c15, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c15, c2) from t1;
+timestampadd(second, c15, c2)
+NULL
+select timestampadd(year, c15, c2) from t1;
+timestampadd(year, c15, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c15, c3) from t1;
+timestampadd(second, c15, c3)
+NULL
+select timestampadd(year, c15, c3) from t1;
+timestampadd(year, c15, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c15, c4) from t1;
+timestampadd(second, c15, c4)
+NULL
+select timestampadd(year, c15, c4) from t1;
+timestampadd(year, c15, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c15, c5) from t1;
+timestampadd(second, c15, c5)
+NULL
+select timestampadd(year, c15, c5) from t1;
+timestampadd(year, c15, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c15, c6) from t1;
+timestampadd(second, c15, c6)
+NULL
+select timestampadd(year, c15, c6) from t1;
+timestampadd(year, c15, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c15, c7) from t1;
+timestampadd(second, c15, c7)
+NULL
+select timestampadd(year, c15, c7) from t1;
+timestampadd(year, c15, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c15, c8) from t1;
+timestampadd(second, c15, c8)
+NULL
+select timestampadd(year, c15, c8) from t1;
+timestampadd(year, c15, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c15, c9) from t1;
+timestampadd(second, c15, c9)
+NULL
+select timestampadd(year, c15, c9) from t1;
+timestampadd(year, c15, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c15, c10) from t1;
+timestampadd(second, c15, c10)
+NULL
+select timestampadd(year, c15, c10) from t1;
+timestampadd(year, c15, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c15, c11) from t1;
+timestampadd(second, c15, c11)
+NULL
+select timestampadd(year, c15, c11) from t1;
+timestampadd(year, c15, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c15, c12) from t1;
+timestampadd(second, c15, c12)
+NULL
+select timestampadd(year, c15, c12) from t1;
+timestampadd(year, c15, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c15, c13) from t1;
+timestampadd(second, c15, c13)
+NULL
+select timestampadd(year, c15, c13) from t1;
+timestampadd(year, c15, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c15, c14) from t1;
+timestampadd(second, c15, c14)
+NULL
+select timestampadd(year, c15, c14) from t1;
+timestampadd(year, c15, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c15, c15) from t1;
+timestampadd(second, c15, c15)
+NULL
+select timestampadd(year, c15, c15) from t1;
+timestampadd(year, c15, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c15, c16) from t1;
+timestampadd(second, c15, c16)
+NULL
+select timestampadd(year, c15, c16) from t1;
+timestampadd(year, c15, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c15, c17) from t1;
+timestampadd(second, c15, c17)
+NULL
+select timestampadd(year, c15, c17) from t1;
+timestampadd(year, c15, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c15, c18) from t1;
+timestampadd(second, c15, c18)
+NULL
+select timestampadd(year, c15, c18) from t1;
+timestampadd(year, c15, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c15, c19) from t1;
+timestampadd(second, c15, c19)
+2019-12-01 12:00:06
+select timestampadd(year, c15, c19) from t1;
+timestampadd(year, c15, c19)
+2025-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c15, c20) from t1;
+timestampadd(second, c15, c20)
+2019-12-03 06:00:06
+select timestampadd(year, c15, c20) from t1;
+timestampadd(year, c15, c20)
+2025-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c15, c21) from t1;
+timestampadd(second, c15, c21)
+NULL
+select timestampadd(year, c15, c21) from t1;
+timestampadd(year, c15, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c15, c22) from t1;
+timestampadd(second, c15, c22)
+NULL
+select timestampadd(year, c15, c22) from t1;
+timestampadd(year, c15, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c16, c1) from t1;
+timestampadd(second, c16, c1)
+NULL
+select timestampadd(year, c16, c1) from t1;
+timestampadd(year, c16, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c16, c2) from t1;
+timestampadd(second, c16, c2)
+NULL
+select timestampadd(year, c16, c2) from t1;
+timestampadd(year, c16, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c16, c3) from t1;
+timestampadd(second, c16, c3)
+NULL
+select timestampadd(year, c16, c3) from t1;
+timestampadd(year, c16, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c16, c4) from t1;
+timestampadd(second, c16, c4)
+NULL
+select timestampadd(year, c16, c4) from t1;
+timestampadd(year, c16, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c16, c5) from t1;
+timestampadd(second, c16, c5)
+NULL
+select timestampadd(year, c16, c5) from t1;
+timestampadd(year, c16, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c16, c6) from t1;
+timestampadd(second, c16, c6)
+NULL
+select timestampadd(year, c16, c6) from t1;
+timestampadd(year, c16, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c16, c7) from t1;
+timestampadd(second, c16, c7)
+NULL
+select timestampadd(year, c16, c7) from t1;
+timestampadd(year, c16, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c16, c8) from t1;
+timestampadd(second, c16, c8)
+NULL
+select timestampadd(year, c16, c8) from t1;
+timestampadd(year, c16, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c16, c9) from t1;
+timestampadd(second, c16, c9)
+NULL
+select timestampadd(year, c16, c9) from t1;
+timestampadd(year, c16, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c16, c10) from t1;
+timestampadd(second, c16, c10)
+NULL
+select timestampadd(year, c16, c10) from t1;
+timestampadd(year, c16, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c16, c11) from t1;
+timestampadd(second, c16, c11)
+NULL
+select timestampadd(year, c16, c11) from t1;
+timestampadd(year, c16, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c16, c12) from t1;
+timestampadd(second, c16, c12)
+NULL
+select timestampadd(year, c16, c12) from t1;
+timestampadd(year, c16, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c16, c13) from t1;
+timestampadd(second, c16, c13)
+NULL
+select timestampadd(year, c16, c13) from t1;
+timestampadd(year, c16, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c16, c14) from t1;
+timestampadd(second, c16, c14)
+NULL
+select timestampadd(year, c16, c14) from t1;
+timestampadd(year, c16, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c16, c15) from t1;
+timestampadd(second, c16, c15)
+NULL
+select timestampadd(year, c16, c15) from t1;
+timestampadd(year, c16, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c16, c16) from t1;
+timestampadd(second, c16, c16)
+NULL
+select timestampadd(year, c16, c16) from t1;
+timestampadd(year, c16, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c16, c17) from t1;
+timestampadd(second, c16, c17)
+NULL
+select timestampadd(year, c16, c17) from t1;
+timestampadd(year, c16, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c16, c18) from t1;
+timestampadd(second, c16, c18)
+NULL
+select timestampadd(year, c16, c18) from t1;
+timestampadd(year, c16, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c16, c19) from t1;
+timestampadd(second, c16, c19)
+2019-12-01 12:00:06
+select timestampadd(year, c16, c19) from t1;
+timestampadd(year, c16, c19)
+2025-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c16, c20) from t1;
+timestampadd(second, c16, c20)
+2019-12-03 06:00:06
+select timestampadd(year, c16, c20) from t1;
+timestampadd(year, c16, c20)
+2025-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c16, c21) from t1;
+timestampadd(second, c16, c21)
+NULL
+select timestampadd(year, c16, c21) from t1;
+timestampadd(year, c16, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c16, c22) from t1;
+timestampadd(second, c16, c22)
+NULL
+select timestampadd(year, c16, c22) from t1;
+timestampadd(year, c16, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c17, c1) from t1;
+timestampadd(second, c17, c1)
+NULL
+select timestampadd(year, c17, c1) from t1;
+timestampadd(year, c17, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c17, c2) from t1;
+timestampadd(second, c17, c2)
+NULL
+select timestampadd(year, c17, c2) from t1;
+timestampadd(year, c17, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c17, c3) from t1;
+timestampadd(second, c17, c3)
+NULL
+select timestampadd(year, c17, c3) from t1;
+timestampadd(year, c17, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c17, c4) from t1;
+timestampadd(second, c17, c4)
+NULL
+select timestampadd(year, c17, c4) from t1;
+timestampadd(year, c17, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c17, c5) from t1;
+timestampadd(second, c17, c5)
+NULL
+select timestampadd(year, c17, c5) from t1;
+timestampadd(year, c17, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c17, c6) from t1;
+timestampadd(second, c17, c6)
+NULL
+select timestampadd(year, c17, c6) from t1;
+timestampadd(year, c17, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c17, c7) from t1;
+timestampadd(second, c17, c7)
+NULL
+select timestampadd(year, c17, c7) from t1;
+timestampadd(year, c17, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c17, c8) from t1;
+timestampadd(second, c17, c8)
+NULL
+select timestampadd(year, c17, c8) from t1;
+timestampadd(year, c17, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c17, c9) from t1;
+timestampadd(second, c17, c9)
+NULL
+select timestampadd(year, c17, c9) from t1;
+timestampadd(year, c17, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c17, c10) from t1;
+timestampadd(second, c17, c10)
+NULL
+select timestampadd(year, c17, c10) from t1;
+timestampadd(year, c17, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c17, c11) from t1;
+timestampadd(second, c17, c11)
+NULL
+select timestampadd(year, c17, c11) from t1;
+timestampadd(year, c17, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c17, c12) from t1;
+timestampadd(second, c17, c12)
+NULL
+select timestampadd(year, c17, c12) from t1;
+timestampadd(year, c17, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c17, c13) from t1;
+timestampadd(second, c17, c13)
+NULL
+select timestampadd(year, c17, c13) from t1;
+timestampadd(year, c17, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c17, c14) from t1;
+timestampadd(second, c17, c14)
+NULL
+select timestampadd(year, c17, c14) from t1;
+timestampadd(year, c17, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c17, c15) from t1;
+timestampadd(second, c17, c15)
+NULL
+select timestampadd(year, c17, c15) from t1;
+timestampadd(year, c17, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c17, c16) from t1;
+timestampadd(second, c17, c16)
+NULL
+select timestampadd(year, c17, c16) from t1;
+timestampadd(year, c17, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c17, c17) from t1;
+timestampadd(second, c17, c17)
+NULL
+select timestampadd(year, c17, c17) from t1;
+timestampadd(year, c17, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c17, c18) from t1;
+timestampadd(second, c17, c18)
+NULL
+select timestampadd(year, c17, c18) from t1;
+timestampadd(year, c17, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c17, c19) from t1;
+timestampadd(second, c17, c19)
+2019-12-01 12:00:08
+select timestampadd(year, c17, c19) from t1;
+timestampadd(year, c17, c19)
+2027-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c17, c20) from t1;
+timestampadd(second, c17, c20)
+2019-12-03 06:00:08
+select timestampadd(year, c17, c20) from t1;
+timestampadd(year, c17, c20)
+2027-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c17, c21) from t1;
+timestampadd(second, c17, c21)
+NULL
+select timestampadd(year, c17, c21) from t1;
+timestampadd(year, c17, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c17, c22) from t1;
+timestampadd(second, c17, c22)
+NULL
+select timestampadd(year, c17, c22) from t1;
+timestampadd(year, c17, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c18, c1) from t1;
+timestampadd(second, c18, c1)
+NULL
+select timestampadd(year, c18, c1) from t1;
+timestampadd(year, c18, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c18, c2) from t1;
+timestampadd(second, c18, c2)
+NULL
+select timestampadd(year, c18, c2) from t1;
+timestampadd(year, c18, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c18, c3) from t1;
+timestampadd(second, c18, c3)
+NULL
+select timestampadd(year, c18, c3) from t1;
+timestampadd(year, c18, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c18, c4) from t1;
+timestampadd(second, c18, c4)
+NULL
+select timestampadd(year, c18, c4) from t1;
+timestampadd(year, c18, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c18, c5) from t1;
+timestampadd(second, c18, c5)
+NULL
+select timestampadd(year, c18, c5) from t1;
+timestampadd(year, c18, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c18, c6) from t1;
+timestampadd(second, c18, c6)
+NULL
+select timestampadd(year, c18, c6) from t1;
+timestampadd(year, c18, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c18, c7) from t1;
+timestampadd(second, c18, c7)
+NULL
+select timestampadd(year, c18, c7) from t1;
+timestampadd(year, c18, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c18, c8) from t1;
+timestampadd(second, c18, c8)
+NULL
+select timestampadd(year, c18, c8) from t1;
+timestampadd(year, c18, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c18, c9) from t1;
+timestampadd(second, c18, c9)
+NULL
+select timestampadd(year, c18, c9) from t1;
+timestampadd(year, c18, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c18, c10) from t1;
+timestampadd(second, c18, c10)
+NULL
+select timestampadd(year, c18, c10) from t1;
+timestampadd(year, c18, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c18, c11) from t1;
+timestampadd(second, c18, c11)
+NULL
+select timestampadd(year, c18, c11) from t1;
+timestampadd(year, c18, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c18, c12) from t1;
+timestampadd(second, c18, c12)
+NULL
+select timestampadd(year, c18, c12) from t1;
+timestampadd(year, c18, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c18, c13) from t1;
+timestampadd(second, c18, c13)
+NULL
+select timestampadd(year, c18, c13) from t1;
+timestampadd(year, c18, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c18, c14) from t1;
+timestampadd(second, c18, c14)
+NULL
+select timestampadd(year, c18, c14) from t1;
+timestampadd(year, c18, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c18, c15) from t1;
+timestampadd(second, c18, c15)
+NULL
+select timestampadd(year, c18, c15) from t1;
+timestampadd(year, c18, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c18, c16) from t1;
+timestampadd(second, c18, c16)
+NULL
+select timestampadd(year, c18, c16) from t1;
+timestampadd(year, c18, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c18, c17) from t1;
+timestampadd(second, c18, c17)
+NULL
+select timestampadd(year, c18, c17) from t1;
+timestampadd(year, c18, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c18, c18) from t1;
+timestampadd(second, c18, c18)
+NULL
+select timestampadd(year, c18, c18) from t1;
+timestampadd(year, c18, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c18, c19) from t1;
+timestampadd(second, c18, c19)
+2019-12-01 12:00:09
+select timestampadd(year, c18, c19) from t1;
+timestampadd(year, c18, c19)
+2028-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c18, c20) from t1;
+timestampadd(second, c18, c20)
+2019-12-03 06:00:09
+select timestampadd(year, c18, c20) from t1;
+timestampadd(year, c18, c20)
+2028-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c18, c21) from t1;
+timestampadd(second, c18, c21)
+NULL
+select timestampadd(year, c18, c21) from t1;
+timestampadd(year, c18, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c18, c22) from t1;
+timestampadd(second, c18, c22)
+NULL
+select timestampadd(year, c18, c22) from t1;
+timestampadd(year, c18, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c19, c1) from t1;
+timestampadd(second, c19, c1)
+NULL
+select timestampadd(year, c19, c1) from t1;
+timestampadd(year, c19, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c19, c2) from t1;
+timestampadd(second, c19, c2)
+NULL
+select timestampadd(year, c19, c2) from t1;
+timestampadd(year, c19, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c19, c3) from t1;
+timestampadd(second, c19, c3)
+NULL
+select timestampadd(year, c19, c3) from t1;
+timestampadd(year, c19, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c19, c4) from t1;
+timestampadd(second, c19, c4)
+NULL
+select timestampadd(year, c19, c4) from t1;
+timestampadd(year, c19, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c19, c5) from t1;
+timestampadd(second, c19, c5)
+NULL
+select timestampadd(year, c19, c5) from t1;
+timestampadd(year, c19, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c19, c6) from t1;
+timestampadd(second, c19, c6)
+NULL
+select timestampadd(year, c19, c6) from t1;
+timestampadd(year, c19, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c19, c7) from t1;
+timestampadd(second, c19, c7)
+NULL
+select timestampadd(year, c19, c7) from t1;
+timestampadd(year, c19, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c19, c8) from t1;
+timestampadd(second, c19, c8)
+NULL
+select timestampadd(year, c19, c8) from t1;
+timestampadd(year, c19, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c19, c9) from t1;
+timestampadd(second, c19, c9)
+NULL
+select timestampadd(year, c19, c9) from t1;
+timestampadd(year, c19, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c19, c10) from t1;
+timestampadd(second, c19, c10)
+NULL
+select timestampadd(year, c19, c10) from t1;
+timestampadd(year, c19, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c19, c11) from t1;
+timestampadd(second, c19, c11)
+NULL
+select timestampadd(year, c19, c11) from t1;
+timestampadd(year, c19, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c19, c12) from t1;
+timestampadd(second, c19, c12)
+NULL
+select timestampadd(year, c19, c12) from t1;
+timestampadd(year, c19, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c19, c13) from t1;
+timestampadd(second, c19, c13)
+NULL
+select timestampadd(year, c19, c13) from t1;
+timestampadd(year, c19, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c19, c14) from t1;
+timestampadd(second, c19, c14)
+NULL
+select timestampadd(year, c19, c14) from t1;
+timestampadd(year, c19, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c19, c15) from t1;
+timestampadd(second, c19, c15)
+NULL
+select timestampadd(year, c19, c15) from t1;
+timestampadd(year, c19, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c19, c16) from t1;
+timestampadd(second, c19, c16)
+NULL
+select timestampadd(year, c19, c16) from t1;
+timestampadd(year, c19, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c19, c17) from t1;
+timestampadd(second, c19, c17)
+NULL
+select timestampadd(year, c19, c17) from t1;
+timestampadd(year, c19, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c19, c18) from t1;
+timestampadd(second, c19, c18)
+NULL
+select timestampadd(year, c19, c18) from t1;
+timestampadd(year, c19, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c19, c19) from t1;
+timestampadd(second, c19, c19)
+NULL
+select timestampadd(year, c19, c19) from t1;
+timestampadd(year, c19, c19)
+NULL
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c19, c20) from t1;
+timestampadd(second, c19, c20)
+NULL
+select timestampadd(year, c19, c20) from t1;
+timestampadd(year, c19, c20)
+NULL
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c19, c21) from t1;
+timestampadd(second, c19, c21)
+NULL
+select timestampadd(year, c19, c21) from t1;
+timestampadd(year, c19, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c19, c22) from t1;
+timestampadd(second, c19, c22)
+NULL
+select timestampadd(year, c19, c22) from t1;
+timestampadd(year, c19, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c20, c1) from t1;
+timestampadd(second, c20, c1)
+NULL
+select timestampadd(year, c20, c1) from t1;
+timestampadd(year, c20, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c20, c2) from t1;
+timestampadd(second, c20, c2)
+NULL
+select timestampadd(year, c20, c2) from t1;
+timestampadd(year, c20, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c20, c3) from t1;
+timestampadd(second, c20, c3)
+NULL
+select timestampadd(year, c20, c3) from t1;
+timestampadd(year, c20, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c20, c4) from t1;
+timestampadd(second, c20, c4)
+NULL
+select timestampadd(year, c20, c4) from t1;
+timestampadd(year, c20, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c20, c5) from t1;
+timestampadd(second, c20, c5)
+NULL
+select timestampadd(year, c20, c5) from t1;
+timestampadd(year, c20, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c20, c6) from t1;
+timestampadd(second, c20, c6)
+NULL
+select timestampadd(year, c20, c6) from t1;
+timestampadd(year, c20, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c20, c7) from t1;
+timestampadd(second, c20, c7)
+NULL
+select timestampadd(year, c20, c7) from t1;
+timestampadd(year, c20, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c20, c8) from t1;
+timestampadd(second, c20, c8)
+NULL
+select timestampadd(year, c20, c8) from t1;
+timestampadd(year, c20, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c20, c9) from t1;
+timestampadd(second, c20, c9)
+NULL
+select timestampadd(year, c20, c9) from t1;
+timestampadd(year, c20, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c20, c10) from t1;
+timestampadd(second, c20, c10)
+NULL
+select timestampadd(year, c20, c10) from t1;
+timestampadd(year, c20, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c20, c11) from t1;
+timestampadd(second, c20, c11)
+NULL
+select timestampadd(year, c20, c11) from t1;
+timestampadd(year, c20, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c20, c12) from t1;
+timestampadd(second, c20, c12)
+NULL
+select timestampadd(year, c20, c12) from t1;
+timestampadd(year, c20, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c20, c13) from t1;
+timestampadd(second, c20, c13)
+NULL
+select timestampadd(year, c20, c13) from t1;
+timestampadd(year, c20, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c20, c14) from t1;
+timestampadd(second, c20, c14)
+NULL
+select timestampadd(year, c20, c14) from t1;
+timestampadd(year, c20, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c20, c15) from t1;
+timestampadd(second, c20, c15)
+NULL
+select timestampadd(year, c20, c15) from t1;
+timestampadd(year, c20, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c20, c16) from t1;
+timestampadd(second, c20, c16)
+NULL
+select timestampadd(year, c20, c16) from t1;
+timestampadd(year, c20, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c20, c17) from t1;
+timestampadd(second, c20, c17)
+NULL
+select timestampadd(year, c20, c17) from t1;
+timestampadd(year, c20, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c20, c18) from t1;
+timestampadd(second, c20, c18)
+NULL
+select timestampadd(year, c20, c18) from t1;
+timestampadd(year, c20, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c20, c19) from t1;
+timestampadd(second, c20, c19)
+NULL
+select timestampadd(year, c20, c19) from t1;
+timestampadd(year, c20, c19)
+NULL
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c20, c20) from t1;
+timestampadd(second, c20, c20)
+NULL
+select timestampadd(year, c20, c20) from t1;
+timestampadd(year, c20, c20)
+NULL
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c20, c21) from t1;
+timestampadd(second, c20, c21)
+NULL
+select timestampadd(year, c20, c21) from t1;
+timestampadd(year, c20, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c20, c22) from t1;
+timestampadd(second, c20, c22)
+NULL
+select timestampadd(year, c20, c22) from t1;
+timestampadd(year, c20, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c21, c1) from t1;
+timestampadd(second, c21, c1)
+NULL
+select timestampadd(year, c21, c1) from t1;
+timestampadd(year, c21, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c21, c2) from t1;
+timestampadd(second, c21, c2)
+NULL
+select timestampadd(year, c21, c2) from t1;
+timestampadd(year, c21, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c21, c3) from t1;
+timestampadd(second, c21, c3)
+NULL
+select timestampadd(year, c21, c3) from t1;
+timestampadd(year, c21, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c21, c4) from t1;
+timestampadd(second, c21, c4)
+NULL
+select timestampadd(year, c21, c4) from t1;
+timestampadd(year, c21, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c21, c5) from t1;
+timestampadd(second, c21, c5)
+NULL
+select timestampadd(year, c21, c5) from t1;
+timestampadd(year, c21, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c21, c6) from t1;
+timestampadd(second, c21, c6)
+NULL
+select timestampadd(year, c21, c6) from t1;
+timestampadd(year, c21, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c21, c7) from t1;
+timestampadd(second, c21, c7)
+NULL
+select timestampadd(year, c21, c7) from t1;
+timestampadd(year, c21, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c21, c8) from t1;
+timestampadd(second, c21, c8)
+NULL
+select timestampadd(year, c21, c8) from t1;
+timestampadd(year, c21, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c21, c9) from t1;
+timestampadd(second, c21, c9)
+NULL
+select timestampadd(year, c21, c9) from t1;
+timestampadd(year, c21, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c21, c10) from t1;
+timestampadd(second, c21, c10)
+NULL
+select timestampadd(year, c21, c10) from t1;
+timestampadd(year, c21, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c21, c11) from t1;
+timestampadd(second, c21, c11)
+NULL
+select timestampadd(year, c21, c11) from t1;
+timestampadd(year, c21, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c21, c12) from t1;
+timestampadd(second, c21, c12)
+NULL
+select timestampadd(year, c21, c12) from t1;
+timestampadd(year, c21, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c21, c13) from t1;
+timestampadd(second, c21, c13)
+NULL
+select timestampadd(year, c21, c13) from t1;
+timestampadd(year, c21, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c21, c14) from t1;
+timestampadd(second, c21, c14)
+NULL
+select timestampadd(year, c21, c14) from t1;
+timestampadd(year, c21, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c21, c15) from t1;
+timestampadd(second, c21, c15)
+NULL
+select timestampadd(year, c21, c15) from t1;
+timestampadd(year, c21, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c21, c16) from t1;
+timestampadd(second, c21, c16)
+NULL
+select timestampadd(year, c21, c16) from t1;
+timestampadd(year, c21, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c21, c17) from t1;
+timestampadd(second, c21, c17)
+NULL
+select timestampadd(year, c21, c17) from t1;
+timestampadd(year, c21, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c21, c18) from t1;
+timestampadd(second, c21, c18)
+NULL
+select timestampadd(year, c21, c18) from t1;
+timestampadd(year, c21, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c21, c19) from t1;
+timestampadd(second, c21, c19)
+2019-12-01 12:00:10
+select timestampadd(year, c21, c19) from t1;
+timestampadd(year, c21, c19)
+2029-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c21, c20) from t1;
+timestampadd(second, c21, c20)
+2019-12-03 06:00:10
+select timestampadd(year, c21, c20) from t1;
+timestampadd(year, c21, c20)
+2029-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c21, c21) from t1;
+timestampadd(second, c21, c21)
+NULL
+select timestampadd(year, c21, c21) from t1;
+timestampadd(year, c21, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c21, c22) from t1;
+timestampadd(second, c21, c22)
+NULL
+select timestampadd(year, c21, c22) from t1;
+timestampadd(year, c21, c22)
+NULL
+select timestampadd(second, null, c1) from t1;
+timestampadd(second, null, c1)
+NULL
+select timestampadd(second, c22, c1) from t1;
+timestampadd(second, c22, c1)
+NULL
+select timestampadd(year, c22, c1) from t1;
+timestampadd(year, c22, c1)
+NULL
+select timestampadd(second, null, c2) from t1;
+timestampadd(second, null, c2)
+NULL
+select timestampadd(second, c22, c2) from t1;
+timestampadd(second, c22, c2)
+NULL
+select timestampadd(year, c22, c2) from t1;
+timestampadd(year, c22, c2)
+NULL
+select timestampadd(second, null, c3) from t1;
+timestampadd(second, null, c3)
+NULL
+select timestampadd(second, c22, c3) from t1;
+timestampadd(second, c22, c3)
+NULL
+select timestampadd(year, c22, c3) from t1;
+timestampadd(year, c22, c3)
+NULL
+select timestampadd(second, null, c4) from t1;
+timestampadd(second, null, c4)
+NULL
+select timestampadd(second, c22, c4) from t1;
+timestampadd(second, c22, c4)
+NULL
+select timestampadd(year, c22, c4) from t1;
+timestampadd(year, c22, c4)
+NULL
+select timestampadd(second, null, c5) from t1;
+timestampadd(second, null, c5)
+NULL
+select timestampadd(second, c22, c5) from t1;
+timestampadd(second, c22, c5)
+NULL
+select timestampadd(year, c22, c5) from t1;
+timestampadd(year, c22, c5)
+NULL
+select timestampadd(second, null, c6) from t1;
+timestampadd(second, null, c6)
+NULL
+select timestampadd(second, c22, c6) from t1;
+timestampadd(second, c22, c6)
+NULL
+select timestampadd(year, c22, c6) from t1;
+timestampadd(year, c22, c6)
+NULL
+select timestampadd(second, null, c7) from t1;
+timestampadd(second, null, c7)
+NULL
+select timestampadd(second, c22, c7) from t1;
+timestampadd(second, c22, c7)
+NULL
+select timestampadd(year, c22, c7) from t1;
+timestampadd(year, c22, c7)
+NULL
+select timestampadd(second, null, c8) from t1;
+timestampadd(second, null, c8)
+NULL
+select timestampadd(second, c22, c8) from t1;
+timestampadd(second, c22, c8)
+NULL
+select timestampadd(year, c22, c8) from t1;
+timestampadd(year, c22, c8)
+NULL
+select timestampadd(second, null, c9) from t1;
+timestampadd(second, null, c9)
+NULL
+select timestampadd(second, c22, c9) from t1;
+timestampadd(second, c22, c9)
+NULL
+select timestampadd(year, c22, c9) from t1;
+timestampadd(year, c22, c9)
+NULL
+select timestampadd(second, null, c10) from t1;
+timestampadd(second, null, c10)
+NULL
+select timestampadd(second, c22, c10) from t1;
+timestampadd(second, c22, c10)
+NULL
+select timestampadd(year, c22, c10) from t1;
+timestampadd(year, c22, c10)
+NULL
+select timestampadd(second, null, c11) from t1;
+timestampadd(second, null, c11)
+NULL
+select timestampadd(second, c22, c11) from t1;
+timestampadd(second, c22, c11)
+NULL
+select timestampadd(year, c22, c11) from t1;
+timestampadd(year, c22, c11)
+NULL
+select timestampadd(second, null, c12) from t1;
+timestampadd(second, null, c12)
+NULL
+select timestampadd(second, c22, c12) from t1;
+timestampadd(second, c22, c12)
+NULL
+select timestampadd(year, c22, c12) from t1;
+timestampadd(year, c22, c12)
+NULL
+select timestampadd(second, null, c13) from t1;
+timestampadd(second, null, c13)
+NULL
+select timestampadd(second, c22, c13) from t1;
+timestampadd(second, c22, c13)
+NULL
+select timestampadd(year, c22, c13) from t1;
+timestampadd(year, c22, c13)
+NULL
+select timestampadd(second, null, c14) from t1;
+timestampadd(second, null, c14)
+NULL
+select timestampadd(second, c22, c14) from t1;
+timestampadd(second, c22, c14)
+NULL
+select timestampadd(year, c22, c14) from t1;
+timestampadd(year, c22, c14)
+NULL
+select timestampadd(second, null, c15) from t1;
+timestampadd(second, null, c15)
+NULL
+select timestampadd(second, c22, c15) from t1;
+timestampadd(second, c22, c15)
+NULL
+select timestampadd(year, c22, c15) from t1;
+timestampadd(year, c22, c15)
+NULL
+select timestampadd(second, null, c16) from t1;
+timestampadd(second, null, c16)
+NULL
+select timestampadd(second, c22, c16) from t1;
+timestampadd(second, c22, c16)
+NULL
+select timestampadd(year, c22, c16) from t1;
+timestampadd(year, c22, c16)
+NULL
+select timestampadd(second, null, c17) from t1;
+timestampadd(second, null, c17)
+NULL
+select timestampadd(second, c22, c17) from t1;
+timestampadd(second, c22, c17)
+NULL
+select timestampadd(year, c22, c17) from t1;
+timestampadd(year, c22, c17)
+NULL
+select timestampadd(second, null, c18) from t1;
+timestampadd(second, null, c18)
+NULL
+select timestampadd(second, c22, c18) from t1;
+timestampadd(second, c22, c18)
+NULL
+select timestampadd(year, c22, c18) from t1;
+timestampadd(year, c22, c18)
+NULL
+select timestampadd(second, null, c19) from t1;
+timestampadd(second, null, c19)
+NULL
+select timestampadd(second, c22, c19) from t1;
+timestampadd(second, c22, c19)
+2019-12-01 12:00:11
+select timestampadd(year, c22, c19) from t1;
+timestampadd(year, c22, c19)
+2030-12-01 12:00:00
+select timestampadd(second, null, c20) from t1;
+timestampadd(second, null, c20)
+NULL
+select timestampadd(second, c22, c20) from t1;
+timestampadd(second, c22, c20)
+2019-12-03 06:00:11
+select timestampadd(year, c22, c20) from t1;
+timestampadd(year, c22, c20)
+2030-12-03 06:00:00
+select timestampadd(second, null, c21) from t1;
+timestampadd(second, null, c21)
+NULL
+select timestampadd(second, c22, c21) from t1;
+timestampadd(second, c22, c21)
+NULL
+select timestampadd(year, c22, c21) from t1;
+timestampadd(year, c22, c21)
+NULL
+select timestampadd(second, null, c22) from t1;
+timestampadd(second, null, c22)
+NULL
+select timestampadd(second, c22, c22) from t1;
+timestampadd(second, c22, c22)
+NULL
+select timestampadd(year, c22, c22) from t1;
+timestampadd(year, c22, c22)
+NULL
+Case2: copied from timestampadd.test
+select timestampadd(second,NULL,NULL);
+timestampadd(second,NULL,NULL)
+NULL
+select timestampadd(second, 123,"2011-05-09 13:45:55");
+timestampadd(second, 123,"2011-05-09 13:45:55")
+2011-05-09 13:47:58
+select timestampadd(second, -123,"2011-05-09 13:45:55");
+timestampadd(second, -123,"2011-05-09 13:45:55")
+2011-05-09 13:43:52
+select timestampadd(second, 123, NULL);
+timestampadd(second, 123, NULL)
+NULL
+select timestampadd(second, 1,"2011-12-31 23:59:59");
+timestampadd(second, 1,"2011-12-31 23:59:59")
+2012-01-01 00:00:00
+select timestampadd(minute,46,"2011-05-09 13:45:55");
+timestampadd(minute,46,"2011-05-09 13:45:55")
+2011-05-09 14:31:55
+select timestampadd(minute,-46,"2010-05-09 13:45:55");
+timestampadd(minute,-46,"2010-05-09 13:45:55")
+2010-05-09 12:59:55
+select timestampadd(minute,45,"2011-05-09 13:45:55");
+timestampadd(minute,45,"2011-05-09 13:45:55")
+2011-05-09 14:30:55
+select timestampadd(minute,-45,"2010-05-09 13:45:55");
+timestampadd(minute,-45,"2010-05-09 13:45:55")
+2010-05-09 13:00:55
+select timestampadd(minute, 1,"2011-12-31 23:59:59");
+timestampadd(minute, 1,"2011-12-31 23:59:59")
+2012-01-01 00:00:59
+select timestampadd(hour,5,"2011-05-09 00:00:00");
+timestampadd(hour,5,"2011-05-09 00:00:00")
+2011-05-09 05:00:00
+select timestampadd(hour,-5,"2012-04-08 23:59:59");
+timestampadd(hour,-5,"2012-04-08 23:59:59")
+2012-04-08 18:59:59
+select timestampadd(hour, 1,"2011-12-31 23:59:59");
+timestampadd(hour, 1,"2011-12-31 23:59:59")
+2012-01-01 00:59:59
+select timestampadd(day,1,"2011-05-09 00:00:00");
+timestampadd(day,1,"2011-05-09 00:00:00")
+2011-05-10 00:00:00
+select timestampadd(day,-10,"2012-04-08 23:59:59");
+timestampadd(day,-10,"2012-04-08 23:59:59")
+2012-03-29 23:59:59
+select timestampadd(day, 1,"2011-12-31 23:59:59");
+timestampadd(day, 1,"2011-12-31 23:59:59")
+2012-01-01 23:59:59
+select timestampadd(week,1,"2011-05-09 00:00:00");
+timestampadd(week,1,"2011-05-09 00:00:00")
+2011-05-16 00:00:00
+select timestampadd(week,2,"2012-04-08 23:59:59");
+timestampadd(week,2,"2012-04-08 23:59:59")
+2012-04-22 23:59:59
+select timestampadd(week,3,"2011-05-09 00:00:00");
+timestampadd(week,3,"2011-05-09 00:00:00")
+2011-05-30 00:00:00
+select timestampadd(week,4,"2012-04-08 23:59:59");
+timestampadd(week,4,"2012-04-08 23:59:59")
+2012-05-06 23:59:59
+select timestampadd(week,-1,"2011-05-09 00:00:00");
+timestampadd(week,-1,"2011-05-09 00:00:00")
+2011-05-02 00:00:00
+select timestampadd(week,-2,"2012-04-08 23:59:59");
+timestampadd(week,-2,"2012-04-08 23:59:59")
+2012-03-25 23:59:59
+select timestampadd(week,-3,"2011-05-09 00:00:00");
+timestampadd(week,-3,"2011-05-09 00:00:00")
+2011-04-18 00:00:00
+select timestampadd(week,-4,"2012-04-08 23:59:59");
+timestampadd(week,-4,"2012-04-08 23:59:59")
+2012-03-11 23:59:59
+select timestampadd(week,1,"2011-12-25 00:00:00");
+timestampadd(week,1,"2011-12-25 00:00:00")
+2012-01-01 00:00:00
+select timestampadd(month,1,"2011-05-07 02:00:00");
+timestampadd(month,1,"2011-05-07 02:00:00")
+2011-06-07 02:00:00
+select timestampadd(month,3,"2011-10-07 01:11:11");
+timestampadd(month,3,"2011-10-07 01:11:11")
+2012-01-07 01:11:11
+select timestampadd(month,5,"2015-09-07 02:00:00");
+timestampadd(month,5,"2015-09-07 02:00:00")
+2016-02-07 02:00:00
+select timestampadd(month,-6,"2011-05-07 02:00:00");
+timestampadd(month,-6,"2011-05-07 02:00:00")
+2010-11-07 02:00:00
+select timestampadd(month,-12,"2011-10-07 01:11:11");
+timestampadd(month,-12,"2011-10-07 01:11:11")
+2010-10-07 01:11:11
+select timestampadd(month,-54,"2015-09-07 02:00:00");
+timestampadd(month,-54,"2015-09-07 02:00:00")
+2011-03-07 02:00:00
+select timestampadd(month,1,"2015-12-07 02:00:00");
+timestampadd(month,1,"2015-12-07 02:00:00")
+2016-01-07 02:00:00
+select timestampadd(quarter,1,"2015-05-09");
+timestampadd(quarter,1,"2015-05-09")
+2015-08-09 00:00:00
+select timestampadd(quarter,2,"2015-04-07");
+timestampadd(quarter,2,"2015-04-07")
+2015-10-07 00:00:00
+select timestampadd(quarter,3,"2015-05-07");
+timestampadd(quarter,3,"2015-05-07")
+2016-02-07 00:00:00
+select timestampadd(quarter,-1,"2015-05-09");
+timestampadd(quarter,-1,"2015-05-09")
+2015-02-09 00:00:00
+select timestampadd(quarter,-2,"2015-04-07");
+timestampadd(quarter,-2,"2015-04-07")
+2014-10-07 00:00:00
+select timestampadd(quarter,-3,"2015-05-07");
+timestampadd(quarter,-3,"2015-05-07")
+2014-08-07 00:00:00
+select timestampadd(quarter,1,"2015-11-07");
+timestampadd(quarter,1,"2015-11-07")
+2016-02-07 00:00:00
+select timestampadd(year,1,"2015-05-09");
+timestampadd(year,1,"2015-05-09")
+2016-05-09 00:00:00
+select timestampadd(year,2,"2015-04-07");
+timestampadd(year,2,"2015-04-07")
+2017-04-07 00:00:00
+select timestampadd(year,3,"2015-05-07");
+timestampadd(year,3,"2015-05-07")
+2018-05-07 00:00:00
+select timestampadd(year,-1,"2015-05-09");
+timestampadd(year,-1,"2015-05-09")
+2014-05-09 00:00:00
+select timestampadd(year,-2,"2015-04-07");
+timestampadd(year,-2,"2015-04-07")
+2013-04-07 00:00:00
+select timestampadd(year,-3,"2015-05-07");
+timestampadd(year,-3,"2015-05-07")
+2012-05-07 00:00:00
+select timestampadd(year,1,"2036-05-07");
+timestampadd(year,1,"2036-05-07")
+2037-05-07 00:00:00
+select timestampadd(second, 123456789,"2011-05-09 13:45:55");
+timestampadd(second, 123456789,"2011-05-09 13:45:55")
+2015-04-07 11:19:04
+select timestampadd(second, -123456789,"2011-05-09 13:45:55");
+timestampadd(second, -123456789,"2011-05-09 13:45:55")
+2007-06-10 16:12:46
+select timestampadd(second, 123456789, NULL);
+timestampadd(second, 123456789, NULL)
+NULL
+select timestampadd(minute,123456789,"2011-05-09 13:45:55");
+timestampadd(minute,123456789,"2011-05-09 13:45:55")
+2246-01-31 10:54:55
+select timestampadd(minute,-123456789,"2010-05-09 13:45:55");
+timestampadd(minute,-123456789,"2010-05-09 13:45:55")
+1775-08-15 16:36:55
+select timestampadd(minute,123456789,"2011-05-09 13:45:55");
+timestampadd(minute,123456789,"2011-05-09 13:45:55")
+2246-01-31 10:54:55
+select timestampadd(minute,-123456789,"2010-05-09 13:45:55");
+timestampadd(minute,-123456789,"2010-05-09 13:45:55")
+1775-08-15 16:36:55
+select timestampadd(hour,123456789,"2011-05-09 00:00:00");
+timestampadd(hour,123456789,"2011-05-09 00:00:00")
+NULL
+select timestampadd(hour,-123456789,"2012-04-08 23:59:59");
+timestampadd(hour,-123456789,"2012-04-08 23:59:59")
+NULL
+select timestampadd(day,123456789,"2011-05-09 00:00:00");
+timestampadd(day,123456789,"2011-05-09 00:00:00")
+NULL
+select timestampadd(day,-123456789,"2012-04-08 23:59:59");
+timestampadd(day,-123456789,"2012-04-08 23:59:59")
+NULL
+select timestampadd(week,123456789,"2011-05-09 00:00:00");
+timestampadd(week,123456789,"2011-05-09 00:00:00")
+NULL
+select timestampadd(week,123456789,"2012-04-08 23:59:59");
+timestampadd(week,123456789,"2012-04-08 23:59:59")
+NULL
+select timestampadd(week,123456789,"2011-05-09 00:00:00");
+timestampadd(week,123456789,"2011-05-09 00:00:00")
+NULL
+select timestampadd(week,123456789,"2012-04-08 23:59:59");
+timestampadd(week,123456789,"2012-04-08 23:59:59")
+NULL
+select timestampadd(week,-123456789,"2011-05-09 00:00:00");
+timestampadd(week,-123456789,"2011-05-09 00:00:00")
+NULL
+select timestampadd(week,-123456789,"2012-04-08 23:59:59");
+timestampadd(week,-123456789,"2012-04-08 23:59:59")
+NULL
+select timestampadd(week,-123456789,"2011-05-09 00:00:00");
+timestampadd(week,-123456789,"2011-05-09 00:00:00")
+NULL
+select timestampadd(week,-123456789,"2012-04-08 23:59:59");
+timestampadd(week,-123456789,"2012-04-08 23:59:59")
+NULL
+select timestampadd(month,123456789,"2011-05-07 02:00:00");
+timestampadd(month,123456789,"2011-05-07 02:00:00")
+NULL
+select timestampadd(month,123456789,"2011-10-07 01:11:11");
+timestampadd(month,123456789,"2011-10-07 01:11:11")
+NULL
+select timestampadd(month,123456789,"2015-09-07 02:00:00");
+timestampadd(month,123456789,"2015-09-07 02:00:00")
+NULL
+select timestampadd(month,-123456789,"2011-05-07 02:00:00");
+timestampadd(month,-123456789,"2011-05-07 02:00:00")
+NULL
+select timestampadd(month,-123456789,"2011-10-07 01:11:11");
+timestampadd(month,-123456789,"2011-10-07 01:11:11")
+NULL
+select timestampadd(month,-123456789,"2015-09-07 02:00:00");
+timestampadd(month,-123456789,"2015-09-07 02:00:00")
+NULL
+select timestampadd(quarter,123456789,"2015-05-09");
+timestampadd(quarter,123456789,"2015-05-09")
+NULL
+select timestampadd(quarter,123456789,"2015-04-07");
+timestampadd(quarter,123456789,"2015-04-07")
+NULL
+select timestampadd(quarter,123456789,"2015-05-07");
+timestampadd(quarter,123456789,"2015-05-07")
+NULL
+select timestampadd(quarter,-123456789,"2015-05-09");
+timestampadd(quarter,-123456789,"2015-05-09")
+NULL
+select timestampadd(quarter,-123456789,"2015-04-07");
+timestampadd(quarter,-123456789,"2015-04-07")
+NULL
+select timestampadd(quarter,-123456789,"2015-05-07");
+timestampadd(quarter,-123456789,"2015-05-07")
+NULL
+select timestampadd(year,123456789,"2015-05-09");
+timestampadd(year,123456789,"2015-05-09")
+NULL
+select timestampadd(year,123456789,"2015-04-07");
+timestampadd(year,123456789,"2015-04-07")
+NULL
+select timestampadd(year,123456789,"2015-05-07");
+timestampadd(year,123456789,"2015-05-07")
+NULL
+select timestampadd(year,-123456789,"2015-05-09");
+timestampadd(year,-123456789,"2015-05-09")
+NULL
+select timestampadd(year,-123456789,"2015-04-07");
+timestampadd(year,-123456789,"2015-04-07")
+NULL
+select timestampadd(year,-123456789,"2015-05-07");
+timestampadd(year,-123456789,"2015-05-07")
+NULL
+select timestampadd(year,1,"9999-05-07");
+timestampadd(year,1,"9999-05-07")
+NULL
+select timestampadd(year,1,"2036-05-07");
+timestampadd(year,1,"2036-05-07")
+2037-05-07 00:00:00
+set time_zone='-5:00';
+create table sb(a timestamp);
+insert into sb values ("2010-01-01 00:00:00");
+set time_zone='-5:00';
+alter system flush plan cache global;
+set @@ob_enable_plan_cache = 0;
+select timestampadd(hour,1,a) from sb;
+timestampadd(hour,1,a)
+2010-01-01 01:00:00
+select timestampadd(hour,-1,a) from sb;
+timestampadd(hour,-1,a)
+2009-12-31 23:00:00
+drop table sb;
+set time_zone='+6:00';
+create table sb(a datetime);
+insert into sb values ("2010-08-06 12:34:56");
+set time_zone='-7:00';
+alter system flush plan cache global;
+select timestampadd(hour,1,a) from sb;
+timestampadd(hour,1,a)
+2010-08-06 13:34:56
+select timestampadd(hour,-1,a) from sb;
+timestampadd(hour,-1,a)
+2010-08-06 11:34:56
+drop table sb;

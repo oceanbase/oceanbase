@@ -1,0 +1,8 @@
+function(set_unittest case)
+  ob_unittest(${ARGV})
+  target_sources(${case} PRIVATE ../join/ob_join_fake_table.h ../join/ob_join_fake_table.cpp)
+endfunction()
+sql_unittest(test_merge_intersect)
+sql_unittest(test_merge_except)
+sql_unittest(test_merge_union)
+ob_unittest(test_hash_set_dump test_hash_set_dump.cpp set_data_generator.h)

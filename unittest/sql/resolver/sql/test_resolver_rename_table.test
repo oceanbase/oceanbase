@@ -1,0 +1,11 @@
+drop database if exists rename_db;
+drop database if exists rename_to;
+create database rename_db;
+create database rename_to;
+use rename_db;
+create table t1(c1 int primary key,c2 int);
+create table t2(c1 int primary key,c2 varchar(30));
+rename table t1 to test,t2 to test2;
+#rename table rename_db.t1 to rename_to.test;
+
+rename table t1 to test,t2 to t1,test to t2;

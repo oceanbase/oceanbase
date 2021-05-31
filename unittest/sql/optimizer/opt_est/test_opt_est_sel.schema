@@ -1,0 +1,7 @@
+create database opt_est;
+use opt_est;
+create table t1(c1 int, c2 int, primary key(c1));
+create table t2(c1 int, c2 int, primary key(c1));
+create table t3(c1 varchar(20), c2 int, primary key(c1));
+create table t4(c1 datetime, c2 timestamp, c3 date, c4 time, c5 year, primary key(c1));
+create table t5(c1 decimal(20));

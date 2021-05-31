@@ -1,0 +1,172 @@
+drop database if exists farm;
+create database farm;
+use farm;
+create table customer
+(
+c_customer_sk             integer               not null,
+c_customer_id             char(16)              not null,
+c_current_cdemo_sk        integer                       ,
+c_current_hdemo_sk        integer                       ,
+c_current_addr_sk         integer                       ,
+c_first_shipto_date_sk    integer                       ,
+c_first_sales_date_sk     integer                       ,
+c_salutation              char(10)                      ,
+c_first_name              char(20)                      ,
+c_last_name               char(30)                      ,
+c_preferred_cust_flag     char(1)                       ,
+c_birth_day               integer                       ,
+c_birth_month             integer                       ,
+c_birth_year              integer                       ,
+c_birth_country           varchar(20)                   ,
+c_login                   char(13)                      ,
+c_email_address           char(50)                      ,
+c_last_review_date        char(10)                      ,
+primary key (c_customer_sk)
+);
+insert into customer values("1","AAAAAAAABAAAAAAA","980124","7135","32946","2452238","2452208","Mr.","Javier","Lewis","Y","9","12","1936","CHILE",NULL,"Javier.Lewis@VFAxlnZEvOx.org","2452508");
+insert into customer values("2","AAAAAAAACAAAAAAA","819667","1461","31655","2452318","2452288","Dr.","Amy","Moses","Y","9","4","1966","TOGO",NULL,"Amy.Moses@Ovk9KjHH.com","2452318");
+insert into customer values("3","AAAAAAAADAAAAAAA","1473522","6247","48572","2449130","2449100","Miss","Latisha","Hamilton","N","18","9","1979","NIUE",NULL,"Latisha.Hamilton@V.com","2452313");
+insert into customer values("4","AAAAAAAAEAAAAAAA","1703214","3986","39558","2450030","2450000","Dr.","Michael","White","N","7","6","1983","MEXICO",NULL,"Michael.White@i.org","2452361");
+insert into customer values("5","AAAAAAAAFAAAAAAA","953372","4470","36368","2449438","2449408","Sir","Robert","Moran","N","8","5","1956","FIJI",NULL,"Robert.Moran@Hh.edu","2452469");
+insert into customer values("6","AAAAAAAAGAAAAAAA","213219","6374","27082","2451883","2451853","Ms.","Brunilda","Sharp","N","4","12","1925","SURINAME",NULL,"Brunilda.Sharp@T3pylZEUQjm.org","2452430");
+insert into customer values("7","AAAAAAAAHAAAAAAA","68377","3219","44814","2451438","2451408","Ms.","Fonda","Wiles","Y","24","4","1985","GAMBIA",NULL,"Fonda.Wiles@S9KnyEtz9hv.org","2452360");
+insert into customer values("8","AAAAAAAAIAAAAAAA","1215897","2471","16598","2449406","2449376","Sir","Ollie","Shipman","N","26","12","1938","KOREA, REPUBLIC OF",NULL,"Ollie.Shipman@be.org","2452334");
+insert into customer values("9","AAAAAAAAJAAAAAAA","1168667","1404","49388","2452275","2452245","Sir","Karl","Gilbert","N","26","10","1966","MONTSERRAT",NULL,"Karl.Gilbert@Crg5KyP2IxX9C4d6.edu","2452454");
+insert into customer values("10","AAAAAAAAKAAAAAAA","1207553","5143","19580","2451353","2451323","Ms.","Albert","Brunson","N","15","10","1973","JORDAN",NULL,"Albert.Brunson@62.com","2452641");
+insert into customer values("11","AAAAAAAALAAAAAAA","1114415","6807","47999","2452288","2452258","Ms.","Betty","Williams","N","18","12","1963","BURKINA FASO",NULL,"Betty.Williams@xRtDqM1eLBVQNoYAJ.com","2452398");
+insert into customer values("12","AAAAAAAAMAAAAAAA","502141","6577","47366","2451039","2451009","Ms.","Margaret","Farias","N","2","6","1956","TURKMENISTAN",NULL,"Margaret.Farias@cb.edu","2452634");
+insert into customer values("13","AAAAAAAANAAAAAAA","1128748","2777","14006","2449658","2449628","Mrs.","Rosalinda","Grimes","N","1","3","1970","UKRAINE",NULL,"Rosalinda.Grimes@tC8pcU7Lt.edu","2452616");
+insert into customer values("14","AAAAAAAAOAAAAAAA","929344","892","6440","2450318","2450288","Mr.","Jack","Wilcox","N","30","3","1937","SLOVENIA",NULL,"Jack.Wilcox@Y3Etqyv3.org","2452641");
+insert into customer values("15","AAAAAAAAPAAAAAAA",NULL,"134","30469",NULL,"2449010","Ms.","Tonya",NULL,NULL,NULL,"12","1969",NULL,NULL,NULL,"2452376");
+insert into customer values("16","AAAAAAAAABAAAAAA","1196373","3014","29302","2451346","2451316","Dr.","Margie","Browning","N","24","12","1933","PHILIPPINES",NULL,"Margie.Browning@LM674NrE2.org","2452573");
+insert into customer values("17","AAAAAAAABBAAAAAA","707524","3876","2228","2451068","2451038","Dr.","Lee","Stovall","N","23","12","1972","PHILIPPINES",NULL,"Lee.Stovall@fqKC83UU0f.org","2452454");
+insert into customer values("18","AAAAAAAACBAAAAAA","1361151","6580","18456","2450041","2450011","Sir","Brad","Lynch","Y","1","9","1950","URUGUAY",NULL,"Brad.Lynch@nAbai.edu","2452549");
+insert into customer values("19","AAAAAAAADBAAAAAA","1161742","4238","45581","2449580","2449550","Dr.","Andre","Moore","N","20","10","1978","NICARAGUA",NULL,"Andre.Moore@cTZLGYi1ZJi.org","2452576");
+insert into customer values("20","AAAAAAAAEBAAAAAA","1185612","89","38966","2450965","2450935","Mr.","Stanton","Dallas","Y","17","5","1976","SWITZERLAND",NULL,"Stanton.Dallas@DBXgl18FGo.edu","2452334");
+insert into customer values("21","AAAAAAAAFBAAAAAA","442697","6538","25979","2451827","2451797","Miss","Naomi","Barnett","N","18","5","1956","BAHAMAS",NULL,"Naomi.Barnett@2T3V3OZOy4KBNAHsT.edu","2452433");
+insert into customer values("22","AAAAAAAAGBAAAAAA","490494","4504","40467","2451465","2451435","Sir","Victor","Martinez","N","21","12","1991","CAYMAN ISLANDS",NULL,"Victor.Martinez@fC.edu","2452529");
+insert into customer values("23","AAAAAAAAHBAAAAAA",NULL,"2107","686","2451012","2450982","Sir",NULL,"Garrison","N",NULL,"5",NULL,NULL,NULL,"Earl.Garrison@G3sM4P.com",NULL);
+insert into customer values("24","AAAAAAAAIBAAAAAA","17113","1102","14291","2450098","2450068","Dr.","Paul","Morris","Y","6","6","1951","GUINEA-BISSAU",NULL,"Paul.Morris@FMGalegqc3.com","2452499");
+insert into customer values("25","AAAAAAAAJBAAAAAA","476176","3278","25933","2449246","2449216","Miss","Nancy","Mccormick","N","6","10","1973","BAHAMAS",NULL,"Nancy.Mccormick@DA26I9ZArLF9rxJ6Z.edu","2452425");
+insert into customer values("26","AAAAAAAAKBAAAAAA","230278","1242","28206","2449816","2449786","Ms.","Monique","Baker","N","14","6","1991","MOROCCO",NULL,"Monique.Baker@9uEucNczY.org","2452356");
+insert into customer values("27","AAAAAAAALBAAAAAA","111621","835","16096","2450611","2450581","Dr.","Shawn","Prather","N","7","3","1972","PUERTO RICO",NULL,"Shawn.Prather@8BusRYegn6.org","2452353");
+insert into customer values("28","AAAAAAAAMBAAAAAA","889961","897","33480","2452615","2452585","Miss","Edith","Hernandez","Y","17","8","1959","C;ÔTE D'IVOIRE",NULL,"Edith.Hernandez@BNHL0k.com","2452631");
+insert into customer values("29","AAAAAAAANBAAAAAA","1634269","1204","44139","2452216","2452186","Ms.","Margaret","Collins","Y","25","8","1973","NETHERLANDS ANTILLES",NULL,"Margaret.Collins@9obPr3UV.org","2452496");
+insert into customer values("30","AAAAAAAAOBAAAAAA","84232","5869","45459","2449916","2449886","Dr.","Pamela","Luna","Y","4","7","1956","GUAM",NULL,"Pamela.Luna@QBGuhL36lnA.edu","2452410");
+insert into customer values("31","AAAAAAAAPBAAAAAA","1275120","5724","7128","2452054","2452024","Dr.","William","Craig","N","13","6","1964","SPAIN",NULL,"William.Craig@prVDE1E8AHc.org","2452336");
+insert into customer values("32","AAAAAAAAACAAAAAA","1369589","6163","48290","2449471","2449441","Dr.","Kenneth","Wood","N","2","8","1927","MOLDOVA, REPUBLIC OF",NULL,"Kenneth.Wood@RIA.edu","2452510");
+insert into customer values("33","AAAAAAAABCAAAAAA","1680761","5823","32438","2451572","2451542","Mrs.","Donna","Betts","Y","25","3","1958","FRANCE",NULL,"Donna.Betts@YJ14k.edu","2452455");
+insert into customer values("34","AAAAAAAACCAAAAAA",NULL,NULL,"37501","2452192","2452162",NULL,NULL,"Woods",NULL,NULL,NULL,NULL,NULL,NULL,"Brandon.Woods@hjKbf.edu","2452408");
+insert into customer values("35","AAAAAAAADCAAAAAA","339036","2057","32231","2451937","2451907","Dr.","Marie","Peterson","N","19","6","1953","KIRIBATI",NULL,"Marie.Peterson@1zg9tydFHafA5.com","2452581");
+insert into customer values("36","AAAAAAAAECAAAAAA","655414","2223","26585","2449222","2449192","Dr.","Anthony","Fisher","N","29","11","1968","KYRGYZSTAN",NULL,"Anthony.Fisher@jJrZfeDcz8P.com","2452470");
+insert into customer values("37","AAAAAAAAFCAAAAAA","827972","2281","12943","2449848","2449818","Dr.","Dwight","Schneider","Y","9","1","1949","RUSSIAN FEDERATION",NULL,"Dwight.Schneider@koxO7zAysvOd.com","2452293");
+insert into customer values("38","AAAAAAAAGCAAAAAA","766645","3879","36360","2450323","2450293","Mrs.","Ha","Carpenter","Y","30","3","1939","PARAGUAY",NULL,"Ha.Carpenter@XgcUt4svNz.com","2452351");
+insert into customer values("39","AAAAAAAAHCAAAAAA","1617182","4013","22844","2452131","2452101","Sir","Neil","Cox","N","14","12","1951","ECUADOR",NULL,"Neil.Cox@FRuR2bFK.com","2452586");
+insert into customer values("40","AAAAAAAAICAAAAAA","1795301",NULL,"21045","2451159",NULL,NULL,"Jacqueline","Hatfield",NULL,"26",NULL,"1942",NULL,NULL,NULL,NULL);
+insert into customer values("41","AAAAAAAAJCAAAAAA","941420","5068","18316","2449989","2449959","Miss","Maxine","Carlson","N","26","6","1939","ISLE OF MAN",NULL,"Maxine.Carlson@StyP5lAokmQ29QHYMLa.edu","2452464");
+insert into customer values("42","AAAAAAAAKCAAAAAA","1867377","3327","11277","2449869","2449839","Dr.","Deborah","Burton","N","17","1","1950","COMOROS",NULL,"Deborah.Burton@xt.edu","2452498");
+insert into customer values("43","AAAAAAAALCAAAAAA","385562","3676","43743","2451705","2451675","Mr.","William","Warner","Y","5","12","1965","GUAM",NULL,"William.Warner@zegnrzurU.org","2452537");
+insert into customer values("44","AAAAAAAAMCAAAAAA","497758","5427","32296","2449750","2449720","Miss","Mabel","Richmond","Y","7","12","1932","CAMBODIA",NULL,"Mabel.Richmond@Tkla.edu","2452333");
+insert into customer values("45","AAAAAAAANCAAAAAA","1036174","2399","19777","2451118","2451088",NULL,NULL,"Hammonds",NULL,"5",NULL,NULL,"NIGER",NULL,NULL,NULL);
+insert into customer values("46","AAAAAAAAOCAAAAAA","843672","4729","21386","2451857","2451827","Mrs.","Jane","Stephenson","Y","13","4","1990","TURKEY",NULL,"Jane.Stephenson@lq8ZQLAUMZhR.edu","2452301");
+insert into customer values("47","AAAAAAAAPCAAAAAA","1634314","5368","38469","2449165","2449135","Mr.","Luis","Young","N","3","12","1982","BRUNEI DARUSSALAM",NULL,"Luis.Young@0DmV.edu","2452586");
+insert into customer values("48","AAAAAAAAADAAAAAA","8817","311","38252","2449531","2449501","Ms.","Jill","Jackson","N","15","9","1961","LUXEMBOURG",NULL,"Jill.Jackson@n6I7SF.org","2452575");
+insert into customer values("49","AAAAAAAABDAAAAAA","936800","1514","20581","2449364","2449334","Mr.","Steven","Venable","N","13","6","1961","NETHERLANDS ANTILLES",NULL,"Steven.Venable@0hA90vhfK7k9F4h.com","2452350");
+insert into customer values("50","AAAAAAAACDAAAAAA","759177","72","32567","2449384","2449354","Mr.","Christopher","Eller","N","24","11","1965","AUSTRALIA",NULL,"Christopher.Eller@gV5Ua7HOmt.com","2452520");
+select * from
+(select *,
+row_number() over(partition by nv order by c_customer_sk) as rn
+from
+(select c_birth_month, c_birth_year, c_customer_sk, c_first_name,
+group_concat(c_customer_sk) over w2,
+ntile(10) over w3 as nv
+from customer
+window w as (partition by c_birth_month),
+w2 as (w order by c_birth_year, c_customer_sk),
+w3 as (order by c_customer_sk)
+) v
+) v
+where rn = 1;
+c_birth_month	c_birth_year	c_customer_sk	c_first_name	group_concat(c_customer_sk) over w2	nv	rn
+12	1936	1	Javier	6,44,16,1	1	1
+12	1925	6	Brunilda	6	2	1
+12	1963	11	Betty	6,44,16,1,8,39,11	3	1
+12	1933	16	Margie	6,44,16	4	1
+5	1956	21	Naomi	23,5,21	5	1
+6	1991	26	Monique	41,24,35,12,49,31,4,26	6	1
+6	1964	31	William	41,24,35,12,49,31	7	1
+11	1968	36	Anthony	50,36	8	1
+6	1939	41	Maxine	41	9	1
+4	1990	46	Jane	2,7,46	10	1
+select c_birth_month, c_birth_year, c_customer_sk, c_first_name,
+count(1) over w,
+max(c_birth_year) over w,
+min(c_birth_year) over w,
+cast(avg(c_birth_year) over w as number(10, 4)),
+sum(c_birth_month) over w,
+row_number() over w2,
+rank() over w2,
+dense_rank() over w2,
+cast(percent_rank() over w2 as number(10, 4)),
+cast(cume_dist() over w2 as number(10, 4)),
+first_value(c_first_name) over w2,
+last_value(c_first_name) over w2,
+nth_value(c_first_name, 1) over w2,
+ntile(10) over w2,
+lead(c_first_name, 2) over w2,
+lag(c_first_name, 2) over w2
+from customer
+window w as (partition by c_birth_month),
+w2 as (w order by c_birth_year, c_customer_sk);
+c_birth_month	c_birth_year	c_customer_sk	c_first_name	count(1) over w	max(c_birth_year) over w	min(c_birth_year) over w	cast(avg(c_birth_year) over w as number(10, 4))	sum(c_birth_month) over w	row_number() over w2	rank() over w2	dense_rank() over w2	cast(percent_rank() over w2 as number(10, 4))	cast(cume_dist() over w2 as number(10, 4))	first_value(c_first_name) over w2	last_value(c_first_name) over w2	nth_value(c_first_name, 1) over w2	ntile(10) over w2	lead(c_first_name, 2) over w2	lag(c_first_name, 2) over w2
+NULL	NULL	34	NULL	3	1942	1942	1942.0000	NULL	1	1	1	0.0000	0.3333	NULL	NULL	NULL	1	Jacqueline	NULL
+NULL	NULL	45	NULL	3	1942	1942	1942.0000	NULL	2	2	2	0.5000	0.6667	NULL	NULL	NULL	2	NULL	NULL
+NULL	1942	40	Jacqueline	3	1942	1942	1942.0000	NULL	3	3	3	1.0000	1.0000	NULL	Jacqueline	NULL	3	NULL	NULL
+1	1949	37	Dwight	2	1950	1949	1949.5000	2	1	1	1	0.0000	0.5000	Dwight	Dwight	Dwight	1	NULL	NULL
+1	1950	42	Deborah	2	1950	1949	1949.5000	2	2	2	2	1.0000	1.0000	Dwight	Deborah	Dwight	2	NULL	NULL
+3	1937	14	Jack	5	1972	1937	1955.2000	15	1	1	1	0.0000	0.2000	Jack	Jack	Jack	1	Donna	NULL
+3	1939	38	Ha	5	1972	1937	1955.2000	15	2	2	2	0.2500	0.4000	Jack	Ha	Jack	2	Rosalinda	NULL
+3	1958	33	Donna	5	1972	1937	1955.2000	15	3	3	3	0.5000	0.6000	Jack	Donna	Jack	3	Shawn	Jack
+3	1970	13	Rosalinda	5	1972	1937	1955.2000	15	4	4	4	0.7500	0.8000	Jack	Rosalinda	Jack	4	NULL	Ha
+3	1972	27	Shawn	5	1972	1937	1955.2000	15	5	5	5	1.0000	1.0000	Jack	Shawn	Jack	5	NULL	Donna
+4	1966	2	Amy	3	1990	1966	1980.3333	12	1	1	1	0.0000	0.3333	Amy	Amy	Amy	1	Jane	NULL
+4	1985	7	Fonda	3	1990	1966	1980.3333	12	2	2	2	0.5000	0.6667	Amy	Fonda	Amy	2	NULL	NULL
+4	1990	46	Jane	3	1990	1966	1980.3333	12	3	3	3	1.0000	1.0000	Amy	Jane	Amy	3	NULL	Amy
+5	NULL	23	NULL	4	1976	1956	1962.6667	20	1	1	1	0.0000	0.2500	NULL	NULL	NULL	1	Naomi	NULL
+5	1956	5	Robert	4	1976	1956	1962.6667	20	2	2	2	0.3333	0.5000	NULL	Robert	NULL	2	Stanton	NULL
+5	1956	21	Naomi	4	1976	1956	1962.6667	20	3	3	3	0.6667	0.7500	NULL	Naomi	NULL	3	NULL	NULL
+5	1976	20	Stanton	4	1976	1956	1962.6667	20	4	4	4	1.0000	1.0000	NULL	Stanton	NULL	4	NULL	Robert
+6	1939	41	Maxine	8	1991	1939	1962.2500	48	1	1	1	0.0000	0.1250	Maxine	Maxine	Maxine	1	Marie	NULL
+6	1951	24	Paul	8	1991	1939	1962.2500	48	2	2	2	0.1429	0.2500	Maxine	Paul	Maxine	2	Margaret	NULL
+6	1953	35	Marie	8	1991	1939	1962.2500	48	3	3	3	0.2857	0.3750	Maxine	Marie	Maxine	3	Steven	Maxine
+6	1956	12	Margaret	8	1991	1939	1962.2500	48	4	4	4	0.4286	0.5000	Maxine	Margaret	Maxine	4	William	Paul
+6	1961	49	Steven	8	1991	1939	1962.2500	48	5	5	5	0.5714	0.6250	Maxine	Steven	Maxine	5	Michael	Marie
+6	1964	31	William	8	1991	1939	1962.2500	48	6	6	6	0.7143	0.7500	Maxine	William	Maxine	6	Monique	Margaret
+6	1983	4	Michael	8	1991	1939	1962.2500	48	7	7	7	0.8571	0.8750	Maxine	Michael	Maxine	7	NULL	Steven
+6	1991	26	Monique	8	1991	1939	1962.2500	48	8	8	8	1.0000	1.0000	Maxine	Monique	Maxine	8	NULL	William
+7	1956	30	Pamela	1	1956	1956	1956.0000	7	1	1	1	0.0000	1.0000	Pamela	Pamela	Pamela	1	NULL	NULL
+8	1927	32	Kenneth	3	1973	1927	1953.0000	24	1	1	1	0.0000	0.3333	Kenneth	Kenneth	Kenneth	1	Margaret	NULL
+8	1959	28	Edith	3	1973	1927	1953.0000	24	2	2	2	0.5000	0.6667	Kenneth	Edith	Kenneth	2	NULL	NULL
+8	1973	29	Margaret	3	1973	1927	1953.0000	24	3	3	3	1.0000	1.0000	Kenneth	Margaret	Kenneth	3	NULL	Kenneth
+9	1950	18	Brad	3	1979	1950	1963.3333	27	1	1	1	0.0000	0.3333	Brad	Brad	Brad	1	Latisha	NULL
+9	1961	48	Jill	3	1979	1950	1963.3333	27	2	2	2	0.5000	0.6667	Brad	Jill	Brad	2	NULL	NULL
+9	1979	3	Latisha	3	1979	1950	1963.3333	27	3	3	3	1.0000	1.0000	Brad	Latisha	Brad	3	NULL	Brad
+10	1966	9	Karl	4	1978	1966	1972.5000	40	1	1	1	0.0000	0.2500	Karl	Karl	Karl	1	Nancy	NULL
+10	1973	10	Albert	4	1978	1966	1972.5000	40	2	2	2	0.3333	0.5000	Karl	Albert	Karl	2	Andre	NULL
+10	1973	25	Nancy	4	1978	1966	1972.5000	40	3	3	3	0.6667	0.7500	Karl	Nancy	Karl	3	NULL	Karl
+10	1978	19	Andre	4	1978	1966	1972.5000	40	4	4	4	1.0000	1.0000	Karl	Andre	Karl	4	NULL	Albert
+11	1965	50	Christopher	2	1968	1965	1966.5000	22	1	1	1	0.0000	0.5000	Christopher	Christopher	Christopher	1	NULL	NULL
+11	1968	36	Anthony	2	1968	1965	1966.5000	22	2	2	2	1.0000	1.0000	Christopher	Anthony	Christopher	2	NULL	NULL
+12	1925	6	Brunilda	12	1991	1925	1954.7500	144	1	1	1	0.0000	0.0833	Brunilda	Brunilda	Brunilda	1	Margie	NULL
+12	1932	44	Mabel	12	1991	1925	1954.7500	144	2	2	2	0.0909	0.1667	Brunilda	Mabel	Brunilda	1	Javier	NULL
+12	1933	16	Margie	12	1991	1925	1954.7500	144	3	3	3	0.1818	0.2500	Brunilda	Margie	Brunilda	2	Ollie	Brunilda
+12	1936	1	Javier	12	1991	1925	1954.7500	144	4	4	4	0.2727	0.3333	Brunilda	Javier	Brunilda	2	Neil	Mabel
+12	1938	8	Ollie	12	1991	1925	1954.7500	144	5	5	5	0.3636	0.4167	Brunilda	Ollie	Brunilda	3	Betty	Margie
+12	1951	39	Neil	12	1991	1925	1954.7500	144	6	6	6	0.4545	0.5000	Brunilda	Neil	Brunilda	4	William	Javier
+12	1963	11	Betty	12	1991	1925	1954.7500	144	7	7	7	0.5455	0.5833	Brunilda	Betty	Brunilda	5	Tonya	Ollie
+12	1965	43	William	12	1991	1925	1954.7500	144	8	8	8	0.6364	0.6667	Brunilda	William	Brunilda	6	Lee	Neil
+12	1969	15	Tonya	12	1991	1925	1954.7500	144	9	9	9	0.7273	0.7500	Brunilda	Tonya	Brunilda	7	Luis	Betty
+12	1972	17	Lee	12	1991	1925	1954.7500	144	10	10	10	0.8182	0.8333	Brunilda	Lee	Brunilda	8	Victor	William
+12	1982	47	Luis	12	1991	1925	1954.7500	144	11	11	11	0.9091	0.9167	Brunilda	Luis	Brunilda	9	NULL	Tonya
+12	1991	22	Victor	12	1991	1925	1954.7500	144	12	12	12	1.0000	1.0000	Brunilda	Victor	Brunilda	10	NULL	Lee
+drop database if exists farm;

@@ -1,0 +1,38 @@
+{
+    "zones":
+    [
+	{
+	    "zone": "SZ",
+	    "region": "shengzhen"
+	}
+    ],
+    "servers":
+    [
+	{
+	    "server":"192.168.2.1",
+	    "zone":"SZ",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100000000000
+	    }
+	},
+	{
+	    "server":"192.168.2.2",
+	    "zone":"SZ",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100000000000
+	    }
+	}
+    ],
+    "units":
+    [
+	{"tenant":"t1", "cpu": 20, "memory": 1100000000, "zone": "SZ", "on_servers": ["192.168.2.1", "192.168.2.2"]},
+	{"tenant":"t2", "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]},
+	{"tenant":"t3", "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]},
+	{"tenant":"t4", "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]},
+	{"tenant":"t5", "cpu": 10, "memory": 2000000000, "zone": "SZ","on_servers": ["192.168.2.1"]}
+    ]
+}

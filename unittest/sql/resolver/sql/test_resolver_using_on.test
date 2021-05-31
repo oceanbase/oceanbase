@@ -1,0 +1,56 @@
+drop database if exists dbdml;
+create database dbdml;
+use dbdml;
+
+drop table if exists tjuo1,tjuo2,tjuo3;
+create table tjuo1 (pk int,c1 int, primary key(pk));
+create table tjuo2 (pk int,c1 int, c2 int, primary key(pk));
+create table tjuo3 (pk int,c2 int, primary key(pk));
+insert into tjuo1 values(1, 11), (2, 12), (3, 13);
+insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
+insert into tjuo3 values(7, 21), (8, 22), (9, 23);
+select * from tjuo1; select * from tjuo2; select * from tjuo3;
+
+# expected same filter as
+# SELECT * FROM tjuo1 JOIN tjuo2 on tjuo1.c1=tjuo2.c1 JOIN tjuo3 on tjuo2.c2=tjuo3.c2;
+#
+SELECT * FROM tjuo1 JOIN tjuo2 USING (c1) JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 JOIN tjuo2 USING (c1) LEFT JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 JOIN tjuo2 USING (c1) RIGHT JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 JOIN tjuo2 USING (c1) FULL JOIN tjuo3 USING (c2);
+
+SELECT * FROM tjuo1 RIGHT JOIN tjuo2 USING (c1) JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 RIGHT JOIN tjuo2 USING (c1) LEFT JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 RIGHT JOIN tjuo2 USING (c1) RIGHT JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 RIGHT JOIN tjuo2 USING (c1) FULL JOIN tjuo3 USING (c2);
+
+SELECT * FROM tjuo1 LEFT JOIN tjuo2 USING (c1) JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 LEFT JOIN tjuo2 USING (c1) LEFT JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 LEFT JOIN tjuo2 USING (c1) RIGHT JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 LEFT JOIN tjuo2 USING (c1) FULL JOIN tjuo3 USING (c2);
+
+SELECT * FROM tjuo1 FULL JOIN tjuo2 USING (c1)  JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 FULL JOIN tjuo2 USING (c1) LEFT JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 FULL JOIN tjuo2 USING (c1) RIGHT JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 FULL JOIN tjuo2 USING (c1) FULL JOIN tjuo3 USING (c2);
+
+--error 5217
+SELECT * FROM tjuo1 JOIN tjuo2 USING (pk) JOIN tjuo3 USING (c1);
+--error 5217
+SELECT * FROM tjuo1 LEFT JOIN tjuo2 USING (pk) RIGHT JOIN tjuo3 USING (c1);
+--error 5217
+SELECT * FROM tjuo1 RIGHT JOIN tjuo2 USING (pk) LEFT JOIN tjuo3 USING (c1);
+--error 5217
+SELECT * FROM tjuo1 RIGHT JOIN tjuo2 USING (pk) FULL JOIN tjuo3 USING (c1);
+
+
+# sub-query
+SELECT * FROM tjuo1 LEFT JOIN (SELECT * FROM tjuo2) as tjuo2_alias USING (c1) RIGHT JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 RIGHT JOIN (SELECT * FROM tjuo2) as tjuo2_alias USING (c1) RIGHT JOIN tjuo3 USING (c2);
+SELECT * FROM tjuo1 RIGHT JOIN (SELECT * FROM tjuo2) as tjuo2_alias USING (c1) LEFT JOIN tjuo3 USING (c2);
+
+SELECT * FROM tjuo1 LEFT JOIN (SELECT * FROM tjuo2) as tjuo2_alias USING (c1) RIGHT JOIN (select * from tjuo3) as tjuo3_alias USING (c2);
+SELECT * FROM tjuo1 RIGHT JOIN (SELECT * FROM tjuo2) as tjuo2_alias USING (c1) RIGHT JOIN (select * from tjuo3) as tjuo3_alias USING (c2);
+SELECT * FROM tjuo1 RIGHT JOIN (SELECT * FROM tjuo2) as tjuo2_alias USING (c1) LEFT JOIN (select * from tjuo3) as tjuo3_alias USING (c2);
+
+drop database dbdml;

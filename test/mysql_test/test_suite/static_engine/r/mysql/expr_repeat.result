@@ -1,0 +1,44 @@
+connect  syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection syscon;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select repeat("abc", -1);
+repeat("abc", -1)
+
+select repeat("abc", 0);
+repeat("abc", 0)
+
+select repeat("abc", 1);
+repeat("abc", 1)
+abc
+select repeat("abc", 2);
+repeat("abc", 2)
+abcabc
+select repeat("abc", 3);
+repeat("abc", 3)
+abcabcabc
+select repeat("abc", "2.1");
+repeat("abc", "2.1")
+abcabc
+select repeat("abc", "2.9");
+repeat("abc", "2.9")
+abcabc
+select repeat("", 2);
+repeat("", 2)
+
+select repeat(NULL, 2);
+repeat(NULL, 2)
+NULL
+select repeat("abc", NULL);
+repeat("abc", NULL)
+NULL
+select repeat(1.414, 1);
+repeat(1.414, 1)
+1.414
+select repeat(1.414, 2);
+repeat(1.414, 2)
+1.4141.414
+select repeat("abc", 200000000);
+repeat("abc", 200000000)
+NULL
+connection syscon;

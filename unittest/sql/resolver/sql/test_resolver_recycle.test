@@ -1,0 +1,7 @@
+
+purge table t1;
+
+purge database db1;
+purge schema db1;
+
+purge tenant tenant1;

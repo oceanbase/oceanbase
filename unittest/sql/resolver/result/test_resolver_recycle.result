@@ -1,0 +1,36 @@
+***************   Case 1   ***************
+purge table t1;
+{
+  "stmt_type":136,
+  "purge_table_arg": {
+    "tenant_id":1,
+    "table_name":"t1"
+  }
+}
+***************   Case 2   ***************
+purge database db1;
+{
+  "stmt_type":135,
+  "purge_db_arg": {
+    "tenant_id":1,
+    "db_name":"db1"
+  }
+}
+***************   Case 3   ***************
+purge schema db1;
+{
+  "stmt_type":135,
+  "purge_db_arg": {
+    "tenant_id":1,
+    "db_name":"db1"
+  }
+}
+***************   Case 4   ***************
+purge tenant tenant1;
+{
+  "stmt_type":134,
+  "purge_tenant_arg": {
+    "tenant_id":1,
+    "tenant_name":"tenant1"
+  }
+}

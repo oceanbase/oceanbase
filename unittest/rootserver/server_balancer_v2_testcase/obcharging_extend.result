@@ -1,0 +1,48 @@
+Zone: zone1
+Server: "192.168.2.1:8888"
+CPU: 24.500000(0.395161)
+MEM: 173946175488.000000(0.501548)
+UNITS:
+    {unit_id:1002, unit_config:1002, cpu:6.000000, mem:42949672960.000000}
+    {unit_id:1003, unit_config:1003, cpu:6.000000, mem:42949672960.000000}
+    {unit_id:1007, unit_config:1007, cpu:6.000000, mem:42949672960.000000}
+    {unit_id:1012, unit_config:1012, cpu:3.000000, mem:21474836480.000000}
+    {unit_id:1015, unit_config:1015, cpu:3.000000, mem:21474836480.000000}
+    {unit_id:1021, unit_config:1021, cpu:0.250000, mem:1073741824.000000}
+    {unit_id:1022, unit_config:1022, cpu:0.250000, mem:1073741824.000000}
+Server: "192.168.2.2:8888"
+CPU: 21.750000(0.350806)
+MEM: 153545080832.000000(0.442724)
+UNITS:
+    {unit_id:1004, unit_config:1004, cpu:6.000000, mem:42949672960.000000}
+    {unit_id:1005, unit_config:1005, cpu:6.000000, mem:42949672960.000000}
+    {unit_id:1011, unit_config:1011, cpu:3.000000, mem:21474836480.000000}
+    {unit_id:1013, unit_config:1013, cpu:3.000000, mem:21474836480.000000}
+    {unit_id:1018, unit_config:1018, cpu:3.000000, mem:21474836480.000000}
+    {unit_id:1028, unit_config:1028, cpu:0.250000, mem:1073741824.000000}
+    {unit_id:1029, unit_config:1029, cpu:0.250000, mem:1073741824.000000}
+    {unit_id:1030, unit_config:1030, cpu:0.250000, mem:1073741824.000000}
+Server: "192.168.2.3:8888"
+CPU: 21.750000(0.350806)
+MEM: 175019917312.000000(0.504644)
+UNITS:
+    {unit_id:1001, unit_config:1001, cpu:6.000000, mem:64424509440.000000}
+    {unit_id:1006, unit_config:1006, cpu:6.000000, mem:42949672960.000000}
+    {unit_id:1014, unit_config:1014, cpu:3.000000, mem:21474836480.000000}
+    {unit_id:1017, unit_config:1017, cpu:3.000000, mem:21474836480.000000}
+    {unit_id:1020, unit_config:1020, cpu:3.000000, mem:21474836480.000000}
+    {unit_id:1023, unit_config:1023, cpu:0.250000, mem:1073741824.000000}
+    {unit_id:1024, unit_config:1024, cpu:0.250000, mem:1073741824.000000}
+    {unit_id:1025, unit_config:1025, cpu:0.250000, mem:1073741824.000000}
+Server: "192.168.2.4:8888"
+CPU: 24.500000(0.395161)
+MEM: 173946175488.000000(0.501548)
+UNITS:
+    {unit_id:1008, unit_config:1008, cpu:6.000000, mem:42949672960.000000}
+    {unit_id:1009, unit_config:1009, cpu:6.000000, mem:42949672960.000000}
+    {unit_id:1010, unit_config:1010, cpu:6.000000, mem:42949672960.000000}
+    {unit_id:1016, unit_config:1016, cpu:3.000000, mem:21474836480.000000}
+    {unit_id:1019, unit_config:1019, cpu:3.000000, mem:21474836480.000000}
+    {unit_id:1026, unit_config:1026, cpu:0.250000, mem:1073741824.000000}
+    {unit_id:1027, unit_config:1027, cpu:0.250000, mem:1073741824.000000}
+

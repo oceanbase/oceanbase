@@ -1,0 +1,1561 @@
+drop database if exists hualong;
+create database hualong;
+use hualong;
+create table other(c1 int primary key, c2 int, c3 int,
+key idx_c2(c2),
+key idx_c3(c3),
+key idx_c2_c3(c2,c3),
+key idx_c3_c2(c3,c2));
+CREATE TABLE `skyline_int` (
+`tenant_id` varchar(8) NOT NULL ,
+`id` int NOT NULL,
+`v1` int NOT NULL,
+`v2` int NOT NULL,
+`v3` int NOT NULL,
+`v4` int NOT NULL,
+`v5` int NOT NULL,
+`v6` int NOT NULL,
+`gmt_create` timestamp NOT NULL,
+`gmt_modified` timestamp NOT NULL,
+PRIMARY KEY (v1, tenant_id),
+KEY `idx_tenant_id` (tenant_id),
+KEY `idx_v2` (v2),
+KEY `idx_v2_v3` (v2, v3),
+KEY `idx_v3_v2` (v3, v2),
+KEY `idx_v2_v3_v4` (v2, v3, v4),
+KEY `idx_v3_v4_v2` (v3, v4, v2),
+KEY `idx_v4_v2_v3` (v4, v2, v3),
+KEY `idx_v2_v3_v4_v5` (v2, v3, v4, v5),
+KEY `idx_v3_v4_v5_v2` (v3, v4, v5, v2),
+KEY `idx_v4_v5_v2_v3` (v4, v5, v2, v3),
+KEY `idx_v5_v2_v3_v4` (v5, v2, v3, v4),
+KEY `idx_v2_v3_v4_v5_v6` (v2, v3, v4, v5, v6),
+KEY `idx_v3_v4_v5_v6_v2` (v3, v4, v5, v6, v2),
+KEY `idx_v4_v5_v6_v2_v3` (v4, v5, v6, v2, v3),
+KEY `idx_v5_v6_v2_v3_v4` (v5, v6, v2, v3, v4),
+KEY `idx_v6_v2_v3_v4_v5` (v6, v2, v3, v4, v5));
+explain select v1, tenant_id from skyline_int group by v3 order by v3;
+Query Plan
+==========================================================
+|ID|OPERATOR      |NAME                  |EST. ROWS|COST |
+----------------------------------------------------------
+|0 |MERGE GROUP BY|                      |101      |60075|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v2)|100000   |37900|
+==========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3]), partitions(p0)
+
+explain select v1, tenant_id from skyline_int group by v3, v4 order by v3;
+Query Plan
+=============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST |
+-------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |10001    |75014|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v2)|100000   |44467|
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
+
+explain select v1, tenant_id from skyline_int group by v4, v3 order by v3;
+Query Plan
+=============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST |
+-------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |10001    |75014|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v2)|100000   |44467|
+=============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
+
+explain select v1, tenant_id from skyline_int group by v3, v4, v5 order by v3;
+Query Plan
+================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST |
+----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |100000   |89953|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|100000   |51034|
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v1, tenant_id from skyline_int group by v3, v5, v4 order by v3;
+Query Plan
+================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST |
+----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |100000   |89953|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|100000   |51034|
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
+
+explain select v1, tenant_id, v6 from skyline_int group by v3, v5, v4 order by v3;
+Query Plan
+===================================================================
+|ID|OPERATOR      |NAME                           |EST. ROWS|COST |
+-------------------------------------------------------------------
+|0 |MERGE GROUP BY|                               |100000   |96520|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v6_v2)|100000   |57600|
+===================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
+
+explain select v1, tenant_id from skyline_int group by v4, v3, v5 order by v3;
+Query Plan
+================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST |
+----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |100000   |89953|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|100000   |51034|
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
+
+explain select v1, tenant_id from skyline_int group by v4, v5, v3 order by v3;
+Query Plan
+================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST |
+----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |100000   |89953|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|100000   |51034|
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), partitions(p0)
+
+explain select v1, tenant_id from skyline_int group by v5, v3, v4 order by v3;
+Query Plan
+================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST |
+----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |100000   |89953|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|100000   |51034|
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
+
+explain select v1, tenant_id from skyline_int group by v5, v4, v3 order by v3;
+Query Plan
+================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST |
+----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |100000   |89953|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|100000   |51034|
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
+
+explain select sum(v1), tenant_id from skyline_int group by v6, v5, v4, v3 having sum(v1) > 100 order by v3;
+Query Plan
+====================================================================
+|ID|OPERATOR      |NAME                           |EST. ROWS|COST  |
+--------------------------------------------------------------------
+|0 |MERGE GROUP BY|                               |5000     |110191|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v6_v2)|100000   |57600 |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_SUM(skyline_int.v1)], [skyline_int.tenant_id]), filter([T_FUN_SUM(skyline_int.v1) > ?]), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), agg_func([T_FUN_SUM(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), partitions(p0)
+
+group by will decide which index to use
+explain select max(v1), tenant_id from skyline_int join other on v4 = c1 and v3 = c2 and v2 = c3 group by v3, v2;
+Query Plan
+==============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |10001    |244757|
+|1 | MERGE JOIN   |                         |95100    |210668|
+|2 |  TABLE SCAN  |skyline_int(idx_v2_v3_v4)|100000   |46673 |
+|3 |  TABLE SCAN  |other(idx_c3_c2)         |100000   |64066 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v2], [skyline_int.v3]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v2], [skyline_int.v3]), filter(nil), 
+      equal_conds([skyline_int.v2 = other.c3], [skyline_int.v3 = other.c2], [skyline_int.v4 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c1], [other.c2], [other.c3]), filter(nil), 
+      access([other.c1], [other.c2], [other.c3]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c1 and v2 = c3 group by v3, v4, v2;
+Query Plan
+==============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |101      |236795|
+|1 | MERGE JOIN   |                         |95100    |210668|
+|2 |  TABLE SCAN  |skyline_int(idx_v4_v2_v3)|100000   |46673 |
+|3 |  TABLE SCAN  |other                    |100000   |64066 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1], [skyline_int.v2 = other.c3], [skyline_int.v3 = other.c2]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c2], [other.c1], [other.c3]), filter(nil), 
+      access([other.c2], [other.c1], [other.c3]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v3;
+Query Plan
+==============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |101      |236795|
+|1 | MERGE JOIN   |                         |95100    |210668|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|100000   |46673 |
+|3 |  TABLE SCAN  |other(idx_c2_c3)         |100000   |64066 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v2 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c2], [other.c3], [other.c1]), filter(nil), 
+      access([other.c2], [other.c3], [other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v3, v4;
+Query Plan
+==============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |10001    |244757|
+|1 | MERGE JOIN   |                         |95100    |210668|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|100000   |46673 |
+|3 |  TABLE SCAN  |other(idx_c2_c3)         |100000   |64066 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v2 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c2], [other.c3], [other.c1]), filter(nil), 
+      access([other.c2], [other.c3], [other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v4, v3;
+Query Plan
+==============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |10001    |244757|
+|1 | MERGE JOIN   |                         |95100    |210668|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|100000   |46673 |
+|3 |  TABLE SCAN  |other(idx_c2_c3)         |100000   |64066 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v2 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c2], [other.c3], [other.c1]), filter(nil), 
+      access([other.c2], [other.c3], [other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v2 = c1 group by v4, v3;
+Query Plan
+==============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |10001    |244757|
+|1 | MERGE JOIN   |                         |95100    |210668|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|100000   |46673 |
+|3 |  TABLE SCAN  |other(idx_c2_c3)         |100000   |64066 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v2 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c3], [other.c2], [other.c1]), filter(nil), 
+      access([other.c3], [other.c2], [other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v2 = c1 group by v4, v3 order by c2, c3;
+Query Plan
+==============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |10001    |244757|
+|1 | MERGE JOIN   |                         |95100    |210668|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|100000   |46673 |
+|3 |  TABLE SCAN  |other(idx_c2_c3)         |100000   |64066 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v2 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c3], [other.c2], [other.c1]), filter(nil), 
+      access([other.c3], [other.c2], [other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c1 and v2 = c2 group by v2, v4;
+Query Plan
+==============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |10001    |244757|
+|1 | MERGE JOIN   |                         |95100    |210668|
+|2 |  TABLE SCAN  |skyline_int(idx_v4_v2_v3)|100000   |46673 |
+|3 |  TABLE SCAN  |other(idx_c3_c2)         |100000   |64066 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v2]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v2]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c3], [skyline_int.v2 = other.c2], [skyline_int.v3 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v3], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c3], [other.c1], [other.c2]), filter(nil), 
+      access([other.c3], [other.c1], [other.c2]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3;
+Query Plan
+=================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |101      |241156|
+|1 | MERGE JOIN   |                            |95100    |215029|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|3 |  TABLE SCAN  |other(idx_c2_c3)            |100000   |64066 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v5 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c2], [other.c3], [other.c1]), filter(nil), 
+      access([other.c2], [other.c3], [other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v5 = c1 group by v3;
+Query Plan
+=================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |101      |241156|
+|1 | MERGE JOIN   |                            |95100    |215029|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|3 |  TABLE SCAN  |other(idx_c2_c3)            |100000   |64066 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v5 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c3], [other.c2], [other.c1]), filter(nil), 
+      access([other.c3], [other.c2], [other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3, v4;
+Query Plan
+=================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |10001    |249118|
+|1 | MERGE JOIN   |                            |95100    |215029|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|3 |  TABLE SCAN  |other(idx_c2_c3)            |100000   |64066 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v5 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c2], [other.c3], [other.c1]), filter(nil), 
+      access([other.c2], [other.c3], [other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v5 = c1 and v4 = c3 and v3 = c2 group by v4, v3;
+Query Plan
+=================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |10001    |249118|
+|1 | MERGE JOIN   |                            |95100    |215029|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|3 |  TABLE SCAN  |other(idx_c2_c3)            |100000   |64066 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v5 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v5], [skyline_int.v4], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c1], [other.c3], [other.c2]), filter(nil), 
+      access([other.c1], [other.c3], [other.c2]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3, v4, v5;
+Query Plan
+================================================================
+|ID|OPERATOR     |NAME                        |EST. ROWS|COST  |
+----------------------------------------------------------------
+|0 |HASH GROUP BY|                            |101      |251356|
+|1 | MERGE JOIN  |                            |95100    |215029|
+|2 |  TABLE SCAN |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|3 |  TABLE SCAN |other(idx_c2_c3)            |100000   |64066 |
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v5]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v5 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c2], [other.c3], [other.c1]), filter(nil), 
+      access([other.c2], [other.c3], [other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v5 = c1 and v4 = c3 and v3 = c2 group by v5, v4, v3;
+Query Plan
+================================================================
+|ID|OPERATOR     |NAME                        |EST. ROWS|COST  |
+----------------------------------------------------------------
+|0 |HASH GROUP BY|                            |101      |251356|
+|1 | MERGE JOIN  |                            |95100    |215029|
+|2 |  TABLE SCAN |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|3 |  TABLE SCAN |other(idx_c2_c3)            |100000   |64066 |
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v5]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3], [skyline_int.v5 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v5], [skyline_int.v4], [skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c1], [other.c3], [other.c2]), filter(nil), 
+      access([other.c1], [other.c3], [other.c2]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v3;
+Query Plan
+===========================================================
+|ID|OPERATOR      |NAME                  |EST. ROWS|COST  |
+-----------------------------------------------------------
+|0 |MERGE GROUP BY|                      |101      |211072|
+|1 | MERGE JOIN   |                      |99000    |183873|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v2)|100000   |37900 |
+|3 |  TABLE SCAN  |other                 |100000   |59654 |
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id]), partitions(p0)
+  3 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v4, v3;
+Query Plan
+==============================================================
+|ID|OPERATOR      |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------
+|0 |MERGE GROUP BY|                         |10001    |225928|
+|1 | MERGE JOIN   |                         |99000    |190440|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v2)|100000   |44467 |
+|3 |  TABLE SCAN  |other                    |100000   |59654 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4]), partitions(p0)
+  3 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4;
+Query Plan
+================================================================
+|ID|OPERATOR     |NAME                        |EST. ROWS|COST  |
+----------------------------------------------------------------
+|0 |HASH GROUP BY|                            |10001    |247662|
+|1 | MERGE JOIN  |                            |99000    |197007|
+|2 |  TABLE SCAN |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|3 |  TABLE SCAN |other                       |100000   |59654 |
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v5], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
+  3 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4 order by v4, v5;
+Query Plan
+=================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------
+|0 |SORT          |                            |10001    |273809|
+|1 | HASH GROUP BY|                            |10001    |247662|
+|2 |  MERGE JOIN  |                            |99000    |197007|
+|3 |   TABLE SCAN |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|4 |   TABLE SCAN |other                       |100000   |59654 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), sort_keys([skyline_int.v4, ASC], [skyline_int.v5, ASC])
+  1 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v5], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  2 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c1]), other_conds(nil)
+  3 - output([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
+  4 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4, v3 order by v3, v4, v5;
+Query Plan
+=================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |99000    |240783|
+|1 | MERGE JOIN   |                            |99000    |197007|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|3 |  TABLE SCAN  |other                       |100000   |59654 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
+  3 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select max(v1), tenant_id, v6 from skyline_int join other on v3 = c1 group by v5, v4, v3 order by v3, v4, v5;
+Query Plan
+====================================================================
+|ID|OPERATOR      |NAME                           |EST. ROWS|COST  |
+--------------------------------------------------------------------
+|0 |MERGE GROUP BY|                               |99000    |247350|
+|1 | MERGE JOIN   |                               |99000    |203574|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v6_v2)|100000   |57600 |
+|3 |  TABLE SCAN  |other                          |100000   |59654 |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id], [skyline_int.v6]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
+  3 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select distinct(v3) from skyline_int join other on v3 = c1 order by v3, v4, v5;
+Query Plan
+=================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------
+|0 |MERGE DISTINCT|                            |101      |218960|
+|1 | MERGE JOIN   |                            |99000    |197007|
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|3 |  TABLE SCAN  |other                       |100000   |59654 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3]), filter(nil), 
+      distinct([skyline_int.v3])
+  1 - output([skyline_int.v3]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v3]), filter(nil), 
+      access([skyline_int.v3]), partitions(p0)
+  3 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select distinct(v4) from skyline_int join other on v4 = c1 order by v3, v4, v5;
+Query Plan
+==================================================================
+|ID|OPERATOR       |NAME                        |EST. ROWS|COST  |
+------------------------------------------------------------------
+|0 |SORT           |                            |101      |219126|
+|1 | MERGE DISTINCT|                            |101      |218960|
+|2 |  MERGE JOIN   |                            |99000    |197007|
+|3 |   TABLE SCAN  |skyline_int(idx_v4_v5_v2_v3)|100000   |51034 |
+|4 |   TABLE SCAN  |other                       |100000   |59654 |
+==================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v4]), filter(nil), sort_keys([skyline_int.v3, ASC], [skyline_int.v4, ASC], [skyline_int.v5, ASC])
+  1 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      distinct([skyline_int.v4])
+  2 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1]), other_conds(nil)
+  3 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
+  4 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select distinct(v4) from skyline_int join other on v4 = c1 order by v3, v4, v5, v6;
+Query Plan
+=====================================================================
+|ID|OPERATOR       |NAME                           |EST. ROWS|COST  |
+---------------------------------------------------------------------
+|0 |SORT           |                               |101      |225712|
+|1 | MERGE DISTINCT|                               |101      |225526|
+|2 |  MERGE JOIN   |                               |99000    |203574|
+|3 |   TABLE SCAN  |skyline_int(idx_v4_v5_v6_v2_v3)|100000   |57600 |
+|4 |   TABLE SCAN  |other                          |100000   |59654 |
+=====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v4]), filter(nil), sort_keys([skyline_int.v3, ASC], [skyline_int.v4, ASC], [skyline_int.v5, ASC], [skyline_int.v6, ASC])
+  1 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      distinct([skyline_int.v4])
+  2 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1]), other_conds(nil)
+  3 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
+  4 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select distinct v5, v4, v3 from skyline_int join other on v4 = c1 order by v3;
+Query Plan
+=================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------
+|0 |SORT          |                            |99000    |558585|
+|1 | HASH DISTINCT|                            |99000    |311870|
+|2 |  MERGE JOIN  |                            |99000    |197007|
+|3 |   TABLE SCAN |skyline_int(idx_v4_v5_v2_v3)|100000   |51034 |
+|4 |   TABLE SCAN |other                       |100000   |59654 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), sort_keys([skyline_int.v3, ASC])
+  1 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), 
+      distinct([skyline_int.v4], [skyline_int.v5], [skyline_int.v3])
+  2 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1]), other_conds(nil)
+  3 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), partitions(p0)
+  4 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select distinct v5, v4, v3 from other left join skyline_int on v4 = c1 order by v3;
+Query Plan
+=====================================================================
+|ID|OPERATOR          |NAME                        |EST. ROWS|COST  |
+---------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                            |100000   |486659|
+|1 | SORT             |                            |100000   |447739|
+|2 |  MERGE OUTER JOIN|                            |100000   |197007|
+|3 |   TABLE SCAN     |other                       |100000   |59654 |
+|4 |   TABLE SCAN     |skyline_int(idx_v4_v5_v2_v3)|100000   |51034 |
+=====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), 
+      distinct([skyline_int.v3], [skyline_int.v5], [skyline_int.v4])
+  1 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), sort_keys([skyline_int.v3, ASC], [skyline_int.v5, ASC], [skyline_int.v4, ASC])
+  2 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1]), other_conds(nil)
+  3 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+  4 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v5], [skyline_int.v3]), partitions(p0)
+
+explain select distinct v4, v5, v6 from other left join skyline_int on v4 = c1 and v5 = c2 order by v4, v5, v6;
+Query Plan
+========================================================================
+|ID|OPERATOR          |NAME                           |EST. ROWS|COST  |
+------------------------------------------------------------------------
+|0 |MERGE DISTINCT    |                               |100000   |519601|
+|1 | SORT             |                               |100000   |480681|
+|2 |  MERGE OUTER JOIN|                               |100000   |210529|
+|3 |   TABLE SCAN     |other                          |100000   |61860 |
+|4 |   TABLE SCAN     |skyline_int(idx_v4_v5_v6_v2_v3)|100000   |55395 |
+========================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      distinct([skyline_int.v4], [skyline_int.v5], [skyline_int.v6])
+  1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), sort_keys([skyline_int.v4, ASC], [skyline_int.v5, ASC], [skyline_int.v6, ASC])
+  2 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1], [skyline_int.v5 = other.c2]), other_conds(nil)
+  3 - output([other.c1], [other.c2]), filter(nil), 
+      access([other.c1], [other.c2]), partitions(p0)
+  4 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int union select c1, c2, c3 from other;
+Query Plan
+=======================================================================
+|ID|OPERATOR            |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                            |200000   |202102|
+|1 | TABLE SCAN         |skyline_int(idx_v3_v4_v5_v2)|100000   |51034 |
+|2 | TABLE SCAN         |other                       |100000   |64066 |
+=======================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+  2 - output([other.c1], [other.c2], [other.c3]), filter(nil), 
+      access([other.c1], [other.c2], [other.c3]), partitions(p0)
+
+explain select v4, v5, v6 from skyline_int intersect select v3, v4, v5 from skyline_int;
+Query Plan
+==============================================================================
+|ID|OPERATOR                |NAME                           |EST. ROWS|COST  |
+------------------------------------------------------------------------------
+|0 |MERGE INTERSECT DISTINCT|                               |100000   |179628|
+|1 | TABLE SCAN             |skyline_int(idx_v4_v5_v6_v2_v3)|100000   |55395 |
+|2 | TABLE SCAN             |skyline_int(idx_v3_v4_v5_v2)   |100000   |51034 |
+==============================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([INTERSECT([1])], [INTERSECT([2])], [INTERSECT([3])]), filter(nil)
+  1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
+  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v4, v5, v6 from skyline_int union select v2, v3, v4 from skyline_int;
+Query Plan
+==========================================================================
+|ID|OPERATOR            |NAME                           |EST. ROWS|COST  |
+--------------------------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                               |200000   |189070|
+|1 | TABLE SCAN         |skyline_int(idx_v4_v5_v6_v2_v3)|100000   |55395 |
+|2 | TABLE SCAN         |skyline_int(idx_v2_v3_v4)      |100000   |46673 |
+==========================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
+  2 - output([skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 = 100 and v5 = 100 order by v3, v4, v5;
+Query Plan
+===========================================================
+|ID|OPERATOR  |NAME                        |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |TABLE SCAN|skyline_int(idx_v3_v4_v5_v2)|1        |36  |
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 in (100, 200, 300) group by v3, v4, v5 order by v3, v4, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |2970     |2680|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|2970     |1524|
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select distinct v3, v4, v5 from skyline_int where v3 in (100, 200, 300) order by v3, v4, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE DISTINCT|                            |2970     |2680|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|2970     |1524|
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      distinct([skyline_int.v3], [skyline_int.v4], [skyline_int.v5])
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 group by v4, v3, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |99       |91  |
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|99       |61  |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v4, v5, v6 from skyline_int where v3 = 100 group by v3, v5;
+Query Plan
+=================================================================
+|ID|OPERATOR     |NAME                           |EST. ROWS|COST|
+-----------------------------------------------------------------
+|0 |HASH GROUP BY|                               |100      |986 |
+|1 | TABLE SCAN  |skyline_int(idx_v3_v4_v5_v6_v2)|990      |590 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      group([skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
+
+explain select distinct v3, v5 from skyline_int where v4 = 100;
+Query Plan
+==============================================================
+|ID|OPERATOR     |NAME                        |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |HASH DISTINCT|                            |990      |1623|
+|1 | TABLE SCAN  |skyline_int(idx_v4_v5_v2_v3)|990      |532 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      distinct([skyline_int.v3], [skyline_int.v5])
+  1 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v5]), partitions(p0)
+
+explain select distinct v3, v5 from skyline_int where v4 > 100 and v4 < 200;
+Query Plan
+==============================================================
+|ID|OPERATOR     |NAME                        |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |HASH DISTINCT|                            |5000     |8075|
+|1 | TABLE SCAN  |skyline_int(idx_v4_v5_v2_v3)|5000     |2565|
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      distinct([skyline_int.v3], [skyline_int.v5])
+  1 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v5]), partitions(p0)
+
+explain select v3, v5 from skyline_int where v4 > 100 and v4 < 200 order by v4, v2;
+Query Plan
+============================================================
+|ID|OPERATOR   |NAME                        |EST. ROWS|COST|
+------------------------------------------------------------
+|0 |SORT       |                            |5000     |8188|
+|1 | TABLE SCAN|skyline_int(idx_v4_v5_v2_v3)|5000     |2675|
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), sort_keys([skyline_int.v4, ASC], [skyline_int.v2, ASC]), prefix_pos(1)
+  1 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v2]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v2]), partitions(p0)
+
+explain select v3, v5 from skyline_int where v4 > 100 and v4 < 200 order by v4, v2 limit 100;
+Query Plan
+========================================================
+|ID|OPERATOR  |NAME                     |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |TABLE SCAN|skyline_int(idx_v4_v2_v3)|100      |642 |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v5]), partitions(p0), 
+      limit(100), offset(nil)
+
+explain select v3, v5 from skyline_int where v5 = 100 group by v4, v2;
+Query Plan
+==============================================================
+|ID|OPERATOR     |NAME                        |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |HASH GROUP BY|                            |990      |1645|
+|1 | TABLE SCAN  |skyline_int(idx_v5_v2_v3_v4)|990      |554 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v2]), agg_func(nil)
+  1 - output([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), 
+      access([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
+
+explain select v3, v5 from skyline_int where v5 = 100 group by v4, v2 limit 100;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |LIMIT         |                            |100      |1022|
+|1 | HASH GROUP BY|                            |100      |1008|
+|2 |  TABLE SCAN  |skyline_int(idx_v5_v2_v3_v4)|990      |554 |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), limit(100), offset(nil)
+  1 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v2]), agg_func(nil)
+  2 - output([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), 
+      access([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
+
+explain select v3, v6 from skyline_int join other on skyline_int.v3 = other.c1 and skyline_int.v5 = other.c2 order by v3, v4;
+Query Plan
+==================================================================
+|ID|OPERATOR    |NAME                           |EST. ROWS|COST  |
+------------------------------------------------------------------
+|0 |SORT        |                               |97030    |623573|
+|1 | HASH JOIN  |                               |97030    |342972|
+|2 |  TABLE SCAN|other(idx_c2)                  |100000   |47311 |
+|3 |  TABLE SCAN|skyline_int(idx_v3_v4_v5_v6_v2)|100000   |57600 |
+==================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v6]), filter(nil), sort_keys([skyline_int.v3, ASC], [skyline_int.v4, ASC])
+  1 - output([skyline_int.v3], [skyline_int.v6], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c1], [skyline_int.v5 = other.c2]), other_conds(nil)
+  2 - output([other.c1], [other.c2]), filter(nil), 
+      access([other.c1], [other.c2]), partitions(p0)
+  3 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v6], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v5], [skyline_int.v6], [skyline_int.v4]), partitions(p0)
+
+explain select v3, v6 from skyline_int join other on skyline_int.v3 = other.c1 and skyline_int.v5 = other.c2 order by v3;
+Query Plan
+==================================================================
+|ID|OPERATOR    |NAME                           |EST. ROWS|COST  |
+------------------------------------------------------------------
+|0 |MERGE JOIN  |                               |97030    |329187|
+|1 | SORT       |                               |100000   |174053|
+|2 |  TABLE SCAN|skyline_int(idx_v3_v4_v5_v6_v2)|100000   |55395 |
+|3 | TABLE SCAN |other                          |100000   |61860 |
+==================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v6]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c1], [skyline_int.v5 = other.c2]), other_conds(nil)
+  1 - output([skyline_int.v3], [skyline_int.v6], [skyline_int.v5]), filter(nil), sort_keys([skyline_int.v3, ASC], [skyline_int.v5, ASC]), prefix_pos(1)
+  2 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
+  3 - output([other.c1], [other.c2]), filter(nil), 
+      access([other.c1], [other.c2]), partitions(p0)
+
+explain select distinct v3, v5 from skyline_int join other where skyline_int.v4 = other.c1 order by v4, v5, v6;
+Query Plan
+====================================================================
+|ID|OPERATOR      |NAME                           |EST. ROWS|COST  |
+--------------------------------------------------------------------
+|0 |SORT          |                               |10001    |273189|
+|1 | HASH DISTINCT|                               |10001    |248983|
+|2 |  MERGE JOIN  |                               |99000    |203574|
+|3 |   TABLE SCAN |skyline_int(idx_v4_v5_v6_v2_v3)|100000   |57600 |
+|4 |   TABLE SCAN |other                          |100000   |59654 |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), sort_keys([skyline_int.v4, ASC], [skyline_int.v5, ASC], [skyline_int.v6, ASC])
+  1 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v4], [skyline_int.v6]), filter(nil), 
+      distinct([skyline_int.v3], [skyline_int.v5])
+  2 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v4], [skyline_int.v6]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1]), other_conds(nil)
+  3 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
+  4 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select v3, v5 from skyline_int join other where skyline_int.v4 = other.c1 group by v4, v5;
+Query Plan
+=================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |10001    |227248|
+|1 | MERGE JOIN   |                            |99000    |197007|
+|2 |  TABLE SCAN  |skyline_int(idx_v4_v5_v2_v3)|100000   |51034 |
+|3 |  TABLE SCAN  |other                       |100000   |59654 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v3], [skyline_int.v5]), partitions(p0)
+  3 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select distinct v4, v5 from skyline_int join other where skyline_int.v4 = other.c1;
+Query Plan
+=================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST  |
+-----------------------------------------------------------------
+|0 |MERGE DISTINCT|                            |10001    |225042|
+|1 | MERGE JOIN   |                            |99000    |194801|
+|2 |  TABLE SCAN  |skyline_int(idx_v4_v5_v2_v3)|100000   |48828 |
+|3 |  TABLE SCAN  |other                       |100000   |59654 |
+=================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      distinct([skyline_int.v4], [skyline_int.v5])
+  1 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v5]), partitions(p0)
+  3 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain select v4, v5 from skyline_int join other where skyline_int.v4 = other.c1 order by v4, v5;
+Query Plan
+==============================================================
+|ID|OPERATOR   |NAME                        |EST. ROWS|COST  |
+--------------------------------------------------------------
+|0 |MERGE JOIN |                            |99000    |194801|
+|1 | TABLE SCAN|skyline_int(idx_v4_v5_v2_v3)|100000   |48828 |
+|2 | TABLE SCAN|other                       |100000   |59654 |
+==============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1]), other_conds(nil)
+  1 - output([skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v5]), partitions(p0)
+  2 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+
+explain (select v4, v5, v6 from skyline_int join other on skyline_int.v4 = other.c1 ) union select c1, c2, c3 from other;
+Query Plan
+==========================================================================
+|ID|OPERATOR            |NAME                           |EST. ROWS|COST  |
+--------------------------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                               |199000   |352001|
+|1 | MERGE JOIN         |                               |99000    |201368|
+|2 |  TABLE SCAN        |skyline_int(idx_v4_v5_v6_v2_v3)|100000   |55395 |
+|3 |  TABLE SCAN        |other                          |100000   |59654 |
+|4 | TABLE SCAN         |other                          |100000   |64066 |
+==========================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      equal_conds([skyline_int.v4 = other.c1]), other_conds(nil)
+  2 - output([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), filter(nil), 
+      access([skyline_int.v4], [skyline_int.v5], [skyline_int.v6]), partitions(p0)
+  3 - output([other.c1]), filter(nil), 
+      access([other.c1]), partitions(p0)
+  4 - output([other.c1], [other.c2], [other.c3]), filter(nil), 
+      access([other.c1], [other.c2], [other.c3]), partitions(p0)
+
+explain select v1, tenant_id from skyline_int group by v2, v3, v4 order by v2, v3, v4, v5;
+Query Plan
+================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST |
+----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |100000   |92159|
+|1 | TABLE SCAN   |skyline_int(idx_v2_v3_v4_v5)|100000   |53239|
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v1], [skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), agg_func(nil)
+  1 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), partitions(p0)
+
+explain select distinct v2, v3, v4, v5 from skyline_int group by v2, v3, v4;
+Query Plan
+================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST |
+----------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |100000   |92159|
+|1 | TABLE SCAN   |skyline_int(idx_v2_v3_v4_v5)|100000   |53239|
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v2], [skyline_int.v3], [skyline_int.v4]), agg_func(nil)
+  1 - output([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v2], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain (select c1, c2, c3 from other group by c1, c2) union select c1, c2, c3 from other group by c1, c2;
+Query Plan
+================================================
+|ID|OPERATOR            |NAME |EST. ROWS|COST  |
+------------------------------------------------
+|0 |MERGE UNION DISTINCT|     |200000   |215134|
+|1 | TABLE SCAN         |other|100000   |64066 |
+|2 | TABLE SCAN         |other|100000   |64066 |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil)
+  1 - output([other.c1], [other.c2], [other.c3]), filter(nil), 
+      access([other.c1], [other.c2], [other.c3]), partitions(p0)
+  2 - output([other.c1], [other.c2], [other.c3]), filter(nil), 
+      access([other.c1], [other.c2], [other.c3]), partitions(p0)
+
+explain select distinct v3, v4, v5 from skyline_int order by v3, v4, v5, v6;
+Query Plan
+===================================================================
+|ID|OPERATOR      |NAME                           |EST. ROWS|COST |
+-------------------------------------------------------------------
+|0 |MERGE DISTINCT|                               |100000   |96520|
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v6_v2)|100000   |57600|
+===================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      distinct([skyline_int.v3], [skyline_int.v4], [skyline_int.v5])
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select distinct v3, v4 from skyline_int union select  distinct c2, c3 from other;
+Query Plan
+====================================================================
+|ID|OPERATOR            |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                         |200000   |184937|
+|1 | TABLE SCAN         |skyline_int(idx_v3_v4_v2)|100000   |44467 |
+|2 | TABLE SCAN         |other(idx_c2_c3)         |100000   |64066 |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
+  2 - output([other.c2], [other.c3]), filter(nil), 
+      access([other.c2], [other.c3]), partitions(p0)
+
+explain select v3, v4 from skyline_int order by v3, v4 union select  distinct c2, c3 from other order by v3, v4;
+Query Plan
+====================================================================
+|ID|OPERATOR            |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                         |200000   |184937|
+|1 | TABLE SCAN         |skyline_int(idx_v3_v4_v2)|100000   |44467 |
+|2 | TABLE SCAN         |other(idx_c2_c3)         |100000   |64066 |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
+  2 - output([other.c2], [other.c3]), filter(nil), 
+      access([other.c2], [other.c3]), partitions(p0)
+
+explain (select v3, v4 from skyline_int order by v3, v4) union (select  distinct c2, c3 from other order by c2, c3) order by 1,2;
+Query Plan
+====================================================================
+|ID|OPERATOR            |NAME                     |EST. ROWS|COST  |
+--------------------------------------------------------------------
+|0 |MERGE UNION DISTINCT|                         |200000   |184937|
+|1 | TABLE SCAN         |skyline_int(idx_v3_v4_v2)|100000   |44467 |
+|2 | TABLE SCAN         |other(idx_c2_c3)         |100000   |64066 |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
+  2 - output([other.c2], [other.c3]), filter(nil), 
+      access([other.c2], [other.c3]), partitions(p0)
+
+explain select /*+use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 group by  v3, v4;
+Query Plan
+====================================================================
+|ID|OPERATOR         |NAME                     |EST. ROWS|COST     |
+--------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                         |10001    |144290960|
+|1 | NESTED-LOOP JOIN|                         |98010000 |114351809|
+|2 |  TABLE SCAN     |skyline_int(idx_v3_v4_v2)|100000   |44467    |
+|3 |  TABLE SCAN     |other(idx_c2)            |990      |503      |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4]), agg_func(nil)
+  1 - output([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      conds(nil), nl_params_([skyline_int.v3])
+  2 - output([skyline_int.v3], [skyline_int.tenant_id], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.tenant_id], [skyline_int.v4]), partitions(p0)
+  3 - output([1]), filter(nil), 
+      access([other.c2]), partitions(p0)
+
+explain select /*+use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 group by  v3, v4, v5;
+Query Plan
+=======================================================================
+|ID|OPERATOR         |NAME                        |EST. ROWS|COST     |
+-----------------------------------------------------------------------
+|0 |MERGE GROUP BY   |                            |1000001  |152503337|
+|1 | NESTED-LOOP JOIN|                            |98010000 |114358376|
+|2 |  TABLE SCAN     |skyline_int(idx_v3_v4_v5_v2)|100000   |51034    |
+|3 |  TABLE SCAN     |other(idx_c2)               |990      |503      |
+=======================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      conds(nil), nl_params_([skyline_int.v3])
+  2 - output([skyline_int.v3], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.tenant_id], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+  3 - output([1]), filter(nil), 
+      access([other.c2]), partitions(p0)
+
+explain select /*use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 and skyline_int.v4 = other.c3 group by v3, v4, v5;
+Query Plan
+==================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST   |
+------------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |960597   |1166699|
+|1 | MERGE JOIN   |                            |960597   |792840 |
+|2 |  TABLE SCAN  |skyline_int(idx_v3_v4_v5_v2)|100000   |51034  |
+|3 |  TABLE SCAN  |other(idx_c2_c3)            |100000   |64066  |
+==================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.tenant_id]), filter(nil), 
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2], [skyline_int.v4 = other.c3]), other_conds(nil)
+  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.tenant_id], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.tenant_id], [skyline_int.v5]), partitions(p0)
+  3 - output([other.c2], [other.c3]), filter(nil), 
+      access([other.c2], [other.c3]), partitions(p0)
+
+explain select /*+use_hash(skyline_int other)*/ v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 order by v3, v4, v5;
+Query Plan
+==================================================================
+|ID|OPERATOR    |NAME                        |EST. ROWS|COST     |
+------------------------------------------------------------------
+|0 |SORT        |                            |98010000 |386474747|
+|1 | HASH JOIN  |                            |98010000 |58368678 |
+|2 |  TABLE SCAN|other(idx_c2)               |100000   |47311    |
+|3 |  TABLE SCAN|skyline_int(idx_v3_v4_v5_v2)|100000   |51034    |
+==================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), sort_keys([skyline_int.v3, ASC], [skyline_int.v4, ASC], [skyline_int.v5, ASC])
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2]), other_conds(nil)
+  2 - output([other.c2]), filter(nil), 
+      access([other.c2]), partitions(p0)
+  3 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select /*+use_hash(skyline_int other)*/ distinct v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 order by v3, v4, v5;
+Query Plan
+===================================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST    |
+-------------------------------------------------------------------
+|0 |SORT          |                            |10001    |96267975|
+|1 | HASH DISTINCT|                            |10001    |96245711|
+|2 |  HASH JOIN   |                            |98010000 |58368678|
+|3 |   TABLE SCAN |other(idx_c2)               |100000   |47311   |
+|4 |   TABLE SCAN |skyline_int(idx_v3_v4_v5_v2)|100000   |51034   |
+===================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), sort_keys([skyline_int.v3, ASC], [skyline_int.v4, ASC], [skyline_int.v5, ASC])
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      distinct([skyline_int.v3], [skyline_int.v4])
+  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2]), other_conds(nil)
+  3 - output([other.c2]), filter(nil), 
+      access([other.c2]), partitions(p0)
+  4 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select /*+leading(other skyline_int) use_hash(other skyline_int)*/ distinct v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 union select c2, c3 from other;
+Query Plan
+======================================================================
+|ID|OPERATOR           |NAME                     |EST. ROWS|COST     |
+----------------------------------------------------------------------
+|0 |HASH UNION DISTINCT|                         |98110000 |166553145|
+|1 | HASH JOIN         |                         |98010000 |58362111 |
+|2 |  TABLE SCAN       |other(idx_c2)            |100000   |47311    |
+|3 |  TABLE SCAN       |skyline_int(idx_v3_v4_v2)|100000   |44467    |
+|4 | TABLE SCAN        |other(idx_c2_c3)         |100000   |64066    |
+======================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      equal_conds([skyline_int.v3 = other.c2]), other_conds(nil)
+  2 - output([other.c2]), filter(nil), 
+      access([other.c2]), partitions(p0)
+  3 - output([skyline_int.v3], [skyline_int.v4]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4]), partitions(p0)
+  4 - output([other.c2], [other.c3]), filter(nil), 
+      access([other.c2], [other.c3]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 group by v3, v4, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |99       |91  |
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|99       |61  |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 group by v3, v4, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |99       |91  |
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|99       |61  |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 < 100 group by v3, v4, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |99       |91  |
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|99       |61  |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 <= 100 group by v3, v4, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |99       |91  |
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|99       |61  |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 and v4 < 1000 group by v3, v4, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |50       |64  |
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|50       |49  |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 and v4 < 1000 group by v3, v4, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |50       |64  |
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|50       |49  |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 and v4 <= 1000 group by v3, v4, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |50       |64  |
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|50       |49  |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 and v4 <= 1000 group by v3, v4, v5;
+Query Plan
+===============================================================
+|ID|OPERATOR      |NAME                        |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |MERGE GROUP BY|                            |50       |64  |
+|1 | TABLE SCAN   |skyline_int(idx_v3_v4_v5_v2)|50       |49  |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      group([skyline_int.v4], [skyline_int.v5]), agg_func(nil)
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), filter(nil), 
+      access([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), partitions(p0)
+
+set @@recyclebin = 'off';
+drop database hualong;

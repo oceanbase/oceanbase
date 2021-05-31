@@ -1,0 +1,950 @@
+static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
+{
+  {
+    /*null -> XXX*/
+    ObNullType,/*null*/
+    ObIntType,/*int*/
+    ObUInt64Type,/*uint*/
+    ObFloatType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+    ObDateTimeType,/*datetime*/
+    ObDateType,/*date*/
+    ObTimeType,/*time*/
+    ObYearType,/*year*/
+    ObVarcharType,/*string*/
+    ObNullType,/*extend*/
+    ObNullType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObBitType,  /*bit*/
+    ObVarcharType,  /*EnumSet*/
+    ObMaxType,  /*EnumSetInner*/
+    ObTimestampTZType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*int -> XXX*/
+    ObIntType,/*null*/
+    ObIntType,/*int*/
+    ObIntType,/*uint*/
+    ObDoubleType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+    ObVarcharType,/*datetime*/
+    ObVarcharType,/*date*/
+    ObVarcharType,/*time*/
+    ObIntType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObDoubleType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObIntType,  /*bit*/
+    ObVarcharType,  /*EnumSet*/
+    ObMaxType,  /*EnumSetInner*/
+    ObVarcharType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*uint -> XXX*/
+    ObUInt64Type,/*null*/
+    ObIntType,/*int*/
+    ObUInt64Type,/*uint*/
+    ObDoubleType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+    ObVarcharType,/*datetime*/
+    ObVarcharType,/*date*/
+    ObVarcharType,/*time*/
+    ObUInt64Type,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObDoubleType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObUInt64Type, /*bit*/
+    ObVarcharType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObVarcharType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*float -> XXX*/
+    ObFloatType,/*null*/
+    ObDoubleType,/*int*/
+    ObDoubleType,/*uint*/
+    ObFloatType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+    ObVarcharType,/*datetime*/
+    ObVarcharType,/*date*/
+    ObVarcharType,/*time*/
+    ObFloatType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObDoubleType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObDoubleType,  /*bit*/
+    ObVarcharType,  /*EnumSet*/
+    ObMaxType,  /*EnumSetInner*/
+    ObVarcharType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*double -> XXX*/
+    ObDoubleType,/*null*/
+    ObDoubleType,/*int*/
+    ObDoubleType,/*uint*/
+    ObDoubleType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+    ObVarcharType,/*datetime*/
+    ObVarcharType,/*date*/
+    ObVarcharType,/*time*/
+    ObDoubleType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObDoubleType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObDoubleType,  /*bit*/
+    ObVarcharType,  /*EnumSet*/
+    ObMaxType,  /*EnumSetInner*/
+    ObVarcharType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*number -> XXX*/
+    ObNumberType,/*null*/
+    ObNumberType,/*int*/
+    ObNumberType,/*uint*/
+    ObNumberType,/*float*/
+    ObNumberType,/*double*/
+    ObNumberType,/*number*/
+    ObVarcharType,/*datetime*/
+    ObVarcharType,/*date*/
+    ObVarcharType,/*time*/
+    ObNumberType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObNumberType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObNumberType,  /*bit*/
+    ObVarcharType,  /*EnumSet*/
+    ObMaxType,  /*EnumSetInner*/
+    ObVarcharType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*datetime -> XXX*/
+    ObDateTimeType,/*null*/
+    ObVarcharType,/*int*/
+    ObVarcharType,/*uint*/
+    ObVarcharType,/*float*/
+    ObVarcharType,/*double*/
+    ObVarcharType,/*number*/
+    ObDateTimeType,/*datetime*/
+    ObDateTimeType,/*date*/
+    ObDateTimeType,/*time*/
+    ObVarcharType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObMaxType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObVarcharType,  /*bit*/
+    ObVarcharType,  /*EnumSet*/
+    ObMaxType,  /*EnumSetInner*/
+    ObTimestampTZType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*date -> XXX*/
+    ObDateType,/*null*/
+    ObVarcharType,/*int*/
+    ObVarcharType,/*uint*/
+    ObVarcharType,/*float*/
+    ObVarcharType,/*double*/
+    ObVarcharType,/*number*/
+    ObDateTimeType,/*datetime*/
+    ObDateType,/*date*/
+    ObDateTimeType,/*time*/
+    ObVarcharType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObMaxType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObVarcharType, /*bit*/
+    ObVarcharType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObTimestampTZType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*time -> XXX*/
+    ObTimeType,/*null*/
+    ObVarcharType,/*int*/
+    ObVarcharType,/*uint*/
+    ObVarcharType,/*float*/
+    ObVarcharType,/*double*/
+    ObVarcharType,/*number*/
+    ObDateTimeType,/*datetime*/
+    ObDateTimeType,/*date*/
+    ObTimeType,/*time*/
+    ObVarcharType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObMaxType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObVarcharType, /*bit*/
+    ObVarcharType, /*EnumSetInner*/
+    ObMaxType, /*EnumSetInner*/
+    ObTimestampTZType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*year -> XXX*/
+    ObYearType,/*null*/
+    ObIntType,/*int*/
+    ObUInt64Type,/*uint*/
+    ObFloatType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+    ObVarcharType,/*datetime*/
+    ObVarcharType,/*date*/
+    ObVarcharType,/*time*/
+    ObYearType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObMaxType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObUInt64Type,  /*bit*/
+    ObVarcharType,  /*EnumSet*/
+    ObMaxType,  /*EnumSetInner*/
+    ObVarcharType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*string -> XXX*/
+    ObVarcharType,/*null*/
+    ObVarcharType,/*int*/
+    ObVarcharType,/*uint*/
+    ObVarcharType,/*float*/
+    ObVarcharType,/*double*/
+    ObVarcharType,/*number*/
+    ObVarcharType,/*datetime*/
+    ObVarcharType,/*date*/
+    ObVarcharType,/*time*/
+    ObVarcharType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObDoubleType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObVarcharType,  /*bit*/
+    ObVarcharType,  /*EnumSet*/
+    ObMaxType,  /*EnumSetInner*/
+    ObVarcharType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*extend -> XXX*/
+    ObNullType,/*null*/
+    ObMaxType,/*int*/
+    ObMaxType,/*uint*/
+    ObMaxType,/*float*/
+    ObMaxType,/*double*/
+    ObMaxType,/*number*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
+    ObMaxType,/*string*/
+    ObMaxType,/*extend*/
+    ObMaxType, /*unknown*/
+    ObMaxType, /*text*/
+    ObMaxType, /*bit*/
+    ObMaxType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObMaxType, /*OTimestamp*/
+    ObMaxType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*unknown -> XXX*/
+    ObNullType,/*null*/
+    ObDoubleType,/*int*/
+    ObDoubleType,/*uint*/
+    ObDoubleType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
+    ObDoubleType,/*string*/
+    ObMaxType,/*extend*/
+    ObDoubleType, /*unknown*/
+    ObDoubleType,  /*text*/
+    ObDoubleType, /*bit*/
+    ObVarcharType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObMaxType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*text -> XXX*/
+    ObLongTextType,/*null*/
+    ObLongTextType,/*int*/
+    ObLongTextType,/*uint*/
+    ObLongTextType,/*float*/
+    ObLongTextType,/*double*/
+    ObLongTextType,/*number*/
+    ObLongTextType,/*datetime*/
+    ObLongTextType,/*date*/
+    ObLongTextType,/*time*/
+    ObLongTextType,/*year*/
+    ObLongTextType,/*string*/
+    ObMaxType,/*extend*/
+    ObDoubleType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObLongTextType, /*uint*/
+    ObLongTextType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObLongTextType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*bit -> XXX*/
+    ObBitType,/*null*/
+    ObIntType,/*int*/
+    ObUInt64Type,/*uint*/
+    ObDoubleType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+    ObVarcharType,/*datetime*/
+    ObVarcharType,/*date*/
+    ObVarcharType,/*time*/
+    ObUInt64Type,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObDoubleType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObBitType, /*bit*/
+    ObVarcharType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObVarcharType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*EnumSet -> XXX*/
+    ObVarcharType,/*null*/
+    ObVarcharType,/*int*/
+    ObVarcharType,/*uint*/
+    ObVarcharType,/*float*/
+    ObVarcharType,/*double*/
+    ObVarcharType,/*number*/
+    ObVarcharType,/*datetime*/
+    ObVarcharType,/*date*/
+    ObVarcharType,/*time*/
+    ObVarcharType,/*year*/
+    ObVarcharType,/*string*/
+    ObMaxType,/*extend*/
+    ObDoubleType, /*unknown*/
+    ObLongTextType, /*text*/
+    ObVarcharType,  /*bit*/
+    ObVarcharType,  /*EnumSet*/
+    ObMaxType,  /*EnumSetInner*/
+    ObVarcharType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*EnumSetInner -> XXX*/
+    ObMaxType,/*null*/
+    ObMaxType,/*int*/
+    ObMaxType,/*uint*/
+    ObMaxType,/*float*/
+    ObMaxType,/*double*/
+    ObMaxType,/*number*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
+    ObMaxType,/*string*/
+    ObMaxType,/*extend*/
+    ObMaxType, /*unknown*/
+    ObMaxType, /*text*/
+    ObMaxType, /*bit*/
+    ObMaxType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObMaxType, /*OTimestamp*/
+    ObMaxType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*Raw -> XXX*/
+    ObMaxType, /*null*/
+    ObMaxType, /*int*/
+    ObMaxType, /*uint*/
+    ObMaxType, /*float*/
+    ObMaxType, /*double*/
+    ObMaxType, /*number*/
+    ObMaxType, /*datetime*/
+    ObMaxType, /*date*/
+    ObMaxType, /*time*/
+    ObMaxType, /*year*/
+    ObMaxType, /*string*/
+    ObMaxType, /*extend*/
+    ObMaxType, /*unknown*/
+    ObMaxType, /*text*/
+    ObMaxType, /*bit*/
+    ObMaxType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObMaxType, /*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+  {
+    /*Interval -> XXX*/
+    ObMaxType, /*null*/
+    ObMaxType, /*int*/
+    ObMaxType, /*uint*/
+    ObMaxType, /*float*/
+    ObMaxType, /*double*/
+    ObMaxType, /*number*/
+    ObMaxType, /*datetime*/
+    ObMaxType, /*date*/
+    ObMaxType, /*time*/
+    ObMaxType, /*year*/
+    ObMaxType, /*string*/
+    ObMaxType, /*extend*/
+    ObMaxType, /*unknown*/
+    ObMaxType, /*text*/
+    ObMaxType, /*bit*/
+    ObMaxType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObMaxType, /*OTimestamp*/
+    ObMaxType, /*Raw*/
+    ObMaxType, /*Interval*/
+  },
+};
+
+
+static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
+{
+  {
+    /*null -> XXX*/
+    ObNullType,/*null*/
+    ObNumberType,/*int*/
+      ObMaxType,/*uint*/
+    ObFloatType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+    ObDateTimeType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObVarcharType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+    ObLongTextType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+    ObTimestampTZType,/*OTimestamp*/
+    ObRawType, /*Raw*/
+    ObIntervalYMType, /*Interval*/
+    ObURowIDType, /*Rowid*/
+  },
+  {
+    // treat int as number, because const 1 will be parsed to bigint 1, not number 1 now.
+    /*int -> XXX*/
+    ObNumberType,/*null*/
+    ObNumberType,/*int*/
+      ObMaxType,/*uint*/
+    ObFloatType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObNumberType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+    ObNumberType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+    ObNumberType,/*Raw*/
+    ObMaxType, /*Interval*/
+    ObMaxType, /*RowID*/
+  },
+  {
+    /*uint -> XXX*/
+      ObMaxType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+      ObMaxType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+      ObMaxType,/*Raw*/
+      ObMaxType, /*Interval*/
+      ObMaxType, /*RowID*/
+  },
+  {
+    /*float -> XXX*/
+    ObFloatType,/*null*/
+    ObFloatType,/*int*/
+      ObMaxType,/*uint*/
+    ObFloatType,/*float*/
+    ObDoubleType,/*double*/
+    ObFloatType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObFloatType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+    ObFloatType,/*Raw*/
+    ObMaxType, /*Interval*/
+    ObMaxType, /*RowID*/
+  },
+  {
+    /*double -> XXX*/
+    ObDoubleType,/*null*/
+    ObDoubleType,/*int*/
+      ObMaxType,/*uint*/
+    ObDoubleType,/*float*/
+    ObDoubleType,/*double*/
+    ObDoubleType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObDoubleType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+    ObDoubleType,/*Raw*/
+    ObMaxType, /*Interval*/
+    ObMaxType, /*RowID*/
+  },
+  {
+    /*number -> XXX*/
+    ObNumberType,/*null*/
+    ObNumberType,/*int*/
+      ObMaxType,/*uint*/
+    ObFloatType,/*float*/
+    ObDoubleType,/*double*/
+    ObNumberType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObNumberType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+    ObNumberType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+    ObNumberType,/*Raw*/
+    ObMaxType,/*Interval*/
+    ObMaxType, /*RowID*/
+  },
+  {
+    /*datetime -> XXX*/
+    ObDateTimeType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+    ObDateTimeType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObDateTimeType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+    ObDateTimeType,/*OTimestamp*/
+    ObDateTimeType,/*Raw*/
+    ObMaxType,/*Interval*/
+    ObMaxType, /*RowID*/
+  },
+  {
+    /*date -> XXX*/
+      ObMaxType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+      ObMaxType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+      ObMaxType,/*Raw*/
+      ObMaxType,/*Interval*/
+      ObMaxType,/*RowID*/
+  },
+  {
+    /*time -> XXX*/
+      ObMaxType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+      ObMaxType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+      ObMaxType,/*Raw*/
+      ObMaxType,/*Interval*/
+      ObMaxType,/*RowID*/
+  },
+  {
+    /*year -> XXX*/
+      ObMaxType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+      ObMaxType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+      ObMaxType,/*Raw*/
+      ObMaxType,/*Interval*/
+      ObMaxType,/*RowID*/
+  },
+  {
+    /*string -> XXX*/
+    ObVarcharType,/*null*/
+    ObVarcharType,/*int*/
+      ObMaxType,/*uint*/
+    ObVarcharType,/*float*/
+    ObVarcharType,/*double*/
+    ObVarcharType,/*number*/
+    ObVarcharType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObVarcharType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+    ObVarcharType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+    ObVarcharType,/*OTimestamp*/
+    ObVarcharType,/*Raw*/
+    ObVarcharType,/*Interval*/
+    ObVarcharType,/*RowID*/
+  },
+  {
+    /*extend -> XXX*/
+      ObMaxType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+      ObMaxType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+      ObMaxType,/*Raw*/
+      ObMaxType,/*Interval*/
+      ObMaxType,/*RowID*/
+  },
+  {
+    /*unknown -> XXX*/
+      ObMaxType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+      ObMaxType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+      ObMaxType,/*Raw*/
+      ObMaxType,/*Interval*/
+      ObMaxType,/*RowID*/
+  },
+  {
+    /*text -> XXX*/
+    ObLongTextType,/*null*/
+    ObLongTextType,/*int*/
+      ObMaxType,/*uint*/
+    ObLongTextType,/*float*/
+    ObLongTextType,/*double*/
+    ObLongTextType,/*number*/
+    ObLongTextType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObLongTextType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+    ObLongTextType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+    ObLongTextType,/*OTimestamp*/
+    ObLongTextType,/*Raw*/
+    ObLongTextType,/*Interval*/
+    ObMaxType,/*RowID*/
+  },
+  {
+    /*bit -> XXX*/
+      ObMaxType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+      ObMaxType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+      ObMaxType,/*Raw*/
+      ObMaxType,/*Interval*/
+      ObMaxType,/*RowID*/
+  },
+  {
+    /*EnumSet -> XXX*/
+      ObMaxType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+      ObMaxType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+      ObMaxType,/*Raw*/
+      ObMaxType,/*Interval*/
+      ObMaxType,/*RowID*/
+  },
+  {
+    /*EnumSetInner -> XXX*/
+      ObMaxType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+      ObMaxType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+      ObMaxType,/*Raw*/
+      ObMaxType,/*Interval*/
+      ObMaxType,/*RowID*/
+  },
+  {
+    /*otimestamp-> XXX*/
+    ObTimestampNanoType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+    ObTimestampNanoType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObTimestampNanoType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+      ObMaxType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+    ObTimestampNanoType,/*OTimestamp*/
+      ObMaxType,/*Raw*/
+      ObMaxType,/*Interval*/
+      ObMaxType,/*RowID*/
+  },
+  {
+    /*Raw-> XXX*/
+    ObRawType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObRawType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+    ObRawType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+    ObRawType,/*Raw*/
+    ObMaxType,/*Interval*/
+    ObMaxType, /*RowID*/
+  },
+  {
+    /*Interval-> XXX*/
+    ObIntervalYMType,/*null*/
+      ObMaxType,/*int*/
+      ObMaxType,/*uint*/
+      ObMaxType,/*float*/
+      ObMaxType,/*double*/
+      ObMaxType,/*number*/
+      ObMaxType,/*datetime*/
+      ObMaxType,/*date*/
+      ObMaxType,/*time*/
+      ObMaxType,/*year*/
+    ObIntervalYMType,/*string*/
+      ObMaxType,/*extend*/
+      ObMaxType,/*unknown*/
+    ObIntervalYMType,/*text*/
+      ObMaxType,/*bit*/
+      ObMaxType,/*EnumSet*/
+      ObMaxType,/*EnumSetInner*/
+      ObMaxType,/*OTimestamp*/
+    ObMaxType,/*Raw*/
+    ObIntervalYMType,/*Interval*/
+    ObMaxType,/*RowID*/
+  },
+  {
+    /*RowID-> XXX*/
+    ObURowIDType,/*null*/
+    ObMaxType,/*int*/
+    ObMaxType,/*uint*/
+    ObMaxType,/*float*/
+    ObMaxType,/*double*/
+    ObMaxType,/*number*/
+    ObMaxType,/*datetime*/
+    ObMaxType,/*date*/
+    ObMaxType,/*time*/
+    ObMaxType,/*year*/
+    ObURowIDType,/*string*/
+    ObMaxType,/*extend*/
+    ObMaxType,/*unknown*/
+    ObMaxType,/*text*/
+    ObMaxType,/*bit*/
+    ObMaxType,/*EnumSet*/
+    ObMaxType,/*EnumSetInner*/
+    ObMaxType,/*OTimestamp*/
+    ObMaxType,/*Raw*/
+    ObMaxType,/*Interval*/
+    ObURowIDType,/*RowID*/
+  },
+};

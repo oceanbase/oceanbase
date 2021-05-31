@@ -1,0 +1,120 @@
+EXPR_STR: select c1 from t3 where c1 like '|||%';
+SELECTIVITY = 0.0200001
+
+EXPR_STR: select c1 from t3 where c1 like '11';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t3 where c1 > '|||||||||||||||||||2';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t3 where c1 = '11';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t3 where c1 != '11';
+SELECTIVITY = 0.99
+
+EXPR_STR: select c1 from t3 where c1 > '11';
+SELECTIVITY = 0.996844
+
+EXPR_STR: select c1 from t3 where c1 < '11';
+SELECTIVITY = 0.0231557
+
+EXPR_STR: select c1 from t3 where c1 < '|||||||||||||||||||2';
+SELECTIVITY = 1
+
+EXPR_STR: select c1 from t3 where c1 > '|||||||||||||||||||2';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t3 where c1 > '||||||||||||||||||||';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t3 where c1 > '20150305123445555';
+SELECTIVITY = 0.984024
+
+EXPR_STR: select c1 from t3 where c1 > '20150305123445555';
+SELECTIVITY = 0.984024
+
+EXPR_STR: select c1 from t3 where c1 like '11';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t3 where c1 like 'abc';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t3 where c1 like '|||%';
+SELECTIVITY = 0.0200001
+
+EXPR_STR: select c1 from t3 where c1 like 123;
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t3 where c1 like 's%123' escape 's';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t3 where c1 like '123';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t3 where c1 like '%123';
+SELECTIVITY = 0.333333
+
+EXPR_STR: select c1 from t3 where c1 like '%%';
+SELECTIVITY = 0.333333
+
+EXPR_STR: select c1 from t3 where c1 like '%||||%';
+SELECTIVITY = 0.333333
+
+EXPR_STR: select c1 from t3 where c1 like '%|||';
+SELECTIVITY = 0.333333
+
+EXPR_STR: select c1 from t3 where c1 > '20150305123445555';
+SELECTIVITY = 0.897209
+
+EXPR_STR: select c1 from t3 where c1 < '20150305123445555';
+SELECTIVITY = 0.122791
+
+EXPR_STR: select c1 from t3 where c1 < '99991231235959999';
+SELECTIVITY = 1
+
+EXPR_STR: select c1 from t3 where c1 > '99991231235959999';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t3 where c1 < '10000101000000111';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t3 where c1 > '10000101000000111';
+SELECTIVITY = 1
+
+EXPR_STR: select c1 from t3 where c1 > '10000101000000111' and c1 < '99991231235959999';
+SELECTIVITY = 0.99
+
+EXPR_STR: select c1 from t3 where c1 > '20150305123445555' and c1 < '10000101000000111';
+SELECTIVITY = 0
+
+EXPR_STR: select c1 from t3 where c1 < '20150305123445555' and c1 > '99991231235959999';
+SELECTIVITY = 0
+
+EXPR_STR: select c1 from t3 where c1 > '20150305123445555' and c1 < '50120805123445666';
+SELECTIVITY = 0.323038
+
+EXPR_STR: select c1 from t3 where c1 > '20150305123445555' and c1 < '20150305123446666';
+SELECTIVITY = 0
+
+EXPR_STR: select c1 from t3 where c1 = '20150305123445555';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t3 where c1 != '20150305123445555';
+SELECTIVITY = 0.99
+
+EXPR_STR: select c1 from t3 where c1 like '20150305123445555';
+SELECTIVITY = 0.01
+
+EXPR_STR: select c1 from t3 where c1 like '1000%';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t3 where c1 like '9999%';
+SELECTIVITY = 0.02
+
+EXPR_STR: select c1 from t3 where c1 like '1%';
+SELECTIVITY = 0.119323
+
+EXPR_STR: select c1 from t3 where c1 like '99%';
+SELECTIVITY = 0.0201236
+

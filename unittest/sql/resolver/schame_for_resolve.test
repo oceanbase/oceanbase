@@ -1,0 +1,34 @@
+create table t3(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int);
+create table t1(c3 int primary key, c4 int);
+
+use d;
+select c1, c3 from t3.t3 join t1 on c1=c3 where t3.c1>0 ===> OK
+
+select t3.c1, t2.c2 from t3 join t2 on c1=c2 where t3.c1>0 ===>FAIL
+ERROR 1052 (23000): Column 'c1' in on clause is ambiguous
+
+insert into t3(d.t.*) values(1,2); ===>fail
+insert into t3(d.*) values(1,2); ====>fail
+
+use test;
+create table feifei(feifei.c1 int primary key, c2 int);
+create table feifei2(test.feifei2.c1 int primary key, c2 int);
+create table feifei2(rongxuan.feifei2.c1 int primary key, c2 int);====>FAIL
+ERROR 1102 (42000): Incorrect database name 'rongxuan'
+
+mysql> create table feifei3(rongxuan.feifei2.c1 int primary key, c2 int);
+ERROR 1102 (42000): Incorrect database name 'rongxuan'
+mysql> create table feifei3(rongxuan.feifei3.* int primary key, c2 int);
+ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '* int primary key, c2 int)' at line 1
+
+alter table rongxuan add rongxuan.c3 int;
+alter table rongxuan add test.rongxuan.c4 int;
+alter table rongxuan add test.rongxuan.c5 int;
+mysql> alter table rongxuan add test.rongxuan.* int;
+ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '* int' at line 1
+mysql> alter table rongxuan add test.jinsong.c2 int;
+ERROR 1103 (42000): Incorrect table name 'jinsong'
+
+mysql> create table `` (c int primary key, c2 int);
+ERROR 1103 (42000): Incorrect table name ''

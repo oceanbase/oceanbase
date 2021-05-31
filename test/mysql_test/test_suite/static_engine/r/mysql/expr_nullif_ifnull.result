@@ -1,0 +1,4044 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT;
+connection conn_admin;
+set @@ob_enable_plan_cache = 0;
+drop table if exists t1;
+create table t1 (c1 int, c2 int unsigned,
+c3 tinyint, c4 tinyint unsigned,
+c5 smallint, c6 smallint unsigned,
+c7 mediumint, c8 mediumint unsigned,
+c9 integer, c10 integer unsigned,
+c11 bigint, c12 bigint unsigned,
+c13 float, c14 float unsigned,
+c15 double, c16 double unsigned,
+c17 decimal, c18 decimal unsigned,
+c19 datetime, c20 timestamp,
+c21 varchar(30), c22 char(30), c_null int);
+insert into t1 values(1, 2,
+1, 2,
+1, 2,
+1, 2,
+1, 2,
+1, 2,
+3.5, 4.5,
+5.5, 6.5,
+7.5, 8.5,
+'2019-12-01 12:00:00', '2019-12-03 06:00:00',
+'9.5', '10.5', null);
+insert into t1 values(-1, 2,
+-1, 2,
+-1, 2,
+-1, 2,
+-1, 2,
+-1, 2,
+-3.5, 4.5,
+-5.5, 6.5,
+-7.5, 8.5,
+'2019-12-01 12:00:00', '2019-12-03 06:00:00',
+'-9.5', '10.5', null);
+select nullif(null, null), nullif(1, null), nullif(null, 1);
+nullif(null, null)	nullif(1, null)	nullif(null, 1)
+NULL	1	NULL
+select ifnull(null, null), ifnull(1, null), ifnull(null, 1);
+ifnull(null, null)	ifnull(1, null)	ifnull(null, 1)
+NULL	1	1
+select c1, c1, nullif(c1, c1), ifnull(c1, c1) from t1;
+c1	c1	nullif(c1, c1)	ifnull(c1, c1)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c2, nullif(c1, c2), ifnull(c1, c2) from t1;
+c1	c2	nullif(c1, c2)	ifnull(c1, c2)
+1	2	1	1
+-1	2	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c3, nullif(c1, c3), ifnull(c1, c3) from t1;
+c1	c3	nullif(c1, c3)	ifnull(c1, c3)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c4, nullif(c1, c4), ifnull(c1, c4) from t1;
+c1	c4	nullif(c1, c4)	ifnull(c1, c4)
+1	2	1	1
+-1	2	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c5, nullif(c1, c5), ifnull(c1, c5) from t1;
+c1	c5	nullif(c1, c5)	ifnull(c1, c5)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c6, nullif(c1, c6), ifnull(c1, c6) from t1;
+c1	c6	nullif(c1, c6)	ifnull(c1, c6)
+1	2	1	1
+-1	2	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c7, nullif(c1, c7), ifnull(c1, c7) from t1;
+c1	c7	nullif(c1, c7)	ifnull(c1, c7)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c8, nullif(c1, c8), ifnull(c1, c8) from t1;
+c1	c8	nullif(c1, c8)	ifnull(c1, c8)
+1	2	1	1
+-1	2	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c9, nullif(c1, c9), ifnull(c1, c9) from t1;
+c1	c9	nullif(c1, c9)	ifnull(c1, c9)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c10, nullif(c1, c10), ifnull(c1, c10) from t1;
+c1	c10	nullif(c1, c10)	ifnull(c1, c10)
+1	2	1	1
+-1	2	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c11, nullif(c1, c11), ifnull(c1, c11) from t1;
+c1	c11	nullif(c1, c11)	ifnull(c1, c11)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c12, nullif(c1, c12), ifnull(c1, c12) from t1;
+c1	c12	nullif(c1, c12)	ifnull(c1, c12)
+1	2	1	1
+-1	2	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c13, nullif(c1, c13), ifnull(c1, c13) from t1;
+c1	c13	nullif(c1, c13)	ifnull(c1, c13)
+1	3.5	1	1
+-1	-3.5	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c14, nullif(c1, c14), ifnull(c1, c14) from t1;
+c1	c14	nullif(c1, c14)	ifnull(c1, c14)
+1	4.5	1	1
+-1	4.5	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c15, nullif(c1, c15), ifnull(c1, c15) from t1;
+c1	c15	nullif(c1, c15)	ifnull(c1, c15)
+1	5.5	1	1
+-1	-5.5	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c16, nullif(c1, c16), ifnull(c1, c16) from t1;
+c1	c16	nullif(c1, c16)	ifnull(c1, c16)
+1	6.5	1	1
+-1	6.5	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c17, nullif(c1, c17), ifnull(c1, c17) from t1;
+c1	c17	nullif(c1, c17)	ifnull(c1, c17)
+1	8	1	1
+-1	-8	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c18, nullif(c1, c18), ifnull(c1, c18) from t1;
+c1	c18	nullif(c1, c18)	ifnull(c1, c18)
+1	9	1	1
+-1	9	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c19, nullif(c1, c19), ifnull(c1, c19) from t1;
+c1	c19	nullif(c1, c19)	ifnull(c1, c19)
+1	2019-12-01 12:00:00	1	1
+-1	2019-12-01 12:00:00	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c20, nullif(c1, c20), ifnull(c1, c20) from t1;
+c1	c20	nullif(c1, c20)	ifnull(c1, c20)
+1	2019-12-03 06:00:00	1	1
+-1	2019-12-03 06:00:00	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c21, nullif(c1, c21), ifnull(c1, c21) from t1;
+c1	c21	nullif(c1, c21)	ifnull(c1, c21)
+1	9.5	1	1
+-1	-9.5	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c1, c22, nullif(c1, c22), ifnull(c1, c22) from t1;
+c1	c22	nullif(c1, c22)	ifnull(c1, c22)
+1	10.5	1	1
+-1	10.5	-1	-1
+select c1, nullif(c1, c1) from t1;
+c1	nullif(c1, c1)
+1	NULL
+-1	NULL
+select c2, c1, nullif(c2, c1), ifnull(c2, c1) from t1;
+c2	c1	nullif(c2, c1)	ifnull(c2, c1)
+2	1	2	2
+2	-1	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c2, nullif(c2, c2), ifnull(c2, c2) from t1;
+c2	c2	nullif(c2, c2)	ifnull(c2, c2)
+2	2	NULL	2
+2	2	NULL	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c3, nullif(c2, c3), ifnull(c2, c3) from t1;
+c2	c3	nullif(c2, c3)	ifnull(c2, c3)
+2	1	2	2
+2	-1	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c4, nullif(c2, c4), ifnull(c2, c4) from t1;
+c2	c4	nullif(c2, c4)	ifnull(c2, c4)
+2	2	NULL	2
+2	2	NULL	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c5, nullif(c2, c5), ifnull(c2, c5) from t1;
+c2	c5	nullif(c2, c5)	ifnull(c2, c5)
+2	1	2	2
+2	-1	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c6, nullif(c2, c6), ifnull(c2, c6) from t1;
+c2	c6	nullif(c2, c6)	ifnull(c2, c6)
+2	2	NULL	2
+2	2	NULL	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c7, nullif(c2, c7), ifnull(c2, c7) from t1;
+c2	c7	nullif(c2, c7)	ifnull(c2, c7)
+2	1	2	2
+2	-1	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c8, nullif(c2, c8), ifnull(c2, c8) from t1;
+c2	c8	nullif(c2, c8)	ifnull(c2, c8)
+2	2	NULL	2
+2	2	NULL	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c9, nullif(c2, c9), ifnull(c2, c9) from t1;
+c2	c9	nullif(c2, c9)	ifnull(c2, c9)
+2	1	2	2
+2	-1	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c10, nullif(c2, c10), ifnull(c2, c10) from t1;
+c2	c10	nullif(c2, c10)	ifnull(c2, c10)
+2	2	NULL	2
+2	2	NULL	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c11, nullif(c2, c11), ifnull(c2, c11) from t1;
+c2	c11	nullif(c2, c11)	ifnull(c2, c11)
+2	1	2	2
+2	-1	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c12, nullif(c2, c12), ifnull(c2, c12) from t1;
+c2	c12	nullif(c2, c12)	ifnull(c2, c12)
+2	2	NULL	2
+2	2	NULL	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c13, nullif(c2, c13), ifnull(c2, c13) from t1;
+c2	c13	nullif(c2, c13)	ifnull(c2, c13)
+2	3.5	2	2
+2	-3.5	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c14, nullif(c2, c14), ifnull(c2, c14) from t1;
+c2	c14	nullif(c2, c14)	ifnull(c2, c14)
+2	4.5	2	2
+2	4.5	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c15, nullif(c2, c15), ifnull(c2, c15) from t1;
+c2	c15	nullif(c2, c15)	ifnull(c2, c15)
+2	5.5	2	2
+2	-5.5	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c16, nullif(c2, c16), ifnull(c2, c16) from t1;
+c2	c16	nullif(c2, c16)	ifnull(c2, c16)
+2	6.5	2	2
+2	6.5	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c17, nullif(c2, c17), ifnull(c2, c17) from t1;
+c2	c17	nullif(c2, c17)	ifnull(c2, c17)
+2	8	2	2
+2	-8	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c18, nullif(c2, c18), ifnull(c2, c18) from t1;
+c2	c18	nullif(c2, c18)	ifnull(c2, c18)
+2	9	2	2
+2	9	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c19, nullif(c2, c19), ifnull(c2, c19) from t1;
+c2	c19	nullif(c2, c19)	ifnull(c2, c19)
+2	2019-12-01 12:00:00	2	2
+2	2019-12-01 12:00:00	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c20, nullif(c2, c20), ifnull(c2, c20) from t1;
+c2	c20	nullif(c2, c20)	ifnull(c2, c20)
+2	2019-12-03 06:00:00	2	2
+2	2019-12-03 06:00:00	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c21, nullif(c2, c21), ifnull(c2, c21) from t1;
+c2	c21	nullif(c2, c21)	ifnull(c2, c21)
+2	9.5	2	2
+2	-9.5	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c2, c22, nullif(c2, c22), ifnull(c2, c22) from t1;
+c2	c22	nullif(c2, c22)	ifnull(c2, c22)
+2	10.5	2	2
+2	10.5	2	2
+select c2, nullif(c2, c2) from t1;
+c2	nullif(c2, c2)
+2	NULL
+2	NULL
+select c3, c1, nullif(c3, c1), ifnull(c3, c1) from t1;
+c3	c1	nullif(c3, c1)	ifnull(c3, c1)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c2, nullif(c3, c2), ifnull(c3, c2) from t1;
+c3	c2	nullif(c3, c2)	ifnull(c3, c2)
+1	2	1	1
+-1	2	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c3, nullif(c3, c3), ifnull(c3, c3) from t1;
+c3	c3	nullif(c3, c3)	ifnull(c3, c3)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c4, nullif(c3, c4), ifnull(c3, c4) from t1;
+c3	c4	nullif(c3, c4)	ifnull(c3, c4)
+1	2	1	1
+-1	2	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c5, nullif(c3, c5), ifnull(c3, c5) from t1;
+c3	c5	nullif(c3, c5)	ifnull(c3, c5)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c6, nullif(c3, c6), ifnull(c3, c6) from t1;
+c3	c6	nullif(c3, c6)	ifnull(c3, c6)
+1	2	1	1
+-1	2	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c7, nullif(c3, c7), ifnull(c3, c7) from t1;
+c3	c7	nullif(c3, c7)	ifnull(c3, c7)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c8, nullif(c3, c8), ifnull(c3, c8) from t1;
+c3	c8	nullif(c3, c8)	ifnull(c3, c8)
+1	2	1	1
+-1	2	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c9, nullif(c3, c9), ifnull(c3, c9) from t1;
+c3	c9	nullif(c3, c9)	ifnull(c3, c9)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c10, nullif(c3, c10), ifnull(c3, c10) from t1;
+c3	c10	nullif(c3, c10)	ifnull(c3, c10)
+1	2	1	1
+-1	2	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c11, nullif(c3, c11), ifnull(c3, c11) from t1;
+c3	c11	nullif(c3, c11)	ifnull(c3, c11)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c12, nullif(c3, c12), ifnull(c3, c12) from t1;
+c3	c12	nullif(c3, c12)	ifnull(c3, c12)
+1	2	1	1
+-1	2	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c13, nullif(c3, c13), ifnull(c3, c13) from t1;
+c3	c13	nullif(c3, c13)	ifnull(c3, c13)
+1	3.5	1	1
+-1	-3.5	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c14, nullif(c3, c14), ifnull(c3, c14) from t1;
+c3	c14	nullif(c3, c14)	ifnull(c3, c14)
+1	4.5	1	1
+-1	4.5	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c15, nullif(c3, c15), ifnull(c3, c15) from t1;
+c3	c15	nullif(c3, c15)	ifnull(c3, c15)
+1	5.5	1	1
+-1	-5.5	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c16, nullif(c3, c16), ifnull(c3, c16) from t1;
+c3	c16	nullif(c3, c16)	ifnull(c3, c16)
+1	6.5	1	1
+-1	6.5	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c17, nullif(c3, c17), ifnull(c3, c17) from t1;
+c3	c17	nullif(c3, c17)	ifnull(c3, c17)
+1	8	1	1
+-1	-8	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c18, nullif(c3, c18), ifnull(c3, c18) from t1;
+c3	c18	nullif(c3, c18)	ifnull(c3, c18)
+1	9	1	1
+-1	9	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c19, nullif(c3, c19), ifnull(c3, c19) from t1;
+c3	c19	nullif(c3, c19)	ifnull(c3, c19)
+1	2019-12-01 12:00:00	1	1
+-1	2019-12-01 12:00:00	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c20, nullif(c3, c20), ifnull(c3, c20) from t1;
+c3	c20	nullif(c3, c20)	ifnull(c3, c20)
+1	2019-12-03 06:00:00	1	1
+-1	2019-12-03 06:00:00	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c21, nullif(c3, c21), ifnull(c3, c21) from t1;
+c3	c21	nullif(c3, c21)	ifnull(c3, c21)
+1	9.5	1	1
+-1	-9.5	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c3, c22, nullif(c3, c22), ifnull(c3, c22) from t1;
+c3	c22	nullif(c3, c22)	ifnull(c3, c22)
+1	10.5	1	1
+-1	10.5	-1	-1
+select c3, nullif(c3, c3) from t1;
+c3	nullif(c3, c3)
+1	NULL
+-1	NULL
+select c4, c1, nullif(c4, c1), ifnull(c4, c1) from t1;
+c4	c1	nullif(c4, c1)	ifnull(c4, c1)
+2	1	2	2
+2	-1	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c2, nullif(c4, c2), ifnull(c4, c2) from t1;
+c4	c2	nullif(c4, c2)	ifnull(c4, c2)
+2	2	NULL	2
+2	2	NULL	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c3, nullif(c4, c3), ifnull(c4, c3) from t1;
+c4	c3	nullif(c4, c3)	ifnull(c4, c3)
+2	1	2	2
+2	-1	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c4, nullif(c4, c4), ifnull(c4, c4) from t1;
+c4	c4	nullif(c4, c4)	ifnull(c4, c4)
+2	2	NULL	2
+2	2	NULL	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c5, nullif(c4, c5), ifnull(c4, c5) from t1;
+c4	c5	nullif(c4, c5)	ifnull(c4, c5)
+2	1	2	2
+2	-1	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c6, nullif(c4, c6), ifnull(c4, c6) from t1;
+c4	c6	nullif(c4, c6)	ifnull(c4, c6)
+2	2	NULL	2
+2	2	NULL	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c7, nullif(c4, c7), ifnull(c4, c7) from t1;
+c4	c7	nullif(c4, c7)	ifnull(c4, c7)
+2	1	2	2
+2	-1	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c8, nullif(c4, c8), ifnull(c4, c8) from t1;
+c4	c8	nullif(c4, c8)	ifnull(c4, c8)
+2	2	NULL	2
+2	2	NULL	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c9, nullif(c4, c9), ifnull(c4, c9) from t1;
+c4	c9	nullif(c4, c9)	ifnull(c4, c9)
+2	1	2	2
+2	-1	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c10, nullif(c4, c10), ifnull(c4, c10) from t1;
+c4	c10	nullif(c4, c10)	ifnull(c4, c10)
+2	2	NULL	2
+2	2	NULL	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c11, nullif(c4, c11), ifnull(c4, c11) from t1;
+c4	c11	nullif(c4, c11)	ifnull(c4, c11)
+2	1	2	2
+2	-1	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c12, nullif(c4, c12), ifnull(c4, c12) from t1;
+c4	c12	nullif(c4, c12)	ifnull(c4, c12)
+2	2	NULL	2
+2	2	NULL	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c13, nullif(c4, c13), ifnull(c4, c13) from t1;
+c4	c13	nullif(c4, c13)	ifnull(c4, c13)
+2	3.5	2	2
+2	-3.5	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c14, nullif(c4, c14), ifnull(c4, c14) from t1;
+c4	c14	nullif(c4, c14)	ifnull(c4, c14)
+2	4.5	2	2
+2	4.5	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c15, nullif(c4, c15), ifnull(c4, c15) from t1;
+c4	c15	nullif(c4, c15)	ifnull(c4, c15)
+2	5.5	2	2
+2	-5.5	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c16, nullif(c4, c16), ifnull(c4, c16) from t1;
+c4	c16	nullif(c4, c16)	ifnull(c4, c16)
+2	6.5	2	2
+2	6.5	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c17, nullif(c4, c17), ifnull(c4, c17) from t1;
+c4	c17	nullif(c4, c17)	ifnull(c4, c17)
+2	8	2	2
+2	-8	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c18, nullif(c4, c18), ifnull(c4, c18) from t1;
+c4	c18	nullif(c4, c18)	ifnull(c4, c18)
+2	9	2	2
+2	9	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c19, nullif(c4, c19), ifnull(c4, c19) from t1;
+c4	c19	nullif(c4, c19)	ifnull(c4, c19)
+2	2019-12-01 12:00:00	2	2
+2	2019-12-01 12:00:00	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c20, nullif(c4, c20), ifnull(c4, c20) from t1;
+c4	c20	nullif(c4, c20)	ifnull(c4, c20)
+2	2019-12-03 06:00:00	2	2
+2	2019-12-03 06:00:00	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c21, nullif(c4, c21), ifnull(c4, c21) from t1;
+c4	c21	nullif(c4, c21)	ifnull(c4, c21)
+2	9.5	2	2
+2	-9.5	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c4, c22, nullif(c4, c22), ifnull(c4, c22) from t1;
+c4	c22	nullif(c4, c22)	ifnull(c4, c22)
+2	10.5	2	2
+2	10.5	2	2
+select c4, nullif(c4, c4) from t1;
+c4	nullif(c4, c4)
+2	NULL
+2	NULL
+select c5, c1, nullif(c5, c1), ifnull(c5, c1) from t1;
+c5	c1	nullif(c5, c1)	ifnull(c5, c1)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c2, nullif(c5, c2), ifnull(c5, c2) from t1;
+c5	c2	nullif(c5, c2)	ifnull(c5, c2)
+1	2	1	1
+-1	2	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c3, nullif(c5, c3), ifnull(c5, c3) from t1;
+c5	c3	nullif(c5, c3)	ifnull(c5, c3)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c4, nullif(c5, c4), ifnull(c5, c4) from t1;
+c5	c4	nullif(c5, c4)	ifnull(c5, c4)
+1	2	1	1
+-1	2	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c5, nullif(c5, c5), ifnull(c5, c5) from t1;
+c5	c5	nullif(c5, c5)	ifnull(c5, c5)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c6, nullif(c5, c6), ifnull(c5, c6) from t1;
+c5	c6	nullif(c5, c6)	ifnull(c5, c6)
+1	2	1	1
+-1	2	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c7, nullif(c5, c7), ifnull(c5, c7) from t1;
+c5	c7	nullif(c5, c7)	ifnull(c5, c7)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c8, nullif(c5, c8), ifnull(c5, c8) from t1;
+c5	c8	nullif(c5, c8)	ifnull(c5, c8)
+1	2	1	1
+-1	2	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c9, nullif(c5, c9), ifnull(c5, c9) from t1;
+c5	c9	nullif(c5, c9)	ifnull(c5, c9)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c10, nullif(c5, c10), ifnull(c5, c10) from t1;
+c5	c10	nullif(c5, c10)	ifnull(c5, c10)
+1	2	1	1
+-1	2	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c11, nullif(c5, c11), ifnull(c5, c11) from t1;
+c5	c11	nullif(c5, c11)	ifnull(c5, c11)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c12, nullif(c5, c12), ifnull(c5, c12) from t1;
+c5	c12	nullif(c5, c12)	ifnull(c5, c12)
+1	2	1	1
+-1	2	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c13, nullif(c5, c13), ifnull(c5, c13) from t1;
+c5	c13	nullif(c5, c13)	ifnull(c5, c13)
+1	3.5	1	1
+-1	-3.5	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c14, nullif(c5, c14), ifnull(c5, c14) from t1;
+c5	c14	nullif(c5, c14)	ifnull(c5, c14)
+1	4.5	1	1
+-1	4.5	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c15, nullif(c5, c15), ifnull(c5, c15) from t1;
+c5	c15	nullif(c5, c15)	ifnull(c5, c15)
+1	5.5	1	1
+-1	-5.5	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c16, nullif(c5, c16), ifnull(c5, c16) from t1;
+c5	c16	nullif(c5, c16)	ifnull(c5, c16)
+1	6.5	1	1
+-1	6.5	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c17, nullif(c5, c17), ifnull(c5, c17) from t1;
+c5	c17	nullif(c5, c17)	ifnull(c5, c17)
+1	8	1	1
+-1	-8	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c18, nullif(c5, c18), ifnull(c5, c18) from t1;
+c5	c18	nullif(c5, c18)	ifnull(c5, c18)
+1	9	1	1
+-1	9	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c19, nullif(c5, c19), ifnull(c5, c19) from t1;
+c5	c19	nullif(c5, c19)	ifnull(c5, c19)
+1	2019-12-01 12:00:00	1	1
+-1	2019-12-01 12:00:00	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c20, nullif(c5, c20), ifnull(c5, c20) from t1;
+c5	c20	nullif(c5, c20)	ifnull(c5, c20)
+1	2019-12-03 06:00:00	1	1
+-1	2019-12-03 06:00:00	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c21, nullif(c5, c21), ifnull(c5, c21) from t1;
+c5	c21	nullif(c5, c21)	ifnull(c5, c21)
+1	9.5	1	1
+-1	-9.5	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c5, c22, nullif(c5, c22), ifnull(c5, c22) from t1;
+c5	c22	nullif(c5, c22)	ifnull(c5, c22)
+1	10.5	1	1
+-1	10.5	-1	-1
+select c5, nullif(c5, c5) from t1;
+c5	nullif(c5, c5)
+1	NULL
+-1	NULL
+select c6, c1, nullif(c6, c1), ifnull(c6, c1) from t1;
+c6	c1	nullif(c6, c1)	ifnull(c6, c1)
+2	1	2	2
+2	-1	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c2, nullif(c6, c2), ifnull(c6, c2) from t1;
+c6	c2	nullif(c6, c2)	ifnull(c6, c2)
+2	2	NULL	2
+2	2	NULL	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c3, nullif(c6, c3), ifnull(c6, c3) from t1;
+c6	c3	nullif(c6, c3)	ifnull(c6, c3)
+2	1	2	2
+2	-1	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c4, nullif(c6, c4), ifnull(c6, c4) from t1;
+c6	c4	nullif(c6, c4)	ifnull(c6, c4)
+2	2	NULL	2
+2	2	NULL	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c5, nullif(c6, c5), ifnull(c6, c5) from t1;
+c6	c5	nullif(c6, c5)	ifnull(c6, c5)
+2	1	2	2
+2	-1	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c6, nullif(c6, c6), ifnull(c6, c6) from t1;
+c6	c6	nullif(c6, c6)	ifnull(c6, c6)
+2	2	NULL	2
+2	2	NULL	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c7, nullif(c6, c7), ifnull(c6, c7) from t1;
+c6	c7	nullif(c6, c7)	ifnull(c6, c7)
+2	1	2	2
+2	-1	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c8, nullif(c6, c8), ifnull(c6, c8) from t1;
+c6	c8	nullif(c6, c8)	ifnull(c6, c8)
+2	2	NULL	2
+2	2	NULL	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c9, nullif(c6, c9), ifnull(c6, c9) from t1;
+c6	c9	nullif(c6, c9)	ifnull(c6, c9)
+2	1	2	2
+2	-1	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c10, nullif(c6, c10), ifnull(c6, c10) from t1;
+c6	c10	nullif(c6, c10)	ifnull(c6, c10)
+2	2	NULL	2
+2	2	NULL	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c11, nullif(c6, c11), ifnull(c6, c11) from t1;
+c6	c11	nullif(c6, c11)	ifnull(c6, c11)
+2	1	2	2
+2	-1	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c12, nullif(c6, c12), ifnull(c6, c12) from t1;
+c6	c12	nullif(c6, c12)	ifnull(c6, c12)
+2	2	NULL	2
+2	2	NULL	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c13, nullif(c6, c13), ifnull(c6, c13) from t1;
+c6	c13	nullif(c6, c13)	ifnull(c6, c13)
+2	3.5	2	2
+2	-3.5	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c14, nullif(c6, c14), ifnull(c6, c14) from t1;
+c6	c14	nullif(c6, c14)	ifnull(c6, c14)
+2	4.5	2	2
+2	4.5	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c15, nullif(c6, c15), ifnull(c6, c15) from t1;
+c6	c15	nullif(c6, c15)	ifnull(c6, c15)
+2	5.5	2	2
+2	-5.5	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c16, nullif(c6, c16), ifnull(c6, c16) from t1;
+c6	c16	nullif(c6, c16)	ifnull(c6, c16)
+2	6.5	2	2
+2	6.5	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c17, nullif(c6, c17), ifnull(c6, c17) from t1;
+c6	c17	nullif(c6, c17)	ifnull(c6, c17)
+2	8	2	2
+2	-8	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c18, nullif(c6, c18), ifnull(c6, c18) from t1;
+c6	c18	nullif(c6, c18)	ifnull(c6, c18)
+2	9	2	2
+2	9	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c19, nullif(c6, c19), ifnull(c6, c19) from t1;
+c6	c19	nullif(c6, c19)	ifnull(c6, c19)
+2	2019-12-01 12:00:00	2	2
+2	2019-12-01 12:00:00	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c20, nullif(c6, c20), ifnull(c6, c20) from t1;
+c6	c20	nullif(c6, c20)	ifnull(c6, c20)
+2	2019-12-03 06:00:00	2	2
+2	2019-12-03 06:00:00	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c21, nullif(c6, c21), ifnull(c6, c21) from t1;
+c6	c21	nullif(c6, c21)	ifnull(c6, c21)
+2	9.5	2	2
+2	-9.5	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c6, c22, nullif(c6, c22), ifnull(c6, c22) from t1;
+c6	c22	nullif(c6, c22)	ifnull(c6, c22)
+2	10.5	2	2
+2	10.5	2	2
+select c6, nullif(c6, c6) from t1;
+c6	nullif(c6, c6)
+2	NULL
+2	NULL
+select c7, c1, nullif(c7, c1), ifnull(c7, c1) from t1;
+c7	c1	nullif(c7, c1)	ifnull(c7, c1)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c2, nullif(c7, c2), ifnull(c7, c2) from t1;
+c7	c2	nullif(c7, c2)	ifnull(c7, c2)
+1	2	1	1
+-1	2	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c3, nullif(c7, c3), ifnull(c7, c3) from t1;
+c7	c3	nullif(c7, c3)	ifnull(c7, c3)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c4, nullif(c7, c4), ifnull(c7, c4) from t1;
+c7	c4	nullif(c7, c4)	ifnull(c7, c4)
+1	2	1	1
+-1	2	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c5, nullif(c7, c5), ifnull(c7, c5) from t1;
+c7	c5	nullif(c7, c5)	ifnull(c7, c5)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c6, nullif(c7, c6), ifnull(c7, c6) from t1;
+c7	c6	nullif(c7, c6)	ifnull(c7, c6)
+1	2	1	1
+-1	2	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c7, nullif(c7, c7), ifnull(c7, c7) from t1;
+c7	c7	nullif(c7, c7)	ifnull(c7, c7)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c8, nullif(c7, c8), ifnull(c7, c8) from t1;
+c7	c8	nullif(c7, c8)	ifnull(c7, c8)
+1	2	1	1
+-1	2	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c9, nullif(c7, c9), ifnull(c7, c9) from t1;
+c7	c9	nullif(c7, c9)	ifnull(c7, c9)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c10, nullif(c7, c10), ifnull(c7, c10) from t1;
+c7	c10	nullif(c7, c10)	ifnull(c7, c10)
+1	2	1	1
+-1	2	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c11, nullif(c7, c11), ifnull(c7, c11) from t1;
+c7	c11	nullif(c7, c11)	ifnull(c7, c11)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c12, nullif(c7, c12), ifnull(c7, c12) from t1;
+c7	c12	nullif(c7, c12)	ifnull(c7, c12)
+1	2	1	1
+-1	2	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c13, nullif(c7, c13), ifnull(c7, c13) from t1;
+c7	c13	nullif(c7, c13)	ifnull(c7, c13)
+1	3.5	1	1
+-1	-3.5	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c14, nullif(c7, c14), ifnull(c7, c14) from t1;
+c7	c14	nullif(c7, c14)	ifnull(c7, c14)
+1	4.5	1	1
+-1	4.5	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c15, nullif(c7, c15), ifnull(c7, c15) from t1;
+c7	c15	nullif(c7, c15)	ifnull(c7, c15)
+1	5.5	1	1
+-1	-5.5	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c16, nullif(c7, c16), ifnull(c7, c16) from t1;
+c7	c16	nullif(c7, c16)	ifnull(c7, c16)
+1	6.5	1	1
+-1	6.5	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c17, nullif(c7, c17), ifnull(c7, c17) from t1;
+c7	c17	nullif(c7, c17)	ifnull(c7, c17)
+1	8	1	1
+-1	-8	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c18, nullif(c7, c18), ifnull(c7, c18) from t1;
+c7	c18	nullif(c7, c18)	ifnull(c7, c18)
+1	9	1	1
+-1	9	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c19, nullif(c7, c19), ifnull(c7, c19) from t1;
+c7	c19	nullif(c7, c19)	ifnull(c7, c19)
+1	2019-12-01 12:00:00	1	1
+-1	2019-12-01 12:00:00	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c20, nullif(c7, c20), ifnull(c7, c20) from t1;
+c7	c20	nullif(c7, c20)	ifnull(c7, c20)
+1	2019-12-03 06:00:00	1	1
+-1	2019-12-03 06:00:00	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c21, nullif(c7, c21), ifnull(c7, c21) from t1;
+c7	c21	nullif(c7, c21)	ifnull(c7, c21)
+1	9.5	1	1
+-1	-9.5	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c7, c22, nullif(c7, c22), ifnull(c7, c22) from t1;
+c7	c22	nullif(c7, c22)	ifnull(c7, c22)
+1	10.5	1	1
+-1	10.5	-1	-1
+select c7, nullif(c7, c7) from t1;
+c7	nullif(c7, c7)
+1	NULL
+-1	NULL
+select c8, c1, nullif(c8, c1), ifnull(c8, c1) from t1;
+c8	c1	nullif(c8, c1)	ifnull(c8, c1)
+2	1	2	2
+2	-1	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c2, nullif(c8, c2), ifnull(c8, c2) from t1;
+c8	c2	nullif(c8, c2)	ifnull(c8, c2)
+2	2	NULL	2
+2	2	NULL	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c3, nullif(c8, c3), ifnull(c8, c3) from t1;
+c8	c3	nullif(c8, c3)	ifnull(c8, c3)
+2	1	2	2
+2	-1	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c4, nullif(c8, c4), ifnull(c8, c4) from t1;
+c8	c4	nullif(c8, c4)	ifnull(c8, c4)
+2	2	NULL	2
+2	2	NULL	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c5, nullif(c8, c5), ifnull(c8, c5) from t1;
+c8	c5	nullif(c8, c5)	ifnull(c8, c5)
+2	1	2	2
+2	-1	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c6, nullif(c8, c6), ifnull(c8, c6) from t1;
+c8	c6	nullif(c8, c6)	ifnull(c8, c6)
+2	2	NULL	2
+2	2	NULL	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c7, nullif(c8, c7), ifnull(c8, c7) from t1;
+c8	c7	nullif(c8, c7)	ifnull(c8, c7)
+2	1	2	2
+2	-1	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c8, nullif(c8, c8), ifnull(c8, c8) from t1;
+c8	c8	nullif(c8, c8)	ifnull(c8, c8)
+2	2	NULL	2
+2	2	NULL	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c9, nullif(c8, c9), ifnull(c8, c9) from t1;
+c8	c9	nullif(c8, c9)	ifnull(c8, c9)
+2	1	2	2
+2	-1	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c10, nullif(c8, c10), ifnull(c8, c10) from t1;
+c8	c10	nullif(c8, c10)	ifnull(c8, c10)
+2	2	NULL	2
+2	2	NULL	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c11, nullif(c8, c11), ifnull(c8, c11) from t1;
+c8	c11	nullif(c8, c11)	ifnull(c8, c11)
+2	1	2	2
+2	-1	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c12, nullif(c8, c12), ifnull(c8, c12) from t1;
+c8	c12	nullif(c8, c12)	ifnull(c8, c12)
+2	2	NULL	2
+2	2	NULL	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c13, nullif(c8, c13), ifnull(c8, c13) from t1;
+c8	c13	nullif(c8, c13)	ifnull(c8, c13)
+2	3.5	2	2
+2	-3.5	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c14, nullif(c8, c14), ifnull(c8, c14) from t1;
+c8	c14	nullif(c8, c14)	ifnull(c8, c14)
+2	4.5	2	2
+2	4.5	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c15, nullif(c8, c15), ifnull(c8, c15) from t1;
+c8	c15	nullif(c8, c15)	ifnull(c8, c15)
+2	5.5	2	2
+2	-5.5	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c16, nullif(c8, c16), ifnull(c8, c16) from t1;
+c8	c16	nullif(c8, c16)	ifnull(c8, c16)
+2	6.5	2	2
+2	6.5	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c17, nullif(c8, c17), ifnull(c8, c17) from t1;
+c8	c17	nullif(c8, c17)	ifnull(c8, c17)
+2	8	2	2
+2	-8	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c18, nullif(c8, c18), ifnull(c8, c18) from t1;
+c8	c18	nullif(c8, c18)	ifnull(c8, c18)
+2	9	2	2
+2	9	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c19, nullif(c8, c19), ifnull(c8, c19) from t1;
+c8	c19	nullif(c8, c19)	ifnull(c8, c19)
+2	2019-12-01 12:00:00	2	2
+2	2019-12-01 12:00:00	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c20, nullif(c8, c20), ifnull(c8, c20) from t1;
+c8	c20	nullif(c8, c20)	ifnull(c8, c20)
+2	2019-12-03 06:00:00	2	2
+2	2019-12-03 06:00:00	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c21, nullif(c8, c21), ifnull(c8, c21) from t1;
+c8	c21	nullif(c8, c21)	ifnull(c8, c21)
+2	9.5	2	2
+2	-9.5	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c8, c22, nullif(c8, c22), ifnull(c8, c22) from t1;
+c8	c22	nullif(c8, c22)	ifnull(c8, c22)
+2	10.5	2	2
+2	10.5	2	2
+select c8, nullif(c8, c8) from t1;
+c8	nullif(c8, c8)
+2	NULL
+2	NULL
+select c9, c1, nullif(c9, c1), ifnull(c9, c1) from t1;
+c9	c1	nullif(c9, c1)	ifnull(c9, c1)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c2, nullif(c9, c2), ifnull(c9, c2) from t1;
+c9	c2	nullif(c9, c2)	ifnull(c9, c2)
+1	2	1	1
+-1	2	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c3, nullif(c9, c3), ifnull(c9, c3) from t1;
+c9	c3	nullif(c9, c3)	ifnull(c9, c3)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c4, nullif(c9, c4), ifnull(c9, c4) from t1;
+c9	c4	nullif(c9, c4)	ifnull(c9, c4)
+1	2	1	1
+-1	2	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c5, nullif(c9, c5), ifnull(c9, c5) from t1;
+c9	c5	nullif(c9, c5)	ifnull(c9, c5)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c6, nullif(c9, c6), ifnull(c9, c6) from t1;
+c9	c6	nullif(c9, c6)	ifnull(c9, c6)
+1	2	1	1
+-1	2	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c7, nullif(c9, c7), ifnull(c9, c7) from t1;
+c9	c7	nullif(c9, c7)	ifnull(c9, c7)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c8, nullif(c9, c8), ifnull(c9, c8) from t1;
+c9	c8	nullif(c9, c8)	ifnull(c9, c8)
+1	2	1	1
+-1	2	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c9, nullif(c9, c9), ifnull(c9, c9) from t1;
+c9	c9	nullif(c9, c9)	ifnull(c9, c9)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c10, nullif(c9, c10), ifnull(c9, c10) from t1;
+c9	c10	nullif(c9, c10)	ifnull(c9, c10)
+1	2	1	1
+-1	2	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c11, nullif(c9, c11), ifnull(c9, c11) from t1;
+c9	c11	nullif(c9, c11)	ifnull(c9, c11)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c12, nullif(c9, c12), ifnull(c9, c12) from t1;
+c9	c12	nullif(c9, c12)	ifnull(c9, c12)
+1	2	1	1
+-1	2	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c13, nullif(c9, c13), ifnull(c9, c13) from t1;
+c9	c13	nullif(c9, c13)	ifnull(c9, c13)
+1	3.5	1	1
+-1	-3.5	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c14, nullif(c9, c14), ifnull(c9, c14) from t1;
+c9	c14	nullif(c9, c14)	ifnull(c9, c14)
+1	4.5	1	1
+-1	4.5	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c15, nullif(c9, c15), ifnull(c9, c15) from t1;
+c9	c15	nullif(c9, c15)	ifnull(c9, c15)
+1	5.5	1	1
+-1	-5.5	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c16, nullif(c9, c16), ifnull(c9, c16) from t1;
+c9	c16	nullif(c9, c16)	ifnull(c9, c16)
+1	6.5	1	1
+-1	6.5	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c17, nullif(c9, c17), ifnull(c9, c17) from t1;
+c9	c17	nullif(c9, c17)	ifnull(c9, c17)
+1	8	1	1
+-1	-8	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c18, nullif(c9, c18), ifnull(c9, c18) from t1;
+c9	c18	nullif(c9, c18)	ifnull(c9, c18)
+1	9	1	1
+-1	9	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c19, nullif(c9, c19), ifnull(c9, c19) from t1;
+c9	c19	nullif(c9, c19)	ifnull(c9, c19)
+1	2019-12-01 12:00:00	1	1
+-1	2019-12-01 12:00:00	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c20, nullif(c9, c20), ifnull(c9, c20) from t1;
+c9	c20	nullif(c9, c20)	ifnull(c9, c20)
+1	2019-12-03 06:00:00	1	1
+-1	2019-12-03 06:00:00	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c21, nullif(c9, c21), ifnull(c9, c21) from t1;
+c9	c21	nullif(c9, c21)	ifnull(c9, c21)
+1	9.5	1	1
+-1	-9.5	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c9, c22, nullif(c9, c22), ifnull(c9, c22) from t1;
+c9	c22	nullif(c9, c22)	ifnull(c9, c22)
+1	10.5	1	1
+-1	10.5	-1	-1
+select c9, nullif(c9, c9) from t1;
+c9	nullif(c9, c9)
+1	NULL
+-1	NULL
+select c10, c1, nullif(c10, c1), ifnull(c10, c1) from t1;
+c10	c1	nullif(c10, c1)	ifnull(c10, c1)
+2	1	2	2
+2	-1	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c2, nullif(c10, c2), ifnull(c10, c2) from t1;
+c10	c2	nullif(c10, c2)	ifnull(c10, c2)
+2	2	NULL	2
+2	2	NULL	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c3, nullif(c10, c3), ifnull(c10, c3) from t1;
+c10	c3	nullif(c10, c3)	ifnull(c10, c3)
+2	1	2	2
+2	-1	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c4, nullif(c10, c4), ifnull(c10, c4) from t1;
+c10	c4	nullif(c10, c4)	ifnull(c10, c4)
+2	2	NULL	2
+2	2	NULL	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c5, nullif(c10, c5), ifnull(c10, c5) from t1;
+c10	c5	nullif(c10, c5)	ifnull(c10, c5)
+2	1	2	2
+2	-1	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c6, nullif(c10, c6), ifnull(c10, c6) from t1;
+c10	c6	nullif(c10, c6)	ifnull(c10, c6)
+2	2	NULL	2
+2	2	NULL	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c7, nullif(c10, c7), ifnull(c10, c7) from t1;
+c10	c7	nullif(c10, c7)	ifnull(c10, c7)
+2	1	2	2
+2	-1	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c8, nullif(c10, c8), ifnull(c10, c8) from t1;
+c10	c8	nullif(c10, c8)	ifnull(c10, c8)
+2	2	NULL	2
+2	2	NULL	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c9, nullif(c10, c9), ifnull(c10, c9) from t1;
+c10	c9	nullif(c10, c9)	ifnull(c10, c9)
+2	1	2	2
+2	-1	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c10, nullif(c10, c10), ifnull(c10, c10) from t1;
+c10	c10	nullif(c10, c10)	ifnull(c10, c10)
+2	2	NULL	2
+2	2	NULL	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c11, nullif(c10, c11), ifnull(c10, c11) from t1;
+c10	c11	nullif(c10, c11)	ifnull(c10, c11)
+2	1	2	2
+2	-1	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c12, nullif(c10, c12), ifnull(c10, c12) from t1;
+c10	c12	nullif(c10, c12)	ifnull(c10, c12)
+2	2	NULL	2
+2	2	NULL	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c13, nullif(c10, c13), ifnull(c10, c13) from t1;
+c10	c13	nullif(c10, c13)	ifnull(c10, c13)
+2	3.5	2	2
+2	-3.5	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c14, nullif(c10, c14), ifnull(c10, c14) from t1;
+c10	c14	nullif(c10, c14)	ifnull(c10, c14)
+2	4.5	2	2
+2	4.5	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c15, nullif(c10, c15), ifnull(c10, c15) from t1;
+c10	c15	nullif(c10, c15)	ifnull(c10, c15)
+2	5.5	2	2
+2	-5.5	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c16, nullif(c10, c16), ifnull(c10, c16) from t1;
+c10	c16	nullif(c10, c16)	ifnull(c10, c16)
+2	6.5	2	2
+2	6.5	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c17, nullif(c10, c17), ifnull(c10, c17) from t1;
+c10	c17	nullif(c10, c17)	ifnull(c10, c17)
+2	8	2	2
+2	-8	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c18, nullif(c10, c18), ifnull(c10, c18) from t1;
+c10	c18	nullif(c10, c18)	ifnull(c10, c18)
+2	9	2	2
+2	9	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c19, nullif(c10, c19), ifnull(c10, c19) from t1;
+c10	c19	nullif(c10, c19)	ifnull(c10, c19)
+2	2019-12-01 12:00:00	2	2
+2	2019-12-01 12:00:00	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c20, nullif(c10, c20), ifnull(c10, c20) from t1;
+c10	c20	nullif(c10, c20)	ifnull(c10, c20)
+2	2019-12-03 06:00:00	2	2
+2	2019-12-03 06:00:00	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c21, nullif(c10, c21), ifnull(c10, c21) from t1;
+c10	c21	nullif(c10, c21)	ifnull(c10, c21)
+2	9.5	2	2
+2	-9.5	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c10, c22, nullif(c10, c22), ifnull(c10, c22) from t1;
+c10	c22	nullif(c10, c22)	ifnull(c10, c22)
+2	10.5	2	2
+2	10.5	2	2
+select c10, nullif(c10, c10) from t1;
+c10	nullif(c10, c10)
+2	NULL
+2	NULL
+select c11, c1, nullif(c11, c1), ifnull(c11, c1) from t1;
+c11	c1	nullif(c11, c1)	ifnull(c11, c1)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c2, nullif(c11, c2), ifnull(c11, c2) from t1;
+c11	c2	nullif(c11, c2)	ifnull(c11, c2)
+1	2	1	1
+-1	2	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c3, nullif(c11, c3), ifnull(c11, c3) from t1;
+c11	c3	nullif(c11, c3)	ifnull(c11, c3)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c4, nullif(c11, c4), ifnull(c11, c4) from t1;
+c11	c4	nullif(c11, c4)	ifnull(c11, c4)
+1	2	1	1
+-1	2	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c5, nullif(c11, c5), ifnull(c11, c5) from t1;
+c11	c5	nullif(c11, c5)	ifnull(c11, c5)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c6, nullif(c11, c6), ifnull(c11, c6) from t1;
+c11	c6	nullif(c11, c6)	ifnull(c11, c6)
+1	2	1	1
+-1	2	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c7, nullif(c11, c7), ifnull(c11, c7) from t1;
+c11	c7	nullif(c11, c7)	ifnull(c11, c7)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c8, nullif(c11, c8), ifnull(c11, c8) from t1;
+c11	c8	nullif(c11, c8)	ifnull(c11, c8)
+1	2	1	1
+-1	2	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c9, nullif(c11, c9), ifnull(c11, c9) from t1;
+c11	c9	nullif(c11, c9)	ifnull(c11, c9)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c10, nullif(c11, c10), ifnull(c11, c10) from t1;
+c11	c10	nullif(c11, c10)	ifnull(c11, c10)
+1	2	1	1
+-1	2	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c11, nullif(c11, c11), ifnull(c11, c11) from t1;
+c11	c11	nullif(c11, c11)	ifnull(c11, c11)
+1	1	NULL	1
+-1	-1	NULL	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c12, nullif(c11, c12), ifnull(c11, c12) from t1;
+c11	c12	nullif(c11, c12)	ifnull(c11, c12)
+1	2	1	1
+-1	2	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c13, nullif(c11, c13), ifnull(c11, c13) from t1;
+c11	c13	nullif(c11, c13)	ifnull(c11, c13)
+1	3.5	1	1
+-1	-3.5	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c14, nullif(c11, c14), ifnull(c11, c14) from t1;
+c11	c14	nullif(c11, c14)	ifnull(c11, c14)
+1	4.5	1	1
+-1	4.5	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c15, nullif(c11, c15), ifnull(c11, c15) from t1;
+c11	c15	nullif(c11, c15)	ifnull(c11, c15)
+1	5.5	1	1
+-1	-5.5	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c16, nullif(c11, c16), ifnull(c11, c16) from t1;
+c11	c16	nullif(c11, c16)	ifnull(c11, c16)
+1	6.5	1	1
+-1	6.5	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c17, nullif(c11, c17), ifnull(c11, c17) from t1;
+c11	c17	nullif(c11, c17)	ifnull(c11, c17)
+1	8	1	1
+-1	-8	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c18, nullif(c11, c18), ifnull(c11, c18) from t1;
+c11	c18	nullif(c11, c18)	ifnull(c11, c18)
+1	9	1	1
+-1	9	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c19, nullif(c11, c19), ifnull(c11, c19) from t1;
+c11	c19	nullif(c11, c19)	ifnull(c11, c19)
+1	2019-12-01 12:00:00	1	1
+-1	2019-12-01 12:00:00	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c20, nullif(c11, c20), ifnull(c11, c20) from t1;
+c11	c20	nullif(c11, c20)	ifnull(c11, c20)
+1	2019-12-03 06:00:00	1	1
+-1	2019-12-03 06:00:00	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c21, nullif(c11, c21), ifnull(c11, c21) from t1;
+c11	c21	nullif(c11, c21)	ifnull(c11, c21)
+1	9.5	1	1
+-1	-9.5	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c11, c22, nullif(c11, c22), ifnull(c11, c22) from t1;
+c11	c22	nullif(c11, c22)	ifnull(c11, c22)
+1	10.5	1	1
+-1	10.5	-1	-1
+select c11, nullif(c11, c11) from t1;
+c11	nullif(c11, c11)
+1	NULL
+-1	NULL
+select c12, c1, nullif(c12, c1), ifnull(c12, c1) from t1;
+c12	c1	nullif(c12, c1)	ifnull(c12, c1)
+2	1	2	2
+2	-1	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c2, nullif(c12, c2), ifnull(c12, c2) from t1;
+c12	c2	nullif(c12, c2)	ifnull(c12, c2)
+2	2	NULL	2
+2	2	NULL	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c3, nullif(c12, c3), ifnull(c12, c3) from t1;
+c12	c3	nullif(c12, c3)	ifnull(c12, c3)
+2	1	2	2
+2	-1	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c4, nullif(c12, c4), ifnull(c12, c4) from t1;
+c12	c4	nullif(c12, c4)	ifnull(c12, c4)
+2	2	NULL	2
+2	2	NULL	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c5, nullif(c12, c5), ifnull(c12, c5) from t1;
+c12	c5	nullif(c12, c5)	ifnull(c12, c5)
+2	1	2	2
+2	-1	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c6, nullif(c12, c6), ifnull(c12, c6) from t1;
+c12	c6	nullif(c12, c6)	ifnull(c12, c6)
+2	2	NULL	2
+2	2	NULL	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c7, nullif(c12, c7), ifnull(c12, c7) from t1;
+c12	c7	nullif(c12, c7)	ifnull(c12, c7)
+2	1	2	2
+2	-1	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c8, nullif(c12, c8), ifnull(c12, c8) from t1;
+c12	c8	nullif(c12, c8)	ifnull(c12, c8)
+2	2	NULL	2
+2	2	NULL	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c9, nullif(c12, c9), ifnull(c12, c9) from t1;
+c12	c9	nullif(c12, c9)	ifnull(c12, c9)
+2	1	2	2
+2	-1	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c10, nullif(c12, c10), ifnull(c12, c10) from t1;
+c12	c10	nullif(c12, c10)	ifnull(c12, c10)
+2	2	NULL	2
+2	2	NULL	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c11, nullif(c12, c11), ifnull(c12, c11) from t1;
+c12	c11	nullif(c12, c11)	ifnull(c12, c11)
+2	1	2	2
+2	-1	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c12, nullif(c12, c12), ifnull(c12, c12) from t1;
+c12	c12	nullif(c12, c12)	ifnull(c12, c12)
+2	2	NULL	2
+2	2	NULL	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c13, nullif(c12, c13), ifnull(c12, c13) from t1;
+c12	c13	nullif(c12, c13)	ifnull(c12, c13)
+2	3.5	2	2
+2	-3.5	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c14, nullif(c12, c14), ifnull(c12, c14) from t1;
+c12	c14	nullif(c12, c14)	ifnull(c12, c14)
+2	4.5	2	2
+2	4.5	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c15, nullif(c12, c15), ifnull(c12, c15) from t1;
+c12	c15	nullif(c12, c15)	ifnull(c12, c15)
+2	5.5	2	2
+2	-5.5	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c16, nullif(c12, c16), ifnull(c12, c16) from t1;
+c12	c16	nullif(c12, c16)	ifnull(c12, c16)
+2	6.5	2	2
+2	6.5	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c17, nullif(c12, c17), ifnull(c12, c17) from t1;
+c12	c17	nullif(c12, c17)	ifnull(c12, c17)
+2	8	2	2
+2	-8	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c18, nullif(c12, c18), ifnull(c12, c18) from t1;
+c12	c18	nullif(c12, c18)	ifnull(c12, c18)
+2	9	2	2
+2	9	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c19, nullif(c12, c19), ifnull(c12, c19) from t1;
+c12	c19	nullif(c12, c19)	ifnull(c12, c19)
+2	2019-12-01 12:00:00	2	2
+2	2019-12-01 12:00:00	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c20, nullif(c12, c20), ifnull(c12, c20) from t1;
+c12	c20	nullif(c12, c20)	ifnull(c12, c20)
+2	2019-12-03 06:00:00	2	2
+2	2019-12-03 06:00:00	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c21, nullif(c12, c21), ifnull(c12, c21) from t1;
+c12	c21	nullif(c12, c21)	ifnull(c12, c21)
+2	9.5	2	2
+2	-9.5	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c12, c22, nullif(c12, c22), ifnull(c12, c22) from t1;
+c12	c22	nullif(c12, c22)	ifnull(c12, c22)
+2	10.5	2	2
+2	10.5	2	2
+select c12, nullif(c12, c12) from t1;
+c12	nullif(c12, c12)
+2	NULL
+2	NULL
+select c13, c1, nullif(c13, c1), ifnull(c13, c1) from t1;
+c13	c1	nullif(c13, c1)	ifnull(c13, c1)
+3.5	1	3.5	3.5
+-3.5	-1	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c2, nullif(c13, c2), ifnull(c13, c2) from t1;
+c13	c2	nullif(c13, c2)	ifnull(c13, c2)
+3.5	2	3.5	3.5
+-3.5	2	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c3, nullif(c13, c3), ifnull(c13, c3) from t1;
+c13	c3	nullif(c13, c3)	ifnull(c13, c3)
+3.5	1	3.5	3.5
+-3.5	-1	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c4, nullif(c13, c4), ifnull(c13, c4) from t1;
+c13	c4	nullif(c13, c4)	ifnull(c13, c4)
+3.5	2	3.5	3.5
+-3.5	2	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c5, nullif(c13, c5), ifnull(c13, c5) from t1;
+c13	c5	nullif(c13, c5)	ifnull(c13, c5)
+3.5	1	3.5	3.5
+-3.5	-1	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c6, nullif(c13, c6), ifnull(c13, c6) from t1;
+c13	c6	nullif(c13, c6)	ifnull(c13, c6)
+3.5	2	3.5	3.5
+-3.5	2	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c7, nullif(c13, c7), ifnull(c13, c7) from t1;
+c13	c7	nullif(c13, c7)	ifnull(c13, c7)
+3.5	1	3.5	3.5
+-3.5	-1	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c8, nullif(c13, c8), ifnull(c13, c8) from t1;
+c13	c8	nullif(c13, c8)	ifnull(c13, c8)
+3.5	2	3.5	3.5
+-3.5	2	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c9, nullif(c13, c9), ifnull(c13, c9) from t1;
+c13	c9	nullif(c13, c9)	ifnull(c13, c9)
+3.5	1	3.5	3.5
+-3.5	-1	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c10, nullif(c13, c10), ifnull(c13, c10) from t1;
+c13	c10	nullif(c13, c10)	ifnull(c13, c10)
+3.5	2	3.5	3.5
+-3.5	2	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c11, nullif(c13, c11), ifnull(c13, c11) from t1;
+c13	c11	nullif(c13, c11)	ifnull(c13, c11)
+3.5	1	3.5	3.5
+-3.5	-1	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c12, nullif(c13, c12), ifnull(c13, c12) from t1;
+c13	c12	nullif(c13, c12)	ifnull(c13, c12)
+3.5	2	3.5	3.5
+-3.5	2	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c13, nullif(c13, c13), ifnull(c13, c13) from t1;
+c13	c13	nullif(c13, c13)	ifnull(c13, c13)
+3.5	3.5	NULL	3.5
+-3.5	-3.5	NULL	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c14, nullif(c13, c14), ifnull(c13, c14) from t1;
+c13	c14	nullif(c13, c14)	ifnull(c13, c14)
+3.5	4.5	3.5	3.5
+-3.5	4.5	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c15, nullif(c13, c15), ifnull(c13, c15) from t1;
+c13	c15	nullif(c13, c15)	ifnull(c13, c15)
+3.5	5.5	3.5	3.5
+-3.5	-5.5	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c16, nullif(c13, c16), ifnull(c13, c16) from t1;
+c13	c16	nullif(c13, c16)	ifnull(c13, c16)
+3.5	6.5	3.5	3.5
+-3.5	6.5	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c17, nullif(c13, c17), ifnull(c13, c17) from t1;
+c13	c17	nullif(c13, c17)	ifnull(c13, c17)
+3.5	8	3.5	3.5
+-3.5	-8	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c18, nullif(c13, c18), ifnull(c13, c18) from t1;
+c13	c18	nullif(c13, c18)	ifnull(c13, c18)
+3.5	9	3.5	3.5
+-3.5	9	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c19, nullif(c13, c19), ifnull(c13, c19) from t1;
+c13	c19	nullif(c13, c19)	ifnull(c13, c19)
+3.5	2019-12-01 12:00:00	3.5	3.5
+-3.5	2019-12-01 12:00:00	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c20, nullif(c13, c20), ifnull(c13, c20) from t1;
+c13	c20	nullif(c13, c20)	ifnull(c13, c20)
+3.5	2019-12-03 06:00:00	3.5	3.5
+-3.5	2019-12-03 06:00:00	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c21, nullif(c13, c21), ifnull(c13, c21) from t1;
+c13	c21	nullif(c13, c21)	ifnull(c13, c21)
+3.5	9.5	3.5	3.5
+-3.5	-9.5	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c13, c22, nullif(c13, c22), ifnull(c13, c22) from t1;
+c13	c22	nullif(c13, c22)	ifnull(c13, c22)
+3.5	10.5	3.5	3.5
+-3.5	10.5	-3.5	-3.5
+select c13, nullif(c13, c13) from t1;
+c13	nullif(c13, c13)
+3.5	NULL
+-3.5	NULL
+select c14, c1, nullif(c14, c1), ifnull(c14, c1) from t1;
+c14	c1	nullif(c14, c1)	ifnull(c14, c1)
+4.5	1	4.5	4.5
+4.5	-1	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c2, nullif(c14, c2), ifnull(c14, c2) from t1;
+c14	c2	nullif(c14, c2)	ifnull(c14, c2)
+4.5	2	4.5	4.5
+4.5	2	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c3, nullif(c14, c3), ifnull(c14, c3) from t1;
+c14	c3	nullif(c14, c3)	ifnull(c14, c3)
+4.5	1	4.5	4.5
+4.5	-1	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c4, nullif(c14, c4), ifnull(c14, c4) from t1;
+c14	c4	nullif(c14, c4)	ifnull(c14, c4)
+4.5	2	4.5	4.5
+4.5	2	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c5, nullif(c14, c5), ifnull(c14, c5) from t1;
+c14	c5	nullif(c14, c5)	ifnull(c14, c5)
+4.5	1	4.5	4.5
+4.5	-1	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c6, nullif(c14, c6), ifnull(c14, c6) from t1;
+c14	c6	nullif(c14, c6)	ifnull(c14, c6)
+4.5	2	4.5	4.5
+4.5	2	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c7, nullif(c14, c7), ifnull(c14, c7) from t1;
+c14	c7	nullif(c14, c7)	ifnull(c14, c7)
+4.5	1	4.5	4.5
+4.5	-1	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c8, nullif(c14, c8), ifnull(c14, c8) from t1;
+c14	c8	nullif(c14, c8)	ifnull(c14, c8)
+4.5	2	4.5	4.5
+4.5	2	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c9, nullif(c14, c9), ifnull(c14, c9) from t1;
+c14	c9	nullif(c14, c9)	ifnull(c14, c9)
+4.5	1	4.5	4.5
+4.5	-1	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c10, nullif(c14, c10), ifnull(c14, c10) from t1;
+c14	c10	nullif(c14, c10)	ifnull(c14, c10)
+4.5	2	4.5	4.5
+4.5	2	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c11, nullif(c14, c11), ifnull(c14, c11) from t1;
+c14	c11	nullif(c14, c11)	ifnull(c14, c11)
+4.5	1	4.5	4.5
+4.5	-1	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c12, nullif(c14, c12), ifnull(c14, c12) from t1;
+c14	c12	nullif(c14, c12)	ifnull(c14, c12)
+4.5	2	4.5	4.5
+4.5	2	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c13, nullif(c14, c13), ifnull(c14, c13) from t1;
+c14	c13	nullif(c14, c13)	ifnull(c14, c13)
+4.5	3.5	4.5	4.5
+4.5	-3.5	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c14, nullif(c14, c14), ifnull(c14, c14) from t1;
+c14	c14	nullif(c14, c14)	ifnull(c14, c14)
+4.5	4.5	NULL	4.5
+4.5	4.5	NULL	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c15, nullif(c14, c15), ifnull(c14, c15) from t1;
+c14	c15	nullif(c14, c15)	ifnull(c14, c15)
+4.5	5.5	4.5	4.5
+4.5	-5.5	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c16, nullif(c14, c16), ifnull(c14, c16) from t1;
+c14	c16	nullif(c14, c16)	ifnull(c14, c16)
+4.5	6.5	4.5	4.5
+4.5	6.5	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c17, nullif(c14, c17), ifnull(c14, c17) from t1;
+c14	c17	nullif(c14, c17)	ifnull(c14, c17)
+4.5	8	4.5	4.5
+4.5	-8	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c18, nullif(c14, c18), ifnull(c14, c18) from t1;
+c14	c18	nullif(c14, c18)	ifnull(c14, c18)
+4.5	9	4.5	4.5
+4.5	9	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c19, nullif(c14, c19), ifnull(c14, c19) from t1;
+c14	c19	nullif(c14, c19)	ifnull(c14, c19)
+4.5	2019-12-01 12:00:00	4.5	4.5
+4.5	2019-12-01 12:00:00	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c20, nullif(c14, c20), ifnull(c14, c20) from t1;
+c14	c20	nullif(c14, c20)	ifnull(c14, c20)
+4.5	2019-12-03 06:00:00	4.5	4.5
+4.5	2019-12-03 06:00:00	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c21, nullif(c14, c21), ifnull(c14, c21) from t1;
+c14	c21	nullif(c14, c21)	ifnull(c14, c21)
+4.5	9.5	4.5	4.5
+4.5	-9.5	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c14, c22, nullif(c14, c22), ifnull(c14, c22) from t1;
+c14	c22	nullif(c14, c22)	ifnull(c14, c22)
+4.5	10.5	4.5	4.5
+4.5	10.5	4.5	4.5
+select c14, nullif(c14, c14) from t1;
+c14	nullif(c14, c14)
+4.5	NULL
+4.5	NULL
+select c15, c1, nullif(c15, c1), ifnull(c15, c1) from t1;
+c15	c1	nullif(c15, c1)	ifnull(c15, c1)
+5.5	1	5.5	5.5
+-5.5	-1	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c2, nullif(c15, c2), ifnull(c15, c2) from t1;
+c15	c2	nullif(c15, c2)	ifnull(c15, c2)
+5.5	2	5.5	5.5
+-5.5	2	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c3, nullif(c15, c3), ifnull(c15, c3) from t1;
+c15	c3	nullif(c15, c3)	ifnull(c15, c3)
+5.5	1	5.5	5.5
+-5.5	-1	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c4, nullif(c15, c4), ifnull(c15, c4) from t1;
+c15	c4	nullif(c15, c4)	ifnull(c15, c4)
+5.5	2	5.5	5.5
+-5.5	2	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c5, nullif(c15, c5), ifnull(c15, c5) from t1;
+c15	c5	nullif(c15, c5)	ifnull(c15, c5)
+5.5	1	5.5	5.5
+-5.5	-1	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c6, nullif(c15, c6), ifnull(c15, c6) from t1;
+c15	c6	nullif(c15, c6)	ifnull(c15, c6)
+5.5	2	5.5	5.5
+-5.5	2	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c7, nullif(c15, c7), ifnull(c15, c7) from t1;
+c15	c7	nullif(c15, c7)	ifnull(c15, c7)
+5.5	1	5.5	5.5
+-5.5	-1	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c8, nullif(c15, c8), ifnull(c15, c8) from t1;
+c15	c8	nullif(c15, c8)	ifnull(c15, c8)
+5.5	2	5.5	5.5
+-5.5	2	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c9, nullif(c15, c9), ifnull(c15, c9) from t1;
+c15	c9	nullif(c15, c9)	ifnull(c15, c9)
+5.5	1	5.5	5.5
+-5.5	-1	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c10, nullif(c15, c10), ifnull(c15, c10) from t1;
+c15	c10	nullif(c15, c10)	ifnull(c15, c10)
+5.5	2	5.5	5.5
+-5.5	2	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c11, nullif(c15, c11), ifnull(c15, c11) from t1;
+c15	c11	nullif(c15, c11)	ifnull(c15, c11)
+5.5	1	5.5	5.5
+-5.5	-1	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c12, nullif(c15, c12), ifnull(c15, c12) from t1;
+c15	c12	nullif(c15, c12)	ifnull(c15, c12)
+5.5	2	5.5	5.5
+-5.5	2	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c13, nullif(c15, c13), ifnull(c15, c13) from t1;
+c15	c13	nullif(c15, c13)	ifnull(c15, c13)
+5.5	3.5	5.5	5.5
+-5.5	-3.5	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c14, nullif(c15, c14), ifnull(c15, c14) from t1;
+c15	c14	nullif(c15, c14)	ifnull(c15, c14)
+5.5	4.5	5.5	5.5
+-5.5	4.5	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c15, nullif(c15, c15), ifnull(c15, c15) from t1;
+c15	c15	nullif(c15, c15)	ifnull(c15, c15)
+5.5	5.5	NULL	5.5
+-5.5	-5.5	NULL	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c16, nullif(c15, c16), ifnull(c15, c16) from t1;
+c15	c16	nullif(c15, c16)	ifnull(c15, c16)
+5.5	6.5	5.5	5.5
+-5.5	6.5	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c17, nullif(c15, c17), ifnull(c15, c17) from t1;
+c15	c17	nullif(c15, c17)	ifnull(c15, c17)
+5.5	8	5.5	5.5
+-5.5	-8	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c18, nullif(c15, c18), ifnull(c15, c18) from t1;
+c15	c18	nullif(c15, c18)	ifnull(c15, c18)
+5.5	9	5.5	5.5
+-5.5	9	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c19, nullif(c15, c19), ifnull(c15, c19) from t1;
+c15	c19	nullif(c15, c19)	ifnull(c15, c19)
+5.5	2019-12-01 12:00:00	5.5	5.5
+-5.5	2019-12-01 12:00:00	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c20, nullif(c15, c20), ifnull(c15, c20) from t1;
+c15	c20	nullif(c15, c20)	ifnull(c15, c20)
+5.5	2019-12-03 06:00:00	5.5	5.5
+-5.5	2019-12-03 06:00:00	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c21, nullif(c15, c21), ifnull(c15, c21) from t1;
+c15	c21	nullif(c15, c21)	ifnull(c15, c21)
+5.5	9.5	5.5	5.5
+-5.5	-9.5	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c15, c22, nullif(c15, c22), ifnull(c15, c22) from t1;
+c15	c22	nullif(c15, c22)	ifnull(c15, c22)
+5.5	10.5	5.5	5.5
+-5.5	10.5	-5.5	-5.5
+select c15, nullif(c15, c15) from t1;
+c15	nullif(c15, c15)
+5.5	NULL
+-5.5	NULL
+select c16, c1, nullif(c16, c1), ifnull(c16, c1) from t1;
+c16	c1	nullif(c16, c1)	ifnull(c16, c1)
+6.5	1	6.5	6.5
+6.5	-1	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c2, nullif(c16, c2), ifnull(c16, c2) from t1;
+c16	c2	nullif(c16, c2)	ifnull(c16, c2)
+6.5	2	6.5	6.5
+6.5	2	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c3, nullif(c16, c3), ifnull(c16, c3) from t1;
+c16	c3	nullif(c16, c3)	ifnull(c16, c3)
+6.5	1	6.5	6.5
+6.5	-1	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c4, nullif(c16, c4), ifnull(c16, c4) from t1;
+c16	c4	nullif(c16, c4)	ifnull(c16, c4)
+6.5	2	6.5	6.5
+6.5	2	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c5, nullif(c16, c5), ifnull(c16, c5) from t1;
+c16	c5	nullif(c16, c5)	ifnull(c16, c5)
+6.5	1	6.5	6.5
+6.5	-1	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c6, nullif(c16, c6), ifnull(c16, c6) from t1;
+c16	c6	nullif(c16, c6)	ifnull(c16, c6)
+6.5	2	6.5	6.5
+6.5	2	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c7, nullif(c16, c7), ifnull(c16, c7) from t1;
+c16	c7	nullif(c16, c7)	ifnull(c16, c7)
+6.5	1	6.5	6.5
+6.5	-1	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c8, nullif(c16, c8), ifnull(c16, c8) from t1;
+c16	c8	nullif(c16, c8)	ifnull(c16, c8)
+6.5	2	6.5	6.5
+6.5	2	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c9, nullif(c16, c9), ifnull(c16, c9) from t1;
+c16	c9	nullif(c16, c9)	ifnull(c16, c9)
+6.5	1	6.5	6.5
+6.5	-1	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c10, nullif(c16, c10), ifnull(c16, c10) from t1;
+c16	c10	nullif(c16, c10)	ifnull(c16, c10)
+6.5	2	6.5	6.5
+6.5	2	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c11, nullif(c16, c11), ifnull(c16, c11) from t1;
+c16	c11	nullif(c16, c11)	ifnull(c16, c11)
+6.5	1	6.5	6.5
+6.5	-1	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c12, nullif(c16, c12), ifnull(c16, c12) from t1;
+c16	c12	nullif(c16, c12)	ifnull(c16, c12)
+6.5	2	6.5	6.5
+6.5	2	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c13, nullif(c16, c13), ifnull(c16, c13) from t1;
+c16	c13	nullif(c16, c13)	ifnull(c16, c13)
+6.5	3.5	6.5	6.5
+6.5	-3.5	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c14, nullif(c16, c14), ifnull(c16, c14) from t1;
+c16	c14	nullif(c16, c14)	ifnull(c16, c14)
+6.5	4.5	6.5	6.5
+6.5	4.5	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c15, nullif(c16, c15), ifnull(c16, c15) from t1;
+c16	c15	nullif(c16, c15)	ifnull(c16, c15)
+6.5	5.5	6.5	6.5
+6.5	-5.5	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c16, nullif(c16, c16), ifnull(c16, c16) from t1;
+c16	c16	nullif(c16, c16)	ifnull(c16, c16)
+6.5	6.5	NULL	6.5
+6.5	6.5	NULL	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c17, nullif(c16, c17), ifnull(c16, c17) from t1;
+c16	c17	nullif(c16, c17)	ifnull(c16, c17)
+6.5	8	6.5	6.5
+6.5	-8	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c18, nullif(c16, c18), ifnull(c16, c18) from t1;
+c16	c18	nullif(c16, c18)	ifnull(c16, c18)
+6.5	9	6.5	6.5
+6.5	9	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c19, nullif(c16, c19), ifnull(c16, c19) from t1;
+c16	c19	nullif(c16, c19)	ifnull(c16, c19)
+6.5	2019-12-01 12:00:00	6.5	6.5
+6.5	2019-12-01 12:00:00	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c20, nullif(c16, c20), ifnull(c16, c20) from t1;
+c16	c20	nullif(c16, c20)	ifnull(c16, c20)
+6.5	2019-12-03 06:00:00	6.5	6.5
+6.5	2019-12-03 06:00:00	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c21, nullif(c16, c21), ifnull(c16, c21) from t1;
+c16	c21	nullif(c16, c21)	ifnull(c16, c21)
+6.5	9.5	6.5	6.5
+6.5	-9.5	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c16, c22, nullif(c16, c22), ifnull(c16, c22) from t1;
+c16	c22	nullif(c16, c22)	ifnull(c16, c22)
+6.5	10.5	6.5	6.5
+6.5	10.5	6.5	6.5
+select c16, nullif(c16, c16) from t1;
+c16	nullif(c16, c16)
+6.5	NULL
+6.5	NULL
+select c17, c1, nullif(c17, c1), ifnull(c17, c1) from t1;
+c17	c1	nullif(c17, c1)	ifnull(c17, c1)
+8	1	8	8
+-8	-1	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c2, nullif(c17, c2), ifnull(c17, c2) from t1;
+c17	c2	nullif(c17, c2)	ifnull(c17, c2)
+8	2	8	8
+-8	2	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c3, nullif(c17, c3), ifnull(c17, c3) from t1;
+c17	c3	nullif(c17, c3)	ifnull(c17, c3)
+8	1	8	8
+-8	-1	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c4, nullif(c17, c4), ifnull(c17, c4) from t1;
+c17	c4	nullif(c17, c4)	ifnull(c17, c4)
+8	2	8	8
+-8	2	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c5, nullif(c17, c5), ifnull(c17, c5) from t1;
+c17	c5	nullif(c17, c5)	ifnull(c17, c5)
+8	1	8	8
+-8	-1	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c6, nullif(c17, c6), ifnull(c17, c6) from t1;
+c17	c6	nullif(c17, c6)	ifnull(c17, c6)
+8	2	8	8
+-8	2	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c7, nullif(c17, c7), ifnull(c17, c7) from t1;
+c17	c7	nullif(c17, c7)	ifnull(c17, c7)
+8	1	8	8
+-8	-1	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c8, nullif(c17, c8), ifnull(c17, c8) from t1;
+c17	c8	nullif(c17, c8)	ifnull(c17, c8)
+8	2	8	8
+-8	2	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c9, nullif(c17, c9), ifnull(c17, c9) from t1;
+c17	c9	nullif(c17, c9)	ifnull(c17, c9)
+8	1	8	8
+-8	-1	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c10, nullif(c17, c10), ifnull(c17, c10) from t1;
+c17	c10	nullif(c17, c10)	ifnull(c17, c10)
+8	2	8	8
+-8	2	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c11, nullif(c17, c11), ifnull(c17, c11) from t1;
+c17	c11	nullif(c17, c11)	ifnull(c17, c11)
+8	1	8	8
+-8	-1	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c12, nullif(c17, c12), ifnull(c17, c12) from t1;
+c17	c12	nullif(c17, c12)	ifnull(c17, c12)
+8	2	8	8
+-8	2	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c13, nullif(c17, c13), ifnull(c17, c13) from t1;
+c17	c13	nullif(c17, c13)	ifnull(c17, c13)
+8	3.5	8	8
+-8	-3.5	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c14, nullif(c17, c14), ifnull(c17, c14) from t1;
+c17	c14	nullif(c17, c14)	ifnull(c17, c14)
+8	4.5	8	8
+-8	4.5	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c15, nullif(c17, c15), ifnull(c17, c15) from t1;
+c17	c15	nullif(c17, c15)	ifnull(c17, c15)
+8	5.5	8	8
+-8	-5.5	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c16, nullif(c17, c16), ifnull(c17, c16) from t1;
+c17	c16	nullif(c17, c16)	ifnull(c17, c16)
+8	6.5	8	8
+-8	6.5	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c17, nullif(c17, c17), ifnull(c17, c17) from t1;
+c17	c17	nullif(c17, c17)	ifnull(c17, c17)
+8	8	NULL	8
+-8	-8	NULL	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c18, nullif(c17, c18), ifnull(c17, c18) from t1;
+c17	c18	nullif(c17, c18)	ifnull(c17, c18)
+8	9	8	8
+-8	9	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c19, nullif(c17, c19), ifnull(c17, c19) from t1;
+c17	c19	nullif(c17, c19)	ifnull(c17, c19)
+8	2019-12-01 12:00:00	8	8
+-8	2019-12-01 12:00:00	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c20, nullif(c17, c20), ifnull(c17, c20) from t1;
+c17	c20	nullif(c17, c20)	ifnull(c17, c20)
+8	2019-12-03 06:00:00	8	8
+-8	2019-12-03 06:00:00	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c21, nullif(c17, c21), ifnull(c17, c21) from t1;
+c17	c21	nullif(c17, c21)	ifnull(c17, c21)
+8	9.5	8	8
+-8	-9.5	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c17, c22, nullif(c17, c22), ifnull(c17, c22) from t1;
+c17	c22	nullif(c17, c22)	ifnull(c17, c22)
+8	10.5	8	8
+-8	10.5	-8	-8
+select c17, nullif(c17, c17) from t1;
+c17	nullif(c17, c17)
+8	NULL
+-8	NULL
+select c18, c1, nullif(c18, c1), ifnull(c18, c1) from t1;
+c18	c1	nullif(c18, c1)	ifnull(c18, c1)
+9	1	9	9
+9	-1	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c2, nullif(c18, c2), ifnull(c18, c2) from t1;
+c18	c2	nullif(c18, c2)	ifnull(c18, c2)
+9	2	9	9
+9	2	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c3, nullif(c18, c3), ifnull(c18, c3) from t1;
+c18	c3	nullif(c18, c3)	ifnull(c18, c3)
+9	1	9	9
+9	-1	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c4, nullif(c18, c4), ifnull(c18, c4) from t1;
+c18	c4	nullif(c18, c4)	ifnull(c18, c4)
+9	2	9	9
+9	2	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c5, nullif(c18, c5), ifnull(c18, c5) from t1;
+c18	c5	nullif(c18, c5)	ifnull(c18, c5)
+9	1	9	9
+9	-1	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c6, nullif(c18, c6), ifnull(c18, c6) from t1;
+c18	c6	nullif(c18, c6)	ifnull(c18, c6)
+9	2	9	9
+9	2	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c7, nullif(c18, c7), ifnull(c18, c7) from t1;
+c18	c7	nullif(c18, c7)	ifnull(c18, c7)
+9	1	9	9
+9	-1	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c8, nullif(c18, c8), ifnull(c18, c8) from t1;
+c18	c8	nullif(c18, c8)	ifnull(c18, c8)
+9	2	9	9
+9	2	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c9, nullif(c18, c9), ifnull(c18, c9) from t1;
+c18	c9	nullif(c18, c9)	ifnull(c18, c9)
+9	1	9	9
+9	-1	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c10, nullif(c18, c10), ifnull(c18, c10) from t1;
+c18	c10	nullif(c18, c10)	ifnull(c18, c10)
+9	2	9	9
+9	2	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c11, nullif(c18, c11), ifnull(c18, c11) from t1;
+c18	c11	nullif(c18, c11)	ifnull(c18, c11)
+9	1	9	9
+9	-1	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c12, nullif(c18, c12), ifnull(c18, c12) from t1;
+c18	c12	nullif(c18, c12)	ifnull(c18, c12)
+9	2	9	9
+9	2	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c13, nullif(c18, c13), ifnull(c18, c13) from t1;
+c18	c13	nullif(c18, c13)	ifnull(c18, c13)
+9	3.5	9	9
+9	-3.5	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c14, nullif(c18, c14), ifnull(c18, c14) from t1;
+c18	c14	nullif(c18, c14)	ifnull(c18, c14)
+9	4.5	9	9
+9	4.5	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c15, nullif(c18, c15), ifnull(c18, c15) from t1;
+c18	c15	nullif(c18, c15)	ifnull(c18, c15)
+9	5.5	9	9
+9	-5.5	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c16, nullif(c18, c16), ifnull(c18, c16) from t1;
+c18	c16	nullif(c18, c16)	ifnull(c18, c16)
+9	6.5	9	9
+9	6.5	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c17, nullif(c18, c17), ifnull(c18, c17) from t1;
+c18	c17	nullif(c18, c17)	ifnull(c18, c17)
+9	8	9	9
+9	-8	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c18, nullif(c18, c18), ifnull(c18, c18) from t1;
+c18	c18	nullif(c18, c18)	ifnull(c18, c18)
+9	9	NULL	9
+9	9	NULL	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c19, nullif(c18, c19), ifnull(c18, c19) from t1;
+c18	c19	nullif(c18, c19)	ifnull(c18, c19)
+9	2019-12-01 12:00:00	9	9
+9	2019-12-01 12:00:00	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c20, nullif(c18, c20), ifnull(c18, c20) from t1;
+c18	c20	nullif(c18, c20)	ifnull(c18, c20)
+9	2019-12-03 06:00:00	9	9
+9	2019-12-03 06:00:00	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c21, nullif(c18, c21), ifnull(c18, c21) from t1;
+c18	c21	nullif(c18, c21)	ifnull(c18, c21)
+9	9.5	9	9
+9	-9.5	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c18, c22, nullif(c18, c22), ifnull(c18, c22) from t1;
+c18	c22	nullif(c18, c22)	ifnull(c18, c22)
+9	10.5	9	9
+9	10.5	9	9
+select c18, nullif(c18, c18) from t1;
+c18	nullif(c18, c18)
+9	NULL
+9	NULL
+select c19, c1, nullif(c19, c1), ifnull(c19, c1) from t1;
+c19	c1	nullif(c19, c1)	ifnull(c19, c1)
+2019-12-01 12:00:00	1	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	-1	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c2, nullif(c19, c2), ifnull(c19, c2) from t1;
+c19	c2	nullif(c19, c2)	ifnull(c19, c2)
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c3, nullif(c19, c3), ifnull(c19, c3) from t1;
+c19	c3	nullif(c19, c3)	ifnull(c19, c3)
+2019-12-01 12:00:00	1	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	-1	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c4, nullif(c19, c4), ifnull(c19, c4) from t1;
+c19	c4	nullif(c19, c4)	ifnull(c19, c4)
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c5, nullif(c19, c5), ifnull(c19, c5) from t1;
+c19	c5	nullif(c19, c5)	ifnull(c19, c5)
+2019-12-01 12:00:00	1	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	-1	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c6, nullif(c19, c6), ifnull(c19, c6) from t1;
+c19	c6	nullif(c19, c6)	ifnull(c19, c6)
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c7, nullif(c19, c7), ifnull(c19, c7) from t1;
+c19	c7	nullif(c19, c7)	ifnull(c19, c7)
+2019-12-01 12:00:00	1	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	-1	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c8, nullif(c19, c8), ifnull(c19, c8) from t1;
+c19	c8	nullif(c19, c8)	ifnull(c19, c8)
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c9, nullif(c19, c9), ifnull(c19, c9) from t1;
+c19	c9	nullif(c19, c9)	ifnull(c19, c9)
+2019-12-01 12:00:00	1	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	-1	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c10, nullif(c19, c10), ifnull(c19, c10) from t1;
+c19	c10	nullif(c19, c10)	ifnull(c19, c10)
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c11, nullif(c19, c11), ifnull(c19, c11) from t1;
+c19	c11	nullif(c19, c11)	ifnull(c19, c11)
+2019-12-01 12:00:00	1	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	-1	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c12, nullif(c19, c12), ifnull(c19, c12) from t1;
+c19	c12	nullif(c19, c12)	ifnull(c19, c12)
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	2	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c13, nullif(c19, c13), ifnull(c19, c13) from t1;
+c19	c13	nullif(c19, c13)	ifnull(c19, c13)
+2019-12-01 12:00:00	3.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	-3.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c14, nullif(c19, c14), ifnull(c19, c14) from t1;
+c19	c14	nullif(c19, c14)	ifnull(c19, c14)
+2019-12-01 12:00:00	4.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	4.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c15, nullif(c19, c15), ifnull(c19, c15) from t1;
+c19	c15	nullif(c19, c15)	ifnull(c19, c15)
+2019-12-01 12:00:00	5.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	-5.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c16, nullif(c19, c16), ifnull(c19, c16) from t1;
+c19	c16	nullif(c19, c16)	ifnull(c19, c16)
+2019-12-01 12:00:00	6.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	6.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c17, nullif(c19, c17), ifnull(c19, c17) from t1;
+c19	c17	nullif(c19, c17)	ifnull(c19, c17)
+2019-12-01 12:00:00	8	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	-8	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c18, nullif(c19, c18), ifnull(c19, c18) from t1;
+c19	c18	nullif(c19, c18)	ifnull(c19, c18)
+2019-12-01 12:00:00	9	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	9	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c19, nullif(c19, c19), ifnull(c19, c19) from t1;
+c19	c19	nullif(c19, c19)	ifnull(c19, c19)
+2019-12-01 12:00:00	2019-12-01 12:00:00	NULL	2019-12-01 12:00:00
+2019-12-01 12:00:00	2019-12-01 12:00:00	NULL	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c20, nullif(c19, c20), ifnull(c19, c20) from t1;
+c19	c20	nullif(c19, c20)	ifnull(c19, c20)
+2019-12-01 12:00:00	2019-12-03 06:00:00	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	2019-12-03 06:00:00	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c21, nullif(c19, c21), ifnull(c19, c21) from t1;
+c19	c21	nullif(c19, c21)	ifnull(c19, c21)
+2019-12-01 12:00:00	9.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	-9.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c19, c22, nullif(c19, c22), ifnull(c19, c22) from t1;
+c19	c22	nullif(c19, c22)	ifnull(c19, c22)
+2019-12-01 12:00:00	10.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+2019-12-01 12:00:00	10.5	2019-12-01 12:00:00	2019-12-01 12:00:00
+select c19, nullif(c19, c19) from t1;
+c19	nullif(c19, c19)
+2019-12-01 12:00:00	NULL
+2019-12-01 12:00:00	NULL
+select c20, c1, nullif(c20, c1), ifnull(c20, c1) from t1;
+c20	c1	nullif(c20, c1)	ifnull(c20, c1)
+2019-12-03 06:00:00	1	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	-1	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c2, nullif(c20, c2), ifnull(c20, c2) from t1;
+c20	c2	nullif(c20, c2)	ifnull(c20, c2)
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c3, nullif(c20, c3), ifnull(c20, c3) from t1;
+c20	c3	nullif(c20, c3)	ifnull(c20, c3)
+2019-12-03 06:00:00	1	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	-1	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c4, nullif(c20, c4), ifnull(c20, c4) from t1;
+c20	c4	nullif(c20, c4)	ifnull(c20, c4)
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c5, nullif(c20, c5), ifnull(c20, c5) from t1;
+c20	c5	nullif(c20, c5)	ifnull(c20, c5)
+2019-12-03 06:00:00	1	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	-1	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c6, nullif(c20, c6), ifnull(c20, c6) from t1;
+c20	c6	nullif(c20, c6)	ifnull(c20, c6)
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c7, nullif(c20, c7), ifnull(c20, c7) from t1;
+c20	c7	nullif(c20, c7)	ifnull(c20, c7)
+2019-12-03 06:00:00	1	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	-1	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c8, nullif(c20, c8), ifnull(c20, c8) from t1;
+c20	c8	nullif(c20, c8)	ifnull(c20, c8)
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c9, nullif(c20, c9), ifnull(c20, c9) from t1;
+c20	c9	nullif(c20, c9)	ifnull(c20, c9)
+2019-12-03 06:00:00	1	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	-1	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c10, nullif(c20, c10), ifnull(c20, c10) from t1;
+c20	c10	nullif(c20, c10)	ifnull(c20, c10)
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c11, nullif(c20, c11), ifnull(c20, c11) from t1;
+c20	c11	nullif(c20, c11)	ifnull(c20, c11)
+2019-12-03 06:00:00	1	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	-1	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c12, nullif(c20, c12), ifnull(c20, c12) from t1;
+c20	c12	nullif(c20, c12)	ifnull(c20, c12)
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	2	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c13, nullif(c20, c13), ifnull(c20, c13) from t1;
+c20	c13	nullif(c20, c13)	ifnull(c20, c13)
+2019-12-03 06:00:00	3.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	-3.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c14, nullif(c20, c14), ifnull(c20, c14) from t1;
+c20	c14	nullif(c20, c14)	ifnull(c20, c14)
+2019-12-03 06:00:00	4.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	4.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c15, nullif(c20, c15), ifnull(c20, c15) from t1;
+c20	c15	nullif(c20, c15)	ifnull(c20, c15)
+2019-12-03 06:00:00	5.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	-5.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c16, nullif(c20, c16), ifnull(c20, c16) from t1;
+c20	c16	nullif(c20, c16)	ifnull(c20, c16)
+2019-12-03 06:00:00	6.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	6.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c17, nullif(c20, c17), ifnull(c20, c17) from t1;
+c20	c17	nullif(c20, c17)	ifnull(c20, c17)
+2019-12-03 06:00:00	8	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	-8	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c18, nullif(c20, c18), ifnull(c20, c18) from t1;
+c20	c18	nullif(c20, c18)	ifnull(c20, c18)
+2019-12-03 06:00:00	9	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	9	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c19, nullif(c20, c19), ifnull(c20, c19) from t1;
+c20	c19	nullif(c20, c19)	ifnull(c20, c19)
+2019-12-03 06:00:00	2019-12-01 12:00:00	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	2019-12-01 12:00:00	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c20, nullif(c20, c20), ifnull(c20, c20) from t1;
+c20	c20	nullif(c20, c20)	ifnull(c20, c20)
+2019-12-03 06:00:00	2019-12-03 06:00:00	NULL	2019-12-03 06:00:00
+2019-12-03 06:00:00	2019-12-03 06:00:00	NULL	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c21, nullif(c20, c21), ifnull(c20, c21) from t1;
+c20	c21	nullif(c20, c21)	ifnull(c20, c21)
+2019-12-03 06:00:00	9.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	-9.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c20, c22, nullif(c20, c22), ifnull(c20, c22) from t1;
+c20	c22	nullif(c20, c22)	ifnull(c20, c22)
+2019-12-03 06:00:00	10.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+2019-12-03 06:00:00	10.5	2019-12-03 06:00:00	2019-12-03 06:00:00
+select c20, nullif(c20, c20) from t1;
+c20	nullif(c20, c20)
+2019-12-03 06:00:00	NULL
+2019-12-03 06:00:00	NULL
+select c21, c1, nullif(c21, c1), ifnull(c21, c1) from t1;
+c21	c1	nullif(c21, c1)	ifnull(c21, c1)
+9.5	1	9.5	9.5
+-9.5	-1	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c2, nullif(c21, c2), ifnull(c21, c2) from t1;
+c21	c2	nullif(c21, c2)	ifnull(c21, c2)
+9.5	2	9.5	9.5
+-9.5	2	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c3, nullif(c21, c3), ifnull(c21, c3) from t1;
+c21	c3	nullif(c21, c3)	ifnull(c21, c3)
+9.5	1	9.5	9.5
+-9.5	-1	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c4, nullif(c21, c4), ifnull(c21, c4) from t1;
+c21	c4	nullif(c21, c4)	ifnull(c21, c4)
+9.5	2	9.5	9.5
+-9.5	2	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c5, nullif(c21, c5), ifnull(c21, c5) from t1;
+c21	c5	nullif(c21, c5)	ifnull(c21, c5)
+9.5	1	9.5	9.5
+-9.5	-1	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c6, nullif(c21, c6), ifnull(c21, c6) from t1;
+c21	c6	nullif(c21, c6)	ifnull(c21, c6)
+9.5	2	9.5	9.5
+-9.5	2	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c7, nullif(c21, c7), ifnull(c21, c7) from t1;
+c21	c7	nullif(c21, c7)	ifnull(c21, c7)
+9.5	1	9.5	9.5
+-9.5	-1	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c8, nullif(c21, c8), ifnull(c21, c8) from t1;
+c21	c8	nullif(c21, c8)	ifnull(c21, c8)
+9.5	2	9.5	9.5
+-9.5	2	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c9, nullif(c21, c9), ifnull(c21, c9) from t1;
+c21	c9	nullif(c21, c9)	ifnull(c21, c9)
+9.5	1	9.5	9.5
+-9.5	-1	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c10, nullif(c21, c10), ifnull(c21, c10) from t1;
+c21	c10	nullif(c21, c10)	ifnull(c21, c10)
+9.5	2	9.5	9.5
+-9.5	2	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c11, nullif(c21, c11), ifnull(c21, c11) from t1;
+c21	c11	nullif(c21, c11)	ifnull(c21, c11)
+9.5	1	9.5	9.5
+-9.5	-1	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c12, nullif(c21, c12), ifnull(c21, c12) from t1;
+c21	c12	nullif(c21, c12)	ifnull(c21, c12)
+9.5	2	9.5	9.5
+-9.5	2	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c13, nullif(c21, c13), ifnull(c21, c13) from t1;
+c21	c13	nullif(c21, c13)	ifnull(c21, c13)
+9.5	3.5	9.5	9.5
+-9.5	-3.5	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c14, nullif(c21, c14), ifnull(c21, c14) from t1;
+c21	c14	nullif(c21, c14)	ifnull(c21, c14)
+9.5	4.5	9.5	9.5
+-9.5	4.5	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c15, nullif(c21, c15), ifnull(c21, c15) from t1;
+c21	c15	nullif(c21, c15)	ifnull(c21, c15)
+9.5	5.5	9.5	9.5
+-9.5	-5.5	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c16, nullif(c21, c16), ifnull(c21, c16) from t1;
+c21	c16	nullif(c21, c16)	ifnull(c21, c16)
+9.5	6.5	9.5	9.5
+-9.5	6.5	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c17, nullif(c21, c17), ifnull(c21, c17) from t1;
+c21	c17	nullif(c21, c17)	ifnull(c21, c17)
+9.5	8	9.5	9.5
+-9.5	-8	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c18, nullif(c21, c18), ifnull(c21, c18) from t1;
+c21	c18	nullif(c21, c18)	ifnull(c21, c18)
+9.5	9	9.5	9.5
+-9.5	9	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c19, nullif(c21, c19), ifnull(c21, c19) from t1;
+c21	c19	nullif(c21, c19)	ifnull(c21, c19)
+9.5	2019-12-01 12:00:00	9.5	9.5
+-9.5	2019-12-01 12:00:00	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c20, nullif(c21, c20), ifnull(c21, c20) from t1;
+c21	c20	nullif(c21, c20)	ifnull(c21, c20)
+9.5	2019-12-03 06:00:00	9.5	9.5
+-9.5	2019-12-03 06:00:00	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c21, nullif(c21, c21), ifnull(c21, c21) from t1;
+c21	c21	nullif(c21, c21)	ifnull(c21, c21)
+9.5	9.5	NULL	9.5
+-9.5	-9.5	NULL	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c21, c22, nullif(c21, c22), ifnull(c21, c22) from t1;
+c21	c22	nullif(c21, c22)	ifnull(c21, c22)
+9.5	10.5	9.5	9.5
+-9.5	10.5	-9.5	-9.5
+select c21, nullif(c21, c21) from t1;
+c21	nullif(c21, c21)
+9.5	NULL
+-9.5	NULL
+select c22, c1, nullif(c22, c1), ifnull(c22, c1) from t1;
+c22	c1	nullif(c22, c1)	ifnull(c22, c1)
+10.5	1	10.5	10.5
+10.5	-1	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c2, nullif(c22, c2), ifnull(c22, c2) from t1;
+c22	c2	nullif(c22, c2)	ifnull(c22, c2)
+10.5	2	10.5	10.5
+10.5	2	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c3, nullif(c22, c3), ifnull(c22, c3) from t1;
+c22	c3	nullif(c22, c3)	ifnull(c22, c3)
+10.5	1	10.5	10.5
+10.5	-1	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c4, nullif(c22, c4), ifnull(c22, c4) from t1;
+c22	c4	nullif(c22, c4)	ifnull(c22, c4)
+10.5	2	10.5	10.5
+10.5	2	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c5, nullif(c22, c5), ifnull(c22, c5) from t1;
+c22	c5	nullif(c22, c5)	ifnull(c22, c5)
+10.5	1	10.5	10.5
+10.5	-1	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c6, nullif(c22, c6), ifnull(c22, c6) from t1;
+c22	c6	nullif(c22, c6)	ifnull(c22, c6)
+10.5	2	10.5	10.5
+10.5	2	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c7, nullif(c22, c7), ifnull(c22, c7) from t1;
+c22	c7	nullif(c22, c7)	ifnull(c22, c7)
+10.5	1	10.5	10.5
+10.5	-1	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c8, nullif(c22, c8), ifnull(c22, c8) from t1;
+c22	c8	nullif(c22, c8)	ifnull(c22, c8)
+10.5	2	10.5	10.5
+10.5	2	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c9, nullif(c22, c9), ifnull(c22, c9) from t1;
+c22	c9	nullif(c22, c9)	ifnull(c22, c9)
+10.5	1	10.5	10.5
+10.5	-1	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c10, nullif(c22, c10), ifnull(c22, c10) from t1;
+c22	c10	nullif(c22, c10)	ifnull(c22, c10)
+10.5	2	10.5	10.5
+10.5	2	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c11, nullif(c22, c11), ifnull(c22, c11) from t1;
+c22	c11	nullif(c22, c11)	ifnull(c22, c11)
+10.5	1	10.5	10.5
+10.5	-1	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c12, nullif(c22, c12), ifnull(c22, c12) from t1;
+c22	c12	nullif(c22, c12)	ifnull(c22, c12)
+10.5	2	10.5	10.5
+10.5	2	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c13, nullif(c22, c13), ifnull(c22, c13) from t1;
+c22	c13	nullif(c22, c13)	ifnull(c22, c13)
+10.5	3.5	10.5	10.5
+10.5	-3.5	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c14, nullif(c22, c14), ifnull(c22, c14) from t1;
+c22	c14	nullif(c22, c14)	ifnull(c22, c14)
+10.5	4.5	10.5	10.5
+10.5	4.5	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c15, nullif(c22, c15), ifnull(c22, c15) from t1;
+c22	c15	nullif(c22, c15)	ifnull(c22, c15)
+10.5	5.5	10.5	10.5
+10.5	-5.5	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c16, nullif(c22, c16), ifnull(c22, c16) from t1;
+c22	c16	nullif(c22, c16)	ifnull(c22, c16)
+10.5	6.5	10.5	10.5
+10.5	6.5	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c17, nullif(c22, c17), ifnull(c22, c17) from t1;
+c22	c17	nullif(c22, c17)	ifnull(c22, c17)
+10.5	8	10.5	10.5
+10.5	-8	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c18, nullif(c22, c18), ifnull(c22, c18) from t1;
+c22	c18	nullif(c22, c18)	ifnull(c22, c18)
+10.5	9	10.5	10.5
+10.5	9	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c19, nullif(c22, c19), ifnull(c22, c19) from t1;
+c22	c19	nullif(c22, c19)	ifnull(c22, c19)
+10.5	2019-12-01 12:00:00	10.5	10.5
+10.5	2019-12-01 12:00:00	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c20, nullif(c22, c20), ifnull(c22, c20) from t1;
+c22	c20	nullif(c22, c20)	ifnull(c22, c20)
+10.5	2019-12-03 06:00:00	10.5	10.5
+10.5	2019-12-03 06:00:00	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c21, nullif(c22, c21), ifnull(c22, c21) from t1;
+c22	c21	nullif(c22, c21)	ifnull(c22, c21)
+10.5	9.5	10.5	10.5
+10.5	-9.5	10.5	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+select c22, c22, nullif(c22, c22), ifnull(c22, c22) from t1;
+c22	c22	nullif(c22, c22)	ifnull(c22, c22)
+10.5	10.5	NULL	10.5
+10.5	10.5	NULL	10.5
+select c22, nullif(c22, c22) from t1;
+c22	nullif(c22, c22)
+10.5	NULL
+10.5	NULL
+drop table if exists t1;
+drop view if exists v1;
+create table t1 (c1 datetime(5), c2 year);
+insert into t1 values('1901-01-01', 1901);
+// transformed to case when expr
+select nullif(c1, c2) from t1;
+nullif(c1, c2)
+1901-01-01 00:00:00.00000
+select nullif(c2, c1) from t1;
+nullif(c2, c1)
+1901
+select nullif(c1, c1) from t1;
+nullif(c1, c1)
+NULL
+select nullif(c2, c2) from t1;
+nullif(c2, c2)
+NULL
+// nullif改写不应该影响show create view，所以show create view还应该是nullif，而非case expr
+create view v1 as select nullif(c1, c2) from t1;
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select nullif(`oceanbase`.`t1`.`c1`,`oceanbase`.`t1`.`c2`) AS `nullif(c1, c2)` from `oceanbase`.`t1`	utf8mb4	utf8mb4_general_ci
+// 类型应该是c1的类型(datetime)
+desc v1;
+Field	Type	Null	Key	Default	Extra
+nullif(c1, c2)	datetime(5)	YES		NULL	
+select * from v1;
+nullif(c1, c2)
+1901-01-01 00:00:00.00000
+drop view v1;
+create view v1 as select nullif(c2, c1) from t1;
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select nullif(`oceanbase`.`t1`.`c2`,`oceanbase`.`t1`.`c1`) AS `nullif(c2, c1)` from `oceanbase`.`t1`	utf8mb4	utf8mb4_general_ci
+// 类型应该是c1的类型(year)
+desc v1;
+Field	Type	Null	Key	Default	Extra
+nullif(c2, c1)	year(4)	YES		NULL	
+select * from v1;
+nullif(c2, c1)
+1901
+drop view v1;
+create view v1 as select nullif(c1, c1) from t1;
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select nullif(`oceanbase`.`t1`.`c1`,`oceanbase`.`t1`.`c1`) AS `nullif(c1, c1)` from `oceanbase`.`t1`	utf8mb4	utf8mb4_general_ci
+// 类型应该是c1的类型(datetime)
+desc v1;
+Field	Type	Null	Key	Default	Extra
+nullif(c1, c1)	datetime(5)	YES		NULL	
+select * from v1;
+nullif(c1, c1)
+NULL
+drop view v1;
+create view v1 as select nullif(c2, c2) from t1;
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select nullif(`oceanbase`.`t1`.`c2`,`oceanbase`.`t1`.`c2`) AS `nullif(c2, c2)` from `oceanbase`.`t1`	utf8mb4	utf8mb4_general_ci
+// 类型应该是c1的类型(datetime)
+desc v1;
+Field	Type	Null	Key	Default	Extra
+nullif(c2, c2)	year(4)	YES		NULL	
+select * from v1;
+nullif(c2, c2)
+NULL
+select collation(nullif('a', binary'b'));
+collation(nullif('a', binary'b'))
+binary
+select NULLIF(14152561829011783680, 1);
+NULLIF(14152561829011783680, 1)
+14152561829011783680
+drop table t1;
+create table t1 (
+col_decimal_20_0_unsigned decimal(20,0) unsigned,
+col_decimal_30_5_signed decimal(30,5) signed,
+col_tinyint_unsigned tinyint unsigned);
+select mod( nullif( col_decimal_20_0_unsigned, col_decimal_30_5_signed ), col_tinyint_unsigned ) from t1;
+mod( nullif( col_decimal_20_0_unsigned, col_decimal_30_5_signed ), col_tinyint_unsigned )
+// check param num
+select nullif(1) from dual;
+ERROR 42000: Incorrect parameter count in the call to native function 'nullif'
+select nullif(1, 2) from dual;
+nullif(1, 2)
+1
+select nullif(1, 2, 3) from dual;
+ERROR 42000: Incorrect parameter count in the call to native function 'nullif'
+select nullif(1, 2, 3, 4) from dual;
+ERROR 42000: Incorrect parameter count in the call to native function 'nullif'
+select nullif(1, 2, 3, 4, 5) from dual;
+ERROR 42000: Incorrect parameter count in the call to native function 'nullif'
+select nullif(1, 2, 3, 4, 5, 6) from dual;
+ERROR 42000: Incorrect parameter count in the call to native function 'nullif'
+select nullif(1, 2, 3, 4, 5, 6, 7) from dual;
+ERROR 42000: Incorrect parameter count in the call to native function 'nullif'
+drop table t1;
+select 1 from dual where null <= nullif(null,null);
+1
+select ifnull(null, 15531789214893998080);
+ifnull(null, 15531789214893998080)
+15531789214893998080
+select ifnull(15531789214893998080, 0);
+ifnull(15531789214893998080, 0)
+15531789214893998080
+SELECT trim(Ifnull(15531789214893998080, 0)) as X from dual;
+X
+15531789214893998080
+create table t1 as select ifnull(15531789214893998080, 0) ;
+desc t1;
+Field	Type	Null	Key	Default	Extra
+ifnull(15531789214893998080, 0)	decimal(20,0)	YES		NULL	
+drop table t1;
+create table t1(z0_test0 enum('中文字符','123456','ABCabc','!@#$%^&*','2020-10-10','2020-10-10 10:10:10','10:10:10') not NULL);
+insert into t1 values('中文字符');
+insert into t1 values('123456');
+insert into t1 values('ABCabc');
+insert into t1 values('!@#$%^&*');
+insert into t1 values('2020-10-10');
+insert into t1 values('2020-10-10 10:10:10');
+insert into t1 values('10:10:10');
+select nullif(z0_test0,'中文字符') from t1;
+nullif(z0_test0,'中文字符')
+NULL
+123456
+ABCabc
+!@#$%^&*
+2020-10-10
+2020-10-10 10:10:10
+10:10:10
+drop table t1;

@@ -1,0 +1,34 @@
+
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+alter system flush plan cache global;
+sleep 2;
+
+set ob_enable_plan_cache = 0;
+select char_length(1234);
+select char_length(1);
+select char_length(null);
+select char_length('');
+select char_length('a');
+select char_length(' a ');
+select char_length(' a b');
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int, c2 char(10), c3 varchar(10), c4 timestamp, c5 decimal);
+#                 ,c6 varchar(100) charset utf16);
+insert into t1 values(1, 'a ', 'a ', '2010-01-01 11:11:11', 10.1);
+#, 123);
+
+select char_length(c1) from t1;
+select char_length(c2) from t1;
+select char_length(c3) from t1;
+select char_length(c4) from t1;
+select char_length(c5) from t1;
+# select char_length(c6) from t1;
+
+
+sleep 2;
+

@@ -1,0 +1,3593 @@
+***************   Case 1   ***************
+select d.t1.c1, sum(t1.c2) from d.t1 where d.t1.c1 > 0 and c2 + d.t1.c1 = 100 group by d.t1.c2 order by t.d1.c1 desc limit 0, 1
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"d.t1.c1",
+              "children": [
+                 {
+                  "type":"T_OP_TABLE_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"sum(t1.c2)",
+              "children": [
+                 {
+                  "type":"T_FUN_SUM",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     { },
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"t1",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c2",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_NAME_FIELD",
+              "int_val":2,
+              "str_val":"t1",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":1,
+                  "str_val":"d",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_OP_AND",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_GT",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_TABLE_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":0,
+                  "str_val":"0",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_OP_EQ",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_ADD",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_OP_TABLE_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":1,
+                          "str_val":"d",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"t1",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c1",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":100,
+                  "str_val":"100",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_EXPR_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_TABLE_NAME_FIELD",
+              "int_val":2,
+              "str_val":"c2",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":1,
+                  "str_val":"d",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c2",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         {
+          "type":"T_SORT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_SORT_KEY",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_TABLE_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"t",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"d1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_SORT_DESC",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_LIMIT_CLAUSE",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_val":"1",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":0,
+              "str_val":"0",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 2   ***************
+select c1, sum(d.t1.c2) from t1 where t1.c1 > 0 and c2 + t1.c1 = 100 group by t1.c2 order by t1.c1 desc limit 0, 1
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"c1",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"sum(d.t1.c2)",
+              "children": [
+                 {
+                  "type":"T_FUN_SUM",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     { },
+                     {
+                      "type":"T_OP_TABLE_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":1,
+                          "str_val":"d",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"t1",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c2",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_IDENT",
+              "int_val":2,
+              "str_val":"t1",
+              "children": [
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_OP_AND",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_GT",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":0,
+                  "str_val":"0",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_OP_EQ",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_ADD",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"t1",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c1",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":100,
+                  "str_val":"100",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_EXPR_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_NAME_FIELD",
+              "int_val":2,
+              "str_val":"c2",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c2",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         {
+          "type":"T_SORT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_SORT_KEY",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_SORT_DESC",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_LIMIT_CLAUSE",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_val":"1",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":0,
+              "str_val":"0",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 3   ***************
+select t1.c1, sum(c2) from t1 where c1 > 0 and c2 + c1 = 100 group by c2 order by c1 desc limit 0, 1
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"t1.c1",
+              "children": [
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"sum(c2)",
+              "children": [
+                 {
+                  "type":"T_FUN_SUM",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_IDENT",
+              "int_val":2,
+              "str_val":"t1",
+              "children": [
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_OP_AND",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_GT",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":0,
+                  "str_val":"0",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_OP_EQ",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_ADD",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":100,
+                  "str_val":"100",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_EXPR_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_IDENT",
+              "int_val":2,
+              "str_val":"c2",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         {
+          "type":"T_SORT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_SORT_KEY",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_SORT_DESC",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_LIMIT_CLAUSE",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_val":"1",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":0,
+              "str_val":"0",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 4   ***************
+insert into t1 values(1, 2)
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_INSERT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_IDENT",
+          "int_val":2,
+          "str_val":"t1",
+          "children": [
+          ]
+        },
+         { },
+         {
+          "type":"T_VALUE_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_val":"1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":2,
+                  "str_val":"2",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_INSERT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 5   ***************
+insert into t1.t1 values(1, 2)
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_INSERT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_OP_NAME_FIELD",
+          "int_val":2,
+          "str_val":"t1",
+          "children": [
+             {
+              "type":"T_IDENT",
+              "int_val":2,
+              "str_val":"t1",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":2,
+              "str_val":"t1",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_VALUE_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_val":"1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":2,
+                  "str_val":"2",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_INSERT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 6   ***************
+insert into t1(c1) values(1), (2)
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_INSERT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_IDENT",
+          "int_val":2,
+          "str_val":"t1",
+          "children": [
+          ]
+        },
+         {
+          "type":"T_COLUMN_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_IDENT",
+              "int_val":2,
+              "str_val":"c1",
+              "children": [
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_VALUE_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_val":"1",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":2,
+                  "str_val":"2",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_INSERT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 7   ***************
+insert into t1(t1.c1) values(1), (2)
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_INSERT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_IDENT",
+          "int_val":2,
+          "str_val":"t1",
+          "children": [
+          ]
+        },
+         {
+          "type":"T_COLUMN_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_NAME_FIELD",
+              "int_val":2,
+              "str_val":"c1",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_VALUE_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_val":"1",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":2,
+                  "str_val":"2",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_INSERT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 8   ***************
+insert into d.t1(d.t1.c1) values(1), (2)
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_INSERT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_OP_NAME_FIELD",
+          "int_val":2,
+          "str_val":"t1",
+          "children": [
+             {
+              "type":"T_IDENT",
+              "int_val":1,
+              "str_val":"d",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":2,
+              "str_val":"t1",
+              "children": [
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_COLUMN_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_TABLE_NAME_FIELD",
+              "int_val":2,
+              "str_val":"c1",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":1,
+                  "str_val":"d",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_VALUE_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_val":"1",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":2,
+                  "str_val":"2",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_INSERT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 9   ***************
+update t1 set d.t1.c2=t1.c1+1 where d.t1.c1 > 1 order by d.t1.c1 desc limit 0, 10
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_UPDATE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_IDENT",
+          "int_val":2,
+          "str_val":"t1",
+          "children": [
+          ]
+        },
+         {
+          "type":"T_ASSIGN_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_ASSIGN_ITEM",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_TABLE_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c2",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_OP_ADD",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"t1",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c1",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":1,
+                      "str_val":"1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_OP_GT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_TABLE_NAME_FIELD",
+              "int_val":2,
+              "str_val":"c1",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":1,
+                  "str_val":"d",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_val":"1",
+              "children": [
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_SORT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_SORT_KEY",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_TABLE_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_SORT_DESC",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_LIMIT_CLAUSE",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":10,
+              "str_val":"10",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":0,
+              "str_val":"0",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 10   ***************
+update d.t1 set t1.c2=d.t1c1+1 where t1.c1 > 1 order by c1 desc limit 0, 10
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_UPDATE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_OP_NAME_FIELD",
+          "int_val":2,
+          "str_val":"t1",
+          "children": [
+             {
+              "type":"T_IDENT",
+              "int_val":1,
+              "str_val":"d",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":2,
+              "str_val":"t1",
+              "children": [
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_ASSIGN_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_ASSIGN_ITEM",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c2",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_OP_ADD",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":4,
+                      "str_val":"t1c1",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":1,
+                          "str_val":"d",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":4,
+                          "str_val":"t1c1",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":1,
+                      "str_val":"1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_OP_GT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_NAME_FIELD",
+              "int_val":2,
+              "str_val":"c1",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_val":"1",
+              "children": [
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_SORT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_SORT_KEY",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_SORT_DESC",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_LIMIT_CLAUSE",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":10,
+              "str_val":"10",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":0,
+              "str_val":"0",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 11   ***************
+delete from d.t1 where d.t1.c2 > 10 order by c1 limit 0, 1
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_DELETE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_OP_NAME_FIELD",
+          "int_val":2,
+          "str_val":"t1",
+          "children": [
+             {
+              "type":"T_IDENT",
+              "int_val":1,
+              "str_val":"d",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":2,
+              "str_val":"t1",
+              "children": [
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_OP_GT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_TABLE_NAME_FIELD",
+              "int_val":2,
+              "str_val":"c2",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":1,
+                  "str_val":"d",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c2",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":10,
+              "str_val":"10",
+              "children": [
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_SORT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_SORT_KEY",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_SORT_ASC",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_LIMIT_CLAUSE",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_val":"1",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":0,
+              "str_val":"0",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 12   ***************
+select t1.c1, t2.c1 from d.t1 join d.t2 on d.t1.c1=t2.c1 where t1.c1>0;
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"t1.c1",
+              "children": [
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"t2.c1",
+              "children": [
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t2",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_JOINED_TABLE",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_JOIN_INNER",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"t2",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t2",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_OP_EQ",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_OP_TABLE_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":1,
+                          "str_val":"d",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"t1",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c1",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"t2",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c1",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_OP_GT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_NAME_FIELD",
+              "int_val":2,
+              "str_val":"c1",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":0,
+              "str_val":"0",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 13   ***************
+select d.t1.c1, t2.c1 from d.t1 join t2 on t1.c1=t2.c1 where t1.c1>0;
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"d.t1.c1",
+              "children": [
+                 {
+                  "type":"T_OP_TABLE_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"t2.c1",
+              "children": [
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t2",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_JOINED_TABLE",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_JOIN_INNER",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t2",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_OP_EQ",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"t1",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c1",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"t2",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c1",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_OP_GT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_NAME_FIELD",
+              "int_val":2,
+              "str_val":"c1",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":0,
+              "str_val":"0",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 14   ***************
+select d.t1.c1, t2.c1 from d.t1 join t2 on c1=c1 where t1.c1>0;
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_SELECT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_PROJECT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"d.t1.c1",
+              "children": [
+                 {
+                  "type":"T_OP_TABLE_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_PROJECT_STRING",
+              "int_val":0,
+              "str_val":"t2.c1",
+              "children": [
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t2",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_FROM_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_JOINED_TABLE",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_JOIN_INNER",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"t1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t2",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_OP_EQ",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_OP_GT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_OP_NAME_FIELD",
+              "int_val":2,
+              "str_val":"c1",
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"t1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":0,
+              "str_val":"0",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 15   ***************
+insert into t1 value (1, 2), (3, 4) on duplicate key update d.t.c1 = t.c2 + 1, c2 = c2 + 3;
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_INSERT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_IDENT",
+          "int_val":2,
+          "str_val":"t1",
+          "children": [
+          ]
+        },
+         { },
+         {
+          "type":"T_VALUE_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_val":"1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":2,
+                  "str_val":"2",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":3,
+                  "str_val":"3",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":4,
+                  "str_val":"4",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_INSERT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+          ]
+        },
+         {
+          "type":"T_ASSIGN_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_ASSIGN_ITEM",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_TABLE_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"t",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_OP_ADD",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":1,
+                          "str_val":"t",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c2",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":1,
+                      "str_val":"1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_ASSIGN_ITEM",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c2",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_OP_ADD",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":3,
+                      "str_val":"3",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 16   ***************
+insert into d.t1 value (1, 2), (3, 4) on duplicate key update t.c1 = t.c2 + 1, d.t.c2 = t.c2 + 3;
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_INSERT",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_OP_NAME_FIELD",
+          "int_val":2,
+          "str_val":"t1",
+          "children": [
+             {
+              "type":"T_IDENT",
+              "int_val":1,
+              "str_val":"d",
+              "children": [
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":2,
+              "str_val":"t1",
+              "children": [
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_VALUE_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_val":"1",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":2,
+                  "str_val":"2",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_VECTOR",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":3,
+                  "str_val":"3",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":4,
+                  "str_val":"4",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_INSERT",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+          ]
+        },
+         {
+          "type":"T_ASSIGN_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_ASSIGN_ITEM",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c1",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"t",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_OP_ADD",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":1,
+                          "str_val":"t",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c2",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":1,
+                      "str_val":"1",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_ASSIGN_ITEM",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_TABLE_NAME_FIELD",
+                  "int_val":2,
+                  "str_val":"c2",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"t",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_OP_ADD",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c2",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":1,
+                          "str_val":"t",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c2",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":3,
+                      "str_val":"3",
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 17   ***************
+create table rongxuan(c int primary key, c2 int)
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_CREATE_TABLE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_IDENT",
+          "int_val":8,
+          "str_val":"rongxuan",
+          "children": [
+          ]
+        },
+         {
+          "type":"T_TABLE_ELEMENT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_COLUMN_DEFINITION",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":1,
+                  "str_val":"c",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_TYPE_INTEGER",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_COLUMN_ATTRIBUTES",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_CONSTR_PRIMARY_KEY",
+                      "int_val":0,
+                      "str_val":null,
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_DEFINITION",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c2",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_TYPE_INTEGER",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                },
+                 { }
+              ]
+            }
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 18   ***************
+create table rongxuan(rongxuan.c int primary key, c2 int)
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_CREATE_TABLE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_IDENT",
+          "int_val":8,
+          "str_val":"rongxuan",
+          "children": [
+          ]
+        },
+         {
+          "type":"T_TABLE_ELEMENT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_COLUMN_DEFINITION",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_NAME_FIELD",
+                  "int_val":1,
+                  "str_val":"c",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"c",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":8,
+                      "str_val":"rongxuan",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_TYPE_INTEGER",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_COLUMN_ATTRIBUTES",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_CONSTR_PRIMARY_KEY",
+                      "int_val":0,
+                      "str_val":null,
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_DEFINITION",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c2",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_TYPE_INTEGER",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                },
+                 { }
+              ]
+            }
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 19   ***************
+create table rongxuan(d.rongxuan.c int primary key, c2 int)
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_CREATE_TABLE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_IDENT",
+          "int_val":8,
+          "str_val":"rongxuan",
+          "children": [
+          ]
+        },
+         {
+          "type":"T_TABLE_ELEMENT_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_COLUMN_DEFINITION",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_OP_TABLE_NAME_FIELD",
+                  "int_val":1,
+                  "str_val":"rongxuan.c",
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"c",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":8,
+                      "str_val":"rongxuan",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":1,
+                      "str_val":"d",
+                      "children": [
+                      ]
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_TYPE_INTEGER",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_COLUMN_ATTRIBUTES",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_CONSTR_PRIMARY_KEY",
+                      "int_val":0,
+                      "str_val":null,
+                      "children": [
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_DEFINITION",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_IDENT",
+                  "int_val":2,
+                  "str_val":"c2",
+                  "children": [
+                  ]
+                },
+                 {
+                  "type":"T_TYPE_INTEGER",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                  ]
+                },
+                 { }
+              ]
+            }
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 20   ***************
+alter table rongxuan add c3 int;
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_ALTER_TABLE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_IDENT",
+          "int_val":8,
+          "str_val":"rongxuan",
+          "children": [
+          ]
+        },
+         {
+          "type":"T_ALTER_TABLE_ACTION_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_ALTER_COLUMN_OPTION",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_COLUMN_DEFINITION",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_IDENT",
+                      "int_val":2,
+                      "str_val":"c3",
+                      "children": [
+                      ]
+                    },
+                     {
+                      "type":"T_TYPE_INTEGER",
+                      "int_val":0,
+                      "str_val":null,
+                      "children": [
+                      ]
+                    },
+                     { }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+***************   Case 21   ***************
+alter table rongxuan add rongxuan.c4 int;
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_ALTER_TABLE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_IDENT",
+          "int_val":8,
+          "str_val":"rongxuan",
+          "children": [
+          ]
+        },
+         {
+          "type":"T_ALTER_TABLE_ACTION_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_ALTER_COLUMN_OPTION",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_COLUMN_DEFINITION",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_OP_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"c4",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c4",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":8,
+                          "str_val":"rongxuan",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_TYPE_INTEGER",
+                      "int_val":0,
+                      "str_val":null,
+                      "children": [
+                      ]
+                    },
+                     { }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+***************   Case 22   ***************
+alter table rongxuan add test.rongxuan.c5 int;
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_ALTER_TABLE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_IDENT",
+          "int_val":8,
+          "str_val":"rongxuan",
+          "children": [
+          ]
+        },
+         {
+          "type":"T_ALTER_TABLE_ACTION_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_ALTER_COLUMN_OPTION",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 {
+                  "type":"T_COLUMN_DEFINITION",
+                  "int_val":0,
+                  "str_val":null,
+                  "children": [
+                     {
+                      "type":"T_OP_TABLE_NAME_FIELD",
+                      "int_val":2,
+                      "str_val":"rongxuan.c5",
+                      "children": [
+                         {
+                          "type":"T_IDENT",
+                          "int_val":2,
+                          "str_val":"c5",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":8,
+                          "str_val":"rongxuan",
+                          "children": [
+                          ]
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":4,
+                          "str_val":"test",
+                          "children": [
+                          ]
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_TYPE_INTEGER",
+                      "int_val":0,
+                      "str_val":null,
+                      "children": [
+                      ]
+                    },
+                     { }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+***************   Case 23   ***************
+drop database rongxuan
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_DROP_DATABASE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_IDENT",
+          "int_val":8,
+          "str_val":"rongxuan",
+          "children": [
+          ]
+        }
+      ]
+    }
+  ]
+}
+***************   Case 24   ***************
+create database rongxuan
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_CREATE_DATABASE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         { },
+         {
+          "type":"T_IDENT",
+          "int_val":8,
+          "str_val":"rongxuan",
+          "children": [
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 25   ***************
+create database if not exists rongxuan
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_CREATE_DATABASE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_IF_NOT_EXISTS",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+          ]
+        },
+         {
+          "type":"T_IDENT",
+          "int_val":8,
+          "str_val":"rongxuan",
+          "children": [
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
+***************   Case 26   ***************
+create database if not exists rongxuan default character set = 'utf8', default collate = 'default_collate'
+{
+  "type":"T_STMT_LIST",
+  "int_val":0,
+  "str_val":null,
+  "children": [
+     {
+      "type":"T_CREATE_DATABASE",
+      "int_val":0,
+      "str_val":null,
+      "children": [
+         {
+          "type":"T_IF_NOT_EXISTS",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+          ]
+        },
+         {
+          "type":"T_IDENT",
+          "int_val":8,
+          "str_val":"rongxuan",
+          "children": [
+          ]
+        },
+         {
+          "type":"T_DATABASE_OPTION_LIST",
+          "int_val":0,
+          "str_val":null,
+          "children": [
+             {
+              "type":"T_CHARSET",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 { },
+                 { },
+                 {
+                  "type":"T_STRING",
+                  "int_val":4,
+                  "str_val":"utf8",
+                  "children": [
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_COLLATION",
+              "int_val":0,
+              "str_val":null,
+              "children": [
+                 { },
+                 { },
+                 {
+                  "type":"T_STRING",
+                  "int_val":15,
+                  "str_val":"default_collate",
+                  "children": [
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

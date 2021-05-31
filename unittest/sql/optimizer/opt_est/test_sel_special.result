@@ -1,0 +1,24 @@
+EXPR_STR: select * from t1,t2 where t1.c1 = t2.c1;
+table1 SELECTIVITY = 0.0007125
+table2 SELECTIVITY = 0.0007125
+
+EXPR_STR: select * from t1,t2 where t1.c1 = t2.c1 or t1.c1 > 1;
+table1 SELECTIVITY = 0.950036
+table2 SELECTIVITY = 0.950036
+
+EXPR_STR: select * from t1,t2 where t1.c1 = t2.c1 and t1.c1 > 1;
+table1 SELECTIVITY = 0.000676875
+table2 SELECTIVITY = 0.000676875
+
+EXPR_STR: select * from t1,t2 where t1.c1 < t2.c1; 
+table1 SELECTIVITY = 0.333333
+table2 SELECTIVITY = 0.333333
+
+EXPR_STR: select * from t1,t2 where t1.c1 > t2.c1;
+table1 SELECTIVITY = 0.333333
+table2 SELECTIVITY = 0.333333
+
+EXPR_STR: select * from t1,t2 where t1.c1 != t2.c1;
+table1 SELECTIVITY = 0.5
+table2 SELECTIVITY = 0.5
+

@@ -1,0 +1,161 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+use information_schema;
+
+#basic
+select table_name from tables where table_schema = 'oceanbase' and table_name like '__all_table';
+select table_name from tables where table_schema = 'oceanbase' and table_type like 'SYSTEM VIEW';
+--disable_warnings
+drop database if exists nijia;
+--enable_warnings
+create database nijia;
+use nijia;
+create table t1(c1 int, c2 int);
+create view v as select * from t1;
+select table_name from information_schema.tables where table_schema = 'nijia' and table_type like 'BASE TABLE';
+select table_name from information_schema.tables where table_schema = 'nijia' and table_type like 'VIEW';
+--disable_warnings
+drop database nijia;
+--enable_warnings
+
+#show
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table information_schema.tables;
+desc information_schema.tables;
+
+##check gv$object table
+
+connect (mysql_jianhua,$OBMYSQL_MS0,root@mysql,'',test,$OBMYSQL_PORT);
+connection mysql_jianhua;
+
+--disable_warnings
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop view v1;
+--error 0, 1051
+drop view vv1;
+--error 0, 1051
+drop view vst1;
+--error 0, 1051
+drop view vsv1;
+--error 0, 5299
+drop public synonym st1 force;
+--error 0, 5299
+drop public synonym sv1 force;
+--error 0, 5299
+drop synonym st1 force;
+--error 0, 5299
+drop synonym sv1 force;
+--error 0, 5299
+drop synonym sst1 force;
+--error 0, 5299
+drop synonym ssv1 force;
+--error 0, 5299
+drop public synonym t1 force;
+--error 0, 5299
+drop public synonym v1 force;
+
+--error 0, 1051
+drop view nv1;
+--error 0, 1051
+drop view njv1;
+--error 0, 1051
+drop view nuv1;
+--enable_warnings
+
+create table t1 (c1 int, c2 varchar(10));
+insert into t1 values (12, "12");
+create view v1 as select * from t1;
+create view vv1 as select * from v1;
+create public synonym st1 for t1;
+create public synonym sv1 for v1;
+create synonym st1 for t1;
+create synonym sv1 for v1;
+create synonym sst1 for st1;
+create synonym ssv1 for sv1;
+create public synonym t1 for t1;
+create public synonym v1 for v1;
+create view vst1 as select * from st1;
+create view vsv1 as select * from sv1;
+
+create view nv1 as select c1, c2 from t1 a;
+create view njv1 as select a.c2 as a_c2, b.c2 as b_c2 from t1 a join t1 b on a.c1=b.c1;
+create view nuv1 as select c.c2, c.c1 from (select c1, c2 from t1 union select c1, c2 from t1) as c;
+
+--source mysql_test/include/check_schema_sync.inc
+
+connect (sys_jianhua,$OBMYSQL_MS0,root@sys,,oceanbase,$OBMYSQL_PORT);
+connection sys_jianhua;
+
+
+##error name
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test1' AND table_name = 'addd' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'addd' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 't1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'v1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'vv1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'st1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'sv1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'sst1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'ssv1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'vst1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+--error 1356
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'vsv1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = '__public' AND table_name = 'st1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = '__public' AND table_name = 'sv1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = '__public' AND table_name = 'sst1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = '__public' AND table_name = 'ssv1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'nv1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'njv1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'mysql' AND database_name = 'test' AND table_name = 'nuv1' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'sys' AND database_name = 'oceanbase' AND table_name = 'gv$unit' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+SELECT tenant_name, database_name, table_name, table_type, part_num, complex_table_type, level1_decoded_db_name, level1_decoded_table_name,  level2_decoded_db_name,  level2_decoded_table_name FROM oceanbase.__all_virtual_proxy_schema WHERE tenant_name = 'sys' AND database_name = 'oceanbase' AND table_name = 'gv$partition' AND partition_id = 0 AND sql_port > 0 ORDER BY role ASC LIMIT 1;
+
+disconnect sys_jianhua;
+
+
+connection mysql_jianhua;
+--disable_warnings
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop view v1;
+--error 0, 1051
+drop view vv1;
+--error 0, 1051
+drop view vst1;
+--error 0, 1051
+drop view vsv1;
+--error 0, 5299
+drop public synonym st1 force;
+--error 0, 5299
+drop public synonym sv1 force;
+--error 0, 5299
+drop synonym st1 force;
+--error 0, 5299
+drop synonym sv1 force;
+--error 0, 5299
+drop synonym sst1 force;
+--error 0, 5299
+drop synonym ssv1 force;
+--error 0, 5299
+drop public synonym t1 force;
+--error 0, 5299
+drop public synonym v1 force;
+
+--error 0, 1051
+drop view nv1;
+--error 0, 1051
+drop view njv1;
+--error 0, 1051
+drop view nuv1;
+
+--enable_warnings
+disconnect mysql_jianhua;

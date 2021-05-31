@@ -1,0 +1,3922 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT;
+connection conn_admin;
+drop table if exists t1, t2;
+create table t1 (
+col_tinyint tinyint,
+col_smallint smallint,
+col_mediumint tinyint,
+col_int int,
+col_bigint bigint,
+col_float float,
+col_double double,
+col_decimal decimal,
+col_utinyint tinyint unsigned,
+col_usmallint smallint unsigned,
+col_umediumint tinyint unsigned,
+col_uint int unsigned,
+col_ubigint bigint unsigned,
+col_ufloat float unsigned,
+col_udouble double unsigned,
+col_udecimal decimal unsigned,
+col_char char(100),
+col_varchar varchar(100),
+col_blob blob,
+col_text text,
+col_date date,
+col_datetime datetime,
+col_timestamp timestamp,
+col_year year,
+col_time time,
+col_bit bit
+);
+insert into t1 values(
+-1,
+-2,
+-3,
+-4,
+-5,
+-1.0,
+-2.0,
+-111.11,
+0,
+0,
+0,
+0,
+0,
+1.0,
+2.0,
+111.11,
+'0',
+'varchar type',
+'blob type', 
+'text type',
+'2019-01-01',
+'2019-01-01 00:00:00',
+'2019-01-01 00:00:00',
+'1997',
+'00:12:12',
+b'001'
+);
+create table t2 (c1 int);
+insert into t2 values(1);
+// Case1: AND/OR测试
+set ob_enable_plan_cache = 0;
+// 两个col_int上面应该有bool expr
+select col_int and col_int from t1;
+col_int and col_int
+1
+// 两个col_xxx上面都应该有bool expr,col_varchar上面应该有cast,转换为decimal
+select col_int and col_varchar from t1;
+col_int and col_varchar
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'varchar type'
+// 两个col_int上面应该有bool expr
+select col_int or col_int from t1;
+col_int or col_int
+1
+// 两个col_xxx上面都应该有bool expr,col_varchar上面应该有cast,转换为decimal
+select col_int or col_varchar from t1;
+col_int or col_varchar
+1
+// 两个col_uint上面应该有bool expr, 结果为0
+select 1 and col_uint from t1;
+1 and col_uint
+0
+// 两个col_xxx上面都应该有bool expr,col_char上面应该有cast,转换为decimal, 结果为0
+select 1 and col_char from t1;
+1 and col_char
+0
+// 两个col_uint上面应该有bool expr, 结果为0
+select col_uint or col_uint from t1;
+col_uint or col_uint
+0
+// 两个col_xxx上面都应该有bool expr,col_char上面应该有cast,转换为decimal, 结果为0
+select col_uint or col_char from t1;
+col_uint or col_char
+0
+// 两个col_uint上面应该有bool expr, 结果为1
+select col_uint or 1 from t1;
+col_uint or 1
+1
+// 两个col_xxx上面都应该有bool expr,col_char上面应该有cast,转换为decimal, 结果为1
+select 1 or col_char from t1;
+1 or col_char
+1
+// Case2: 有布尔语义的表达式，不会有bool expr被插入
+// and表达式的两个子节点都是有布尔语义的，所以bool expr不会出现
+select col_int from t1 where (col_int = col_int) and (col_uint = col_uint);
+col_int
+-4
+// 同上，也不会有bool expr
+select 1 from t1 where t1.col_int = t1.col_uint;
+1
+// 同上，也不会有bool expr
+select col_int from t1 having avg(col_int) = 1;
+col_int
+// 同上，也不会有bool expr
+select 1 from t1 inner join t2 on t2.c1 = t1.col_int;
+1
+// Case3: TODO: 测试where/having/join condition，
+// 需要想一些不带有布尔语义的作为各个子句的条件
+// Case4: 对各种类型进行测试，看能否顺利转换，且结果跟不加bool expr是一致的
+drop table if exists t1;
+create table t1 (c1 int, c2 int unsigned, 
+c3 tinyint, c4 tinyint unsigned,
+c5 smallint, c6 smallint unsigned,
+c7 mediumint, c8 mediumint unsigned,
+c9 integer, c10 integer unsigned,
+c11 bigint, c12 bigint unsigned,
+c13 float, c14 float unsigned, 
+c15 double, c16 double unsigned, 
+c17 decimal, c18 decimal unsigned, 
+c19 datetime, c20 timestamp, 
+c21 varchar(30), c22 char(30), c23 blob, c24 text);
+insert into t1 values(1, 2, 
+1, 2, 
+1, 2, 
+1, 2, 
+1, 2, 
+1, 2, 
+3.5, 4.5, 
+5.5, 6.5,
+7.5, 8.5,
+'2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+'9.5', '10.5', 'blob type', 'text type');
+set ob_enable_plan_cache = 0;
+select c1 and c1 from t1;
+c1 and c1
+1
+select c1 or c1 from t1;
+c1 or c1
+1
+select c1 and c2 from t1;
+c1 and c2
+1
+select c1 or c2 from t1;
+c1 or c2
+1
+select c1 and c3 from t1;
+c1 and c3
+1
+select c1 or c3 from t1;
+c1 or c3
+1
+select c1 and c4 from t1;
+c1 and c4
+1
+select c1 or c4 from t1;
+c1 or c4
+1
+select c1 and c5 from t1;
+c1 and c5
+1
+select c1 or c5 from t1;
+c1 or c5
+1
+select c1 and c6 from t1;
+c1 and c6
+1
+select c1 or c6 from t1;
+c1 or c6
+1
+select c1 and c7 from t1;
+c1 and c7
+1
+select c1 or c7 from t1;
+c1 or c7
+1
+select c1 and c8 from t1;
+c1 and c8
+1
+select c1 or c8 from t1;
+c1 or c8
+1
+select c1 and c9 from t1;
+c1 and c9
+1
+select c1 or c9 from t1;
+c1 or c9
+1
+select c1 and c10 from t1;
+c1 and c10
+1
+select c1 or c10 from t1;
+c1 or c10
+1
+select c1 and c11 from t1;
+c1 and c11
+1
+select c1 or c11 from t1;
+c1 or c11
+1
+select c1 and c12 from t1;
+c1 and c12
+1
+select c1 or c12 from t1;
+c1 or c12
+1
+select c1 and c13 from t1;
+c1 and c13
+1
+select c1 or c13 from t1;
+c1 or c13
+1
+select c1 and c14 from t1;
+c1 and c14
+1
+select c1 or c14 from t1;
+c1 or c14
+1
+select c1 and c15 from t1;
+c1 and c15
+1
+select c1 or c15 from t1;
+c1 or c15
+1
+select c1 and c16 from t1;
+c1 and c16
+1
+select c1 or c16 from t1;
+c1 or c16
+1
+select c1 and c17 from t1;
+c1 and c17
+1
+select c1 or c17 from t1;
+c1 or c17
+1
+select c1 and c18 from t1;
+c1 and c18
+1
+select c1 or c18 from t1;
+c1 or c18
+1
+select c1 and c19 from t1;
+c1 and c19
+1
+select c1 or c19 from t1;
+c1 or c19
+1
+select c1 and c20 from t1;
+c1 and c20
+1
+select c1 or c20 from t1;
+c1 or c20
+1
+select c1 and c21 from t1;
+c1 and c21
+1
+select c1 or c21 from t1;
+c1 or c21
+1
+select c1 and c22 from t1;
+c1 and c22
+1
+select c1 or c22 from t1;
+c1 or c22
+1
+select c1 and c23 from t1;
+c1 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c1 or c23 from t1;
+c1 or c23
+1
+select c1 and c24 from t1;
+c1 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c1 or c24 from t1;
+c1 or c24
+1
+select c2 and c1 from t1;
+c2 and c1
+1
+select c2 or c1 from t1;
+c2 or c1
+1
+select c2 and c2 from t1;
+c2 and c2
+1
+select c2 or c2 from t1;
+c2 or c2
+1
+select c2 and c3 from t1;
+c2 and c3
+1
+select c2 or c3 from t1;
+c2 or c3
+1
+select c2 and c4 from t1;
+c2 and c4
+1
+select c2 or c4 from t1;
+c2 or c4
+1
+select c2 and c5 from t1;
+c2 and c5
+1
+select c2 or c5 from t1;
+c2 or c5
+1
+select c2 and c6 from t1;
+c2 and c6
+1
+select c2 or c6 from t1;
+c2 or c6
+1
+select c2 and c7 from t1;
+c2 and c7
+1
+select c2 or c7 from t1;
+c2 or c7
+1
+select c2 and c8 from t1;
+c2 and c8
+1
+select c2 or c8 from t1;
+c2 or c8
+1
+select c2 and c9 from t1;
+c2 and c9
+1
+select c2 or c9 from t1;
+c2 or c9
+1
+select c2 and c10 from t1;
+c2 and c10
+1
+select c2 or c10 from t1;
+c2 or c10
+1
+select c2 and c11 from t1;
+c2 and c11
+1
+select c2 or c11 from t1;
+c2 or c11
+1
+select c2 and c12 from t1;
+c2 and c12
+1
+select c2 or c12 from t1;
+c2 or c12
+1
+select c2 and c13 from t1;
+c2 and c13
+1
+select c2 or c13 from t1;
+c2 or c13
+1
+select c2 and c14 from t1;
+c2 and c14
+1
+select c2 or c14 from t1;
+c2 or c14
+1
+select c2 and c15 from t1;
+c2 and c15
+1
+select c2 or c15 from t1;
+c2 or c15
+1
+select c2 and c16 from t1;
+c2 and c16
+1
+select c2 or c16 from t1;
+c2 or c16
+1
+select c2 and c17 from t1;
+c2 and c17
+1
+select c2 or c17 from t1;
+c2 or c17
+1
+select c2 and c18 from t1;
+c2 and c18
+1
+select c2 or c18 from t1;
+c2 or c18
+1
+select c2 and c19 from t1;
+c2 and c19
+1
+select c2 or c19 from t1;
+c2 or c19
+1
+select c2 and c20 from t1;
+c2 and c20
+1
+select c2 or c20 from t1;
+c2 or c20
+1
+select c2 and c21 from t1;
+c2 and c21
+1
+select c2 or c21 from t1;
+c2 or c21
+1
+select c2 and c22 from t1;
+c2 and c22
+1
+select c2 or c22 from t1;
+c2 or c22
+1
+select c2 and c23 from t1;
+c2 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c2 or c23 from t1;
+c2 or c23
+1
+select c2 and c24 from t1;
+c2 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c2 or c24 from t1;
+c2 or c24
+1
+select c3 and c1 from t1;
+c3 and c1
+1
+select c3 or c1 from t1;
+c3 or c1
+1
+select c3 and c2 from t1;
+c3 and c2
+1
+select c3 or c2 from t1;
+c3 or c2
+1
+select c3 and c3 from t1;
+c3 and c3
+1
+select c3 or c3 from t1;
+c3 or c3
+1
+select c3 and c4 from t1;
+c3 and c4
+1
+select c3 or c4 from t1;
+c3 or c4
+1
+select c3 and c5 from t1;
+c3 and c5
+1
+select c3 or c5 from t1;
+c3 or c5
+1
+select c3 and c6 from t1;
+c3 and c6
+1
+select c3 or c6 from t1;
+c3 or c6
+1
+select c3 and c7 from t1;
+c3 and c7
+1
+select c3 or c7 from t1;
+c3 or c7
+1
+select c3 and c8 from t1;
+c3 and c8
+1
+select c3 or c8 from t1;
+c3 or c8
+1
+select c3 and c9 from t1;
+c3 and c9
+1
+select c3 or c9 from t1;
+c3 or c9
+1
+select c3 and c10 from t1;
+c3 and c10
+1
+select c3 or c10 from t1;
+c3 or c10
+1
+select c3 and c11 from t1;
+c3 and c11
+1
+select c3 or c11 from t1;
+c3 or c11
+1
+select c3 and c12 from t1;
+c3 and c12
+1
+select c3 or c12 from t1;
+c3 or c12
+1
+select c3 and c13 from t1;
+c3 and c13
+1
+select c3 or c13 from t1;
+c3 or c13
+1
+select c3 and c14 from t1;
+c3 and c14
+1
+select c3 or c14 from t1;
+c3 or c14
+1
+select c3 and c15 from t1;
+c3 and c15
+1
+select c3 or c15 from t1;
+c3 or c15
+1
+select c3 and c16 from t1;
+c3 and c16
+1
+select c3 or c16 from t1;
+c3 or c16
+1
+select c3 and c17 from t1;
+c3 and c17
+1
+select c3 or c17 from t1;
+c3 or c17
+1
+select c3 and c18 from t1;
+c3 and c18
+1
+select c3 or c18 from t1;
+c3 or c18
+1
+select c3 and c19 from t1;
+c3 and c19
+1
+select c3 or c19 from t1;
+c3 or c19
+1
+select c3 and c20 from t1;
+c3 and c20
+1
+select c3 or c20 from t1;
+c3 or c20
+1
+select c3 and c21 from t1;
+c3 and c21
+1
+select c3 or c21 from t1;
+c3 or c21
+1
+select c3 and c22 from t1;
+c3 and c22
+1
+select c3 or c22 from t1;
+c3 or c22
+1
+select c3 and c23 from t1;
+c3 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c3 or c23 from t1;
+c3 or c23
+1
+select c3 and c24 from t1;
+c3 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c3 or c24 from t1;
+c3 or c24
+1
+select c4 and c1 from t1;
+c4 and c1
+1
+select c4 or c1 from t1;
+c4 or c1
+1
+select c4 and c2 from t1;
+c4 and c2
+1
+select c4 or c2 from t1;
+c4 or c2
+1
+select c4 and c3 from t1;
+c4 and c3
+1
+select c4 or c3 from t1;
+c4 or c3
+1
+select c4 and c4 from t1;
+c4 and c4
+1
+select c4 or c4 from t1;
+c4 or c4
+1
+select c4 and c5 from t1;
+c4 and c5
+1
+select c4 or c5 from t1;
+c4 or c5
+1
+select c4 and c6 from t1;
+c4 and c6
+1
+select c4 or c6 from t1;
+c4 or c6
+1
+select c4 and c7 from t1;
+c4 and c7
+1
+select c4 or c7 from t1;
+c4 or c7
+1
+select c4 and c8 from t1;
+c4 and c8
+1
+select c4 or c8 from t1;
+c4 or c8
+1
+select c4 and c9 from t1;
+c4 and c9
+1
+select c4 or c9 from t1;
+c4 or c9
+1
+select c4 and c10 from t1;
+c4 and c10
+1
+select c4 or c10 from t1;
+c4 or c10
+1
+select c4 and c11 from t1;
+c4 and c11
+1
+select c4 or c11 from t1;
+c4 or c11
+1
+select c4 and c12 from t1;
+c4 and c12
+1
+select c4 or c12 from t1;
+c4 or c12
+1
+select c4 and c13 from t1;
+c4 and c13
+1
+select c4 or c13 from t1;
+c4 or c13
+1
+select c4 and c14 from t1;
+c4 and c14
+1
+select c4 or c14 from t1;
+c4 or c14
+1
+select c4 and c15 from t1;
+c4 and c15
+1
+select c4 or c15 from t1;
+c4 or c15
+1
+select c4 and c16 from t1;
+c4 and c16
+1
+select c4 or c16 from t1;
+c4 or c16
+1
+select c4 and c17 from t1;
+c4 and c17
+1
+select c4 or c17 from t1;
+c4 or c17
+1
+select c4 and c18 from t1;
+c4 and c18
+1
+select c4 or c18 from t1;
+c4 or c18
+1
+select c4 and c19 from t1;
+c4 and c19
+1
+select c4 or c19 from t1;
+c4 or c19
+1
+select c4 and c20 from t1;
+c4 and c20
+1
+select c4 or c20 from t1;
+c4 or c20
+1
+select c4 and c21 from t1;
+c4 and c21
+1
+select c4 or c21 from t1;
+c4 or c21
+1
+select c4 and c22 from t1;
+c4 and c22
+1
+select c4 or c22 from t1;
+c4 or c22
+1
+select c4 and c23 from t1;
+c4 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c4 or c23 from t1;
+c4 or c23
+1
+select c4 and c24 from t1;
+c4 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c4 or c24 from t1;
+c4 or c24
+1
+select c5 and c1 from t1;
+c5 and c1
+1
+select c5 or c1 from t1;
+c5 or c1
+1
+select c5 and c2 from t1;
+c5 and c2
+1
+select c5 or c2 from t1;
+c5 or c2
+1
+select c5 and c3 from t1;
+c5 and c3
+1
+select c5 or c3 from t1;
+c5 or c3
+1
+select c5 and c4 from t1;
+c5 and c4
+1
+select c5 or c4 from t1;
+c5 or c4
+1
+select c5 and c5 from t1;
+c5 and c5
+1
+select c5 or c5 from t1;
+c5 or c5
+1
+select c5 and c6 from t1;
+c5 and c6
+1
+select c5 or c6 from t1;
+c5 or c6
+1
+select c5 and c7 from t1;
+c5 and c7
+1
+select c5 or c7 from t1;
+c5 or c7
+1
+select c5 and c8 from t1;
+c5 and c8
+1
+select c5 or c8 from t1;
+c5 or c8
+1
+select c5 and c9 from t1;
+c5 and c9
+1
+select c5 or c9 from t1;
+c5 or c9
+1
+select c5 and c10 from t1;
+c5 and c10
+1
+select c5 or c10 from t1;
+c5 or c10
+1
+select c5 and c11 from t1;
+c5 and c11
+1
+select c5 or c11 from t1;
+c5 or c11
+1
+select c5 and c12 from t1;
+c5 and c12
+1
+select c5 or c12 from t1;
+c5 or c12
+1
+select c5 and c13 from t1;
+c5 and c13
+1
+select c5 or c13 from t1;
+c5 or c13
+1
+select c5 and c14 from t1;
+c5 and c14
+1
+select c5 or c14 from t1;
+c5 or c14
+1
+select c5 and c15 from t1;
+c5 and c15
+1
+select c5 or c15 from t1;
+c5 or c15
+1
+select c5 and c16 from t1;
+c5 and c16
+1
+select c5 or c16 from t1;
+c5 or c16
+1
+select c5 and c17 from t1;
+c5 and c17
+1
+select c5 or c17 from t1;
+c5 or c17
+1
+select c5 and c18 from t1;
+c5 and c18
+1
+select c5 or c18 from t1;
+c5 or c18
+1
+select c5 and c19 from t1;
+c5 and c19
+1
+select c5 or c19 from t1;
+c5 or c19
+1
+select c5 and c20 from t1;
+c5 and c20
+1
+select c5 or c20 from t1;
+c5 or c20
+1
+select c5 and c21 from t1;
+c5 and c21
+1
+select c5 or c21 from t1;
+c5 or c21
+1
+select c5 and c22 from t1;
+c5 and c22
+1
+select c5 or c22 from t1;
+c5 or c22
+1
+select c5 and c23 from t1;
+c5 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c5 or c23 from t1;
+c5 or c23
+1
+select c5 and c24 from t1;
+c5 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c5 or c24 from t1;
+c5 or c24
+1
+select c6 and c1 from t1;
+c6 and c1
+1
+select c6 or c1 from t1;
+c6 or c1
+1
+select c6 and c2 from t1;
+c6 and c2
+1
+select c6 or c2 from t1;
+c6 or c2
+1
+select c6 and c3 from t1;
+c6 and c3
+1
+select c6 or c3 from t1;
+c6 or c3
+1
+select c6 and c4 from t1;
+c6 and c4
+1
+select c6 or c4 from t1;
+c6 or c4
+1
+select c6 and c5 from t1;
+c6 and c5
+1
+select c6 or c5 from t1;
+c6 or c5
+1
+select c6 and c6 from t1;
+c6 and c6
+1
+select c6 or c6 from t1;
+c6 or c6
+1
+select c6 and c7 from t1;
+c6 and c7
+1
+select c6 or c7 from t1;
+c6 or c7
+1
+select c6 and c8 from t1;
+c6 and c8
+1
+select c6 or c8 from t1;
+c6 or c8
+1
+select c6 and c9 from t1;
+c6 and c9
+1
+select c6 or c9 from t1;
+c6 or c9
+1
+select c6 and c10 from t1;
+c6 and c10
+1
+select c6 or c10 from t1;
+c6 or c10
+1
+select c6 and c11 from t1;
+c6 and c11
+1
+select c6 or c11 from t1;
+c6 or c11
+1
+select c6 and c12 from t1;
+c6 and c12
+1
+select c6 or c12 from t1;
+c6 or c12
+1
+select c6 and c13 from t1;
+c6 and c13
+1
+select c6 or c13 from t1;
+c6 or c13
+1
+select c6 and c14 from t1;
+c6 and c14
+1
+select c6 or c14 from t1;
+c6 or c14
+1
+select c6 and c15 from t1;
+c6 and c15
+1
+select c6 or c15 from t1;
+c6 or c15
+1
+select c6 and c16 from t1;
+c6 and c16
+1
+select c6 or c16 from t1;
+c6 or c16
+1
+select c6 and c17 from t1;
+c6 and c17
+1
+select c6 or c17 from t1;
+c6 or c17
+1
+select c6 and c18 from t1;
+c6 and c18
+1
+select c6 or c18 from t1;
+c6 or c18
+1
+select c6 and c19 from t1;
+c6 and c19
+1
+select c6 or c19 from t1;
+c6 or c19
+1
+select c6 and c20 from t1;
+c6 and c20
+1
+select c6 or c20 from t1;
+c6 or c20
+1
+select c6 and c21 from t1;
+c6 and c21
+1
+select c6 or c21 from t1;
+c6 or c21
+1
+select c6 and c22 from t1;
+c6 and c22
+1
+select c6 or c22 from t1;
+c6 or c22
+1
+select c6 and c23 from t1;
+c6 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c6 or c23 from t1;
+c6 or c23
+1
+select c6 and c24 from t1;
+c6 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c6 or c24 from t1;
+c6 or c24
+1
+select c7 and c1 from t1;
+c7 and c1
+1
+select c7 or c1 from t1;
+c7 or c1
+1
+select c7 and c2 from t1;
+c7 and c2
+1
+select c7 or c2 from t1;
+c7 or c2
+1
+select c7 and c3 from t1;
+c7 and c3
+1
+select c7 or c3 from t1;
+c7 or c3
+1
+select c7 and c4 from t1;
+c7 and c4
+1
+select c7 or c4 from t1;
+c7 or c4
+1
+select c7 and c5 from t1;
+c7 and c5
+1
+select c7 or c5 from t1;
+c7 or c5
+1
+select c7 and c6 from t1;
+c7 and c6
+1
+select c7 or c6 from t1;
+c7 or c6
+1
+select c7 and c7 from t1;
+c7 and c7
+1
+select c7 or c7 from t1;
+c7 or c7
+1
+select c7 and c8 from t1;
+c7 and c8
+1
+select c7 or c8 from t1;
+c7 or c8
+1
+select c7 and c9 from t1;
+c7 and c9
+1
+select c7 or c9 from t1;
+c7 or c9
+1
+select c7 and c10 from t1;
+c7 and c10
+1
+select c7 or c10 from t1;
+c7 or c10
+1
+select c7 and c11 from t1;
+c7 and c11
+1
+select c7 or c11 from t1;
+c7 or c11
+1
+select c7 and c12 from t1;
+c7 and c12
+1
+select c7 or c12 from t1;
+c7 or c12
+1
+select c7 and c13 from t1;
+c7 and c13
+1
+select c7 or c13 from t1;
+c7 or c13
+1
+select c7 and c14 from t1;
+c7 and c14
+1
+select c7 or c14 from t1;
+c7 or c14
+1
+select c7 and c15 from t1;
+c7 and c15
+1
+select c7 or c15 from t1;
+c7 or c15
+1
+select c7 and c16 from t1;
+c7 and c16
+1
+select c7 or c16 from t1;
+c7 or c16
+1
+select c7 and c17 from t1;
+c7 and c17
+1
+select c7 or c17 from t1;
+c7 or c17
+1
+select c7 and c18 from t1;
+c7 and c18
+1
+select c7 or c18 from t1;
+c7 or c18
+1
+select c7 and c19 from t1;
+c7 and c19
+1
+select c7 or c19 from t1;
+c7 or c19
+1
+select c7 and c20 from t1;
+c7 and c20
+1
+select c7 or c20 from t1;
+c7 or c20
+1
+select c7 and c21 from t1;
+c7 and c21
+1
+select c7 or c21 from t1;
+c7 or c21
+1
+select c7 and c22 from t1;
+c7 and c22
+1
+select c7 or c22 from t1;
+c7 or c22
+1
+select c7 and c23 from t1;
+c7 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c7 or c23 from t1;
+c7 or c23
+1
+select c7 and c24 from t1;
+c7 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c7 or c24 from t1;
+c7 or c24
+1
+select c8 and c1 from t1;
+c8 and c1
+1
+select c8 or c1 from t1;
+c8 or c1
+1
+select c8 and c2 from t1;
+c8 and c2
+1
+select c8 or c2 from t1;
+c8 or c2
+1
+select c8 and c3 from t1;
+c8 and c3
+1
+select c8 or c3 from t1;
+c8 or c3
+1
+select c8 and c4 from t1;
+c8 and c4
+1
+select c8 or c4 from t1;
+c8 or c4
+1
+select c8 and c5 from t1;
+c8 and c5
+1
+select c8 or c5 from t1;
+c8 or c5
+1
+select c8 and c6 from t1;
+c8 and c6
+1
+select c8 or c6 from t1;
+c8 or c6
+1
+select c8 and c7 from t1;
+c8 and c7
+1
+select c8 or c7 from t1;
+c8 or c7
+1
+select c8 and c8 from t1;
+c8 and c8
+1
+select c8 or c8 from t1;
+c8 or c8
+1
+select c8 and c9 from t1;
+c8 and c9
+1
+select c8 or c9 from t1;
+c8 or c9
+1
+select c8 and c10 from t1;
+c8 and c10
+1
+select c8 or c10 from t1;
+c8 or c10
+1
+select c8 and c11 from t1;
+c8 and c11
+1
+select c8 or c11 from t1;
+c8 or c11
+1
+select c8 and c12 from t1;
+c8 and c12
+1
+select c8 or c12 from t1;
+c8 or c12
+1
+select c8 and c13 from t1;
+c8 and c13
+1
+select c8 or c13 from t1;
+c8 or c13
+1
+select c8 and c14 from t1;
+c8 and c14
+1
+select c8 or c14 from t1;
+c8 or c14
+1
+select c8 and c15 from t1;
+c8 and c15
+1
+select c8 or c15 from t1;
+c8 or c15
+1
+select c8 and c16 from t1;
+c8 and c16
+1
+select c8 or c16 from t1;
+c8 or c16
+1
+select c8 and c17 from t1;
+c8 and c17
+1
+select c8 or c17 from t1;
+c8 or c17
+1
+select c8 and c18 from t1;
+c8 and c18
+1
+select c8 or c18 from t1;
+c8 or c18
+1
+select c8 and c19 from t1;
+c8 and c19
+1
+select c8 or c19 from t1;
+c8 or c19
+1
+select c8 and c20 from t1;
+c8 and c20
+1
+select c8 or c20 from t1;
+c8 or c20
+1
+select c8 and c21 from t1;
+c8 and c21
+1
+select c8 or c21 from t1;
+c8 or c21
+1
+select c8 and c22 from t1;
+c8 and c22
+1
+select c8 or c22 from t1;
+c8 or c22
+1
+select c8 and c23 from t1;
+c8 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c8 or c23 from t1;
+c8 or c23
+1
+select c8 and c24 from t1;
+c8 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c8 or c24 from t1;
+c8 or c24
+1
+select c9 and c1 from t1;
+c9 and c1
+1
+select c9 or c1 from t1;
+c9 or c1
+1
+select c9 and c2 from t1;
+c9 and c2
+1
+select c9 or c2 from t1;
+c9 or c2
+1
+select c9 and c3 from t1;
+c9 and c3
+1
+select c9 or c3 from t1;
+c9 or c3
+1
+select c9 and c4 from t1;
+c9 and c4
+1
+select c9 or c4 from t1;
+c9 or c4
+1
+select c9 and c5 from t1;
+c9 and c5
+1
+select c9 or c5 from t1;
+c9 or c5
+1
+select c9 and c6 from t1;
+c9 and c6
+1
+select c9 or c6 from t1;
+c9 or c6
+1
+select c9 and c7 from t1;
+c9 and c7
+1
+select c9 or c7 from t1;
+c9 or c7
+1
+select c9 and c8 from t1;
+c9 and c8
+1
+select c9 or c8 from t1;
+c9 or c8
+1
+select c9 and c9 from t1;
+c9 and c9
+1
+select c9 or c9 from t1;
+c9 or c9
+1
+select c9 and c10 from t1;
+c9 and c10
+1
+select c9 or c10 from t1;
+c9 or c10
+1
+select c9 and c11 from t1;
+c9 and c11
+1
+select c9 or c11 from t1;
+c9 or c11
+1
+select c9 and c12 from t1;
+c9 and c12
+1
+select c9 or c12 from t1;
+c9 or c12
+1
+select c9 and c13 from t1;
+c9 and c13
+1
+select c9 or c13 from t1;
+c9 or c13
+1
+select c9 and c14 from t1;
+c9 and c14
+1
+select c9 or c14 from t1;
+c9 or c14
+1
+select c9 and c15 from t1;
+c9 and c15
+1
+select c9 or c15 from t1;
+c9 or c15
+1
+select c9 and c16 from t1;
+c9 and c16
+1
+select c9 or c16 from t1;
+c9 or c16
+1
+select c9 and c17 from t1;
+c9 and c17
+1
+select c9 or c17 from t1;
+c9 or c17
+1
+select c9 and c18 from t1;
+c9 and c18
+1
+select c9 or c18 from t1;
+c9 or c18
+1
+select c9 and c19 from t1;
+c9 and c19
+1
+select c9 or c19 from t1;
+c9 or c19
+1
+select c9 and c20 from t1;
+c9 and c20
+1
+select c9 or c20 from t1;
+c9 or c20
+1
+select c9 and c21 from t1;
+c9 and c21
+1
+select c9 or c21 from t1;
+c9 or c21
+1
+select c9 and c22 from t1;
+c9 and c22
+1
+select c9 or c22 from t1;
+c9 or c22
+1
+select c9 and c23 from t1;
+c9 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c9 or c23 from t1;
+c9 or c23
+1
+select c9 and c24 from t1;
+c9 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c9 or c24 from t1;
+c9 or c24
+1
+select c10 and c1 from t1;
+c10 and c1
+1
+select c10 or c1 from t1;
+c10 or c1
+1
+select c10 and c2 from t1;
+c10 and c2
+1
+select c10 or c2 from t1;
+c10 or c2
+1
+select c10 and c3 from t1;
+c10 and c3
+1
+select c10 or c3 from t1;
+c10 or c3
+1
+select c10 and c4 from t1;
+c10 and c4
+1
+select c10 or c4 from t1;
+c10 or c4
+1
+select c10 and c5 from t1;
+c10 and c5
+1
+select c10 or c5 from t1;
+c10 or c5
+1
+select c10 and c6 from t1;
+c10 and c6
+1
+select c10 or c6 from t1;
+c10 or c6
+1
+select c10 and c7 from t1;
+c10 and c7
+1
+select c10 or c7 from t1;
+c10 or c7
+1
+select c10 and c8 from t1;
+c10 and c8
+1
+select c10 or c8 from t1;
+c10 or c8
+1
+select c10 and c9 from t1;
+c10 and c9
+1
+select c10 or c9 from t1;
+c10 or c9
+1
+select c10 and c10 from t1;
+c10 and c10
+1
+select c10 or c10 from t1;
+c10 or c10
+1
+select c10 and c11 from t1;
+c10 and c11
+1
+select c10 or c11 from t1;
+c10 or c11
+1
+select c10 and c12 from t1;
+c10 and c12
+1
+select c10 or c12 from t1;
+c10 or c12
+1
+select c10 and c13 from t1;
+c10 and c13
+1
+select c10 or c13 from t1;
+c10 or c13
+1
+select c10 and c14 from t1;
+c10 and c14
+1
+select c10 or c14 from t1;
+c10 or c14
+1
+select c10 and c15 from t1;
+c10 and c15
+1
+select c10 or c15 from t1;
+c10 or c15
+1
+select c10 and c16 from t1;
+c10 and c16
+1
+select c10 or c16 from t1;
+c10 or c16
+1
+select c10 and c17 from t1;
+c10 and c17
+1
+select c10 or c17 from t1;
+c10 or c17
+1
+select c10 and c18 from t1;
+c10 and c18
+1
+select c10 or c18 from t1;
+c10 or c18
+1
+select c10 and c19 from t1;
+c10 and c19
+1
+select c10 or c19 from t1;
+c10 or c19
+1
+select c10 and c20 from t1;
+c10 and c20
+1
+select c10 or c20 from t1;
+c10 or c20
+1
+select c10 and c21 from t1;
+c10 and c21
+1
+select c10 or c21 from t1;
+c10 or c21
+1
+select c10 and c22 from t1;
+c10 and c22
+1
+select c10 or c22 from t1;
+c10 or c22
+1
+select c10 and c23 from t1;
+c10 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c10 or c23 from t1;
+c10 or c23
+1
+select c10 and c24 from t1;
+c10 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c10 or c24 from t1;
+c10 or c24
+1
+select c11 and c1 from t1;
+c11 and c1
+1
+select c11 or c1 from t1;
+c11 or c1
+1
+select c11 and c2 from t1;
+c11 and c2
+1
+select c11 or c2 from t1;
+c11 or c2
+1
+select c11 and c3 from t1;
+c11 and c3
+1
+select c11 or c3 from t1;
+c11 or c3
+1
+select c11 and c4 from t1;
+c11 and c4
+1
+select c11 or c4 from t1;
+c11 or c4
+1
+select c11 and c5 from t1;
+c11 and c5
+1
+select c11 or c5 from t1;
+c11 or c5
+1
+select c11 and c6 from t1;
+c11 and c6
+1
+select c11 or c6 from t1;
+c11 or c6
+1
+select c11 and c7 from t1;
+c11 and c7
+1
+select c11 or c7 from t1;
+c11 or c7
+1
+select c11 and c8 from t1;
+c11 and c8
+1
+select c11 or c8 from t1;
+c11 or c8
+1
+select c11 and c9 from t1;
+c11 and c9
+1
+select c11 or c9 from t1;
+c11 or c9
+1
+select c11 and c10 from t1;
+c11 and c10
+1
+select c11 or c10 from t1;
+c11 or c10
+1
+select c11 and c11 from t1;
+c11 and c11
+1
+select c11 or c11 from t1;
+c11 or c11
+1
+select c11 and c12 from t1;
+c11 and c12
+1
+select c11 or c12 from t1;
+c11 or c12
+1
+select c11 and c13 from t1;
+c11 and c13
+1
+select c11 or c13 from t1;
+c11 or c13
+1
+select c11 and c14 from t1;
+c11 and c14
+1
+select c11 or c14 from t1;
+c11 or c14
+1
+select c11 and c15 from t1;
+c11 and c15
+1
+select c11 or c15 from t1;
+c11 or c15
+1
+select c11 and c16 from t1;
+c11 and c16
+1
+select c11 or c16 from t1;
+c11 or c16
+1
+select c11 and c17 from t1;
+c11 and c17
+1
+select c11 or c17 from t1;
+c11 or c17
+1
+select c11 and c18 from t1;
+c11 and c18
+1
+select c11 or c18 from t1;
+c11 or c18
+1
+select c11 and c19 from t1;
+c11 and c19
+1
+select c11 or c19 from t1;
+c11 or c19
+1
+select c11 and c20 from t1;
+c11 and c20
+1
+select c11 or c20 from t1;
+c11 or c20
+1
+select c11 and c21 from t1;
+c11 and c21
+1
+select c11 or c21 from t1;
+c11 or c21
+1
+select c11 and c22 from t1;
+c11 and c22
+1
+select c11 or c22 from t1;
+c11 or c22
+1
+select c11 and c23 from t1;
+c11 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c11 or c23 from t1;
+c11 or c23
+1
+select c11 and c24 from t1;
+c11 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c11 or c24 from t1;
+c11 or c24
+1
+select c12 and c1 from t1;
+c12 and c1
+1
+select c12 or c1 from t1;
+c12 or c1
+1
+select c12 and c2 from t1;
+c12 and c2
+1
+select c12 or c2 from t1;
+c12 or c2
+1
+select c12 and c3 from t1;
+c12 and c3
+1
+select c12 or c3 from t1;
+c12 or c3
+1
+select c12 and c4 from t1;
+c12 and c4
+1
+select c12 or c4 from t1;
+c12 or c4
+1
+select c12 and c5 from t1;
+c12 and c5
+1
+select c12 or c5 from t1;
+c12 or c5
+1
+select c12 and c6 from t1;
+c12 and c6
+1
+select c12 or c6 from t1;
+c12 or c6
+1
+select c12 and c7 from t1;
+c12 and c7
+1
+select c12 or c7 from t1;
+c12 or c7
+1
+select c12 and c8 from t1;
+c12 and c8
+1
+select c12 or c8 from t1;
+c12 or c8
+1
+select c12 and c9 from t1;
+c12 and c9
+1
+select c12 or c9 from t1;
+c12 or c9
+1
+select c12 and c10 from t1;
+c12 and c10
+1
+select c12 or c10 from t1;
+c12 or c10
+1
+select c12 and c11 from t1;
+c12 and c11
+1
+select c12 or c11 from t1;
+c12 or c11
+1
+select c12 and c12 from t1;
+c12 and c12
+1
+select c12 or c12 from t1;
+c12 or c12
+1
+select c12 and c13 from t1;
+c12 and c13
+1
+select c12 or c13 from t1;
+c12 or c13
+1
+select c12 and c14 from t1;
+c12 and c14
+1
+select c12 or c14 from t1;
+c12 or c14
+1
+select c12 and c15 from t1;
+c12 and c15
+1
+select c12 or c15 from t1;
+c12 or c15
+1
+select c12 and c16 from t1;
+c12 and c16
+1
+select c12 or c16 from t1;
+c12 or c16
+1
+select c12 and c17 from t1;
+c12 and c17
+1
+select c12 or c17 from t1;
+c12 or c17
+1
+select c12 and c18 from t1;
+c12 and c18
+1
+select c12 or c18 from t1;
+c12 or c18
+1
+select c12 and c19 from t1;
+c12 and c19
+1
+select c12 or c19 from t1;
+c12 or c19
+1
+select c12 and c20 from t1;
+c12 and c20
+1
+select c12 or c20 from t1;
+c12 or c20
+1
+select c12 and c21 from t1;
+c12 and c21
+1
+select c12 or c21 from t1;
+c12 or c21
+1
+select c12 and c22 from t1;
+c12 and c22
+1
+select c12 or c22 from t1;
+c12 or c22
+1
+select c12 and c23 from t1;
+c12 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c12 or c23 from t1;
+c12 or c23
+1
+select c12 and c24 from t1;
+c12 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c12 or c24 from t1;
+c12 or c24
+1
+select c13 and c1 from t1;
+c13 and c1
+1
+select c13 or c1 from t1;
+c13 or c1
+1
+select c13 and c2 from t1;
+c13 and c2
+1
+select c13 or c2 from t1;
+c13 or c2
+1
+select c13 and c3 from t1;
+c13 and c3
+1
+select c13 or c3 from t1;
+c13 or c3
+1
+select c13 and c4 from t1;
+c13 and c4
+1
+select c13 or c4 from t1;
+c13 or c4
+1
+select c13 and c5 from t1;
+c13 and c5
+1
+select c13 or c5 from t1;
+c13 or c5
+1
+select c13 and c6 from t1;
+c13 and c6
+1
+select c13 or c6 from t1;
+c13 or c6
+1
+select c13 and c7 from t1;
+c13 and c7
+1
+select c13 or c7 from t1;
+c13 or c7
+1
+select c13 and c8 from t1;
+c13 and c8
+1
+select c13 or c8 from t1;
+c13 or c8
+1
+select c13 and c9 from t1;
+c13 and c9
+1
+select c13 or c9 from t1;
+c13 or c9
+1
+select c13 and c10 from t1;
+c13 and c10
+1
+select c13 or c10 from t1;
+c13 or c10
+1
+select c13 and c11 from t1;
+c13 and c11
+1
+select c13 or c11 from t1;
+c13 or c11
+1
+select c13 and c12 from t1;
+c13 and c12
+1
+select c13 or c12 from t1;
+c13 or c12
+1
+select c13 and c13 from t1;
+c13 and c13
+1
+select c13 or c13 from t1;
+c13 or c13
+1
+select c13 and c14 from t1;
+c13 and c14
+1
+select c13 or c14 from t1;
+c13 or c14
+1
+select c13 and c15 from t1;
+c13 and c15
+1
+select c13 or c15 from t1;
+c13 or c15
+1
+select c13 and c16 from t1;
+c13 and c16
+1
+select c13 or c16 from t1;
+c13 or c16
+1
+select c13 and c17 from t1;
+c13 and c17
+1
+select c13 or c17 from t1;
+c13 or c17
+1
+select c13 and c18 from t1;
+c13 and c18
+1
+select c13 or c18 from t1;
+c13 or c18
+1
+select c13 and c19 from t1;
+c13 and c19
+1
+select c13 or c19 from t1;
+c13 or c19
+1
+select c13 and c20 from t1;
+c13 and c20
+1
+select c13 or c20 from t1;
+c13 or c20
+1
+select c13 and c21 from t1;
+c13 and c21
+1
+select c13 or c21 from t1;
+c13 or c21
+1
+select c13 and c22 from t1;
+c13 and c22
+1
+select c13 or c22 from t1;
+c13 or c22
+1
+select c13 and c23 from t1;
+c13 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c13 or c23 from t1;
+c13 or c23
+1
+select c13 and c24 from t1;
+c13 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c13 or c24 from t1;
+c13 or c24
+1
+select c14 and c1 from t1;
+c14 and c1
+1
+select c14 or c1 from t1;
+c14 or c1
+1
+select c14 and c2 from t1;
+c14 and c2
+1
+select c14 or c2 from t1;
+c14 or c2
+1
+select c14 and c3 from t1;
+c14 and c3
+1
+select c14 or c3 from t1;
+c14 or c3
+1
+select c14 and c4 from t1;
+c14 and c4
+1
+select c14 or c4 from t1;
+c14 or c4
+1
+select c14 and c5 from t1;
+c14 and c5
+1
+select c14 or c5 from t1;
+c14 or c5
+1
+select c14 and c6 from t1;
+c14 and c6
+1
+select c14 or c6 from t1;
+c14 or c6
+1
+select c14 and c7 from t1;
+c14 and c7
+1
+select c14 or c7 from t1;
+c14 or c7
+1
+select c14 and c8 from t1;
+c14 and c8
+1
+select c14 or c8 from t1;
+c14 or c8
+1
+select c14 and c9 from t1;
+c14 and c9
+1
+select c14 or c9 from t1;
+c14 or c9
+1
+select c14 and c10 from t1;
+c14 and c10
+1
+select c14 or c10 from t1;
+c14 or c10
+1
+select c14 and c11 from t1;
+c14 and c11
+1
+select c14 or c11 from t1;
+c14 or c11
+1
+select c14 and c12 from t1;
+c14 and c12
+1
+select c14 or c12 from t1;
+c14 or c12
+1
+select c14 and c13 from t1;
+c14 and c13
+1
+select c14 or c13 from t1;
+c14 or c13
+1
+select c14 and c14 from t1;
+c14 and c14
+1
+select c14 or c14 from t1;
+c14 or c14
+1
+select c14 and c15 from t1;
+c14 and c15
+1
+select c14 or c15 from t1;
+c14 or c15
+1
+select c14 and c16 from t1;
+c14 and c16
+1
+select c14 or c16 from t1;
+c14 or c16
+1
+select c14 and c17 from t1;
+c14 and c17
+1
+select c14 or c17 from t1;
+c14 or c17
+1
+select c14 and c18 from t1;
+c14 and c18
+1
+select c14 or c18 from t1;
+c14 or c18
+1
+select c14 and c19 from t1;
+c14 and c19
+1
+select c14 or c19 from t1;
+c14 or c19
+1
+select c14 and c20 from t1;
+c14 and c20
+1
+select c14 or c20 from t1;
+c14 or c20
+1
+select c14 and c21 from t1;
+c14 and c21
+1
+select c14 or c21 from t1;
+c14 or c21
+1
+select c14 and c22 from t1;
+c14 and c22
+1
+select c14 or c22 from t1;
+c14 or c22
+1
+select c14 and c23 from t1;
+c14 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c14 or c23 from t1;
+c14 or c23
+1
+select c14 and c24 from t1;
+c14 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c14 or c24 from t1;
+c14 or c24
+1
+select c15 and c1 from t1;
+c15 and c1
+1
+select c15 or c1 from t1;
+c15 or c1
+1
+select c15 and c2 from t1;
+c15 and c2
+1
+select c15 or c2 from t1;
+c15 or c2
+1
+select c15 and c3 from t1;
+c15 and c3
+1
+select c15 or c3 from t1;
+c15 or c3
+1
+select c15 and c4 from t1;
+c15 and c4
+1
+select c15 or c4 from t1;
+c15 or c4
+1
+select c15 and c5 from t1;
+c15 and c5
+1
+select c15 or c5 from t1;
+c15 or c5
+1
+select c15 and c6 from t1;
+c15 and c6
+1
+select c15 or c6 from t1;
+c15 or c6
+1
+select c15 and c7 from t1;
+c15 and c7
+1
+select c15 or c7 from t1;
+c15 or c7
+1
+select c15 and c8 from t1;
+c15 and c8
+1
+select c15 or c8 from t1;
+c15 or c8
+1
+select c15 and c9 from t1;
+c15 and c9
+1
+select c15 or c9 from t1;
+c15 or c9
+1
+select c15 and c10 from t1;
+c15 and c10
+1
+select c15 or c10 from t1;
+c15 or c10
+1
+select c15 and c11 from t1;
+c15 and c11
+1
+select c15 or c11 from t1;
+c15 or c11
+1
+select c15 and c12 from t1;
+c15 and c12
+1
+select c15 or c12 from t1;
+c15 or c12
+1
+select c15 and c13 from t1;
+c15 and c13
+1
+select c15 or c13 from t1;
+c15 or c13
+1
+select c15 and c14 from t1;
+c15 and c14
+1
+select c15 or c14 from t1;
+c15 or c14
+1
+select c15 and c15 from t1;
+c15 and c15
+1
+select c15 or c15 from t1;
+c15 or c15
+1
+select c15 and c16 from t1;
+c15 and c16
+1
+select c15 or c16 from t1;
+c15 or c16
+1
+select c15 and c17 from t1;
+c15 and c17
+1
+select c15 or c17 from t1;
+c15 or c17
+1
+select c15 and c18 from t1;
+c15 and c18
+1
+select c15 or c18 from t1;
+c15 or c18
+1
+select c15 and c19 from t1;
+c15 and c19
+1
+select c15 or c19 from t1;
+c15 or c19
+1
+select c15 and c20 from t1;
+c15 and c20
+1
+select c15 or c20 from t1;
+c15 or c20
+1
+select c15 and c21 from t1;
+c15 and c21
+1
+select c15 or c21 from t1;
+c15 or c21
+1
+select c15 and c22 from t1;
+c15 and c22
+1
+select c15 or c22 from t1;
+c15 or c22
+1
+select c15 and c23 from t1;
+c15 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c15 or c23 from t1;
+c15 or c23
+1
+select c15 and c24 from t1;
+c15 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c15 or c24 from t1;
+c15 or c24
+1
+select c16 and c1 from t1;
+c16 and c1
+1
+select c16 or c1 from t1;
+c16 or c1
+1
+select c16 and c2 from t1;
+c16 and c2
+1
+select c16 or c2 from t1;
+c16 or c2
+1
+select c16 and c3 from t1;
+c16 and c3
+1
+select c16 or c3 from t1;
+c16 or c3
+1
+select c16 and c4 from t1;
+c16 and c4
+1
+select c16 or c4 from t1;
+c16 or c4
+1
+select c16 and c5 from t1;
+c16 and c5
+1
+select c16 or c5 from t1;
+c16 or c5
+1
+select c16 and c6 from t1;
+c16 and c6
+1
+select c16 or c6 from t1;
+c16 or c6
+1
+select c16 and c7 from t1;
+c16 and c7
+1
+select c16 or c7 from t1;
+c16 or c7
+1
+select c16 and c8 from t1;
+c16 and c8
+1
+select c16 or c8 from t1;
+c16 or c8
+1
+select c16 and c9 from t1;
+c16 and c9
+1
+select c16 or c9 from t1;
+c16 or c9
+1
+select c16 and c10 from t1;
+c16 and c10
+1
+select c16 or c10 from t1;
+c16 or c10
+1
+select c16 and c11 from t1;
+c16 and c11
+1
+select c16 or c11 from t1;
+c16 or c11
+1
+select c16 and c12 from t1;
+c16 and c12
+1
+select c16 or c12 from t1;
+c16 or c12
+1
+select c16 and c13 from t1;
+c16 and c13
+1
+select c16 or c13 from t1;
+c16 or c13
+1
+select c16 and c14 from t1;
+c16 and c14
+1
+select c16 or c14 from t1;
+c16 or c14
+1
+select c16 and c15 from t1;
+c16 and c15
+1
+select c16 or c15 from t1;
+c16 or c15
+1
+select c16 and c16 from t1;
+c16 and c16
+1
+select c16 or c16 from t1;
+c16 or c16
+1
+select c16 and c17 from t1;
+c16 and c17
+1
+select c16 or c17 from t1;
+c16 or c17
+1
+select c16 and c18 from t1;
+c16 and c18
+1
+select c16 or c18 from t1;
+c16 or c18
+1
+select c16 and c19 from t1;
+c16 and c19
+1
+select c16 or c19 from t1;
+c16 or c19
+1
+select c16 and c20 from t1;
+c16 and c20
+1
+select c16 or c20 from t1;
+c16 or c20
+1
+select c16 and c21 from t1;
+c16 and c21
+1
+select c16 or c21 from t1;
+c16 or c21
+1
+select c16 and c22 from t1;
+c16 and c22
+1
+select c16 or c22 from t1;
+c16 or c22
+1
+select c16 and c23 from t1;
+c16 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c16 or c23 from t1;
+c16 or c23
+1
+select c16 and c24 from t1;
+c16 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c16 or c24 from t1;
+c16 or c24
+1
+select c17 and c1 from t1;
+c17 and c1
+1
+select c17 or c1 from t1;
+c17 or c1
+1
+select c17 and c2 from t1;
+c17 and c2
+1
+select c17 or c2 from t1;
+c17 or c2
+1
+select c17 and c3 from t1;
+c17 and c3
+1
+select c17 or c3 from t1;
+c17 or c3
+1
+select c17 and c4 from t1;
+c17 and c4
+1
+select c17 or c4 from t1;
+c17 or c4
+1
+select c17 and c5 from t1;
+c17 and c5
+1
+select c17 or c5 from t1;
+c17 or c5
+1
+select c17 and c6 from t1;
+c17 and c6
+1
+select c17 or c6 from t1;
+c17 or c6
+1
+select c17 and c7 from t1;
+c17 and c7
+1
+select c17 or c7 from t1;
+c17 or c7
+1
+select c17 and c8 from t1;
+c17 and c8
+1
+select c17 or c8 from t1;
+c17 or c8
+1
+select c17 and c9 from t1;
+c17 and c9
+1
+select c17 or c9 from t1;
+c17 or c9
+1
+select c17 and c10 from t1;
+c17 and c10
+1
+select c17 or c10 from t1;
+c17 or c10
+1
+select c17 and c11 from t1;
+c17 and c11
+1
+select c17 or c11 from t1;
+c17 or c11
+1
+select c17 and c12 from t1;
+c17 and c12
+1
+select c17 or c12 from t1;
+c17 or c12
+1
+select c17 and c13 from t1;
+c17 and c13
+1
+select c17 or c13 from t1;
+c17 or c13
+1
+select c17 and c14 from t1;
+c17 and c14
+1
+select c17 or c14 from t1;
+c17 or c14
+1
+select c17 and c15 from t1;
+c17 and c15
+1
+select c17 or c15 from t1;
+c17 or c15
+1
+select c17 and c16 from t1;
+c17 and c16
+1
+select c17 or c16 from t1;
+c17 or c16
+1
+select c17 and c17 from t1;
+c17 and c17
+1
+select c17 or c17 from t1;
+c17 or c17
+1
+select c17 and c18 from t1;
+c17 and c18
+1
+select c17 or c18 from t1;
+c17 or c18
+1
+select c17 and c19 from t1;
+c17 and c19
+1
+select c17 or c19 from t1;
+c17 or c19
+1
+select c17 and c20 from t1;
+c17 and c20
+1
+select c17 or c20 from t1;
+c17 or c20
+1
+select c17 and c21 from t1;
+c17 and c21
+1
+select c17 or c21 from t1;
+c17 or c21
+1
+select c17 and c22 from t1;
+c17 and c22
+1
+select c17 or c22 from t1;
+c17 or c22
+1
+select c17 and c23 from t1;
+c17 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c17 or c23 from t1;
+c17 or c23
+1
+select c17 and c24 from t1;
+c17 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c17 or c24 from t1;
+c17 or c24
+1
+select c18 and c1 from t1;
+c18 and c1
+1
+select c18 or c1 from t1;
+c18 or c1
+1
+select c18 and c2 from t1;
+c18 and c2
+1
+select c18 or c2 from t1;
+c18 or c2
+1
+select c18 and c3 from t1;
+c18 and c3
+1
+select c18 or c3 from t1;
+c18 or c3
+1
+select c18 and c4 from t1;
+c18 and c4
+1
+select c18 or c4 from t1;
+c18 or c4
+1
+select c18 and c5 from t1;
+c18 and c5
+1
+select c18 or c5 from t1;
+c18 or c5
+1
+select c18 and c6 from t1;
+c18 and c6
+1
+select c18 or c6 from t1;
+c18 or c6
+1
+select c18 and c7 from t1;
+c18 and c7
+1
+select c18 or c7 from t1;
+c18 or c7
+1
+select c18 and c8 from t1;
+c18 and c8
+1
+select c18 or c8 from t1;
+c18 or c8
+1
+select c18 and c9 from t1;
+c18 and c9
+1
+select c18 or c9 from t1;
+c18 or c9
+1
+select c18 and c10 from t1;
+c18 and c10
+1
+select c18 or c10 from t1;
+c18 or c10
+1
+select c18 and c11 from t1;
+c18 and c11
+1
+select c18 or c11 from t1;
+c18 or c11
+1
+select c18 and c12 from t1;
+c18 and c12
+1
+select c18 or c12 from t1;
+c18 or c12
+1
+select c18 and c13 from t1;
+c18 and c13
+1
+select c18 or c13 from t1;
+c18 or c13
+1
+select c18 and c14 from t1;
+c18 and c14
+1
+select c18 or c14 from t1;
+c18 or c14
+1
+select c18 and c15 from t1;
+c18 and c15
+1
+select c18 or c15 from t1;
+c18 or c15
+1
+select c18 and c16 from t1;
+c18 and c16
+1
+select c18 or c16 from t1;
+c18 or c16
+1
+select c18 and c17 from t1;
+c18 and c17
+1
+select c18 or c17 from t1;
+c18 or c17
+1
+select c18 and c18 from t1;
+c18 and c18
+1
+select c18 or c18 from t1;
+c18 or c18
+1
+select c18 and c19 from t1;
+c18 and c19
+1
+select c18 or c19 from t1;
+c18 or c19
+1
+select c18 and c20 from t1;
+c18 and c20
+1
+select c18 or c20 from t1;
+c18 or c20
+1
+select c18 and c21 from t1;
+c18 and c21
+1
+select c18 or c21 from t1;
+c18 or c21
+1
+select c18 and c22 from t1;
+c18 and c22
+1
+select c18 or c22 from t1;
+c18 or c22
+1
+select c18 and c23 from t1;
+c18 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c18 or c23 from t1;
+c18 or c23
+1
+select c18 and c24 from t1;
+c18 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c18 or c24 from t1;
+c18 or c24
+1
+select c19 and c1 from t1;
+c19 and c1
+1
+select c19 or c1 from t1;
+c19 or c1
+1
+select c19 and c2 from t1;
+c19 and c2
+1
+select c19 or c2 from t1;
+c19 or c2
+1
+select c19 and c3 from t1;
+c19 and c3
+1
+select c19 or c3 from t1;
+c19 or c3
+1
+select c19 and c4 from t1;
+c19 and c4
+1
+select c19 or c4 from t1;
+c19 or c4
+1
+select c19 and c5 from t1;
+c19 and c5
+1
+select c19 or c5 from t1;
+c19 or c5
+1
+select c19 and c6 from t1;
+c19 and c6
+1
+select c19 or c6 from t1;
+c19 or c6
+1
+select c19 and c7 from t1;
+c19 and c7
+1
+select c19 or c7 from t1;
+c19 or c7
+1
+select c19 and c8 from t1;
+c19 and c8
+1
+select c19 or c8 from t1;
+c19 or c8
+1
+select c19 and c9 from t1;
+c19 and c9
+1
+select c19 or c9 from t1;
+c19 or c9
+1
+select c19 and c10 from t1;
+c19 and c10
+1
+select c19 or c10 from t1;
+c19 or c10
+1
+select c19 and c11 from t1;
+c19 and c11
+1
+select c19 or c11 from t1;
+c19 or c11
+1
+select c19 and c12 from t1;
+c19 and c12
+1
+select c19 or c12 from t1;
+c19 or c12
+1
+select c19 and c13 from t1;
+c19 and c13
+1
+select c19 or c13 from t1;
+c19 or c13
+1
+select c19 and c14 from t1;
+c19 and c14
+1
+select c19 or c14 from t1;
+c19 or c14
+1
+select c19 and c15 from t1;
+c19 and c15
+1
+select c19 or c15 from t1;
+c19 or c15
+1
+select c19 and c16 from t1;
+c19 and c16
+1
+select c19 or c16 from t1;
+c19 or c16
+1
+select c19 and c17 from t1;
+c19 and c17
+1
+select c19 or c17 from t1;
+c19 or c17
+1
+select c19 and c18 from t1;
+c19 and c18
+1
+select c19 or c18 from t1;
+c19 or c18
+1
+select c19 and c19 from t1;
+c19 and c19
+1
+select c19 or c19 from t1;
+c19 or c19
+1
+select c19 and c20 from t1;
+c19 and c20
+1
+select c19 or c20 from t1;
+c19 or c20
+1
+select c19 and c21 from t1;
+c19 and c21
+1
+select c19 or c21 from t1;
+c19 or c21
+1
+select c19 and c22 from t1;
+c19 and c22
+1
+select c19 or c22 from t1;
+c19 or c22
+1
+select c19 and c23 from t1;
+c19 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c19 or c23 from t1;
+c19 or c23
+1
+select c19 and c24 from t1;
+c19 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c19 or c24 from t1;
+c19 or c24
+1
+select c20 and c1 from t1;
+c20 and c1
+1
+select c20 or c1 from t1;
+c20 or c1
+1
+select c20 and c2 from t1;
+c20 and c2
+1
+select c20 or c2 from t1;
+c20 or c2
+1
+select c20 and c3 from t1;
+c20 and c3
+1
+select c20 or c3 from t1;
+c20 or c3
+1
+select c20 and c4 from t1;
+c20 and c4
+1
+select c20 or c4 from t1;
+c20 or c4
+1
+select c20 and c5 from t1;
+c20 and c5
+1
+select c20 or c5 from t1;
+c20 or c5
+1
+select c20 and c6 from t1;
+c20 and c6
+1
+select c20 or c6 from t1;
+c20 or c6
+1
+select c20 and c7 from t1;
+c20 and c7
+1
+select c20 or c7 from t1;
+c20 or c7
+1
+select c20 and c8 from t1;
+c20 and c8
+1
+select c20 or c8 from t1;
+c20 or c8
+1
+select c20 and c9 from t1;
+c20 and c9
+1
+select c20 or c9 from t1;
+c20 or c9
+1
+select c20 and c10 from t1;
+c20 and c10
+1
+select c20 or c10 from t1;
+c20 or c10
+1
+select c20 and c11 from t1;
+c20 and c11
+1
+select c20 or c11 from t1;
+c20 or c11
+1
+select c20 and c12 from t1;
+c20 and c12
+1
+select c20 or c12 from t1;
+c20 or c12
+1
+select c20 and c13 from t1;
+c20 and c13
+1
+select c20 or c13 from t1;
+c20 or c13
+1
+select c20 and c14 from t1;
+c20 and c14
+1
+select c20 or c14 from t1;
+c20 or c14
+1
+select c20 and c15 from t1;
+c20 and c15
+1
+select c20 or c15 from t1;
+c20 or c15
+1
+select c20 and c16 from t1;
+c20 and c16
+1
+select c20 or c16 from t1;
+c20 or c16
+1
+select c20 and c17 from t1;
+c20 and c17
+1
+select c20 or c17 from t1;
+c20 or c17
+1
+select c20 and c18 from t1;
+c20 and c18
+1
+select c20 or c18 from t1;
+c20 or c18
+1
+select c20 and c19 from t1;
+c20 and c19
+1
+select c20 or c19 from t1;
+c20 or c19
+1
+select c20 and c20 from t1;
+c20 and c20
+1
+select c20 or c20 from t1;
+c20 or c20
+1
+select c20 and c21 from t1;
+c20 and c21
+1
+select c20 or c21 from t1;
+c20 or c21
+1
+select c20 and c22 from t1;
+c20 and c22
+1
+select c20 or c22 from t1;
+c20 or c22
+1
+select c20 and c23 from t1;
+c20 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c20 or c23 from t1;
+c20 or c23
+1
+select c20 and c24 from t1;
+c20 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c20 or c24 from t1;
+c20 or c24
+1
+select c21 and c1 from t1;
+c21 and c1
+1
+select c21 or c1 from t1;
+c21 or c1
+1
+select c21 and c2 from t1;
+c21 and c2
+1
+select c21 or c2 from t1;
+c21 or c2
+1
+select c21 and c3 from t1;
+c21 and c3
+1
+select c21 or c3 from t1;
+c21 or c3
+1
+select c21 and c4 from t1;
+c21 and c4
+1
+select c21 or c4 from t1;
+c21 or c4
+1
+select c21 and c5 from t1;
+c21 and c5
+1
+select c21 or c5 from t1;
+c21 or c5
+1
+select c21 and c6 from t1;
+c21 and c6
+1
+select c21 or c6 from t1;
+c21 or c6
+1
+select c21 and c7 from t1;
+c21 and c7
+1
+select c21 or c7 from t1;
+c21 or c7
+1
+select c21 and c8 from t1;
+c21 and c8
+1
+select c21 or c8 from t1;
+c21 or c8
+1
+select c21 and c9 from t1;
+c21 and c9
+1
+select c21 or c9 from t1;
+c21 or c9
+1
+select c21 and c10 from t1;
+c21 and c10
+1
+select c21 or c10 from t1;
+c21 or c10
+1
+select c21 and c11 from t1;
+c21 and c11
+1
+select c21 or c11 from t1;
+c21 or c11
+1
+select c21 and c12 from t1;
+c21 and c12
+1
+select c21 or c12 from t1;
+c21 or c12
+1
+select c21 and c13 from t1;
+c21 and c13
+1
+select c21 or c13 from t1;
+c21 or c13
+1
+select c21 and c14 from t1;
+c21 and c14
+1
+select c21 or c14 from t1;
+c21 or c14
+1
+select c21 and c15 from t1;
+c21 and c15
+1
+select c21 or c15 from t1;
+c21 or c15
+1
+select c21 and c16 from t1;
+c21 and c16
+1
+select c21 or c16 from t1;
+c21 or c16
+1
+select c21 and c17 from t1;
+c21 and c17
+1
+select c21 or c17 from t1;
+c21 or c17
+1
+select c21 and c18 from t1;
+c21 and c18
+1
+select c21 or c18 from t1;
+c21 or c18
+1
+select c21 and c19 from t1;
+c21 and c19
+1
+select c21 or c19 from t1;
+c21 or c19
+1
+select c21 and c20 from t1;
+c21 and c20
+1
+select c21 or c20 from t1;
+c21 or c20
+1
+select c21 and c21 from t1;
+c21 and c21
+1
+select c21 or c21 from t1;
+c21 or c21
+1
+select c21 and c22 from t1;
+c21 and c22
+1
+select c21 or c22 from t1;
+c21 or c22
+1
+select c21 and c23 from t1;
+c21 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c21 or c23 from t1;
+c21 or c23
+1
+select c21 and c24 from t1;
+c21 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c21 or c24 from t1;
+c21 or c24
+1
+select c22 and c1 from t1;
+c22 and c1
+1
+select c22 or c1 from t1;
+c22 or c1
+1
+select c22 and c2 from t1;
+c22 and c2
+1
+select c22 or c2 from t1;
+c22 or c2
+1
+select c22 and c3 from t1;
+c22 and c3
+1
+select c22 or c3 from t1;
+c22 or c3
+1
+select c22 and c4 from t1;
+c22 and c4
+1
+select c22 or c4 from t1;
+c22 or c4
+1
+select c22 and c5 from t1;
+c22 and c5
+1
+select c22 or c5 from t1;
+c22 or c5
+1
+select c22 and c6 from t1;
+c22 and c6
+1
+select c22 or c6 from t1;
+c22 or c6
+1
+select c22 and c7 from t1;
+c22 and c7
+1
+select c22 or c7 from t1;
+c22 or c7
+1
+select c22 and c8 from t1;
+c22 and c8
+1
+select c22 or c8 from t1;
+c22 or c8
+1
+select c22 and c9 from t1;
+c22 and c9
+1
+select c22 or c9 from t1;
+c22 or c9
+1
+select c22 and c10 from t1;
+c22 and c10
+1
+select c22 or c10 from t1;
+c22 or c10
+1
+select c22 and c11 from t1;
+c22 and c11
+1
+select c22 or c11 from t1;
+c22 or c11
+1
+select c22 and c12 from t1;
+c22 and c12
+1
+select c22 or c12 from t1;
+c22 or c12
+1
+select c22 and c13 from t1;
+c22 and c13
+1
+select c22 or c13 from t1;
+c22 or c13
+1
+select c22 and c14 from t1;
+c22 and c14
+1
+select c22 or c14 from t1;
+c22 or c14
+1
+select c22 and c15 from t1;
+c22 and c15
+1
+select c22 or c15 from t1;
+c22 or c15
+1
+select c22 and c16 from t1;
+c22 and c16
+1
+select c22 or c16 from t1;
+c22 or c16
+1
+select c22 and c17 from t1;
+c22 and c17
+1
+select c22 or c17 from t1;
+c22 or c17
+1
+select c22 and c18 from t1;
+c22 and c18
+1
+select c22 or c18 from t1;
+c22 or c18
+1
+select c22 and c19 from t1;
+c22 and c19
+1
+select c22 or c19 from t1;
+c22 or c19
+1
+select c22 and c20 from t1;
+c22 and c20
+1
+select c22 or c20 from t1;
+c22 or c20
+1
+select c22 and c21 from t1;
+c22 and c21
+1
+select c22 or c21 from t1;
+c22 or c21
+1
+select c22 and c22 from t1;
+c22 and c22
+1
+select c22 or c22 from t1;
+c22 or c22
+1
+select c22 and c23 from t1;
+c22 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c22 or c23 from t1;
+c22 or c23
+1
+select c22 and c24 from t1;
+c22 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c22 or c24 from t1;
+c22 or c24
+1
+select c23 and c1 from t1;
+c23 and c1
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c1 from t1;
+c23 or c1
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c2 from t1;
+c23 and c2
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c2 from t1;
+c23 or c2
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c3 from t1;
+c23 and c3
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c3 from t1;
+c23 or c3
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c4 from t1;
+c23 and c4
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c4 from t1;
+c23 or c4
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c5 from t1;
+c23 and c5
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c5 from t1;
+c23 or c5
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c6 from t1;
+c23 and c6
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c6 from t1;
+c23 or c6
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c7 from t1;
+c23 and c7
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c7 from t1;
+c23 or c7
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c8 from t1;
+c23 and c8
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c8 from t1;
+c23 or c8
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c9 from t1;
+c23 and c9
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c9 from t1;
+c23 or c9
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c10 from t1;
+c23 and c10
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c10 from t1;
+c23 or c10
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c11 from t1;
+c23 and c11
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c11 from t1;
+c23 or c11
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c12 from t1;
+c23 and c12
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c12 from t1;
+c23 or c12
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c13 from t1;
+c23 and c13
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c13 from t1;
+c23 or c13
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c14 from t1;
+c23 and c14
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c14 from t1;
+c23 or c14
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c15 from t1;
+c23 and c15
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c15 from t1;
+c23 or c15
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c16 from t1;
+c23 and c16
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c16 from t1;
+c23 or c16
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c17 from t1;
+c23 and c17
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c17 from t1;
+c23 or c17
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c18 from t1;
+c23 and c18
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c18 from t1;
+c23 or c18
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c19 from t1;
+c23 and c19
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c19 from t1;
+c23 or c19
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c20 from t1;
+c23 and c20
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c20 from t1;
+c23 or c20
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c21 from t1;
+c23 and c21
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c21 from t1;
+c23 or c21
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c22 from t1;
+c23 and c22
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c22 from t1;
+c23 or c22
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c23 from t1;
+c23 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c23 from t1;
+c23 or c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 and c24 from t1;
+c23 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c23 or c24 from t1;
+c23 or c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c1 from t1;
+c24 and c1
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c1 from t1;
+c24 or c1
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c2 from t1;
+c24 and c2
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c2 from t1;
+c24 or c2
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c3 from t1;
+c24 and c3
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c3 from t1;
+c24 or c3
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c4 from t1;
+c24 and c4
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c4 from t1;
+c24 or c4
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c5 from t1;
+c24 and c5
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c5 from t1;
+c24 or c5
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c6 from t1;
+c24 and c6
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c6 from t1;
+c24 or c6
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c7 from t1;
+c24 and c7
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c7 from t1;
+c24 or c7
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c8 from t1;
+c24 and c8
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c8 from t1;
+c24 or c8
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c9 from t1;
+c24 and c9
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c9 from t1;
+c24 or c9
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c10 from t1;
+c24 and c10
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c10 from t1;
+c24 or c10
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c11 from t1;
+c24 and c11
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c11 from t1;
+c24 or c11
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c12 from t1;
+c24 and c12
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c12 from t1;
+c24 or c12
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c13 from t1;
+c24 and c13
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c13 from t1;
+c24 or c13
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c14 from t1;
+c24 and c14
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c14 from t1;
+c24 or c14
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c15 from t1;
+c24 and c15
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c15 from t1;
+c24 or c15
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c16 from t1;
+c24 and c16
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c16 from t1;
+c24 or c16
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c17 from t1;
+c24 and c17
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c17 from t1;
+c24 or c17
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c18 from t1;
+c24 and c18
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c18 from t1;
+c24 or c18
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c19 from t1;
+c24 and c19
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c19 from t1;
+c24 or c19
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c20 from t1;
+c24 and c20
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c20 from t1;
+c24 or c20
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c21 from t1;
+c24 and c21
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c21 from t1;
+c24 or c21
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c22 from t1;
+c24 and c22
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c22 from t1;
+c24 or c22
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 and c23 from t1;
+c24 and c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c23 from t1;
+c24 or c23
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+Warning	1292	Truncated incorrect DOUBLE value: 'blob type'
+select c24 and c24 from t1;
+c24 and c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+select c24 or c24 from t1;
+c24 or c24
+0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+Warning	1292	Truncated incorrect DOUBLE value: 'text type'
+// Case5: case/if表达式测试
+// 结果应该为'branch1'，第一个when expr上面不应该有bool expr,其余的应该有bool expr
+select case when 'a' = 'a' then 'branch1' when 'b' then c1 else c2 end from t1;
+case when 'a' = 'a' then 'branch1' when 'b' then c1 else c2 end
+branch1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'b'
+// 结果应该为2，且when expr上面都应该 有bool expr
+// TODO: 没有出现预期的warning
+select case when 'a' then 'str' when 'b' then c1 else c2 end from t1;
+case when 'a' then 'str' when 'b' then c1 else c2 end
+2
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'a'
+Warning	1292	Truncated incorrect DOUBLE value: 'b'
+// 结果应该为'branch2'，且if表达式会被转为case表达式，但是不应该有bool expr,因为判断本身就带有布尔语义
+select if ('a' = 'b', c1, 'branch2') from t1;
+if ('a' = 'b', c1, 'branch2')
+branch2
+// 结果应该为'branch2'，且if表达式会被转为case表达式，0上面应该有一个bool expr
+select if (0, c1, 'branch2') from t1;
+if (0, c1, 'branch2')
+branch2
+// Case6: not表达式测试
+// c1是1，所以结果为0，且c1上面应该有bool expr
+select not c1 from t1;
+not c1
+0
+// c1-1是0，所以结果为0，且c1上面应该有bool expr
+select not c1-1 from t1;
+not c1-1
+1
+// 结果为1，且not的子节点上面没有bool expr
+select not (c1 and 0) from t1;
+not (c1 and 0)
+1

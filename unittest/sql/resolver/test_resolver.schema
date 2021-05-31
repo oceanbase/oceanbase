@@ -1,0 +1,30 @@
+create database information_schema;
+create database mysql;
+create database rongxuan;
+use rongxuan;
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+create table t2(c1 int, c2 int, c3 varchar(32), primary key(c2, c3)) partition by key(c2, c3) partitions 3
+create table t3(c3 int primary key, c4 int) locality "f@zone1, f,l@region1"
+create index idx1 on t1(c2) LOCAL
+create table test(c1 int , c2 int, c3 varchar(50), c4 varchar(50), c5 int , c6 double, c7 int, primary key(c1, c2, c3))
+create index test_indx on test(c4, c5)
+create table non_reserved_key_test(value int primary key)
+create table test2(c1 int primary key, c2 varchar(30), c3 timestamp(6) default now(6))
+create table t4(c1 int primary key, c2 int not null, c3 int default 1, c4 int not null default 2)
+create table ta(c1 int primary key, c2 int auto_increment) comment='test', auto_increment= 5
+create table alter_table1(c1 int primary key, c2 varchar(11) not null default 'c2', c3 tinyint default 3, c4 char(11)) partition by hash(c1) partitions 3
+create index idx_c1 on alter_table1(c1) LOCAL
+create table t_auto_inc(c1 int primary key, c2 int auto_increment)
+create table coll_table(c1 varchar(10) collate utf8_general_ci, c2 varchar(10) collate utf8_bin, c3 varchar(10), primary key(c1, c2));
+create table ts(c1 int primary key, c2 timestamp default current_timestamp on update current_timestamp, c3 int);
+create table t_no_pk(c1 int)
+create table char_t(c1 int primary key, c2 char(5), c3 char(5), c4 varchar(5), c5 varchar(6), c6 binary(3), c7 binary(8))
+create table tt(c1 int auto_increment primary key, c2 int)
+create table bt1(f1 varchar(100) default 'test', id int primary key)
+create table t_equal_prefix(pk int primary key, a int, b int, c int, d int, e int);
+create index idx_b_c on t_equal_prefix(b, c);
+create index idx_b_a_c on t_equal_prefix(b, a, c);
+create index idx_b_e_d_c_a on t_equal_prefix(b, e, d, c, a);
+update ignore tt set c1 = 1;
+create table test_enum(c1 int, c2 enum('a', 'b', 'c'));
+create table test_set(c1 int, c2 set('e', 'f', 'g'));

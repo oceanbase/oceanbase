@@ -1,0 +1,1790 @@
+insert into insert_distributed values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6);
+[101] insert into insert_distributed values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6);
+{
+  "param_num":0,
+  "table_schema_version": [
+     {
+      "table_id":1099511677792,
+      "schema_version":192
+    }
+  ],
+  "pre_calc_exprs": [
+  ],
+  "main_query": {
+    "PHY_ROOT_TRANSMIT": {
+      "id":21,
+      "type":13,
+      "column_count":0,
+      "projector":null,
+      "filter_exprs": [
+      ],
+      "calc_exprs": [
+      ]
+    },
+    "child_operators": [
+       {
+        "PHY_APPEND": {
+          "id":20,
+          "type":42,
+          "column_count":0,
+          "projector":null,
+          "filter_exprs": [
+          ],
+          "calc_exprs": [
+          ]
+        },
+        "child_operators": [
+           {
+            "PHY_FIFO_RECEIVE_V2": {
+              "id":3,
+              "type":45,
+              "column_count":0,
+              "projector":null,
+              "filter_exprs": [
+              ],
+              "calc_exprs": [
+              ]
+            },
+            "child_operators": [
+               {
+                "PHY_DISTRIBUTED_TRANSMIT": {
+                  "id":2,
+                  "type":16,
+                  "column_count":4,
+                  "projector":null,
+                  "filter_exprs": [
+                  ],
+                  "calc_exprs": [
+                  ]
+                },
+                "child_operators": [
+                   {
+                    "PHY_INSERT": {
+                      "id":1,
+                      "type":24,
+                      "column_count":4,
+                      "projector": [
+                        2,
+                        3
+                      ],
+                      "filter_exprs": [
+                      ],
+                      "calc_exprs": [
+                         {
+                          "result_index":2,
+                          "post_expr": [
+                             {
+                              "const": {
+                                "INT":4
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "INT":63
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "BIGINT":51539607551
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "TINYINT":0
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "column_index":0,
+                              "accuracy": {
+                                "length":-1,
+                                "precision":11,
+                                "scale":0
+                              }
+                            },
+                             {
+                              "op": {
+                                "expr_type":"T_FUN_COLUMN_CONV",
+                                "expr_name":"column_conv",
+                                "param_num":5,
+                                "dimension":-1,
+                                "real_param_num":5,
+                                "result_type": {
+                                  "meta": {
+                                    "type":"INT",
+                                    "collation":"binary",
+                                    "coercibility":"IMPLICIT"
+                                  },
+                                  "accuracy": {
+                                    "length":-1,
+                                    "precision":11,
+                                    "scale":0
+                                  },
+                                  "flag":0,
+                                  "calc_type": {
+                                    "type":"NULL",
+                                    "collation":"invalid_type",
+                                    "coercibility":"INVALID"
+                                  }
+                                },
+                                "input_type": [
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":16515
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                         {
+                          "result_index":3,
+                          "post_expr": [
+                             {
+                              "const": {
+                                "INT":4
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "INT":63
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "BIGINT":51539607551
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "TINYINT":0
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "column_index":1,
+                              "accuracy": {
+                                "length":-1,
+                                "precision":11,
+                                "scale":0
+                              }
+                            },
+                             {
+                              "op": {
+                                "expr_type":"T_FUN_COLUMN_CONV",
+                                "expr_name":"column_conv",
+                                "param_num":5,
+                                "dimension":-1,
+                                "real_param_num":5,
+                                "result_type": {
+                                  "meta": {
+                                    "type":"INT",
+                                    "collation":"binary",
+                                    "coercibility":"IMPLICIT"
+                                  },
+                                  "accuracy": {
+                                    "length":-1,
+                                    "precision":11,
+                                    "scale":0
+                                  },
+                                  "flag":0,
+                                  "calc_type": {
+                                    "type":"NULL",
+                                    "collation":"invalid_type",
+                                    "coercibility":"INVALID"
+                                  }
+                                },
+                                "input_type": [
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":16515
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "table_id":1099511677792,
+                      "column_id": [
+                        16,
+                        17
+                      ]
+                    },
+                    "child_operators": [
+                       {
+                        "PHY_EXPR_VALUES": {
+                          "id":0,
+                          "type":30,
+                          "column_count":2,
+                          "projector": [
+                            0,
+                            1
+                          ],
+                          "filter_exprs": [
+                          ],
+                          "calc_exprs": [
+                          ],
+                          "values": [
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":1
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ],
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":1
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ],
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":6
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ],
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":6
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+           {
+            "PHY_FIFO_RECEIVE_V2": {
+              "id":7,
+              "type":45,
+              "column_count":0,
+              "projector":null,
+              "filter_exprs": [
+              ],
+              "calc_exprs": [
+              ]
+            },
+            "child_operators": [
+               {
+                "PHY_DISTRIBUTED_TRANSMIT": {
+                  "id":6,
+                  "type":16,
+                  "column_count":4,
+                  "projector":null,
+                  "filter_exprs": [
+                  ],
+                  "calc_exprs": [
+                  ]
+                },
+                "child_operators": [
+                   {
+                    "PHY_INSERT": {
+                      "id":5,
+                      "type":24,
+                      "column_count":4,
+                      "projector": [
+                        2,
+                        3
+                      ],
+                      "filter_exprs": [
+                      ],
+                      "calc_exprs": [
+                         {
+                          "result_index":2,
+                          "post_expr": [
+                             {
+                              "const": {
+                                "INT":4
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "INT":63
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "BIGINT":51539607551
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "TINYINT":0
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "column_index":0,
+                              "accuracy": {
+                                "length":-1,
+                                "precision":11,
+                                "scale":0
+                              }
+                            },
+                             {
+                              "op": {
+                                "expr_type":"T_FUN_COLUMN_CONV",
+                                "expr_name":"column_conv",
+                                "param_num":5,
+                                "dimension":-1,
+                                "real_param_num":5,
+                                "result_type": {
+                                  "meta": {
+                                    "type":"INT",
+                                    "collation":"binary",
+                                    "coercibility":"IMPLICIT"
+                                  },
+                                  "accuracy": {
+                                    "length":-1,
+                                    "precision":11,
+                                    "scale":0
+                                  },
+                                  "flag":0,
+                                  "calc_type": {
+                                    "type":"NULL",
+                                    "collation":"invalid_type",
+                                    "coercibility":"INVALID"
+                                  }
+                                },
+                                "input_type": [
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":16515
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                         {
+                          "result_index":3,
+                          "post_expr": [
+                             {
+                              "const": {
+                                "INT":4
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "INT":63
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "BIGINT":51539607551
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "TINYINT":0
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "column_index":1,
+                              "accuracy": {
+                                "length":-1,
+                                "precision":11,
+                                "scale":0
+                              }
+                            },
+                             {
+                              "op": {
+                                "expr_type":"T_FUN_COLUMN_CONV",
+                                "expr_name":"column_conv",
+                                "param_num":5,
+                                "dimension":-1,
+                                "real_param_num":5,
+                                "result_type": {
+                                  "meta": {
+                                    "type":"INT",
+                                    "collation":"binary",
+                                    "coercibility":"IMPLICIT"
+                                  },
+                                  "accuracy": {
+                                    "length":-1,
+                                    "precision":11,
+                                    "scale":0
+                                  },
+                                  "flag":0,
+                                  "calc_type": {
+                                    "type":"NULL",
+                                    "collation":"invalid_type",
+                                    "coercibility":"INVALID"
+                                  }
+                                },
+                                "input_type": [
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":16515
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "table_id":1099511677792,
+                      "column_id": [
+                        16,
+                        17
+                      ]
+                    },
+                    "child_operators": [
+                       {
+                        "PHY_EXPR_VALUES": {
+                          "id":4,
+                          "type":30,
+                          "column_count":2,
+                          "projector": [
+                            0,
+                            1
+                          ],
+                          "filter_exprs": [
+                          ],
+                          "calc_exprs": [
+                          ],
+                          "values": [
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":2
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ],
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":2
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+           {
+            "PHY_FIFO_RECEIVE_V2": {
+              "id":11,
+              "type":45,
+              "column_count":0,
+              "projector":null,
+              "filter_exprs": [
+              ],
+              "calc_exprs": [
+              ]
+            },
+            "child_operators": [
+               {
+                "PHY_DISTRIBUTED_TRANSMIT": {
+                  "id":10,
+                  "type":16,
+                  "column_count":4,
+                  "projector":null,
+                  "filter_exprs": [
+                  ],
+                  "calc_exprs": [
+                  ]
+                },
+                "child_operators": [
+                   {
+                    "PHY_INSERT": {
+                      "id":9,
+                      "type":24,
+                      "column_count":4,
+                      "projector": [
+                        2,
+                        3
+                      ],
+                      "filter_exprs": [
+                      ],
+                      "calc_exprs": [
+                         {
+                          "result_index":2,
+                          "post_expr": [
+                             {
+                              "const": {
+                                "INT":4
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "INT":63
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "BIGINT":51539607551
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "TINYINT":0
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "column_index":0,
+                              "accuracy": {
+                                "length":-1,
+                                "precision":11,
+                                "scale":0
+                              }
+                            },
+                             {
+                              "op": {
+                                "expr_type":"T_FUN_COLUMN_CONV",
+                                "expr_name":"column_conv",
+                                "param_num":5,
+                                "dimension":-1,
+                                "real_param_num":5,
+                                "result_type": {
+                                  "meta": {
+                                    "type":"INT",
+                                    "collation":"binary",
+                                    "coercibility":"IMPLICIT"
+                                  },
+                                  "accuracy": {
+                                    "length":-1,
+                                    "precision":11,
+                                    "scale":0
+                                  },
+                                  "flag":0,
+                                  "calc_type": {
+                                    "type":"NULL",
+                                    "collation":"invalid_type",
+                                    "coercibility":"INVALID"
+                                  }
+                                },
+                                "input_type": [
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":16515
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                         {
+                          "result_index":3,
+                          "post_expr": [
+                             {
+                              "const": {
+                                "INT":4
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "INT":63
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "BIGINT":51539607551
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "TINYINT":0
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "column_index":1,
+                              "accuracy": {
+                                "length":-1,
+                                "precision":11,
+                                "scale":0
+                              }
+                            },
+                             {
+                              "op": {
+                                "expr_type":"T_FUN_COLUMN_CONV",
+                                "expr_name":"column_conv",
+                                "param_num":5,
+                                "dimension":-1,
+                                "real_param_num":5,
+                                "result_type": {
+                                  "meta": {
+                                    "type":"INT",
+                                    "collation":"binary",
+                                    "coercibility":"IMPLICIT"
+                                  },
+                                  "accuracy": {
+                                    "length":-1,
+                                    "precision":11,
+                                    "scale":0
+                                  },
+                                  "flag":0,
+                                  "calc_type": {
+                                    "type":"NULL",
+                                    "collation":"invalid_type",
+                                    "coercibility":"INVALID"
+                                  }
+                                },
+                                "input_type": [
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":16515
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "table_id":1099511677792,
+                      "column_id": [
+                        16,
+                        17
+                      ]
+                    },
+                    "child_operators": [
+                       {
+                        "PHY_EXPR_VALUES": {
+                          "id":8,
+                          "type":30,
+                          "column_count":2,
+                          "projector": [
+                            0,
+                            1
+                          ],
+                          "filter_exprs": [
+                          ],
+                          "calc_exprs": [
+                          ],
+                          "values": [
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":3
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ],
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":3
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+           {
+            "PHY_FIFO_RECEIVE_V2": {
+              "id":15,
+              "type":45,
+              "column_count":0,
+              "projector":null,
+              "filter_exprs": [
+              ],
+              "calc_exprs": [
+              ]
+            },
+            "child_operators": [
+               {
+                "PHY_DISTRIBUTED_TRANSMIT": {
+                  "id":14,
+                  "type":16,
+                  "column_count":4,
+                  "projector":null,
+                  "filter_exprs": [
+                  ],
+                  "calc_exprs": [
+                  ]
+                },
+                "child_operators": [
+                   {
+                    "PHY_INSERT": {
+                      "id":13,
+                      "type":24,
+                      "column_count":4,
+                      "projector": [
+                        2,
+                        3
+                      ],
+                      "filter_exprs": [
+                      ],
+                      "calc_exprs": [
+                         {
+                          "result_index":2,
+                          "post_expr": [
+                             {
+                              "const": {
+                                "INT":4
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "INT":63
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "BIGINT":51539607551
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "TINYINT":0
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "column_index":0,
+                              "accuracy": {
+                                "length":-1,
+                                "precision":11,
+                                "scale":0
+                              }
+                            },
+                             {
+                              "op": {
+                                "expr_type":"T_FUN_COLUMN_CONV",
+                                "expr_name":"column_conv",
+                                "param_num":5,
+                                "dimension":-1,
+                                "real_param_num":5,
+                                "result_type": {
+                                  "meta": {
+                                    "type":"INT",
+                                    "collation":"binary",
+                                    "coercibility":"IMPLICIT"
+                                  },
+                                  "accuracy": {
+                                    "length":-1,
+                                    "precision":11,
+                                    "scale":0
+                                  },
+                                  "flag":0,
+                                  "calc_type": {
+                                    "type":"NULL",
+                                    "collation":"invalid_type",
+                                    "coercibility":"INVALID"
+                                  }
+                                },
+                                "input_type": [
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":16515
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                         {
+                          "result_index":3,
+                          "post_expr": [
+                             {
+                              "const": {
+                                "INT":4
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "INT":63
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "BIGINT":51539607551
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "TINYINT":0
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "column_index":1,
+                              "accuracy": {
+                                "length":-1,
+                                "precision":11,
+                                "scale":0
+                              }
+                            },
+                             {
+                              "op": {
+                                "expr_type":"T_FUN_COLUMN_CONV",
+                                "expr_name":"column_conv",
+                                "param_num":5,
+                                "dimension":-1,
+                                "real_param_num":5,
+                                "result_type": {
+                                  "meta": {
+                                    "type":"INT",
+                                    "collation":"binary",
+                                    "coercibility":"IMPLICIT"
+                                  },
+                                  "accuracy": {
+                                    "length":-1,
+                                    "precision":11,
+                                    "scale":0
+                                  },
+                                  "flag":0,
+                                  "calc_type": {
+                                    "type":"NULL",
+                                    "collation":"invalid_type",
+                                    "coercibility":"INVALID"
+                                  }
+                                },
+                                "input_type": [
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":16515
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "table_id":1099511677792,
+                      "column_id": [
+                        16,
+                        17
+                      ]
+                    },
+                    "child_operators": [
+                       {
+                        "PHY_EXPR_VALUES": {
+                          "id":12,
+                          "type":30,
+                          "column_count":2,
+                          "projector": [
+                            0,
+                            1
+                          ],
+                          "filter_exprs": [
+                          ],
+                          "calc_exprs": [
+                          ],
+                          "values": [
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":4
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ],
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":4
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+           {
+            "PHY_FIFO_RECEIVE_V2": {
+              "id":19,
+              "type":45,
+              "column_count":0,
+              "projector":null,
+              "filter_exprs": [
+              ],
+              "calc_exprs": [
+              ]
+            },
+            "child_operators": [
+               {
+                "PHY_DISTRIBUTED_TRANSMIT": {
+                  "id":18,
+                  "type":16,
+                  "column_count":4,
+                  "projector":null,
+                  "filter_exprs": [
+                  ],
+                  "calc_exprs": [
+                  ]
+                },
+                "child_operators": [
+                   {
+                    "PHY_INSERT": {
+                      "id":17,
+                      "type":24,
+                      "column_count":4,
+                      "projector": [
+                        2,
+                        3
+                      ],
+                      "filter_exprs": [
+                      ],
+                      "calc_exprs": [
+                         {
+                          "result_index":2,
+                          "post_expr": [
+                             {
+                              "const": {
+                                "INT":4
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "INT":63
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "BIGINT":51539607551
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "TINYINT":0
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "column_index":0,
+                              "accuracy": {
+                                "length":-1,
+                                "precision":11,
+                                "scale":0
+                              }
+                            },
+                             {
+                              "op": {
+                                "expr_type":"T_FUN_COLUMN_CONV",
+                                "expr_name":"column_conv",
+                                "param_num":5,
+                                "dimension":-1,
+                                "real_param_num":5,
+                                "result_type": {
+                                  "meta": {
+                                    "type":"INT",
+                                    "collation":"binary",
+                                    "coercibility":"IMPLICIT"
+                                  },
+                                  "accuracy": {
+                                    "length":-1,
+                                    "precision":11,
+                                    "scale":0
+                                  },
+                                  "flag":0,
+                                  "calc_type": {
+                                    "type":"NULL",
+                                    "collation":"invalid_type",
+                                    "coercibility":"INVALID"
+                                  }
+                                },
+                                "input_type": [
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":16515
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                         {
+                          "result_index":3,
+                          "post_expr": [
+                             {
+                              "const": {
+                                "INT":4
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "INT":63
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "BIGINT":51539607551
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "const": {
+                                "TINYINT":0
+                              },
+                              "accuracy": {
+                                "length":-1,
+                                "precision":-1,
+                                "scale":-1
+                              }
+                            },
+                             {
+                              "column_index":1,
+                              "accuracy": {
+                                "length":-1,
+                                "precision":11,
+                                "scale":0
+                              }
+                            },
+                             {
+                              "op": {
+                                "expr_type":"T_FUN_COLUMN_CONV",
+                                "expr_name":"column_conv",
+                                "param_num":5,
+                                "dimension":-1,
+                                "real_param_num":5,
+                                "result_type": {
+                                  "meta": {
+                                    "type":"INT",
+                                    "collation":"binary",
+                                    "coercibility":"IMPLICIT"
+                                  },
+                                  "accuracy": {
+                                    "length":-1,
+                                    "precision":11,
+                                    "scale":0
+                                  },
+                                  "flag":0,
+                                  "calc_type": {
+                                    "type":"NULL",
+                                    "collation":"invalid_type",
+                                    "coercibility":"INVALID"
+                                  }
+                                },
+                                "input_type": [
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"NULL",
+                                      "collation":"binary",
+                                      "coercibility":"IGNORABLE"
+                                    },
+                                    "length":0,
+                                    "flag":0
+                                  },
+                                   {
+                                    "calc_meta": {
+                                      "type":"INT",
+                                      "collation":"binary",
+                                      "coercibility":"NUMERIC"
+                                    },
+                                    "length":11,
+                                    "flag":16515
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "table_id":1099511677792,
+                      "column_id": [
+                        16,
+                        17
+                      ]
+                    },
+                    "child_operators": [
+                       {
+                        "PHY_EXPR_VALUES": {
+                          "id":16,
+                          "type":30,
+                          "column_count":2,
+                          "projector": [
+                            0,
+                            1
+                          ],
+                          "filter_exprs": [
+                          ],
+                          "calc_exprs": [
+                          ],
+                          "values": [
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":5
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ],
+                             [
+                               {
+                                "const": {
+                                  "BIGINT":5
+                                },
+                                "accuracy": {
+                                  "length":1,
+                                  "precision":1,
+                                  "scale":0
+                                }
+                              }
+                            ]
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

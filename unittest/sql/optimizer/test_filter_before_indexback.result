@@ -1,0 +1,229 @@
+***************   Case 1   ***************
+
+SQL: select /*+index(z1 z1_b)*/ * from z1 where a > 1 and b > 1 and c > 1 and d > 1 and ceil(b) > 1; 
+
+=======================================
+|ID|OPERATOR  |NAME    |EST. ROWS|COST|
+---------------------------------------
+|0 |TABLE SCAN|z1(z1_b)|30       |302 |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([z1.a], [z1.b], [z1.c], [z1.d]), filter([ceil(z1.b) > ?], [z1.a > ?], [z1.c > ?], [z1.d > ?]), 
+      access([z1.a], [z1.b], [z1.c], [z1.d]), partitions(p0), 
+      is_index_back=true, filter_before_indexback[true,true,false,false], 
+      range_key([z1.b], [z1.a]), range(1,MAX ; MAX,MAX), 
+      range_cond([z1.b > ?])
+
+*************** Case 1(end)  ************** 
+
+***************   Case 2   ***************
+
+SQL: select /*+index(z1 primary)*/ * from z1 where a > 1 and b > 1 and c > 1 and d > 1 and ceil(b) > 1; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|z1  |30       |153 |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([z1.a], [z1.b], [z1.c], [z1.d]), filter([ceil(z1.b) > ?], [z1.b > ?], [z1.c > ?], [z1.d > ?]), 
+      access([z1.a], [z1.b], [z1.c], [z1.d]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false,false,false,false], 
+      range_key([z1.a]), range(1 ; MAX), 
+      range_cond([z1.a > ?])
+
+*************** Case 2(end)  ************** 
+
+***************   Case 3   ***************
+
+SQL: select /*+index(z1 z1_b)*/ * from z1 where a + b > 1 and a + c > 1 and b + c > 1 and a + b > c; 
+
+=======================================
+|ID|OPERATOR  |NAME    |EST. ROWS|COST|
+---------------------------------------
+|0 |TABLE SCAN|z1(z1_b)|2        |293 |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([z1.a], [z1.b], [z1.c], [z1.d]), filter([z1.a + z1.b > ?], [z1.a + z1.c > ?], [z1.b + z1.c > ?], [z1.a + z1.b > z1.c]), 
+      access([z1.a], [z1.b], [z1.c], [z1.d]), partitions(p0), 
+      is_index_back=true, filter_before_indexback[true,false,false,false], 
+      range_key([z1.b], [z1.a]), range(MIN,MIN ; MAX,MAX)always true
+
+*************** Case 3(end)  ************** 
+
+***************   Case 4   ***************
+
+SQL: select /*+index(z1 primary)*/ * from z1 where a + b > 1 and a + c > 1 and b + c > 1 and a + b > c; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|z1  |2        |136 |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([z1.a], [z1.b], [z1.c], [z1.d]), filter([z1.a + z1.b > ?], [z1.a + z1.c > ?], [z1.b + z1.c > ?], [z1.a + z1.b > z1.c]), 
+      access([z1.a], [z1.b], [z1.c], [z1.d]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false,false,false,false], 
+      range_key([z1.a]), range(MIN ; MAX)always true
+
+*************** Case 4(end)  ************** 
+
+***************   Case 5   ***************
+
+SQL: select /*+index(z1 z1_b)*/ * from z1 where a + b > 1 and 1 + a > b and 1 + b > a and b + 1 > a; 
+
+=======================================
+|ID|OPERATOR  |NAME    |EST. ROWS|COST|
+---------------------------------------
+|0 |TABLE SCAN|z1(z1_b)|2        |164 |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([z1.a], [z1.b], [z1.c], [z1.d]), filter([z1.a + z1.b > ?], [? + z1.a > z1.b], [? + z1.b > z1.a], [z1.b + ? > z1.a]), 
+      access([z1.a], [z1.b], [z1.c], [z1.d]), partitions(p0), 
+      is_index_back=true, filter_before_indexback[true,true,true,true], 
+      range_key([z1.b], [z1.a]), range(MIN,MIN ; MAX,MAX)always true
+
+*************** Case 5(end)  ************** 
+
+***************   Case 6   ***************
+
+SQL: select /*+index(z1 primary)*/ * from z1 where a + b > 1 and 1 + a > b and 1 + b > a and b + 1 > a; 
+
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|z1  |2        |153 |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([z1.a], [z1.b], [z1.c], [z1.d]), filter([z1.a + z1.b > ?], [? + z1.a > z1.b], [? + z1.b > z1.a], [z1.b + ? > z1.a]), 
+      access([z1.a], [z1.b], [z1.c], [z1.d]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false,false,false,false], 
+      range_key([z1.a]), range(MIN ; MAX)always true
+
+*************** Case 6(end)  ************** 
+
+***************   Case 7   ***************
+
+SQL: select /*+leading(z1,z2),use_nl(z2)*/ * from z1,z2 where z1.b = z2.b; 
+
+=============================================
+|ID|OPERATOR        |NAME    |EST. ROWS|COST|
+---------------------------------------------
+|0 |NESTED-LOOP JOIN|        |100      |8977|
+|1 | TABLE SCAN     |z1      |100      |95  |
+|2 | TABLE SCAN     |z2(z2_b)|1        |89  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([z1.a], [z1.b], [z1.c], [z1.d], [z2.a], [z2.b], [z2.c], [z2.d]), filter(nil), 
+      conds(nil), nl_params_([z1.b]), batch_join=true
+  1 - output([z1.b], [z1.a], [z1.c], [z1.d]), filter(nil), 
+      access([z1.b], [z1.a], [z1.c], [z1.d]), partitions(p0), 
+      is_index_back=false, 
+      range_key([z1.a]), range(MIN ; MAX)always true
+  2 - output([z2.b], [z2.a], [z2.c], [z2.d]), filter(nil), 
+      access([z2.b], [z2.a], [z2.c], [z2.d]), partitions(p0), 
+      is_index_back=true, 
+      range_key([z2.b], [z2.a]), range(MIN ; MAX), 
+      range_cond([? = z2.b])
+
+*************** Case 7(end)  ************** 
+
+***************   Case 8   ***************
+
+SQL: select /*+leading(z1,z2),use_nl(z2)*/ * from z1,z2 where z1.b = z2.b and z1.a > 1 and z1.b > 1 and z1.c > 1; 
+
+=============================================
+|ID|OPERATOR        |NAME    |EST. ROWS|COST|
+---------------------------------------------
+|0 |NESTED-LOOP JOIN|        |93       |8315|
+|1 | TABLE SCAN     |z1      |93       |128 |
+|2 | TABLE SCAN     |z2(z2_b)|1        |89  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([z1.a], [z1.b], [z1.c], [z1.d], [z2.a], [z2.b], [z2.c], [z2.d]), filter(nil), 
+      conds(nil), nl_params_([z1.b]), batch_join=true
+  1 - output([z1.b], [z1.a], [z1.c], [z1.d]), filter([z1.b > ?], [z1.c > ?]), 
+      access([z1.b], [z1.a], [z1.c], [z1.d]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false,false], 
+      range_key([z1.a]), range(1 ; MAX), 
+      range_cond([z1.a > ?])
+  2 - output([z2.b], [z2.a], [z2.c], [z2.d]), filter(nil), 
+      access([z2.b], [z2.a], [z2.c], [z2.d]), partitions(p0), 
+      is_index_back=true, 
+      range_key([z2.b], [z2.a]), range(MIN ; MAX), 
+      range_cond([z2.b > ?], [? = z2.b])
+
+*************** Case 8(end)  ************** 
+
+***************   Case 9   ***************
+
+SQL: select /*+leading(z1,z2),use_nl(z2)*/ * from z1,z2 where z1.b = z2.b and z2.a > 1 and z2.b > 1 and z2.c > 1; 
+
+=============================================
+|ID|OPERATOR        |NAME    |EST. ROWS|COST|
+---------------------------------------------
+|0 |NESTED-LOOP JOIN|        |93       |9008|
+|1 | TABLE SCAN     |z1      |100      |111 |
+|2 | TABLE SCAN     |z2(z2_b)|1        |89  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([z1.a], [z1.b], [z1.c], [z1.d], [z2.a], [z2.b], [z2.c], [z2.d]), filter(nil), 
+      conds(nil), nl_params_([z1.b]), batch_join=true
+  1 - output([z1.b], [z1.a], [z1.c], [z1.d]), filter([z1.b > ?]), 
+      access([z1.b], [z1.a], [z1.c], [z1.d]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false], 
+      range_key([z1.a]), range(MIN ; MAX)always true
+  2 - output([z2.b], [z2.a], [z2.c], [z2.d]), filter([z2.c > ?]), 
+      access([z2.b], [z2.a], [z2.c], [z2.d]), partitions(p0), 
+      is_index_back=true, filter_before_indexback[false], 
+      range_key([z2.b], [z2.a]), range(MIN ; MAX), 
+      range_cond([z2.a > ?], [z2.b > ?], [? = z2.b])
+
+*************** Case 9(end)  ************** 
+
+***************   Case 10   ***************
+
+SQL: select /*+leading(z1,z2),use_nl(z2)*/ * from z1,z2 where z1.b = z2.b and z1.a + z1.b > 1 and z1.a + z1.b > z1.c and z1.a + z1.b > z2.c and z1.a + z2.b > z1.c; 
+
+=============================================
+|ID|OPERATOR        |NAME    |EST. ROWS|COST|
+---------------------------------------------
+|0 |NESTED-LOOP JOIN|        |2        |1064|
+|1 | TABLE SCAN     |z1      |12       |120 |
+|2 | TABLE SCAN     |z2(z2_b)|1        |85  |
+=============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([z1.a], [z1.b], [z1.c], [z1.d], [z2.a], [z2.b], [z2.c], [z2.d]), filter(nil), 
+      conds(nil), nl_params_([z1.b], [z1.a + z1.b], [z1.a], [z1.c]), batch_join=false
+  1 - output([z1.b], [z1.a], [z1.c], [z1.d]), filter([z1.a + z1.b > ?], [z1.a + z1.b > z1.c]), 
+      access([z1.b], [z1.a], [z1.c], [z1.d]), partitions(p0), 
+      is_index_back=false, filter_before_indexback[false,false], 
+      range_key([z1.a]), range(MIN ; MAX)always true
+  2 - output([z2.b], [z2.c], [z2.a], [z2.d]), filter([? > z2.c], [? + z2.b > ?]), 
+      access([z2.b], [z2.c], [z2.a], [z2.d]), partitions(p0), 
+      is_index_back=true, filter_before_indexback[false,true], 
+      range_key([z2.b], [z2.a]), range(MIN ; MAX), 
+      range_cond([? = z2.b])
+
+*************** Case 10(end)  ************** 
+

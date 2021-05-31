@@ -1,0 +1,40 @@
+drop table if exists pt1;
+create table pt1 (c1 int primary key, c2 int) partition by key(c1) partitions 3;
+select * from information_schema.partitions where table_name = 'pt1';
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	PARTITION_NAME	SUBPARTITION_NAME	PARTITION_ORDINAL_POSITION	SUBPARTITION_ORDINAL_POSITION	PARTITION_METHOD	SUBPARTITION_METHOD	PARTITION_EXPRESSION	SUBPARTITION_EXPRESSION	PARTITION_DESCRIPTION	TABLE_ROWS	AVG_ROW_LENGTH	DATA_LENGTH	MAX_DATA_LENGTH	INDEX_LENGTH	DATA_FREE	CREATE_TIME	UPDATE_TIME	CHECK_TIME	CHECKSUM	PARTITION_COMMENT	NODEGROUP	TABLESPACE_NAME
+def	test	pt1	p0	NULL	0	0	KEY	NULL	c1		NULL	0	0	0	0	0	0	NULL	NULL	NULL	NULL	NULL	default	
+def	test	pt1	p1	NULL	1	0	KEY	NULL	c1		NULL	0	0	0	0	0	0	NULL	NULL	NULL	NULL	NULL	default	
+def	test	pt1	p2	NULL	2	0	KEY	NULL	c1		NULL	0	0	0	0	0	0	NULL	NULL	NULL	NULL	NULL	default	
+select table_schema, table_name from information_schema.partitions where table_name = 'pt1';
+table_schema	table_name
+test	pt1
+test	pt1
+test	pt1
+desc information_schema.partitions;
+Field	Type	Null	Key	Default	Extra
+TABLE_CATALOG	varchar(4096)	NO			
+TABLE_SCHEMA	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+PARTITION_NAME	varchar(64)	YES		NULL	
+SUBPARTITION_NAME	varchar(64)	YES		NULL	
+PARTITION_ORDINAL_POSITION	bigint(20) unsigned	YES		NULL	
+SUBPARTITION_ORDINAL_POSITION	bigint(20) unsigned	YES		NULL	
+PARTITION_METHOD	varchar(18)	YES		NULL	
+SUBPARTITION_METHOD	varchar(18)	YES		NULL	
+PARTITION_EXPRESSION	varchar(4096)	YES		NULL	
+SUBPARTITION_EXPRESSION	varchar(4096)	YES		NULL	
+PARTITION_DESCRIPTION	varchar(1024)	YES		NULL	
+TABLE_ROWS	bigint(20) unsigned	NO		0	
+AVG_ROW_LENGTH	bigint(20) unsigned	NO		0	
+DATA_LENGTH	bigint(20) unsigned	NO		0	
+MAX_DATA_LENGTH	bigint(20) unsigned	YES		NULL	
+INDEX_LENGTH	bigint(20) unsigned	NO		0	
+DATA_FREE	bigint(20) unsigned	NO		0	
+CREATE_TIME	timestamp(6)	YES		NULL	
+UPDATE_TIME	timestamp(6)	YES		NULL	
+CHECK_TIME	timestamp(6)	YES		NULL	
+CHECKSUM	bigint(20)	YES		NULL	
+PARTITION_COMMENT	varchar(1024)	NO			
+NODEGROUP	varchar(12)	NO			
+TABLESPACE_NAME	varchar(128)	YES		NULL	
+drop table pt1;

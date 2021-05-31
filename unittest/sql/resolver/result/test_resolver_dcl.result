@@ -1,0 +1,387 @@
+***************   Case 1   ***************
+drop database if exists dbdcl;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"dbdcl",
+  "if_exist":true,
+  "to_recyclebin":false
+}
+***************   Case 2   ***************
+create database dbdcl;
+{
+  "create_database_arg":"database_schema",
+  "database_id":-1,
+  "schema_version":1,
+  "database_name":"dbdcl",
+  "replica_num":0,
+  "zone_list": [
+  ],
+  "primary_zone":"",
+  "charset_type":2,
+  "collation_type":"utf8mb4_general_ci",
+  "name_case_mode":-1,
+  "comment":"",
+  "read_only":false,
+  "default_tablegroup_id":-1,
+  "default_tablegroup_name":"",
+  "in_recyclebin":false,
+  "primary_zone_array": [
+  ]
+}
+***************   Case 3   ***************
+use dbdcl;
+{
+  "stmt_type":97
+}
+***************   Case 4   ***************
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+{"ObTableStmt":{"partition_fun_expr":[], "range_values_exprs":[], "list_values_exprs":[], "index_partition_resolve_results":[], "part_type":8}, "stmt_type":20, "create_table_arg":{"if_not_exist":false, "schema":{"simple_table_schema":{"tenant_id":1, "database_id":18446744073709551615, "tablegroup_id":1099511627777, "table_id":18446744073709551615, "table_name":"t1", "replica_num":0, "previous_locality_str":"", "min_partition_id":0, "session_id":0, "index_type":0, "table_type":3, "data_table_id":0, "name_casemode":-1, "schema_version":0, "part_level":1, "part_option":{"part_func_type":0, "part_func_expr":"c1 + 1", "part_num":3, "partition_cnt_within_partition_table":-1, "max_used_part_id":2}, "sub_part_option":{"part_func_type":0, "part_func_expr":"", "part_num":1, "partition_cnt_within_partition_table":-1, "max_used_part_id":-1}, "locality_str":"", "zone_list":[], "primary_zone":"", "part_num":0, "subpart_num":0, "partition_num":3, "subpartition_num":0, "partition_array":[{"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":0, "name":"p0", "high_bound_val":, "list_row_values":[], "part_idx":0}, "mapping_pg_part_id":-1}, {"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":1, "name":"p1", "high_bound_val":, "list_row_values":[], "part_idx":1}, "mapping_pg_part_id":-1}, {"BasePartition":{"tenant_id":18446744073709551615, "table_id":18446744073709551615, "part_id":2, "name":"p2", "high_bound_val":, "list_row_values":[], "part_idx":2}, "mapping_pg_part_id":-1}], "subpartition_array":null, "index_status":1, "binding":false, "duplicate_scope":0}, "max_used_column_id":17, "max_used_constraint_id":0, "sess_active_time":0, "rowkey_column_num":1, "index_column_num":0, "rowkey_split_pos":0, "block_size":16384, "is_use_bloomfilter":false, "progressive_merge_num":0, "tablet_size":134217728, "pctfree":10, "load_type":0, "index_using_type":0, "def_type":1, "charset_type":2, "collation_type":45, "create_mem_version":0, "index_status":1, "partition_status":0, "code_version":1, "last_modified_frozen_version":0, "comment":"", "pk_comment":"", "create_host":"", "zone_replica_attr_array":[], "region_replica_num_array":[], "tablegroup_name":"", "compress_func_name":"zstd_1.0", "row_store_type":1, "store_format":3, "expire_info":"", "view_schema":{"view_definition":"", "check_option":"none", "is_updatable":"false", "is_materialized":"false"}, "autoinc_column_id":0, "auto_increment":1, "read_only":false, "primary_zone_array":[], "index_tid_array":[], "mv_tid_array":[], "aux_vp_tid_array":[], "base_table_ids":[], "rowkey_info":{"columns":[{"length":0, "column_id":16, "type":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":1}, "partition_key_info":{"columns":[{"length":0, "column_id":16, "type":{"type":"INT", "collation":"binary", "coercibility":"NUMERIC"}, "order":0, "fulltext_flag":false}], "capacity":1}, "aux_vp_tid_array":[]}, "index_arg_list":[], "constraint_list":[], "db_name":"dbdcl", "last_replay_log_id":0, "foreign_key_arg_list":[], "vertical_partition_arg_list":[]}, "index_arg_list":[]}
+***************   Case 5   ***************
+create user 'hualong' identified by '123456'
+{
+  "stmt_type":58,
+  "users_to_create": [
+    "hualong",
+    "%",
+    "123456",
+    "YES"
+  ]
+}
+***************   Case 6   ***************
+create user 'hualong' identified by '123456', '' identified by '123456'
+{
+  "stmt_type":58,
+  "users_to_create": [
+    "hualong",
+    "%",
+    "123456",
+    "YES",
+    "",
+    "%",
+    "123456",
+    "YES"
+  ]
+}
+***************   Case 7   ***************
+drop user 'hualong'
+{
+  "stmt_type":59,
+  "users": [
+    "hualong",
+    "%"
+  ]
+}
+***************   Case 8   ***************
+set password for 'hualong' = password('111111')
+{
+  "stmt_type":60,
+  "user_pwd": [
+    "hualong",
+    "%",
+    "111111"
+  ]
+}
+***************   Case 9   ***************
+alter user 'hualong' identified by '111111'
+{
+  "stmt_type":60,
+  "user_pwd": [
+    "hualong",
+    "%",
+    "111111"
+  ]
+}
+***************   Case 10   ***************
+rename user 'hualong' to 'hualong01'
+{
+  "stmt_type":62,
+  "rename_infos": [
+    "hualong",
+    "%",
+    "hualong01",
+    "%"
+  ]
+}
+***************   Case 11   ***************
+alter user 'hualong','zdy' account lock
+{
+  "stmt_type":61,
+  "tenant_id":1,
+  "user": [
+    "hualong",
+    "%",
+    "zdy",
+    "%"
+  ],
+  "locked":true
+}
+***************   Case 12   ***************
+alter user 'xiaohua','zdy' account unlock
+{
+  "stmt_type":61,
+  "tenant_id":1,
+  "user": [
+    "xiaohua",
+    "%",
+    "zdy",
+    "%"
+  ],
+  "locked":false
+}
+***************   Case 13   ***************
+grant all privileges on * to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_ALTER,PRIV_CREATE,PRIV_DELETE,PRIV_DROP,PRIV_INSERT,PRIV_UPDATE,PRIV_SELECT,PRIV_INDEX,PRIV_CREATE_VIEW,PRIV_SHOW_VIEW",
+  "grant_level":"DB_LEVEL",
+  "database":"dbdcl",
+  "table":"",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 14   ***************
+grant all privileges on *.*  to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_ALTER,PRIV_CREATE,PRIV_CREATE_USER,PRIV_DELETE,PRIV_DROP,PRIV_INSERT,PRIV_UPDATE,PRIV_SELECT,PRIV_INDEX,PRIV_CREATE_VIEW,PRIV_SHOW_VIEW,PRIV_SHOW_DB,PRIV_SUPER,PRIV_PROCESS",
+  "grant_level":"USER_LEVEL",
+  "database":"",
+  "table":"",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 15   ***************
+grant all privileges on rongxuan.* to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_ALTER,PRIV_CREATE,PRIV_DELETE,PRIV_DROP,PRIV_INSERT,PRIV_UPDATE,PRIV_SELECT,PRIV_INDEX,PRIV_CREATE_VIEW,PRIV_SHOW_VIEW",
+  "grant_level":"DB_LEVEL",
+  "database":"rongxuan",
+  "table":"",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 16   ***************
+grant all privileges on rongxuan.t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_ALTER,PRIV_CREATE,PRIV_DELETE,PRIV_DROP,PRIV_INSERT,PRIV_UPDATE,PRIV_SELECT,PRIV_INDEX,PRIV_CREATE_VIEW,PRIV_SHOW_VIEW",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 17   ***************
+grant all privileges on t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_ALTER,PRIV_CREATE,PRIV_DELETE,PRIV_DROP,PRIV_INSERT,PRIV_UPDATE,PRIV_SELECT,PRIV_INDEX,PRIV_CREATE_VIEW,PRIV_SHOW_VIEW",
+  "grant_level":"TABLE_LEVEL",
+  "database":"dbdcl",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 18   ***************
+grant all privileges on rongxuan.t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_ALTER,PRIV_CREATE,PRIV_DELETE,PRIV_DROP,PRIV_INSERT,PRIV_UPDATE,PRIV_SELECT,PRIV_INDEX,PRIV_CREATE_VIEW,PRIV_SHOW_VIEW",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 19   ***************
+grant alter on rongxuan.t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_ALTER",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 20   ***************
+grant create on rongxuan.t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_CREATE",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 21   ***************
+grant drop on rongxuan.t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_DROP",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 22   ***************
+grant select on rongxuan.t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_SELECT",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 23   ***************
+grant update on rongxuan.t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_UPDATE",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 24   ***************
+grant insert on rongxuan.t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_INSERT",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 25   ***************
+grant delete on rongxuan.t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_DELETE",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 26   ***************
+grant index on rongxuan.t1 to 'hualong'
+{
+  "stmt_type":63,
+  "priv_set":"PRIV_INDEX",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    "hualong",
+    "%",
+    "",
+    "NO"
+  ]
+}
+***************   Case 27   ***************
+revoke all privileges on rongxuan.t1 from 'hualong'
+{
+  "stmt_type":64,
+  "priv_set":"PRIV_ALTER,PRIV_CREATE,PRIV_DELETE,PRIV_DROP,PRIV_INSERT,PRIV_UPDATE,PRIV_SELECT,PRIV_INDEX,PRIV_CREATE_VIEW,PRIV_SHOW_VIEW",
+  "grant_level":"TABLE_LEVEL",
+  "database":"rongxuan",
+  "table":"t1",
+  "users": [
+    1000
+  ],
+  "revoke_all":false
+}
+***************   Case 28   ***************
+revoke all privileges, grant option from 'hualong'
+{
+  "stmt_type":64,
+  "priv_set":"",
+  "grant_level":"USER_LEVEL",
+  "database":"",
+  "table":"",
+  "users": [
+    1000
+  ],
+  "revoke_all":true
+}
+***************   Case 29   ***************
+revoke all privileges on * from 'hualong'
+{
+  "stmt_type":64,
+  "priv_set":"PRIV_ALTER,PRIV_CREATE,PRIV_DELETE,PRIV_DROP,PRIV_INSERT,PRIV_UPDATE,PRIV_SELECT,PRIV_INDEX,PRIV_CREATE_VIEW,PRIV_SHOW_VIEW",
+  "grant_level":"DB_LEVEL",
+  "database":"dbdcl",
+  "table":"",
+  "users": [
+    1000
+  ],
+  "revoke_all":false
+}
+***************   Case 30   ***************
+drop database dbdcl;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"dbdcl",
+  "if_exist":false,
+  "to_recyclebin":false
+}

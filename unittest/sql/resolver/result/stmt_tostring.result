@@ -1,0 +1,12 @@
+***************   Case 1   ***************
+before : select * from t1;
+after : select `rongxuan`.`t1`.`c1` AS `c1`,`rongxuan`.`t1`.`c2` AS `c2` from `rongxuan`.`t1`
+***************   Case 2   ***************
+before : select * from (select * from t2) a;
+after : select `a`.`c1` AS `c1`,`a`.`c2` AS `c2`,`a`.`c3` AS `c3` from (select `rongxuan`.`t2`.`c1` AS `c1`,`rongxuan`.`t2`.`c2` AS `c2`,`rongxuan`.`t2`.`c3` AS `c3` from `rongxuan`.`t2`) a
+***************   Case 3   ***************
+before : select a.*, b.*, c.alias + 10 from t1 a, (select c1 from t2) b, (select c3 as alias from t3) c;
+after : select `rongxuan`.`a`.`c1` AS `c1`,`rongxuan`.`a`.`c2` AS `c2`,`b`.`c1` AS `c1`,(`c`.`alias` + 10) AS `c.alias + 10` from `rongxuan`.`t1` `a`,(select `rongxuan`.`t2`.`c1` AS `c1` from `rongxuan`.`t2`) b,(select `rongxuan`.`t3`.`c3` AS `alias` from `rongxuan`.`t3`) c
+***************   Case 4   ***************
+before : select t1.c1 from t1 join (select t2.c1 from t2 join (select * from t3) a) b;
+after : select `rongxuan`.`t1`.`c1` AS `c1` from (`rongxuan`.`t1` join (select `rongxuan`.`t2`.`c1` AS `c1` from (`rongxuan`.`t2` join (select `rongxuan`.`t3`.`c3` AS `c3`,`rongxuan`.`t3`.`c4` AS `c4` from `rongxuan`.`t3`) a)) b)

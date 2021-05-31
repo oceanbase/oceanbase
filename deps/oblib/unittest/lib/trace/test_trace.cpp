@@ -1,0 +1,105 @@
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+#include <gtest/gtest.h>
+
+#include "lib/ob_define.h"
+#include "lib/trace/ob_trace.h"
+#include "lib/profile/ob_trace_id.h"
+#include "share/ob_truncated_string.h"
+
+using namespace oceanbase;
+using namespace common;
+
+#define OK(value) ASSERT_EQ(OB_SUCCESS, (value))
+
+TEST(TestTrace, basic_test)
+{
+  INIT_TRACE();
+  SET_TRACE_LEVEL(ObTraceLevel(2));
+  SET_TRACE_STAT(true);
+  OB_TRACE.set_file_name("sqltrace.log");
+  ObString stmt = ObString::make_string("select * from t1");
+  int64_t sql_id = 100;
+  int64_t t1 = ::oceanbase::common::ObTimeUtility::current_time();
+  // FILL_TRACE_STD(T_PARSE_START, T_KV(K_STMT, S(ObTruncatedString(stmt))));
+  FILL_TRACE_STD(T_PARSE_END);
+  FILL_TRACE_STD(T_CACHE_GET_PLAN_START);
+  FILL_TRACE_STD(T_CACHE_GET_PLAN_END);
+  // FILL_TRACE_STD(T_PLAN_CACHE_HIT, T_KV(K_SQL_ID, sql_id));
+  FILL_TRACE_STD(T_CACHE_ADD_PLAN_START);
+  FILL_TRACE_STD(T_CACHE_ADD_PLAN_END);
+  FILL_TRACE_STD(T_RESOLVER_START);
+  FILL_TRACE_STD(T_RESOLVER_END);
+  FILL_TRACE_STD(T_TRANSFORM_START);
+  FILL_TRACE_STD(T_TRANSFORM_END);
+  FILL_TRACE_STD(T_OPTIMIZER_START);
+  FILL_TRACE_STD(T_OPTIMIZER_END);
+  FILL_TRACE_STD(T_CG_START);
+  FILL_TRACE_STD(T_CG_END);
+  // FILL_TRACE_STD(T_PARSE_START, T_KV(K_STMT, S(ObTruncatedString(stmt))));
+  FILL_TRACE_STD(T_PARSE_END);
+  FILL_TRACE_STD(T_CACHE_GET_PLAN_START);
+  FILL_TRACE_STD(T_CACHE_GET_PLAN_END);
+  // FILL_TRACE_STD(T_PLAN_CACHE_HIT, T_KV(K_SQL_ID, sql_id));
+  FILL_TRACE_STD(T_CACHE_ADD_PLAN_START);
+  FILL_TRACE_STD(T_CACHE_ADD_PLAN_END);
+  FILL_TRACE_STD(T_RESOLVER_START);
+  FILL_TRACE_STD(T_RESOLVER_END);
+  FILL_TRACE_STD(T_TRANSFORM_START);
+  FILL_TRACE_STD(T_TRANSFORM_END);
+  FILL_TRACE_STD(T_OPTIMIZER_START);
+  FILL_TRACE_STD(T_OPTIMIZER_END);
+  FILL_TRACE_STD(T_CG_START);
+  FILL_TRACE_STD(T_CG_END);
+  // FILL_TRACE_STD(T_PARSE_START, T_KV(K_STMT, S(ObTruncatedString(stmt))));
+  FILL_TRACE_STD(T_PARSE_END);
+  FILL_TRACE_STD(T_CACHE_GET_PLAN_START);
+  FILL_TRACE_STD(T_CACHE_GET_PLAN_END);
+  // FILL_TRACE_STD(T_PLAN_CACHE_HIT, T_KV(K_SQL_ID, sql_id));
+  FILL_TRACE_STD(T_CACHE_ADD_PLAN_START);
+  FILL_TRACE_STD(T_CACHE_ADD_PLAN_END);
+  FILL_TRACE_STD(T_RESOLVER_START);
+  FILL_TRACE_STD(T_RESOLVER_END);
+  FILL_TRACE_STD(T_TRANSFORM_START);
+  FILL_TRACE_STD(T_TRANSFORM_END);
+  FILL_TRACE_STD(T_OPTIMIZER_START);
+  FILL_TRACE_STD(T_OPTIMIZER_END);
+  FILL_TRACE_STD(T_CG_START);
+  FILL_TRACE_STD(T_CG_END);
+  // FILL_TRACE_STD(T_PARSE_START, T_KV(K_STMT, S(ObTruncatedString(stmt))));
+  FILL_TRACE_STD(T_PARSE_END);
+  FILL_TRACE_STD(T_CACHE_GET_PLAN_START);
+  FILL_TRACE_STD(T_CACHE_GET_PLAN_END);
+  // FILL_TRACE_STD(T_PLAN_CACHE_HIT, T_KV(K_SQL_ID, sql_id));
+  FILL_TRACE_STD(T_CACHE_ADD_PLAN_START);
+  FILL_TRACE_STD(T_CACHE_ADD_PLAN_END);
+  FILL_TRACE_STD(T_RESOLVER_START);
+  FILL_TRACE_STD(T_RESOLVER_END);
+  FILL_TRACE_STD(T_TRANSFORM_START);
+  FILL_TRACE_STD(T_TRANSFORM_END);
+  FILL_TRACE_STD(T_OPTIMIZER_START);
+  FILL_TRACE_STD(T_OPTIMIZER_END);
+  FILL_TRACE_STD(T_CG_START);
+  FILL_TRACE_STD(T_CG_END);
+  int64_t t2 = ::oceanbase::common::ObTimeUtility::current_time();
+  LIB_LOG(INFO, "===========");
+  LIB_LOG(INFO, "time", "time", t2 - t1);
+  LIB_LOG(INFO, "===========");
+  FLUSH_TRACE();
+}
+
+int main(int argc, char** argv)
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

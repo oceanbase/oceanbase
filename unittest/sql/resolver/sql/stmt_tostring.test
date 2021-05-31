@@ -1,0 +1,4 @@
+select * from t1;
+select * from (select * from t2) a;
+select a.*, b.*, c.alias + 10 from t1 a, (select c1 from t2) b, (select c3 as alias from t3) c;
+select t1.c1 from t1 join (select t2.c1 from t2 join (select * from t3) a) b;

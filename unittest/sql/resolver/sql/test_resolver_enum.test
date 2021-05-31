@@ -1,0 +1,13 @@
+drop database if exists enum_db;
+create database enum_db;
+use enum_db;
+#schema
+
+create table t1(c1 int primary key, c2 enum('a', 'b', 'c')) partition by hash(c1 + 1) partitions 3
+create table t2(c1 int, c2 int, c3 enum('a', 'b', 'c'), primary key(c2, c3)) partition by key(c2, c3) partitions 3
+create table t22(c1 int, c2 int, c3 enum('a', 'b', 'c'), primary key(c2, c3)) partition by key(c2, c3) partitions 3
+create table t3(c3 int primary key, c4 enum('a', 'b', 'c') default 'c')
+create table t4(c1 int primary key, c3 enum('a', 'b', 'c'))
+create table coll_table(c1 varchar(10) collate utf8_general_ci, c2 enum('a', 'b', 'c'), c3 varchar(10), primary key(c1, c2));
+
+insert into t3 values(1,2);

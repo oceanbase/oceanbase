@@ -1,0 +1,57 @@
+drop database if exists altersystem;
+create database altersystem;
+use altersystem;
+
+alter system switch replica leader server = '127.0.0.1:80'
+alter system switch replica leader zone = '127.0.0.1:80'
+alter system switch replica leader partition_id = '1 % 3 @ 4' server = '127.0.0.1:80'
+alter system switch replica leader zone = 'z1';
+alter system switch replica leader server = '127.0.0.1:80';
+alter system switch replica leader partition_id = '1%8@3001' server = '127.0.0.1:80';
+alter system switch replica leader partition_id '1%8@3001' server '127.0.0.1:80';
+alter system drop replica partition_id = '1%8@3001' server = '127.0.0.1:80';
+alter system drop replica partition_id = '1%8@3001' server = '127.0.0.1:80' create_timestamp = 1;
+alter system drop replica partition_id = '1%8@3001' server = '127.0.0.1:80' zone = 'z1';
+alter system drop replica partition_id = '1%8@3001' server = '127.0.0.1:80' create_timestamp = 1 zone = 'z1';
+alter system drop replica partition_id '1%8@3001' server '127.0.0.1:80' create_timestamp 1 zone 'z1';
+alter system copy replica partition_id = '1%8@3001' source = '127.0.0.1:80' destination = '127.0.0.2:80';
+alter system move replica partition_id = '1%8@3001' source = '127.0.0.1:80' destination = '127.0.0.2:80';
+alter system move replica partition_id '1%8@3001' source '127.0.0.1:80' destination '127.0.0.2:80';
+alter system report replica;
+alter system report replica server = '127.0.0.1:80';
+alter system report replica zone = 'z1';
+alter system recycle replica;
+alter system recycle replica server = '127.0.0.1:80';
+alter system recycle replica server '127.0.0.1:80';
+alter system recycle replica zone = 'z1';
+alter system recycle replica zone 'z1';
+alter system major freeze;
+alter system start merge zone = 'z1';
+alter system suspend merge;
+alter system suspend merge zone = 'z1';
+alter system resume merge;
+alter system resume merge zone = 'z1';
+alter system clear roottable;
+alter system clear roottable tenant = 'test';
+alter system refresh schema;
+alter system refresh schema zone = 'test';
+alter system refresh schema server = '127.0.0.1:80';
+alter system set abc = 1, abd = 'xx' server = '127.0.0.1:80', def = true comment 'defxxx' tenant = 't1';
+alter system modify zone 'z1'
+alter system modify zone 'z1' region = 'r1'
+alter system modify zone 'z1' idc = 'idc1'
+alter system modify zone 'z1' zone_type = 'ReadWrite'
+alter system modify zone 'z1' set idc 'idc1', region 'r1'
+alter system modify zone 'z1' set region 'r1', idc 'idc1'
+alter system modify zone 'z1' set zone_type 'ReadWrite', region 'r1'
+alter system modify zone 'z1' set region 'r1', zone_type 'ReadWrite'
+alter system modify zone 'z1' set idc 'idc1', zone_type 'ReadWrite'
+alter system modify zone 'z1' set zone_type 'ReadWrite', idc 'idc1'
+alter system modify zone 'z1' set zone_type 'ReadWrite', idc 'idc1', region 'r1'
+alter system modify zone 'z1' set zone_type 'ReadWrite', region 'r1', idc 'idc1'
+alter system modify zone 'z1' set idc 'idc1', zone_type 'ReadWrite', region 'r1'
+alter system modify zone 'z1' set idc 'idc1', region 'r1', zone_type 'ReadWrite'
+alter system modify zone 'z1' set region 'r1', idc 'idc1', zone_type 'ReadWrite'
+alter system modify zone 'z1' set region 'r1', zone_type 'ReadWrite', idc 'idc1'
+
+drop database altersystem;

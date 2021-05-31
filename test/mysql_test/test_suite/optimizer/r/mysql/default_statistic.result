@@ -1,0 +1,381 @@
+drop table if exists t1, t2, t3;
+create table t1(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int, 
+index k1(c1), 
+index k2(c1,c2),
+index k3(c1,c2,c3),
+index k4(c1,c2,c3,c4),
+index k5(c1,c2,c3,c4,c5));
+create table t2(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int, 
+primary key(c1, c6, c7),
+index k1(c1), 
+index k2(c1,c2),
+index k3(c1,c2,c3),
+index k4(c1,c2,c3,c4),
+index k5(c1,c2,c3,c4,c5));
+create table t3(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int, 
+primary key(c1, c2, c6),
+index k1(c1), 
+index k2(c1,c2),
+index k3(c1,c2,c3),
+index k4(c1,c2,c3,c4),
+index k5(c1,c2,c3,c4,c5));
+explain select count(*) from t1;
+Query Plan
+===========================================
+|ID|OPERATOR       |NAME  |EST. ROWS|COST |
+-------------------------------------------
+|0 |SCALAR GROUP BY|      |1        |43045|
+|1 | TABLE SCAN    |t1(k1)|100000   |23944|
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil), 
+      access([t1.c1]), partitions(p0)
+
+explain select * from t1 where c1 = 1;
+Query Plan
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t1(k1)|990      |6209|
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), 
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), partitions(p0)
+
+explain select * from t1 where c1 < 1;
+Query Plan
+======================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST |
+--------------------------------------
+|0 |TABLE SCAN|t1(k1)|10000    |62113|
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), 
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), partitions(p0)
+
+explain select * from t1 where c1 > 1;
+Query Plan
+======================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST |
+--------------------------------------
+|0 |TABLE SCAN|t1(k1)|10000    |62113|
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), 
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), partitions(p0)
+
+explain select * from t1 where c1 > 1 and c1 < 10;
+Query Plan
+======================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST |
+--------------------------------------
+|0 |TABLE SCAN|t1(k1)|5000     |31098|
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), 
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), partitions(p0)
+
+explain select * from t1 where c1 = 1 and c2 < 1;
+Query Plan
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t1(k2)|99       |679 |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), 
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), partitions(p0)
+
+explain select * from t1 where c1 = 1 and c2 = 1;
+Query Plan
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t1(k2)|10       |142 |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), 
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), partitions(p0)
+
+explain select * from t1 where c1 = 1 and c2 = 1 and c3 < 1;
+Query Plan
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t1(k3)|1        |89  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), 
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), partitions(p0)
+
+explain select * from t1 where c1 = 1 and c2 = 1 and c3 = 1;
+Query Plan
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t1(k3)|1        |89  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), filter(nil), 
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6], [t1.c7], [t1.c8], [t1.c9], [t1.c10]), partitions(p0)
+
+explain select count(*) from t2;
+Query Plan
+===========================================
+|ID|OPERATOR       |NAME  |EST. ROWS|COST |
+-------------------------------------------
+|0 |SCALAR GROUP BY|      |1        |52640|
+|1 | TABLE SCAN    |t2(k1)|100000   |33539|
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil), 
+      access([t2.c1]), partitions(p0)
+
+explain select * from t2 where c1 = 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |990      |820 |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
+
+explain select * from t2 where c1 < 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |10000    |7983|
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
+
+explain select * from t2 where c1 > 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |10000    |7983|
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
+
+explain select * from t2 where c1 > 1 and c1 < 10;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t2  |5000     |4010|
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
+
+explain select * from t2 where c1 = 1 and c2 < 1;
+Query Plan
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t2(k2)|99       |675 |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
+
+explain select * from t2 where c1 = 1 and c2 = 1;
+Query Plan
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t2(k2)|10       |142 |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
+
+explain select * from t2 where c1 = 1 and c2 = 1 and c3 < 1;
+Query Plan
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t2(k3)|1        |89  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
+
+explain select * from t2 where c1 = 1 and c2 = 1 and c3 = 1;
+Query Plan
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t2(k3)|1        |89  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3], [t2.c4], [t2.c5], [t2.c6], [t2.c7], [t2.c8], [t2.c9], [t2.c10]), partitions(p0)
+
+explain select count(*) from t3;
+Query Plan
+===========================================
+|ID|OPERATOR       |NAME  |EST. ROWS|COST |
+-------------------------------------------
+|0 |SCALAR GROUP BY|      |1        |52640|
+|1 | TABLE SCAN    |t3(k1)|100000   |33539|
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), 
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil), 
+      access([t3.c1]), partitions(p0)
+
+explain select * from t3 where c1 = 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t3  |990      |820 |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), 
+      access([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), partitions(p0)
+
+explain select * from t3 where c1 < 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t3  |10000    |7983|
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), 
+      access([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), partitions(p0)
+
+explain select * from t3 where c1 > 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t3  |10000    |7983|
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), 
+      access([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), partitions(p0)
+
+explain select * from t3 where c1 > 1 and c1 < 10;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t3  |5000     |4010|
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), 
+      access([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), partitions(p0)
+
+explain select * from t3 where c1 = 1 and c2 < 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t3  |99       |107 |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), 
+      access([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), partitions(p0)
+
+explain select * from t3 where c1 = 1 and c2 = 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t3  |10       |40  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter(nil), 
+      access([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), partitions(p0)
+
+explain select * from t3 where c1 = 1 and c2 = 1 and c3 < 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t3  |1        |41  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter([t3.c3 < 1]), 
+      access([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), partitions(p0)
+
+explain select * from t3 where c1 = 1 and c2 = 1 and c3 = 1;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t3  |1        |41  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), filter([t3.c3 = 1]), 
+      access([t3.c1], [t3.c2], [t3.c3], [t3.c4], [t3.c5], [t3.c6], [t3.c7], [t3.c8], [t3.c9], [t3.c10]), partitions(p0)
+

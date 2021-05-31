@@ -1,0 +1,11 @@
+function(pc_unittest case)
+  sql_unittest(${ARGV})
+  target_sources(${case} PRIVATE test_sql.h test_sql.cpp)
+endfunction()
+
+pc_unittest(test_id_manager_allocator)
+pc_unittest(test_sql_parameterization)
+pc_unittest(test_pcv_set)
+pc_unittest(test_plan_cache_manager)
+pc_unittest(test_plan_cache_value)
+pc_unittest(test_plan_set)

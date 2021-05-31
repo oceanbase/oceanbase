@@ -1,0 +1,14 @@
+use information_schema;
+select * from schemata limit 0;
+CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH
+select schema_name from schemata;
+show create view schemata;
+View	Create View	character_set_client	collation_connection
+SCHEMATA	CREATE VIEW `SCHEMATA` AS    SELECT 'def' AS CATALOG_NAME, DATABASE_NAME AS SCHEMA_NAME, 'utf8mb4' AS DEFAULT_CHARACTER_SET_NAME, 'utf8mb4_general_ci' AS DEFAULT_COLLATION_NAME, NULL AS SQL_PATH  FROM oceanbase.__all_virtual_database a WHERE a.tenant_id = effective_tenant_id() and in_recyclebin = 0 and database_name != '__recyclebin' 	utf8mb4	utf8mb4_general_ci
+desc schemata;
+Field	Type	Null	Key	Default	Extra
+CATALOG_NAME	varchar(3)	NO			
+SCHEMA_NAME	varchar(128)	NO			
+DEFAULT_CHARACTER_SET_NAME	varchar(7)	NO			
+DEFAULT_COLLATION_NAME	varchar(18)	NO			
+SQL_PATH	null	NO			

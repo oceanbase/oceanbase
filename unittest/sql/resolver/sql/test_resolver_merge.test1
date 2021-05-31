@@ -1,0 +1,49 @@
+drop database if exists merge_db;
+create database merge_db;
+use merge_db;
+
+#################### schema ####################
+create table sourceTable(id int primary key, sales int);
+create table sourceTable_2(id2 int primary key, sales2 int);
+create table targetTable(id int primary key, sales int);
+################## test for target relation and source relation ##################
+merge into targetTable using sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
+
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales;
+
+################## test for match conditoin ##################
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id and t1.id != t2.sales) when matched then update set t1.sales = t2.sales;
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id or t1.id != abs(t2.sales)) when matched then update set t1.sales = t2.sales;
+merge into targetTable using sourceTable_2 on (id = id2 or id != abs(sales2)) when matched then update set sales = sales2;
+
+################## test for update clause ##################
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id and t1.id != t2.sales) when matched then update set t1.sales = t2.sales;
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id and t1.id != t2.sales) when matched then update set t1.sales = t2.sales where t1.sales > 1;
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id and t1.id != t2.sales) when matched then update set t1.sales = t2.sales where t1.sales > 88 delete where t1.id < 99;
+
+################## test for insert clause ##################
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id = 999 delete where t1.sales =888 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id = 777;
+
+################## test for column_conv ##################
+
+### test for const value ###
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(99, 88);
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id and t1.id != t2.sales) when matched then update set t1.sales = 100;
+
+### test for default value ###
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id) values(99);
+
+### test for empty insert columns ###
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert (t1.id, t1.sales) values(99, 88);
+
+################## test for rowkey  ##################
+create table target1(id int, c2 int, c3 int, primary key(id, c2));
+create table target2(id int, c2 int);
+merge into target1 using sourceTable on (target1.id = sourceTable.id) when matched then update set target1.c2 = sourceTable.sales;
+merge into target2 using sourceTable on (target2.id = sourceTable.id) when matched then update set target2.c2 = sourceTable.sales;
+
+################## test for subquery  ##################
+merge into targetTable using (select * from target1 ) sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.c3;
+merge into targetTable t1 using (select * from sourceTable) t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id = 999 delete where t1.sales =888 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id = 777;

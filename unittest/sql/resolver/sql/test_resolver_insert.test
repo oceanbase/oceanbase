@@ -1,0 +1,124 @@
+drop database if exists insert_db;
+create database insert_db;
+use insert_db;
+
+
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+create table t2(c1 int, c2 int, c3 varchar(32), primary key(c2, c3)) partition by key(c2, c3) partitions 3
+create table t3(c3 int primary key, c4 int)
+create index idx1 on t1(c2) LOCAL
+create table test(c1 int , c2 int, c3 varchar(50), c4 varchar(50), c5 int , c6 double, c7 int, primary key(c1, c2, c3))
+create index test_indx on test(c4, c5)
+create table non_reserved_key_test(value int primary key)
+create table test2(c1 int primary key, c2 varchar(30), c3 timestamp(6) default now(6))
+create table t4(c1 int primary key, c2 int not null, c3 int default 1, c4 int not null default 2)
+create table ta(c1 int primary key, c2 int auto_increment) comment='test', auto_increment= 5
+create table alter_table1(c1 int primary key, c2 varchar(11) not null default 'c2', c3 tinyint default 3, c4 char(11)) partition by hash(c1) partitions 3
+create index idx_c1 on alter_table1(c1) LOCAL
+create table t_auto_inc(c1 int primary key, c2 int auto_increment)
+create table coll_table(c1 varchar(10) collate utf8_general_ci, c2 varchar(10) collate utf8_bin, c3 varchar(10), primary key(c1, c2));
+create table ts(c1 int primary key, c2 timestamp default current_timestamp on update current_timestamp, c3 int);
+create table tt1(c1 int primary key auto_increment, c2 int);
+create table tm(c1 int primary key, c2 char(100) default 'fffyyy', c3 int);
+create table ttt(c1 int, c2 int);
+create table bt(c1 binary(4), c2 binary(5), c3 binary(6));
+### common
+
+#### value or values
+insert into t1 values(1, 2)
+insert into t1 value(1, 2)
+
+--error 4007
+REPLACE IGNORE INTO t1 VALUE (1, 1);
+
+#### not configure the column list
+insert into t2 values(1, 1, 'test')
+
+####default value with timestamp
+insert into test2(c1,c2) values(1,'test')
+
+#### configure the column list
+insert into t1(c1,c2) values(1, 2)
+insert into t2(c1, c2, c3) values(1, 1, 'test')
+insert into t2 partition(p0) (c2,c3) values (1,'test')
+
+#### multiple values
+insert into t1(c1) values(1), (2)
+insert into t2(c1, c2, c3) values(1, 1, 'test'), (2, 2, 'hello'), (3, 3, 'world')
+
+#### subquery
+#column count not match
+--error 5175
+insert into t2 select * from t1
+--error 5175
+insert into t2(c1) select c1, c2 from t1
+insert into t2 (c2, c3) select c1, c2 from t1
+insert into t2 (c2,c3) select * from t1
+#no primary key table
+insert into ttt select c1, c2 from t1;
+insert into ttt select * from ttt;
+
+#### function or expression
+insert into t2 values (1+1, 'new'||'name', 45)
+#insert into t1 values (DEFAULT, 1);		//not support default
+
+#### partition
+#insert into t1 partition (p1) values (1,1)	//not support
+
+#### question mark
+insert into t1 values (1,1)
+
+#### replace
+replace into t1 values (1,2)
+replace into t2 (c1,c2,c3) values (1,2,'test')
+#### duplicate key update
+insert into t1 values (1,2) on duplicate key update c2 = c2+1
+insert into t2 values (3,4,'test') on duplicate key update t2.c2 = t2.c2 + 1
+insert into test (c1,c2,c3,c4) values (1,2,'test','test') on duplicate key update c5 = c2+c1
+insert into test (c1,c2,c3,c4) values (1,2,'test','test') on duplicate key update c5 = c2
+insert into test (c1,c2,c3,c4) values (1,2,'test','test') on duplicate key update c1 = c2
+#### default + not null
+insert into t4(c1, c2) values(1,1), (2,2)
+insert into t4(c1, c2, c3) values(1,1,1), (2,2,2), (3,3,3)
+insert into t4 values(1,2,3,4)
+
+### autoincrement
+insert into ta(c1,c2) values (1,0),(2,0)
+insert into ta(c1,c2) values (3,NULL), (4, NULL)
+insert into ta(c1) values (5),(6)
+insert into ta set c1 = 1, c2 = c1 + 1;
+insert into ta set c2 = c1, c1 = c2 + 1;
+insert into ta values(1, c1 + 1);
+insert into ta(c2,c1) values(NULL, c2+1);
+insert into ta select * from t3;
+insert into ta select * from t3 on duplicate key update c1 = c1 + 2, c2 = values(c2);
+### primary key is null
+##insert into test(c1) values(1);
+
+###binary
+insert into bt(c1, c2) values(1,2);
+insert into bt (c1,c2)values(2, c1 + 1);
+insert into bt set c1 = 2, c2 = c1 + 1;
+insert into bt set c1 = 2, c2 = c1 + 1, c3 = c1 + 2;
+insert into bt select c1,c2,c3 from test;
+insert into bt  select c1,c2,c3 from test on duplicate key update c1 = c1 + 1, c2 = values(c2);
+
+### default
+insert into test2(c1,c2, c3) values(1,'test', default);
+insert into t4 (c1,c2,c3) values(11, 1, default), (13,1, default);
+insert into t4 (c1,c2,c3) values(11, 2, default), (13,3, default) on duplicate key update c2 = 5, c3=4;
+insert into t_auto_inc values (1, default), (2, default);
+insert into t4 values(1, 3, default, 4);
+insert into t1 values (1,2) on duplicate key update c1=values(c2);
+insert into t1 values (1,2),(3,4) on duplicate key update c1=values(c2)+values(c1), c2= values(c1)+values(c1);
+insert into tt1 ()values(),();
+insert into tt1 values(),();
+insert into test set c1=1, c2=c1+1, c3=c2+c1;
+insert into t1 set c1 = 1 + c1, c2 = 1;
+insert into tm values(1, substr(c1,1,3), c3);
+create table test3(c1 int primary key, c2 int, c3 int auto_increment unique key);
+insert into test3 set c1 = 135, c3 = c2 + 1
+insert into t3 values(1, values(c3))
+insert into t3 values(values(c3), values(c4))
+
+drop database insert_db;

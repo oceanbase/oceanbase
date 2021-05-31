@@ -1,0 +1,12 @@
+[test_table]
+table_id=1001
+compress_func_name=snappy_1.0
+table_type=1
+def_type=1
+column_info=4,1,2,c1,int
+column_info=5,2,0,c2,varchar,64
+column_info=8,0,1,c5,datetime
+column_info=11,0,3,c8,number,50,0,0,1,50,50
+#rowkey = c1(8%int),c2(64%varchar)
+block_size = 2097152
+max_used_column_id = 100

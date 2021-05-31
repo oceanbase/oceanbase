@@ -1,0 +1,381 @@
+drop table if exists t1, t2, t3, t4, t5;
+create table t1(c1 int primary key, c2 int, c3 varchar(10));
+create table t2(c1 int primary key,
+c2 int,
+c3 varchar(10))
+partition by key(c1) partitions 5;
+create table t3(c1 int primary key, c2 datetime default now());
+insert into t1 values(1, 1, 'abc');
+insert into t1 values(2, 1, 'def');
+insert into t1 values(3, 2, 'ghi');
+insert into t1 values(4, 3, 'jkl');
+insert into t1 values(5, 4, 'mno');
+insert into t2 values(0, 1, 'beijing');
+insert into t2 values(10, 2, 'beijing');
+insert into t2 values(11, 3, 'beijing');
+insert into t2 values(1, 1, 'hangzhou');
+insert into t2 values(2, 1, 'hangzhou');
+insert into t2 values(3, 1, 'shanghai');
+insert into t2 values(5, 1, 'tianjin');
+select c1, sum(c2), count(c2), avg(c2), max(c2), min(c2) from t1 group by c1;
+c1	sum(c2)	count(c2)	avg(c2)	max(c2)	min(c2)
+1	1	1	1.0000	1	1
+2	1	1	1.0000	1	1
+3	2	1	2.0000	2	2
+4	3	1	3.0000	3	3
+5	4	1	4.0000	4	4
+select c2, sum(c1), count(c1), avg(c1), max(c1), min(c1) from t1 group by c2;
+c2	sum(c1)	count(c1)	avg(c1)	max(c1)	min(c1)
+1	3	2	1.5000	2	1
+2	3	1	3.0000	3	3
+3	4	1	4.0000	4	4
+4	5	1	5.0000	5	5
+select c2, sum(c1), count(c2), avg(c2), max(c1), min(c1) from t1 group by c3;
+c2	sum(c1)	count(c2)	avg(c2)	max(c1)	min(c1)
+1	1	1	1.0000	1	1
+1	2	1	1.0000	2	2
+2	3	1	2.0000	3	3
+3	4	1	3.0000	4	4
+4	5	1	4.0000	5	5
+select c1, sum(c2), count(c2), avg(c2), max(c2), min(c2) from t2 group by c1;
+c1	sum(c2)	count(c2)	avg(c2)	max(c2)	min(c2)
+0	1	1	1.0000	1	1
+1	1	1	1.0000	1	1
+10	2	1	2.0000	2	2
+11	3	1	3.0000	3	3
+2	1	1	1.0000	1	1
+3	1	1	1.0000	1	1
+5	1	1	1.0000	1	1
+select c2, sum(c1), count(c1), avg(c1), max(c1), min(c1) from t2 group by c2;
+c2	sum(c1)	count(c1)	avg(c1)	max(c1)	min(c1)
+1	11	5	2.2000	5	0
+2	10	1	10.0000	10	10
+3	11	1	11.0000	11	11
+select c3, sum(c1), count(c1), avg(c1), max(c2), min(c1) from t2 group by c3;
+c3	sum(c1)	count(c1)	avg(c1)	max(c2)	min(c1)
+beijing	21	3	7.0000	3	0
+hangzhou	3	2	1.5000	1	1
+shanghai	3	1	3.0000	1	3
+tianjin	5	1	5.0000	1	5
+select max(c1), count(*) from t1;
+max(c1)	count(*)
+5	5
+select min(c2), count(*) from t2;
+min(c2)	count(*)
+1	7
+select c1, c2, count(c2) from t1 group by c1, c2, c3;
+c1	c2	count(c2)
+1	1	1
+2	1	1
+3	2	1
+4	3	1
+5	4	1
+select c1, c2, count(c2) from t1 group by 1, 2;
+c1	c2	count(c2)
+1	1	1
+2	1	1
+3	2	1
+4	3	1
+5	4	1
+select c1 as id, max(c2) from t1 group by id;
+id	max(c2)
+1	1
+2	1
+3	2
+4	3
+5	4
+select sum(c1) + sum(c2) from t1 group by c3;
+sum(c1) + sum(c2)
+2
+3
+5
+7
+9
+select sum(c1 + c2) from t1 group by c3;
+sum(c1 + c2)
+2
+3
+5
+7
+9
+select c1, c2, c3, count(*) from t1 group by c1, c2, c3;
+c1	c2	c3	count(*)
+1	1	abc	1
+2	1	def	1
+3	2	ghi	1
+4	3	jkl	1
+5	4	mno	1
+select * from t1 group by -1;
+c1	c2	c3
+1	1	abc
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 varchar(100), c3 varchar(100), c4 int, c5 varchar(100));
+insert into t1 values (1, 'a', 'bc', 21, 'g1'), (2, 'ab', 'c', 22, 'g1'), (3, 'a2', 'b3', 24, 'g2'), (4, 'a1', 'b3', 24, 'g2'), (5, 'a3', 'b2', 25, 'g2');
+select group_concat(c2, c3) from t1;
+group_concat(c2, c3)
+abc,abc,a2b3,a1b3,a3b2
+select group_concat(distinct c2, c3) from t1;
+group_concat(distinct c2, c3)
+abc,a1b3,a2b3,a3b2,abc
+select group_concat(c2, c3 order by c2) from t1;
+group_concat(c2, c3 order by c2)
+abc,a1b3,a2b3,a3b2,abc
+select group_concat(c2, c3 order by c3) from t1;
+group_concat(c2, c3 order by c3)
+a3b2,a2b3,a1b3,abc,abc
+select group_concat(c2, c3 order by c3 desc, c2 asc) from t1;
+group_concat(c2, c3 order by c3 desc, c2 asc)
+abc,abc,a1b3,a2b3,a3b2
+select group_concat(distinct c2, c3 order by c3 desc, c2 asc) from t1;
+group_concat(distinct c2, c3 order by c3 desc, c2 asc)
+abc,abc,a1b3,a2b3,a3b2
+select group_concat(distinct c2, c3 order by 2 desc, 1 asc) from t1;
+group_concat(distinct c2, c3 order by 2 desc, 1 asc)
+abc,abc,a1b3,a2b3,a3b2
+select group_concat(c2, c3) from t1 group by c5;
+group_concat(c2, c3)
+a2b3,a1b3,a3b2
+abc,abc
+select group_concat(distinct c2, c3) from t1 group by c5;
+group_concat(distinct c2, c3)
+abc,abc
+a1b3,a2b3,a3b2
+select group_concat(c2, c3 order by c1) from t1 group by c5;
+group_concat(c2, c3 order by c1)
+a2b3,a1b3,a3b2
+abc,abc
+select group_concat(c2, c3 order by c2) from t1 group by c5;
+group_concat(c2, c3 order by c2)
+a1b3,a2b3,a3b2
+abc,abc
+select group_concat(c2, c3 order by c3) from t1 group by c5;
+group_concat(c2, c3 order by c3)
+a3b2,a2b3,a1b3
+abc,abc
+select group_concat(c2, c3 order by c4 desc) from t1 group by c5;
+group_concat(c2, c3 order by c4 desc)
+a3b2,a2b3,a1b3
+abc,abc
+select group_concat(c2, c3 order by c3 desc, c2 asc) from t1 group by c5;
+group_concat(c2, c3 order by c3 desc, c2 asc)
+a1b3,a2b3,a3b2
+abc,abc
+select group_concat(distinct c2, c3 order by c3 desc, c2 asc) from t1 group by c5;
+group_concat(distinct c2, c3 order by c3 desc, c2 asc)
+a1b3,a2b3,a3b2
+abc,abc
+select group_concat(distinct c2, c3 order by 2 desc, 1 asc) from t1 group by c5;
+group_concat(distinct c2, c3 order by 2 desc, 1 asc)
+a1b3,a2b3,a3b2
+abc,abc
+select min(c2), max(c3), count(*), count(c1), avg(c4), group_concat(distinct c2, c3 order by 2 desc, 1 asc) from t1 group by c5;
+min(c2)	max(c3)	count(*)	count(c1)	avg(c4)	group_concat(distinct c2, c3 order by 2 desc, 1 asc)
+a	c	2	2	21.5000	abc,abc
+a1	b3	3	3	24.3333	a1b3,a2b3,a3b2
+select group_concat(c3, c4 order by c4 desc) from t1 group by c5;
+group_concat(c3, c4 order by c4 desc)
+b225,b324,b324
+c22,bc21
+select group_concat(distinct c3, c4 order by c4 desc) from t1 group by c5;
+group_concat(distinct c3, c4 order by c4 desc)
+c22,bc21
+b225,b324
+select group_concat(c4 order by 1 desc) from t1 group by c5;
+group_concat(c4 order by 1 desc)
+22,21
+25,24,24
+select group_concat(distinct c4 order by 1 desc) from t1 group by c5;
+group_concat(distinct c4 order by 1 desc)
+22,21
+25,24
+select group_concat(distinct c4 order by c4 desc separator 'AAA') from t1 group by c5;
+group_concat(distinct c4 order by c4 desc separator 'AAA')
+22AAA21
+25AAA24
+select group_concat(distinct c4 order by 1 desc separator '#') from t1 group by c5;
+group_concat(distinct c4 order by 1 desc separator '#')
+22#21
+25#24
+select group_concat(distinct c2, c3 order by c3 asc, c2 desc separator '%%') from t1 group by c5;
+group_concat(distinct c2, c3 order by c3 asc, c2 desc separator '%%')
+abc%%abc
+a3b2%%a2b3%%a1b3
+select group_concat(c2, c3 order by c4 desc separator '*') from t1 group by c5;
+group_concat(c2, c3 order by c4 desc separator '*')
+abc*abc
+a3b2*a2b3*a1b3
+select group_concat(c2 separator '\\') from t1;
+group_concat(c2 separator '\\')
+a\ab\a2\a1\a3
+select group_concat(c2, c3 separator '\\') from t1;
+group_concat(c2, c3 separator '\\')
+abc\abc\a2b3\a1b3\a3b2
+drop table if exists t2;
+create table t2 (c1 int primary key, c2 varchar(100), c3 varchar(100), c4 varchar(100));
+insert into t2 values (1, 'd1', 's1', 'g1'), (2, 'd2', NULL, 'g1'), (3, NULL, 's3', 'g1'), (4, 'd4', 's4', 'g1'), (5, 'd5', NULL, 'g2'), (6, NULL, 's6', 'g2'), (7, NULL, NULL, 'g3'), (8, '', '', 'g4');
+select group_concat(c2, c3) from t2;
+group_concat(c2, c3)
+d1s1,d4s4,
+select group_concat(c2, c3) from t2 group by c4;
+group_concat(c2, c3)
+
+NULL
+NULL
+d1s1,d4s4
+select group_concat(c2) from t2 group by c4;
+group_concat(c2)
+
+NULL
+d1,d2,d4
+d5
+select @@group_concat_max_len;
+@@group_concat_max_len
+1024
+set group_concat_max_len = 7;
+select @@group_concat_max_len;
+@@group_concat_max_len
+7
+select group_concat(c2, c3) from t2;
+group_concat(c2, c3)
+d1s1,d4
+Warnings:
+Warning	1260	Row 2 was cut by GROUP_CONCAT()
+select group_concat(c2) from t2 group by c4;
+group_concat(c2)
+
+NULL
+Warning	1260	Row 3 was cut by GROUP_CONCAT()
+Warnings:
+d1,d2,d
+d5
+select group_concat(c2, c3) from t2 group by c4;
+group_concat(c2, c3)
+
+NULL
+NULL
+Warning	1260	Row 2 was cut by GROUP_CONCAT()
+Warnings:
+d1s1,d4
+set group_concat_max_len = 10;
+select @@group_concat_max_len;
+@@group_concat_max_len
+10
+select group_concat(c2, c3) from t2;
+group_concat(c2, c3)
+d1s1,d4s4,
+set group_concat_max_len = 9;
+select group_concat(c2, c3) from t2 group by c4;
+group_concat(c2, c3)
+
+NULL
+NULL
+d1s1,d4s4
+select @@group_concat_max_len;
+@@group_concat_max_len
+9
+set group_concat_max_len = default;
+select @@group_concat_max_len;
+@@group_concat_max_len
+1024
+select group_concat(c2, c3) from t2;
+group_concat(c2, c3)
+d1s1,d4s4,
+select group_concat(c2) from t2 group by c4;
+group_concat(c2)
+
+NULL
+d1,d2,d4
+d5
+select group_concat(c2, c3) from t2 group by c4;
+group_concat(c2, c3)
+
+NULL
+NULL
+d1s1,d4s4
+drop table if exists t3;
+create table t3(c1 int, c2 timestamp(4));
+insert into t3 values(1,'2015-01-01 12:12:12'), (2, '2015-01-02 12:12:33.333333');
+select * from t3;
+c1	c2
+1	2015-01-01 12:12:12.0000
+2	2015-01-02 12:12:33.3333
+select group_concat(c1,c2) from t3;
+group_concat(c1,c2)
+12015-01-01 12:12:12.0000,22015-01-02 12:12:33.3333
+drop table if exists t4;
+create table t4 (c1 int primary key, c2 varchar(100) charset utf8mb4 collate utf8mb4_bin, c3 varchar(50) charset utf8mb4 collate utf8mb4_general_ci);
+insert into t4 values (1, 'a', 'a'), (2, 'A', 'A'), (3, 'B', 'B'), (4, 'b', 'b');
+select group_concat(c2 order by c2) from t4;
+group_concat(c2 order by c2)
+A,B,a,b
+select group_concat(c3 order by c3) from t4;
+group_concat(c3 order by c3)
+a,A,B,b
+select group_concat(distinct c2) from t4;
+group_concat(distinct c2)
+A,B,a,b
+select group_concat(distinct c3) from t4;
+group_concat(distinct c3)
+a,B
+select collation(group_concat(c1)), collation(group_concat(c2)), collation(group_concat(c3)) from t4;
+collation(group_concat(c1))	collation(group_concat(c2))	collation(group_concat(c3))
+utf8mb4_general_ci	utf8mb4_bin	utf8mb4_general_ci
+create table t5(c1 int primary key, c2 int, c3 varchar(100), c4 int) partition by hash(c1) partitions 2;
+insert into t5 values (1, 21, 'a', 1);
+insert into t5 values (2, 22, 'b', 2);
+insert into t5 values (3, 23, 'c', 1);
+insert into t5 values (4, 24, 'd', 1);
+insert into t5 values (5, 25, 'e', 1);
+select count(c2), group_concat(c3 order by c3 desc), max(c1) from t5 group by c4;
+count(c2)	group_concat(c3 order by c3 desc)	max(c1)
+1	b	2
+4	e,d,c,a	5
+set @bug7726379 = 1;
+select group_concat(@bug7726379 order by 1);
+group_concat(@bug7726379 order by 1)
+1
+select group_concat(@bug7726379 order by @bug7726379);
+group_concat(@bug7726379 order by @bug7726379)
+1
+select group_concat(3 order by 1);
+group_concat(3 order by 1)
+3
+select group_concat(3 + 2 order by 1);
+group_concat(3 + 2 order by 1)
+5
+drop table t1, t2;
+create table t1(c1 int, c2 int);
+create table t2(a int, b int);
+select distinct (select max(a) from t1 where alias.b = a) as field1 from t2 as alias group by field1;
+ERROR 42000: Can't group on 'field1'
+drop table t1;
+create table t1 (c1 int, c2 int, c3 int);
+insert into t1 (c1, c2, c3) values (1, 1, 1);
+insert into t1 (c1, c2, c3) values (1, 2, 2);
+insert into t1 (c1, c2, c3) values (1, 2, 2);
+insert into t1 (c1, c2, c3) values (1, 2, 3);
+insert into t1 (c1, c2, c3) values (2, 1, 2);
+insert into t1 (c1, c2, c3) values (2, 3, 2);
+insert into t1 (c1, c2, c3) values (2, 3, 2);
+insert into t1 (c1, c2, c3) values (2, 3, 3);
+select c2, avg(distinct c3) from t1 group by c2;
+c2	avg(distinct c3)
+1	1.5000
+2	2.5000
+3	2.5000
+select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2;
+c1	c2	group_concat(distinct c3 order by c3 desc)
+1	1	1
+1	2	3,2
+2	1	2
+2	3	3,2
+select c1,c2, group_concat(distinct c3 order by c3 desc) from t1 group by c1,c2 with rollup;
+c1	c2	group_concat(distinct c3 order by c3 desc)
+1	1	1
+1	2	3,2
+1	NULL	3,2,1
+2	1	2
+2	3	3,2
+2	NULL	3,2
+NULL	NULL	3,2,1
+drop table t1, t2, t3, t4, t5;

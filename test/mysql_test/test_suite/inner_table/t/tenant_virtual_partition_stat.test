@@ -1,0 +1,19 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+--disable_abort_on_error
+--disable_warnings
+#检查表结构
+desc oceanbase.__tenant_virtual_partition_stat;
+
+--disable_result_log
+
+#login into the sys tenant
+connect (conn_admin,$OBMYSQL_MS0,admin@sys,admin,*NO-ONE*,$OBMYSQL_PORT);
+
+let $cnt = query_get_value(select count(*) from oceanbase.__tenant_virtual_partition_stat, count(*), 1);
+if ($cnt != 0)
+{
+  echo pass;
+}

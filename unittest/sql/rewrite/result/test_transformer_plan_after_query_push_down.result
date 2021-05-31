@@ -1,0 +1,734 @@
+***************   Case 0   ***************
+SQL: select * from (select * from t1 order by c2) a limit 1; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |1        |123 |
+|1 | TOP-N SORT |    |1        |123 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(1), offset(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(1)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 1   ***************
+SQL: select * from t1 order by c2 limit 1; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |1        |123 |
+|1 | TOP-N SORT |    |1        |123 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(1), offset(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(1)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 2   ***************
+SQL: select * from (select * from t1 order by c2) a limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 3   ***************
+SQL: select * from t1 order by c2 limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 4   ***************
+SQL: select * from (select * from t1 order by c2 desc) a limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, DESC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 5   ***************
+SQL: select * from t1 order by c2 limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 6   ***************
+SQL: select * from (select * from t1 order by c2 desc) a where 1=1 limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, DESC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 7   ***************
+SQL: select * from t1 order by c2 limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 8   ***************
+SQL: select * from (select * from t1 order by c2 desc) a where (1=1) and (0=0) limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, DESC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 9   ***************
+SQL: select * from t1 order by c2 limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 10   ***************
+SQL: select * from (select * from t1 order by c2 desc) a where 1 limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, DESC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 11   ***************
+SQL: select * from t1 order by c2 limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 12   ***************
+SQL: select * from (select * from (select * from (select * from (select * from (select * from (select * from t1 order by c2) a) b) c) d) e) f limit 1; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |1        |123 |
+|1 | TOP-N SORT |    |1        |123 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(1), offset(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(1)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 13   ***************
+SQL: select * from (select * from (select d.* from (select c.* from (select * from (select * from (select * from t1 order by c2) a) b) c) d) e) f limit 1; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |1        |123 |
+|1 | TOP-N SORT |    |1        |123 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(1), offset(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(1)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 14   ***************
+SQL: select * from (select * from t1) a order by a.c2 limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 15   ***************
+SQL: select * from t1 order by c2 limit 1, 10; 
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |LIMIT       |    |10       |155 |
+|1 | TOP-N SORT |    |11       |153 |
+|2 |  TABLE SCAN|t1  |100      |90  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(10 + ?)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 16   ***************
+SQL: select count(*) from (select * from t1) a group by a.c2 limit 1, 10; 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |LIMIT         |    |10       |138 |
+|1 | HASH GROUP BY|    |11       |136 |
+|2 |  TABLE SCAN  |t1  |100      |90  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), limit(10), offset(?)
+  1 - output([T_FUN_COUNT(*)]), filter(nil), 
+      group([t1.c2]), agg_func([T_FUN_COUNT(*)])
+  2 - output([t1.c2]), filter(nil), 
+      access([t1.c2]), partitions(p0)
+
+***************   Case 17   ***************
+SQL: select a.c1 from (select * from t1) a group by a.c2 limit 1, 10; 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |LIMIT         |    |10       |132 |
+|1 | HASH GROUP BY|    |11       |131 |
+|2 |  TABLE SCAN  |t1  |100      |90  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), limit(10), offset(?)
+  1 - output([t1.c1]), filter(nil), 
+      group([t1.c2]), agg_func(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 18   ***************
+SQL: select a.c2 from (select * from t1) a; 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |100      |90  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c2]), filter(nil), 
+      access([t1.c2]), partitions(p0)
+
+***************   Case 19   ***************
+SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10; 
+=======================================
+|ID|OPERATOR      |NAME|EST. ROWS|COST|
+---------------------------------------
+|0 |LIMIT         |    |10       |280 |
+|1 | HASH JOIN    |    |10       |279 |
+|2 |  SUBPLAN SCAN|a   |100      |104 |
+|3 |   TABLE SCAN |t1  |100      |90  |
+|4 |  TABLE SCAN  |t1  |10       |38  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [t1.c1], [t1.c2]), filter(nil), limit(10), offset(nil)
+  1 - output([a.c1], [a.c2], [t1.c1], [t1.c2]), filter(nil), 
+      equal_conds([a.c2 = t1.c2]), other_conds(nil)
+  2 - output([a.c2], [a.c1]), filter(nil), 
+      access([a.c2], [a.c1])
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  4 - output([t1.c2], [t1.c1]), filter(nil), 
+      access([t1.c2], [t1.c1]), partitions(p0)
+
+***************   Case 20   ***************
+SQL: select * from (select * from t1) a where a.c2 = 1 limit 1; 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |1        |107 |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c2 = ?]), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 21   ***************
+SQL: select distinct a.c1 from (select * from t1) a limit 1; 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |1        |36  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), 
+      access([t1.c1]), partitions(p0), 
+      limit(1), offset(nil)
+
+***************   Case 22   ***************
+SQL: select b.c2 from (select * from (select * from t1) a limit 10) b; 
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t1  |10       |38  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c2]), filter(nil), 
+      access([t1.c2]), partitions(p0), 
+      limit(10), offset(nil)
+
+***************   Case 23   ***************
+SQL: (select * from (select * from t1) a limit 10) union all (select * from (select * from t1) b limit 10); 
+====================================
+|ID|OPERATOR   |NAME|EST. ROWS|COST|
+------------------------------------
+|0 |UNION ALL  |    |20       |83  |
+|1 | TABLE SCAN|t1  |10       |38  |
+|2 | TABLE SCAN|t1  |10       |38  |
+====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      limit(10), offset(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0), 
+      limit(10), offset(nil)
+
+***************   Case 24   ***************
+SQL: select * from (select * from t1 order by c2) a where exists (select * from t1) limit 10; 
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |LIMIT           |    |10       |227 |
+|1 | TOP-N SORT     |    |10       |226 |
+|2 |  SUBPLAN FILTER|    |50       |194 |
+|3 |   TABLE SCAN   |t1  |100      |90  |
+|4 |   TABLE SCAN   |t1  |100      |90  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(10)
+  2 - output([t1.c1], [t1.c2]), filter([?]), 
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))]), init_plan_idxs_(nil)
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  4 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+***************   Case 25   ***************
+SQL: select now(), b.* from (select c2 from t1 group by c2) as b; 
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |HASH GROUP BY|    |100      |195 |
+|1 | TABLE SCAN  |t1  |100      |90  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?], [t1.c2]), filter(nil), 
+      group([t1.c2]), agg_func(nil)
+  1 - output([t1.c2]), filter(nil), 
+      access([t1.c2]), partitions(p0)
+
+***************   Case 26   ***************
+SQL: select * from tl0 union distinct select * from tr0; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl0 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([tl0.c1]), filter(nil), 
+      access([tl0.c1]), partitions(p0)
+  2 - output([?]), filter(nil)
+      values({?})
+
+***************   Case 27   ***************
+SQL: select * from tl0 union distinct select * from tr1; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl0 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([tl0.c1]), filter(nil), 
+      access([tl0.c1]), partitions(p0)
+  2 - output(['1']), filter(nil)
+      values({'1'})
+
+***************   Case 28   ***************
+SQL: select * from tl0 union distinct select * from tr2; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl0 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([tl0.c1]), filter(nil), 
+      access([tl0.c1]), partitions(p0)
+  2 - output([?]), filter(nil)
+      values({?})
+
+***************   Case 29   ***************
+SQL: select * from tl0 union distinct select * from tr3; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl0 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([tl0.c1]), filter(nil), 
+      access([tl0.c1]), partitions(p0)
+  2 - output([?]), filter(nil)
+      values({?})
+
+***************   Case 30   ***************
+SQL: select * from tl1 union distinct select * from tr0; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl1 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([cast(tl1.c1, BIGINT(20, 0))]), filter(nil), 
+      access([tl1.c1]), partitions(p0)
+  2 - output([1]), filter(nil)
+      values({1})
+
+***************   Case 31   ***************
+SQL: select * from tl1 union distinct select * from tr1; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl1 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([cast(tl1.c1, VARCHAR(11))]), filter(nil), 
+      access([tl1.c1]), partitions(p0)
+  2 - output(['1']), filter(nil)
+      values({'1'})
+
+***************   Case 32   ***************
+SQL: select * from tl1 union distinct select * from tr2; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl1 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([cast(tl1.c1, DECIMAL(12, 1))]), filter(nil), 
+      access([tl1.c1]), partitions(p0)
+  2 - output([1.1]), filter(nil)
+      values({1.1})
+
+***************   Case 33   ***************
+SQL: select * from tl1 union distinct select * from tr3; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl1 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([cast(tl1.c1, VARCHAR(11))]), filter(nil), 
+      access([tl1.c1]), partitions(p0)
+  2 - output([?]), filter(nil)
+      values({?})
+
+***************   Case 34   ***************
+SQL: select * from tl2 union distinct select * from tr0; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl2 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([tl2.c1]), filter(nil), 
+      access([tl2.c1]), partitions(p0)
+  2 - output([?]), filter(nil)
+      values({?})
+
+***************   Case 35   ***************
+SQL: select * from tl2 union distinct select * from tr1; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl2 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([cast(tl2.c1, VARCHAR(23))]), filter(nil), 
+      access([tl2.c1]), partitions(p0)
+  2 - output(['1']), filter(nil)
+      values({'1'})
+
+***************   Case 36   ***************
+SQL: select * from tl2 union distinct select * from tr2; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl2 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([tl2.c1]), filter(nil), 
+      access([tl2.c1]), partitions(p0)
+  2 - output([?]), filter(nil)
+      values({?})
+
+***************   Case 37   ***************
+SQL: select * from tl2 union distinct select * from tr3; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl2 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([cast(tl2.c1, VARCHAR(23))]), filter(nil), 
+      access([tl2.c1]), partitions(p0)
+  2 - output([?]), filter(nil)
+      values({?})
+
+***************   Case 38   ***************
+SQL: select * from tl3 union distinct select * from tr0; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl3 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([cast(tl3.c1, VARCHAR(20))]), filter(nil), 
+      access([tl3.c1]), partitions(p0)
+  2 - output([?]), filter(nil)
+      values({?})
+
+***************   Case 39   ***************
+SQL: select * from tl3 union distinct select * from tr1; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl3 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([cast(tl3.c1, VARCHAR(10))]), filter(nil), 
+      access([tl3.c1]), partitions(p0)
+  2 - output(['1']), filter(nil)
+      values({'1'})
+
+***************   Case 40   ***************
+SQL: select * from tl3 union distinct select * from tr2; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl3 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([cast(tl3.c1, VARCHAR(10))]), filter(nil), 
+      access([tl3.c1]), partitions(p0)
+  2 - output([?]), filter(nil)
+      values({?})
+
+***************   Case 41   ***************
+SQL: select * from tl3 union distinct select * from tr3; 
+============================================
+|ID|OPERATOR           |NAME|EST. ROWS|COST|
+--------------------------------------------
+|0 |HASH UNION DISTINCT|    |101      |200 |
+|1 | TABLE SCAN        |tl3 |100      |95  |
+|2 | EXPRESSION        |    |1        |1   |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil)
+  1 - output([tl3.c1]), filter(nil), 
+      access([tl3.c1]), partitions(p0)
+  2 - output([?]), filter(nil)
+      values({?})
+

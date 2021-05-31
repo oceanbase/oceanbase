@@ -1,0 +1,210 @@
+set ob_query_timeout=1000000000;
+drop database if exists px_test;
+create database px_test;
+use px_test;
+create table stu (
+sid     int,
+name    varchar(32),
+cls     int,
+primary key (cls, sid)
+) partition by hash(sid) partitions 6;
+create table teacher (
+tid        int,
+name       varchar(32),
+subject    varchar(4),
+primary key (tid)
+) partition by hash(tid) partitions 8;
+create table score (
+sid     int,
+subject varchar(4),
+score   int,
+primary key (sid, subject)
+) partition by hash(sid) partitions 6;
+insert into stu values
+(11, 'a1', 1),
+(12, 'b1', 1),
+(13, 'c1', 1),
+(21, 'a2', 2),
+(22, 'b2', 2),
+(31, 'a3', 3),
+(41, 'a4', 4),
+(42, 'b4', 4),
+(51, 'a5', 5),
+(52, 'b5', 5),
+(61, 'a6', 6),
+(62, 'b6', 6),
+(63, 'c6', 6),
+(64, 'd6', 6);
+insert into teacher values
+(1, 'Miss Zhang', 'EN'),
+(2, 'Mr Wang', 'MA');
+insert into score values
+(11, 'EN', 60),
+(12, 'EN', 70),
+(13, 'EN', 80),
+(21, 'EN', 58),
+(22, 'EN', 90),
+(31, 'EN', 80),
+(41, 'EN', 80),
+(42, 'EN', 90),
+(51, 'EN', 89),
+(52, 'EN', 99),
+(61, 'EN', 100),
+(62, 'EN', 90),
+(63, 'EN', 99),
+(64, 'EN', 87);
+insert into score values
+(11, 'MA', 60),
+(12, 'MA', 70),
+(13, 'MA', 80),
+(21, 'MA', 58),
+(22, 'MA', 90),
+(31, 'MA', 80),
+(41, 'MA', 80),
+(42, 'MA', 90),
+(51, 'MA', 89),
+(52, 'MA', 99),
+(61, 'MA', 100),
+(62, 'MA', 90),
+(63, 'MA', 99),
+(64, 'MA', 87);
+explain select /*+ USE_PX parallel(2) */ * from stu, score where stu.sid != score.sid and stu.sid < 12;
+Query Plan
+================================================================
+|ID|OPERATOR                           |NAME    |EST. ROWS|COST|
+----------------------------------------------------------------
+|0 |PX COORDINATOR                     |        |15       |106 |
+|1 | EXCHANGE OUT DISTR                |:EX10001|15       |100 |
+|2 |  NESTED-LOOP JOIN                 |        |15       |100 |
+|3 |   PX BLOCK ITERATOR               |        |24       |41  |
+|4 |    TABLE SCAN                     |score   |24       |41  |
+|5 |   MATERIAL                        |        |2        |42  |
+|6 |    EXCHANGE IN DISTR              |        |2        |41  |
+|7 |     EXCHANGE OUT DISTR (BROADCAST)|:EX10000|2        |41  |
+|8 |      PX BLOCK ITERATOR            |        |2        |41  |
+|9 |       TABLE SCAN                  |stu     |2        |41  |
+================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([stu.sid], [stu.name], [stu.cls], [score.sid], [score.subject], [score.score]), filter(nil)
+  1 - output([stu.sid], [stu.name], [stu.cls], [score.sid], [score.subject], [score.score]), filter(nil), dop=2
+  2 - output([stu.sid], [stu.name], [stu.cls], [score.sid], [score.subject], [score.score]), filter(nil), 
+      conds([stu.sid != score.sid]), nl_params_(nil)
+  3 - output([score.sid], [score.subject], [score.score]), filter(nil)
+  4 - output([score.sid], [score.subject], [score.score]), filter(nil), 
+      access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
+  5 - output([stu.sid], [stu.name], [stu.cls]), filter(nil)
+  6 - output([stu.sid], [stu.name], [stu.cls]), filter(nil)
+  7 - output([stu.sid], [stu.name], [stu.cls]), filter(nil), dop=2
+  8 - output([stu.sid], [stu.name], [stu.cls]), filter(nil)
+  9 - output([stu.sid], [stu.name], [stu.cls]), filter([stu.sid < 12]), 
+      access([stu.sid], [stu.name], [stu.cls]), partitions(p[0-5])
+
+select /*+ USE_PX parallel(2) */ * from stu, score where stu.sid != score.sid and stu.sid < 12;
+sid	name	cls	sid	subject	score
+11	a1	1	12	EN	70
+11	a1	1	12	MA	70
+11	a1	1	13	EN	80
+11	a1	1	13	MA	80
+11	a1	1	21	EN	58
+11	a1	1	21	MA	58
+11	a1	1	22	EN	90
+11	a1	1	22	MA	90
+11	a1	1	31	EN	80
+11	a1	1	31	MA	80
+11	a1	1	41	EN	80
+11	a1	1	41	MA	80
+11	a1	1	42	EN	90
+11	a1	1	42	MA	90
+11	a1	1	51	EN	89
+11	a1	1	51	MA	89
+11	a1	1	52	EN	99
+11	a1	1	52	MA	99
+11	a1	1	61	EN	100
+11	a1	1	61	MA	100
+11	a1	1	62	EN	90
+11	a1	1	62	MA	90
+11	a1	1	63	EN	99
+11	a1	1	63	MA	99
+11	a1	1	64	EN	87
+11	a1	1	64	MA	87
+explain select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject and teacher.tid = 1;
+Query Plan
+===============================================================
+|ID|OPERATOR                          |NAME    |EST. ROWS|COST|
+---------------------------------------------------------------
+|0 |PX COORDINATOR                    |        |1        |109 |
+|1 | EXCHANGE OUT DISTR               |:EX10001|1        |109 |
+|2 |  NESTED-LOOP JOIN                |        |1        |109 |
+|3 |   EXCHANGE IN DISTR              |        |1        |53  |
+|4 |    EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1        |53  |
+|5 |     PX BLOCK ITERATOR            |        |1        |53  |
+|6 |      TABLE GET                   |teacher |1        |53  |
+|7 |   PX BLOCK ITERATOR              |        |24       |41  |
+|8 |    TABLE SCAN                    |score   |24       |41  |
+===============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([score.sid], [score.subject], [score.score], [teacher.tid], [teacher.name], [teacher.subject]), filter(nil)
+  1 - output([score.sid], [score.subject], [score.score], [teacher.tid], [teacher.name], [teacher.subject]), filter(nil), dop=2
+  2 - output([score.sid], [score.subject], [score.score], [teacher.tid], [teacher.name], [teacher.subject]), filter(nil), 
+      conds([teacher.subject = score.subject]), nl_params_(nil)
+  3 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil)
+  4 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), dop=2
+  5 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil)
+  6 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), 
+      access([teacher.tid], [teacher.subject], [teacher.name]), partitions(p1)
+  7 - output([score.sid], [score.subject], [score.score]), filter(nil)
+  8 - output([score.sid], [score.subject], [score.score]), filter(nil), 
+      access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
+
+select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject and teacher.tid = 1;
+sid	subject	score	tid	name	subject
+11	EN	60	1	Miss Zhang	EN
+12	EN	70	1	Miss Zhang	EN
+13	EN	80	1	Miss Zhang	EN
+21	EN	58	1	Miss Zhang	EN
+22	EN	90	1	Miss Zhang	EN
+31	EN	80	1	Miss Zhang	EN
+41	EN	80	1	Miss Zhang	EN
+42	EN	90	1	Miss Zhang	EN
+51	EN	89	1	Miss Zhang	EN
+52	EN	99	1	Miss Zhang	EN
+61	EN	100	1	Miss Zhang	EN
+62	EN	90	1	Miss Zhang	EN
+63	EN	99	1	Miss Zhang	EN
+64	EN	87	1	Miss Zhang	EN
+CREATE TABLE product (pid bigint primary key,pname varchar(50),gmt_modify timestamp(6),gmt_create timestamp(6),thread_id bigint, key k (gmt_modify))duplicate_scope="cluster";
+CREATE TABLE orders (oid bigint primary key,pid bigint,amount int, addr varchar(20),key k (pid) local) partition by hash (oid) partitions 100;
+insert into product values(314265, "abcd", now(), now(), 1234);
+insert into orders values(314265, 314265, 678, "192.168.1.8");
+insert into product values(314266, "abcd", now(), now(), 1234);
+insert into orders values(314266, 314266, 678, "192.168.1.8");
+insert into product values(314267, "abcd", now(), now(), 1234);
+insert into orders values(314267, 314267, 678, "192.168.1.8");
+insert into product values(314268, "abcd", now(), now(), 1234);
+insert into orders values(314268, 314268, 678, "192.168.1.8");
+explain select t1.pname,t2.oid,t2.amount from product t1,orders t2 where t2.oid = 314265 and t1.pid=t2.pid;
+Query Plan
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |NESTED-LOOP JOIN|    |1        |89  |
+|1 | TABLE GET      |t2  |1        |53  |
+|2 | TABLE GET      |t1  |1        |36  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.pname], [t2.oid], [t2.amount]), filter(nil), 
+      conds(nil), nl_params_([t2.pid])
+  1 - output([t2.oid], [t2.pid], [t2.amount]), filter(nil), 
+      access([t2.oid], [t2.pid], [t2.amount]), partitions(p65)
+  2 - output([t1.pname]), filter(nil), 
+      access([t1.pname]), partitions(p0)
+
+select t1.pname,t2.oid,t2.amount from product t1,orders t2 where t2.oid = 314265 and t1.pid=t2.pid;
+pname	oid	amount
+abcd	314265	678

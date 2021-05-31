@@ -1,0 +1,15 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+use information_schema;
+
+#basic
+select * from collations;
+select collation_name, character_set_name, id, is_default, is_compiled, sortlen from collations;
+select * from collations where collation_name like '%utf8%';
+
+#show
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table collations;
+desc collations;

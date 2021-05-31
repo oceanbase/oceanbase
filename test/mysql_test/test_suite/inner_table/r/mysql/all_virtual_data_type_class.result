@@ -1,0 +1,108 @@
+use oceanbase;
+select * from __all_virtual_data_type_class;
+data_type_class	data_type_class_str
+0	NULL
+1	INT
+2	UINT
+3	FLOAT
+4	DOUBLE
+5	DECIMAL
+6	DATETIME
+7	DATE
+8	TIME
+9	YEAR
+10	STRING
+11	EXT
+12	UNKNOWN
+13	TEXT
+14	BIT
+15	ENUM_SET
+17	OTIMESTAMP
+18	RAW
+19	INTERVAL
+20	ROWID
+21	LOB
+select data_type_class, data_type_class_str from __all_virtual_data_type_class;
+data_type_class	data_type_class_str
+0	NULL
+1	INT
+2	UINT
+3	FLOAT
+4	DOUBLE
+5	DECIMAL
+6	DATETIME
+7	DATE
+8	TIME
+9	YEAR
+10	STRING
+11	EXT
+12	UNKNOWN
+13	TEXT
+14	BIT
+15	ENUM_SET
+17	OTIMESTAMP
+18	RAW
+19	INTERVAL
+20	ROWID
+21	LOB
+select * from __all_virtual_data_type_class where data_type_class = 10;
+data_type_class	data_type_class_str
+10	STRING
+select a.data_type_str, b.data_type_class_str from __all_virtual_data_type a inner join __all_virtual_data_type_class b on a.data_type_class = b.data_type_class order by a.data_type;
+data_type_str	data_type_class_str
+NULL	NULL
+TINYINT	INT
+SMALLINT	INT
+MEDIUMINT	INT
+INT	INT
+BIGINT	INT
+TINYINT UNSIGNED	UINT
+SMALLINT UNSIGNED	UINT
+MEDIUMINT UNSIGNED	UINT
+INT UNSIGNED	UINT
+BIGINT UNSIGNED	UINT
+FLOAT	FLOAT
+DOUBLE	DOUBLE
+FLOAT UNSIGNED	FLOAT
+DOUBLE UNSIGNED	DOUBLE
+DECIMAL	DECIMAL
+DECIMAL UNSIGNED	DECIMAL
+DATETIME	DATETIME
+TIMESTAMP	DATETIME
+DATE	DATE
+TIME	TIME
+YEAR	YEAR
+VARCHAR	STRING
+CHAR	STRING
+HEX_STRING	STRING
+EXT	EXT
+UNKNOWN	UNKNOWN
+TINYTEXT	TEXT
+TEXT	TEXT
+MEDIUMTEXT	TEXT
+LONGTEXT	TEXT
+BIT	BIT
+ENUM	ENUM_SET
+SET	ENUM_SET
+TIMESTAMP_WITH_TIME_ZONE	OTIMESTAMP
+TIMESTAMP_WITH_LOCAL_TIME_ZONE	OTIMESTAMP
+TIMESTAMP	OTIMESTAMP
+RAW	RAW
+INTERVAL_YEAR_TO_MONTH	INTERVAL
+INTERVAL_DAY_TO_SECOND	INTERVAL
+NUMBER_FLOAT	DECIMAL
+NVARCHAR2	STRING
+NCHAR	STRING
+ROWID	ROWID
+LOB	LOB
+show create table __all_virtual_data_type_class;
+Table	Create Table
+__all_virtual_data_type_class	CREATE TABLE `__all_virtual_data_type_class` (
+  `data_type_class` bigint(20) NOT NULL,
+  `data_type_class_str` varchar(128) NOT NULL,
+  PRIMARY KEY (`data_type_class`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'none' REPLICA_NUM = NUM BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 TABLEGROUP = 'oceanbase'
+desc __all_virtual_data_type_class;
+Field	Type	Null	Key	Default	Extra
+data_type_class	bigint(20)	NO	PRI	NULL	
+data_type_class_str	varchar(128)	NO		NULL	

@@ -1,0 +1,5025 @@
+[0] 1 like 1.0
+{
+  "item_type":"T_OP_LIKE",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":1
+      }
+    },
+     {
+      "item_type":"T_NUMBER",
+      "result_type": {
+        "meta": {
+          "type":"DECIMAL",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":3,
+          "precision":2,
+          "scale":1
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "DECIMAL":"1"
+      }
+    },
+     {
+      "item_type":"T_VARCHAR",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"COERCIBLE"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":-1
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"\",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      }
+    }
+  ]
+}
+[1] '1' like '1' 
+{
+  "item_type":"T_OP_LIKE",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_VARCHAR",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"COERCIBLE"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":-1
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"1",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      }
+    },
+     {
+      "item_type":"T_VARCHAR",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"COERCIBLE"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":-1
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"1",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      }
+    },
+     {
+      "item_type":"T_VARCHAR",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"COERCIBLE"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":-1
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"\",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      }
+    }
+  ]
+}
+[2] 2 in (1, 2, 3) 
+{
+  "item_type":"T_OP_IN",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_IN",
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_IN",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":2
+      }
+    },
+     {
+      "item_type":"T_OP_ROW",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST_EXPR",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":1
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":2
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":3
+          }
+        }
+      ]
+    }
+  ]
+}
+[3] 2 not in (1, 2, 3) 
+{
+  "item_type":"T_OP_NOT_IN",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_IN",
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_IN",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":2
+      }
+    },
+     {
+      "item_type":"T_OP_ROW",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST_EXPR",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":1
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":2
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":3
+          }
+        }
+      ]
+    }
+  ]
+}
+[4] 1 or 1 
+{
+  "item_type":"T_OP_OR",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_OR",
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_OR",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":1
+      }
+    },
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":1
+      }
+    }
+  ]
+}
+[5] 100 and 0 
+{
+  "item_type":"T_OP_AND",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":3,
+          "precision":3,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":100
+      }
+    },
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":0
+      }
+    }
+  ]
+}
+[6] 100 or 0 and 100 
+{
+  "item_type":"T_OP_OR",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_OR",
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_OR",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":3,
+          "precision":3,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":100
+      }
+    },
+     {
+      "item_type":"T_OP_AND",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CALCULABLE_EXPR",
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "CNT_CALCULABLE_EXPR"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":0
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":3,
+              "precision":3,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":100
+          }
+        }
+      ]
+    }
+  ]
+}
+[7] case name  when 'sam' then 'yong'  when 'lee' then 'handsome'  else 'good' end
+{
+  "item_type":"T_OP_ARG_CASE",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_CONST",
+    "CNT_COLUMN"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "arg_case": {
+    "item_type":"T_REF_COLUMN",
+    "result_type": {
+      "meta": {
+        "type":"",
+        "collation":"binary",
+        "coercibility":"NUMERIC"
+      },
+      "accuracy": {
+        "length":-1,
+        "precision":-1,
+        "scale":-1
+      },
+      "flag":0,
+      "calc_type": {
+        "type":"NULL",
+        "collation":"invalid_type",
+        "coercibility":"INVALID"
+      }
+    },
+    "expr_info": [
+      "IS_COLUMN",
+      "CNT_COLUMN"
+    ],
+    "rel_id": [
+    ],
+    "table_id":-1,
+    "column_id":-1,
+    "database_name":"",
+    "table_name":"",
+    "synonym_name":"",
+    "synonym_db_name":"",
+    "column_name":"",
+    "expr_level":-1,
+    "expr_levels": [
+    ],
+    "column_flags":0,
+    "enum_set_values": [
+    ],
+    "is_lob_column":false,
+    "is_unpivot_mocked_column":false,
+    "is_hidden":false
+  },
+  "default": {
+    "item_type":"T_VARCHAR",
+    "result_type": {
+      "meta": {
+        "type":"VARCHAR",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      },
+      "accuracy": {
+        "length":4,
+        "precision":1,
+        "scale":-1
+      },
+      "flag":1,
+      "calc_type": {
+        "type":"NULL",
+        "collation":"invalid_type",
+        "coercibility":"INVALID"
+      }
+    },
+    "expr_info": [
+      "IS_CONST",
+      "CNT_CONST"
+    ],
+    "rel_id": [
+    ],
+    "value": {
+      "VARCHAR":"good",
+      "collation":"utf8mb4_general_ci",
+      "coercibility":"COERCIBLE"
+    }
+  },
+  "when": [
+     {
+      "item_type":"T_VARCHAR",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"COERCIBLE"
+        },
+        "accuracy": {
+          "length":3,
+          "precision":1,
+          "scale":-1
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"sam",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      }
+    },
+     {
+      "item_type":"T_VARCHAR",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"COERCIBLE"
+        },
+        "accuracy": {
+          "length":3,
+          "precision":1,
+          "scale":-1
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"lee",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      }
+    }
+  ],
+  "then": [
+     {
+      "item_type":"T_VARCHAR",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"COERCIBLE"
+        },
+        "accuracy": {
+          "length":4,
+          "precision":1,
+          "scale":-1
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"yong",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      }
+    },
+     {
+      "item_type":"T_VARCHAR",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"COERCIBLE"
+        },
+        "accuracy": {
+          "length":8,
+          "precision":1,
+          "scale":-1
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"handsome",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      }
+    }
+  ],
+  "decode":false
+}
+[8] case when 1>0 then 'true' else 'false' end
+{
+  "item_type":"T_OP_CASE",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "arg_case":null,
+  "default": {
+    "item_type":"T_VARCHAR",
+    "result_type": {
+      "meta": {
+        "type":"VARCHAR",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      },
+      "accuracy": {
+        "length":5,
+        "precision":1,
+        "scale":-1
+      },
+      "flag":1,
+      "calc_type": {
+        "type":"NULL",
+        "collation":"invalid_type",
+        "coercibility":"INVALID"
+      }
+    },
+    "expr_info": [
+      "IS_CONST",
+      "CNT_CONST"
+    ],
+    "rel_id": [
+    ],
+    "value": {
+      "VARCHAR":"false",
+      "collation":"utf8mb4_general_ci",
+      "coercibility":"COERCIBLE"
+    }
+  },
+  "when": [
+     {
+      "item_type":"T_OP_GT",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CALCULABLE_EXPR",
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "CNT_CALCULABLE_EXPR"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":1
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":0
+          }
+        }
+      ]
+    }
+  ],
+  "then": [
+     {
+      "item_type":"T_VARCHAR",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"COERCIBLE"
+        },
+        "accuracy": {
+          "length":4,
+          "precision":1,
+          "scale":-1
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"true",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"COERCIBLE"
+      }
+    }
+  ],
+  "decode":false
+}
+[9] now()
+{
+  "item_type":"T_FUN_SYS_CUR_TIMESTAMP",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":0
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CONST",
+    "IS_FUNC",
+    "IS_CUR_TIME",
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_FUNC",
+    "CNT_CUR_TIME",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "func":"current_timestamp",
+  "children": [
+  ],
+  "enum_set_values": [
+  ]
+}
+[10] utc_timestamp()
+{
+  "item_type":"T_FUN_SYS_UTC_TIMESTAMP",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":0
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CONST",
+    "IS_FUNC",
+    "IS_CUR_TIME",
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_FUNC",
+    "CNT_CUR_TIME",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "func":"utc_timestamp",
+  "children": [
+  ],
+  "enum_set_values": [
+  ]
+}
+[11] floor(3.14)
+{
+  "item_type":"T_FUN_SYS_FLOOR",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CONST",
+    "IS_FUNC",
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_FUNC",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "func":"floor",
+  "children": [
+     {
+      "item_type":"T_NUMBER",
+      "result_type": {
+        "meta": {
+          "type":"DECIMAL",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":4,
+          "precision":3,
+          "scale":2
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "DECIMAL":"3.14"
+      }
+    }
+  ],
+  "enum_set_values": [
+  ]
+}
+[12] count(*)
+{
+  "item_type":"T_FUN_COUNT",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_AGG",
+    "CNT_AGG"
+  ],
+  "rel_id": [
+    0
+  ],
+  "expr_level":-1,
+  "expr_levels": [
+  ],
+  "children": [
+  ],
+  "distinct":false,
+  "order_by": [
+  ],
+  "separator_param_expr":null,
+  "udf_meta": {
+    "tenant_id":-1,
+    "name":"",
+    "ret":0,
+    "dl":"",
+    "type":0
+  },
+  "linear_inter_expr":null
+}
+[13] max(c1)
+{
+  "item_type":"T_FUN_MAX",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_AGG",
+    "CNT_COLUMN",
+    "CNT_AGG"
+  ],
+  "rel_id": [
+    0
+  ],
+  "expr_level":-1,
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    }
+  ],
+  "distinct":false,
+  "order_by": [
+  ],
+  "separator_param_expr":null,
+  "udf_meta": {
+    "tenant_id":-1,
+    "name":"",
+    "ret":0,
+    "dl":"",
+    "type":0
+  },
+  "linear_inter_expr":null
+}
+[14] c1 in (select t1 from table1)
+{
+  "item_type":"T_OP_SQ_EQ",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_COLUMN",
+    "CNT_SUB_QUERY",
+    "IS_WITH_ANY"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    },
+     {
+      "item_type":"T_REF_QUERY",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_SUB_QUERY",
+        "CNT_SUB_QUERY"
+      ],
+      "rel_id": [
+      ],
+      "id":-1,
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "output_column":0,
+      "is_set":true,
+      "is_cursor":false,
+      "column_types": [
+      ],
+      "enum_set_values": [
+      ]
+    }
+  ]
+}
+[15] 1=(select c1 from table1 where c2>20)
+{
+  "item_type":"T_OP_EQ",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_CONST",
+    "CNT_SUB_QUERY",
+    "IS_WITH_SUBQUERY"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":1
+      }
+    },
+     {
+      "item_type":"T_REF_QUERY",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_SUB_QUERY",
+        "CNT_SUB_QUERY"
+      ],
+      "rel_id": [
+      ],
+      "id":-1,
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "output_column":0,
+      "is_set":false,
+      "is_cursor":false,
+      "column_types": [
+      ],
+      "enum_set_values": [
+      ]
+    }
+  ]
+}
+[16] (t1,t2)=(select c1, c2 from table1)
+{
+  "item_type":"T_OP_EQ",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_COLUMN",
+    "CNT_SUB_QUERY",
+    "IS_WITH_SUBQUERY"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_OP_ROW",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        },
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        }
+      ]
+    },
+     {
+      "item_type":"T_REF_QUERY",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_SUB_QUERY",
+        "CNT_SUB_QUERY"
+      ],
+      "rel_id": [
+      ],
+      "id":-1,
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "output_column":0,
+      "is_set":false,
+      "is_cursor":false,
+      "column_types": [
+      ],
+      "enum_set_values": [
+      ]
+    }
+  ]
+}
+[17] 10
+{
+  "item_type":"T_INT",
+  "result_type": {
+    "meta": {
+      "type":"BIGINT",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":2,
+      "precision":2,
+      "scale":0
+    },
+    "flag":1,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CONST",
+    "CNT_CONST"
+  ],
+  "rel_id": [
+  ],
+  "value": {
+    "BIGINT":10
+  }
+}
+[18] @@auto_increment_increment
+{
+  "item_type":"T_OP_GET_SYS_VAR",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CONST",
+    "IS_FUNC",
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_FUNC",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "func":"get_sys_var",
+  "children": [
+     {
+      "item_type":"T_VARCHAR",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"SYSCONST"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"auto_increment_increment",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"SYSCONST"
+      }
+    },
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":0
+      }
+    }
+  ],
+  "enum_set_values": [
+  ]
+}
+[19] @a
+{
+  "item_type":"T_OP_GET_USER_VAR",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_FUNC",
+    "IS_CALCULABLE_EXPR",
+    "IS_USER_VARIABLE",
+    "CNT_CONST",
+    "CNT_FUNC",
+    "CNT_CALCULABLE_EXPR",
+    "CNT_USER_VARIABLE"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "func":"",
+  "children": [
+     {
+      "item_type":"T_USER_VARIABLE_IDENTIFIER",
+      "result_type": {
+        "meta": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"IMPLICIT"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "VARCHAR":"a",
+        "collation":"utf8mb4_general_ci",
+        "coercibility":"IMPLICIT"
+      },
+      "is_contain_assign":false,
+      "query_has_udf":false
+    }
+  ],
+  "enum_set_values": [
+  ]
+}
+[20] c1
+{
+  "item_type":"T_REF_COLUMN",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_COLUMN",
+    "CNT_COLUMN"
+  ],
+  "rel_id": [
+  ],
+  "table_id":-1,
+  "column_id":-1,
+  "database_name":"",
+  "table_name":"",
+  "synonym_name":"",
+  "synonym_db_name":"",
+  "column_name":"",
+  "expr_level":-1,
+  "expr_levels": [
+  ],
+  "column_flags":0,
+  "enum_set_values": [
+  ],
+  "is_lob_column":false,
+  "is_unpivot_mocked_column":false,
+  "is_hidden":false
+}
+[21] 10+10
+{
+  "item_type":"T_OP_ADD",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":2,
+          "precision":2,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":10
+      }
+    },
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":2,
+          "precision":2,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":10
+      }
+    }
+  ]
+}
+[22] not 10
+{
+  "item_type":"T_OP_NOT",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_NOT",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_NOT"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":2,
+          "precision":2,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":10
+      }
+    }
+  ]
+}
+[23] c1+c2=c3+c4
+{
+  "item_type":"T_OP_EQ",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_COLUMN",
+    "IS_JOIN_COND"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_OP_ADD",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        },
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        }
+      ]
+    },
+     {
+      "item_type":"T_OP_ADD",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        },
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        }
+      ]
+    }
+  ]
+}
+[24] c1=3
+{
+  "item_type":"T_OP_EQ",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_CONST",
+    "CNT_COLUMN",
+    "IS_SIMPLE_COND"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    },
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":3
+      }
+    }
+  ]
+}
+[25] c1>1
+{
+  "item_type":"T_OP_GT",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_CONST",
+    "CNT_COLUMN",
+    "IS_RANGE_COND"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    },
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":1
+      }
+    }
+  ]
+}
+[26] c1 > c2
+{
+  "item_type":"T_OP_GT",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_COLUMN"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    },
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    }
+  ]
+}
+[27] c1 in (1,2,3,4)
+{
+  "item_type":"T_OP_IN",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_IN",
+    "CNT_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_COLUMN",
+    "CNT_IN"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    },
+     {
+      "item_type":"T_OP_ROW",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST_EXPR",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":1
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":2
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":3
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":4
+          }
+        }
+      ]
+    }
+  ]
+}
+[28] c1 between 2 and 10
+{
+  "item_type":"T_OP_BTW",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_CONST",
+    "CNT_COLUMN",
+    "IS_RANGE_COND"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    },
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":2
+      }
+    },
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":2,
+          "precision":2,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":10
+      }
+    }
+  ]
+}
+[29] 10+10+c1
+{
+  "item_type":"T_OP_ADD",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_COLUMN",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_OP_ADD",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CALCULABLE_EXPR",
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "CNT_CALCULABLE_EXPR"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":2,
+              "precision":2,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":10
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":2,
+              "precision":2,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":10
+          }
+        }
+      ]
+    },
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    }
+  ]
+}
+[30] c1 = 1 + 2
+{
+  "item_type":"T_OP_EQ",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_COLUMN",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    },
+     {
+      "item_type":"T_OP_ADD",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CALCULABLE_EXPR",
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "CNT_CALCULABLE_EXPR"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":1
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":2
+          }
+        }
+      ]
+    }
+  ]
+}
+[31] c1 between 10+10 and 30
+{
+  "item_type":"T_OP_BTW",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "CNT_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_COLUMN",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    },
+     {
+      "item_type":"T_OP_ADD",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CALCULABLE_EXPR",
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "CNT_CALCULABLE_EXPR"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":2,
+              "precision":2,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":10
+          }
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":2,
+              "precision":2,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":10
+          }
+        }
+      ]
+    },
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":2,
+          "precision":2,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":30
+      }
+    }
+  ]
+}
+[32] 1+c1 > ? and 'abc' || c2 = 'def'
+{
+  "item_type":"T_OP_OR",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_OR",
+    "CNT_CONST",
+    "CNT_COLUMN",
+    "CNT_PARAM",
+    "CNT_OR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_OP_AND",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "CNT_CONST",
+        "CNT_COLUMN",
+        "CNT_PARAM"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_OP_GT",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "CNT_PARAM"
+          ],
+          "rel_id": [
+          ],
+          "expr_levels": [
+          ],
+          "children": [
+             {
+              "item_type":"T_OP_ADD",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "CNT_CONST",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+              ],
+              "expr_levels": [
+              ],
+              "children": [
+                 {
+                  "item_type":"T_INT",
+                  "result_type": {
+                    "meta": {
+                      "type":"BIGINT",
+                      "collation":"binary",
+                      "coercibility":"NUMERIC"
+                    },
+                    "accuracy": {
+                      "length":1,
+                      "precision":1,
+                      "scale":0
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "BIGINT":1
+                  }
+                },
+                 {
+                  "item_type":"T_REF_COLUMN",
+                  "result_type": {
+                    "meta": {
+                      "type":"",
+                      "collation":"binary",
+                      "coercibility":"NUMERIC"
+                    },
+                    "accuracy": {
+                      "length":-1,
+                      "precision":-1,
+                      "scale":-1
+                    },
+                    "flag":0,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_COLUMN",
+                    "CNT_COLUMN"
+                  ],
+                  "rel_id": [
+                  ],
+                  "table_id":-1,
+                  "column_id":-1,
+                  "database_name":"",
+                  "table_name":"",
+                  "synonym_name":"",
+                  "synonym_db_name":"",
+                  "column_name":"",
+                  "expr_level":-1,
+                  "expr_levels": [
+                  ],
+                  "column_flags":0,
+                  "enum_set_values": [
+                  ],
+                  "is_lob_column":false,
+                  "is_unpivot_mocked_column":false,
+                  "is_hidden":false
+                }
+              ]
+            },
+             {
+              "item_type":"T_QUESTIONMARK",
+              "result_type": {
+                "meta": {
+                  "type":"UNKNOWN",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "IS_PARAM",
+                "CNT_CONST",
+                "CNT_PARAM"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "UNKNOWN":0
+              }
+            }
+          ]
+        },
+         {
+          "item_type":"T_VARCHAR",
+          "result_type": {
+            "meta": {
+              "type":"VARCHAR",
+              "collation":"utf8mb4_general_ci",
+              "coercibility":"COERCIBLE"
+            },
+            "accuracy": {
+              "length":3,
+              "precision":1,
+              "scale":-1
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "VARCHAR":"abc",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"COERCIBLE"
+          }
+        }
+      ]
+    },
+     {
+      "item_type":"T_OP_EQ",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "CNT_CONST",
+        "CNT_COLUMN",
+        "IS_SIMPLE_COND"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        },
+         {
+          "item_type":"T_VARCHAR",
+          "result_type": {
+            "meta": {
+              "type":"VARCHAR",
+              "collation":"utf8mb4_general_ci",
+              "coercibility":"COERCIBLE"
+            },
+            "accuracy": {
+              "length":3,
+              "precision":1,
+              "scale":-1
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "VARCHAR":"def",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"COERCIBLE"
+          }
+        }
+      ]
+    }
+  ]
+}
+[33] binary binary 'abc' collate utf8_general_ci collate utf8_bin
+{
+  "item_type":"T_FUN_SYS_CAST",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_CONST",
+    "IS_FUNC",
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_FUNC",
+    "CNT_CALCULABLE_EXPR"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "func":"cast",
+  "children": [
+     {
+      "item_type":"T_FUN_SYS_CAST",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "IS_FUNC",
+        "IS_CALCULABLE_EXPR",
+        "IS_CONST_EXPR",
+        "CNT_CONST",
+        "CNT_FUNC",
+        "CNT_CALCULABLE_EXPR"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "func":"cast",
+      "children": [
+         {
+          "item_type":"T_FUN_SYS_SET_COLLATION",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "IS_FUNC",
+            "IS_CALCULABLE_EXPR",
+            "IS_CONST_EXPR",
+            "CNT_CONST",
+            "CNT_FUNC",
+            "CNT_CALCULABLE_EXPR"
+          ],
+          "rel_id": [
+          ],
+          "expr_levels": [
+          ],
+          "func":"set_collation",
+          "children": [
+             {
+              "item_type":"T_FUN_SYS_SET_COLLATION",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "IS_FUNC",
+                "IS_CALCULABLE_EXPR",
+                "IS_CONST_EXPR",
+                "CNT_CONST",
+                "CNT_FUNC",
+                "CNT_CALCULABLE_EXPR"
+              ],
+              "rel_id": [
+              ],
+              "expr_levels": [
+              ],
+              "func":"set_collation",
+              "children": [
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":3,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"abc",
+                    "collation":"utf8mb4_general_ci",
+                    "coercibility":"COERCIBLE"
+                  }
+                },
+                 {
+                  "item_type":"T_INT",
+                  "result_type": {
+                    "meta": {
+                      "type":"BIGINT",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"IGNORABLE"
+                    },
+                    "accuracy": {
+                      "length":-1,
+                      "precision":-1,
+                      "scale":-1
+                    },
+                    "flag":0,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "BIGINT":45
+                  }
+                }
+              ],
+              "enum_set_values": [
+              ]
+            },
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"utf8mb4_bin",
+                  "coercibility":"IGNORABLE"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":46
+              }
+            }
+          ],
+          "enum_set_values": [
+          ]
+        },
+         {
+          "item_type":"T_INT",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":-4290838506
+          }
+        }
+      ],
+      "enum_set_values": [
+      ]
+    },
+     {
+      "item_type":"T_INT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "BIGINT":-4290838506
+      }
+    }
+  ],
+  "enum_set_values": [
+  ]
+}
+[34] X not like Y
+{
+  "item_type":"T_OP_NOT",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_NOT",
+    "CNT_CONST",
+    "CNT_COLUMN",
+    "CNT_NOT"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_OP_LIKE",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "CNT_CONST",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        },
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        },
+         {
+          "item_type":"T_VARCHAR",
+          "result_type": {
+            "meta": {
+              "type":"VARCHAR",
+              "collation":"utf8mb4_general_ci",
+              "coercibility":"COERCIBLE"
+            },
+            "accuracy": {
+              "length":1,
+              "precision":1,
+              "scale":-1
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "VARCHAR":"\",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"COERCIBLE"
+          }
+        }
+      ]
+    }
+  ]
+}
+[35] Z not regexp A
+{
+  "item_type":"T_OP_NOT",
+  "result_type": {
+    "meta": {
+      "type":"",
+      "collation":"binary",
+      "coercibility":"NUMERIC"
+    },
+    "accuracy": {
+      "length":-1,
+      "precision":-1,
+      "scale":-1
+    },
+    "flag":0,
+    "calc_type": {
+      "type":"NULL",
+      "collation":"invalid_type",
+      "coercibility":"INVALID"
+    }
+  },
+  "expr_info": [
+    "IS_NOT",
+    "CNT_COLUMN",
+    "CNT_NOT"
+  ],
+  "rel_id": [
+  ],
+  "expr_levels": [
+  ],
+  "children": [
+     {
+      "item_type":"T_OP_REGEXP",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "expr_levels": [
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        },
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+          ],
+          "table_id":-1,
+          "column_id":-1,
+          "database_name":"",
+          "table_name":"",
+          "synonym_name":"",
+          "synonym_db_name":"",
+          "column_name":"",
+          "expr_level":-1,
+          "expr_levels": [
+          ],
+          "column_flags":0,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false,
+          "is_unpivot_mocked_column":false,
+          "is_hidden":false
+        }
+      ]
+    }
+  ]
+}

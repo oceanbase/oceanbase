@@ -1,0 +1,56 @@
+{
+  "zones":
+  [
+    { "zone": "z1", "region": "shengzhen" },
+    { "zone": "z2", "region": "shengzhen" },
+    { "zone": "z3", "region": "shengzhen" }
+  ],
+  "servers":
+  [
+    {"server":"1.1.1.1", "zone":"z1", "resources":{"cpu": 100, "memory": 100}},
+    {"server":"1.1.1.2", "zone":"z1", "resources":{"cpu": 100, "memory": 100}},
+    {"server":"1.1.1.3", "zone":"z1", "resources":{"cpu": 100, "memory": 100}},
+    {"server":"2.2.2.1", "zone":"z2", "resources":{"cpu": 200, "memory": 100}},
+    {"server":"2.2.2.2", "zone":"z2", "resources":{"cpu": 200, "memory": 100}},
+    {"server":"2.2.2.3", "zone":"z2", "resources":{"cpu": 200, "memory": 100}},
+    {"server":"3.3.3.1", "zone":"z3", "resources":{"cpu": 100, "memory": 100}},
+    {"server":"3.3.3.2", "zone":"z3", "resources":{"cpu": 100, "memory": 100}},
+    {"server":"3.3.3.3", "zone":"z3", "resources":{"cpu": 100, "memory": 100}}
+  ],
+  "units":
+  [
+    {"tenant":1, "config_name":"u1", "cpu": 20, "memory": 100, "zone": "z1", "on_servers": ["1.1.1.1", "1.1.1.2", "1.1.1.3"]},
+    {"tenant":1, "config_name":"u2", "cpu": 20, "memory": 100, "zone": "z2", "on_servers": ["2.2.2.1", "2.2.2.2", "2.2.2.2"]},
+    {"tenant":1, "config_name":"u3", "cpu": 20, "memory": 100, "zone": "z3", "on_servers": ["3.3.3.1", "3.3.3.2", "3.3.3.3"]}
+  ],
+  "tables":
+  [
+    {"table_id":100001, "table_group":1, "partition_cnt":3, "replica_num":3, "tenant":1, "replicas" :
+      [
+        {"zone":"z1", "role": 1, "on_server": "1.1.1.1", "partition_id":0, "cpu":2, "memory":10},
+        {"zone":"z2", "role": 2, "on_server": "2.2.2.1", "partition_id":0, "cpu":2, "memory":10},
+        {"zone":"z3", "role": 2, "on_server": "3.3.3.1", "partition_id":0, "cpu":2, "memory":10},
+        {"zone":"z1", "role": 1, "on_server": "1.1.1.1", "partition_id":1, "cpu":2, "memory":10},
+        {"zone":"z2", "role": 2, "on_server": "2.2.2.1", "partition_id":1, "cpu":2, "memory":10},
+        {"zone":"z3", "role": 2, "on_server": "3.3.3.1", "partition_id":1, "cpu":2, "memory":10},
+        {"zone":"z1", "role": 1, "on_server": "1.1.1.1", "partition_id":2, "cpu":2, "memory":10},
+        {"zone":"z2", "role": 2, "on_server": "2.2.2.1", "partition_id":2, "cpu":2, "memory":10},
+        {"zone":"z3", "role": 2, "on_server": "3.3.3.1", "partition_id":2, "cpu":2, "memory":10}
+
+      ]
+    },
+    {"table_id":100002, "table_group":2, "partition_cnt":3, "replica_num":3, "tenant":1, "replicas" :
+      [
+        {"zone":"z1", "role": 1, "on_server": "1.1.1.1", "partition_id":0, "cpu":1, "memory":20},
+        {"zone":"z2", "role": 2, "on_server": "2.2.2.1", "partition_id":0, "cpu":1, "memory":20},
+        {"zone":"z3", "role": 2, "on_server": "3.3.3.1", "partition_id":0, "cpu":1, "memory":20},
+        {"zone":"z1", "role": 1, "on_server": "1.1.1.1", "partition_id":1, "cpu":1, "memory":20},
+        {"zone":"z2", "role": 2, "on_server": "2.2.2.1", "partition_id":1, "cpu":1, "memory":20},
+        {"zone":"z3", "role": 2, "on_server": "3.3.3.1", "partition_id":1, "cpu":1, "memory":20},
+        {"zone":"z1", "role": 1, "on_server": "1.1.1.1", "partition_id":2, "cpu":1, "memory":20},
+        {"zone":"z2", "role": 2, "on_server": "2.2.2.1", "partition_id":2, "cpu":1, "memory":20},
+        {"zone":"z3", "role": 2, "on_server": "3.3.3.1", "partition_id":2, "cpu":1, "memory":20}
+      ]  
+    }
+  ]
+}

@@ -1,0 +1,5993 @@
+***************   Case 1   ***************
+drop database if exists dbcmd;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"dbcmd",
+  "if_exist":true,
+  "to_recyclebin":false
+}
+***************   Case 2   ***************
+create database dbcmd;
+{
+  "create_database_arg":"database_schema",
+  "database_id":-1,
+  "schema_version":1,
+  "database_name":"dbcmd",
+  "replica_num":0,
+  "zone_list": [
+  ],
+  "primary_zone":"",
+  "charset_type":2,
+  "collation_type":"utf8mb4_general_ci",
+  "name_case_mode":-1,
+  "comment":"",
+  "read_only":false,
+  "default_tablegroup_id":-1,
+  "default_tablegroup_name":"",
+  "in_recyclebin":false,
+  "primary_zone_array": [
+  ]
+}
+***************   Case 3   ***************
+use dbcmd;
+{
+  "stmt_type":97
+}
+***************   Case 4   ***************
+show columns from rongxuan.t1
+{
+  "stmt_type":1,
+  "table": [
+     {
+      "table_id":-2,
+      "table_name":"subquery_alias",
+      "alias_name":"subquery_alias",
+      "synonym_name":"",
+      "table_type":2,
+      "ref_id":-1,
+      "database_name":"",
+      "for_update":false,
+      "wait":-1,
+      "mock_id":-1,
+      "view_base_item":-1
+    }
+  ],
+  "joined_table": [
+  ],
+  "partition_express": [
+  ],
+  "column": [
+     {
+      "column_id":16,
+      "table_id":-2,
+      "column":"Field",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "base_tid":1099511637778,
+      "base_cid":17,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":128,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":16387,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Field",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    },
+     {
+      "column_id":17,
+      "table_id":-2,
+      "column":"Type",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "base_tid":1099511637778,
+      "base_cid":18,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":64,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":17,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Type",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    },
+     {
+      "column_id":18,
+      "table_id":-2,
+      "column":"Null",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "base_tid":1099511637778,
+      "base_cid":20,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":4,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":18,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Null",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    },
+     {
+      "column_id":19,
+      "table_id":-2,
+      "column":"Key",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "base_tid":1099511637778,
+      "base_cid":21,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":4,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":19,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Key",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    },
+     {
+      "column_id":20,
+      "table_id":-2,
+      "column":"Default",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "base_tid":1099511637778,
+      "base_cid":22,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":4096,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":20,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Default",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    },
+     {
+      "column_id":21,
+      "table_id":-2,
+      "column":"Extra",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "base_tid":1099511637778,
+      "base_cid":23,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":4096,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":21,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Extra",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":128,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":16387,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Field",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":false,
+      "alias_name":"Field",
+      "expr_name":"Field",
+      "default": {
+        "NULL":"NULL"
+      }
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":64,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":17,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Type",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":false,
+      "alias_name":"Type",
+      "expr_name":"Type",
+      "default": {
+        "NULL":"NULL"
+      }
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":4,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":18,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Null",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":false,
+      "alias_name":"Null",
+      "expr_name":"Null",
+      "default": {
+        "NULL":"NULL"
+      }
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":4,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":19,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Key",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":false,
+      "alias_name":"Key",
+      "expr_name":"Key",
+      "default": {
+        "NULL":"NULL"
+      }
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":4096,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":20,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Default",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":false,
+      "alias_name":"Default",
+      "expr_name":"Default",
+      "default": {
+        "NULL":"NULL"
+      }
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":4096,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":21,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Extra",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":false,
+      "alias_name":"Extra",
+      "expr_name":"Extra",
+      "default": {
+        "NULL":"NULL"
+      }
+    }
+  ],
+  "distinct":false,
+  "rollup":false,
+  "nocycle":false,
+  "from": [
+     {
+      "table_id":-2,
+      "is_join":false
+    }
+  ],
+  "start_with": [
+  ],
+  "connect_by": [
+  ],
+  "where": [
+  ],
+  "group_by": [
+  ],
+  "having": [
+  ],
+  "aggr_func": [
+  ],
+  "order_by": [
+  ],
+  "limit":null,
+  "offset":null,
+  "show_stmt_ctx": {
+    "is_from_show_stmt":true,
+    "global_scope":false,
+    "tenant_id":-1,
+    "show_database_id":-1,
+    "show_table_id":-1,
+    "grants_user_id":-1
+  },
+  "hint": {
+    "read_static":false,
+    "no_rewrite":false,
+    "frozen_version":-1,
+    "topk_precision":-1,
+    "sharding_minimum_row_count":0,
+    "query_timeout":-1,
+    "hotspot":false,
+    "index": [
+    ],
+    "read_consistency":-1,
+    "join_ordered":false,
+    "join_order": [
+    ],
+    "merge_hint_ids": [
+    ],
+    "hash_hint_ids": [
+    ],
+    "no_hash_hint_ids": [
+    ],
+    "nl_hint_ids": [
+    ],
+    "part_hints": [
+    ],
+    "use_late_materialization":-1,
+    "log_level":"",
+    "max_concurrent":-1,
+    "only_concurrent_hint":false,
+    "has_hint_exclude_concurrent":false,
+    "parallel":-1,
+    "use_px":0,
+    "use join filter":false,
+    "org_pq_distributes": [
+    ],
+    "pq_distributes": [
+    ]
+  },
+  "query_context": {
+    "param_num":0,
+    "fetch_cur_time":true,
+    "calculable_items": [
+    ]
+  },
+  "extra_output_exprs": [
+  ],
+  "current_level":0,
+  "equal_sets": [
+  ],
+  "pseudo_column_exprs": [
+  ],
+  "child_stmts": [
+     {
+      "stmt_type":1,
+      "table": [
+         {
+          "table_id":1099511637778,
+          "table_name":"__tenant_virtual_table_column",
+          "alias_name":"",
+          "synonym_name":"",
+          "table_type":0,
+          "ref_id":1099511637778,
+          "database_name":"oceanbase",
+          "for_update":false,
+          "wait":-1,
+          "mock_id":-1,
+          "view_base_item":-1
+        }
+      ],
+      "joined_table": [
+      ],
+      "partition_express": [
+      ],
+      "column": [
+         {
+          "column_id":16,
+          "table_id":1099511637778,
+          "column":"table_id",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511637778,
+          "base_cid":16,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"BIGINT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":20,
+                "scale":0
+              },
+              "flag":16387,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":16,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"table_id",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":17,
+          "table_id":1099511637778,
+          "column":"field",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511637778,
+          "base_cid":17,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":16387,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":17,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"field",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":18,
+          "table_id":1099511637778,
+          "column":"type",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511637778,
+          "base_cid":18,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":64,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":18,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"type",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":20,
+          "table_id":1099511637778,
+          "column":"null",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511637778,
+          "base_cid":20,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":4,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":20,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"null",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":21,
+          "table_id":1099511637778,
+          "column":"key",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511637778,
+          "base_cid":21,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":4,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":21,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"key",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":22,
+          "table_id":1099511637778,
+          "column":"default",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511637778,
+          "base_cid":22,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":4096,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":22,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"default",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":23,
+          "table_id":1099511637778,
+          "column":"extra",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511637778,
+          "base_cid":23,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":4096,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":23,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"extra",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        }
+      ],
+      "select": [
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":16387,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":17,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"field",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":true,
+          "alias_name":"Field",
+          "expr_name":"field",
+          "default": {
+            "NULL":"NULL"
+          }
+        },
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":64,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":18,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"type",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":true,
+          "alias_name":"Type",
+          "expr_name":"type",
+          "default": {
+            "NULL":"NULL"
+          }
+        },
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":4,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":20,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"null",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":true,
+          "alias_name":"Null",
+          "expr_name":"`NULL`",
+          "default": {
+            "NULL":"NULL"
+          }
+        },
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":4,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":21,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"key",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":true,
+          "alias_name":"Key",
+          "expr_name":"`KEY`",
+          "default": {
+            "NULL":"NULL"
+          }
+        },
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":4096,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":22,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"default",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":true,
+          "alias_name":"Default",
+          "expr_name":"`DEFAULT`",
+          "default": {
+            "NULL":"NULL"
+          }
+        },
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":4096,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637778,
+            "column_id":23,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_table_column",
+            "synonym_name":"",
+            "column_name":"extra",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":true,
+          "alias_name":"Extra",
+          "expr_name":"extra",
+          "default": {
+            "NULL":"NULL"
+          }
+        }
+      ],
+      "distinct":false,
+      "rollup":false,
+      "nocycle":false,
+      "from": [
+         {
+          "table_id":1099511637778,
+          "is_join":false
+        }
+      ],
+      "start_with": [
+      ],
+      "connect_by": [
+      ],
+      "where": [
+         {
+          "item_type":"T_OP_EQ",
+          "result_type": {
+            "meta": {
+              "type":"INT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            }
+          },
+          "expr_info": [
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "IS_SIMPLE_COND"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":20,
+                  "scale":0
+                },
+                "flag":16387,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+                1
+              ],
+              "table_id":1099511637778,
+              "column_id":16,
+              "database_name":"oceanbase",
+              "table_name":"__tenant_virtual_table_column",
+              "synonym_name":"",
+              "column_name":"table_id",
+              "expr_level":0,
+              "expr_levels": [
+                0
+              ],
+              "column_flags":17179869184,
+              "is_explicited_referece":true,
+              "explicited_ref_count":1,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false
+            },
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":13,
+                  "precision":13,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":1099511677777
+              }
+            }
+          ]
+        }
+      ],
+      "group_by": [
+      ],
+      "having": [
+      ],
+      "aggr_func": [
+      ],
+      "order_by": [
+      ],
+      "limit":null,
+      "offset":null,
+      "show_stmt_ctx": {
+        "is_from_show_stmt":false,
+        "global_scope":false,
+        "tenant_id":-1,
+        "show_database_id":-1,
+        "show_table_id":-1,
+        "grants_user_id":-1
+      },
+      "hint": {
+        "read_static":false,
+        "no_rewrite":false,
+        "frozen_version":-1,
+        "topk_precision":-1,
+        "sharding_minimum_row_count":0,
+        "query_timeout":-1,
+        "hotspot":false,
+        "index": [
+        ],
+        "read_consistency":-1,
+        "join_ordered":false,
+        "join_order": [
+        ],
+        "merge_hint_ids": [
+        ],
+        "hash_hint_ids": [
+        ],
+        "no_hash_hint_ids": [
+        ],
+        "nl_hint_ids": [
+        ],
+        "part_hints": [
+        ],
+        "use_late_materialization":-1,
+        "log_level":"",
+        "max_concurrent":-1,
+        "only_concurrent_hint":false,
+        "has_hint_exclude_concurrent":false,
+        "parallel":-1,
+        "use_px":0,
+        "use join filter":false,
+        "org_pq_distributes": [
+        ],
+        "pq_distributes": [
+        ]
+      },
+      "query_context": {
+        "param_num":0,
+        "fetch_cur_time":true,
+        "calculable_items": [
+        ]
+      },
+      "extra_output_exprs": [
+      ],
+      "current_level":0,
+      "equal_sets": [
+      ],
+      "pseudo_column_exprs": [
+      ],
+      "child_stmts": [
+      ],
+      "has_transformed_for_hierarchical_query":false,
+      "is_hierarchical_query":false
+    }
+  ],
+  "has_transformed_for_hierarchical_query":false,
+  "is_hierarchical_query":false
+}
+***************   Case 5   ***************
+show databases
+{
+  "stmt_type":1,
+  "table": [
+     {
+      "table_id":-2,
+      "table_name":"subquery_alias",
+      "alias_name":"subquery_alias",
+      "synonym_name":"",
+      "table_type":2,
+      "ref_id":-1,
+      "database_name":"",
+      "for_update":false,
+      "wait":-1,
+      "mock_id":-1,
+      "view_base_item":-1
+    }
+  ],
+  "joined_table": [
+  ],
+  "partition_express": [
+  ],
+  "column": [
+     {
+      "column_id":16,
+      "table_id":-2,
+      "column":"Database",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "VARCHAR":"",
+        "collation":"utf8mb4_general_ci"
+      },
+      "base_tid":1099511627880,
+      "base_cid":20,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":128,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Database",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":128,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Database",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":false,
+      "alias_name":"Database",
+      "expr_name":"Database",
+      "default": {
+        "VARCHAR":"",
+        "collation":"utf8mb4_general_ci"
+      }
+    }
+  ],
+  "distinct":false,
+  "rollup":false,
+  "nocycle":false,
+  "from": [
+     {
+      "table_id":-2,
+      "is_join":false
+    }
+  ],
+  "start_with": [
+  ],
+  "connect_by": [
+  ],
+  "where": [
+  ],
+  "group_by": [
+  ],
+  "having": [
+  ],
+  "aggr_func": [
+  ],
+  "order_by": [
+  ],
+  "limit":null,
+  "offset":null,
+  "show_stmt_ctx": {
+    "is_from_show_stmt":true,
+    "global_scope":false,
+    "tenant_id":-1,
+    "show_database_id":-1,
+    "show_table_id":-1,
+    "grants_user_id":-1
+  },
+  "hint": {
+    "read_static":false,
+    "no_rewrite":false,
+    "frozen_version":-1,
+    "topk_precision":-1,
+    "sharding_minimum_row_count":0,
+    "query_timeout":-1,
+    "hotspot":false,
+    "index": [
+    ],
+    "read_consistency":-1,
+    "join_ordered":false,
+    "join_order": [
+    ],
+    "merge_hint_ids": [
+    ],
+    "hash_hint_ids": [
+    ],
+    "no_hash_hint_ids": [
+    ],
+    "nl_hint_ids": [
+    ],
+    "part_hints": [
+    ],
+    "use_late_materialization":-1,
+    "log_level":"",
+    "max_concurrent":-1,
+    "only_concurrent_hint":false,
+    "has_hint_exclude_concurrent":false,
+    "parallel":-1,
+    "use_px":0,
+    "use join filter":false,
+    "org_pq_distributes": [
+    ],
+    "pq_distributes": [
+    ]
+  },
+  "query_context": {
+    "param_num":0,
+    "fetch_cur_time":true,
+    "calculable_items": [
+    ]
+  },
+  "extra_output_exprs": [
+  ],
+  "current_level":0,
+  "equal_sets": [
+  ],
+  "pseudo_column_exprs": [
+  ],
+  "child_stmts": [
+     {
+      "stmt_type":1,
+      "table": [
+         {
+          "table_id":1099511627880,
+          "table_name":"__all_database",
+          "alias_name":"",
+          "synonym_name":"",
+          "table_type":0,
+          "ref_id":1099511627880,
+          "database_name":"oceanbase",
+          "for_update":false,
+          "wait":-1,
+          "mock_id":-1,
+          "view_base_item":-1
+        }
+      ],
+      "joined_table": [
+      ],
+      "partition_express": [
+         {
+          "table_id":1099511627880,
+          "index_tid":1099511627880,
+          "part_expr": {
+            "item_type":"T_FUN_SYS_PART_KEY_V1",
+            "result_type": {
+              "meta": {
+                "type":"BIGINT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":20,
+                "scale":0
+              },
+              "flag":0,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_FUNC",
+              "CNT_COLUMN",
+              "CNT_FUNC"
+            ],
+            "rel_id": [
+            ],
+            "expr_levels": [
+            ],
+            "func":"partition_key",
+            "children": [
+               {
+                "item_type":"T_REF_COLUMN",
+                "result_type": {
+                  "meta": {
+                    "type":"BIGINT",
+                    "collation":"binary",
+                    "coercibility":"NUMERIC"
+                  },
+                  "accuracy": {
+                    "length":-1,
+                    "precision":20,
+                    "scale":0
+                  },
+                  "flag":16387,
+                  "calc_type": {
+                    "type":"NULL",
+                    "collation":"invalid_type",
+                    "coercibility":"INVALID"
+                  }
+                },
+                "expr_info": [
+                  "IS_COLUMN",
+                  "CNT_COLUMN"
+                ],
+                "rel_id": [
+                  1
+                ],
+                "table_id":1099511627880,
+                "column_id":18,
+                "database_name":"oceanbase",
+                "table_name":"__all_database",
+                "synonym_name":"",
+                "column_name":"tenant_id",
+                "expr_level":0,
+                "expr_levels": [
+                  0
+                ],
+                "column_flags":17179869184,
+                "is_explicited_referece":true,
+                "explicited_ref_count":2,
+                "enum_set_values": [
+                ],
+                "is_lob_column":false
+              }
+            ],
+            "enum_set_values": [
+            ]
+          },
+          "subpart_expr":null
+        }
+      ],
+      "column": [
+         {
+          "column_id":18,
+          "table_id":1099511627880,
+          "column":"tenant_id",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511627880,
+          "base_cid":18,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"BIGINT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":20,
+                "scale":0
+              },
+              "flag":16387,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511627880,
+            "column_id":18,
+            "database_name":"oceanbase",
+            "table_name":"__all_database",
+            "synonym_name":"",
+            "column_name":"tenant_id",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":2,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":28,
+          "table_id":1099511627880,
+          "column":"in_recyclebin",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "BIGINT":0
+          },
+          "base_tid":1099511627880,
+          "base_cid":28,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"BIGINT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":20,
+                "scale":0
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511627880,
+            "column_id":28,
+            "database_name":"oceanbase",
+            "table_name":"__all_database",
+            "synonym_name":"",
+            "column_name":"in_recyclebin",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":20,
+          "table_id":1099511627880,
+          "column":"database_name",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "VARCHAR":"",
+            "collation":"utf8mb4_general_ci"
+          },
+          "base_tid":1099511627880,
+          "base_cid":20,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511627880,
+            "column_id":20,
+            "database_name":"oceanbase",
+            "table_name":"__all_database",
+            "synonym_name":"",
+            "column_name":"database_name",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":3,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        }
+      ],
+      "select": [
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511627880,
+            "column_id":20,
+            "database_name":"oceanbase",
+            "table_name":"__all_database",
+            "synonym_name":"",
+            "column_name":"database_name",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":3,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":true,
+          "alias_name":"Database",
+          "expr_name":"`database_name`",
+          "default": {
+            "VARCHAR":"",
+            "collation":"utf8mb4_general_ci"
+          }
+        }
+      ],
+      "distinct":false,
+      "rollup":false,
+      "nocycle":false,
+      "from": [
+         {
+          "table_id":1099511627880,
+          "is_join":false
+        }
+      ],
+      "start_with": [
+      ],
+      "connect_by": [
+      ],
+      "where": [
+         {
+          "item_type":"T_OP_EQ",
+          "result_type": {
+            "meta": {
+              "type":"INT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            }
+          },
+          "expr_info": [
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "IS_SIMPLE_COND"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":20,
+                  "scale":0
+                },
+                "flag":16387,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+                1
+              ],
+              "table_id":1099511627880,
+              "column_id":18,
+              "database_name":"oceanbase",
+              "table_name":"__all_database",
+              "synonym_name":"",
+              "column_name":"tenant_id",
+              "expr_level":0,
+              "expr_levels": [
+                0
+              ],
+              "column_flags":17179869184,
+              "is_explicited_referece":true,
+              "explicited_ref_count":2,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false
+            },
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":1,
+                  "precision":1,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":1
+              }
+            }
+          ]
+        },
+         {
+          "item_type":"T_OP_EQ",
+          "result_type": {
+            "meta": {
+              "type":"INT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            }
+          },
+          "expr_info": [
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "IS_SIMPLE_COND"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":20,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+                1
+              ],
+              "table_id":1099511627880,
+              "column_id":28,
+              "database_name":"oceanbase",
+              "table_name":"__all_database",
+              "synonym_name":"",
+              "column_name":"in_recyclebin",
+              "expr_level":0,
+              "expr_levels": [
+                0
+              ],
+              "column_flags":17179869184,
+              "is_explicited_referece":true,
+              "explicited_ref_count":1,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false
+            },
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":1,
+                  "precision":1,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":0
+              }
+            }
+          ]
+        },
+         {
+          "item_type":"T_OP_NOT_IN",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_IN",
+            "CNT_CONST_EXPR",
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "CNT_IN"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"VARCHAR",
+                  "collation":"utf8mb4_general_ci",
+                  "coercibility":"IMPLICIT"
+                },
+                "accuracy": {
+                  "length":128,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+                1
+              ],
+              "table_id":1099511627880,
+              "column_id":20,
+              "database_name":"oceanbase",
+              "table_name":"__all_database",
+              "synonym_name":"",
+              "column_name":"database_name",
+              "expr_level":0,
+              "expr_levels": [
+                0
+              ],
+              "column_flags":17179869184,
+              "is_explicited_referece":true,
+              "explicited_ref_count":3,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false
+            },
+             {
+              "item_type":"T_OP_ROW",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST_EXPR",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "expr_levels": [
+              ],
+              "children": [
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":12,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"__recyclebin",
+                    "collation":"utf8mb4_general_ci"
+                  }
+                },
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":8,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"__public",
+                    "collation":"utf8mb4_general_ci"
+                  }
+                },
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":8,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"__public",
+                    "collation":"utf8mb4_general_ci"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "item_type":"T_OP_EQ",
+          "result_type": {
+            "meta": {
+              "type":"INT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            }
+          },
+          "expr_info": [
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "CNT_FUNC"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":1,
+                  "precision":1,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":0
+              }
+            },
+             {
+              "item_type":"T_FUN_SYS_SYS_PRIVILEGE_CHECK",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":20,
+                  "scale":0
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_FUNC",
+                "CNT_CONST",
+                "CNT_COLUMN",
+                "CNT_FUNC"
+              ],
+              "rel_id": [
+                1
+              ],
+              "expr_levels": [
+                0
+              ],
+              "func":"sys_privilege_check",
+              "children": [
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":6,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"db_acc",
+                    "collation":"utf8mb4_general_ci"
+                  }
+                },
+                 {
+                  "item_type":"T_REF_COLUMN",
+                  "result_type": {
+                    "meta": {
+                      "type":"BIGINT",
+                      "collation":"binary",
+                      "coercibility":"NUMERIC"
+                    },
+                    "accuracy": {
+                      "length":-1,
+                      "precision":20,
+                      "scale":0
+                    },
+                    "flag":16387,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_COLUMN",
+                    "CNT_COLUMN"
+                  ],
+                  "rel_id": [
+                    1
+                  ],
+                  "table_id":1099511627880,
+                  "column_id":18,
+                  "database_name":"oceanbase",
+                  "table_name":"__all_database",
+                  "synonym_name":"",
+                  "column_name":"tenant_id",
+                  "expr_level":0,
+                  "expr_levels": [
+                    0
+                  ],
+                  "column_flags":17179869184,
+                  "is_explicited_referece":true,
+                  "explicited_ref_count":2,
+                  "enum_set_values": [
+                  ],
+                  "is_lob_column":false
+                },
+                 {
+                  "item_type":"T_REF_COLUMN",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"IMPLICIT"
+                    },
+                    "accuracy": {
+                      "length":128,
+                      "precision":-1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_COLUMN",
+                    "CNT_COLUMN"
+                  ],
+                  "rel_id": [
+                    1
+                  ],
+                  "table_id":1099511627880,
+                  "column_id":20,
+                  "database_name":"oceanbase",
+                  "table_name":"__all_database",
+                  "synonym_name":"",
+                  "column_name":"database_name",
+                  "expr_level":0,
+                  "expr_levels": [
+                    0
+                  ],
+                  "column_flags":17179869184,
+                  "is_explicited_referece":true,
+                  "explicited_ref_count":3,
+                  "enum_set_values": [
+                  ],
+                  "is_lob_column":false
+                },
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":0,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"",
+                    "collation":"utf8mb4_general_ci"
+                  }
+                }
+              ],
+              "enum_set_values": [
+              ]
+            }
+          ]
+        }
+      ],
+      "group_by": [
+      ],
+      "having": [
+      ],
+      "aggr_func": [
+      ],
+      "order_by": [
+      ],
+      "limit":null,
+      "offset":null,
+      "show_stmt_ctx": {
+        "is_from_show_stmt":false,
+        "global_scope":false,
+        "tenant_id":-1,
+        "show_database_id":-1,
+        "show_table_id":-1,
+        "grants_user_id":-1
+      },
+      "hint": {
+        "read_static":false,
+        "no_rewrite":false,
+        "frozen_version":-1,
+        "topk_precision":-1,
+        "sharding_minimum_row_count":0,
+        "query_timeout":-1,
+        "hotspot":false,
+        "index": [
+        ],
+        "read_consistency":-1,
+        "join_ordered":false,
+        "join_order": [
+        ],
+        "merge_hint_ids": [
+        ],
+        "hash_hint_ids": [
+        ],
+        "no_hash_hint_ids": [
+        ],
+        "nl_hint_ids": [
+        ],
+        "part_hints": [
+        ],
+        "use_late_materialization":-1,
+        "log_level":"",
+        "max_concurrent":-1,
+        "only_concurrent_hint":false,
+        "has_hint_exclude_concurrent":false,
+        "parallel":-1,
+        "use_px":0,
+        "use join filter":false,
+        "org_pq_distributes": [
+        ],
+        "pq_distributes": [
+        ]
+      },
+      "query_context": {
+        "param_num":0,
+        "fetch_cur_time":true,
+        "calculable_items": [
+        ]
+      },
+      "extra_output_exprs": [
+      ],
+      "current_level":0,
+      "equal_sets": [
+      ],
+      "pseudo_column_exprs": [
+      ],
+      "child_stmts": [
+      ],
+      "has_transformed_for_hierarchical_query":false,
+      "is_hierarchical_query":false
+    }
+  ],
+  "has_transformed_for_hierarchical_query":false,
+  "is_hierarchical_query":false
+}
+***************   Case 6   ***************
+show databases like 'ocean%'
+{
+  "stmt_type":1,
+  "table": [
+     {
+      "table_id":-2,
+      "table_name":"subquery_alias",
+      "alias_name":"subquery_alias",
+      "synonym_name":"",
+      "table_type":2,
+      "ref_id":-1,
+      "database_name":"",
+      "for_update":false,
+      "wait":-1,
+      "mock_id":-1,
+      "view_base_item":-1
+    }
+  ],
+  "joined_table": [
+  ],
+  "partition_express": [
+  ],
+  "column": [
+     {
+      "column_id":16,
+      "table_id":-2,
+      "column":"Database",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "VARCHAR":"",
+        "collation":"utf8mb4_general_ci"
+      },
+      "base_tid":1099511627880,
+      "base_cid":20,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":128,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Database",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":2,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":128,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Database",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":2,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":true,
+      "alias_name":"Database (ocean%)",
+      "expr_name":"`Database`",
+      "default": {
+        "VARCHAR":"",
+        "collation":"utf8mb4_general_ci"
+      }
+    }
+  ],
+  "distinct":false,
+  "rollup":false,
+  "nocycle":false,
+  "from": [
+     {
+      "table_id":-2,
+      "is_join":false
+    }
+  ],
+  "start_with": [
+  ],
+  "connect_by": [
+  ],
+  "where": [
+     {
+      "item_type":"T_OP_LIKE",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":1,
+          "scale":0
+        },
+        "flag":1,
+        "calc_type": {
+          "type":"VARCHAR",
+          "collation":"utf8mb4_general_ci",
+          "coercibility":"IMPLICIT"
+        }
+      },
+      "expr_info": [
+        "CNT_CONST",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+        1
+      ],
+      "expr_levels": [
+        0
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type": {
+            "meta": {
+              "type":"VARCHAR",
+              "collation":"utf8mb4_general_ci",
+              "coercibility":"IMPLICIT"
+            },
+            "accuracy": {
+              "length":128,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+            1
+          ],
+          "table_id":-2,
+          "column_id":16,
+          "database_name":"",
+          "table_name":"subquery_alias",
+          "synonym_name":"",
+          "column_name":"Database",
+          "expr_level":0,
+          "expr_levels": [
+            0
+          ],
+          "column_flags":0,
+          "is_explicited_referece":true,
+          "explicited_ref_count":2,
+          "enum_set_values": [
+          ],
+          "is_lob_column":false
+        },
+         {
+          "item_type":"T_VARCHAR",
+          "result_type": {
+            "meta": {
+              "type":"VARCHAR",
+              "collation":"utf8mb4_general_ci",
+              "coercibility":"IMPLICIT"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "VARCHAR":"ocean%",
+            "collation":"utf8mb4_general_ci"
+          }
+        },
+         {
+          "item_type":"T_VARCHAR",
+          "result_type": {
+            "meta": {
+              "type":"VARCHAR",
+              "collation":"utf8mb4_general_ci",
+              "coercibility":"IMPLICIT"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "VARCHAR":"\",
+            "collation":"utf8mb4_general_ci"
+          }
+        }
+      ]
+    }
+  ],
+  "group_by": [
+  ],
+  "having": [
+  ],
+  "aggr_func": [
+  ],
+  "order_by": [
+  ],
+  "limit":null,
+  "offset":null,
+  "show_stmt_ctx": {
+    "is_from_show_stmt":true,
+    "global_scope":false,
+    "tenant_id":-1,
+    "show_database_id":-1,
+    "show_table_id":-1,
+    "grants_user_id":-1
+  },
+  "hint": {
+    "read_static":false,
+    "no_rewrite":false,
+    "frozen_version":-1,
+    "topk_precision":-1,
+    "sharding_minimum_row_count":0,
+    "query_timeout":-1,
+    "hotspot":false,
+    "index": [
+    ],
+    "read_consistency":-1,
+    "join_ordered":false,
+    "join_order": [
+    ],
+    "merge_hint_ids": [
+    ],
+    "hash_hint_ids": [
+    ],
+    "no_hash_hint_ids": [
+    ],
+    "nl_hint_ids": [
+    ],
+    "part_hints": [
+    ],
+    "use_late_materialization":-1,
+    "log_level":"",
+    "max_concurrent":-1,
+    "only_concurrent_hint":false,
+    "has_hint_exclude_concurrent":false,
+    "parallel":-1,
+    "use_px":0,
+    "use join filter":false,
+    "org_pq_distributes": [
+    ],
+    "pq_distributes": [
+    ]
+  },
+  "query_context": {
+    "param_num":0,
+    "fetch_cur_time":true,
+    "calculable_items": [
+    ]
+  },
+  "extra_output_exprs": [
+  ],
+  "current_level":0,
+  "equal_sets": [
+  ],
+  "pseudo_column_exprs": [
+  ],
+  "child_stmts": [
+     {
+      "stmt_type":1,
+      "table": [
+         {
+          "table_id":1099511627880,
+          "table_name":"__all_database",
+          "alias_name":"",
+          "synonym_name":"",
+          "table_type":0,
+          "ref_id":1099511627880,
+          "database_name":"oceanbase",
+          "for_update":false,
+          "wait":-1,
+          "mock_id":-1,
+          "view_base_item":-1
+        }
+      ],
+      "joined_table": [
+      ],
+      "partition_express": [
+         {
+          "table_id":1099511627880,
+          "index_tid":1099511627880,
+          "part_expr": {
+            "item_type":"T_FUN_SYS_PART_KEY_V1",
+            "result_type": {
+              "meta": {
+                "type":"BIGINT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":20,
+                "scale":0
+              },
+              "flag":0,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_FUNC",
+              "CNT_COLUMN",
+              "CNT_FUNC"
+            ],
+            "rel_id": [
+            ],
+            "expr_levels": [
+            ],
+            "func":"partition_key",
+            "children": [
+               {
+                "item_type":"T_REF_COLUMN",
+                "result_type": {
+                  "meta": {
+                    "type":"BIGINT",
+                    "collation":"binary",
+                    "coercibility":"NUMERIC"
+                  },
+                  "accuracy": {
+                    "length":-1,
+                    "precision":20,
+                    "scale":0
+                  },
+                  "flag":16387,
+                  "calc_type": {
+                    "type":"NULL",
+                    "collation":"invalid_type",
+                    "coercibility":"INVALID"
+                  }
+                },
+                "expr_info": [
+                  "IS_COLUMN",
+                  "CNT_COLUMN"
+                ],
+                "rel_id": [
+                  1
+                ],
+                "table_id":1099511627880,
+                "column_id":18,
+                "database_name":"oceanbase",
+                "table_name":"__all_database",
+                "synonym_name":"",
+                "column_name":"tenant_id",
+                "expr_level":0,
+                "expr_levels": [
+                  0
+                ],
+                "column_flags":17179869184,
+                "is_explicited_referece":true,
+                "explicited_ref_count":2,
+                "enum_set_values": [
+                ],
+                "is_lob_column":false
+              }
+            ],
+            "enum_set_values": [
+            ]
+          },
+          "subpart_expr":null
+        }
+      ],
+      "column": [
+         {
+          "column_id":18,
+          "table_id":1099511627880,
+          "column":"tenant_id",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511627880,
+          "base_cid":18,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"BIGINT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":20,
+                "scale":0
+              },
+              "flag":16387,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511627880,
+            "column_id":18,
+            "database_name":"oceanbase",
+            "table_name":"__all_database",
+            "synonym_name":"",
+            "column_name":"tenant_id",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":2,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":28,
+          "table_id":1099511627880,
+          "column":"in_recyclebin",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "BIGINT":0
+          },
+          "base_tid":1099511627880,
+          "base_cid":28,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"BIGINT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":20,
+                "scale":0
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511627880,
+            "column_id":28,
+            "database_name":"oceanbase",
+            "table_name":"__all_database",
+            "synonym_name":"",
+            "column_name":"in_recyclebin",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":20,
+          "table_id":1099511627880,
+          "column":"database_name",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "VARCHAR":"",
+            "collation":"utf8mb4_general_ci"
+          },
+          "base_tid":1099511627880,
+          "base_cid":20,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511627880,
+            "column_id":20,
+            "database_name":"oceanbase",
+            "table_name":"__all_database",
+            "synonym_name":"",
+            "column_name":"database_name",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":3,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        }
+      ],
+      "select": [
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511627880,
+            "column_id":20,
+            "database_name":"oceanbase",
+            "table_name":"__all_database",
+            "synonym_name":"",
+            "column_name":"database_name",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":3,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":true,
+          "alias_name":"Database",
+          "expr_name":"`database_name`",
+          "default": {
+            "VARCHAR":"",
+            "collation":"utf8mb4_general_ci"
+          }
+        }
+      ],
+      "distinct":false,
+      "rollup":false,
+      "nocycle":false,
+      "from": [
+         {
+          "table_id":1099511627880,
+          "is_join":false
+        }
+      ],
+      "start_with": [
+      ],
+      "connect_by": [
+      ],
+      "where": [
+         {
+          "item_type":"T_OP_EQ",
+          "result_type": {
+            "meta": {
+              "type":"INT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            }
+          },
+          "expr_info": [
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "IS_SIMPLE_COND"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":20,
+                  "scale":0
+                },
+                "flag":16387,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+                1
+              ],
+              "table_id":1099511627880,
+              "column_id":18,
+              "database_name":"oceanbase",
+              "table_name":"__all_database",
+              "synonym_name":"",
+              "column_name":"tenant_id",
+              "expr_level":0,
+              "expr_levels": [
+                0
+              ],
+              "column_flags":17179869184,
+              "is_explicited_referece":true,
+              "explicited_ref_count":2,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false
+            },
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":1,
+                  "precision":1,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":1
+              }
+            }
+          ]
+        },
+         {
+          "item_type":"T_OP_EQ",
+          "result_type": {
+            "meta": {
+              "type":"INT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            }
+          },
+          "expr_info": [
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "IS_SIMPLE_COND"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":20,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+                1
+              ],
+              "table_id":1099511627880,
+              "column_id":28,
+              "database_name":"oceanbase",
+              "table_name":"__all_database",
+              "synonym_name":"",
+              "column_name":"in_recyclebin",
+              "expr_level":0,
+              "expr_levels": [
+                0
+              ],
+              "column_flags":17179869184,
+              "is_explicited_referece":true,
+              "explicited_ref_count":1,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false
+            },
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":1,
+                  "precision":1,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":0
+              }
+            }
+          ]
+        },
+         {
+          "item_type":"T_OP_NOT_IN",
+          "result_type": {
+            "meta": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "IS_IN",
+            "CNT_CONST_EXPR",
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "CNT_IN"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"VARCHAR",
+                  "collation":"utf8mb4_general_ci",
+                  "coercibility":"IMPLICIT"
+                },
+                "accuracy": {
+                  "length":128,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+                1
+              ],
+              "table_id":1099511627880,
+              "column_id":20,
+              "database_name":"oceanbase",
+              "table_name":"__all_database",
+              "synonym_name":"",
+              "column_name":"database_name",
+              "expr_level":0,
+              "expr_levels": [
+                0
+              ],
+              "column_flags":17179869184,
+              "is_explicited_referece":true,
+              "explicited_ref_count":3,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false
+            },
+             {
+              "item_type":"T_OP_ROW",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST_EXPR",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "expr_levels": [
+              ],
+              "children": [
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":12,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"__recyclebin",
+                    "collation":"utf8mb4_general_ci"
+                  }
+                },
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":8,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"__public",
+                    "collation":"utf8mb4_general_ci"
+                  }
+                },
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":8,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"__public",
+                    "collation":"utf8mb4_general_ci"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "item_type":"T_OP_EQ",
+          "result_type": {
+            "meta": {
+              "type":"INT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            }
+          },
+          "expr_info": [
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "CNT_FUNC"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":1,
+                  "precision":1,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":0
+              }
+            },
+             {
+              "item_type":"T_FUN_SYS_SYS_PRIVILEGE_CHECK",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":20,
+                  "scale":0
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_FUNC",
+                "CNT_CONST",
+                "CNT_COLUMN",
+                "CNT_FUNC"
+              ],
+              "rel_id": [
+                1
+              ],
+              "expr_levels": [
+                0
+              ],
+              "func":"sys_privilege_check",
+              "children": [
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":6,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"db_acc",
+                    "collation":"utf8mb4_general_ci"
+                  }
+                },
+                 {
+                  "item_type":"T_REF_COLUMN",
+                  "result_type": {
+                    "meta": {
+                      "type":"BIGINT",
+                      "collation":"binary",
+                      "coercibility":"NUMERIC"
+                    },
+                    "accuracy": {
+                      "length":-1,
+                      "precision":20,
+                      "scale":0
+                    },
+                    "flag":16387,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_COLUMN",
+                    "CNT_COLUMN"
+                  ],
+                  "rel_id": [
+                    1
+                  ],
+                  "table_id":1099511627880,
+                  "column_id":18,
+                  "database_name":"oceanbase",
+                  "table_name":"__all_database",
+                  "synonym_name":"",
+                  "column_name":"tenant_id",
+                  "expr_level":0,
+                  "expr_levels": [
+                    0
+                  ],
+                  "column_flags":17179869184,
+                  "is_explicited_referece":true,
+                  "explicited_ref_count":2,
+                  "enum_set_values": [
+                  ],
+                  "is_lob_column":false
+                },
+                 {
+                  "item_type":"T_REF_COLUMN",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"IMPLICIT"
+                    },
+                    "accuracy": {
+                      "length":128,
+                      "precision":-1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_COLUMN",
+                    "CNT_COLUMN"
+                  ],
+                  "rel_id": [
+                    1
+                  ],
+                  "table_id":1099511627880,
+                  "column_id":20,
+                  "database_name":"oceanbase",
+                  "table_name":"__all_database",
+                  "synonym_name":"",
+                  "column_name":"database_name",
+                  "expr_level":0,
+                  "expr_levels": [
+                    0
+                  ],
+                  "column_flags":17179869184,
+                  "is_explicited_referece":true,
+                  "explicited_ref_count":3,
+                  "enum_set_values": [
+                  ],
+                  "is_lob_column":false
+                },
+                 {
+                  "item_type":"T_VARCHAR",
+                  "result_type": {
+                    "meta": {
+                      "type":"VARCHAR",
+                      "collation":"utf8mb4_general_ci",
+                      "coercibility":"COERCIBLE"
+                    },
+                    "accuracy": {
+                      "length":0,
+                      "precision":1,
+                      "scale":-1
+                    },
+                    "flag":1,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_CONST",
+                    "CNT_CONST"
+                  ],
+                  "rel_id": [
+                  ],
+                  "value": {
+                    "VARCHAR":"",
+                    "collation":"utf8mb4_general_ci"
+                  }
+                }
+              ],
+              "enum_set_values": [
+              ]
+            }
+          ]
+        }
+      ],
+      "group_by": [
+      ],
+      "having": [
+      ],
+      "aggr_func": [
+      ],
+      "order_by": [
+      ],
+      "limit":null,
+      "offset":null,
+      "show_stmt_ctx": {
+        "is_from_show_stmt":false,
+        "global_scope":false,
+        "tenant_id":-1,
+        "show_database_id":-1,
+        "show_table_id":-1,
+        "grants_user_id":-1
+      },
+      "hint": {
+        "read_static":false,
+        "no_rewrite":false,
+        "frozen_version":-1,
+        "topk_precision":-1,
+        "sharding_minimum_row_count":0,
+        "query_timeout":-1,
+        "hotspot":false,
+        "index": [
+        ],
+        "read_consistency":-1,
+        "join_ordered":false,
+        "join_order": [
+        ],
+        "merge_hint_ids": [
+        ],
+        "hash_hint_ids": [
+        ],
+        "no_hash_hint_ids": [
+        ],
+        "nl_hint_ids": [
+        ],
+        "part_hints": [
+        ],
+        "use_late_materialization":-1,
+        "log_level":"",
+        "max_concurrent":-1,
+        "only_concurrent_hint":false,
+        "has_hint_exclude_concurrent":false,
+        "parallel":-1,
+        "use_px":0,
+        "use join filter":false,
+        "org_pq_distributes": [
+        ],
+        "pq_distributes": [
+        ]
+      },
+      "query_context": {
+        "param_num":0,
+        "fetch_cur_time":true,
+        "calculable_items": [
+        ]
+      },
+      "extra_output_exprs": [
+      ],
+      "current_level":0,
+      "equal_sets": [
+      ],
+      "pseudo_column_exprs": [
+      ],
+      "child_stmts": [
+      ],
+      "has_transformed_for_hierarchical_query":false,
+      "is_hierarchical_query":false
+    }
+  ],
+  "has_transformed_for_hierarchical_query":false,
+  "is_hierarchical_query":false
+}
+***************   Case 7   ***************
+show tables
+{
+  "stmt_type":1,
+  "table": [
+     {
+      "table_id":-2,
+      "table_name":"subquery_alias",
+      "alias_name":"subquery_alias",
+      "synonym_name":"",
+      "table_type":2,
+      "ref_id":-1,
+      "database_name":"",
+      "for_update":false,
+      "wait":-1,
+      "mock_id":-1,
+      "view_base_item":-1
+    }
+  ],
+  "joined_table": [
+  ],
+  "partition_express": [
+  ],
+  "column": [
+     {
+      "column_id":16,
+      "table_id":-2,
+      "column":"table_name",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "base_tid":1099511637794,
+      "base_cid":17,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":128,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":16387,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"table_name",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":128,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":16387,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"table_name",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":true,
+      "alias_name":"Tables_in_dbcmd",
+      "expr_name":"table_name",
+      "default": {
+        "NULL":"NULL"
+      }
+    }
+  ],
+  "distinct":false,
+  "rollup":false,
+  "nocycle":false,
+  "from": [
+     {
+      "table_id":-2,
+      "is_join":false
+    }
+  ],
+  "start_with": [
+  ],
+  "connect_by": [
+  ],
+  "where": [
+  ],
+  "group_by": [
+  ],
+  "having": [
+  ],
+  "aggr_func": [
+  ],
+  "order_by": [
+  ],
+  "limit":null,
+  "offset":null,
+  "show_stmt_ctx": {
+    "is_from_show_stmt":true,
+    "global_scope":false,
+    "tenant_id":-1,
+    "show_database_id":-1,
+    "show_table_id":-1,
+    "grants_user_id":-1
+  },
+  "hint": {
+    "read_static":false,
+    "no_rewrite":false,
+    "frozen_version":-1,
+    "topk_precision":-1,
+    "sharding_minimum_row_count":0,
+    "query_timeout":-1,
+    "hotspot":false,
+    "index": [
+    ],
+    "read_consistency":-1,
+    "join_ordered":false,
+    "join_order": [
+    ],
+    "merge_hint_ids": [
+    ],
+    "hash_hint_ids": [
+    ],
+    "no_hash_hint_ids": [
+    ],
+    "nl_hint_ids": [
+    ],
+    "part_hints": [
+    ],
+    "use_late_materialization":-1,
+    "log_level":"",
+    "max_concurrent":-1,
+    "only_concurrent_hint":false,
+    "has_hint_exclude_concurrent":false,
+    "parallel":-1,
+    "use_px":0,
+    "use join filter":false,
+    "org_pq_distributes": [
+    ],
+    "pq_distributes": [
+    ]
+  },
+  "query_context": {
+    "param_num":0,
+    "fetch_cur_time":true,
+    "calculable_items": [
+    ]
+  },
+  "extra_output_exprs": [
+  ],
+  "current_level":0,
+  "equal_sets": [
+  ],
+  "pseudo_column_exprs": [
+  ],
+  "child_stmts": [
+     {
+      "stmt_type":1,
+      "table": [
+         {
+          "table_id":1099511637794,
+          "table_name":"__tenant_virtual_show_tables",
+          "alias_name":"",
+          "synonym_name":"",
+          "table_type":0,
+          "ref_id":1099511637794,
+          "database_name":"oceanbase",
+          "for_update":false,
+          "wait":-1,
+          "mock_id":-1,
+          "view_base_item":-1
+        }
+      ],
+      "joined_table": [
+      ],
+      "partition_express": [
+      ],
+      "column": [
+         {
+          "column_id":16,
+          "table_id":1099511637794,
+          "column":"database_id",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511637794,
+          "base_cid":16,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"BIGINT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":20,
+                "scale":0
+              },
+              "flag":16387,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637794,
+            "column_id":16,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_show_tables",
+            "synonym_name":"",
+            "column_name":"database_id",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":17,
+          "table_id":1099511637794,
+          "column":"table_name",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511637794,
+          "base_cid":17,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":16387,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637794,
+            "column_id":17,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_show_tables",
+            "synonym_name":"",
+            "column_name":"table_name",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":2,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        }
+      ],
+      "select": [
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":16387,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637794,
+            "column_id":17,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_show_tables",
+            "synonym_name":"",
+            "column_name":"table_name",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":2,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":false,
+          "alias_name":"table_name",
+          "expr_name":"table_name",
+          "default": {
+            "NULL":"NULL"
+          }
+        }
+      ],
+      "distinct":false,
+      "rollup":false,
+      "nocycle":false,
+      "from": [
+         {
+          "table_id":1099511637794,
+          "is_join":false
+        }
+      ],
+      "start_with": [
+      ],
+      "connect_by": [
+      ],
+      "where": [
+         {
+          "item_type":"T_OP_EQ",
+          "result_type": {
+            "meta": {
+              "type":"INT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":1,
+              "scale":0
+            },
+            "flag":1,
+            "calc_type": {
+              "type":"BIGINT",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            }
+          },
+          "expr_info": [
+            "CNT_CONST",
+            "CNT_COLUMN",
+            "IS_SIMPLE_COND"
+          ],
+          "rel_id": [
+            1
+          ],
+          "expr_levels": [
+            0
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":20,
+                  "scale":0
+                },
+                "flag":16387,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+                1
+              ],
+              "table_id":1099511637794,
+              "column_id":16,
+              "database_name":"oceanbase",
+              "table_name":"__tenant_virtual_show_tables",
+              "synonym_name":"",
+              "column_name":"database_id",
+              "expr_level":0,
+              "expr_levels": [
+                0
+              ],
+              "column_flags":17179869184,
+              "is_explicited_referece":true,
+              "explicited_ref_count":1,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false
+            },
+             {
+              "item_type":"T_INT",
+              "result_type": {
+                "meta": {
+                  "type":"BIGINT",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":13,
+                  "precision":13,
+                  "scale":0
+                },
+                "flag":1,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_CONST",
+                "CNT_CONST"
+              ],
+              "rel_id": [
+              ],
+              "value": {
+                "BIGINT":1099511628779
+              }
+            }
+          ]
+        }
+      ],
+      "group_by": [
+      ],
+      "having": [
+      ],
+      "aggr_func": [
+      ],
+      "order_by": [
+         {
+          "expression": {
+            "item_type":"T_FUN_SYS_SET_COLLATION",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_bin",
+                "coercibility":"EXPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":0,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_FUNC",
+              "CNT_CONST",
+              "CNT_COLUMN",
+              "CNT_FUNC"
+            ],
+            "rel_id": [
+              1
+            ],
+            "expr_levels": [
+              0
+            ],
+            "func":"set_collation",
+            "children": [
+               {
+                "item_type":"T_REF_COLUMN",
+                "result_type": {
+                  "meta": {
+                    "type":"VARCHAR",
+                    "collation":"utf8mb4_general_ci",
+                    "coercibility":"IMPLICIT"
+                  },
+                  "accuracy": {
+                    "length":128,
+                    "precision":-1,
+                    "scale":-1
+                  },
+                  "flag":16387,
+                  "calc_type": {
+                    "type":"NULL",
+                    "collation":"invalid_type",
+                    "coercibility":"INVALID"
+                  }
+                },
+                "expr_info": [
+                  "IS_COLUMN",
+                  "CNT_COLUMN"
+                ],
+                "rel_id": [
+                  1
+                ],
+                "table_id":1099511637794,
+                "column_id":17,
+                "database_name":"oceanbase",
+                "table_name":"__tenant_virtual_show_tables",
+                "synonym_name":"",
+                "column_name":"table_name",
+                "expr_level":0,
+                "expr_levels": [
+                  0
+                ],
+                "column_flags":17179869184,
+                "is_explicited_referece":true,
+                "explicited_ref_count":2,
+                "enum_set_values": [
+                ],
+                "is_lob_column":false
+              },
+               {
+                "item_type":"T_INT",
+                "result_type": {
+                  "meta": {
+                    "type":"BIGINT",
+                    "collation":"utf8mb4_bin",
+                    "coercibility":"IGNORABLE"
+                  },
+                  "accuracy": {
+                    "length":-1,
+                    "precision":-1,
+                    "scale":-1
+                  },
+                  "flag":1,
+                  "calc_type": {
+                    "type":"NULL",
+                    "collation":"invalid_type",
+                    "coercibility":"INVALID"
+                  }
+                },
+                "expr_info": [
+                  "IS_CONST",
+                  "CNT_CONST"
+                ],
+                "rel_id": [
+                ],
+                "value": {
+                  "BIGINT":46
+                }
+              }
+            ],
+            "enum_set_values": [
+            ]
+          },
+          "ascending":"ASC"
+        }
+      ],
+      "limit":null,
+      "offset":null,
+      "show_stmt_ctx": {
+        "is_from_show_stmt":false,
+        "global_scope":false,
+        "tenant_id":-1,
+        "show_database_id":-1,
+        "show_table_id":-1,
+        "grants_user_id":-1
+      },
+      "hint": {
+        "read_static":false,
+        "no_rewrite":false,
+        "frozen_version":-1,
+        "topk_precision":-1,
+        "sharding_minimum_row_count":0,
+        "query_timeout":-1,
+        "hotspot":false,
+        "index": [
+        ],
+        "read_consistency":-1,
+        "join_ordered":false,
+        "join_order": [
+        ],
+        "merge_hint_ids": [
+        ],
+        "hash_hint_ids": [
+        ],
+        "no_hash_hint_ids": [
+        ],
+        "nl_hint_ids": [
+        ],
+        "part_hints": [
+        ],
+        "use_late_materialization":-1,
+        "log_level":"",
+        "max_concurrent":-1,
+        "only_concurrent_hint":false,
+        "has_hint_exclude_concurrent":false,
+        "parallel":-1,
+        "use_px":0,
+        "use join filter":false,
+        "org_pq_distributes": [
+        ],
+        "pq_distributes": [
+        ]
+      },
+      "query_context": {
+        "param_num":0,
+        "fetch_cur_time":true,
+        "calculable_items": [
+        ]
+      },
+      "extra_output_exprs": [
+      ],
+      "current_level":0,
+      "equal_sets": [
+      ],
+      "pseudo_column_exprs": [
+      ],
+      "child_stmts": [
+      ],
+      "has_transformed_for_hierarchical_query":false,
+      "is_hierarchical_query":false
+    }
+  ],
+  "has_transformed_for_hierarchical_query":false,
+  "is_hierarchical_query":false
+}
+***************   Case 8   ***************
+show variables
+{
+  "stmt_type":1,
+  "table": [
+     {
+      "table_id":-2,
+      "table_name":"subquery_alias",
+      "alias_name":"subquery_alias",
+      "synonym_name":"",
+      "table_type":2,
+      "ref_id":-1,
+      "database_name":"",
+      "for_update":false,
+      "wait":-1,
+      "mock_id":-1,
+      "view_base_item":-1
+    }
+  ],
+  "joined_table": [
+  ],
+  "partition_express": [
+  ],
+  "column": [
+     {
+      "column_id":16,
+      "table_id":-2,
+      "column":"Variable_name",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "VARCHAR":"",
+        "collation":"utf8mb4_general_ci"
+      },
+      "base_tid":1099511637782,
+      "base_cid":16,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":128,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Variable_name",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    },
+     {
+      "column_id":17,
+      "table_id":-2,
+      "column":"Value",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "base_tid":1099511637782,
+      "base_cid":17,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":65536,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":0,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":17,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Value",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":128,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":16,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Variable_name",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":false,
+      "alias_name":"Variable_name",
+      "expr_name":"Variable_name",
+      "default": {
+        "VARCHAR":"",
+        "collation":"utf8mb4_general_ci"
+      }
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"VARCHAR",
+            "collation":"utf8mb4_general_ci",
+            "coercibility":"IMPLICIT"
+          },
+          "accuracy": {
+            "length":65536,
+            "precision":-1,
+            "scale":-1
+          },
+          "flag":0,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":-2,
+        "column_id":17,
+        "database_name":"",
+        "table_name":"subquery_alias",
+        "synonym_name":"",
+        "column_name":"Value",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false
+      },
+      "is_alias":false,
+      "alias_name":"Value",
+      "expr_name":"Value",
+      "default": {
+        "NULL":"NULL"
+      }
+    }
+  ],
+  "distinct":false,
+  "rollup":false,
+  "nocycle":false,
+  "from": [
+     {
+      "table_id":-2,
+      "is_join":false
+    }
+  ],
+  "start_with": [
+  ],
+  "connect_by": [
+  ],
+  "where": [
+  ],
+  "group_by": [
+  ],
+  "having": [
+  ],
+  "aggr_func": [
+  ],
+  "order_by": [
+  ],
+  "limit":null,
+  "offset":null,
+  "show_stmt_ctx": {
+    "is_from_show_stmt":true,
+    "global_scope":false,
+    "tenant_id":-1,
+    "show_database_id":-1,
+    "show_table_id":-1,
+    "grants_user_id":-1
+  },
+  "hint": {
+    "read_static":false,
+    "no_rewrite":false,
+    "frozen_version":-1,
+    "topk_precision":-1,
+    "sharding_minimum_row_count":0,
+    "query_timeout":-1,
+    "hotspot":false,
+    "index": [
+    ],
+    "read_consistency":-1,
+    "join_ordered":false,
+    "join_order": [
+    ],
+    "merge_hint_ids": [
+    ],
+    "hash_hint_ids": [
+    ],
+    "no_hash_hint_ids": [
+    ],
+    "nl_hint_ids": [
+    ],
+    "part_hints": [
+    ],
+    "use_late_materialization":-1,
+    "log_level":"",
+    "max_concurrent":-1,
+    "only_concurrent_hint":false,
+    "has_hint_exclude_concurrent":false,
+    "parallel":-1,
+    "use_px":0,
+    "use join filter":false,
+    "org_pq_distributes": [
+    ],
+    "pq_distributes": [
+    ]
+  },
+  "query_context": {
+    "param_num":0,
+    "fetch_cur_time":true,
+    "calculable_items": [
+    ]
+  },
+  "extra_output_exprs": [
+  ],
+  "current_level":0,
+  "equal_sets": [
+  ],
+  "pseudo_column_exprs": [
+  ],
+  "child_stmts": [
+     {
+      "stmt_type":1,
+      "table": [
+         {
+          "table_id":1099511637782,
+          "table_name":"__tenant_virtual_session_variable",
+          "alias_name":"",
+          "synonym_name":"",
+          "table_type":0,
+          "ref_id":1099511637782,
+          "database_name":"oceanbase",
+          "for_update":false,
+          "wait":-1,
+          "mock_id":-1,
+          "view_base_item":-1
+        }
+      ],
+      "joined_table": [
+      ],
+      "partition_express": [
+      ],
+      "column": [
+         {
+          "column_id":16,
+          "table_id":1099511637782,
+          "column":"variable_name",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "VARCHAR":"",
+            "collation":"utf8mb4_general_ci"
+          },
+          "base_tid":1099511637782,
+          "base_cid":16,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637782,
+            "column_id":16,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_session_variable",
+            "synonym_name":"",
+            "column_name":"variable_name",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":2,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        },
+         {
+          "column_id":17,
+          "table_id":1099511637782,
+          "column":"value",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511637782,
+          "base_cid":17,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":65536,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":0,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637782,
+            "column_id":17,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_session_variable",
+            "synonym_name":"",
+            "column_name":"value",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          }
+        }
+      ],
+      "select": [
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637782,
+            "column_id":16,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_session_variable",
+            "synonym_name":"",
+            "column_name":"variable_name",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":2,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":true,
+          "alias_name":"Variable_name",
+          "expr_name":"variable_name",
+          "default": {
+            "VARCHAR":"",
+            "collation":"utf8mb4_general_ci"
+          }
+        },
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":65536,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":0,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637782,
+            "column_id":17,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_session_variable",
+            "synonym_name":"",
+            "column_name":"value",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "is_alias":true,
+          "alias_name":"Value",
+          "expr_name":"value",
+          "default": {
+            "NULL":"NULL"
+          }
+        }
+      ],
+      "distinct":false,
+      "rollup":false,
+      "nocycle":false,
+      "from": [
+         {
+          "table_id":1099511637782,
+          "is_join":false
+        }
+      ],
+      "start_with": [
+      ],
+      "connect_by": [
+      ],
+      "where": [
+      ],
+      "group_by": [
+      ],
+      "having": [
+      ],
+      "aggr_func": [
+      ],
+      "order_by": [
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"VARCHAR",
+                "collation":"utf8mb4_general_ci",
+                "coercibility":"IMPLICIT"
+              },
+              "accuracy": {
+                "length":128,
+                "precision":-1,
+                "scale":-1
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511637782,
+            "column_id":16,
+            "database_name":"oceanbase",
+            "table_name":"__tenant_virtual_session_variable",
+            "synonym_name":"",
+            "column_name":"variable_name",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":17179869184,
+            "is_explicited_referece":true,
+            "explicited_ref_count":2,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false
+          },
+          "ascending":"ASC"
+        }
+      ],
+      "limit":null,
+      "offset":null,
+      "show_stmt_ctx": {
+        "is_from_show_stmt":false,
+        "global_scope":false,
+        "tenant_id":-1,
+        "show_database_id":-1,
+        "show_table_id":-1,
+        "grants_user_id":-1
+      },
+      "hint": {
+        "read_static":false,
+        "no_rewrite":false,
+        "frozen_version":-1,
+        "topk_precision":-1,
+        "sharding_minimum_row_count":0,
+        "query_timeout":-1,
+        "hotspot":false,
+        "index": [
+        ],
+        "read_consistency":-1,
+        "join_ordered":false,
+        "join_order": [
+        ],
+        "merge_hint_ids": [
+        ],
+        "hash_hint_ids": [
+        ],
+        "no_hash_hint_ids": [
+        ],
+        "nl_hint_ids": [
+        ],
+        "part_hints": [
+        ],
+        "use_late_materialization":-1,
+        "log_level":"",
+        "max_concurrent":-1,
+        "only_concurrent_hint":false,
+        "has_hint_exclude_concurrent":false,
+        "parallel":-1,
+        "use_px":0,
+        "use join filter":false,
+        "org_pq_distributes": [
+        ],
+        "pq_distributes": [
+        ]
+      },
+      "query_context": {
+        "param_num":0,
+        "fetch_cur_time":true,
+        "calculable_items": [
+        ]
+      },
+      "extra_output_exprs": [
+      ],
+      "current_level":0,
+      "equal_sets": [
+      ],
+      "pseudo_column_exprs": [
+      ],
+      "child_stmts": [
+      ],
+      "has_transformed_for_hierarchical_query":false,
+      "is_hierarchical_query":false
+    }
+  ],
+  "has_transformed_for_hierarchical_query":false,
+  "is_hierarchical_query":false
+}
+***************   Case 9   ***************
+set names latin1;
+{
+  "stmt_type":113,
+  "is_set_names":true,
+  "is_default_charset":false,
+  "is_default_collation":false,
+  "charset":"latin1",
+  "collation":""
+}
+***************   Case 10   ***************
+set names utf8 collate 'utf8_general_ci';
+{
+  "stmt_type":113,
+  "is_set_names":true,
+  "is_default_charset":false,
+  "is_default_collation":false,
+  "charset":"utf8",
+  "collation":"utf8_general_ci"
+}
+***************   Case 11   ***************
+set charset utf8;
+{
+  "stmt_type":113,
+  "is_set_names":false,
+  "is_default_charset":false,
+  "is_default_collation":false,
+  "charset":"utf8",
+  "collation":""
+}
+***************   Case 12   ***************
+drop database dbcmd;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"dbcmd",
+  "if_exist":false,
+  "to_recyclebin":false
+}
+***************   Case 13   ***************
+alter system bootstrap REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
+{"stmt_type":77, "bootstrap_arg":{"server_list":["region":"sys_region", "zone":"zone1", "server":"10.101.74.122:41425"], "cluster_type":1}}
+***************   Case 14   ***************
+alter system bootstrap CLUSTER primary REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
+{"stmt_type":77, "bootstrap_arg":{"server_list":["region":"sys_region", "zone":"zone1", "server":"10.101.74.122:41425"], "cluster_type":1}}
+***************   Case 15   ***************
+alter system bootstrap cluster standby REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
+{"stmt_type":77, "bootstrap_arg":{"server_list":["region":"sys_region", "zone":"zone1", "server":"10.101.74.122:41425"], "cluster_type":2}}
+***************   Case 16   ***************
+alter system set cluster_id = 3;
+{
+  "stmt_type":175,
+  "rpc_arg": {
+    "items": [
+       {
+        "name":"cluster_id",
+        "value":"3",
+        "comment":"",
+        "zone":"",
+        "server":"0.0.0.0",
+        "tenant_name":"",
+        "exec_tenant_id":1,
+        "tenant_ids": [
+        ]
+      }
+    ]
+  }
+}
+***************   Case 17   ***************
+alter system COMMIT TO SWITCHOVER TO PRIMARY;
+{
+  "stmt_type":169,
+  "database_arg": {
+    "op_type":0
+  }
+}
+***************   Case 18   ***************
+alter system COMMIT TO SWITCHOVER TO PHYSICAL STANDBY;
+{
+  "stmt_type":169,
+  "database_arg": {
+    "op_type":1
+  }
+}
+***************   Case 19   ***************
+alter system remove cluster tt cluster_id = 4;
+{
+  "stmt_type":174,
+  "database_arg": {
+    "cluster_name":"tt",
+    "cluster_id":4,
+    "alter_type":1
+  }
+}

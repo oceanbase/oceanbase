@@ -1,0 +1,24 @@
+create database opt;
+use opt;
+#create table t1(c1 int primary key, c2 int) partition by hash (c1) partitions 5
+create table t2(c1 int primary key, c2 int, c3 varchar(32)) partition by hash (c1) partitions 3
+create table t3(c1 int primary key, c2 int, c3 varchar(32)) partition by hash (c1) partitions 2
+#create index idx_t1_c2 on t1(c2) LOCAL
+create table t4(c1 int, c2 int, c3 int, primary key(c1, c2))
+create index idx_t4_c2_c3 on t4(c2, c3)
+create index idx_t4_c3 on t4(c3)
+create index idx_t4_c2 on t4(c2)
+create table t5(c1 int, c2 int, c3 int, primary key(c2,c3)) partition by key(c2, c3) partitions 3
+create index idx_t5_c2 on t5(c2) LOCAL
+create index idx_t5_c3 on t5(c3) LOCAL
+create table t6(c1 int primary key, c2 tinyint) partition by key(c1) partitions 3
+create table t7(c1 int primary key, c2 int)
+create table t8(c1 int primary key, c2 int)
+create table t2_no_part(c1 int primary key, c2 int, c3 int);
+create table t9(c1 int primary key, c2 int not null default 1, c3 int default 2);
+create table t10(c1 int, c2 int, c3 int, primary key(c2,c1)) partition by hash (c2) partitions 2;
+create table t11(c1 int, c2 int, c3 int, primary key(c2,c1)) partition by hash (c2) partitions 2;
+create table t12 (a bigint primary key, b char(20), c bigint);
+create table t13 (b char(20), c bigint, a bigint primary key);
+create table te1(c1 int primary key);
+create table tab1(id int, parent_id int);

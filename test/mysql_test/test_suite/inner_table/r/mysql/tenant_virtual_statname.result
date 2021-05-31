@@ -1,0 +1,18 @@
+use oceanbase;
+desc __tenant_virtual_statname;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+stat_id	bigint(20)	NO		NULL	
+statistic#	bigint(20)	NO		NULL	
+name	varchar(64)	NO		NULL	
+display_name	varchar(64)	NO		NULL	
+class	bigint(20)	NO		NULL	
+desc v$statname;
+Field	Type	Null	Key	Default	Extra
+CON_ID	bigint(20)	NO		NULL	
+STAT_ID	bigint(20)	NO		NULL	
+STATISTIC#	bigint(20)	NO		NULL	
+NAME	varchar(64)	NO		NULL	
+DISPLAY_NAME	varchar(64)	NO		NULL	
+CLASS	bigint(20)	NO		NULL	
+succeed

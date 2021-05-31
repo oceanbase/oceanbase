@@ -1,0 +1,47 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+connect (obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys1;
+
+alter system set backup_log_archive_option='MANDATORY';
+alter system set backup_log_archive_option='MANDATORY compression=disable';
+alter system set backup_log_archive_option='MANDATORY compression =enable';
+alter system set backup_log_archive_option='MANDATORY compression = lz4_1.0';
+alter system set backup_log_archive_option='MANDATORY compression= zstd_1.3.8';
+alter system set backup_log_archive_option='optional compression= zstd_1.3.8';
+alter system set backup_log_archive_option='compression= zstd_1.3.8 optional ';
+--error 4147
+alter system set backup_log_archive_option='encryption_mode= none';
+--error 4147
+alter system set backup_log_archive_option='encryption_mode= TRANSPARENT_ENCRYPTION';
+##alter system set backup_log_archive_option='encryption_mode= transparent_encryption ';
+##alter system set backup_log_archive_option='encryption_mode= transparent_encryption ENCRYPTION_ALGORITHM = aes-128';
+##alter system set backup_log_archive_option='encryption_mode= transparent_encryption ENCRYPTION_ALGORITHM = aes-192';
+##alter system set backup_log_archive_option='encryption_mode= transparent_encryption ENCRYPTION_ALGORITHM = aes-256';
+##alter system set backup_log_archive_option='encryption_mode= transparent_encryption ENCRYPTION_ALGORITHM = sm4';
+##alter system set backup_log_archive_option='optional encryption_mode= none ENCRYPTION_ALGORITHM = sm4';
+
+--error 4147
+alter system set backup_log_archive_option='optional compression= none';
+--error 4147
+alter system set backup_log_archive_option='optional compression';
+--error 4147
+alter system set backup_log_archive_option='optional biubiu';
+--error 4147
+alter system set backup_log_archive_option='optional compression disable';
+--error 4147
+alter system set backup_log_archive_option='= compression=disable';
+--error 4147
+alter system set backup_log_archive_option='compression=disable=';
+--error 4147
+alter system set backup_log_archive_option='encryption_mode= password';
+--error 4147
+alter system set backup_log_archive_option='encryption_mode= password_encryption';
+--error 4147
+alter system set backup_log_archive_option='encryption_mode= DUAL_MODE_ENCRYPTION';
+--error 4147
+alter system set backup_log_archive_option='encryption_mode= transparent_encryption ENCRYPTION_ALGORITHM = yyy';
+--error 4147
+alter system set backup_log_archive_option='encryption_mode= transparent_encryption ENCRYPTION_ALGORITHM = none';

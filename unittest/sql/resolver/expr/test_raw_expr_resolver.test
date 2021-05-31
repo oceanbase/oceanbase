@@ -1,0 +1,36 @@
+1 like 1.0
+'1' like '1' 
+2 in (1, 2, 3) 
+2 not in (1, 2, 3) 
+1 or 1 
+100 and 0 
+100 or 0 and 100 
+case name  when 'sam' then 'yong'  when 'lee' then 'handsome'  else 'good' end
+case when 1>0 then 'true' else 'false' end
+now()
+utc_timestamp()
+floor(3.14)
+count(*)
+max(c1)
+c1 in (select t1 from table1)
+1=(select c1 from table1 where c2>20)
+(t1,t2)=(select c1, c2 from table1)
+10
+@@auto_increment_increment
+@a
+c1
+10+10
+not 10
+c1+c2=c3+c4
+c1=3
+c1>1
+c1 > c2
+c1 in (1,2,3,4)
+c1 between 2 and 10
+10+10+c1
+c1 = 1 + 2
+c1 between 10+10 and 30
+1+c1 > ? and 'abc' || c2 = 'def'
+binary binary 'abc' collate utf8_general_ci collate utf8_bin
+X not like Y
+Z not regexp A

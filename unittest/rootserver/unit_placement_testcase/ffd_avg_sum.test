@@ -1,0 +1,64 @@
+{
+    "servers":
+    [
+	{
+	    "server":"192.168.0.1",
+	    "zone":"ZTG",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100
+	    }
+	},
+	{
+	    "server":"192.168.0.2",
+	    "zone":"ZTG",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100
+	    }
+	},
+	{
+	    "server":"192.168.1.1",
+	    "zone":"ZUI",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100
+	    }
+	},
+	{
+	    "server":"192.168.1.2",
+	    "zone":"ZUI",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100
+	    }
+	},
+	{
+	    "server":"192.168.2.1",
+	    "zone":"SZ",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100
+	    }
+	},
+	{
+	    "server":"192.168.2.2",
+	    "zone":"SZ",
+	    "resources":
+	    {
+		"cpu": 100,
+		"memory": 100
+	    }
+	}
+    ],
+    "units":
+    [
+	{"tenant":"t1", "cpu": 20, "memory": 10, "num": 16},
+	{"tenant":"t2", "cpu": 10, "memory": 20, "num": 16}
+    ]
+}

@@ -1,0 +1,143 @@
+================ expression position ================
+select position(' ' in 'abc');
+position(' ' in 'abc')
+0
+select position('abcd' in 'abc');
+position('abcd' in 'abc')
+0
+select position('abc' in 'abc');
+position('abc' in 'abc')
+1
+select position('a' in 'abc');
+position('a' in 'abc')
+1
+select position('b' in 'abc');
+position('b' in 'abc')
+2
+select position('c' in 'abc');
+position('c' in 'abc')
+3
+select position('bc' in 'abc');
+position('bc' in 'abc')
+2
+select position('bc' in 'abcbc');
+position('bc' in 'abcbc')
+2
+select position('BC' in 'abcbc');
+position('BC' in 'abcbc')
+2
+select position('bC' in 'abcbc');
+position('bC' in 'abcbc')
+2
+select position('阿里' in '阿里巴巴');
+position('阿里' in '阿里巴巴')
+1
+select position('巴巴' in '阿里巴巴巴巴');
+position('巴巴' in '阿里巴巴巴巴')
+3
+select position('阿里巴巴' in '阿里巴巴');
+position('阿里巴巴' in '阿里巴巴')
+1
+select position(true in '123');
+position(true in '123')
+1
+select position(true in '23');
+position(true in '23')
+0
+select position(23 in 123);
+position(23 in 123)
+2
+select position('' in 23);
+position('' in 23)
+1
+select position('23' in 123);
+position('23' in 123)
+2
+select position(123.4 in '123.400000');
+position(123.4 in '123.400000')
+1
+select position('123.400000' in 123.4);
+position('123.400000' in 123.4)
+0
+select position('123.400000' in null);
+position('123.400000' in null)
+NULL
+select position(null in '巴巴');
+position(null in '巴巴')
+NULL
+select position('巴巴' in null);
+position('巴巴' in null)
+NULL
+select position(null in null);
+position(null in null)
+NULL
+select position(false in true);
+position(false in true)
+0
+select position(true in true);
+position(true in true)
+1
+select position(true in 123);
+position(true in 123)
+1
+select position(false in 123);
+position(false in 123)
+0
+select position(false in 0123);
+position(false in 0123)
+0
+select position(false in 1023);
+position(false in 1023)
+2
+select position(23 in 123);
+position(23 in 123)
+2
+select position(123456 in 123);
+position(123456 in 123)
+0
+select position(123 in 123.4);
+position(123 in 123.4)
+1
+select position(123.4 in 1234);
+position(123.4 in 1234)
+0
+select position(123 in null);
+position(123 in null)
+NULL
+select position(null in 123);
+position(null in 123)
+NULL
+drop table if exists test;
+create table test(c1 datetime primary key);
+insert into test values('2015-5-5');
+select position('201' in c1) from test;
+position('201' in c1)
+1
+select position('' in c1) from test;
+position('' in c1)
+1
+select position('haha' in c1) from test;
+position('haha' in c1)
+0
+select position('-5' in c1) from test;
+position('-5' in c1)
+0
+select position('2015-5-5' in c1) from test;
+position('2015-5-5' in c1)
+0
+select position(true in c1) from test;
+position(true in c1)
+3
+select position(201 in c1) from test;
+position(201 in c1)
+1
+select position(201.1 in c1) from test;
+position(201.1 in c1)
+0
+select position(c1 in null) from test;
+position(c1 in null)
+NULL
+select position(null in c1) from test;
+position(null in c1)
+NULL
+drop table if exists test;

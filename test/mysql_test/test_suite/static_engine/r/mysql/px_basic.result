@@ -1,0 +1,128 @@
+connect  syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection default;
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;
+create table t3(c1 int primary key,c2 int) partition by hash(c1) partitions 5;
+create table t4(c1 int primary key,c2 int) partition by hash(c1) partitions 6;
+insert into t3 values(0,0);
+insert into t3 values(1,0);
+insert into t3 values(2,1);
+insert into t3 values(3,2);
+insert into t3 values(4,3);
+insert into t3 values(5,4);
+insert into t3 values(6,5);
+insert into t4 values(1,0);
+insert into t4 values(2,1);
+insert into t4 values(3,2);
+insert into t4 values(4,3);
+insert into t4 values(5,4);
+insert into t4 values(6,5);
+insert into t4 values(7,5);
+commit;
+create table t5(c1 int primary key,c2 int);
+insert into t5 values(1,1);
+insert into t5 values(2,2);
+insert into t5 values(3,3);
+insert into t5 values(4,4);
+insert into t5 values(5,5);
+insert into t5 values(6,6);
+commit;
+create table t1(c1 int,c2 int) partition by hash(c1) partitions 5;
+create table t2(c1 int,c2 int) partition by hash(c2) partitions 6;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+insert into t1 values(3,3);
+insert into t1 values(4,4);
+insert into t1 values(5,5);
+insert into t1 values(6,6);
+insert into t2 values(1,1);
+insert into t2 values(2,2);
+insert into t2 values(3,3);
+insert into t2 values(4,4);
+insert into t2 values(5,5);
+insert into t2 values(6,6);
+commit;
+connection syscon;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select * from t3 a ;
+c1	c2
+0	0
+5	4
+1	0
+6	5
+2	1
+3	2
+4	3
+select /*+ parallel(2) NO_USE_HASH_AGGREGATION */  a.c1,a.c2+a.c1 from t3 a group by a.c1,a.c2 order by a.c2+1+a.c1;
+c1	a.c2+a.c1
+0	0
+1	1
+2	3
+3	5
+4	7
+5	9
+6	11
+select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on a.c2=b.c1 order by a.c1,a.c2;
+c1	c2
+NULL	NULL
+0	0
+1	0
+2	1
+3	2
+4	3
+5	4
+6	5
+select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on a.c2+2=b.c1+1 order by a.c1,a.c2+2;
+c1	c2
+NULL	NULL
+0	0
+1	0
+2	1
+3	2
+4	3
+5	4
+6	5
+select /*+ parallel(2) pq_distribute(a hash hash) NO_USE_HASH_AGGREGATION */ a.c1,a.c2 from t3 a right outer join t3 b on abs(a.c2)+2=b.c1 order by a.c1,a.c2+2;
+c1	c2
+NULL	NULL
+NULL	NULL
+0	0
+1	0
+2	1
+3	2
+4	3
+5	4
+select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1=b.c2 order by a.c1,b.c1;
+c1	c2	c1	c2
+1	1	1	1
+2	2	2	2
+3	3	3	3
+4	4	4	4
+5	5	5	5
+6	6	6	6
+select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b where a.c1+2=b.c2 + 1 order by a.c1,b.c1+2;
+c1	c2	c1	c2
+1	1	2	2
+2	2	3	3
+3	3	4	4
+4	4	5	5
+5	5	6	6
+select /*+ use_px parallel(2) */ c2,sum(c1) from (select  a.c1,b.c2 from t5 a , t5 b where a.c1=b.c2) group by c2 order by 1,2;
+c2	sum(c1)
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+connection syscon;
+connection default;
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;

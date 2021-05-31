@@ -1,0 +1,168 @@
+#
+#           certain query plans
+#
+drop table if exists t0, t1, t2, t3, t6, t8;
+drop view if exists v1, v2, v3, v_t2, view_b, view_c;
+CREATE TABLE t0(a INTEGER);
+CREATE TABLE t1(a INTEGER);
+INSERT INTO t1 VALUES(1);
+CREATE TABLE t2(a INTEGER);
+INSERT INTO t2 VALUES(5), (8);
+CREATE TABLE t6(a INTEGER);
+INSERT INTO t6 VALUES(7), (1), (0), (5), (1), (4);
+CREATE TABLE t8(a INTEGER);
+INSERT INTO t8 VALUES(1), (3), (5), (7), (9), (7), (3), (1);
+EXPLAIN 
+SELECT *
+FROM t2 AS nt2
+WHERE 1 IN (SELECT it1.a
+FROM t1 AS it1 JOIN t6 AS it3 ON it1.a=it3.a);
+Query Plan
+=========================================================
+|ID|OPERATOR                       |NAME |EST. ROWS|COST|
+---------------------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN CARTESIAN|     |2        |113 |
+|1 | TABLE SCAN                    |nt2  |2        |37  |
+|2 | MATERIAL                      |     |1        |76  |
+|3 |  SUBPLAN SCAN                 |VIEW1|1        |75  |
+|4 |   NESTED-LOOP JOIN CARTESIAN  |     |1        |75  |
+|5 |    TABLE SCAN                 |it1  |1        |37  |
+|6 |    MATERIAL                   |     |1        |39  |
+|7 |     TABLE SCAN                |it3  |1        |38  |
+=========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([nt2.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([nt2.a]), filter(nil), 
+      access([nt2.a]), partitions(p0)
+  2 - output([1]), filter(nil)
+  3 - output([1]), filter(nil), 
+      access(nil)
+  4 - output([1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  5 - output([1]), filter([it1.a = 1]), 
+      access([it1.a]), partitions(p0)
+  6 - output([1]), filter(nil)
+  7 - output([1]), filter([it3.a = 1]), 
+      access([it3.a]), partitions(p0)
+
+SELECT *
+FROM t2 AS nt2
+WHERE 1 IN (SELECT it1.a
+FROM t1 AS it1 JOIN t6 AS it3 ON it1.a=it3.a);
+a
+5
+8
+EXPLAIN 
+SELECT *
+FROM t2 AS nt2, t8 AS nt4
+WHERE 1 IN (SELECT it1.a
+FROM t1 AS it1 JOIN t6 AS it3 ON it1.a=it3.a);
+Query Plan
+===========================================================
+|ID|OPERATOR                         |NAME |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN       |     |16       |162 |
+|1 | TABLE SCAN                      |nt4  |8        |38  |
+|2 | MATERIAL                        |     |2        |114 |
+|3 |  NESTED-LOOP SEMI JOIN CARTESIAN|     |2        |113 |
+|4 |   TABLE SCAN                    |nt2  |2        |37  |
+|5 |   MATERIAL                      |     |1        |76  |
+|6 |    SUBPLAN SCAN                 |VIEW1|1        |75  |
+|7 |     NESTED-LOOP JOIN CARTESIAN  |     |1        |75  |
+|8 |      TABLE SCAN                 |it1  |1        |37  |
+|9 |      MATERIAL                   |     |1        |39  |
+|10|       TABLE SCAN                |it3  |1        |38  |
+===========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([nt2.a], [nt4.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([nt4.a]), filter(nil), 
+      access([nt4.a]), partitions(p0)
+  2 - output([nt2.a]), filter(nil)
+  3 - output([nt2.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  4 - output([nt2.a]), filter(nil), 
+      access([nt2.a]), partitions(p0)
+  5 - output([1]), filter(nil)
+  6 - output([1]), filter(nil), 
+      access(nil)
+  7 - output([1]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  8 - output([1]), filter([it1.a = 1]), 
+      access([it1.a]), partitions(p0)
+  9 - output([1]), filter(nil)
+  10 - output([1]), filter([it3.a = 1]), 
+      access([it3.a]), partitions(p0)
+
+SELECT *
+FROM t2 AS nt2, t8 AS nt4
+WHERE 1 IN (SELECT it1.a
+FROM t1 AS it1 JOIN t6 AS it3 ON it1.a=it3.a);
+a	a
+5	1
+8	1
+5	3
+8	3
+5	5
+8	5
+5	7
+8	7
+5	9
+8	9
+5	7
+8	7
+5	3
+8	3
+5	1
+8	1
+EXPLAIN 
+SELECT *
+FROM t0 AS ot1, t2 AS nt3
+WHERE ot1.a IN (SELECT it2.a
+FROM t1 AS it2 JOIN t8 AS it4 ON it2.a=it4.a);
+Query Plan
+=====================================================
+|ID|OPERATOR                  |NAME |EST. ROWS|COST |
+-----------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN|     |1961     |96769|
+|1 | HASH RIGHT SEMI JOIN     |     |981      |95345|
+|2 |  SUBPLAN SCAN            |VIEW1|1        |78   |
+|3 |   HASH JOIN              |     |1        |78   |
+|4 |    TABLE SCAN            |it2  |1        |36   |
+|5 |    TABLE SCAN            |it4  |8        |38   |
+|6 |  TABLE SCAN              |ot1  |100000   |61860|
+|7 | MATERIAL                 |     |2        |37   |
+|8 |  TABLE SCAN              |nt3  |2        |37   |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([ot1.a], [nt3.a]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([ot1.a]), filter(nil), 
+      equal_conds([ot1.a = VIEW1.a]), other_conds(nil)
+  2 - output([VIEW1.a]), filter(nil), 
+      access([VIEW1.a])
+  3 - output([it2.a]), filter(nil), 
+      equal_conds([it2.a = it4.a]), other_conds(nil)
+  4 - output([it2.a]), filter(nil), 
+      access([it2.a]), partitions(p0)
+  5 - output([it4.a]), filter(nil), 
+      access([it4.a]), partitions(p0)
+  6 - output([ot1.a]), filter(nil), 
+      access([ot1.a]), partitions(p0)
+  7 - output([nt3.a]), filter(nil)
+  8 - output([nt3.a]), filter(nil), 
+      access([nt3.a]), partitions(p0)
+
+SELECT *
+FROM t0 as ot1, t2 AS nt3
+WHERE ot1.a IN (SELECT it2.a
+FROM t1 AS it2 JOIN t8 AS it4 ON it2.a=it4.a);
+a	a
+DROP TABLE t0, t1, t2, t6, t8;

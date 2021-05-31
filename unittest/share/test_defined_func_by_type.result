@@ -1,0 +1,2350 @@
+/**************** NULL ****************/
+
+<NULL, NULL> : defined
+<NULL, TINYINT> : defined
+<NULL, SMALLINT> : defined
+<NULL, MEDIUMINT> : defined
+<NULL, INT> : defined
+<NULL, BIGINT> : defined
+<NULL, TINYINT UNSIGNED> : defined
+<NULL, SMALLINT UNSIGNED> : defined
+<NULL, MEDIUMINT UNSIGNED> : defined
+<NULL, INT UNSIGNED> : defined
+<NULL, BIGINT UNSIGNED> : defined
+<NULL, FLOAT> : defined
+<NULL, DOUBLE> : defined
+<NULL, FLOAT UNSIGNED> : defined
+<NULL, DOUBLE UNSIGNED> : defined
+<NULL, DECIMAL> : defined
+<NULL, DECIMAL UNSIGNED> : defined
+<NULL, DATETIME> : defined
+<NULL, TIMESTAMP> : defined
+<NULL, DATE> : defined
+<NULL, TIME> : defined
+<NULL, YEAR> : defined
+<NULL, VARCHAR> : defined
+<NULL, CHAR> : defined
+<NULL, HEX_STRING> : defined
+<NULL, EXT> : defined
+<NULL, UNKNOWN> : defined
+<NULL, TINYTEXT> : defined
+<NULL, TEXT> : defined
+<NULL, MEDIUMTEXT> : defined
+<NULL, LONGTEXT> : defined
+<NULL, BIT> : defined
+<NULL, ENUM> : defined
+<NULL, SET> : defined
+<NULL, ENUM_INNER> : defined
+<NULL, SET_INNER> : defined
+<NULL, TIMESTAMP_WITH_TIME_ZONE> : defined
+<NULL, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : defined
+<NULL, TIMESTAMP> : defined
+<NULL, RAW> : defined
+<NULL, INTERVAL_YEAR_TO_MONTH> : defined
+<NULL, INTERVAL_DAY_TO_SECOND> : defined
+<NULL, NUMBER_FLOAT> : defined
+<NULL, NVARCHAR2> : defined
+<NULL, NCHAR> : defined
+<NULL, ROWID> : defined
+<NULL, LOB> : defined
+
+/**************** TINYINT ****************/
+
+<TINYINT, NULL> : defined
+<TINYINT, TINYINT> : defined
+<TINYINT, SMALLINT> : defined
+<TINYINT, MEDIUMINT> : defined
+<TINYINT, INT> : defined
+<TINYINT, BIGINT> : defined
+<TINYINT, TINYINT UNSIGNED> : defined
+<TINYINT, SMALLINT UNSIGNED> : defined
+<TINYINT, MEDIUMINT UNSIGNED> : defined
+<TINYINT, INT UNSIGNED> : defined
+<TINYINT, BIGINT UNSIGNED> : defined
+<TINYINT, FLOAT> : not defined
+<TINYINT, DOUBLE> : not defined
+<TINYINT, FLOAT UNSIGNED> : not defined
+<TINYINT, DOUBLE UNSIGNED> : not defined
+<TINYINT, DECIMAL> : not defined
+<TINYINT, DECIMAL UNSIGNED> : not defined
+<TINYINT, DATETIME> : not defined
+<TINYINT, TIMESTAMP> : not defined
+<TINYINT, DATE> : not defined
+<TINYINT, TIME> : not defined
+<TINYINT, YEAR> : not defined
+<TINYINT, VARCHAR> : not defined
+<TINYINT, CHAR> : not defined
+<TINYINT, HEX_STRING> : not defined
+<TINYINT, EXT> : defined
+<TINYINT, UNKNOWN> : not defined
+<TINYINT, TINYTEXT> : not defined
+<TINYINT, TEXT> : not defined
+<TINYINT, MEDIUMTEXT> : not defined
+<TINYINT, LONGTEXT> : not defined
+<TINYINT, BIT> : not defined
+<TINYINT, ENUM> : defined
+<TINYINT, SET> : defined
+<TINYINT, ENUM_INNER> : not defined
+<TINYINT, SET_INNER> : not defined
+<TINYINT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<TINYINT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<TINYINT, TIMESTAMP> : not defined
+<TINYINT, RAW> : not defined
+<TINYINT, INTERVAL_YEAR_TO_MONTH> : not defined
+<TINYINT, INTERVAL_DAY_TO_SECOND> : not defined
+<TINYINT, NUMBER_FLOAT> : not defined
+<TINYINT, NVARCHAR2> : not defined
+<TINYINT, NCHAR> : not defined
+<TINYINT, ROWID> : not defined
+<TINYINT, LOB> : not defined
+
+/**************** SMALLINT ****************/
+
+<SMALLINT, NULL> : defined
+<SMALLINT, TINYINT> : defined
+<SMALLINT, SMALLINT> : defined
+<SMALLINT, MEDIUMINT> : defined
+<SMALLINT, INT> : defined
+<SMALLINT, BIGINT> : defined
+<SMALLINT, TINYINT UNSIGNED> : defined
+<SMALLINT, SMALLINT UNSIGNED> : defined
+<SMALLINT, MEDIUMINT UNSIGNED> : defined
+<SMALLINT, INT UNSIGNED> : defined
+<SMALLINT, BIGINT UNSIGNED> : defined
+<SMALLINT, FLOAT> : not defined
+<SMALLINT, DOUBLE> : not defined
+<SMALLINT, FLOAT UNSIGNED> : not defined
+<SMALLINT, DOUBLE UNSIGNED> : not defined
+<SMALLINT, DECIMAL> : not defined
+<SMALLINT, DECIMAL UNSIGNED> : not defined
+<SMALLINT, DATETIME> : not defined
+<SMALLINT, TIMESTAMP> : not defined
+<SMALLINT, DATE> : not defined
+<SMALLINT, TIME> : not defined
+<SMALLINT, YEAR> : not defined
+<SMALLINT, VARCHAR> : not defined
+<SMALLINT, CHAR> : not defined
+<SMALLINT, HEX_STRING> : not defined
+<SMALLINT, EXT> : defined
+<SMALLINT, UNKNOWN> : not defined
+<SMALLINT, TINYTEXT> : not defined
+<SMALLINT, TEXT> : not defined
+<SMALLINT, MEDIUMTEXT> : not defined
+<SMALLINT, LONGTEXT> : not defined
+<SMALLINT, BIT> : not defined
+<SMALLINT, ENUM> : defined
+<SMALLINT, SET> : defined
+<SMALLINT, ENUM_INNER> : not defined
+<SMALLINT, SET_INNER> : not defined
+<SMALLINT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<SMALLINT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<SMALLINT, TIMESTAMP> : not defined
+<SMALLINT, RAW> : not defined
+<SMALLINT, INTERVAL_YEAR_TO_MONTH> : not defined
+<SMALLINT, INTERVAL_DAY_TO_SECOND> : not defined
+<SMALLINT, NUMBER_FLOAT> : not defined
+<SMALLINT, NVARCHAR2> : not defined
+<SMALLINT, NCHAR> : not defined
+<SMALLINT, ROWID> : not defined
+<SMALLINT, LOB> : not defined
+
+/**************** MEDIUMINT ****************/
+
+<MEDIUMINT, NULL> : defined
+<MEDIUMINT, TINYINT> : defined
+<MEDIUMINT, SMALLINT> : defined
+<MEDIUMINT, MEDIUMINT> : defined
+<MEDIUMINT, INT> : defined
+<MEDIUMINT, BIGINT> : defined
+<MEDIUMINT, TINYINT UNSIGNED> : defined
+<MEDIUMINT, SMALLINT UNSIGNED> : defined
+<MEDIUMINT, MEDIUMINT UNSIGNED> : defined
+<MEDIUMINT, INT UNSIGNED> : defined
+<MEDIUMINT, BIGINT UNSIGNED> : defined
+<MEDIUMINT, FLOAT> : not defined
+<MEDIUMINT, DOUBLE> : not defined
+<MEDIUMINT, FLOAT UNSIGNED> : not defined
+<MEDIUMINT, DOUBLE UNSIGNED> : not defined
+<MEDIUMINT, DECIMAL> : not defined
+<MEDIUMINT, DECIMAL UNSIGNED> : not defined
+<MEDIUMINT, DATETIME> : not defined
+<MEDIUMINT, TIMESTAMP> : not defined
+<MEDIUMINT, DATE> : not defined
+<MEDIUMINT, TIME> : not defined
+<MEDIUMINT, YEAR> : not defined
+<MEDIUMINT, VARCHAR> : not defined
+<MEDIUMINT, CHAR> : not defined
+<MEDIUMINT, HEX_STRING> : not defined
+<MEDIUMINT, EXT> : defined
+<MEDIUMINT, UNKNOWN> : not defined
+<MEDIUMINT, TINYTEXT> : not defined
+<MEDIUMINT, TEXT> : not defined
+<MEDIUMINT, MEDIUMTEXT> : not defined
+<MEDIUMINT, LONGTEXT> : not defined
+<MEDIUMINT, BIT> : not defined
+<MEDIUMINT, ENUM> : defined
+<MEDIUMINT, SET> : defined
+<MEDIUMINT, ENUM_INNER> : not defined
+<MEDIUMINT, SET_INNER> : not defined
+<MEDIUMINT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<MEDIUMINT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<MEDIUMINT, TIMESTAMP> : not defined
+<MEDIUMINT, RAW> : not defined
+<MEDIUMINT, INTERVAL_YEAR_TO_MONTH> : not defined
+<MEDIUMINT, INTERVAL_DAY_TO_SECOND> : not defined
+<MEDIUMINT, NUMBER_FLOAT> : not defined
+<MEDIUMINT, NVARCHAR2> : not defined
+<MEDIUMINT, NCHAR> : not defined
+<MEDIUMINT, ROWID> : not defined
+<MEDIUMINT, LOB> : not defined
+
+/**************** INT ****************/
+
+<INT, NULL> : defined
+<INT, TINYINT> : defined
+<INT, SMALLINT> : defined
+<INT, MEDIUMINT> : defined
+<INT, INT> : defined
+<INT, BIGINT> : defined
+<INT, TINYINT UNSIGNED> : defined
+<INT, SMALLINT UNSIGNED> : defined
+<INT, MEDIUMINT UNSIGNED> : defined
+<INT, INT UNSIGNED> : defined
+<INT, BIGINT UNSIGNED> : defined
+<INT, FLOAT> : not defined
+<INT, DOUBLE> : not defined
+<INT, FLOAT UNSIGNED> : not defined
+<INT, DOUBLE UNSIGNED> : not defined
+<INT, DECIMAL> : not defined
+<INT, DECIMAL UNSIGNED> : not defined
+<INT, DATETIME> : not defined
+<INT, TIMESTAMP> : not defined
+<INT, DATE> : not defined
+<INT, TIME> : not defined
+<INT, YEAR> : not defined
+<INT, VARCHAR> : not defined
+<INT, CHAR> : not defined
+<INT, HEX_STRING> : not defined
+<INT, EXT> : defined
+<INT, UNKNOWN> : not defined
+<INT, TINYTEXT> : not defined
+<INT, TEXT> : not defined
+<INT, MEDIUMTEXT> : not defined
+<INT, LONGTEXT> : not defined
+<INT, BIT> : not defined
+<INT, ENUM> : defined
+<INT, SET> : defined
+<INT, ENUM_INNER> : not defined
+<INT, SET_INNER> : not defined
+<INT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<INT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<INT, TIMESTAMP> : not defined
+<INT, RAW> : not defined
+<INT, INTERVAL_YEAR_TO_MONTH> : not defined
+<INT, INTERVAL_DAY_TO_SECOND> : not defined
+<INT, NUMBER_FLOAT> : not defined
+<INT, NVARCHAR2> : not defined
+<INT, NCHAR> : not defined
+<INT, ROWID> : not defined
+<INT, LOB> : not defined
+
+/**************** BIGINT ****************/
+
+<BIGINT, NULL> : defined
+<BIGINT, TINYINT> : defined
+<BIGINT, SMALLINT> : defined
+<BIGINT, MEDIUMINT> : defined
+<BIGINT, INT> : defined
+<BIGINT, BIGINT> : defined
+<BIGINT, TINYINT UNSIGNED> : defined
+<BIGINT, SMALLINT UNSIGNED> : defined
+<BIGINT, MEDIUMINT UNSIGNED> : defined
+<BIGINT, INT UNSIGNED> : defined
+<BIGINT, BIGINT UNSIGNED> : defined
+<BIGINT, FLOAT> : not defined
+<BIGINT, DOUBLE> : not defined
+<BIGINT, FLOAT UNSIGNED> : not defined
+<BIGINT, DOUBLE UNSIGNED> : not defined
+<BIGINT, DECIMAL> : not defined
+<BIGINT, DECIMAL UNSIGNED> : not defined
+<BIGINT, DATETIME> : not defined
+<BIGINT, TIMESTAMP> : not defined
+<BIGINT, DATE> : not defined
+<BIGINT, TIME> : not defined
+<BIGINT, YEAR> : not defined
+<BIGINT, VARCHAR> : not defined
+<BIGINT, CHAR> : not defined
+<BIGINT, HEX_STRING> : not defined
+<BIGINT, EXT> : defined
+<BIGINT, UNKNOWN> : not defined
+<BIGINT, TINYTEXT> : not defined
+<BIGINT, TEXT> : not defined
+<BIGINT, MEDIUMTEXT> : not defined
+<BIGINT, LONGTEXT> : not defined
+<BIGINT, BIT> : not defined
+<BIGINT, ENUM> : defined
+<BIGINT, SET> : defined
+<BIGINT, ENUM_INNER> : not defined
+<BIGINT, SET_INNER> : not defined
+<BIGINT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<BIGINT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<BIGINT, TIMESTAMP> : not defined
+<BIGINT, RAW> : not defined
+<BIGINT, INTERVAL_YEAR_TO_MONTH> : not defined
+<BIGINT, INTERVAL_DAY_TO_SECOND> : not defined
+<BIGINT, NUMBER_FLOAT> : not defined
+<BIGINT, NVARCHAR2> : not defined
+<BIGINT, NCHAR> : not defined
+<BIGINT, ROWID> : not defined
+<BIGINT, LOB> : not defined
+
+/**************** TINYINT UNSIGNED ****************/
+
+<TINYINT UNSIGNED, NULL> : defined
+<TINYINT UNSIGNED, TINYINT> : defined
+<TINYINT UNSIGNED, SMALLINT> : defined
+<TINYINT UNSIGNED, MEDIUMINT> : defined
+<TINYINT UNSIGNED, INT> : defined
+<TINYINT UNSIGNED, BIGINT> : defined
+<TINYINT UNSIGNED, TINYINT UNSIGNED> : defined
+<TINYINT UNSIGNED, SMALLINT UNSIGNED> : defined
+<TINYINT UNSIGNED, MEDIUMINT UNSIGNED> : defined
+<TINYINT UNSIGNED, INT UNSIGNED> : defined
+<TINYINT UNSIGNED, BIGINT UNSIGNED> : defined
+<TINYINT UNSIGNED, FLOAT> : not defined
+<TINYINT UNSIGNED, DOUBLE> : not defined
+<TINYINT UNSIGNED, FLOAT UNSIGNED> : not defined
+<TINYINT UNSIGNED, DOUBLE UNSIGNED> : not defined
+<TINYINT UNSIGNED, DECIMAL> : not defined
+<TINYINT UNSIGNED, DECIMAL UNSIGNED> : not defined
+<TINYINT UNSIGNED, DATETIME> : not defined
+<TINYINT UNSIGNED, TIMESTAMP> : not defined
+<TINYINT UNSIGNED, DATE> : not defined
+<TINYINT UNSIGNED, TIME> : not defined
+<TINYINT UNSIGNED, YEAR> : not defined
+<TINYINT UNSIGNED, VARCHAR> : not defined
+<TINYINT UNSIGNED, CHAR> : not defined
+<TINYINT UNSIGNED, HEX_STRING> : not defined
+<TINYINT UNSIGNED, EXT> : defined
+<TINYINT UNSIGNED, UNKNOWN> : not defined
+<TINYINT UNSIGNED, TINYTEXT> : not defined
+<TINYINT UNSIGNED, TEXT> : not defined
+<TINYINT UNSIGNED, MEDIUMTEXT> : not defined
+<TINYINT UNSIGNED, LONGTEXT> : not defined
+<TINYINT UNSIGNED, BIT> : not defined
+<TINYINT UNSIGNED, ENUM> : defined
+<TINYINT UNSIGNED, SET> : defined
+<TINYINT UNSIGNED, ENUM_INNER> : not defined
+<TINYINT UNSIGNED, SET_INNER> : not defined
+<TINYINT UNSIGNED, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<TINYINT UNSIGNED, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<TINYINT UNSIGNED, TIMESTAMP> : not defined
+<TINYINT UNSIGNED, RAW> : not defined
+<TINYINT UNSIGNED, INTERVAL_YEAR_TO_MONTH> : not defined
+<TINYINT UNSIGNED, INTERVAL_DAY_TO_SECOND> : not defined
+<TINYINT UNSIGNED, NUMBER_FLOAT> : not defined
+<TINYINT UNSIGNED, NVARCHAR2> : not defined
+<TINYINT UNSIGNED, NCHAR> : not defined
+<TINYINT UNSIGNED, ROWID> : not defined
+<TINYINT UNSIGNED, LOB> : not defined
+
+/**************** SMALLINT UNSIGNED ****************/
+
+<SMALLINT UNSIGNED, NULL> : defined
+<SMALLINT UNSIGNED, TINYINT> : defined
+<SMALLINT UNSIGNED, SMALLINT> : defined
+<SMALLINT UNSIGNED, MEDIUMINT> : defined
+<SMALLINT UNSIGNED, INT> : defined
+<SMALLINT UNSIGNED, BIGINT> : defined
+<SMALLINT UNSIGNED, TINYINT UNSIGNED> : defined
+<SMALLINT UNSIGNED, SMALLINT UNSIGNED> : defined
+<SMALLINT UNSIGNED, MEDIUMINT UNSIGNED> : defined
+<SMALLINT UNSIGNED, INT UNSIGNED> : defined
+<SMALLINT UNSIGNED, BIGINT UNSIGNED> : defined
+<SMALLINT UNSIGNED, FLOAT> : not defined
+<SMALLINT UNSIGNED, DOUBLE> : not defined
+<SMALLINT UNSIGNED, FLOAT UNSIGNED> : not defined
+<SMALLINT UNSIGNED, DOUBLE UNSIGNED> : not defined
+<SMALLINT UNSIGNED, DECIMAL> : not defined
+<SMALLINT UNSIGNED, DECIMAL UNSIGNED> : not defined
+<SMALLINT UNSIGNED, DATETIME> : not defined
+<SMALLINT UNSIGNED, TIMESTAMP> : not defined
+<SMALLINT UNSIGNED, DATE> : not defined
+<SMALLINT UNSIGNED, TIME> : not defined
+<SMALLINT UNSIGNED, YEAR> : not defined
+<SMALLINT UNSIGNED, VARCHAR> : not defined
+<SMALLINT UNSIGNED, CHAR> : not defined
+<SMALLINT UNSIGNED, HEX_STRING> : not defined
+<SMALLINT UNSIGNED, EXT> : defined
+<SMALLINT UNSIGNED, UNKNOWN> : not defined
+<SMALLINT UNSIGNED, TINYTEXT> : not defined
+<SMALLINT UNSIGNED, TEXT> : not defined
+<SMALLINT UNSIGNED, MEDIUMTEXT> : not defined
+<SMALLINT UNSIGNED, LONGTEXT> : not defined
+<SMALLINT UNSIGNED, BIT> : not defined
+<SMALLINT UNSIGNED, ENUM> : defined
+<SMALLINT UNSIGNED, SET> : defined
+<SMALLINT UNSIGNED, ENUM_INNER> : not defined
+<SMALLINT UNSIGNED, SET_INNER> : not defined
+<SMALLINT UNSIGNED, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<SMALLINT UNSIGNED, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<SMALLINT UNSIGNED, TIMESTAMP> : not defined
+<SMALLINT UNSIGNED, RAW> : not defined
+<SMALLINT UNSIGNED, INTERVAL_YEAR_TO_MONTH> : not defined
+<SMALLINT UNSIGNED, INTERVAL_DAY_TO_SECOND> : not defined
+<SMALLINT UNSIGNED, NUMBER_FLOAT> : not defined
+<SMALLINT UNSIGNED, NVARCHAR2> : not defined
+<SMALLINT UNSIGNED, NCHAR> : not defined
+<SMALLINT UNSIGNED, ROWID> : not defined
+<SMALLINT UNSIGNED, LOB> : not defined
+
+/**************** MEDIUMINT UNSIGNED ****************/
+
+<MEDIUMINT UNSIGNED, NULL> : defined
+<MEDIUMINT UNSIGNED, TINYINT> : defined
+<MEDIUMINT UNSIGNED, SMALLINT> : defined
+<MEDIUMINT UNSIGNED, MEDIUMINT> : defined
+<MEDIUMINT UNSIGNED, INT> : defined
+<MEDIUMINT UNSIGNED, BIGINT> : defined
+<MEDIUMINT UNSIGNED, TINYINT UNSIGNED> : defined
+<MEDIUMINT UNSIGNED, SMALLINT UNSIGNED> : defined
+<MEDIUMINT UNSIGNED, MEDIUMINT UNSIGNED> : defined
+<MEDIUMINT UNSIGNED, INT UNSIGNED> : defined
+<MEDIUMINT UNSIGNED, BIGINT UNSIGNED> : defined
+<MEDIUMINT UNSIGNED, FLOAT> : not defined
+<MEDIUMINT UNSIGNED, DOUBLE> : not defined
+<MEDIUMINT UNSIGNED, FLOAT UNSIGNED> : not defined
+<MEDIUMINT UNSIGNED, DOUBLE UNSIGNED> : not defined
+<MEDIUMINT UNSIGNED, DECIMAL> : not defined
+<MEDIUMINT UNSIGNED, DECIMAL UNSIGNED> : not defined
+<MEDIUMINT UNSIGNED, DATETIME> : not defined
+<MEDIUMINT UNSIGNED, TIMESTAMP> : not defined
+<MEDIUMINT UNSIGNED, DATE> : not defined
+<MEDIUMINT UNSIGNED, TIME> : not defined
+<MEDIUMINT UNSIGNED, YEAR> : not defined
+<MEDIUMINT UNSIGNED, VARCHAR> : not defined
+<MEDIUMINT UNSIGNED, CHAR> : not defined
+<MEDIUMINT UNSIGNED, HEX_STRING> : not defined
+<MEDIUMINT UNSIGNED, EXT> : defined
+<MEDIUMINT UNSIGNED, UNKNOWN> : not defined
+<MEDIUMINT UNSIGNED, TINYTEXT> : not defined
+<MEDIUMINT UNSIGNED, TEXT> : not defined
+<MEDIUMINT UNSIGNED, MEDIUMTEXT> : not defined
+<MEDIUMINT UNSIGNED, LONGTEXT> : not defined
+<MEDIUMINT UNSIGNED, BIT> : not defined
+<MEDIUMINT UNSIGNED, ENUM> : defined
+<MEDIUMINT UNSIGNED, SET> : defined
+<MEDIUMINT UNSIGNED, ENUM_INNER> : not defined
+<MEDIUMINT UNSIGNED, SET_INNER> : not defined
+<MEDIUMINT UNSIGNED, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<MEDIUMINT UNSIGNED, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<MEDIUMINT UNSIGNED, TIMESTAMP> : not defined
+<MEDIUMINT UNSIGNED, RAW> : not defined
+<MEDIUMINT UNSIGNED, INTERVAL_YEAR_TO_MONTH> : not defined
+<MEDIUMINT UNSIGNED, INTERVAL_DAY_TO_SECOND> : not defined
+<MEDIUMINT UNSIGNED, NUMBER_FLOAT> : not defined
+<MEDIUMINT UNSIGNED, NVARCHAR2> : not defined
+<MEDIUMINT UNSIGNED, NCHAR> : not defined
+<MEDIUMINT UNSIGNED, ROWID> : not defined
+<MEDIUMINT UNSIGNED, LOB> : not defined
+
+/**************** INT UNSIGNED ****************/
+
+<INT UNSIGNED, NULL> : defined
+<INT UNSIGNED, TINYINT> : defined
+<INT UNSIGNED, SMALLINT> : defined
+<INT UNSIGNED, MEDIUMINT> : defined
+<INT UNSIGNED, INT> : defined
+<INT UNSIGNED, BIGINT> : defined
+<INT UNSIGNED, TINYINT UNSIGNED> : defined
+<INT UNSIGNED, SMALLINT UNSIGNED> : defined
+<INT UNSIGNED, MEDIUMINT UNSIGNED> : defined
+<INT UNSIGNED, INT UNSIGNED> : defined
+<INT UNSIGNED, BIGINT UNSIGNED> : defined
+<INT UNSIGNED, FLOAT> : not defined
+<INT UNSIGNED, DOUBLE> : not defined
+<INT UNSIGNED, FLOAT UNSIGNED> : not defined
+<INT UNSIGNED, DOUBLE UNSIGNED> : not defined
+<INT UNSIGNED, DECIMAL> : not defined
+<INT UNSIGNED, DECIMAL UNSIGNED> : not defined
+<INT UNSIGNED, DATETIME> : not defined
+<INT UNSIGNED, TIMESTAMP> : not defined
+<INT UNSIGNED, DATE> : not defined
+<INT UNSIGNED, TIME> : not defined
+<INT UNSIGNED, YEAR> : not defined
+<INT UNSIGNED, VARCHAR> : not defined
+<INT UNSIGNED, CHAR> : not defined
+<INT UNSIGNED, HEX_STRING> : not defined
+<INT UNSIGNED, EXT> : defined
+<INT UNSIGNED, UNKNOWN> : not defined
+<INT UNSIGNED, TINYTEXT> : not defined
+<INT UNSIGNED, TEXT> : not defined
+<INT UNSIGNED, MEDIUMTEXT> : not defined
+<INT UNSIGNED, LONGTEXT> : not defined
+<INT UNSIGNED, BIT> : not defined
+<INT UNSIGNED, ENUM> : defined
+<INT UNSIGNED, SET> : defined
+<INT UNSIGNED, ENUM_INNER> : not defined
+<INT UNSIGNED, SET_INNER> : not defined
+<INT UNSIGNED, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<INT UNSIGNED, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<INT UNSIGNED, TIMESTAMP> : not defined
+<INT UNSIGNED, RAW> : not defined
+<INT UNSIGNED, INTERVAL_YEAR_TO_MONTH> : not defined
+<INT UNSIGNED, INTERVAL_DAY_TO_SECOND> : not defined
+<INT UNSIGNED, NUMBER_FLOAT> : not defined
+<INT UNSIGNED, NVARCHAR2> : not defined
+<INT UNSIGNED, NCHAR> : not defined
+<INT UNSIGNED, ROWID> : not defined
+<INT UNSIGNED, LOB> : not defined
+
+/**************** BIGINT UNSIGNED ****************/
+
+<BIGINT UNSIGNED, NULL> : defined
+<BIGINT UNSIGNED, TINYINT> : defined
+<BIGINT UNSIGNED, SMALLINT> : defined
+<BIGINT UNSIGNED, MEDIUMINT> : defined
+<BIGINT UNSIGNED, INT> : defined
+<BIGINT UNSIGNED, BIGINT> : defined
+<BIGINT UNSIGNED, TINYINT UNSIGNED> : defined
+<BIGINT UNSIGNED, SMALLINT UNSIGNED> : defined
+<BIGINT UNSIGNED, MEDIUMINT UNSIGNED> : defined
+<BIGINT UNSIGNED, INT UNSIGNED> : defined
+<BIGINT UNSIGNED, BIGINT UNSIGNED> : defined
+<BIGINT UNSIGNED, FLOAT> : not defined
+<BIGINT UNSIGNED, DOUBLE> : not defined
+<BIGINT UNSIGNED, FLOAT UNSIGNED> : not defined
+<BIGINT UNSIGNED, DOUBLE UNSIGNED> : not defined
+<BIGINT UNSIGNED, DECIMAL> : not defined
+<BIGINT UNSIGNED, DECIMAL UNSIGNED> : not defined
+<BIGINT UNSIGNED, DATETIME> : not defined
+<BIGINT UNSIGNED, TIMESTAMP> : not defined
+<BIGINT UNSIGNED, DATE> : not defined
+<BIGINT UNSIGNED, TIME> : not defined
+<BIGINT UNSIGNED, YEAR> : not defined
+<BIGINT UNSIGNED, VARCHAR> : not defined
+<BIGINT UNSIGNED, CHAR> : not defined
+<BIGINT UNSIGNED, HEX_STRING> : not defined
+<BIGINT UNSIGNED, EXT> : defined
+<BIGINT UNSIGNED, UNKNOWN> : not defined
+<BIGINT UNSIGNED, TINYTEXT> : not defined
+<BIGINT UNSIGNED, TEXT> : not defined
+<BIGINT UNSIGNED, MEDIUMTEXT> : not defined
+<BIGINT UNSIGNED, LONGTEXT> : not defined
+<BIGINT UNSIGNED, BIT> : not defined
+<BIGINT UNSIGNED, ENUM> : defined
+<BIGINT UNSIGNED, SET> : defined
+<BIGINT UNSIGNED, ENUM_INNER> : not defined
+<BIGINT UNSIGNED, SET_INNER> : not defined
+<BIGINT UNSIGNED, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<BIGINT UNSIGNED, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<BIGINT UNSIGNED, TIMESTAMP> : not defined
+<BIGINT UNSIGNED, RAW> : not defined
+<BIGINT UNSIGNED, INTERVAL_YEAR_TO_MONTH> : not defined
+<BIGINT UNSIGNED, INTERVAL_DAY_TO_SECOND> : not defined
+<BIGINT UNSIGNED, NUMBER_FLOAT> : not defined
+<BIGINT UNSIGNED, NVARCHAR2> : not defined
+<BIGINT UNSIGNED, NCHAR> : not defined
+<BIGINT UNSIGNED, ROWID> : not defined
+<BIGINT UNSIGNED, LOB> : not defined
+
+/**************** FLOAT ****************/
+
+<FLOAT, NULL> : defined
+<FLOAT, TINYINT> : not defined
+<FLOAT, SMALLINT> : not defined
+<FLOAT, MEDIUMINT> : not defined
+<FLOAT, INT> : not defined
+<FLOAT, BIGINT> : not defined
+<FLOAT, TINYINT UNSIGNED> : not defined
+<FLOAT, SMALLINT UNSIGNED> : not defined
+<FLOAT, MEDIUMINT UNSIGNED> : not defined
+<FLOAT, INT UNSIGNED> : not defined
+<FLOAT, BIGINT UNSIGNED> : not defined
+<FLOAT, FLOAT> : defined
+<FLOAT, DOUBLE> : not defined
+<FLOAT, FLOAT UNSIGNED> : defined
+<FLOAT, DOUBLE UNSIGNED> : not defined
+<FLOAT, DECIMAL> : not defined
+<FLOAT, DECIMAL UNSIGNED> : not defined
+<FLOAT, DATETIME> : not defined
+<FLOAT, TIMESTAMP> : not defined
+<FLOAT, DATE> : not defined
+<FLOAT, TIME> : not defined
+<FLOAT, YEAR> : not defined
+<FLOAT, VARCHAR> : not defined
+<FLOAT, CHAR> : not defined
+<FLOAT, HEX_STRING> : not defined
+<FLOAT, EXT> : defined
+<FLOAT, UNKNOWN> : not defined
+<FLOAT, TINYTEXT> : not defined
+<FLOAT, TEXT> : not defined
+<FLOAT, MEDIUMTEXT> : not defined
+<FLOAT, LONGTEXT> : not defined
+<FLOAT, BIT> : not defined
+<FLOAT, ENUM> : not defined
+<FLOAT, SET> : not defined
+<FLOAT, ENUM_INNER> : not defined
+<FLOAT, SET_INNER> : not defined
+<FLOAT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<FLOAT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<FLOAT, TIMESTAMP> : not defined
+<FLOAT, RAW> : not defined
+<FLOAT, INTERVAL_YEAR_TO_MONTH> : not defined
+<FLOAT, INTERVAL_DAY_TO_SECOND> : not defined
+<FLOAT, NUMBER_FLOAT> : not defined
+<FLOAT, NVARCHAR2> : not defined
+<FLOAT, NCHAR> : not defined
+<FLOAT, ROWID> : not defined
+<FLOAT, LOB> : not defined
+
+/**************** DOUBLE ****************/
+
+<DOUBLE, NULL> : defined
+<DOUBLE, TINYINT> : not defined
+<DOUBLE, SMALLINT> : not defined
+<DOUBLE, MEDIUMINT> : not defined
+<DOUBLE, INT> : not defined
+<DOUBLE, BIGINT> : not defined
+<DOUBLE, TINYINT UNSIGNED> : not defined
+<DOUBLE, SMALLINT UNSIGNED> : not defined
+<DOUBLE, MEDIUMINT UNSIGNED> : not defined
+<DOUBLE, INT UNSIGNED> : not defined
+<DOUBLE, BIGINT UNSIGNED> : not defined
+<DOUBLE, FLOAT> : not defined
+<DOUBLE, DOUBLE> : defined
+<DOUBLE, FLOAT UNSIGNED> : not defined
+<DOUBLE, DOUBLE UNSIGNED> : defined
+<DOUBLE, DECIMAL> : not defined
+<DOUBLE, DECIMAL UNSIGNED> : not defined
+<DOUBLE, DATETIME> : not defined
+<DOUBLE, TIMESTAMP> : not defined
+<DOUBLE, DATE> : not defined
+<DOUBLE, TIME> : not defined
+<DOUBLE, YEAR> : not defined
+<DOUBLE, VARCHAR> : not defined
+<DOUBLE, CHAR> : not defined
+<DOUBLE, HEX_STRING> : not defined
+<DOUBLE, EXT> : defined
+<DOUBLE, UNKNOWN> : not defined
+<DOUBLE, TINYTEXT> : not defined
+<DOUBLE, TEXT> : not defined
+<DOUBLE, MEDIUMTEXT> : not defined
+<DOUBLE, LONGTEXT> : not defined
+<DOUBLE, BIT> : not defined
+<DOUBLE, ENUM> : not defined
+<DOUBLE, SET> : not defined
+<DOUBLE, ENUM_INNER> : not defined
+<DOUBLE, SET_INNER> : not defined
+<DOUBLE, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<DOUBLE, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<DOUBLE, TIMESTAMP> : not defined
+<DOUBLE, RAW> : not defined
+<DOUBLE, INTERVAL_YEAR_TO_MONTH> : not defined
+<DOUBLE, INTERVAL_DAY_TO_SECOND> : not defined
+<DOUBLE, NUMBER_FLOAT> : not defined
+<DOUBLE, NVARCHAR2> : not defined
+<DOUBLE, NCHAR> : not defined
+<DOUBLE, ROWID> : not defined
+<DOUBLE, LOB> : not defined
+
+/**************** FLOAT UNSIGNED ****************/
+
+<FLOAT UNSIGNED, NULL> : defined
+<FLOAT UNSIGNED, TINYINT> : not defined
+<FLOAT UNSIGNED, SMALLINT> : not defined
+<FLOAT UNSIGNED, MEDIUMINT> : not defined
+<FLOAT UNSIGNED, INT> : not defined
+<FLOAT UNSIGNED, BIGINT> : not defined
+<FLOAT UNSIGNED, TINYINT UNSIGNED> : not defined
+<FLOAT UNSIGNED, SMALLINT UNSIGNED> : not defined
+<FLOAT UNSIGNED, MEDIUMINT UNSIGNED> : not defined
+<FLOAT UNSIGNED, INT UNSIGNED> : not defined
+<FLOAT UNSIGNED, BIGINT UNSIGNED> : not defined
+<FLOAT UNSIGNED, FLOAT> : defined
+<FLOAT UNSIGNED, DOUBLE> : not defined
+<FLOAT UNSIGNED, FLOAT UNSIGNED> : defined
+<FLOAT UNSIGNED, DOUBLE UNSIGNED> : not defined
+<FLOAT UNSIGNED, DECIMAL> : not defined
+<FLOAT UNSIGNED, DECIMAL UNSIGNED> : not defined
+<FLOAT UNSIGNED, DATETIME> : not defined
+<FLOAT UNSIGNED, TIMESTAMP> : not defined
+<FLOAT UNSIGNED, DATE> : not defined
+<FLOAT UNSIGNED, TIME> : not defined
+<FLOAT UNSIGNED, YEAR> : not defined
+<FLOAT UNSIGNED, VARCHAR> : not defined
+<FLOAT UNSIGNED, CHAR> : not defined
+<FLOAT UNSIGNED, HEX_STRING> : not defined
+<FLOAT UNSIGNED, EXT> : defined
+<FLOAT UNSIGNED, UNKNOWN> : not defined
+<FLOAT UNSIGNED, TINYTEXT> : not defined
+<FLOAT UNSIGNED, TEXT> : not defined
+<FLOAT UNSIGNED, MEDIUMTEXT> : not defined
+<FLOAT UNSIGNED, LONGTEXT> : not defined
+<FLOAT UNSIGNED, BIT> : not defined
+<FLOAT UNSIGNED, ENUM> : not defined
+<FLOAT UNSIGNED, SET> : not defined
+<FLOAT UNSIGNED, ENUM_INNER> : not defined
+<FLOAT UNSIGNED, SET_INNER> : not defined
+<FLOAT UNSIGNED, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<FLOAT UNSIGNED, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<FLOAT UNSIGNED, TIMESTAMP> : not defined
+<FLOAT UNSIGNED, RAW> : not defined
+<FLOAT UNSIGNED, INTERVAL_YEAR_TO_MONTH> : not defined
+<FLOAT UNSIGNED, INTERVAL_DAY_TO_SECOND> : not defined
+<FLOAT UNSIGNED, NUMBER_FLOAT> : not defined
+<FLOAT UNSIGNED, NVARCHAR2> : not defined
+<FLOAT UNSIGNED, NCHAR> : not defined
+<FLOAT UNSIGNED, ROWID> : not defined
+<FLOAT UNSIGNED, LOB> : not defined
+
+/**************** DOUBLE UNSIGNED ****************/
+
+<DOUBLE UNSIGNED, NULL> : defined
+<DOUBLE UNSIGNED, TINYINT> : not defined
+<DOUBLE UNSIGNED, SMALLINT> : not defined
+<DOUBLE UNSIGNED, MEDIUMINT> : not defined
+<DOUBLE UNSIGNED, INT> : not defined
+<DOUBLE UNSIGNED, BIGINT> : not defined
+<DOUBLE UNSIGNED, TINYINT UNSIGNED> : not defined
+<DOUBLE UNSIGNED, SMALLINT UNSIGNED> : not defined
+<DOUBLE UNSIGNED, MEDIUMINT UNSIGNED> : not defined
+<DOUBLE UNSIGNED, INT UNSIGNED> : not defined
+<DOUBLE UNSIGNED, BIGINT UNSIGNED> : not defined
+<DOUBLE UNSIGNED, FLOAT> : not defined
+<DOUBLE UNSIGNED, DOUBLE> : defined
+<DOUBLE UNSIGNED, FLOAT UNSIGNED> : not defined
+<DOUBLE UNSIGNED, DOUBLE UNSIGNED> : defined
+<DOUBLE UNSIGNED, DECIMAL> : not defined
+<DOUBLE UNSIGNED, DECIMAL UNSIGNED> : not defined
+<DOUBLE UNSIGNED, DATETIME> : not defined
+<DOUBLE UNSIGNED, TIMESTAMP> : not defined
+<DOUBLE UNSIGNED, DATE> : not defined
+<DOUBLE UNSIGNED, TIME> : not defined
+<DOUBLE UNSIGNED, YEAR> : not defined
+<DOUBLE UNSIGNED, VARCHAR> : not defined
+<DOUBLE UNSIGNED, CHAR> : not defined
+<DOUBLE UNSIGNED, HEX_STRING> : not defined
+<DOUBLE UNSIGNED, EXT> : defined
+<DOUBLE UNSIGNED, UNKNOWN> : not defined
+<DOUBLE UNSIGNED, TINYTEXT> : not defined
+<DOUBLE UNSIGNED, TEXT> : not defined
+<DOUBLE UNSIGNED, MEDIUMTEXT> : not defined
+<DOUBLE UNSIGNED, LONGTEXT> : not defined
+<DOUBLE UNSIGNED, BIT> : not defined
+<DOUBLE UNSIGNED, ENUM> : not defined
+<DOUBLE UNSIGNED, SET> : not defined
+<DOUBLE UNSIGNED, ENUM_INNER> : not defined
+<DOUBLE UNSIGNED, SET_INNER> : not defined
+<DOUBLE UNSIGNED, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<DOUBLE UNSIGNED, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<DOUBLE UNSIGNED, TIMESTAMP> : not defined
+<DOUBLE UNSIGNED, RAW> : not defined
+<DOUBLE UNSIGNED, INTERVAL_YEAR_TO_MONTH> : not defined
+<DOUBLE UNSIGNED, INTERVAL_DAY_TO_SECOND> : not defined
+<DOUBLE UNSIGNED, NUMBER_FLOAT> : not defined
+<DOUBLE UNSIGNED, NVARCHAR2> : not defined
+<DOUBLE UNSIGNED, NCHAR> : not defined
+<DOUBLE UNSIGNED, ROWID> : not defined
+<DOUBLE UNSIGNED, LOB> : not defined
+
+/**************** DECIMAL ****************/
+
+<DECIMAL, NULL> : defined
+<DECIMAL, TINYINT> : not defined
+<DECIMAL, SMALLINT> : not defined
+<DECIMAL, MEDIUMINT> : not defined
+<DECIMAL, INT> : not defined
+<DECIMAL, BIGINT> : not defined
+<DECIMAL, TINYINT UNSIGNED> : not defined
+<DECIMAL, SMALLINT UNSIGNED> : not defined
+<DECIMAL, MEDIUMINT UNSIGNED> : not defined
+<DECIMAL, INT UNSIGNED> : not defined
+<DECIMAL, BIGINT UNSIGNED> : not defined
+<DECIMAL, FLOAT> : not defined
+<DECIMAL, DOUBLE> : not defined
+<DECIMAL, FLOAT UNSIGNED> : not defined
+<DECIMAL, DOUBLE UNSIGNED> : not defined
+<DECIMAL, DECIMAL> : defined
+<DECIMAL, DECIMAL UNSIGNED> : defined
+<DECIMAL, DATETIME> : not defined
+<DECIMAL, TIMESTAMP> : not defined
+<DECIMAL, DATE> : not defined
+<DECIMAL, TIME> : not defined
+<DECIMAL, YEAR> : not defined
+<DECIMAL, VARCHAR> : not defined
+<DECIMAL, CHAR> : not defined
+<DECIMAL, HEX_STRING> : not defined
+<DECIMAL, EXT> : defined
+<DECIMAL, UNKNOWN> : not defined
+<DECIMAL, TINYTEXT> : not defined
+<DECIMAL, TEXT> : not defined
+<DECIMAL, MEDIUMTEXT> : not defined
+<DECIMAL, LONGTEXT> : not defined
+<DECIMAL, BIT> : not defined
+<DECIMAL, ENUM> : not defined
+<DECIMAL, SET> : not defined
+<DECIMAL, ENUM_INNER> : not defined
+<DECIMAL, SET_INNER> : not defined
+<DECIMAL, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<DECIMAL, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<DECIMAL, TIMESTAMP> : not defined
+<DECIMAL, RAW> : not defined
+<DECIMAL, INTERVAL_YEAR_TO_MONTH> : not defined
+<DECIMAL, INTERVAL_DAY_TO_SECOND> : not defined
+<DECIMAL, NUMBER_FLOAT> : defined
+<DECIMAL, NVARCHAR2> : not defined
+<DECIMAL, NCHAR> : not defined
+<DECIMAL, ROWID> : not defined
+<DECIMAL, LOB> : not defined
+
+/**************** DECIMAL UNSIGNED ****************/
+
+<DECIMAL UNSIGNED, NULL> : defined
+<DECIMAL UNSIGNED, TINYINT> : not defined
+<DECIMAL UNSIGNED, SMALLINT> : not defined
+<DECIMAL UNSIGNED, MEDIUMINT> : not defined
+<DECIMAL UNSIGNED, INT> : not defined
+<DECIMAL UNSIGNED, BIGINT> : not defined
+<DECIMAL UNSIGNED, TINYINT UNSIGNED> : not defined
+<DECIMAL UNSIGNED, SMALLINT UNSIGNED> : not defined
+<DECIMAL UNSIGNED, MEDIUMINT UNSIGNED> : not defined
+<DECIMAL UNSIGNED, INT UNSIGNED> : not defined
+<DECIMAL UNSIGNED, BIGINT UNSIGNED> : not defined
+<DECIMAL UNSIGNED, FLOAT> : not defined
+<DECIMAL UNSIGNED, DOUBLE> : not defined
+<DECIMAL UNSIGNED, FLOAT UNSIGNED> : not defined
+<DECIMAL UNSIGNED, DOUBLE UNSIGNED> : not defined
+<DECIMAL UNSIGNED, DECIMAL> : defined
+<DECIMAL UNSIGNED, DECIMAL UNSIGNED> : defined
+<DECIMAL UNSIGNED, DATETIME> : not defined
+<DECIMAL UNSIGNED, TIMESTAMP> : not defined
+<DECIMAL UNSIGNED, DATE> : not defined
+<DECIMAL UNSIGNED, TIME> : not defined
+<DECIMAL UNSIGNED, YEAR> : not defined
+<DECIMAL UNSIGNED, VARCHAR> : not defined
+<DECIMAL UNSIGNED, CHAR> : not defined
+<DECIMAL UNSIGNED, HEX_STRING> : not defined
+<DECIMAL UNSIGNED, EXT> : defined
+<DECIMAL UNSIGNED, UNKNOWN> : not defined
+<DECIMAL UNSIGNED, TINYTEXT> : not defined
+<DECIMAL UNSIGNED, TEXT> : not defined
+<DECIMAL UNSIGNED, MEDIUMTEXT> : not defined
+<DECIMAL UNSIGNED, LONGTEXT> : not defined
+<DECIMAL UNSIGNED, BIT> : not defined
+<DECIMAL UNSIGNED, ENUM> : not defined
+<DECIMAL UNSIGNED, SET> : not defined
+<DECIMAL UNSIGNED, ENUM_INNER> : not defined
+<DECIMAL UNSIGNED, SET_INNER> : not defined
+<DECIMAL UNSIGNED, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<DECIMAL UNSIGNED, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<DECIMAL UNSIGNED, TIMESTAMP> : not defined
+<DECIMAL UNSIGNED, RAW> : not defined
+<DECIMAL UNSIGNED, INTERVAL_YEAR_TO_MONTH> : not defined
+<DECIMAL UNSIGNED, INTERVAL_DAY_TO_SECOND> : not defined
+<DECIMAL UNSIGNED, NUMBER_FLOAT> : defined
+<DECIMAL UNSIGNED, NVARCHAR2> : not defined
+<DECIMAL UNSIGNED, NCHAR> : not defined
+<DECIMAL UNSIGNED, ROWID> : not defined
+<DECIMAL UNSIGNED, LOB> : not defined
+
+/**************** DATETIME ****************/
+
+<DATETIME, NULL> : defined
+<DATETIME, TINYINT> : not defined
+<DATETIME, SMALLINT> : not defined
+<DATETIME, MEDIUMINT> : not defined
+<DATETIME, INT> : not defined
+<DATETIME, BIGINT> : not defined
+<DATETIME, TINYINT UNSIGNED> : not defined
+<DATETIME, SMALLINT UNSIGNED> : not defined
+<DATETIME, MEDIUMINT UNSIGNED> : not defined
+<DATETIME, INT UNSIGNED> : not defined
+<DATETIME, BIGINT UNSIGNED> : not defined
+<DATETIME, FLOAT> : not defined
+<DATETIME, DOUBLE> : not defined
+<DATETIME, FLOAT UNSIGNED> : not defined
+<DATETIME, DOUBLE UNSIGNED> : not defined
+<DATETIME, DECIMAL> : not defined
+<DATETIME, DECIMAL UNSIGNED> : not defined
+<DATETIME, DATETIME> : defined
+<DATETIME, TIMESTAMP> : not defined
+<DATETIME, DATE> : not defined
+<DATETIME, TIME> : not defined
+<DATETIME, YEAR> : not defined
+<DATETIME, VARCHAR> : not defined
+<DATETIME, CHAR> : not defined
+<DATETIME, HEX_STRING> : not defined
+<DATETIME, EXT> : defined
+<DATETIME, UNKNOWN> : not defined
+<DATETIME, TINYTEXT> : not defined
+<DATETIME, TEXT> : not defined
+<DATETIME, MEDIUMTEXT> : not defined
+<DATETIME, LONGTEXT> : not defined
+<DATETIME, BIT> : not defined
+<DATETIME, ENUM> : not defined
+<DATETIME, SET> : not defined
+<DATETIME, ENUM_INNER> : not defined
+<DATETIME, SET_INNER> : not defined
+<DATETIME, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<DATETIME, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<DATETIME, TIMESTAMP> : not defined
+<DATETIME, RAW> : not defined
+<DATETIME, INTERVAL_YEAR_TO_MONTH> : not defined
+<DATETIME, INTERVAL_DAY_TO_SECOND> : not defined
+<DATETIME, NUMBER_FLOAT> : not defined
+<DATETIME, NVARCHAR2> : not defined
+<DATETIME, NCHAR> : not defined
+<DATETIME, ROWID> : not defined
+<DATETIME, LOB> : not defined
+
+/**************** TIMESTAMP ****************/
+
+<TIMESTAMP, NULL> : defined
+<TIMESTAMP, TINYINT> : not defined
+<TIMESTAMP, SMALLINT> : not defined
+<TIMESTAMP, MEDIUMINT> : not defined
+<TIMESTAMP, INT> : not defined
+<TIMESTAMP, BIGINT> : not defined
+<TIMESTAMP, TINYINT UNSIGNED> : not defined
+<TIMESTAMP, SMALLINT UNSIGNED> : not defined
+<TIMESTAMP, MEDIUMINT UNSIGNED> : not defined
+<TIMESTAMP, INT UNSIGNED> : not defined
+<TIMESTAMP, BIGINT UNSIGNED> : not defined
+<TIMESTAMP, FLOAT> : not defined
+<TIMESTAMP, DOUBLE> : not defined
+<TIMESTAMP, FLOAT UNSIGNED> : not defined
+<TIMESTAMP, DOUBLE UNSIGNED> : not defined
+<TIMESTAMP, DECIMAL> : not defined
+<TIMESTAMP, DECIMAL UNSIGNED> : not defined
+<TIMESTAMP, DATETIME> : not defined
+<TIMESTAMP, TIMESTAMP> : defined
+<TIMESTAMP, DATE> : not defined
+<TIMESTAMP, TIME> : not defined
+<TIMESTAMP, YEAR> : not defined
+<TIMESTAMP, VARCHAR> : not defined
+<TIMESTAMP, CHAR> : not defined
+<TIMESTAMP, HEX_STRING> : not defined
+<TIMESTAMP, EXT> : defined
+<TIMESTAMP, UNKNOWN> : not defined
+<TIMESTAMP, TINYTEXT> : not defined
+<TIMESTAMP, TEXT> : not defined
+<TIMESTAMP, MEDIUMTEXT> : not defined
+<TIMESTAMP, LONGTEXT> : not defined
+<TIMESTAMP, BIT> : not defined
+<TIMESTAMP, ENUM> : not defined
+<TIMESTAMP, SET> : not defined
+<TIMESTAMP, ENUM_INNER> : not defined
+<TIMESTAMP, SET_INNER> : not defined
+<TIMESTAMP, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<TIMESTAMP, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<TIMESTAMP, TIMESTAMP> : not defined
+<TIMESTAMP, RAW> : not defined
+<TIMESTAMP, INTERVAL_YEAR_TO_MONTH> : not defined
+<TIMESTAMP, INTERVAL_DAY_TO_SECOND> : not defined
+<TIMESTAMP, NUMBER_FLOAT> : not defined
+<TIMESTAMP, NVARCHAR2> : not defined
+<TIMESTAMP, NCHAR> : not defined
+<TIMESTAMP, ROWID> : not defined
+<TIMESTAMP, LOB> : not defined
+
+/**************** DATE ****************/
+
+<DATE, NULL> : defined
+<DATE, TINYINT> : not defined
+<DATE, SMALLINT> : not defined
+<DATE, MEDIUMINT> : not defined
+<DATE, INT> : not defined
+<DATE, BIGINT> : not defined
+<DATE, TINYINT UNSIGNED> : not defined
+<DATE, SMALLINT UNSIGNED> : not defined
+<DATE, MEDIUMINT UNSIGNED> : not defined
+<DATE, INT UNSIGNED> : not defined
+<DATE, BIGINT UNSIGNED> : not defined
+<DATE, FLOAT> : not defined
+<DATE, DOUBLE> : not defined
+<DATE, FLOAT UNSIGNED> : not defined
+<DATE, DOUBLE UNSIGNED> : not defined
+<DATE, DECIMAL> : not defined
+<DATE, DECIMAL UNSIGNED> : not defined
+<DATE, DATETIME> : not defined
+<DATE, TIMESTAMP> : not defined
+<DATE, DATE> : defined
+<DATE, TIME> : not defined
+<DATE, YEAR> : not defined
+<DATE, VARCHAR> : not defined
+<DATE, CHAR> : not defined
+<DATE, HEX_STRING> : not defined
+<DATE, EXT> : defined
+<DATE, UNKNOWN> : not defined
+<DATE, TINYTEXT> : not defined
+<DATE, TEXT> : not defined
+<DATE, MEDIUMTEXT> : not defined
+<DATE, LONGTEXT> : not defined
+<DATE, BIT> : not defined
+<DATE, ENUM> : not defined
+<DATE, SET> : not defined
+<DATE, ENUM_INNER> : not defined
+<DATE, SET_INNER> : not defined
+<DATE, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<DATE, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<DATE, TIMESTAMP> : not defined
+<DATE, RAW> : not defined
+<DATE, INTERVAL_YEAR_TO_MONTH> : not defined
+<DATE, INTERVAL_DAY_TO_SECOND> : not defined
+<DATE, NUMBER_FLOAT> : not defined
+<DATE, NVARCHAR2> : not defined
+<DATE, NCHAR> : not defined
+<DATE, ROWID> : not defined
+<DATE, LOB> : not defined
+
+/**************** TIME ****************/
+
+<TIME, NULL> : defined
+<TIME, TINYINT> : not defined
+<TIME, SMALLINT> : not defined
+<TIME, MEDIUMINT> : not defined
+<TIME, INT> : not defined
+<TIME, BIGINT> : not defined
+<TIME, TINYINT UNSIGNED> : not defined
+<TIME, SMALLINT UNSIGNED> : not defined
+<TIME, MEDIUMINT UNSIGNED> : not defined
+<TIME, INT UNSIGNED> : not defined
+<TIME, BIGINT UNSIGNED> : not defined
+<TIME, FLOAT> : not defined
+<TIME, DOUBLE> : not defined
+<TIME, FLOAT UNSIGNED> : not defined
+<TIME, DOUBLE UNSIGNED> : not defined
+<TIME, DECIMAL> : not defined
+<TIME, DECIMAL UNSIGNED> : not defined
+<TIME, DATETIME> : not defined
+<TIME, TIMESTAMP> : not defined
+<TIME, DATE> : not defined
+<TIME, TIME> : defined
+<TIME, YEAR> : not defined
+<TIME, VARCHAR> : not defined
+<TIME, CHAR> : not defined
+<TIME, HEX_STRING> : not defined
+<TIME, EXT> : defined
+<TIME, UNKNOWN> : not defined
+<TIME, TINYTEXT> : not defined
+<TIME, TEXT> : not defined
+<TIME, MEDIUMTEXT> : not defined
+<TIME, LONGTEXT> : not defined
+<TIME, BIT> : not defined
+<TIME, ENUM> : not defined
+<TIME, SET> : not defined
+<TIME, ENUM_INNER> : not defined
+<TIME, SET_INNER> : not defined
+<TIME, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<TIME, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<TIME, TIMESTAMP> : not defined
+<TIME, RAW> : not defined
+<TIME, INTERVAL_YEAR_TO_MONTH> : not defined
+<TIME, INTERVAL_DAY_TO_SECOND> : not defined
+<TIME, NUMBER_FLOAT> : not defined
+<TIME, NVARCHAR2> : not defined
+<TIME, NCHAR> : not defined
+<TIME, ROWID> : not defined
+<TIME, LOB> : not defined
+
+/**************** YEAR ****************/
+
+<YEAR, NULL> : defined
+<YEAR, TINYINT> : not defined
+<YEAR, SMALLINT> : not defined
+<YEAR, MEDIUMINT> : not defined
+<YEAR, INT> : not defined
+<YEAR, BIGINT> : not defined
+<YEAR, TINYINT UNSIGNED> : not defined
+<YEAR, SMALLINT UNSIGNED> : not defined
+<YEAR, MEDIUMINT UNSIGNED> : not defined
+<YEAR, INT UNSIGNED> : not defined
+<YEAR, BIGINT UNSIGNED> : not defined
+<YEAR, FLOAT> : not defined
+<YEAR, DOUBLE> : not defined
+<YEAR, FLOAT UNSIGNED> : not defined
+<YEAR, DOUBLE UNSIGNED> : not defined
+<YEAR, DECIMAL> : not defined
+<YEAR, DECIMAL UNSIGNED> : not defined
+<YEAR, DATETIME> : not defined
+<YEAR, TIMESTAMP> : not defined
+<YEAR, DATE> : not defined
+<YEAR, TIME> : not defined
+<YEAR, YEAR> : defined
+<YEAR, VARCHAR> : not defined
+<YEAR, CHAR> : not defined
+<YEAR, HEX_STRING> : not defined
+<YEAR, EXT> : defined
+<YEAR, UNKNOWN> : not defined
+<YEAR, TINYTEXT> : not defined
+<YEAR, TEXT> : not defined
+<YEAR, MEDIUMTEXT> : not defined
+<YEAR, LONGTEXT> : not defined
+<YEAR, BIT> : not defined
+<YEAR, ENUM> : not defined
+<YEAR, SET> : not defined
+<YEAR, ENUM_INNER> : not defined
+<YEAR, SET_INNER> : not defined
+<YEAR, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<YEAR, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<YEAR, TIMESTAMP> : not defined
+<YEAR, RAW> : not defined
+<YEAR, INTERVAL_YEAR_TO_MONTH> : not defined
+<YEAR, INTERVAL_DAY_TO_SECOND> : not defined
+<YEAR, NUMBER_FLOAT> : not defined
+<YEAR, NVARCHAR2> : not defined
+<YEAR, NCHAR> : not defined
+<YEAR, ROWID> : not defined
+<YEAR, LOB> : not defined
+
+/**************** VARCHAR ****************/
+
+<VARCHAR, NULL> : defined
+<VARCHAR, TINYINT> : not defined
+<VARCHAR, SMALLINT> : not defined
+<VARCHAR, MEDIUMINT> : not defined
+<VARCHAR, INT> : not defined
+<VARCHAR, BIGINT> : not defined
+<VARCHAR, TINYINT UNSIGNED> : not defined
+<VARCHAR, SMALLINT UNSIGNED> : not defined
+<VARCHAR, MEDIUMINT UNSIGNED> : not defined
+<VARCHAR, INT UNSIGNED> : not defined
+<VARCHAR, BIGINT UNSIGNED> : not defined
+<VARCHAR, FLOAT> : not defined
+<VARCHAR, DOUBLE> : not defined
+<VARCHAR, FLOAT UNSIGNED> : not defined
+<VARCHAR, DOUBLE UNSIGNED> : not defined
+<VARCHAR, DECIMAL> : not defined
+<VARCHAR, DECIMAL UNSIGNED> : not defined
+<VARCHAR, DATETIME> : not defined
+<VARCHAR, TIMESTAMP> : not defined
+<VARCHAR, DATE> : not defined
+<VARCHAR, TIME> : not defined
+<VARCHAR, YEAR> : not defined
+<VARCHAR, VARCHAR> : not defined
+<VARCHAR, CHAR> : not defined
+<VARCHAR, HEX_STRING> : not defined
+<VARCHAR, EXT> : defined
+<VARCHAR, UNKNOWN> : not defined
+<VARCHAR, TINYTEXT> : not defined
+<VARCHAR, TEXT> : not defined
+<VARCHAR, MEDIUMTEXT> : not defined
+<VARCHAR, LONGTEXT> : not defined
+<VARCHAR, BIT> : not defined
+<VARCHAR, ENUM> : not defined
+<VARCHAR, SET> : not defined
+<VARCHAR, ENUM_INNER> : not defined
+<VARCHAR, SET_INNER> : not defined
+<VARCHAR, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<VARCHAR, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<VARCHAR, TIMESTAMP> : not defined
+<VARCHAR, RAW> : not defined
+<VARCHAR, INTERVAL_YEAR_TO_MONTH> : not defined
+<VARCHAR, INTERVAL_DAY_TO_SECOND> : not defined
+<VARCHAR, NUMBER_FLOAT> : not defined
+<VARCHAR, NVARCHAR2> : not defined
+<VARCHAR, NCHAR> : not defined
+<VARCHAR, ROWID> : not defined
+<VARCHAR, LOB> : not defined
+
+/**************** CHAR ****************/
+
+<CHAR, NULL> : defined
+<CHAR, TINYINT> : not defined
+<CHAR, SMALLINT> : not defined
+<CHAR, MEDIUMINT> : not defined
+<CHAR, INT> : not defined
+<CHAR, BIGINT> : not defined
+<CHAR, TINYINT UNSIGNED> : not defined
+<CHAR, SMALLINT UNSIGNED> : not defined
+<CHAR, MEDIUMINT UNSIGNED> : not defined
+<CHAR, INT UNSIGNED> : not defined
+<CHAR, BIGINT UNSIGNED> : not defined
+<CHAR, FLOAT> : not defined
+<CHAR, DOUBLE> : not defined
+<CHAR, FLOAT UNSIGNED> : not defined
+<CHAR, DOUBLE UNSIGNED> : not defined
+<CHAR, DECIMAL> : not defined
+<CHAR, DECIMAL UNSIGNED> : not defined
+<CHAR, DATETIME> : not defined
+<CHAR, TIMESTAMP> : not defined
+<CHAR, DATE> : not defined
+<CHAR, TIME> : not defined
+<CHAR, YEAR> : not defined
+<CHAR, VARCHAR> : not defined
+<CHAR, CHAR> : not defined
+<CHAR, HEX_STRING> : not defined
+<CHAR, EXT> : defined
+<CHAR, UNKNOWN> : not defined
+<CHAR, TINYTEXT> : not defined
+<CHAR, TEXT> : not defined
+<CHAR, MEDIUMTEXT> : not defined
+<CHAR, LONGTEXT> : not defined
+<CHAR, BIT> : not defined
+<CHAR, ENUM> : not defined
+<CHAR, SET> : not defined
+<CHAR, ENUM_INNER> : not defined
+<CHAR, SET_INNER> : not defined
+<CHAR, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<CHAR, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<CHAR, TIMESTAMP> : not defined
+<CHAR, RAW> : not defined
+<CHAR, INTERVAL_YEAR_TO_MONTH> : not defined
+<CHAR, INTERVAL_DAY_TO_SECOND> : not defined
+<CHAR, NUMBER_FLOAT> : not defined
+<CHAR, NVARCHAR2> : not defined
+<CHAR, NCHAR> : not defined
+<CHAR, ROWID> : not defined
+<CHAR, LOB> : not defined
+
+/**************** HEX_STRING ****************/
+
+<HEX_STRING, NULL> : defined
+<HEX_STRING, TINYINT> : not defined
+<HEX_STRING, SMALLINT> : not defined
+<HEX_STRING, MEDIUMINT> : not defined
+<HEX_STRING, INT> : not defined
+<HEX_STRING, BIGINT> : not defined
+<HEX_STRING, TINYINT UNSIGNED> : not defined
+<HEX_STRING, SMALLINT UNSIGNED> : not defined
+<HEX_STRING, MEDIUMINT UNSIGNED> : not defined
+<HEX_STRING, INT UNSIGNED> : not defined
+<HEX_STRING, BIGINT UNSIGNED> : not defined
+<HEX_STRING, FLOAT> : not defined
+<HEX_STRING, DOUBLE> : not defined
+<HEX_STRING, FLOAT UNSIGNED> : not defined
+<HEX_STRING, DOUBLE UNSIGNED> : not defined
+<HEX_STRING, DECIMAL> : not defined
+<HEX_STRING, DECIMAL UNSIGNED> : not defined
+<HEX_STRING, DATETIME> : not defined
+<HEX_STRING, TIMESTAMP> : not defined
+<HEX_STRING, DATE> : not defined
+<HEX_STRING, TIME> : not defined
+<HEX_STRING, YEAR> : not defined
+<HEX_STRING, VARCHAR> : not defined
+<HEX_STRING, CHAR> : not defined
+<HEX_STRING, HEX_STRING> : not defined
+<HEX_STRING, EXT> : defined
+<HEX_STRING, UNKNOWN> : not defined
+<HEX_STRING, TINYTEXT> : not defined
+<HEX_STRING, TEXT> : not defined
+<HEX_STRING, MEDIUMTEXT> : not defined
+<HEX_STRING, LONGTEXT> : not defined
+<HEX_STRING, BIT> : not defined
+<HEX_STRING, ENUM> : not defined
+<HEX_STRING, SET> : not defined
+<HEX_STRING, ENUM_INNER> : not defined
+<HEX_STRING, SET_INNER> : not defined
+<HEX_STRING, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<HEX_STRING, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<HEX_STRING, TIMESTAMP> : not defined
+<HEX_STRING, RAW> : not defined
+<HEX_STRING, INTERVAL_YEAR_TO_MONTH> : not defined
+<HEX_STRING, INTERVAL_DAY_TO_SECOND> : not defined
+<HEX_STRING, NUMBER_FLOAT> : not defined
+<HEX_STRING, NVARCHAR2> : not defined
+<HEX_STRING, NCHAR> : not defined
+<HEX_STRING, ROWID> : not defined
+<HEX_STRING, LOB> : not defined
+
+/**************** EXT ****************/
+
+<EXT, NULL> : defined
+<EXT, TINYINT> : defined
+<EXT, SMALLINT> : defined
+<EXT, MEDIUMINT> : defined
+<EXT, INT> : defined
+<EXT, BIGINT> : defined
+<EXT, TINYINT UNSIGNED> : defined
+<EXT, SMALLINT UNSIGNED> : defined
+<EXT, MEDIUMINT UNSIGNED> : defined
+<EXT, INT UNSIGNED> : defined
+<EXT, BIGINT UNSIGNED> : defined
+<EXT, FLOAT> : defined
+<EXT, DOUBLE> : defined
+<EXT, FLOAT UNSIGNED> : defined
+<EXT, DOUBLE UNSIGNED> : defined
+<EXT, DECIMAL> : defined
+<EXT, DECIMAL UNSIGNED> : defined
+<EXT, DATETIME> : defined
+<EXT, TIMESTAMP> : defined
+<EXT, DATE> : defined
+<EXT, TIME> : defined
+<EXT, YEAR> : defined
+<EXT, VARCHAR> : defined
+<EXT, CHAR> : defined
+<EXT, HEX_STRING> : defined
+<EXT, EXT> : defined
+<EXT, UNKNOWN> : defined
+<EXT, TINYTEXT> : defined
+<EXT, TEXT> : defined
+<EXT, MEDIUMTEXT> : defined
+<EXT, LONGTEXT> : defined
+<EXT, BIT> : defined
+<EXT, ENUM> : defined
+<EXT, SET> : defined
+<EXT, ENUM_INNER> : defined
+<EXT, SET_INNER> : defined
+<EXT, TIMESTAMP_WITH_TIME_ZONE> : defined
+<EXT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : defined
+<EXT, TIMESTAMP> : defined
+<EXT, RAW> : defined
+<EXT, INTERVAL_YEAR_TO_MONTH> : defined
+<EXT, INTERVAL_DAY_TO_SECOND> : defined
+<EXT, NUMBER_FLOAT> : defined
+<EXT, NVARCHAR2> : defined
+<EXT, NCHAR> : defined
+<EXT, ROWID> : defined
+<EXT, LOB> : defined
+
+/**************** UNKNOWN ****************/
+
+<UNKNOWN, NULL> : defined
+<UNKNOWN, TINYINT> : not defined
+<UNKNOWN, SMALLINT> : not defined
+<UNKNOWN, MEDIUMINT> : not defined
+<UNKNOWN, INT> : not defined
+<UNKNOWN, BIGINT> : not defined
+<UNKNOWN, TINYINT UNSIGNED> : not defined
+<UNKNOWN, SMALLINT UNSIGNED> : not defined
+<UNKNOWN, MEDIUMINT UNSIGNED> : not defined
+<UNKNOWN, INT UNSIGNED> : not defined
+<UNKNOWN, BIGINT UNSIGNED> : not defined
+<UNKNOWN, FLOAT> : not defined
+<UNKNOWN, DOUBLE> : not defined
+<UNKNOWN, FLOAT UNSIGNED> : not defined
+<UNKNOWN, DOUBLE UNSIGNED> : not defined
+<UNKNOWN, DECIMAL> : not defined
+<UNKNOWN, DECIMAL UNSIGNED> : not defined
+<UNKNOWN, DATETIME> : not defined
+<UNKNOWN, TIMESTAMP> : not defined
+<UNKNOWN, DATE> : not defined
+<UNKNOWN, TIME> : not defined
+<UNKNOWN, YEAR> : not defined
+<UNKNOWN, VARCHAR> : not defined
+<UNKNOWN, CHAR> : not defined
+<UNKNOWN, HEX_STRING> : not defined
+<UNKNOWN, EXT> : defined
+<UNKNOWN, UNKNOWN> : defined
+<UNKNOWN, TINYTEXT> : not defined
+<UNKNOWN, TEXT> : not defined
+<UNKNOWN, MEDIUMTEXT> : not defined
+<UNKNOWN, LONGTEXT> : not defined
+<UNKNOWN, BIT> : not defined
+<UNKNOWN, ENUM> : not defined
+<UNKNOWN, SET> : not defined
+<UNKNOWN, ENUM_INNER> : not defined
+<UNKNOWN, SET_INNER> : not defined
+<UNKNOWN, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<UNKNOWN, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<UNKNOWN, TIMESTAMP> : not defined
+<UNKNOWN, RAW> : not defined
+<UNKNOWN, INTERVAL_YEAR_TO_MONTH> : not defined
+<UNKNOWN, INTERVAL_DAY_TO_SECOND> : not defined
+<UNKNOWN, NUMBER_FLOAT> : not defined
+<UNKNOWN, NVARCHAR2> : not defined
+<UNKNOWN, NCHAR> : not defined
+<UNKNOWN, ROWID> : not defined
+<UNKNOWN, LOB> : not defined
+
+/**************** TINYTEXT ****************/
+
+<TINYTEXT, NULL> : defined
+<TINYTEXT, TINYINT> : not defined
+<TINYTEXT, SMALLINT> : not defined
+<TINYTEXT, MEDIUMINT> : not defined
+<TINYTEXT, INT> : not defined
+<TINYTEXT, BIGINT> : not defined
+<TINYTEXT, TINYINT UNSIGNED> : not defined
+<TINYTEXT, SMALLINT UNSIGNED> : not defined
+<TINYTEXT, MEDIUMINT UNSIGNED> : not defined
+<TINYTEXT, INT UNSIGNED> : not defined
+<TINYTEXT, BIGINT UNSIGNED> : not defined
+<TINYTEXT, FLOAT> : not defined
+<TINYTEXT, DOUBLE> : not defined
+<TINYTEXT, FLOAT UNSIGNED> : not defined
+<TINYTEXT, DOUBLE UNSIGNED> : not defined
+<TINYTEXT, DECIMAL> : not defined
+<TINYTEXT, DECIMAL UNSIGNED> : not defined
+<TINYTEXT, DATETIME> : not defined
+<TINYTEXT, TIMESTAMP> : not defined
+<TINYTEXT, DATE> : not defined
+<TINYTEXT, TIME> : not defined
+<TINYTEXT, YEAR> : not defined
+<TINYTEXT, VARCHAR> : not defined
+<TINYTEXT, CHAR> : not defined
+<TINYTEXT, HEX_STRING> : not defined
+<TINYTEXT, EXT> : defined
+<TINYTEXT, UNKNOWN> : not defined
+<TINYTEXT, TINYTEXT> : not defined
+<TINYTEXT, TEXT> : not defined
+<TINYTEXT, MEDIUMTEXT> : not defined
+<TINYTEXT, LONGTEXT> : not defined
+<TINYTEXT, BIT> : not defined
+<TINYTEXT, ENUM> : not defined
+<TINYTEXT, SET> : not defined
+<TINYTEXT, ENUM_INNER> : not defined
+<TINYTEXT, SET_INNER> : not defined
+<TINYTEXT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<TINYTEXT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<TINYTEXT, TIMESTAMP> : not defined
+<TINYTEXT, RAW> : not defined
+<TINYTEXT, INTERVAL_YEAR_TO_MONTH> : not defined
+<TINYTEXT, INTERVAL_DAY_TO_SECOND> : not defined
+<TINYTEXT, NUMBER_FLOAT> : not defined
+<TINYTEXT, NVARCHAR2> : not defined
+<TINYTEXT, NCHAR> : not defined
+<TINYTEXT, ROWID> : not defined
+<TINYTEXT, LOB> : not defined
+
+/**************** TEXT ****************/
+
+<TEXT, NULL> : defined
+<TEXT, TINYINT> : not defined
+<TEXT, SMALLINT> : not defined
+<TEXT, MEDIUMINT> : not defined
+<TEXT, INT> : not defined
+<TEXT, BIGINT> : not defined
+<TEXT, TINYINT UNSIGNED> : not defined
+<TEXT, SMALLINT UNSIGNED> : not defined
+<TEXT, MEDIUMINT UNSIGNED> : not defined
+<TEXT, INT UNSIGNED> : not defined
+<TEXT, BIGINT UNSIGNED> : not defined
+<TEXT, FLOAT> : not defined
+<TEXT, DOUBLE> : not defined
+<TEXT, FLOAT UNSIGNED> : not defined
+<TEXT, DOUBLE UNSIGNED> : not defined
+<TEXT, DECIMAL> : not defined
+<TEXT, DECIMAL UNSIGNED> : not defined
+<TEXT, DATETIME> : not defined
+<TEXT, TIMESTAMP> : not defined
+<TEXT, DATE> : not defined
+<TEXT, TIME> : not defined
+<TEXT, YEAR> : not defined
+<TEXT, VARCHAR> : not defined
+<TEXT, CHAR> : not defined
+<TEXT, HEX_STRING> : not defined
+<TEXT, EXT> : defined
+<TEXT, UNKNOWN> : not defined
+<TEXT, TINYTEXT> : not defined
+<TEXT, TEXT> : not defined
+<TEXT, MEDIUMTEXT> : not defined
+<TEXT, LONGTEXT> : not defined
+<TEXT, BIT> : not defined
+<TEXT, ENUM> : not defined
+<TEXT, SET> : not defined
+<TEXT, ENUM_INNER> : not defined
+<TEXT, SET_INNER> : not defined
+<TEXT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<TEXT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<TEXT, TIMESTAMP> : not defined
+<TEXT, RAW> : not defined
+<TEXT, INTERVAL_YEAR_TO_MONTH> : not defined
+<TEXT, INTERVAL_DAY_TO_SECOND> : not defined
+<TEXT, NUMBER_FLOAT> : not defined
+<TEXT, NVARCHAR2> : not defined
+<TEXT, NCHAR> : not defined
+<TEXT, ROWID> : not defined
+<TEXT, LOB> : not defined
+
+/**************** MEDIUMTEXT ****************/
+
+<MEDIUMTEXT, NULL> : defined
+<MEDIUMTEXT, TINYINT> : not defined
+<MEDIUMTEXT, SMALLINT> : not defined
+<MEDIUMTEXT, MEDIUMINT> : not defined
+<MEDIUMTEXT, INT> : not defined
+<MEDIUMTEXT, BIGINT> : not defined
+<MEDIUMTEXT, TINYINT UNSIGNED> : not defined
+<MEDIUMTEXT, SMALLINT UNSIGNED> : not defined
+<MEDIUMTEXT, MEDIUMINT UNSIGNED> : not defined
+<MEDIUMTEXT, INT UNSIGNED> : not defined
+<MEDIUMTEXT, BIGINT UNSIGNED> : not defined
+<MEDIUMTEXT, FLOAT> : not defined
+<MEDIUMTEXT, DOUBLE> : not defined
+<MEDIUMTEXT, FLOAT UNSIGNED> : not defined
+<MEDIUMTEXT, DOUBLE UNSIGNED> : not defined
+<MEDIUMTEXT, DECIMAL> : not defined
+<MEDIUMTEXT, DECIMAL UNSIGNED> : not defined
+<MEDIUMTEXT, DATETIME> : not defined
+<MEDIUMTEXT, TIMESTAMP> : not defined
+<MEDIUMTEXT, DATE> : not defined
+<MEDIUMTEXT, TIME> : not defined
+<MEDIUMTEXT, YEAR> : not defined
+<MEDIUMTEXT, VARCHAR> : not defined
+<MEDIUMTEXT, CHAR> : not defined
+<MEDIUMTEXT, HEX_STRING> : not defined
+<MEDIUMTEXT, EXT> : defined
+<MEDIUMTEXT, UNKNOWN> : not defined
+<MEDIUMTEXT, TINYTEXT> : not defined
+<MEDIUMTEXT, TEXT> : not defined
+<MEDIUMTEXT, MEDIUMTEXT> : not defined
+<MEDIUMTEXT, LONGTEXT> : not defined
+<MEDIUMTEXT, BIT> : not defined
+<MEDIUMTEXT, ENUM> : not defined
+<MEDIUMTEXT, SET> : not defined
+<MEDIUMTEXT, ENUM_INNER> : not defined
+<MEDIUMTEXT, SET_INNER> : not defined
+<MEDIUMTEXT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<MEDIUMTEXT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<MEDIUMTEXT, TIMESTAMP> : not defined
+<MEDIUMTEXT, RAW> : not defined
+<MEDIUMTEXT, INTERVAL_YEAR_TO_MONTH> : not defined
+<MEDIUMTEXT, INTERVAL_DAY_TO_SECOND> : not defined
+<MEDIUMTEXT, NUMBER_FLOAT> : not defined
+<MEDIUMTEXT, NVARCHAR2> : not defined
+<MEDIUMTEXT, NCHAR> : not defined
+<MEDIUMTEXT, ROWID> : not defined
+<MEDIUMTEXT, LOB> : not defined
+
+/**************** LONGTEXT ****************/
+
+<LONGTEXT, NULL> : defined
+<LONGTEXT, TINYINT> : not defined
+<LONGTEXT, SMALLINT> : not defined
+<LONGTEXT, MEDIUMINT> : not defined
+<LONGTEXT, INT> : not defined
+<LONGTEXT, BIGINT> : not defined
+<LONGTEXT, TINYINT UNSIGNED> : not defined
+<LONGTEXT, SMALLINT UNSIGNED> : not defined
+<LONGTEXT, MEDIUMINT UNSIGNED> : not defined
+<LONGTEXT, INT UNSIGNED> : not defined
+<LONGTEXT, BIGINT UNSIGNED> : not defined
+<LONGTEXT, FLOAT> : not defined
+<LONGTEXT, DOUBLE> : not defined
+<LONGTEXT, FLOAT UNSIGNED> : not defined
+<LONGTEXT, DOUBLE UNSIGNED> : not defined
+<LONGTEXT, DECIMAL> : not defined
+<LONGTEXT, DECIMAL UNSIGNED> : not defined
+<LONGTEXT, DATETIME> : not defined
+<LONGTEXT, TIMESTAMP> : not defined
+<LONGTEXT, DATE> : not defined
+<LONGTEXT, TIME> : not defined
+<LONGTEXT, YEAR> : not defined
+<LONGTEXT, VARCHAR> : not defined
+<LONGTEXT, CHAR> : not defined
+<LONGTEXT, HEX_STRING> : not defined
+<LONGTEXT, EXT> : defined
+<LONGTEXT, UNKNOWN> : not defined
+<LONGTEXT, TINYTEXT> : not defined
+<LONGTEXT, TEXT> : not defined
+<LONGTEXT, MEDIUMTEXT> : not defined
+<LONGTEXT, LONGTEXT> : not defined
+<LONGTEXT, BIT> : not defined
+<LONGTEXT, ENUM> : not defined
+<LONGTEXT, SET> : not defined
+<LONGTEXT, ENUM_INNER> : not defined
+<LONGTEXT, SET_INNER> : not defined
+<LONGTEXT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<LONGTEXT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<LONGTEXT, TIMESTAMP> : not defined
+<LONGTEXT, RAW> : not defined
+<LONGTEXT, INTERVAL_YEAR_TO_MONTH> : not defined
+<LONGTEXT, INTERVAL_DAY_TO_SECOND> : not defined
+<LONGTEXT, NUMBER_FLOAT> : not defined
+<LONGTEXT, NVARCHAR2> : not defined
+<LONGTEXT, NCHAR> : not defined
+<LONGTEXT, ROWID> : not defined
+<LONGTEXT, LOB> : not defined
+
+/**************** BIT ****************/
+
+<BIT, NULL> : defined
+<BIT, TINYINT> : not defined
+<BIT, SMALLINT> : not defined
+<BIT, MEDIUMINT> : not defined
+<BIT, INT> : not defined
+<BIT, BIGINT> : not defined
+<BIT, TINYINT UNSIGNED> : not defined
+<BIT, SMALLINT UNSIGNED> : not defined
+<BIT, MEDIUMINT UNSIGNED> : not defined
+<BIT, INT UNSIGNED> : not defined
+<BIT, BIGINT UNSIGNED> : not defined
+<BIT, FLOAT> : not defined
+<BIT, DOUBLE> : not defined
+<BIT, FLOAT UNSIGNED> : not defined
+<BIT, DOUBLE UNSIGNED> : not defined
+<BIT, DECIMAL> : not defined
+<BIT, DECIMAL UNSIGNED> : not defined
+<BIT, DATETIME> : not defined
+<BIT, TIMESTAMP> : not defined
+<BIT, DATE> : not defined
+<BIT, TIME> : not defined
+<BIT, YEAR> : not defined
+<BIT, VARCHAR> : not defined
+<BIT, CHAR> : not defined
+<BIT, HEX_STRING> : not defined
+<BIT, EXT> : defined
+<BIT, UNKNOWN> : not defined
+<BIT, TINYTEXT> : not defined
+<BIT, TEXT> : not defined
+<BIT, MEDIUMTEXT> : not defined
+<BIT, LONGTEXT> : not defined
+<BIT, BIT> : defined
+<BIT, ENUM> : not defined
+<BIT, SET> : not defined
+<BIT, ENUM_INNER> : not defined
+<BIT, SET_INNER> : not defined
+<BIT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<BIT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<BIT, TIMESTAMP> : not defined
+<BIT, RAW> : not defined
+<BIT, INTERVAL_YEAR_TO_MONTH> : not defined
+<BIT, INTERVAL_DAY_TO_SECOND> : not defined
+<BIT, NUMBER_FLOAT> : not defined
+<BIT, NVARCHAR2> : not defined
+<BIT, NCHAR> : not defined
+<BIT, ROWID> : not defined
+<BIT, LOB> : not defined
+
+/**************** ENUM ****************/
+
+<ENUM, NULL> : defined
+<ENUM, TINYINT> : defined
+<ENUM, SMALLINT> : defined
+<ENUM, MEDIUMINT> : defined
+<ENUM, INT> : defined
+<ENUM, BIGINT> : defined
+<ENUM, TINYINT UNSIGNED> : defined
+<ENUM, SMALLINT UNSIGNED> : defined
+<ENUM, MEDIUMINT UNSIGNED> : defined
+<ENUM, INT UNSIGNED> : defined
+<ENUM, BIGINT UNSIGNED> : defined
+<ENUM, FLOAT> : not defined
+<ENUM, DOUBLE> : not defined
+<ENUM, FLOAT UNSIGNED> : not defined
+<ENUM, DOUBLE UNSIGNED> : not defined
+<ENUM, DECIMAL> : not defined
+<ENUM, DECIMAL UNSIGNED> : not defined
+<ENUM, DATETIME> : not defined
+<ENUM, TIMESTAMP> : not defined
+<ENUM, DATE> : not defined
+<ENUM, TIME> : not defined
+<ENUM, YEAR> : not defined
+<ENUM, VARCHAR> : not defined
+<ENUM, CHAR> : not defined
+<ENUM, HEX_STRING> : not defined
+<ENUM, EXT> : defined
+<ENUM, UNKNOWN> : not defined
+<ENUM, TINYTEXT> : not defined
+<ENUM, TEXT> : not defined
+<ENUM, MEDIUMTEXT> : not defined
+<ENUM, LONGTEXT> : not defined
+<ENUM, BIT> : not defined
+<ENUM, ENUM> : defined
+<ENUM, SET> : defined
+<ENUM, ENUM_INNER> : not defined
+<ENUM, SET_INNER> : not defined
+<ENUM, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<ENUM, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<ENUM, TIMESTAMP> : not defined
+<ENUM, RAW> : not defined
+<ENUM, INTERVAL_YEAR_TO_MONTH> : not defined
+<ENUM, INTERVAL_DAY_TO_SECOND> : not defined
+<ENUM, NUMBER_FLOAT> : not defined
+<ENUM, NVARCHAR2> : not defined
+<ENUM, NCHAR> : not defined
+<ENUM, ROWID> : not defined
+<ENUM, LOB> : not defined
+
+/**************** SET ****************/
+
+<SET, NULL> : defined
+<SET, TINYINT> : defined
+<SET, SMALLINT> : defined
+<SET, MEDIUMINT> : defined
+<SET, INT> : defined
+<SET, BIGINT> : defined
+<SET, TINYINT UNSIGNED> : defined
+<SET, SMALLINT UNSIGNED> : defined
+<SET, MEDIUMINT UNSIGNED> : defined
+<SET, INT UNSIGNED> : defined
+<SET, BIGINT UNSIGNED> : defined
+<SET, FLOAT> : not defined
+<SET, DOUBLE> : not defined
+<SET, FLOAT UNSIGNED> : not defined
+<SET, DOUBLE UNSIGNED> : not defined
+<SET, DECIMAL> : not defined
+<SET, DECIMAL UNSIGNED> : not defined
+<SET, DATETIME> : not defined
+<SET, TIMESTAMP> : not defined
+<SET, DATE> : not defined
+<SET, TIME> : not defined
+<SET, YEAR> : not defined
+<SET, VARCHAR> : not defined
+<SET, CHAR> : not defined
+<SET, HEX_STRING> : not defined
+<SET, EXT> : defined
+<SET, UNKNOWN> : not defined
+<SET, TINYTEXT> : not defined
+<SET, TEXT> : not defined
+<SET, MEDIUMTEXT> : not defined
+<SET, LONGTEXT> : not defined
+<SET, BIT> : not defined
+<SET, ENUM> : defined
+<SET, SET> : defined
+<SET, ENUM_INNER> : not defined
+<SET, SET_INNER> : not defined
+<SET, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<SET, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<SET, TIMESTAMP> : not defined
+<SET, RAW> : not defined
+<SET, INTERVAL_YEAR_TO_MONTH> : not defined
+<SET, INTERVAL_DAY_TO_SECOND> : not defined
+<SET, NUMBER_FLOAT> : not defined
+<SET, NVARCHAR2> : not defined
+<SET, NCHAR> : not defined
+<SET, ROWID> : not defined
+<SET, LOB> : not defined
+
+/**************** ENUM_INNER ****************/
+
+<ENUM_INNER, NULL> : defined
+<ENUM_INNER, TINYINT> : not defined
+<ENUM_INNER, SMALLINT> : not defined
+<ENUM_INNER, MEDIUMINT> : not defined
+<ENUM_INNER, INT> : not defined
+<ENUM_INNER, BIGINT> : not defined
+<ENUM_INNER, TINYINT UNSIGNED> : not defined
+<ENUM_INNER, SMALLINT UNSIGNED> : not defined
+<ENUM_INNER, MEDIUMINT UNSIGNED> : not defined
+<ENUM_INNER, INT UNSIGNED> : not defined
+<ENUM_INNER, BIGINT UNSIGNED> : not defined
+<ENUM_INNER, FLOAT> : not defined
+<ENUM_INNER, DOUBLE> : not defined
+<ENUM_INNER, FLOAT UNSIGNED> : not defined
+<ENUM_INNER, DOUBLE UNSIGNED> : not defined
+<ENUM_INNER, DECIMAL> : not defined
+<ENUM_INNER, DECIMAL UNSIGNED> : not defined
+<ENUM_INNER, DATETIME> : not defined
+<ENUM_INNER, TIMESTAMP> : not defined
+<ENUM_INNER, DATE> : not defined
+<ENUM_INNER, TIME> : not defined
+<ENUM_INNER, YEAR> : not defined
+<ENUM_INNER, VARCHAR> : not defined
+<ENUM_INNER, CHAR> : not defined
+<ENUM_INNER, HEX_STRING> : not defined
+<ENUM_INNER, EXT> : defined
+<ENUM_INNER, UNKNOWN> : not defined
+<ENUM_INNER, TINYTEXT> : not defined
+<ENUM_INNER, TEXT> : not defined
+<ENUM_INNER, MEDIUMTEXT> : not defined
+<ENUM_INNER, LONGTEXT> : not defined
+<ENUM_INNER, BIT> : not defined
+<ENUM_INNER, ENUM> : not defined
+<ENUM_INNER, SET> : not defined
+<ENUM_INNER, ENUM_INNER> : not defined
+<ENUM_INNER, SET_INNER> : not defined
+<ENUM_INNER, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<ENUM_INNER, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<ENUM_INNER, TIMESTAMP> : not defined
+<ENUM_INNER, RAW> : not defined
+<ENUM_INNER, INTERVAL_YEAR_TO_MONTH> : not defined
+<ENUM_INNER, INTERVAL_DAY_TO_SECOND> : not defined
+<ENUM_INNER, NUMBER_FLOAT> : not defined
+<ENUM_INNER, NVARCHAR2> : not defined
+<ENUM_INNER, NCHAR> : not defined
+<ENUM_INNER, ROWID> : not defined
+<ENUM_INNER, LOB> : not defined
+
+/**************** SET_INNER ****************/
+
+<SET_INNER, NULL> : defined
+<SET_INNER, TINYINT> : not defined
+<SET_INNER, SMALLINT> : not defined
+<SET_INNER, MEDIUMINT> : not defined
+<SET_INNER, INT> : not defined
+<SET_INNER, BIGINT> : not defined
+<SET_INNER, TINYINT UNSIGNED> : not defined
+<SET_INNER, SMALLINT UNSIGNED> : not defined
+<SET_INNER, MEDIUMINT UNSIGNED> : not defined
+<SET_INNER, INT UNSIGNED> : not defined
+<SET_INNER, BIGINT UNSIGNED> : not defined
+<SET_INNER, FLOAT> : not defined
+<SET_INNER, DOUBLE> : not defined
+<SET_INNER, FLOAT UNSIGNED> : not defined
+<SET_INNER, DOUBLE UNSIGNED> : not defined
+<SET_INNER, DECIMAL> : not defined
+<SET_INNER, DECIMAL UNSIGNED> : not defined
+<SET_INNER, DATETIME> : not defined
+<SET_INNER, TIMESTAMP> : not defined
+<SET_INNER, DATE> : not defined
+<SET_INNER, TIME> : not defined
+<SET_INNER, YEAR> : not defined
+<SET_INNER, VARCHAR> : not defined
+<SET_INNER, CHAR> : not defined
+<SET_INNER, HEX_STRING> : not defined
+<SET_INNER, EXT> : defined
+<SET_INNER, UNKNOWN> : not defined
+<SET_INNER, TINYTEXT> : not defined
+<SET_INNER, TEXT> : not defined
+<SET_INNER, MEDIUMTEXT> : not defined
+<SET_INNER, LONGTEXT> : not defined
+<SET_INNER, BIT> : not defined
+<SET_INNER, ENUM> : not defined
+<SET_INNER, SET> : not defined
+<SET_INNER, ENUM_INNER> : not defined
+<SET_INNER, SET_INNER> : not defined
+<SET_INNER, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<SET_INNER, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<SET_INNER, TIMESTAMP> : not defined
+<SET_INNER, RAW> : not defined
+<SET_INNER, INTERVAL_YEAR_TO_MONTH> : not defined
+<SET_INNER, INTERVAL_DAY_TO_SECOND> : not defined
+<SET_INNER, NUMBER_FLOAT> : not defined
+<SET_INNER, NVARCHAR2> : not defined
+<SET_INNER, NCHAR> : not defined
+<SET_INNER, ROWID> : not defined
+<SET_INNER, LOB> : not defined
+
+/**************** TIMESTAMP_WITH_TIME_ZONE ****************/
+
+<TIMESTAMP_WITH_TIME_ZONE, NULL> : defined
+<TIMESTAMP_WITH_TIME_ZONE, TINYINT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, SMALLINT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, MEDIUMINT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, INT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, BIGINT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, TINYINT UNSIGNED> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, SMALLINT UNSIGNED> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, MEDIUMINT UNSIGNED> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, INT UNSIGNED> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, BIGINT UNSIGNED> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, FLOAT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, DOUBLE> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, FLOAT UNSIGNED> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, DOUBLE UNSIGNED> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, DECIMAL> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, DECIMAL UNSIGNED> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, DATETIME> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, TIMESTAMP> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, DATE> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, TIME> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, YEAR> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, VARCHAR> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, CHAR> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, HEX_STRING> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, EXT> : defined
+<TIMESTAMP_WITH_TIME_ZONE, UNKNOWN> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, TINYTEXT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, TEXT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, MEDIUMTEXT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, LONGTEXT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, BIT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, ENUM> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, SET> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, ENUM_INNER> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, SET_INNER> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, TIMESTAMP_WITH_TIME_ZONE> : defined
+<TIMESTAMP_WITH_TIME_ZONE, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, TIMESTAMP> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, RAW> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, INTERVAL_YEAR_TO_MONTH> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, INTERVAL_DAY_TO_SECOND> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, NUMBER_FLOAT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, NVARCHAR2> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, NCHAR> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, ROWID> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, LOB> : not defined
+
+/**************** TIMESTAMP_WITH_LOCAL_TIME_ZONE ****************/
+
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, NULL> : defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, TINYINT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, SMALLINT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, MEDIUMINT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, INT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, BIGINT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, TINYINT UNSIGNED> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, SMALLINT UNSIGNED> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, MEDIUMINT UNSIGNED> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, INT UNSIGNED> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, BIGINT UNSIGNED> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, FLOAT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, DOUBLE> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, FLOAT UNSIGNED> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, DOUBLE UNSIGNED> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, DECIMAL> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, DECIMAL UNSIGNED> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, DATETIME> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, TIMESTAMP> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, DATE> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, TIME> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, YEAR> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, VARCHAR> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, CHAR> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, HEX_STRING> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, EXT> : defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, UNKNOWN> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, TINYTEXT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, TEXT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, MEDIUMTEXT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, LONGTEXT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, BIT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, ENUM> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, SET> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, ENUM_INNER> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, SET_INNER> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, TIMESTAMP> : defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, RAW> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, INTERVAL_YEAR_TO_MONTH> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, INTERVAL_DAY_TO_SECOND> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, NUMBER_FLOAT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, NVARCHAR2> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, NCHAR> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, ROWID> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, LOB> : not defined
+
+/**************** TIMESTAMP ****************/
+
+<TIMESTAMP, NULL> : defined
+<TIMESTAMP, TINYINT> : not defined
+<TIMESTAMP, SMALLINT> : not defined
+<TIMESTAMP, MEDIUMINT> : not defined
+<TIMESTAMP, INT> : not defined
+<TIMESTAMP, BIGINT> : not defined
+<TIMESTAMP, TINYINT UNSIGNED> : not defined
+<TIMESTAMP, SMALLINT UNSIGNED> : not defined
+<TIMESTAMP, MEDIUMINT UNSIGNED> : not defined
+<TIMESTAMP, INT UNSIGNED> : not defined
+<TIMESTAMP, BIGINT UNSIGNED> : not defined
+<TIMESTAMP, FLOAT> : not defined
+<TIMESTAMP, DOUBLE> : not defined
+<TIMESTAMP, FLOAT UNSIGNED> : not defined
+<TIMESTAMP, DOUBLE UNSIGNED> : not defined
+<TIMESTAMP, DECIMAL> : not defined
+<TIMESTAMP, DECIMAL UNSIGNED> : not defined
+<TIMESTAMP, DATETIME> : not defined
+<TIMESTAMP, TIMESTAMP> : not defined
+<TIMESTAMP, DATE> : not defined
+<TIMESTAMP, TIME> : not defined
+<TIMESTAMP, YEAR> : not defined
+<TIMESTAMP, VARCHAR> : not defined
+<TIMESTAMP, CHAR> : not defined
+<TIMESTAMP, HEX_STRING> : not defined
+<TIMESTAMP, EXT> : defined
+<TIMESTAMP, UNKNOWN> : not defined
+<TIMESTAMP, TINYTEXT> : not defined
+<TIMESTAMP, TEXT> : not defined
+<TIMESTAMP, MEDIUMTEXT> : not defined
+<TIMESTAMP, LONGTEXT> : not defined
+<TIMESTAMP, BIT> : not defined
+<TIMESTAMP, ENUM> : not defined
+<TIMESTAMP, SET> : not defined
+<TIMESTAMP, ENUM_INNER> : not defined
+<TIMESTAMP, SET_INNER> : not defined
+<TIMESTAMP, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<TIMESTAMP, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : defined
+<TIMESTAMP, TIMESTAMP> : defined
+<TIMESTAMP, RAW> : not defined
+<TIMESTAMP, INTERVAL_YEAR_TO_MONTH> : not defined
+<TIMESTAMP, INTERVAL_DAY_TO_SECOND> : not defined
+<TIMESTAMP, NUMBER_FLOAT> : not defined
+<TIMESTAMP, NVARCHAR2> : not defined
+<TIMESTAMP, NCHAR> : not defined
+<TIMESTAMP, ROWID> : not defined
+<TIMESTAMP, LOB> : not defined
+
+/**************** RAW ****************/
+
+<RAW, NULL> : defined
+<RAW, TINYINT> : not defined
+<RAW, SMALLINT> : not defined
+<RAW, MEDIUMINT> : not defined
+<RAW, INT> : not defined
+<RAW, BIGINT> : not defined
+<RAW, TINYINT UNSIGNED> : not defined
+<RAW, SMALLINT UNSIGNED> : not defined
+<RAW, MEDIUMINT UNSIGNED> : not defined
+<RAW, INT UNSIGNED> : not defined
+<RAW, BIGINT UNSIGNED> : not defined
+<RAW, FLOAT> : not defined
+<RAW, DOUBLE> : not defined
+<RAW, FLOAT UNSIGNED> : not defined
+<RAW, DOUBLE UNSIGNED> : not defined
+<RAW, DECIMAL> : not defined
+<RAW, DECIMAL UNSIGNED> : not defined
+<RAW, DATETIME> : not defined
+<RAW, TIMESTAMP> : not defined
+<RAW, DATE> : not defined
+<RAW, TIME> : not defined
+<RAW, YEAR> : not defined
+<RAW, VARCHAR> : not defined
+<RAW, CHAR> : not defined
+<RAW, HEX_STRING> : not defined
+<RAW, EXT> : defined
+<RAW, UNKNOWN> : not defined
+<RAW, TINYTEXT> : not defined
+<RAW, TEXT> : not defined
+<RAW, MEDIUMTEXT> : not defined
+<RAW, LONGTEXT> : not defined
+<RAW, BIT> : not defined
+<RAW, ENUM> : not defined
+<RAW, SET> : not defined
+<RAW, ENUM_INNER> : not defined
+<RAW, SET_INNER> : not defined
+<RAW, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<RAW, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<RAW, TIMESTAMP> : not defined
+<RAW, RAW> : not defined
+<RAW, INTERVAL_YEAR_TO_MONTH> : not defined
+<RAW, INTERVAL_DAY_TO_SECOND> : not defined
+<RAW, NUMBER_FLOAT> : not defined
+<RAW, NVARCHAR2> : not defined
+<RAW, NCHAR> : not defined
+<RAW, ROWID> : not defined
+<RAW, LOB> : not defined
+
+/**************** INTERVAL_YEAR_TO_MONTH ****************/
+
+<INTERVAL_YEAR_TO_MONTH, NULL> : defined
+<INTERVAL_YEAR_TO_MONTH, TINYINT> : not defined
+<INTERVAL_YEAR_TO_MONTH, SMALLINT> : not defined
+<INTERVAL_YEAR_TO_MONTH, MEDIUMINT> : not defined
+<INTERVAL_YEAR_TO_MONTH, INT> : not defined
+<INTERVAL_YEAR_TO_MONTH, BIGINT> : not defined
+<INTERVAL_YEAR_TO_MONTH, TINYINT UNSIGNED> : not defined
+<INTERVAL_YEAR_TO_MONTH, SMALLINT UNSIGNED> : not defined
+<INTERVAL_YEAR_TO_MONTH, MEDIUMINT UNSIGNED> : not defined
+<INTERVAL_YEAR_TO_MONTH, INT UNSIGNED> : not defined
+<INTERVAL_YEAR_TO_MONTH, BIGINT UNSIGNED> : not defined
+<INTERVAL_YEAR_TO_MONTH, FLOAT> : not defined
+<INTERVAL_YEAR_TO_MONTH, DOUBLE> : not defined
+<INTERVAL_YEAR_TO_MONTH, FLOAT UNSIGNED> : not defined
+<INTERVAL_YEAR_TO_MONTH, DOUBLE UNSIGNED> : not defined
+<INTERVAL_YEAR_TO_MONTH, DECIMAL> : not defined
+<INTERVAL_YEAR_TO_MONTH, DECIMAL UNSIGNED> : not defined
+<INTERVAL_YEAR_TO_MONTH, DATETIME> : not defined
+<INTERVAL_YEAR_TO_MONTH, TIMESTAMP> : not defined
+<INTERVAL_YEAR_TO_MONTH, DATE> : not defined
+<INTERVAL_YEAR_TO_MONTH, TIME> : not defined
+<INTERVAL_YEAR_TO_MONTH, YEAR> : not defined
+<INTERVAL_YEAR_TO_MONTH, VARCHAR> : not defined
+<INTERVAL_YEAR_TO_MONTH, CHAR> : not defined
+<INTERVAL_YEAR_TO_MONTH, HEX_STRING> : not defined
+<INTERVAL_YEAR_TO_MONTH, EXT> : defined
+<INTERVAL_YEAR_TO_MONTH, UNKNOWN> : not defined
+<INTERVAL_YEAR_TO_MONTH, TINYTEXT> : not defined
+<INTERVAL_YEAR_TO_MONTH, TEXT> : not defined
+<INTERVAL_YEAR_TO_MONTH, MEDIUMTEXT> : not defined
+<INTERVAL_YEAR_TO_MONTH, LONGTEXT> : not defined
+<INTERVAL_YEAR_TO_MONTH, BIT> : not defined
+<INTERVAL_YEAR_TO_MONTH, ENUM> : not defined
+<INTERVAL_YEAR_TO_MONTH, SET> : not defined
+<INTERVAL_YEAR_TO_MONTH, ENUM_INNER> : not defined
+<INTERVAL_YEAR_TO_MONTH, SET_INNER> : not defined
+<INTERVAL_YEAR_TO_MONTH, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<INTERVAL_YEAR_TO_MONTH, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<INTERVAL_YEAR_TO_MONTH, TIMESTAMP> : not defined
+<INTERVAL_YEAR_TO_MONTH, RAW> : not defined
+<INTERVAL_YEAR_TO_MONTH, INTERVAL_YEAR_TO_MONTH> : defined
+<INTERVAL_YEAR_TO_MONTH, INTERVAL_DAY_TO_SECOND> : not defined
+<INTERVAL_YEAR_TO_MONTH, NUMBER_FLOAT> : not defined
+<INTERVAL_YEAR_TO_MONTH, NVARCHAR2> : not defined
+<INTERVAL_YEAR_TO_MONTH, NCHAR> : not defined
+<INTERVAL_YEAR_TO_MONTH, ROWID> : not defined
+<INTERVAL_YEAR_TO_MONTH, LOB> : not defined
+
+/**************** INTERVAL_DAY_TO_SECOND ****************/
+
+<INTERVAL_DAY_TO_SECOND, NULL> : defined
+<INTERVAL_DAY_TO_SECOND, TINYINT> : not defined
+<INTERVAL_DAY_TO_SECOND, SMALLINT> : not defined
+<INTERVAL_DAY_TO_SECOND, MEDIUMINT> : not defined
+<INTERVAL_DAY_TO_SECOND, INT> : not defined
+<INTERVAL_DAY_TO_SECOND, BIGINT> : not defined
+<INTERVAL_DAY_TO_SECOND, TINYINT UNSIGNED> : not defined
+<INTERVAL_DAY_TO_SECOND, SMALLINT UNSIGNED> : not defined
+<INTERVAL_DAY_TO_SECOND, MEDIUMINT UNSIGNED> : not defined
+<INTERVAL_DAY_TO_SECOND, INT UNSIGNED> : not defined
+<INTERVAL_DAY_TO_SECOND, BIGINT UNSIGNED> : not defined
+<INTERVAL_DAY_TO_SECOND, FLOAT> : not defined
+<INTERVAL_DAY_TO_SECOND, DOUBLE> : not defined
+<INTERVAL_DAY_TO_SECOND, FLOAT UNSIGNED> : not defined
+<INTERVAL_DAY_TO_SECOND, DOUBLE UNSIGNED> : not defined
+<INTERVAL_DAY_TO_SECOND, DECIMAL> : not defined
+<INTERVAL_DAY_TO_SECOND, DECIMAL UNSIGNED> : not defined
+<INTERVAL_DAY_TO_SECOND, DATETIME> : not defined
+<INTERVAL_DAY_TO_SECOND, TIMESTAMP> : not defined
+<INTERVAL_DAY_TO_SECOND, DATE> : not defined
+<INTERVAL_DAY_TO_SECOND, TIME> : not defined
+<INTERVAL_DAY_TO_SECOND, YEAR> : not defined
+<INTERVAL_DAY_TO_SECOND, VARCHAR> : not defined
+<INTERVAL_DAY_TO_SECOND, CHAR> : not defined
+<INTERVAL_DAY_TO_SECOND, HEX_STRING> : not defined
+<INTERVAL_DAY_TO_SECOND, EXT> : defined
+<INTERVAL_DAY_TO_SECOND, UNKNOWN> : not defined
+<INTERVAL_DAY_TO_SECOND, TINYTEXT> : not defined
+<INTERVAL_DAY_TO_SECOND, TEXT> : not defined
+<INTERVAL_DAY_TO_SECOND, MEDIUMTEXT> : not defined
+<INTERVAL_DAY_TO_SECOND, LONGTEXT> : not defined
+<INTERVAL_DAY_TO_SECOND, BIT> : not defined
+<INTERVAL_DAY_TO_SECOND, ENUM> : not defined
+<INTERVAL_DAY_TO_SECOND, SET> : not defined
+<INTERVAL_DAY_TO_SECOND, ENUM_INNER> : not defined
+<INTERVAL_DAY_TO_SECOND, SET_INNER> : not defined
+<INTERVAL_DAY_TO_SECOND, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<INTERVAL_DAY_TO_SECOND, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<INTERVAL_DAY_TO_SECOND, TIMESTAMP> : not defined
+<INTERVAL_DAY_TO_SECOND, RAW> : not defined
+<INTERVAL_DAY_TO_SECOND, INTERVAL_YEAR_TO_MONTH> : not defined
+<INTERVAL_DAY_TO_SECOND, INTERVAL_DAY_TO_SECOND> : defined
+<INTERVAL_DAY_TO_SECOND, NUMBER_FLOAT> : not defined
+<INTERVAL_DAY_TO_SECOND, NVARCHAR2> : not defined
+<INTERVAL_DAY_TO_SECOND, NCHAR> : not defined
+<INTERVAL_DAY_TO_SECOND, ROWID> : not defined
+<INTERVAL_DAY_TO_SECOND, LOB> : not defined
+
+/**************** NUMBER_FLOAT ****************/
+
+<NUMBER_FLOAT, NULL> : defined
+<NUMBER_FLOAT, TINYINT> : not defined
+<NUMBER_FLOAT, SMALLINT> : not defined
+<NUMBER_FLOAT, MEDIUMINT> : not defined
+<NUMBER_FLOAT, INT> : not defined
+<NUMBER_FLOAT, BIGINT> : not defined
+<NUMBER_FLOAT, TINYINT UNSIGNED> : not defined
+<NUMBER_FLOAT, SMALLINT UNSIGNED> : not defined
+<NUMBER_FLOAT, MEDIUMINT UNSIGNED> : not defined
+<NUMBER_FLOAT, INT UNSIGNED> : not defined
+<NUMBER_FLOAT, BIGINT UNSIGNED> : not defined
+<NUMBER_FLOAT, FLOAT> : not defined
+<NUMBER_FLOAT, DOUBLE> : not defined
+<NUMBER_FLOAT, FLOAT UNSIGNED> : not defined
+<NUMBER_FLOAT, DOUBLE UNSIGNED> : not defined
+<NUMBER_FLOAT, DECIMAL> : defined
+<NUMBER_FLOAT, DECIMAL UNSIGNED> : defined
+<NUMBER_FLOAT, DATETIME> : not defined
+<NUMBER_FLOAT, TIMESTAMP> : not defined
+<NUMBER_FLOAT, DATE> : not defined
+<NUMBER_FLOAT, TIME> : not defined
+<NUMBER_FLOAT, YEAR> : not defined
+<NUMBER_FLOAT, VARCHAR> : not defined
+<NUMBER_FLOAT, CHAR> : not defined
+<NUMBER_FLOAT, HEX_STRING> : not defined
+<NUMBER_FLOAT, EXT> : defined
+<NUMBER_FLOAT, UNKNOWN> : not defined
+<NUMBER_FLOAT, TINYTEXT> : not defined
+<NUMBER_FLOAT, TEXT> : not defined
+<NUMBER_FLOAT, MEDIUMTEXT> : not defined
+<NUMBER_FLOAT, LONGTEXT> : not defined
+<NUMBER_FLOAT, BIT> : not defined
+<NUMBER_FLOAT, ENUM> : not defined
+<NUMBER_FLOAT, SET> : not defined
+<NUMBER_FLOAT, ENUM_INNER> : not defined
+<NUMBER_FLOAT, SET_INNER> : not defined
+<NUMBER_FLOAT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<NUMBER_FLOAT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<NUMBER_FLOAT, TIMESTAMP> : not defined
+<NUMBER_FLOAT, RAW> : not defined
+<NUMBER_FLOAT, INTERVAL_YEAR_TO_MONTH> : not defined
+<NUMBER_FLOAT, INTERVAL_DAY_TO_SECOND> : not defined
+<NUMBER_FLOAT, NUMBER_FLOAT> : defined
+<NUMBER_FLOAT, NVARCHAR2> : not defined
+<NUMBER_FLOAT, NCHAR> : not defined
+<NUMBER_FLOAT, ROWID> : not defined
+<NUMBER_FLOAT, LOB> : not defined
+
+/**************** NVARCHAR2 ****************/
+
+<NVARCHAR2, NULL> : defined
+<NVARCHAR2, TINYINT> : not defined
+<NVARCHAR2, SMALLINT> : not defined
+<NVARCHAR2, MEDIUMINT> : not defined
+<NVARCHAR2, INT> : not defined
+<NVARCHAR2, BIGINT> : not defined
+<NVARCHAR2, TINYINT UNSIGNED> : not defined
+<NVARCHAR2, SMALLINT UNSIGNED> : not defined
+<NVARCHAR2, MEDIUMINT UNSIGNED> : not defined
+<NVARCHAR2, INT UNSIGNED> : not defined
+<NVARCHAR2, BIGINT UNSIGNED> : not defined
+<NVARCHAR2, FLOAT> : not defined
+<NVARCHAR2, DOUBLE> : not defined
+<NVARCHAR2, FLOAT UNSIGNED> : not defined
+<NVARCHAR2, DOUBLE UNSIGNED> : not defined
+<NVARCHAR2, DECIMAL> : not defined
+<NVARCHAR2, DECIMAL UNSIGNED> : not defined
+<NVARCHAR2, DATETIME> : not defined
+<NVARCHAR2, TIMESTAMP> : not defined
+<NVARCHAR2, DATE> : not defined
+<NVARCHAR2, TIME> : not defined
+<NVARCHAR2, YEAR> : not defined
+<NVARCHAR2, VARCHAR> : not defined
+<NVARCHAR2, CHAR> : not defined
+<NVARCHAR2, HEX_STRING> : not defined
+<NVARCHAR2, EXT> : defined
+<NVARCHAR2, UNKNOWN> : not defined
+<NVARCHAR2, TINYTEXT> : not defined
+<NVARCHAR2, TEXT> : not defined
+<NVARCHAR2, MEDIUMTEXT> : not defined
+<NVARCHAR2, LONGTEXT> : not defined
+<NVARCHAR2, BIT> : not defined
+<NVARCHAR2, ENUM> : not defined
+<NVARCHAR2, SET> : not defined
+<NVARCHAR2, ENUM_INNER> : not defined
+<NVARCHAR2, SET_INNER> : not defined
+<NVARCHAR2, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<NVARCHAR2, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<NVARCHAR2, TIMESTAMP> : not defined
+<NVARCHAR2, RAW> : not defined
+<NVARCHAR2, INTERVAL_YEAR_TO_MONTH> : not defined
+<NVARCHAR2, INTERVAL_DAY_TO_SECOND> : not defined
+<NVARCHAR2, NUMBER_FLOAT> : not defined
+<NVARCHAR2, NVARCHAR2> : not defined
+<NVARCHAR2, NCHAR> : not defined
+<NVARCHAR2, ROWID> : not defined
+<NVARCHAR2, LOB> : not defined
+
+/**************** NCHAR ****************/
+
+<NCHAR, NULL> : defined
+<NCHAR, TINYINT> : not defined
+<NCHAR, SMALLINT> : not defined
+<NCHAR, MEDIUMINT> : not defined
+<NCHAR, INT> : not defined
+<NCHAR, BIGINT> : not defined
+<NCHAR, TINYINT UNSIGNED> : not defined
+<NCHAR, SMALLINT UNSIGNED> : not defined
+<NCHAR, MEDIUMINT UNSIGNED> : not defined
+<NCHAR, INT UNSIGNED> : not defined
+<NCHAR, BIGINT UNSIGNED> : not defined
+<NCHAR, FLOAT> : not defined
+<NCHAR, DOUBLE> : not defined
+<NCHAR, FLOAT UNSIGNED> : not defined
+<NCHAR, DOUBLE UNSIGNED> : not defined
+<NCHAR, DECIMAL> : not defined
+<NCHAR, DECIMAL UNSIGNED> : not defined
+<NCHAR, DATETIME> : not defined
+<NCHAR, TIMESTAMP> : not defined
+<NCHAR, DATE> : not defined
+<NCHAR, TIME> : not defined
+<NCHAR, YEAR> : not defined
+<NCHAR, VARCHAR> : not defined
+<NCHAR, CHAR> : not defined
+<NCHAR, HEX_STRING> : not defined
+<NCHAR, EXT> : defined
+<NCHAR, UNKNOWN> : not defined
+<NCHAR, TINYTEXT> : not defined
+<NCHAR, TEXT> : not defined
+<NCHAR, MEDIUMTEXT> : not defined
+<NCHAR, LONGTEXT> : not defined
+<NCHAR, BIT> : not defined
+<NCHAR, ENUM> : not defined
+<NCHAR, SET> : not defined
+<NCHAR, ENUM_INNER> : not defined
+<NCHAR, SET_INNER> : not defined
+<NCHAR, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<NCHAR, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<NCHAR, TIMESTAMP> : not defined
+<NCHAR, RAW> : not defined
+<NCHAR, INTERVAL_YEAR_TO_MONTH> : not defined
+<NCHAR, INTERVAL_DAY_TO_SECOND> : not defined
+<NCHAR, NUMBER_FLOAT> : not defined
+<NCHAR, NVARCHAR2> : not defined
+<NCHAR, NCHAR> : not defined
+<NCHAR, ROWID> : not defined
+<NCHAR, LOB> : not defined
+
+/**************** ROWID ****************/
+
+<ROWID, NULL> : defined
+<ROWID, TINYINT> : not defined
+<ROWID, SMALLINT> : not defined
+<ROWID, MEDIUMINT> : not defined
+<ROWID, INT> : not defined
+<ROWID, BIGINT> : not defined
+<ROWID, TINYINT UNSIGNED> : not defined
+<ROWID, SMALLINT UNSIGNED> : not defined
+<ROWID, MEDIUMINT UNSIGNED> : not defined
+<ROWID, INT UNSIGNED> : not defined
+<ROWID, BIGINT UNSIGNED> : not defined
+<ROWID, FLOAT> : not defined
+<ROWID, DOUBLE> : not defined
+<ROWID, FLOAT UNSIGNED> : not defined
+<ROWID, DOUBLE UNSIGNED> : not defined
+<ROWID, DECIMAL> : not defined
+<ROWID, DECIMAL UNSIGNED> : not defined
+<ROWID, DATETIME> : not defined
+<ROWID, TIMESTAMP> : not defined
+<ROWID, DATE> : not defined
+<ROWID, TIME> : not defined
+<ROWID, YEAR> : not defined
+<ROWID, VARCHAR> : not defined
+<ROWID, CHAR> : not defined
+<ROWID, HEX_STRING> : not defined
+<ROWID, EXT> : defined
+<ROWID, UNKNOWN> : not defined
+<ROWID, TINYTEXT> : not defined
+<ROWID, TEXT> : not defined
+<ROWID, MEDIUMTEXT> : not defined
+<ROWID, LONGTEXT> : not defined
+<ROWID, BIT> : not defined
+<ROWID, ENUM> : not defined
+<ROWID, SET> : not defined
+<ROWID, ENUM_INNER> : not defined
+<ROWID, SET_INNER> : not defined
+<ROWID, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<ROWID, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<ROWID, TIMESTAMP> : not defined
+<ROWID, RAW> : not defined
+<ROWID, INTERVAL_YEAR_TO_MONTH> : not defined
+<ROWID, INTERVAL_DAY_TO_SECOND> : not defined
+<ROWID, NUMBER_FLOAT> : not defined
+<ROWID, NVARCHAR2> : not defined
+<ROWID, NCHAR> : not defined
+<ROWID, ROWID> : defined
+<ROWID, LOB> : not defined
+
+/**************** LOB ****************/
+
+<LOB, NULL> : defined
+<LOB, TINYINT> : not defined
+<LOB, SMALLINT> : not defined
+<LOB, MEDIUMINT> : not defined
+<LOB, INT> : not defined
+<LOB, BIGINT> : not defined
+<LOB, TINYINT UNSIGNED> : not defined
+<LOB, SMALLINT UNSIGNED> : not defined
+<LOB, MEDIUMINT UNSIGNED> : not defined
+<LOB, INT UNSIGNED> : not defined
+<LOB, BIGINT UNSIGNED> : not defined
+<LOB, FLOAT> : not defined
+<LOB, DOUBLE> : not defined
+<LOB, FLOAT UNSIGNED> : not defined
+<LOB, DOUBLE UNSIGNED> : not defined
+<LOB, DECIMAL> : not defined
+<LOB, DECIMAL UNSIGNED> : not defined
+<LOB, DATETIME> : not defined
+<LOB, TIMESTAMP> : not defined
+<LOB, DATE> : not defined
+<LOB, TIME> : not defined
+<LOB, YEAR> : not defined
+<LOB, VARCHAR> : not defined
+<LOB, CHAR> : not defined
+<LOB, HEX_STRING> : not defined
+<LOB, EXT> : defined
+<LOB, UNKNOWN> : not defined
+<LOB, TINYTEXT> : not defined
+<LOB, TEXT> : not defined
+<LOB, MEDIUMTEXT> : not defined
+<LOB, LONGTEXT> : not defined
+<LOB, BIT> : not defined
+<LOB, ENUM> : not defined
+<LOB, SET> : not defined
+<LOB, ENUM_INNER> : not defined
+<LOB, SET_INNER> : not defined
+<LOB, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<LOB, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<LOB, TIMESTAMP> : not defined
+<LOB, RAW> : not defined
+<LOB, INTERVAL_YEAR_TO_MONTH> : not defined
+<LOB, INTERVAL_DAY_TO_SECOND> : not defined
+<LOB, NUMBER_FLOAT> : not defined
+<LOB, NVARCHAR2> : not defined
+<LOB, NCHAR> : not defined
+<LOB, ROWID> : not defined
+<LOB, LOB> : not defined
+

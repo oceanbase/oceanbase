@@ -1,0 +1,26 @@
+#f in ('a')
+f = 'a'
+f != 'a'
+f > 'a'
+f < 'a'
+f >= 'a'
+f <= 'a'
+f is TRUE
+f is FALSE
+f is NULL
+f > 'a' and false
+false and f > 'a'
+f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'
+f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')
+f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'
+f > 'a' and f < 'B' 
+f > 'B' and f < 'a' and g > 'a' and g < 'b'
+f > 'B' or f < 'a' and g > 'a' or g < 'b'
+f > 'B' and f < 'a' and g > 'a' and g < 'B'
+f > 'B' and 'a' = 'A'
+#(f, g) in (('a', 'b'), ('B', 'A'))
+#(f, g) > ('a', 'b') and (f, g) < ('B', 'A')
+f between 'a' and 'b'
+f between 'B' and 'a'
+f not between 'a' and 'b'
+f = 'a' + 'b'

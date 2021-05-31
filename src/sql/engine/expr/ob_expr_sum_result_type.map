@@ -1,0 +1,45 @@
+static ObObjType SUM_RESULT_TYPE[ObMaxType] =
+{
+    ObDoubleType,        /*NullType  */
+    ObNumberType,        /*TinyIntType  */
+    ObNumberType,        /*SmallIntType  */
+    ObNumberType,        /*MediumIntType  */
+    ObNumberType,        /*Int32Type  */
+    ObNumberType,        /*IntType  */
+    ObNumberType,        /*UTinyIntType  */
+    ObNumberType,        /*USmallIntType  */
+    ObNumberType,        /*UMediumIntType  */
+    ObNumberType,        /*UInt32Type  */
+    ObNumberType,        /*UIntType  */
+    ObDoubleType,        /*FloatType  */
+    ObDoubleType,        /*DoubleType  */
+    ObDoubleType,        /*UFloatType  */
+    ObDoubleType,        /*UDoubleType  */
+    ObNumberType,        /*NumberType  */
+    ObNumberType,        /*UNumberType  */
+    ObNumberType,        /*DateTimeType  */
+    ObNumberType,        /*TimestampType  */
+    ObNumberType,        /*DateType  */
+    ObNumberType,        /*TimeType  */
+    ObNumberType,        /*YearType  */
+    ObDoubleType,        /*VarcharType  */
+    ObDoubleType,        /*CharType  */
+    ObDoubleType,        /*HexStringType  */
+    ObMaxType,           /*ExtendType  */
+    ObNumberType,         /*UnknownType  */
+    ObDoubleType,       /*TinyTextType*/
+    ObDoubleType,       /*TextType*/
+    ObDoubleType,       /*MediumTextType*/
+    ObDoubleType,        /*LongTextType*/
+    ObNumberType,         /*BitType*/
+    ObDoubleType,         /*EnumType*/
+    ObDoubleType,         /*SetType*/
+    ObMaxType,         /*EnumInnerType*/
+    ObMaxType,         /*SetInnerType*/
+    ObNumberType,      /*ObTimestampTZType  */
+    ObNumberType,      /*ObTimestampLTZType  */
+    ObNumberType,      /*ObTimestampNanoType  */
+    ObNumberType,      /*ObRawType  */
+    ObNumberType,      /*ObIntervalYMType  */
+    ObNumberType,      /*ObIntervalDSType  */
+};

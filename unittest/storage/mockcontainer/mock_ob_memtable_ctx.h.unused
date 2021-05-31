@@ -1,0 +1,75 @@
+#ifndef MOCK_OB_MEMTABLE_CTX_H_
+#define MOCK_OB_MEMTABLE_CTX_H_
+
+#include "storage/memtable/ob_memtable_interface.h"
+
+namespace oceanbase
+{
+namespace transaction
+{
+
+using namespace common;
+using namespace memtable;
+
+class MockObMemtableCtx : public ObIMemtableCtx
+{
+public:
+  MockObMemtableCtx() {}
+  ~MockObMemtableCtx() {}
+public:
+  int trans_begin()
+  {
+    //TRANS_LOG(INFO, __func__);
+    return OB_SUCCESS;
+  }
+  int sub_trans_begin(const int64_t snaptshot, const int64_t abs_expired_time)
+  {
+    UNUSED(snaptshot);
+    UNUSED(abs_expired_time);
+    //TRANS_LOG(INFO, __func__, K(snaptshot), K(abs_expired_time));
+    return OB_SUCCESS;
+  }
+  void sub_trans_abort()
+  {
+    //TRANS_LOG(INFO, __func__);
+  }
+  void trans_end(const bool commit, const int64_t redo_log_id)
+  {
+    UNUSED(commit);
+    UNUSED(redo_log_id);
+    //TRANS_LOG(INFO, __func__, K(commit), K(redo_log_id));
+  }
+  void trans_publish()
+  {
+    //TRANS_LOG(INFO, __func__);
+  }
+  void replay_end(const bool commit, const int64_t redo_log_id)
+  {
+    UNUSED(commit);
+    UNUSED(redo_log_id);
+    //TRANS_LOG(INFO, __func__, K(commit), K(redo_log_id));
+  }
+  const char *get_trace_log()
+  {
+    return NULL;
+  }
+public:
+  int fill_redo_log(char *buf, const int64_t buf_len, int64_t &buf_pos)
+  { UNUSED(buf); UNUSED(buf_len); UNUSED(buf_pos); return OB_SUCCESS; }
+public:
+  void fill_trace_log(const char *fmt, ...)
+  { UNUSED(fmt); }
+  void *alloc(const int64_t size)
+  { UNUSED(size); return NULL; }
+  int register_lifo_callback(ObIMvccCallback *callback)
+  { UNUSED(callback); return OB_SUCCESS; }
+  int register_fifo_callback(ObIMvccCallback *callback)
+  { UNUSED(callback); return OB_SUCCESS; }
+  int append_redo_log(const void *key, const char *data, const int64_t data_len)
+  { UNUSED(key); UNUSED(data); UNUSED(data_len); return OB_SUCCESS; }
+};
+
+} // transaction
+} // oceanbase
+
+#endif

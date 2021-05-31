@@ -1,0 +1,219 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection conn_admin;
+alter system flush plan cache global;
+connection default;
+select 3;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				3	3	8	1	1	N	32897	0	63
+3
+3
+select 3.4;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				3.4	3.4	246	4	3	N	32897	1	63
+3.4
+3.4
+select 3.000000000000000000000000001;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				3.000000000000000000000000001	3.000000000000000000000000001	246	30	29	N	32897	27	63
+3.000000000000000000000000001
+3.000000000000000000000000001
+select -3;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				-3	-3	8	1	2	N	32897	0	63
+-3
+-3
+select -3.4;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				-3.4	-3.4	246	4	4	N	32897	1	63
+-3.4
+-3.4
+select -3.000000000000000000000000001;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				-3.000000000000000000000000001	-3.000000000000000000000000001	246	30	30	N	32897	27	63
+-3.000000000000000000000000001
+-3.000000000000000000000000001
+select 1, 11, 111, 1111, 11111, 111111, 1111111, 11111111, 111111111, 1111111111,11111111111, 111111111111;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				1	1	8	1	1	N	32897	0	63
+def				11	11	8	2	2	N	32897	0	63
+def				111	111	8	3	3	N	32897	0	63
+def				1111	1111	8	4	4	N	32897	0	63
+def				11111	11111	8	5	5	N	32897	0	63
+def				111111	111111	8	6	6	N	32897	0	63
+def				1111111	1111111	8	7	7	N	32897	0	63
+def				11111111	11111111	8	8	8	N	32897	0	63
+def				111111111	111111111	8	9	9	N	32897	0	63
+def				1111111111	1111111111	8	10	10	N	32897	0	63
+def				11111111111	11111111111	8	11	11	N	32897	0	63
+def				111111111111	111111111111	8	12	12	N	32897	0	63
+1	11	111	1111	11111	111111	1111111	11111111	111111111	1111111111	11111111111	111111111111
+1	11	111	1111	11111	111111	1111111	11111111	111111111	1111111111	11111111111	111111111111
+select TIMESTAMP '2012-12-31 11:30:45', TIMESTAMP '2012-12-31 11:30:45.1', TIMESTAMP '2012-12-31 11:30:45.11', TIMESTAMP '2012-12-31 11:30:45.111', TIMESTAMP '2012-12-31 11:30:45.1111', TIMESTAMP '2012-12-31 11:30:45.11111', TIMESTAMP '2012-12-31 11:30:45.111111';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				TIMESTAMP '2012-12-31 11:30:45'	TIMESTAMP '2012-12-31 11:30:45'	12	19	19	N	129	0	63
+def				TIMESTAMP '2012-12-31 11:30:45.1'	TIMESTAMP '2012-12-31 11:30:45.1'	12	21	21	N	129	1	63
+def				TIMESTAMP '2012-12-31 11:30:45.11'	TIMESTAMP '2012-12-31 11:30:45.11'	12	22	22	N	129	2	63
+def				TIMESTAMP '2012-12-31 11:30:45.111'	TIMESTAMP '2012-12-31 11:30:45.111'	12	23	23	N	129	3	63
+def				TIMESTAMP '2012-12-31 11:30:45.1111'	TIMESTAMP '2012-12-31 11:30:45.1111'	12	24	24	N	129	4	63
+def				TIMESTAMP '2012-12-31 11:30:45.11111'	TIMESTAMP '2012-12-31 11:30:45.11111'	12	25	25	N	129	5	63
+def				TIMESTAMP '2012-12-31 11:30:45.111111'	TIMESTAMP '2012-12-31 11:30:45.111111'	12	26	26	N	129	6	63
+TIMESTAMP '2012-12-31 11:30:45'	TIMESTAMP '2012-12-31 11:30:45.1'	TIMESTAMP '2012-12-31 11:30:45.11'	TIMESTAMP '2012-12-31 11:30:45.111'	TIMESTAMP '2012-12-31 11:30:45.1111'	TIMESTAMP '2012-12-31 11:30:45.11111'	TIMESTAMP '2012-12-31 11:30:45.111111'
+2012-12-31 11:30:45	2012-12-31 11:30:45.1	2012-12-31 11:30:45.11	2012-12-31 11:30:45.111	2012-12-31 11:30:45.1111	2012-12-31 11:30:45.11111	2012-12-31 11:30:45.111111
+select TIME '11:30:45', TIME '11:30:45.111111', TIME '11:30:45.11111', TIME '11:30:45.1111', TIME '11:30:45.111', TIME '11:30:45.11', TIME '11:30:45.1';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				TIME '11:30:45'	TIME '11:30:45'	11	10	8	N	129	0	63
+def				TIME '11:30:45.111111'	TIME '11:30:45.111111'	11	17	15	N	129	6	63
+def				TIME '11:30:45.11111'	TIME '11:30:45.11111'	11	16	14	N	129	5	63
+def				TIME '11:30:45.1111'	TIME '11:30:45.1111'	11	15	13	N	129	4	63
+def				TIME '11:30:45.111'	TIME '11:30:45.111'	11	14	12	N	129	3	63
+def				TIME '11:30:45.11'	TIME '11:30:45.11'	11	13	11	N	129	2	63
+def				TIME '11:30:45.1'	TIME '11:30:45.1'	11	12	10	N	129	1	63
+TIME '11:30:45'	TIME '11:30:45.111111'	TIME '11:30:45.11111'	TIME '11:30:45.1111'	TIME '11:30:45.111'	TIME '11:30:45.11'	TIME '11:30:45.1'
+11:30:45	11:30:45.111111	11:30:45.11111	11:30:45.1111	11:30:45.111	11:30:45.11	11:30:45.1
+select date '1998-09-09';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date '1998-09-09'	date '1998-09-09'	10	10	10	N	129	0	63
+date '1998-09-09'
+1998-09-09
+select TIMESTAMP '2012-2-1 11:30:45';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				TIMESTAMP '2012-2-1 11:30:45'	TIMESTAMP '2012-2-1 11:30:45'	12	19	19	N	129	0	63
+TIMESTAMP '2012-2-1 11:30:45'
+2012-02-01 11:30:45
+select TIME '11:5:45';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				TIME '11:5:45'	TIME '11:5:45'	11	10	8	N	129	0	63
+TIME '11:5:45'
+11:05:45
+select date '1998-9-9';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				date '1998-9-9'	date '1998-9-9'	10	10	10	N	129	0	63
+date '1998-9-9'
+1998-09-09
+SELECT X'4D7953514C';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				X'4D7953514C'	X'4D7953514C'	253	5	5	N	129	31	63
+X'4D7953514C'
+MySQL
+SELECT 0x5061756c;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				0x5061756c	0x5061756c	253	5	4	N	129	31	63
+0x5061756c
+Paul
+SELECT 0x636174;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				0x636174	0x636174	253	5	3	N	129	31	63
+0x636174
+cat
+SELECT TRUE, true, FALSE, false;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				TRUE	TRUE	1	1	1	N	32897	0	63
+def				true	true	1	1	1	N	32897	0	63
+def				FALSE	FALSE	1	1	1	N	32897	0	63
+def				false	false	1	1	1	N	32897	0	63
+TRUE	true	FALSE	false
+1	1	0	0
+select 'abcde';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				abcde	abcde	253	20	5	N	1	31	45
+abcde
+abcde
+select '我爱你';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				我爱你	我爱你	253	20	9	N	1	31	45
+我爱你
+我爱你
+select '我e爱a你t';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				我e爱a你t	我e爱a你t	253	20	12	N	1	31	45
+我e爱a你t
+我e爱a你t
+select '';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def						253	20	0	N	1	31	45
+
+
+select ' ';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def						253	20	1	N	1	31	45
+
+ 
+select '0x10';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				0x10	0x10	253	20	4	N	1	31	45
+0x10
+0x10
+select '0810';
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				0810	0810	253	20	4	N	1	31	45
+0810
+0810
+drop table if exists t1;
+create table t1(f1  datetime(6));
+insert into t1 values('01-01-01'),('02-02-02'),('01-01-01'),('02-02-02');
+set @bug28261='';
+select if(@bug28261 = f1, '', @bug28261:= f1) from t1;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				if(@bug28261 = f1, '', @bug28261:= f1)	if(@bug28261 = f1, '', @bug28261:= f1)	253	4194304	26	Y	0	31	45
+if(@bug28261 = f1, '', @bug28261:= f1)
+2001-01-01 00:00:00.000000
+2002-02-02 00:00:00.000000
+2001-01-01 00:00:00.000000
+2002-02-02 00:00:00.000000
+drop table t1;
+drop table if exists tt;
+CREATE TABLE if not exists tt(aa  int);
+select count(*) as cnt from tt a ;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				cnt	cnt	8	20	1	Y	32896	0	63
+cnt
+0
+select sum(cnt) from(select count(*) as cnt from tt a ) c;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				sum(cnt)	sum(cnt)	246	21	1	Y	32896	0	63
+sum(cnt)
+0
+drop table if exists obright;
+create table obright(row_id bigint, dec3 decimal(16,6));
+select dec3 mod (case when row_id > 0 then dec3 else 1 end) from obright;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				dec3 mod (case when row_id > 0 then dec3 else 1 end)	dec3 mod (case when row_id > 0 then dec3 else 1 end)	246	28	0	Y	32896	6	63
+dec3 mod (case when row_id > 0 then dec3 else 1 end)
+select field(0,'a');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				field(0,'a')	field(0,'a')	8	3	1	Y	32896	0	63
+field(0,'a')
+1
+show warnings;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def		subquery_alias	subquery_alias	Level	Level	253	128	7	N	1	31	45
+def		subquery_alias	subquery_alias	Code	Code	8	20	4	N	32897	0	63
+def		subquery_alias	subquery_alias	Message	Message	253	2048	37	N	1	31	45
+Level	Code	Message
+Warning	1292	Truncated incorrect DOUBLE value: 'a'
+select field(1,'a', 'b');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				field(1,'a', 'b')	field(1,'a', 'b')	8	3	1	Y	32896	0	63
+field(1,'a', 'b')
+0
+show warnings;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def		subquery_alias	subquery_alias	Level	Level	253	128	7	N	1	31	45
+def		subquery_alias	subquery_alias	Code	Code	8	20	4	N	32897	0	63
+def		subquery_alias	subquery_alias	Message	Message	253	2048	37	N	1	31	45
+Level	Code	Message
+Warning	1292	Truncated incorrect DOUBLE value: 'a'
+Warning	1292	Truncated incorrect DOUBLE value: 'b'
+select field(3,'a', 2, 'c');
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def				field(3,'a', 2, 'c')	field(3,'a', 2, 'c')	8	3	1	Y	32896	0	63
+field(3,'a', 2, 'c')
+0
+show warnings;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def		subquery_alias	subquery_alias	Level	Level	253	128	7	N	1	31	45
+def		subquery_alias	subquery_alias	Code	Code	8	20	4	N	32897	0	63
+def		subquery_alias	subquery_alias	Message	Message	253	2048	37	N	1	31	45
+Level	Code	Message
+Warning	1292	Truncated incorrect DOUBLE value: 'a'
+Warning	1292	Truncated incorrect DOUBLE value: 'c'

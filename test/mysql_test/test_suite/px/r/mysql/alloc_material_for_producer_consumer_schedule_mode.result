@@ -1,0 +1,227 @@
+drop table if exists t1, t2;
+create table t1 (c1 int, c2 int, c3 int);
+create table t2 (c1 int, c2 int, c3 int);
+explain select /*+ use_px parallel(2) use_hash(c d) */ * from (select a.c2, b.c3 from  (select /*+ use_hash(a, b) */ c1, c2, count(*) c3 from t1 group by 1, 2) a, (select c1, c2, count(*) c3 from t1 group by 1, 2) b where a.c1 = b.c1) c, (select c1, c2, count(*) c3 from t1 group by 1, 2) d where c.c2 = d.c2;
+Query Plan
+====================================================================
+|ID|OPERATOR                           |NAME    |EST. ROWS|COST    |
+--------------------------------------------------------------------
+|0 |PX COORDINATOR                     |        |96059602 |90225641|
+|1 | EXCHANGE OUT DISTR                |:EX10005|96059602 |58400112|
+|2 |  HASH JOIN                        |        |96059602 |58400112|
+|3 |   EXCHANGE IN DISTR               |        |10001    |169529  |
+|4 |    EXCHANGE OUT DISTR (BROADCAST) |:EX10001|10001    |168583  |
+|5 |     SUBPLAN SCAN                  |b       |10001    |168583  |
+|6 |      HASH GROUP BY                |        |10001    |167202  |
+|7 |       EXCHANGE IN DISTR           |        |10001    |116107  |
+|8 |        EXCHANGE OUT DISTR (HASH)  |:EX10000|10001    |115161  |
+|9 |         HASH GROUP BY             |        |10001    |115161  |
+|10|          PX BLOCK ITERATOR        |        |100000   |64066   |
+|11|           TABLE SCAN              |t1      |100000   |64066   |
+|12|   HASH JOIN                       |        |980101   |924869  |
+|13|    EXCHANGE IN DISTR              |        |10001    |158931  |
+|14|     EXCHANGE OUT DISTR (BROADCAST)|:EX10003|10001    |157984  |
+|15|      SUBPLAN SCAN                 |a       |10001    |157984  |
+|16|       HASH GROUP BY               |        |10001    |156604  |
+|17|        EXCHANGE IN DISTR          |        |10001    |110808  |
+|18|         EXCHANGE OUT DISTR (HASH) |:EX10002|10001    |109862  |
+|19|          HASH GROUP BY            |        |10001    |109862  |
+|20|           PX BLOCK ITERATOR       |        |100000   |64066   |
+|21|            TABLE SCAN             |t1      |100000   |64066   |
+|22|    SUBPLAN SCAN                   |d       |10001    |168583  |
+|23|     HASH GROUP BY                 |        |10001    |167202  |
+|24|      EXCHANGE IN DISTR            |        |10001    |116107  |
+|25|       EXCHANGE OUT DISTR (HASH)   |:EX10004|10001    |115161  |
+|26|        HASH GROUP BY              |        |10001    |115161  |
+|27|         PX BLOCK ITERATOR         |        |100000   |64066   |
+|28|          TABLE SCAN               |t1      |100000   |64066   |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c2], [b.c3], [d.c1], [d.c2], [d.c3]), filter(nil)
+  1 - output([a.c2], [b.c3], [d.c1], [d.c2], [d.c3]), filter(nil), dop=2
+  2 - output([a.c2], [b.c3], [d.c1], [d.c2], [d.c3]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  3 - output([b.c1], [b.c3]), filter(nil)
+  4 - output([b.c1], [b.c3]), filter(nil), dop=2
+  5 - output([b.c1], [b.c3]), filter(nil), 
+      access([b.c1], [b.c3])
+  6 - output([t1.c1], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), 
+      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  7 - output([t1.c1], [T_FUN_COUNT(*)], [t1.c2]), filter(nil)
+  8 - (#keys=2, [t1.c1], [t1.c2]), output([t1.c1], [T_FUN_COUNT(*)], [t1.c2]), filter(nil), dop=2
+  9 - output([t1.c1], [T_FUN_COUNT(*)], [t1.c2]), filter(nil), 
+      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT(*)])
+  10 - output([t1.c1], [t1.c2]), filter(nil)
+  11 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  12 - output([a.c2], [d.c1], [d.c2], [d.c3], [a.c1]), filter(nil), 
+      equal_conds([a.c2 = d.c2]), other_conds(nil)
+  13 - output([a.c1], [a.c2]), filter(nil)
+  14 - output([a.c1], [a.c2]), filter(nil), dop=2
+  15 - output([a.c1], [a.c2]), filter(nil), 
+      access([a.c1], [a.c2])
+  16 - output([t1.c1], [t1.c2]), filter(nil), 
+      group([t1.c1], [t1.c2]), agg_func(nil)
+  17 - output([t1.c1], [t1.c2]), filter(nil)
+  18 - (#keys=2, [t1.c1], [t1.c2]), output([t1.c1], [t1.c2]), filter(nil), dop=2
+  19 - output([t1.c1], [t1.c2]), filter(nil), 
+      group([t1.c1], [t1.c2]), agg_func(nil)
+  20 - output([t1.c1], [t1.c2]), filter(nil)
+  21 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  22 - output([d.c2], [d.c1], [d.c3]), filter(nil), 
+      access([d.c2], [d.c1], [d.c3])
+  23 - output([t1.c1], [t1.c2], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), 
+      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  24 - output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil)
+  25 - (#keys=2, [t1.c1], [t1.c2]), output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), dop=2
+  26 - output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), 
+      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT(*)])
+  27 - output([t1.c1], [t1.c2]), filter(nil)
+  28 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+
+explain select /*+ use_px parallel(2) use_merge(a b) */ b.c2, sum(a.c3) from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1 group by 1;
+Query Plan
+===============================================================================
+|ID|OPERATOR                                        |NAME    |EST. ROWS|COST  |
+-------------------------------------------------------------------------------
+|0 |PX COORDINATOR                                  |        |101      |744726|
+|1 | EXCHANGE OUT DISTR                             |:EX10005|101      |744696|
+|2 |  MERGE GROUP BY                                |        |101      |744696|
+|3 |   EXCHANGE IN MERGE SORT DISTR                 |        |101      |742003|
+|4 |    EXCHANGE OUT DISTR (HASH)                   |:EX10004|101      |741972|
+|5 |     MERGE GROUP BY                             |        |101      |741972|
+|6 |      SORT                                      |        |9802     |739279|
+|7 |       MERGE JOIN                               |        |9802     |712834|
+|8 |        MATERIAL                                |        |101      |355664|
+|9 |         EXCHANGE IN MERGE SORT DISTR           |        |101      |355600|
+|10|          EXCHANGE OUT DISTR (BROADCAST)        |:EX10002|101      |355583|
+|11|           MATERIAL                             |        |101      |355583|
+|12|            SUBPLAN SCAN                        |VIEW1   |101      |355519|
+|13|             MERGE GROUP BY                     |        |101      |355505|
+|14|              EXCHANGE IN MERGE SORT DISTR      |        |101      |352758|
+|15|               EXCHANGE OUT DISTR (HASH)        |:EX10001|101      |352748|
+|16|                MATERIAL                        |        |101      |352748|
+|17|                 MERGE GROUP BY                 |        |101      |352711|
+|18|                  SUBPLAN SCAN                  |a       |10001    |349964|
+|19|                   MERGE GROUP BY               |        |10001    |348584|
+|20|                    EXCHANGE IN MERGE SORT DISTR|        |10001    |312738|
+|21|                     EXCHANGE OUT DISTR (HASH)  |:EX10000|10001    |311791|
+|22|                      MERGE GROUP BY            |        |10001    |311791|
+|23|                       SORT                     |        |100000   |275945|
+|24|                        PX BLOCK ITERATOR       |        |100000   |64066 |
+|25|                         TABLE SCAN             |t1      |100000   |64066 |
+|26|        SUBPLAN SCAN                            |VIEW2   |10001    |349964|
+|27|         MERGE GROUP BY                         |        |10001    |348584|
+|28|          EXCHANGE IN MERGE SORT DISTR          |        |10001    |312738|
+|29|           EXCHANGE OUT DISTR (HASH)            |:EX10003|10001    |311791|
+|30|            MERGE GROUP BY                      |        |10001    |311791|
+|31|             SORT                               |        |100000   |275945|
+|32|              PX BLOCK ITERATOR                 |        |100000   |64066 |
+|33|               TABLE SCAN                       |b       |100000   |64066 |
+===============================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([VIEW2.b.c2], [T_FUN_SUM(T_FUN_SUM(VIEW1.T_FUN_SUM(a.c3) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0))))]), filter(nil)
+  1 - output([VIEW2.b.c2], [T_FUN_SUM(T_FUN_SUM(VIEW1.T_FUN_SUM(a.c3) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0))))]), filter(nil), dop=2
+  2 - output([VIEW2.b.c2], [T_FUN_SUM(T_FUN_SUM(VIEW1.T_FUN_SUM(a.c3) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0))))]), filter(nil), 
+      group([VIEW2.b.c2]), agg_func([T_FUN_SUM(T_FUN_SUM(VIEW1.T_FUN_SUM(a.c3) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0))))])
+  3 - output([VIEW2.b.c2], [T_FUN_SUM(VIEW1.T_FUN_SUM(a.c3) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0)))]), filter(nil), sort_keys([VIEW2.b.c2, ASC])
+  4 - (#keys=1, [VIEW2.b.c2]), output([VIEW2.b.c2], [T_FUN_SUM(VIEW1.T_FUN_SUM(a.c3) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0)))]), filter(nil), dop=2
+  5 - output([VIEW2.b.c2], [T_FUN_SUM(VIEW1.T_FUN_SUM(a.c3) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0)))]), filter(nil), 
+      group([VIEW2.b.c2]), agg_func([T_FUN_SUM(VIEW1.T_FUN_SUM(a.c3) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0)))])
+  6 - output([VIEW2.b.c2], [VIEW1.T_FUN_SUM(a.c3) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0))]), filter(nil), sort_keys([VIEW2.b.c2, ASC])
+  7 - output([VIEW2.b.c2], [VIEW1.T_FUN_SUM(a.c3)], [VIEW2.T_FUN_COUNT(*)]), filter(nil), 
+      equal_conds([VIEW1.a.c1 = VIEW2.b.c1]), other_conds(nil)
+  8 - output([VIEW1.T_FUN_SUM(a.c3)], [VIEW1.a.c1]), filter(nil)
+  9 - output([VIEW1.T_FUN_SUM(a.c3)], [VIEW1.a.c1]), filter(nil), sort_keys([VIEW1.a.c1, ASC])
+  10 - output([VIEW1.T_FUN_SUM(a.c3)], [VIEW1.a.c1]), filter(nil), dop=2
+  11 - output([VIEW1.T_FUN_SUM(a.c3)], [VIEW1.a.c1]), filter(nil)
+  12 - output([VIEW1.a.c1], [VIEW1.T_FUN_SUM(a.c3)]), filter(nil), 
+      access([VIEW1.a.c1], [VIEW1.T_FUN_SUM(a.c3)])
+  13 - output([a.c1], [T_FUN_SUM(T_FUN_SUM(a.c3))]), filter(nil), 
+      group([a.c1]), agg_func([T_FUN_SUM(T_FUN_SUM(a.c3))])
+  14 - output([a.c1], [T_FUN_SUM(a.c3)]), filter(nil), sort_keys([a.c1, ASC])
+  15 - (#keys=1, [a.c1]), output([a.c1], [T_FUN_SUM(a.c3)]), filter(nil), dop=2
+  16 - output([a.c1], [T_FUN_SUM(a.c3)]), filter(nil)
+  17 - output([a.c1], [T_FUN_SUM(a.c3)]), filter(nil), 
+      group([a.c1]), agg_func([T_FUN_SUM(a.c3)])
+  18 - output([a.c1], [a.c3]), filter(nil), 
+      access([a.c1], [a.c3])
+  19 - output([t1.c1], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), 
+      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  20 - output([t1.c1], [T_FUN_COUNT(*)], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC], [t1.c2, ASC])
+  21 - (#keys=2, [t1.c1], [t1.c2]), output([t1.c1], [T_FUN_COUNT(*)], [t1.c2]), filter(nil), dop=2
+  22 - output([t1.c1], [T_FUN_COUNT(*)], [t1.c2]), filter(nil), 
+      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT(*)])
+  23 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC], [t1.c2, ASC])
+  24 - output([t1.c1], [t1.c2]), filter(nil)
+  25 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  26 - output([VIEW2.b.c1], [VIEW2.b.c2], [VIEW2.T_FUN_COUNT(*)]), filter(nil), 
+      access([VIEW2.b.c1], [VIEW2.b.c2], [VIEW2.T_FUN_COUNT(*)])
+  27 - output([b.c1], [b.c2], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), 
+      group([b.c1], [b.c2]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  28 - output([b.c1], [b.c2], [T_FUN_COUNT(*)]), filter(nil), sort_keys([b.c1, ASC], [b.c2, ASC])
+  29 - (#keys=2, [b.c1], [b.c2]), output([b.c1], [b.c2], [T_FUN_COUNT(*)]), filter(nil), dop=2
+  30 - output([b.c1], [b.c2], [T_FUN_COUNT(*)]), filter(nil), 
+      group([b.c1], [b.c2]), agg_func([T_FUN_COUNT(*)])
+  31 - output([b.c1], [b.c2]), filter(nil), sort_keys([b.c1, ASC], [b.c2, ASC])
+  32 - output([b.c1], [b.c2]), filter(nil)
+  33 - output([b.c1], [b.c2]), filter(nil), 
+      access([b.c1], [b.c2]), partitions(p0)
+
+explain select /*+ use_px parallel(2) use_merge(a b) */ * from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1;
+Query Plan
+====================================================================
+|ID|OPERATOR                            |NAME    |EST. ROWS|COST   |
+--------------------------------------------------------------------
+|0 |PX COORDINATOR                      |        |9801001  |9264343|
+|1 | EXCHANGE OUT DISTR                 |:EX10002|9801001  |6481053|
+|2 |  MERGE JOIN                        |        |9801001  |6481053|
+|3 |   EXCHANGE IN MERGE SORT DISTR     |        |10001    |356896 |
+|4 |    EXCHANGE OUT DISTR (BROADCAST)  |:EX10001|10001    |355477 |
+|5 |     MATERIAL                       |        |10001    |355477 |
+|6 |      SUBPLAN SCAN                  |a       |10001    |349964 |
+|7 |       MERGE GROUP BY               |        |10001    |348584 |
+|8 |        EXCHANGE IN MERGE SORT DISTR|        |10001    |312738 |
+|9 |         EXCHANGE OUT DISTR (HASH)  |:EX10000|10001    |311791 |
+|10|          MERGE GROUP BY            |        |10001    |311791 |
+|11|           SORT                     |        |100000   |275945 |
+|12|            PX BLOCK ITERATOR       |        |100000   |64066  |
+|13|             TABLE SCAN             |t1      |100000   |64066  |
+|14|   SORT                             |        |100000   |296180 |
+|15|    PX BLOCK ITERATOR               |        |100000   |66272  |
+|16|     TABLE SCAN                     |b       |100000   |66272  |
+====================================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([a.c1], [a.c2], [a.c3], [b.c1], [b.c2], [b.c3]), filter(nil)
+  1 - output([a.c1], [a.c2], [a.c3], [b.c1], [b.c2], [b.c3]), filter(nil), dop=2
+  2 - output([a.c1], [a.c2], [a.c3], [b.c1], [b.c2], [b.c3]), filter(nil), 
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  3 - output([a.c1], [a.c2], [a.c3]), filter(nil), sort_keys([a.c1, ASC])
+  4 - output([a.c1], [a.c2], [a.c3]), filter(nil), dop=2
+  5 - output([a.c1], [a.c2], [a.c3]), filter(nil)
+  6 - output([a.c1], [a.c2], [a.c3]), filter(nil), 
+      access([a.c1], [a.c2], [a.c3])
+  7 - output([t1.c1], [t1.c2], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), 
+      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  8 - output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), sort_keys([t1.c1, ASC], [t1.c2, ASC])
+  9 - (#keys=2, [t1.c1], [t1.c2]), output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), dop=2
+  10 - output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), 
+      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT(*)])
+  11 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC], [t1.c2, ASC])
+  12 - output([t1.c1], [t1.c2]), filter(nil)
+  13 - output([t1.c1], [t1.c2]), filter(nil), 
+      access([t1.c1], [t1.c2]), partitions(p0)
+  14 - output([b.c1], [b.c2], [b.c3]), filter(nil), sort_keys([b.c1, ASC])
+  15 - output([b.c1], [b.c2], [b.c3]), filter(nil)
+  16 - output([b.c1], [b.c2], [b.c3]), filter(nil), 
+      access([b.c1], [b.c2], [b.c3]), partitions(p0)
+

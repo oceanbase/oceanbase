@@ -1,0 +1,42 @@
+drop database if exists subquery_db;
+create database subquery_db;
+use subquery_db;
+
+create table t1(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int, c3 varchar(32));
+create table t3(c1 int, c2 int);
+
+select * from t1 where c1>ANY(select c1 from t2);
+select * from t1 where c1<ALL(select c1 from t2);
+select * from t1 where c1=(select c1 from t2);
+select * from t1 where c1=ANY(select c1 from t2 where t1.c2>t2.c2);
+select * from t1 where exists(select c1 from t2 where t1.c2>t2.c2);
+select * from t1 where 1<ANY(select c1 from t2);
+select c2 from t1 where exists(select c2 from t2 where t1.c1>t2.c1);
+select * from t1 where c1>(select c1 from t2);
+select * from t1 where exists(select * from t2 where t1.c1=t2.c2);
+select * from t1 where c1 in (select c1 from t1);
+#from-subquery
+select * from (select * from t1 limit 1) t;
+select c1 from t1 where c1 not in (select c1 from t2 where c2 not in (select c2 from t2));
+select (select c1 from t1) from t1;
+select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select max(c1) from (select c1 from t3 where t1.c2=t3.c1 order by c1 limit 1) as tt));
+
+--error 5042
+select (select c1, c2 from t1) from t1;
+select * from t1 group by (select c1 from t1);
+--error 5042
+select * from t1 group by (select c1, c2 from t1);
+select * from t1 where (select c1 from t2) in (1, 2);
+
+
+select * from t1 where c1=ANY(select c1 from t2 where t1.c2>t2.c2);
+select * from t1, (select * from t2) as v where exists(select c2 from t2 where t2.c1 = t1.c1);
+(select substr('a',1,1) ) union (select 1);
+
+--error 5008
+select * from (select c1, c2, c2 from t1) tt;
+
+select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1 from t3 where t1.c2=t3.c1));
+
+drop database subquery_db;

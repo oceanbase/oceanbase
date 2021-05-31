@@ -1,0 +1,12 @@
+select * from oceanbase.__tenant_virtual_interm_result where svr_ip = '0.0.0.0' and svr_port = 0;
+job_id	task_id	slice_id	execution_id	svr_ip	svr_port	expire_time	row_count	scanner_count	used_memory_size	used_disk_size	partition_ip	partition_port
+select * from oceanbase.__tenant_virtual_interm_result;
+select * from oceanbase.__tenant_virtual_interm_result where svr_port > 0;
+select * from oceanbase.__tenant_virtual_interm_result where scanner_count > 0;
+select * from oceanbase.__tenant_virtual_interm_result where expire_time > 0;
+select * from oceanbase.__tenant_virtual_interm_result where used_memory_size > 0;
+select * from oceanbase.__tenant_virtual_interm_result where is_serving_tenant(svr_ip, svr_port, 1);
+select * from oceanbase.__tenant_virtual_interm_result where is_serving_tenant(svr_ip, svr_port, 1001);
+select is_serving_tenant(svr_ip, svr_port, 1), is_serving_tenant(svr_ip, svr_port, 1001) from oceanbase.__tenant_virtual_interm_result where is_serving_tenant(svr_ip, svr_port, 1);
+select svr_ip, svr_port from oceanbase.__tenant_virtual_interm_result group by svr_ip, svr_port having is_serving_tenant(svr_ip, svr_port, 1);
+select t1.svr_ip, t1.svr_port, t2.svr_ip, t2.svr_port from oceanbase.__tenant_virtual_interm_result t1 join oceanbase.__tenant_virtual_interm_result t2 on is_serving_tenant(t1.svr_ip, t2.svr_port, 1);

@@ -1,0 +1,25 @@
+drop database if exists range_partition;
+create database range_partition;
+use range_partition;
+
+create table t1(c1 int, c2 int) partition by range columns(c1) (partition p0 values less than(20), partition p1 values less than(30), partition p2 values less than maxvalue);
+create table t2(c1 int, c2 int) partition by hash(c1) subpartition by range columns(c2) subpartition template (subpartition p0 values less than(20), subpartition p1 values less than(30)) partitions 4;
+create table t3(c1 date, c2 int) partition by range columns(c1) (partition p0 values less than('1990-01-01'), partition p1 values less than('19910101'));
+--error 5178
+create table t4(c1 year, c2 int) partition by range columns(c1) (partition p0 values less than('1990'), partition p1 values less than(1997));
+--error 5178
+create table t5(c1 time, c2 int) partition by range columns(c1) (partition p0 values less than('10:10:10'), partition p1 values less than(101010));
+create table t6(c1 datetime, c2 int) partition by range columns(c1) (partition p0 values less than('1990-01-01'), partition p1 values less than('19910101'));
+--error 5178
+create table t7(c1 timestamp, c2 int) partition by range columns(c1) (partition p0 values less than('1990-01-01 10:10:10'), partition p1 values less than(19910101101010));
+
+#test error
+--error 5178
+create table t8(c1 float, c2 int) partition by range columns(c1) (partition p0 values less than(20), partition p1 values less than(30), partition p2 values less than maxvalue);
+--error 5275
+create table t9(c1 varchar(30), c2 int) partition by range columns(c1) (partition p0 values less than(20), partition p1 values less than(30), partition p2 values less than maxvalue);
+--error 5275
+create table t10(c1 int, c2 int) partition by range columns(c1) (partition p0 values less than(1.20),partition p1 values less than(30));
+--error 5280
+create table t11(c1 int, c2 int) partition by range columns(c1) (partition p0 values less than(10), partition p0 values less than(300));
+drop database range_partition;

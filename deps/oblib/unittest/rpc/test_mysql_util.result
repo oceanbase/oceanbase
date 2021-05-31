@@ -1,0 +1,260 @@
+***********INT_TEST***********
+value = 10, is_unsigned = 1, zerofill = 1, len = 5
+00010
+value = 100, is_unsigned = 1, zerofill = 1, len = 5
+00100
+value = 100, is_unsigned = 0, zerofill = 1, len = 5
+00100
+value = 100, is_unsigned = 1, zerofill = 0, len = 5
+100
+value = 100, is_unsigned = 0, zerofill = 0, len = 5
+100
+value = -100, is_unsigned = 0, zerofill = 0, len = 5
+-100
+value = -100, is_unsigned = 1, zerofill = 0, len = 5
+18446744073709551516
+value = -1, is_unsigned = 0, zerofill = 1, len = 5
+000-1
+value = 0, is_unsigned = 0, zerofill = 0, len = 5
+0
+value = 18446744073709551615, is_unsigned = 0, zerofill = 0, len = 5
+-1
+value = 18446744073709551615, is_unsigned = 1, zerofill = 0, len = 5
+18446744073709551615
+value = 18446744073709551615, is_unsigned = 0, zerofill = 1, len = 5
+000-1
+value = 18446744073709551615, is_unsigned = 1, zerofill = 1, len = 20
+18446744073709551615
+value = 18446744073709551615, is_unsigned = 1, zerofill = 1, len = 21
+018446744073709551615
+value = 9223372036854775807, is_unsigned = 1, zerofill = 1, len = 20
+09223372036854775807
+value = 9223372036854775807, is_unsigned = 0, zerofill = 1, len = 20
+09223372036854775807
+value = 9223372036854775807, is_unsigned = 0, zerofill = 0, len = 20
+9223372036854775807
+value = -9223372036854775807, is_unsigned = 0, zerofill = 0, len = 20
+-9223372036854775807
+value = -9223372036854775807, is_unsigned = 1, zerofill = 0, len = 20
+9223372036854775809
+value = -9223372036854775807, is_unsigned = 0, zerofill = 1, len = 20
+-9223372036854775807
+value = -9223372036854775807, is_unsigned = 1, zerofill = 1, len = 20
+09223372036854775809
+value = 0, is_unsigned = 0, zerofill = 0, len = 10000
+0
+value = 0, is_unsigned = 0, zerofill = 1, len = 10000
+err
+
+***********FLOAT_TEST***********
+value=1.5,scale=1,zerofill=1,zflength5
+001.5
+value=1.5,scale=1,zerofill=1,zflength5
+001.5
+value=1.5,scale=10,zerofill=1,zflength10
+1.5000000000
+value=1.5,scale=10,zerofill=1,zflength10
+1.5000000000
+value=1,scale=10,zerofill=1,zflength10
+1.0000000000
+value=1,scale=20,zerofill=1,zflength10
+1.00000000000000000000
+value=1,scale=20,zerofill=1,zflength20
+1.00000000000000000000
+value=1,scale=10,zerofill=1,zflength20
+000000001.0000000000
+
+***********DOUBLE_TEST***********
+value=1e-15,scale=10,zerofill=1,zflength20
+000000000.0000000000
+value=1e-15,scale=20,zerofill=1,zflength20
+0.00000000000000100000
+value=1e-16,scale=10,zerofill=1,zflength20
+000000000.0000000000
+value=1e-16,scale=20,zerofill=1,zflength20
+0.00000000000000010000
+value=0,scale=20,zerofill=1,zflength20
+0.00000000000000000000
+value=1.55556,scale=10,zerofill=1,zflength15
+0001.5555555550
+value=1,scale=5,zerofill=1,zflength15
+000000001.00000
+value=1.23e+12,scale=5,zerofill=1,zflength15
+1230000000000.00000
+value=1.23e+12,scale=5,zerofill=1,zflength10
+1230000000000.00000
+value=1.23e+12,scale=0,zerofill=1,zflength5
+1230000000000
+value=1.23e+12,scale=0,zerofill=0,zflength20
+1230000000000
+value=1.23e+12,scale=3,zerofill=1,zflength20
+0001230000000000.000
+value=1.23333e+10,scale=5,zerofill=0,zflength10
+12333333333.33333
+value=1.23333e+10,scale=5,zerofill=1,zflength30
+000000000000012333333333.33333
+value=1.23333e+10,scale=20,zerofill=1,zflength10
+ 12333333333.33333400000000000000
+value=1.23333e+10,scale=20,zerofill=1,zflength30
+ 12333333333.33333400000000000000
+value=1.23333e+10,scale=20,zerofill=0,zflength40
+ 12333333333.33333400000000000000
+value=1.23333e+10,scale=20,zerofill=1,zflength40
+(0000000012333333333.33333400000000000000
+
+***********DATETIME_TEST***********
+val = 2011-01-01 12:01:01
+2011-01-01 12:01:01
+val = 2011-01-01 12:01:01.555
+2011-01-01 12:01:01.555
+val = 99991231235959
+9999-12-31 23:59:59
+val = 99991231235959.999999
+9999-12-31 23:59:59.999999
+val = 0000-00-00 00:00:00
+0000-00-00 00:00:00
+val = 1000-01-01 00:00:00
+1000-01-01 00:00:00
+val = 2011-01-01 12:01:01.555555
+2011-01-01 12:01:01.555555
+val = 2011-01-01 23:01:01.5
+2011-01-01 23:01:01.5
+val = 2011-12-01 12:01:01.55
+2011-12-01 12:01:01.55
+val = 0000-00-00 00:00:00.555
+invalid datetime
+val = 2011-13-01 12:01:01.55
+invalid datetime
+val = 99991231235959.9999999
+invalid datetime
+
+***********DATE_TEST***********
+val = 2011-01-01
+
+2011-01-01 
+val = 2011-01-01
+
+2011-01-01 
+val = 99991231
+
+9999-12-31 
+val = 99990131
+
+9999-01-31 
+val = 0000-00-00
+
+0000-00-00 
+val = 1000-01-01
+
+1000-01-01 
+val = 2011-01-01
+
+2011-01-01 
+val = 2018-12-01
+
+2018-12-01 
+val = 2011-12-01
+
+2011-12-01 
+val = 10000-00-00
+invalid date
+val = 99990132
+invalid date
+val = 2011-13-01
+invalid date
+
+***********TIME_TEST***********
+val = 23:00:00scale = 6
+23:00:00
+val = 00:00:00scale = 0
+00:00:00
+val = 12:00:00.1233scale = 0
+12:00:00.1233
+val = 12:00:00.123323232scale = 4
+12:00:00.123323
+val = -838:59:59scale = 6
+
+-838:59:59
+val = 838:59:59scale = 0
+	838:59:59
+val = 838:59:59.1212scale = 0
+invalid time
+val = -838:59:59.1212scale = 4
+invalid time
+val = 839:59:59.9999999scale = 4
+invalid time
+val = -839:59:59.9999999scale = 6
+invalid time
+
+***********YEAR_TEST***********
+val = 2012
+2012
+val = 0
+0000
+val = 1901
+1901
+val = 2155
+2155
+val = 12
+2012
+val = 69
+2069
+val = 70
+1970
+val = -1
+invalid year
+
+***********VARCHAR_TEST***********
+val = 
+str_len = 0
+
+val = 123
+str_len = 3
+123
+val = adafa
+str_len = 5
+adafa
+val = 123abc
+str_len = 6
+123abc
+val = oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+str_len = 2048
+err
+val = oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+str_len = 1124
+err
+val = oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+str_len = 1024
+err
+val = oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+str_len = 1022
+err
+val = oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+str_len = 1020
+üüoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+
+***********NUMBER_TEST***********
+val123, scale = 0, zerofill=1, zflen = 20
+00000000000000000123
+val123, scale = 10, zerofill=1, zflen = 20
+000000123.0000000000
+val123, scale = 10, zerofill=0, zflen = 20
+123.0000000000
+val123, scale = 20, zerofill=1, zflen = 20
+123.00000000000000000000
+val0, scale = 0, zerofill=1, zflen = 20
+00000000000000000000
+val0, scale = 0, zerofill=0, zflen = 20
+0
+val0, scale = 10, zerofill=1, zflen = 20
+000000000.0000000000
+val0, scale = 20, zerofill=1, zflen = 20
+0.00000000000000000000
+val122323.23123123123123123131311, scale = 0, zerofill=1, zflen = 20
+00000000000000122323
+val122323.23123123123123123131311, scale = 0, zerofill=0, zflen = 20
+122323
+val122323.23123123123123123131311, scale = 10, zerofill=1, zflen = 20
+000122323.2312312312
+val122323.23123123123123123131311, scale = 20, zerofill=1, zflen = 20
+122323.23123123123123123131

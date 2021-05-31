@@ -1,0 +1,15 @@
+select * from t3 where c3='2';
+select * from t3 where c3>'2';
+select * from t3 where c3<'2';
+select * from t3 where c3>='2';
+select * from t3 where c3<='2';
+select * from t3 where c3!='2';
+select * from t3 where c3<=>'2';
+select * from t3 where c3 is null;
+select * from t3 where c3 is false;
+select * from t3 where c3 is true;
+select * from t3 where c3+'2'>'1';
+select * from t3 where c3-'2'>'1';
+select * from t3 where c3*'2'>'1';
+select * from t3 where c3/'2'>'1';
+select * from t3 where length(concat(c3, '2'))>'1';

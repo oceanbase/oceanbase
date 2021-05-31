@@ -1,0 +1,107 @@
+drop database if exists update_db;
+create database update_db;
+use update_db;
+
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+create table t2(c1 int, c2 int, c3 varchar(32), primary key(c2,c3)) partition by key(c2, c3) partitions 3
+create table t3(c3 int primary key, c4 int)
+create index idx1 on t1(c2) LOCAL
+create table test(c1 int , c2 int, c3 varchar(50), c4 varchar(50), c5 int , c6 double, c7 int, primary key(c1, c2, c3))
+create index test_indx on test(c4, c5)
+create table non_reserved_key_test(value int primary key)
+create table test2(c1 int primary key, c2 varchar(30), c3 timestamp(6) default now(6))
+create table t4(c1 int primary key, c2 int not null, c3 int default 1, c4 int not null default 2)
+create table ta(c1 int primary key, c2 int auto_increment) comment='test', auto_increment= 5
+create table alter_table1(c1 int primary key, c2 varchar(11) not null default 'c2', c3 tinyint default 3, c4 char(11)) partition by hash(c1) partitions 3
+create index idx_c1 on alter_table1(c1) LOCAL
+create table t_auto_inc(c1 int primary key, c2 int auto_increment)
+create table coll_table(c1 varchar(10) collate utf8_general_ci, c2 varchar(10) collate utf8_bin, c3 varchar(10), primary key(c1, c2));
+create table ts(c1 int primary key, c2 timestamp default current_timestamp on update current_timestamp, c3 int);
+
+
+#update testcase
+
+##simple
+    update t1 set c2=1
+    update t1 set t1.c2=1
+
+update test set c2=c1+c2, c3=c2+c1;
+
+##alias
+	update t1 vt1 set c2=1
+	update t1 vt1 set vt1.c2=1 
+#resolve error
+#	update t1 vt1 set t1.c2=1   
+update rongxuan.t1 set c1 = 1
+update rongxuan.t1 table1 set c1 =1
+
+###with index
+#### index column in rowkey
+update t1 set c1 = 1
+#### index column not in rowkey
+update test set c5 = 1
+#### column not in index or rowkey
+update test set c7 = 3 where c1 = 0
+
+##expr            
+	update t1 set c2=c1+1 
+	update t1 set c2=2*c1,c2=c2+1 
+	update t1 set c2=c2                           
+
+##where                  
+    update t1 set c2=1 where c1 > 0   
+    update t1 vt1 set c2=1 where vt1.c1 > 0   
+    update t1 set c2=1 where c1 > 2
+    update t1 set c2=1 where 2 > 2
+
+##limit                  
+	update t1 set c2=1 limit 10 
+	update t1 set c2=1 limit 2
+	update t1 set c2=1 limit 0,10   
+	update t1 set c2=1 limit 2, 2
+	update t1 set c2=1 limit 0 offset 10 
+	update t1 set c2=1 limit 2 offset 2
+
+##order_by   
+	update t1 set c2=1 order by c1   
+	update t1 set c2=1 order by c1 desc 
+	update t1 vt1 set c2=1 order by vt1.c1 desc
+	update t1 set c2=1 order by c1 asc ,c2 desc   
+#resolve error
+#update t1 set c2=1 order by 1 desc 
+	update t1 set c2=1 order by c1 desc                                
+    update t1 set c2=1 order by c2   
+	update t1 set c2=1 order by c1,c2 
+#parse error
+#	update t1 set c2=1 order by 2 2 
+
+##subquery                  
+#	update t1 set c2 = 6 where c1 = (select max(c1) from t1)   //parse error
+#	update t1 set c2 = (select max(c1) from t1) where c1 = 1   //parse error             
+
+##hint                 
+	update/*+query_timeout(2000)*/ t1 set c1=1
+	update/*+index(t1 i1)*/ t1 set c1=1
+
+##question_mark                  
+	update t1 set c1=2  
+#parse error
+#	update t1 set 1=2   
+#	update t1 set 2=2 
+
+	update t2 set c2 = c3 like '%h%' where c1 = 1                                       
+
+    update/*+index(t2 i2)*/ t2 vt2 set vt2.c1=2*vt2.c2,c1=c1+1,vt2.c2=10,c3=2 where c1>0 and vt2.c2<2 order by vt2.c1 asc, vt2.c2 desc limit 2 offset 10  
+    update/*+index(t2 i2),query_timeout(2000)*/ t2 vt2 set vt2.c1=2*vt2.c2,c1=c1+1,vt2.c2=10,c3=10 where c1>0 and vt2.c2<10 order by vt2.c1 asc,c2 desc limit 10,10
+update test set c4 = 1 where c1 =0
+update test set c1 = 1 where c1 = 0
+
+## default and not null
+
+update t4 set c2 = 1 where c1 = 2
+update t4 set c3 = 5, c4 = 6
+
+update t4 set c2 =6,c3=7 where c1>0;
+#update t4 set c2 =default,c3=default where c1>0;
+
+drop database update_db;

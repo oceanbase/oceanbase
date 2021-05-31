@@ -1,0 +1,178 @@
+drop database if exists altertable;
+create database altertable;
+use altertable;
+
+create table ta(c1 int primary key, c2 int auto_increment) comment='test', auto_increment= 5;
+create table alter_table1(c1 int primary key, c2 varchar(11) not null default 'c2', c3 tinyint default 3, c4 char(11)) partition by hash(c1) partitions 3;
+create index idx_c1 on alter_table1(c1) LOCAL;
+create table test(c1 int , c2 int, c3 varchar(50), c4 varchar(50), c5 int , c6 double, c7 int, primary key(c1, c2, c3));
+create index test_indx on test(c4, c5);
+
+### add new column
+alter table alter_table1 add column nc3 int null default 0
+alter table alter_table1 add (nc3 int null default 0, nc4 varchar(11))
+
+###key or index
+alter table alter_table1 add key(c2)
+alter table alter_table1 add index(c2)
+
+### specify order
+alter table alter_table1 add index idx2(c2 DESC)
+
+###multiple column
+alter table alter_table1 add index idx1(c1,c2)
+alter table alter_table1 add index idx1(c1,c2 DESC)
+alter table alter_table1 add index idx1(c1 ASC, c2 DESC)
+
+###multiple index
+--error 4200
+alter table alter_table1 add index idx1(c1), add index idx2(c2)
+
+###index option
+alter table alter_table1 add index idx1(c1) GLOBAL COMMENT 'string' BLOCK_SIZE 16384 STORING(c3, c4)
+alter table alter_table1 add index idx1(c1) GLOBAL COMMENT 'string' BLOCK_SIZE = 16384 STORING(c3, c4)
+
+###unique
+alter table alter_table1 add unique index uidx1(c1)
+alter table alter_table1 add unique uidx1(c1)
+
+###alter column
+alter table alter_table1 alter column c3 set default 13
+alter table alter_table1 alter column c3 drop default
+
+###change column
+alter table alter_table1 change column c4 nc4 char(20)
+
+###modify column
+alter table alter_table1 modify c3 tinyint default 33
+
+###drop column
+alter table alter_table1 drop column c3
+
+###drop index
+#alter table alter_table1 drop index idx_c1
+
+###rename index
+alter table alter_table1 rename index idx_c1 to idx_2
+alter table alter_table1 rename index idx_2 to idx_c1
+
+###table rename
+alter table alter_table1 rename to alter_t1
+
+###alter table option
+#character set
+#alter table alter_table1 character set = 'utf8mb4'
+#comment
+alter table alter_table1 set comment = 'hahaha'
+#compression
+alter table alter_table1 set compression = 'none'
+#expire info
+ALTER TABLE test SET EXPIRE_INFO (c1 > 9)
+#alter table alter_table1 set EXPIRE_INFO = (thedate < date_sub(merging_frozen_time(), INTERVAL 1 DAY))
+#replica num
+alter table alter_table1 replica_num = 3
+#Partition block size
+alter table alter_table1 set block_size = 16384
+#BloomFilter
+alter table alter_table1 set use_bloom_filter = true
+#step merge num range(1~64)
+alter table alter_table1 set progressive_merge_num = 1
+#table group
+alter table alter_table1 tablegroup = 'tp1'
+alter table alter_table1 drop tablegroup
+#zone list
+#alter table alter_table1 zone_list = ('z1', 'z2')
+#primary zone
+alter table alter_table1 primary_zone = 'z1'
+#autoincrement
+alter table alter_table1 auto_increment = 1
+
+##tablegroup
+alter table alter_table1 drop tablegroup
+
+###error
+#duplicate column c3
+#--error 5008
+#alter table alter_table1 add c3 int, alter c3 drop default;
+#duplicate column c1
+#--error 5008
+#alter table alter_table1 add column c1 int;
+#add duplicate column
+#--error 5019
+#alter table stu add column c8 int, add column c8 int;
+#multiple operation on the same column c8
+#--error 5019
+#alter table stu add column c8 int, drop c8;
+#column not exist
+#--error 5217
+#alter table alter_table1 change column abcd acd char(11);
+#modify primary key
+#--error 5057
+#alter table alter_table1 add column c7 int primary key;
+#--error 5057
+#alter table alter_table1 change column c2 c2 varchar(12) not null primary key;
+#drop primary key
+#--error 5217
+#alter table alter_table1 drop id;
+#--error 5057
+#alter table alter_table1 add primary key (c2);
+#--error 5057
+#alter table alter_table1 add primary key (c2) GLOBAL COMMENT 'string' COMPRESSION 'lz4_1.0' BLOCK_SIZE 1024 STORING(c3, c4);
+#table not exist
+#--error 5019
+#alter table alter_table2 rename TO t5
+#--error 5019
+#alter table t_student set progressive_merge_num=1;
+#not support
+#--error 5006
+#alter table test alter c2 set not null
+#rename to exist column
+#--error 5008
+#alter table alter_table1 change c2 c1 varchar(20);
+#modify column type
+#--error 4007
+#alter table alter_table1 modify column c2 int;
+#modify varchar length to smaller
+#--error 4007
+#alter table alter_table1 modify column c2 varchar(10);
+#modify char length to smaller
+#--error 4007
+#alter table alter_table1 modify column c4 char(10);
+
+
+##prefix key
+#--error 4007
+#alter table test add unique (c3(11), c1);
+#--error 5190
+#alter table test add unique (c3(60));
+#--error 5190
+#alter table test add unique (c1(1));
+--error 5191
+alter table test add unique (c3(0));
+--error 5191
+alter table test add unique (xxx(0));
+
+##rename
+--error 5163
+alter table test rename to ``
+--error 5163
+alter table test rename to `    `
+
+#using hash/btree(only syntax support)
+alter table test add index using btree(c1) using hash;
+alter table test add unique index using btree(c1) using hash;
+--error 4200
+alter table test add index using hash(c1), add index using btree(c2)
+
+##constraint for unique key
+create table wang_01(c1 int, c2 varchar(30), c3 bigint, c4 timestamp, c5 decimal(7,3), c6 varbinary(1024), c7 char(32), c8 tinyint);
+alter table wang_01 add constraint unique key(c2);
+alter table wang_01 add constraint const_name unique key(c3);
+alter table wang_01 add constraint const_name unique key uk_name_1(c4);
+alter table wang_01 add constraint cons_name_1 unique key(c5);
+alter table wang_01 add constraint unique key uk_name_2(c6);
+alter table wang_01 add constraint cons_name unique key uk_name_3(c7);
+alter table wang_01 add constraint unique key uk_name_4(c8);
+
+# cleanup
+drop database altertable;

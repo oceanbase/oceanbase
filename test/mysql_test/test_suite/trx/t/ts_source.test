@@ -1,0 +1,68 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#
+# 原则：
+# 1. 系统租户的时钟源为LTS
+# 2. 不允许设置系统租户的时钟源为非LTS的其他时钟源
+# 3. 普通租户的时钟源默认为GTS，且可以设置为LTS
+
+--disable_abort_on_error
+--disable_warnings
+
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+
+## 系统租户下的时钟源测试
+
+show global variables like 'ob_timestamp_service';
+set global ob_timestamp_service='GTS';
+show global variables like 'ob_timestamp_service';
+
+disconnect obsys;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+
+show global variables like 'ob_timestamp_service';
+
+## 普通租户下的时钟源测试
+--disable_query_log
+create resource unit if not exists ts_source_unit max_cpu=1, min_memory='1G',max_memory='1G',max_disk_size='1G',max_iops=1000,max_session_num=1000;
+create resource pool if not exists ts_source_pool1 unit='ts_source_unit', unit_num=1;
+create tenant if not exists ts_source_tenant1 RESOURCE_POOL_LIST=('ts_source_pool1') set ob_tcp_invited_nodes='%';
+--source mysql_test/include/check_tenant_sync.inc
+--enable_query_log
+
+connect (obcommon,$OBMYSQL_MS0,root@ts_source_tenant1,,*NO-ONE*,$OBMYSQL_PORT);
+connection obcommon;
+
+show global variables like 'ob_timestamp_service';
+set global ob_timestamp_service='LTS';
+show global variables like 'ob_timestamp_service';
+
+disconnect obcommon;
+connect (obcommon,$OBMYSQL_MS0,root@ts_source_tenant1,,*NO-ONE*,$OBMYSQL_PORT);
+connection obcommon;
+
+show global variables like 'ob_timestamp_service';
+set global ob_timestamp_service='GTS';
+show global variables like 'ob_timestamp_service';
+
+disconnect obcommon;
+connect (obcommon,$OBMYSQL_MS0,root@ts_source_tenant1,,*NO-ONE*,$OBMYSQL_PORT);
+connection obcommon;
+
+show global variables like 'ob_timestamp_service';
+
+## 清理数据
+--disable_query_log
+connection obsys;
+drop tenant ts_source_tenant1 force;
+drop resource pool ts_source_pool1;
+drop resource unit ts_source_unit;
+--enable_query_log
+
+--enable_abort_on_error
+--enable_warnings
+
+

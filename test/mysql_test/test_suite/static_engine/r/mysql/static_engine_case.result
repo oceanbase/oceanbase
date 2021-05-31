@@ -1,0 +1,128 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+// Case1: normal test,测试是否将带参数的case转为不带参数的case
+// Case2: 测试case表达式里面有列的情况
+// Case3: 测试空串以及NULL的情况
+connection conn_admin;
+alter system flush plan cache global;
+set @@ob_enable_plan_cache = 0;
+// Case1: normal test. 
+// 所有带参数的case表达式都被转为不带参数的case表达式
+select case 1 when 1 then 'a' when 2 then 'b' else 'c' end from dual;
+case 1 when 1 then 'a' when 2 then 'b' else 'c' end
+a
+// 应该命中else expr
+select case 100 when 1 then 'a' when 2 then 'b' else 'c' end from dual;
+case 100 when 1 then 'a' when 2 then 'b' else 'c' end
+c
+
+// MySQL允许各个when/then expr结果类型不一致
+// 1和'1'的类型不一致，会被加上cast，都被转为decimal再进行比较,返回'a'
+select case 1 when '1' then 'a' when 2 then 'b' else 'c' end from dual;
+case 1 when '1' then 'a' when 2 then 'b' else 'c' end
+a
+// 第二个then 应该要加cast，返回'a'
+select case 1 when 1 then 'a' when 2 then 'b' else 3 end from dual;
+case 1 when 1 then 'a' when 2 then 'b' else 3 end
+a
+// 不带参数的case的测试
+// normal test
+// 应该返回'a'
+select case when 1=1 then 'a' when 2 then 'b' else 'c' end from dual;
+case when 1=1 then 'a' when 2 then 'b' else 'c' end
+a
+// 应该返回'c'
+select case when 0=1 then 'a' when 0.0 then 'b' else 'c' end from dual;
+case when 0=1 then 'a' when 0.0 then 'b' else 'c' end
+c
+// 应该返回'a'，且0='1'中要加cast
+select case when 1='1' then 'a' when 2 then 'b' else 'c' end from dual;
+case when 1='1' then 'a' when 2 then 'b' else 'c' end
+a
+// 应该返回'c'，且0='1'中要加cast
+select case when 0='1' then 'a' when 0.0 then 'b' else 'c' end from dual;
+case when 0='1' then 'a' when 0.0 then 'b' else 'c' end
+c
+// Case2: 测试建表的情况
+drop table if exists t1;
+create table t1 (col_null int, col_int int, col_char char);
+insert into t1 values(null, 1, 'a');
+set @@ob_enable_plan_cache = 0;
+alter system flush plan cache global;
+// 测试int的normal case，应该返回'a'
+select case col_int when 1 then 'a' when 2 then 'b' else 'c' end from t1;
+case col_int when 1 then 'a' when 2 then 'b' else 'c' end
+a
+// 测试int需要加cast的情况，第一个when需要加cast, 第二个when不需要
+select case col_int when '1' then 'a' when 2 then 'b' else 'c' end from t1;
+case col_int when '1' then 'a' when 2 then 'b' else 'c' end
+a
+// 测试null的情况，应该返回'c'，而且没有cast出现
+select case col_null when 1 then 'a' when 2 then 'b' else 'c' end from t1;
+case col_null when 1 then 'a' when 2 then 'b' else 'c' end
+c
+// Case3: 测试空串以及NULL的情况
+// 应该返回1, MySQL没有把空串看成NULL
+select case '' when '' then 1 when 'here' then 2 else 'hh' end from dual;
+case '' when '' then 1 when 'here' then 2 else 'hh' end
+1
+// 应该返回'hh'
+select case NULL when NULL then 1 when 'here' then 2 else 'hh' end from dual;
+case NULL when NULL then 1 when 'here' then 2 else 'hh' end
+hh
+// 应该返回1, MySQL没有把空串看成NULL
+select case when '' = '' then 1 when 'here' then 2 else 'hh' end from dual;
+case when '' = '' then 1 when 'here' then 2 else 'hh' end
+1
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'here'
+// 应该返回'hh', 因为'here'cast为double会失败,返回值应该是0
+select case when NULL=NULL then 1 when 'here' then 2 else 'hh' end from dual;
+case when NULL=NULL then 1 when 'here' then 2 else 'hh' end
+hh
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'here'
+// Case4: 测试不同字符集，大小写问题
+drop table t1;
+create table t1 (a varchar(100) collate utf8_general_ci, cond1 varchar(100) collate utf8_bin, cond2 varchar(100) collate utf8_general_ci);
+insert into t1 values('cond', 'COND', 'COND');
+// 返回Null，a和cond1以及a和cond2比较都会使用utf8_bin作为collation type(因为有aggregate collation的过程)
+select case a when cond1 then '1' when cond2 then '2' end from t1;
+case a when cond1 then '1' when cond2 then '2' end
+NULL
+// 返回'neq', a和cond1比较使用的是utf8_bin
+select case a when cond1 then 'eq' else 'neq' end from t1;
+case a when cond1 then 'eq' else 'neq' end
+neq
+// 返回'eq', a和cond1比较使用的是utf8_general_ci
+select case a when cond2 then 'eq' else 'neq' end from t1;
+case a when cond2 then 'eq' else 'neq' end
+eq
+// arg case子节点也是arg case的情况测试，应该都被改为case expr(应该返回'ok')
+select case case a when 'cond' then 'eq' else 'neq' end when 'eq' then 'ok' else 'not ok' end from t1;
+case case a when 'cond' then 'eq' else 'neq' end when 'eq' then 'ok' else 'not ok' end
+ok
+// Case5: show create view/table
+drop view if exists v1;
+drop table if exists t2;
+create view v1 as select case case a when 'cond' then 'eq' else 'neq' end when 'eq' then 'ok' else 'not ok' end from t1;
+select * from v1;
+Name_exp_1
+ok
+// arg case expr的改写不应该影响show create view，结果应该还是arg case expr 而非改写后的case expr
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select (case (case `test`.`t1`.`a` when 'cond' then 'eq' else 'neq' end) when 'eq' then 'ok' else 'not ok' end) AS `Name_exp_1` from `test`.`t1`	utf8mb4	utf8mb4_general_ci
+drop view v1;
+create table t2 as select case case a when 'cond' then 'eq' else 'neq' end when 'eq' then 'ok' else 'not ok' end from t1;
+select * from t2;
+case case a when 'cond' then 'eq' else 'neq' end when 'eq' then 'ok' else 'not ok' end
+ok
+// arg case expr的改写不应该影响show create table，结果应该还是arg case expr 而非改写后的case expr
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `case case a when 'cond' then 'eq' else 'neq' end when 'eq' then 'ok' else 'not ok' end` varchar(6) NOT NULL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+drop table t1;
+drop table t2;
+alter system set _enable_static_typing_engine = false;

@@ -1,0 +1,13 @@
+#drop database if exists returning_db;
+#create database returning_db;
+#use returning_db;
+#
+#create table t1(c1 int primary key, c2 int, c3 int);
+#insert into t1 values(1, 2, 3), (2, 3, 4) returning c1, c2, c3;
+#insert into t1 values(3, 3, 3) returning c1, c2, c3;
+#replace into t1 values(3, 10, 11) returning c1 + 1, c2 + 1, c3 + 1;
+#delete from t1 where c1 = 1 or c1 = 10 returning c1 + c2 + c3;
+#update t1 set c2 = 200 where c1 = 3 returning c1 * 2, c2 + c3;
+#
+#drop table t1;
+#drop database returning_db;

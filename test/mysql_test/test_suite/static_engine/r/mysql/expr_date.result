@@ -1,0 +1,18 @@
+connect  sys, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection default;
+drop table if exists t1;
+create table t1 (c1 varchar(2000));
+insert into t1 values("2019-10-11");
+connection sys;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select date(c1) from t1;
+date(c1)
+2019-10-11
+select date("2019-10-10") from dual;
+date("2019-10-10")
+2019-10-10
+select date(null) from dual;
+date(null)
+NULL
+connection sys;

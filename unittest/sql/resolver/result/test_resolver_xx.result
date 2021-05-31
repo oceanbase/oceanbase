@@ -1,0 +1,1016 @@
+***************   Case 1   ***************
+SELECT COUNT(c1) AS c2 FROM t1 GROUP BY c2 HAVING c2 = 2;
+{
+  "stmt_type":1,
+  "table": [
+     {
+      "table_id":1,
+      "table_name":"t1",
+      "alias_name":"",
+      "table_type":0,
+      "ref_id":1,
+      "ref_query":null,
+      "database_name":"rongxuan"
+    }
+  ],
+  "joined_table": [
+  ],
+  "partition_express": [
+     {
+      "table_id":1,
+      "expression": {
+        "item_type":"T_FUN_SYS_PART_HASH",
+        "result_type":"BIGINT",
+        "expr_info": [
+          "IS_FUNC",
+          "CNT_CONST",
+          "CNT_COLUMN",
+          "CNT_FUNC"
+        ],
+        "rel_id": [
+          1
+        ],
+        "func":"partition_hash",
+        "children": [
+           {
+            "item_type":"T_OP_ADD",
+            "result_type":"BIGINT",
+            "expr_info": [
+              "CNT_CONST",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "children": [
+               {
+                "item_type":"T_REF_COLUMN",
+                "result_type":"INT",
+                "expr_info": [
+                  "IS_COLUMN",
+                  "CNT_COLUMN"
+                ],
+                "rel_id": [
+                  1
+                ],
+                "table_id":1,
+                "column_id":17,
+                "expr_level":0
+              },
+               {
+                "item_type":"T_INT",
+                "result_type":"BIGINT",
+                "expr_info": [
+                  "IS_CONST",
+                  "CNT_CONST"
+                ],
+                "rel_id": [
+                ],
+                "value": {
+                  "BIGINT":1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "column": [
+     {
+      "column_id":17,
+      "column_name":"c2",
+      "table_id":1,
+      "obj_type":"INT",
+      "data_length":0,
+      "cs_type":45,
+      "cs_level":2,
+      "decimal_scale":0,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1,
+        "column_id":17,
+        "expr_level":0
+      }
+    },
+     {
+      "column_id":16,
+      "column_name":"c1",
+      "table_id":1,
+      "obj_type":"INT",
+      "data_length":0,
+      "cs_type":45,
+      "cs_level":2,
+      "decimal_scale":0,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1,
+        "column_id":16,
+        "expr_level":0
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_FUN_COUNT",
+        "result_type":"DECIMAL",
+        "expr_info": [
+          "IS_AGG",
+          "CNT_COLUMN",
+          "CNT_AGG"
+        ],
+        "rel_id": [
+          1
+        ],
+        "children": {
+          "item_type":"T_REF_COLUMN",
+          "result_type":"INT",
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+            1
+          ],
+          "table_id":1,
+          "column_id":16,
+          "expr_level":0
+        },
+        "distinct":false
+      },
+      "table_id":-1,
+      "column_id":65509,
+      "is_alias":true,
+      "alias_name":"c2",
+      "expr_name":"c2",
+      "obj_type":"DECIMAL",
+      "decimal_scale":9223372036854775807
+    }
+  ],
+  "distinct":false,
+  "from": [
+     {
+      "table_id":1,
+      "is_join":false
+    }
+  ],
+  "where": [
+  ],
+  "group_by": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type":"INT",
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+        1
+      ],
+      "table_id":1,
+      "column_id":17,
+      "expr_level":0
+    }
+  ],
+  "having": [
+     {
+      "item_type":"T_OP_EQ",
+      "result_type":"TINYINT",
+      "expr_info": [
+        "CNT_CONST",
+        "CNT_COLUMN",
+        "IS_SIMPLE_COND"
+      ],
+      "rel_id": [
+        1
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type":"INT",
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+            1
+          ],
+          "table_id":1,
+          "column_id":17,
+          "expr_level":0
+        },
+         {
+          "item_type":"T_INT",
+          "result_type":"BIGINT",
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":2
+          }
+        }
+      ]
+    }
+  ],
+  "aggr_func": [
+     {
+      "column_id":65519,
+      "expression": {
+        "item_type":"T_FUN_COUNT",
+        "result_type":"DECIMAL",
+        "expr_info": [
+          "IS_AGG",
+          "CNT_COLUMN",
+          "CNT_AGG"
+        ],
+        "rel_id": [
+          1
+        ],
+        "children": {
+          "item_type":"T_REF_COLUMN",
+          "result_type":"INT",
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+            1
+          ],
+          "table_id":1,
+          "column_id":16,
+          "expr_level":0
+        },
+        "distinct":false
+      }
+    }
+  ],
+  "order_by": [
+  ],
+  "limit":null,
+  "offset":null,
+  "for_update":false,
+  "wait":-1,
+  "show_table_id":-1,
+  "when": [
+  ],
+  "hint": {
+    "read_static":false,
+    "frozen_version":-1,
+    "topk_precision":-1,
+    "sharding_minimum_row_count":0,
+    "query_timeout":-1,
+    "hotspot":false,
+    "index": [
+    ],
+    "read_consistency":0,
+    "join_order": [
+    ],
+    "merge_hint_idxs":"0, 0, 0, 0, 0, 0, 0, 0",
+    "hash_hint_idxs":"0, 0, 0, 0, 0, 0, 0, 0",
+    "nl_hint_idxs":"0, 0, 0, 0, 0, 0, 0, 0",
+    "part_hints": [
+    ]
+  },
+  "query_context": {
+    "param_num":0
+  },
+  "equal_sets": [
+  ]
+}
+***************   Case 2   ***************
+select * from t1 group by c1 having c1 > 5;
+{
+  "stmt_type":1,
+  "table": [
+     {
+      "table_id":1,
+      "table_name":"t1",
+      "alias_name":"",
+      "table_type":0,
+      "ref_id":1,
+      "ref_query":null,
+      "database_name":"rongxuan"
+    }
+  ],
+  "joined_table": [
+  ],
+  "partition_express": [
+     {
+      "table_id":1,
+      "expression": {
+        "item_type":"T_FUN_SYS_PART_HASH",
+        "result_type":"BIGINT",
+        "expr_info": [
+          "IS_FUNC",
+          "CNT_CONST",
+          "CNT_COLUMN",
+          "CNT_FUNC"
+        ],
+        "rel_id": [
+          1
+        ],
+        "func":"partition_hash",
+        "children": [
+           {
+            "item_type":"T_OP_ADD",
+            "result_type":"BIGINT",
+            "expr_info": [
+              "CNT_CONST",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "children": [
+               {
+                "item_type":"T_REF_COLUMN",
+                "result_type":"INT",
+                "expr_info": [
+                  "IS_COLUMN",
+                  "CNT_COLUMN"
+                ],
+                "rel_id": [
+                  1
+                ],
+                "table_id":1,
+                "column_id":17,
+                "expr_level":0
+              },
+               {
+                "item_type":"T_INT",
+                "result_type":"BIGINT",
+                "expr_info": [
+                  "IS_CONST",
+                  "CNT_CONST"
+                ],
+                "rel_id": [
+                ],
+                "value": {
+                  "BIGINT":1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "column": [
+     {
+      "column_id":17,
+      "column_name":"c2",
+      "table_id":1,
+      "obj_type":"INT",
+      "data_length":0,
+      "cs_type":45,
+      "cs_level":2,
+      "decimal_scale":0,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1,
+        "column_id":17,
+        "expr_level":0
+      }
+    },
+     {
+      "column_id":16,
+      "column_name":"c1",
+      "table_id":1,
+      "obj_type":"INT",
+      "data_length":0,
+      "cs_type":0,
+      "cs_level":7,
+      "decimal_scale":0,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1,
+        "column_id":16,
+        "expr_level":0
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1,
+        "column_id":16,
+        "expr_level":0
+      },
+      "table_id":-1,
+      "column_id":65519,
+      "is_alias":false,
+      "alias_name":"c1",
+      "expr_name":"c1",
+      "obj_type":"INT",
+      "decimal_scale":0
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1,
+        "column_id":17,
+        "expr_level":0
+      },
+      "table_id":-1,
+      "column_id":65518,
+      "is_alias":false,
+      "alias_name":"c2",
+      "expr_name":"c2",
+      "obj_type":"INT",
+      "decimal_scale":0
+    }
+  ],
+  "distinct":false,
+  "from": [
+     {
+      "table_id":1,
+      "is_join":false
+    }
+  ],
+  "where": [
+  ],
+  "group_by": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type":"INT",
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+        1
+      ],
+      "table_id":1,
+      "column_id":16,
+      "expr_level":0
+    }
+  ],
+  "having": [
+     {
+      "item_type":"T_OP_GT",
+      "result_type":"TINYINT",
+      "expr_info": [
+        "CNT_CONST",
+        "CNT_COLUMN",
+        "IS_RANGE_COND"
+      ],
+      "rel_id": [
+        1
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type":"INT",
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+            1
+          ],
+          "table_id":1,
+          "column_id":16,
+          "expr_level":0
+        },
+         {
+          "item_type":"T_INT",
+          "result_type":"BIGINT",
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":5
+          }
+        }
+      ]
+    }
+  ],
+  "aggr_func": [
+  ],
+  "order_by": [
+  ],
+  "limit":null,
+  "offset":null,
+  "for_update":false,
+  "wait":-1,
+  "show_table_id":-1,
+  "when": [
+  ],
+  "hint": {
+    "read_static":false,
+    "frozen_version":-1,
+    "topk_precision":-1,
+    "sharding_minimum_row_count":0,
+    "query_timeout":-1,
+    "hotspot":false,
+    "index": [
+    ],
+    "read_consistency":0,
+    "join_order": [
+    ],
+    "merge_hint_idxs":"0, 0, 0, 0, 0, 0, 0, 0",
+    "hash_hint_idxs":"0, 0, 0, 0, 0, 0, 0, 0",
+    "nl_hint_idxs":"0, 0, 0, 0, 0, 0, 0, 0",
+    "part_hints": [
+    ]
+  },
+  "query_context": {
+    "param_num":0
+  },
+  "equal_sets": [
+  ]
+}
+***************   Case 3   ***************
+select t1.c1, t2.c1 from t1, t2 having t1.c1 > 5 and t2.c1=t1.c1
+{
+  "stmt_type":1,
+  "table": [
+     {
+      "table_id":1,
+      "table_name":"t1",
+      "alias_name":"",
+      "table_type":0,
+      "ref_id":1,
+      "ref_query":null,
+      "database_name":"rongxuan"
+    },
+     {
+      "table_id":2,
+      "table_name":"t2",
+      "alias_name":"",
+      "table_type":0,
+      "ref_id":2,
+      "ref_query":null,
+      "database_name":"rongxuan"
+    }
+  ],
+  "joined_table": [
+  ],
+  "partition_express": [
+     {
+      "table_id":1,
+      "expression": {
+        "item_type":"T_FUN_SYS_PART_HASH",
+        "result_type":"BIGINT",
+        "expr_info": [
+          "IS_FUNC",
+          "CNT_CONST",
+          "CNT_COLUMN",
+          "CNT_FUNC"
+        ],
+        "rel_id": [
+          1
+        ],
+        "func":"partition_hash",
+        "children": [
+           {
+            "item_type":"T_OP_ADD",
+            "result_type":"BIGINT",
+            "expr_info": [
+              "CNT_CONST",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "children": [
+               {
+                "item_type":"T_REF_COLUMN",
+                "result_type":"INT",
+                "expr_info": [
+                  "IS_COLUMN",
+                  "CNT_COLUMN"
+                ],
+                "rel_id": [
+                  1
+                ],
+                "table_id":1,
+                "column_id":17,
+                "expr_level":0
+              },
+               {
+                "item_type":"T_INT",
+                "result_type":"BIGINT",
+                "expr_info": [
+                  "IS_CONST",
+                  "CNT_CONST"
+                ],
+                "rel_id": [
+                ],
+                "value": {
+                  "BIGINT":1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+     {
+      "table_id":2,
+      "expression": {
+        "item_type":"T_FUN_SYS_PART_KEY",
+        "result_type":"BIGINT",
+        "expr_info": [
+          "IS_FUNC",
+          "CNT_COLUMN",
+          "CNT_FUNC"
+        ],
+        "rel_id": [
+          2
+        ],
+        "func":"partition_key",
+        "children": [
+           {
+            "item_type":"T_REF_COLUMN",
+            "result_type":"INT",
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              2
+            ],
+            "table_id":2,
+            "column_id":17,
+            "expr_level":0
+          },
+           {
+            "item_type":"T_REF_COLUMN",
+            "result_type":"VARCHAR",
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              2
+            ],
+            "table_id":2,
+            "column_id":18,
+            "expr_level":0
+          }
+        ]
+      }
+    }
+  ],
+  "column": [
+     {
+      "column_id":17,
+      "column_name":"c2",
+      "table_id":1,
+      "obj_type":"INT",
+      "data_length":0,
+      "cs_type":45,
+      "cs_level":2,
+      "decimal_scale":0,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1,
+        "column_id":17,
+        "expr_level":0
+      }
+    },
+     {
+      "column_id":17,
+      "column_name":"c2",
+      "table_id":2,
+      "obj_type":"INT",
+      "data_length":0,
+      "cs_type":45,
+      "cs_level":2,
+      "decimal_scale":0,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          2
+        ],
+        "table_id":2,
+        "column_id":17,
+        "expr_level":0
+      }
+    },
+     {
+      "column_id":18,
+      "column_name":"c3",
+      "table_id":2,
+      "obj_type":"VARCHAR",
+      "data_length":0,
+      "cs_type":45,
+      "cs_level":2,
+      "decimal_scale":0,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"VARCHAR",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          2
+        ],
+        "table_id":2,
+        "column_id":18,
+        "expr_level":0
+      }
+    },
+     {
+      "column_id":16,
+      "column_name":"c1",
+      "table_id":1,
+      "obj_type":"INT",
+      "data_length":0,
+      "cs_type":45,
+      "cs_level":2,
+      "decimal_scale":0,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1,
+        "column_id":16,
+        "expr_level":0
+      }
+    },
+     {
+      "column_id":16,
+      "column_name":"c1",
+      "table_id":2,
+      "obj_type":"INT",
+      "data_length":0,
+      "cs_type":45,
+      "cs_level":2,
+      "decimal_scale":0,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          2
+        ],
+        "table_id":2,
+        "column_id":16,
+        "expr_level":0
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1,
+        "column_id":16,
+        "expr_level":0
+      },
+      "table_id":-1,
+      "column_id":65519,
+      "is_alias":false,
+      "alias_name":"c1",
+      "expr_name":"c1",
+      "obj_type":"INT",
+      "decimal_scale":0
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type":"INT",
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          2
+        ],
+        "table_id":2,
+        "column_id":16,
+        "expr_level":0
+      },
+      "table_id":-1,
+      "column_id":65518,
+      "is_alias":false,
+      "alias_name":"c1",
+      "expr_name":"c1",
+      "obj_type":"INT",
+      "decimal_scale":0
+    }
+  ],
+  "distinct":false,
+  "from": [
+     {
+      "table_id":1,
+      "is_join":false
+    },
+     {
+      "table_id":2,
+      "is_join":false
+    }
+  ],
+  "where": [
+  ],
+  "group_by": [
+  ],
+  "having": [
+     {
+      "item_type":"T_OP_GT",
+      "result_type":"TINYINT",
+      "expr_info": [
+        "CNT_CONST",
+        "CNT_COLUMN",
+        "IS_RANGE_COND"
+      ],
+      "rel_id": [
+        1
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type":"INT",
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+            1
+          ],
+          "table_id":1,
+          "column_id":16,
+          "expr_level":0
+        },
+         {
+          "item_type":"T_INT",
+          "result_type":"BIGINT",
+          "expr_info": [
+            "IS_CONST",
+            "CNT_CONST"
+          ],
+          "rel_id": [
+          ],
+          "value": {
+            "BIGINT":5
+          }
+        }
+      ]
+    },
+     {
+      "item_type":"T_OP_EQ",
+      "result_type":"TINYINT",
+      "expr_info": [
+        "CNT_COLUMN",
+        "IS_JOIN_COND"
+      ],
+      "rel_id": [
+        1,
+        2
+      ],
+      "children": [
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type":"INT",
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+            2
+          ],
+          "table_id":2,
+          "column_id":16,
+          "expr_level":0
+        },
+         {
+          "item_type":"T_REF_COLUMN",
+          "result_type":"INT",
+          "expr_info": [
+            "IS_COLUMN",
+            "CNT_COLUMN"
+          ],
+          "rel_id": [
+            1
+          ],
+          "table_id":1,
+          "column_id":16,
+          "expr_level":0
+        }
+      ]
+    }
+  ],
+  "aggr_func": [
+  ],
+  "order_by": [
+  ],
+  "limit":null,
+  "offset":null,
+  "for_update":false,
+  "wait":-1,
+  "show_table_id":-1,
+  "when": [
+  ],
+  "hint": {
+    "read_static":false,
+    "frozen_version":-1,
+    "topk_precision":-1,
+    "sharding_minimum_row_count":0,
+    "query_timeout":-1,
+    "hotspot":false,
+    "index": [
+    ],
+    "read_consistency":0,
+    "join_order": [
+    ],
+    "merge_hint_idxs":"0, 0, 0, 0, 0, 0, 0, 0",
+    "hash_hint_idxs":"0, 0, 0, 0, 0, 0, 0, 0",
+    "nl_hint_idxs":"0, 0, 0, 0, 0, 0, 0, 0",
+    "part_hints": [
+    ]
+  },
+  "query_context": {
+    "param_num":0
+  },
+  "equal_sets": [
+  ]
+}

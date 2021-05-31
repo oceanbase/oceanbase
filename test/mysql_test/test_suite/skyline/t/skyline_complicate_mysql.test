@@ -1,0 +1,227 @@
+# description:
+#
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+--disable_warnings
+drop database if exists hualong;
+--enable_warnings
+
+create database hualong;
+use hualong;
+
+create table other(c1 int primary key, c2 int, c3 int,
+  key idx_c2(c2),
+  key idx_c3(c3),
+  key idx_c2_c3(c2,c3),
+  key idx_c3_c2(c3,c2));
+
+## 这个表的特点在于(c2~c6)的所有列上都建有索引，只要跟c2~c6的列上的序能够利用，那么就能找到一个最佳的索引。
+
+#CREATE TABLE `skyline` (
+#  `tenant_id` varchar(8) NOT NULL ,
+#  `id` varchar(32) NOT NULL ,
+#  `v1` varchar(64) NOT NULL ,
+#  `v2` varchar(24) NOT NULL,
+#  `v3` varchar(64) NOT NULL,
+#  `v4` varchar(32) NOT NULL,
+#  `v5` varchar(32) NOT NULL,
+#  `v6` varchar(32) NOT NULL,
+#  `gmt_create` timestamp NOT NULL,
+#  `gmt_modified` timestamp NOT NULL,
+#  PRIMARY KEY (v1, tenant_id),
+#  KEY `idx_tenant_id` (tenant_id),
+#  KEY `idx_v2` (v2),
+#  KEY `idx_v2_v3` (v2, v3),
+#  KEY `idx_v3_v2` (v3, v2),
+#  KEY `idx_v2_v3_v4` (v2, v3, v4),
+#  KEY `idx_v3_v4_v2` (v3, v4, v2),
+#  KEY `idx_v4_v2_v3` (v4, v2, v3),
+#  KEY `idx_v2_v3_v4_v5` (v2, v3, v4, v5),
+#  KEY `idx_v3_v4_v5_v2` (v3, v4, v5, v2),
+#  KEY `idx_v4_v5_v2_v3` (v4, v5, v2, v3),
+#  KEY `idx_v5_v2_v3_v4` (v5, v2, v3, v4),
+#  KEY `idx_v2_v3_v4_v5_v6` (v2, v3, v4, v5, v6),
+#  KEY `idx_v3_v4_v5_v6_v2` (v3, v4, v5, v6, v2),
+#  KEY `idx_v4_v5_v6_v2_v3` (v4, v5, v6, v2, v3),
+#  KEY `idx_v5_v6_v2_v3_v4` (v5, v6, v2, v3, v4),
+#  KEY `idx_v6_v2_v3_v4_v5` (v6, v2, v3, v4, v5));
+#
+CREATE TABLE `skyline_int` (
+  `tenant_id` varchar(8) NOT NULL ,
+  `id` int NOT NULL,
+  `v1` int NOT NULL,
+  `v2` int NOT NULL,
+  `v3` int NOT NULL,
+  `v4` int NOT NULL,
+  `v5` int NOT NULL,
+  `v6` int NOT NULL,
+  `gmt_create` timestamp NOT NULL,
+  `gmt_modified` timestamp NOT NULL,
+  PRIMARY KEY (v1, tenant_id),
+  KEY `idx_tenant_id` (tenant_id),
+  KEY `idx_v2` (v2),
+  KEY `idx_v2_v3` (v2, v3),
+  KEY `idx_v3_v2` (v3, v2),
+  KEY `idx_v2_v3_v4` (v2, v3, v4),
+  KEY `idx_v3_v4_v2` (v3, v4, v2),
+  KEY `idx_v4_v2_v3` (v4, v2, v3),
+  KEY `idx_v2_v3_v4_v5` (v2, v3, v4, v5),
+  KEY `idx_v3_v4_v5_v2` (v3, v4, v5, v2),
+  KEY `idx_v4_v5_v2_v3` (v4, v5, v2, v3),
+  KEY `idx_v5_v2_v3_v4` (v5, v2, v3, v4),
+  KEY `idx_v2_v3_v4_v5_v6` (v2, v3, v4, v5, v6),
+  KEY `idx_v3_v4_v5_v6_v2` (v3, v4, v5, v6, v2),
+  KEY `idx_v4_v5_v6_v2_v3` (v4, v5, v6, v2, v3),
+  KEY `idx_v5_v6_v2_v3_v4` (v5, v6, v2, v3, v4),
+  KEY `idx_v6_v2_v3_v4_v5` (v6, v2, v3, v4, v5));
+
+--real_sleep 5
+
+##这里的虽然group by之后的序不一定能给order by用，但是这里的group by interesting order会剪掉大部分的index
+##最好的索引是 idx_v3_v2
+explain select v1, tenant_id from skyline_int group by v3 order by v3;
+
+## 能选的索引只有 idx_v3_v4_v2, idx_v3_v4_v5_v2 idx_v3_v4_v5_v6_v2, 代价最小应该是最短的
+explain select v1, tenant_id from skyline_int group by v3, v4 order by v3;
+explain select v1, tenant_id from skyline_int group by v4, v3 order by v3;
+
+##不管group 顺序如何，都是选中同一个索引idx_v3_v4_v5_v2 或 idx_v3_v4_v5_v6_v2
+##如果需要v6列，那么会选第二个索引
+explain select v1, tenant_id from skyline_int group by v3, v4, v5 order by v3;
+explain select v1, tenant_id from skyline_int group by v3, v5, v4 order by v3;
+##no index back
+explain select v1, tenant_id, v6 from skyline_int group by v3, v5, v4 order by v3;
+explain select v1, tenant_id from skyline_int group by v4, v3, v5 order by v3;
+explain select v1, tenant_id from skyline_int group by v4, v5, v3 order by v3;
+explain select v1, tenant_id from skyline_int group by v5, v3, v4 order by v3;
+explain select v1, tenant_id from skyline_int group by v5, v4, v3 order by v3;
+
+##有很多索引可以选，但是像idx_v3_v2 idx_v3_v4_v2 idx_v3_v4_v5_v2 idx_v3_v4_v5_v6_v2, 会剪掉大部分，只剩下最后一个
+explain select sum(v1), tenant_id from skyline_int group by v6, v5, v4, v3 having sum(v1) > 100 order by v3;
+
+## 有group的情况下，最大的序会group和join的最大值，和order by无关
+--echo group by will decide which index to use
+## index idx_v2_v3_v4
+explain select max(v1), tenant_id from skyline_int join other on v4 = c1 and v3 = c2 and v2 = c3 group by v3, v2;
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c1 and v2 = c3 group by v3, v4, v2;
+## index idx_v3_v4_v2
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v3;
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v3, v4;
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v2 = c1 group by v4, v3;
+explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v2 = c1 group by v4, v3;
+explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v2 = c1 group by v4, v3 order by c2, c3;
+## index idx_v4_v2_v3
+explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c1 and v2 = c2 group by v2, v4;
+
+## index idx_v3_v4_v5_v2
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3;
+explain select max(v1), tenant_id from skyline_int join other on v4 = c3 and v3 = c2 and v5 = c1 group by v3;
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3, v4;
+explain select max(v1), tenant_id from skyline_int join other on v5 = c1 and v4 = c3 and v3 = c2 group by v4, v3;
+explain select max(v1), tenant_id from skyline_int join other on v3 = c2 and v4 = c3 and v5 = c1 group by v3, v4, v5;
+explain select max(v1), tenant_id from skyline_int join other on v5 = c1 and v4 = c3 and v3 = c2 group by v5, v4, v3;
+
+## idx_v3_v2
+explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v3; 
+## idx_v3_v4_v2
+explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v4, v3;
+## idx_v3_v4_v5
+explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4;
+explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4 order by v4, v5;
+## idx_v3_v4_v5_v2 
+explain select max(v1), tenant_id from skyline_int join other on v3 = c1 group by v5, v4, v3 order by v3, v4, v5;
+## idx_v3_v4_v5_v6_v2
+explain select max(v1), tenant_id, v6 from skyline_int join other on v3 = c1 group by v5, v4, v3 order by v3, v4, v5;
+
+## idx_v3_v4_v5_v2 
+explain select distinct(v3) from skyline_int join other on v3 = c1 order by v3, v4, v5;
+## idx_v4_v5_v2_v3
+explain select distinct(v4) from skyline_int join other on v4 = c1 order by v3, v4, v5;
+## idx_v4_v5_v6_v2_v3 
+explain select distinct(v4) from skyline_int join other on v4 = c1 order by v3, v4, v5, v6;
+## idx_v4_v5_v2_v3 
+explain select distinct v5, v4, v3 from skyline_int join other on v4 = c1 order by v3;
+explain select distinct v5, v4, v3 from other left join skyline_int on v4 = c1 order by v3;
+## idx_v4_v5_v6_v2_v3
+explain select distinct v4, v5, v6 from other left join skyline_int on v4 = c1 and v5 = c2 order by v4, v5, v6;
+
+# test union
+explain select v3, v4, v5 from skyline_int union select c1, c2, c3 from other;
+explain select v4, v5, v6 from skyline_int intersect select v3, v4, v5 from skyline_int; 
+explain select v4, v5, v6 from skyline_int union select v2, v3, v4 from skyline_int;
+
+## condition
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 = 100 and v5 = 100 order by v3, v4, v5;
+explain select v3, v4, v5 from skyline_int where v3 in (100, 200, 300) group by v3, v4, v5 order by v3, v4, v5;
+explain select distinct v3, v4, v5 from skyline_int where v3 in (100, 200, 300) order by v3, v4, v5;
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 group by v4, v3, v5;
+
+explain select v4, v5, v6 from skyline_int where v3 = 100 group by v3, v5;
+explain select distinct v3, v5 from skyline_int where v4 = 100;
+explain select distinct v3, v5 from skyline_int where v4 > 100 and v4 < 200;
+explain select v3, v5 from skyline_int where v4 > 100 and v4 < 200 order by v4, v2;
+explain select v3, v5 from skyline_int where v4 > 100 and v4 < 200 order by v4, v2 limit 100;
+explain select v3, v5 from skyline_int where v5 = 100 group by v4, v2;
+explain select v3, v5 from skyline_int where v5 = 100 group by v4, v2 limit 100;
+explain select v3, v6 from skyline_int join other on skyline_int.v3 = other.c1 and skyline_int.v5 = other.c2 order by v3, v4;
+explain select v3, v6 from skyline_int join other on skyline_int.v3 = other.c1 and skyline_int.v5 = other.c2 order by v3;
+
+## 还是要SORT
+explain select distinct v3, v5 from skyline_int join other where skyline_int.v4 = other.c1 order by v4, v5, v6;
+
+#join的序没有被后面的运算符所用
+## should do merge group by
+explain select v3, v5 from skyline_int join other where skyline_int.v4 = other.c1 group by v4, v5;
+## 并没有使用hash distinct保序
+explain select distinct v4, v5 from skyline_int join other where skyline_int.v4 = other.c1;
+## 并没有用merge join 保序
+explain select v4, v5 from skyline_int join other where skyline_int.v4 = other.c1 order by v4, v5;
+## 没有用merge join 保序
+explain (select v4, v5, v6 from skyline_int join other on skyline_int.v4 = other.c1 ) union select c1, c2, c3 from other;
+
+#group by的序能被 order by和distinct 所用
+##group by的序能被order by所用
+explain select v1, tenant_id from skyline_int group by v2, v3, v4 order by v2, v3, v4, v5;
+#group by的序其实能被 distinct所用
+explain select distinct v2, v3, v4, v5 from skyline_int group by v2, v3, v4;
+## group by的序能被union所用
+explain (select c1, c2, c3 from other group by c1, c2) union select c1, c2, c3 from other group by c1, c2;
+
+##distinct的序能被order by所用
+explain select distinct v3, v4, v5 from skyline_int order by v3, v4, v5, v6;
+##distinct的序能被union所用
+explain select distinct v3, v4 from skyline_int union select  distinct c2, c3 from other;
+
+## order by会消除或者能被union所用
+explain select v3, v4 from skyline_int order by v3, v4 union select  distinct c2, c3 from other order by v3, v4;
+explain (select v3, v4 from skyline_int order by v3, v4) union (select  distinct c2, c3 from other order by c2, c3) order by 1,2;
+
+## 强制走 nestloop，保左表的序，group by的序能被用
+explain select /*+use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 group by  v3, v4;
+explain select /*+use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 group by  v3, v4, v5;
+
+explain select /*use_nl(skyline_int other)*/tenant_id from skyline_int join other where skyline_int.v3 = other.c2 and skyline_int.v4 = other.c3 group by v3, v4, v5;
+
+## 强制走 hash join 右表的序能被利用
+explain select /*+use_hash(skyline_int other)*/ v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 order by v3, v4, v5;
+explain select /*+use_hash(skyline_int other)*/ distinct v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 order by v3, v4, v5;
+explain select /*+leading(other skyline_int) use_hash(other skyline_int)*/ distinct v3, v4 from skyline_int join other on skyline_int.v3 = other.c2 union select c2, c3 from other;
+
+## test query range
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 group by v3, v4, v5;
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 group by v3, v4, v5;
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 < 100 group by v3, v4, v5;
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 <= 100 group by v3, v4, v5;
+
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 and v4 < 1000 group by v3, v4, v5;
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 and v4 < 1000 group by v3, v4, v5;
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 > 100 and v4 <= 1000 group by v3, v4, v5;
+explain select v3, v4, v5 from skyline_int where v3 = 100 and v4 >= 100 and v4 <= 1000 group by v3, v4, v5;
+
+set @@recyclebin = 'off';
+drop database hualong;
+
+

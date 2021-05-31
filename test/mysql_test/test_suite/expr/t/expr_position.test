@@ -1,0 +1,62 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+--echo ================ expression position ================
+select position(' ' in 'abc');
+select position('abcd' in 'abc');
+select position('abc' in 'abc');
+select position('a' in 'abc');
+select position('b' in 'abc');
+select position('c' in 'abc');
+select position('bc' in 'abc');
+select position('bc' in 'abcbc');
+select position('BC' in 'abcbc');
+select position('bC' in 'abcbc');
+select position('阿里' in '阿里巴巴');
+select position('巴巴' in '阿里巴巴巴巴');
+select position('阿里巴巴' in '阿里巴巴');
+select position(true in '123');
+select position(true in '23');
+select position(23 in 123);
+select position('' in 23);
+select position('23' in 123);
+select position(123.4 in '123.400000');
+select position('123.400000' in 123.4);
+select position('123.400000' in null);
+select position(null in '巴巴');
+select position('巴巴' in null);
+select position(null in null);
+
+
+select position(false in true);
+select position(true in true);
+select position(true in 123);
+select position(false in 123);
+select position(false in 0123);
+select position(false in 1023);
+select position(23 in 123);
+select position(123456 in 123);
+select position(123 in 123.4);
+select position(123.4 in 1234);
+select position(123 in null);
+select position(null in 123);
+
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(c1 datetime primary key);
+sleep 5;
+insert into test values('2015-5-5');
+select position('201' in c1) from test;
+select position('' in c1) from test;
+select position('haha' in c1) from test;
+select position('-5' in c1) from test;
+select position('2015-5-5' in c1) from test;
+select position(true in c1) from test;
+select position(201 in c1) from test;
+select position(201.1 in c1) from test;
+select position(c1 in null) from test;
+select position(null in c1) from test;
+--disable_warnings
+drop table if exists test;
+--enable_warnings

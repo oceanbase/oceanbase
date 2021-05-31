@@ -1,0 +1,36 @@
+RowFilter(<, 'binary:abc')
+RowFilter(<=, 'binary:abc''(),xyz,,rowfilter''')
+RowFilter(!=, 'binaryprefix:abc')
+ValueFilter(=, 'substring:abc*123')
+QualifierFilter(=, 'substring:abc')
+( singlecolumnvaluefilter ( 'cf1', 'c1', !=, 'substring:abc', true, false ) )
+Skip RowFilter(>=, 'binaryprefix:def')
+while ((RowFilter(>=, 'binaryprefix:def')))
+RowFilter(<=, 'binaryprefix:abc') AND RowFilter(!=, 'binaryprefix:abc') AND ValueFilter(=, 'substring:abc*123')
+RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc') OR ValueFilter(=, 'substring:abc*123')
+RowFilter(<=, 'binaryprefix:abc') AND RowFilter(!=, 'binaryprefix:abc') OR ValueFilter(=, 'substring:abc*123')
+RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc') AND ValueFilter(=, 'substring:abc*123')
+(RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc')) AND ValueFilter(=, 'substring:abc*123')
+Skip While Skip RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc') AND ValueFilter(=, 'substring:abc*123')
+--error 5006
+RowFilter(<=>, 'binary:abc')
+--error 5006
+RowF(<, 'binary:abc')
+--error 5006
+RowFilter(<, 'binary
+--error 5006
+RowFilter(<, 'binary'')
+--error 4002
+RowFilter(<, 'binary''')
+--error 5006
+RowFilter(<, 'binary:abc'))
+--error 5006
+(RowFilter(<, 'binary:abc')
+--error 4002
+RowFilter(>, 'substring:abc')
+--error 4007
+RowFilter(>=, 'regexstring:abc')
+--error 5006
+( singlecolumnvaluefilter ( !=, 'substring:abc', 'cf1', 'c1') )
+( singlecolumnvaluefilter ( 'cf1', 'c1', !=, 'substring:abc') )
+PrefixFilter ( 'abc' )

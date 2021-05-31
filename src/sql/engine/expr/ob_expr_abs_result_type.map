@@ -1,0 +1,105 @@
+static ObObjType ABS_RESULT_TYPE[ObMaxType] =
+{
+    ObDoubleType,   /* NullType             */
+    ObIntType,      /* TinyIntType          */
+    ObIntType,      /* SmallIntType         */
+    ObIntType,      /* MediumIntType        */
+    ObIntType,      /* Int32Type            */
+    ObIntType,      /* IntType              */
+    ObUInt64Type,   /* UTinyIntType         */
+    ObUInt64Type,   /* USmallIntType        */
+    ObUInt64Type,   /* UMediumIntType       */
+    ObUInt64Type,   /* UInt32Type           */
+    ObUInt64Type,   /* UIntType             */
+    ObDoubleType,   /* FloatType            */
+    ObDoubleType,   /* DoubleType           */
+    ObUDoubleType,  /* UFloatType           */
+    ObUDoubleType,  /* UDoubleType          */
+    ObNumberType,   /* NumberType           */
+    ObUNumberType,  /* UNumberType          */
+    ObDoubleType,   /* DateTimeType         */
+    ObDoubleType,   /* TimestampType        */
+    ObDoubleType,   /* DateType             */
+    ObDoubleType,   /* TimeType             */
+    ObUInt64Type,   /* YearType             */
+    ObDoubleType,   /* VarcharType          */
+    ObDoubleType,   /* CharType             */
+    ObUDoubleType,  /* HexStringType        */
+    ObMaxType,      /* ExtendType           */
+    ObDoubleType,   /* UnknownType          */
+    ObDoubleType,   /* TinyTextType         */
+    ObDoubleType,   /* TextType             */
+    ObDoubleType,   /* MediumTextType       */
+    ObDoubleType,   /* LongTextType         */
+    ObUInt64Type,   /* BitType              */
+    ObDoubleType,   /* ObEnumType           */
+    ObDoubleType,   /* ObSetType            */
+    ObMaxType,      /* ObEnumInnerType      */
+    ObMaxType,      /* ObSetInnerType       */
+    ObMaxType,      /* ObTimestampTZType    */
+    ObMaxType,      /* ObTimestampLTZType   */
+    ObMaxType,      /* ObTimestampNanoType  */
+    ObMaxType,      /* ObRawType            */
+    ObMaxType,      /* ObIntervalYMType     */
+    ObMaxType,      /* ObIntervalDSType     */
+    ObMaxType,      /* ObNumberFloatType    */
+    ObMaxType,      /* ObNVarchar2Type      */
+    ObMaxType,      /* ObNCharType          */
+    ObMaxType,      /* ObURowIDType         */
+};
+
+static_assert(sizeof(ABS_RESULT_TYPE) / sizeof(ObObjType) == ObMaxType,
+              "unexpected size of ABS_RESULT_TYPE");
+
+static ObObjType ABS_RESULT_TYPE_ORACLE[ObMaxType] =
+{
+    ObNullType,     /* NullType             */
+    ObNumberType,   /* TinyIntType          */
+    ObNumberType,   /* SmallIntType         */
+    ObNumberType,    /* MediumIntType        */
+    ObNumberType,   /* Int32Type            */
+    ObNumberType,   /* IntType              */
+    ObMaxType,      /* UTinyIntType         */
+    ObMaxType,      /* USmallIntType        */
+    ObMaxType,      /* UMediumIntType       */
+    ObMaxType,      /* UInt32Type           */
+    ObMaxType,      /* UIntType             */
+    ObFloatType,      /* FloatType            */
+    ObDoubleType,      /* DoubleType           */
+    ObMaxType,      /* UFloatType           */
+    ObMaxType,      /* UDoubleType          */
+    ObNumberType,   /* NumberType           */
+    ObMaxType,      /* UNumberType          */
+    ObMaxType,      /* DateTimeType         */
+    ObMaxType,      /* TimestampType        */
+    ObMaxType,      /* DateType             */
+    ObMaxType,      /* TimeType             */
+    ObMaxType,      /* YearType             */
+    ObNumberType,   /* VarcharType          */
+    ObNumberType,   /* CharType             */
+    ObMaxType,      /* HexStringType        */
+    ObMaxType,      /* ExtendType           */
+    ObMaxType,      /* UnknownType          */
+    ObMaxType,      /* TinyTextType         */
+    ObMaxType,      /* TextType             */
+    ObMaxType,      /* MediumTextType       */
+    ObMaxType,      /* LongTextType         */
+    ObMaxType,      /* BitType              */
+    ObMaxType,      /* ObEnumType           */
+    ObMaxType,      /* ObSetType            */
+    ObMaxType,      /* ObEnumInnerType      */
+    ObMaxType,      /* ObSetInnerType       */
+    ObMaxType,      /* ObTimestampTZType    */
+    ObMaxType,      /* ObTimestampLTZType   */
+    ObMaxType,      /* ObTimestampNanoType  */
+    ObMaxType,      /* ObRawType            */
+    ObMaxType,      /* ObIntervalYMType     */
+    ObMaxType,      /* ObIntervalDSType     */
+    ObNumberType,   /* ObNumberFloatType    */
+    ObNumberType,   /* ObNVarchar2Type      */
+    ObNumberType,   /* ObNCharType          */
+    ObMaxType,      /* ObURowIDType         */
+};
+
+static_assert(sizeof(ABS_RESULT_TYPE_ORACLE) / sizeof(ObObjType) == ObMaxType,
+              "unexpected size of ABS_RESULT_TYPE_ORACLE");

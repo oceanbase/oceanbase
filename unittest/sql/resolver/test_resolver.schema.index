@@ -1,0 +1,16 @@
+create database xy;
+use xy
+drop table if exists tab1
+create table tab1(c1 int primary key, c2 int, c3 int, c4 varchar(50)) partition by hash(c2 + 1) partitions 3
+create index k1 on tab1(c2, c3) TABLET_BLOCK_SIZE=1024;
+create unique index k2 on tab1(c2, c3) GLOBAL;
+create index k3 on tab1(c2 asc, c3 desc);
+create index k4 on tab1(c2, c3) comment='kk contains c2/c3', compress_method='snappy_1.0', TABLET_BLOCK_SIZE=1024;
+create index k5 on tab1(c2, c3) storing(c4);
+create index k6 on tab1(c2, c3) LOCAL storing(c4) comment='kk contains c2/c3', compress_method='snappy_1.0', TABLET_BLOCK_SIZE=1024;
+drop index k1 on tab1;
+drop index k2 on tab1;
+drop index k3 on tab1;
+drop index k4 on tab1;
+drop index k5 on tab1;
+drop index k6 on tab1;

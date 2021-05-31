@@ -1,0 +1,69 @@
+connect  syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection default;
+drop table if exists t1;
+drop table if exists t2;
+create table t1(c1 int,c2 int,c3 int);
+create table t2(c1 int,c2 int,c3 int);
+insert into t1 values(1,2,3);
+insert into t1 values(1,2,3);
+insert into t1 values(0,2,3);
+insert into t1 values(2,2,3);
+insert into t1 values(3,2,3);
+insert into t2 values(2,2,3);
+insert into t2 values(2,2,3);
+insert into t2 values(0,2,3);
+insert into t2 values(1,2,3);
+insert into t2 values(null,2,3);
+commit;
+connection syscon;
+connection default;
+set @@ob_enable_plan_cache = 0;
+explain select * from t1,t2;
+Query Plan
+===================================================
+|ID|OPERATOR                  |NAME|EST. ROWS|COST|
+---------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN|    |25       |95  |
+|1 | TABLE SCAN               |t1  |5        |37  |
+|2 | MATERIAL                 |    |5        |40  |
+|3 |  TABLE SCAN              |t2  |5        |37  |
+===================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      conds(nil), nl_params_(nil)
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), 
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+  2 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil)
+  3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+
+select * from t1,t2;
+c1	c2	c3	c1	c2	c3
+1	2	3	2	2	3
+1	2	3	2	2	3
+1	2	3	0	2	3
+1	2	3	1	2	3
+1	2	3	NULL	2	3
+1	2	3	2	2	3
+1	2	3	2	2	3
+1	2	3	0	2	3
+1	2	3	1	2	3
+1	2	3	NULL	2	3
+0	2	3	2	2	3
+0	2	3	2	2	3
+0	2	3	0	2	3
+0	2	3	1	2	3
+0	2	3	NULL	2	3
+2	2	3	2	2	3
+2	2	3	2	2	3
+2	2	3	0	2	3
+2	2	3	1	2	3
+2	2	3	NULL	2	3
+3	2	3	2	2	3
+3	2	3	2	2	3
+3	2	3	0	2	3
+3	2	3	1	2	3
+3	2	3	NULL	2	3
+connection syscon;

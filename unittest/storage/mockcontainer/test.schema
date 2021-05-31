@@ -1,0 +1,1 @@
+create table t1(pk1 int, pk2 int, c1 int, c2 varchar(512), c3 varchar(512), primary key(pk1, pk2)) DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci

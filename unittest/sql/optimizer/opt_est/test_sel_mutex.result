@@ -1,0 +1,126 @@
+******************CASE0******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_nn = 0.5
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 is not NULL;
+SELECTIVITY = 1
+
+******************CASE1******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_e = 0.1
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = 1;
+SELECTIVITY = 0.01
+
+******************CASE2******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_nn = 0.5
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > 0;
+SELECTIVITY = 1
+
+******************CASE3******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_e + p_e = 0.2
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = 1 or c1 = 2;
+SELECTIVITY = 0.02
+
+******************CASE4******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_e = 0.1
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = 1;
+SELECTIVITY = 0.01
+
+******************CASE5******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_e + p_e - p_e * p_e = 0.19
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = 1 or c2 = 1;
+SELECTIVITY = 0.0199
+
+******************CASE6******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_e + p_nn - p_nn * p_e = 0.55
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 > 0 or c1 = 1;
+SELECTIVITY = 1
+
+******************CASE7******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_e * p_e + p_e - p_e * p_e * p_e = 0.109
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (c1 = 1 and c2 = 1) or c1 = 2;
+SELECTIVITY = 0.010099
+
+******************CASE8******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_e ^ 2 + p_e * p_nn - p_e ^ 3 * p_nn = 0.0595
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (c1 = 1 and c2 = 1) or (c1 = 2 and c2 > 0);
+SELECTIVITY = 0.010099
+
+******************CASE9******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :(2 * p_e - p_e * p_e) + (p_e * p_nn) - (2 * p_e - p_e * p_e) * (p_e * p_nn)  = 0.2305
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (c1 = 1 or c2 = 1) or (c1 = 2 and c2 > 0);
+SELECTIVITY = 0.029701
+
+******************CASE10******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_e ^ 2 + (p_e + p_nn - p_e * p_nn) - (p_e ^ 2 * (p_e + p_nn - p_e * p_nn)) = 0.5545
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where (c1 = 1 and c2 = 1) or (c1 = 2 or c2 > 0);
+SELECTIVITY = 1
+
+******************CASE11******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :p_e + p_e + p_e + p_e = 0.4
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = 1 or c1 = 2 or c1 = 3 or c1 = 4;
+SELECTIVITY = 0.04
+
+******************CASE12******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :(p_e + p_e + p_e) + p_e - p_e * (p_e * 3) = 0.37
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = 1 or c1 = 2 or c1 = 3 or c2 = 4;
+SELECTIVITY = 0.0397
+
+******************CASE13******************
+min = 1, max = 5, ndv = 5, null_num = 5
+the ratio of not null row is (10-5)/10 = 0.5
+for range cond : if half_open min_selectivity = 20/DNV, else min_selectivity = 10/DNV
+EXPECTED RESULT :((p_e + p_e) + p_e - p_e * (p_e + p_e)) + p_e - p_e * (3 * p_e - p_e * (p_e + p_e)) = 0.352
+----------------------------------------------------------
+EXPR_STR: select c1 from t1 where c1 = 1 or c1 = 2 or c2 = 3 or c1 = 4;
+SELECTIVITY = 0.039502
+

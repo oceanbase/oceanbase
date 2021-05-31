@@ -1,0 +1,10 @@
+## test for create outline
+create outline outline_name on select * from t1;
+create or replace outline outline_name on select * from t1;
+create or replace outline outline_name on insert into t1 values (1, 2);
+create outline outline_name on update t1 set c1=100 where c1=1;
+create outline outline_name on delete from t1 where c1=1;
+
+## test for drop outline
+drop outline outline_name;
+drop outline rongxuan.outline_name;

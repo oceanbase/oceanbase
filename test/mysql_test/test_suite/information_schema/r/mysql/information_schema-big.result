@@ -1,0 +1,167 @@
+connect  obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection obsys1;
+drop tenant if exists tt1 force;
+drop resource pool if exists mypool1;
+drop resource unit if exists mybox1;
+select * from oceanbase.__all_unit_config where name='mybox1';
+gmt_create	gmt_modified	unit_config_id	name	max_cpu	min_cpu	max_memory	min_memory	max_iops	min_iops	max_disk_size	max_session_num
+create_time	modify_time	unit_config_id	mybox1	1	1	536870912	536870912	128	128	536870912	64
+gmt_create	gmt_modified	resource_pool_id	name	unit_count	unit_config_id	zone_list	tenant_id	replica_type	is_tenant_sys_pool
+create_time	modify_time	resource_pool_id	mypool1	1	unit_config_id	zone	-1	0	0
+select * from oceanbase.__all_tenant where tenant_name='tt1';
+gmt_create	gmt_modified	tenant_id	tenant_name	replica_num	zone_list	primary_zone	locked	collation_type	info	read_only	rewrite_merge_version	locality	logonly_replica_num	previous_locality	storage_format_version	storage_format_work_version	default_tablegroup_id	compatibility_mode	drop_tenant_time	status	in_recyclebin
+create_time	modify_time	tenant_id	tt1	-1	zone	zone	0	0		0	0	locality	logonly_replica_num	previous_locality	storage_format_version	storage_format_work_version	-1	0	-1	TENANT_STATUS_NORMAL	0
+disconnect obsys1;
+connect  tt1_root,$TE_SERVER_IP,root@tt1,,*NO-ONE*,$TE_SERVER_PORT;
+connection tt1_root;
+create user testtt1 identified by 'testtt1';
+create database tt1_test;
+GRANT ALL ON *.* TO testtt1;
+connect  ob_sys_check_schema,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection ob_sys_check_schema;
+disconnect ob_sys_check_schema;
+connect  conn1,$TE_SERVER_IP,testtt1@tt1,testtt1,tt1_test,$TE_SERVER_PORT;
+connection conn1;
+use test;
+DROP TABLE IF EXISTS t0,t1,t2,t3,t4,t5;
+DROP VIEW IF EXISTS v1;
+#
+# Bug#18925: subqueries with MIN/MAX functions on INFORMARTION_SCHEMA
+#
+SELECT t.table_name, c1.column_name
+FROM information_schema.tables t
+INNER JOIN
+information_schema.columns c1
+ON t.table_schema = c1.table_schema AND
+t.table_name = c1.table_name
+WHERE t.table_schema = 'information_schema' AND
+c1.ordinal_position =
+( SELECT COALESCE(MIN(c2.ordinal_position),1)
+FROM information_schema.columns c2
+WHERE c2.table_schema = t.table_schema AND
+c2.table_name = t.table_name AND
+c2.column_name LIKE '%SCHEMA%')
+AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+table_name	column_name
+SELECT t.table_name, c1.column_name
+FROM information_schema.tables t
+INNER JOIN
+information_schema.columns c1
+ON t.table_schema = c1.table_schema AND
+t.table_name = c1.table_name
+WHERE t.table_schema = 'information_schema' AND
+c1.ordinal_position =
+( SELECT COALESCE(MIN(c2.ordinal_position),1)
+FROM information_schema.columns c2
+WHERE c2.table_schema = 'information_schema' AND
+c2.table_name = t.table_name AND
+c2.column_name LIKE '%SCHEMA%')
+AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+table_name	column_name
+connect  conn_root,$OBMYSQL_MS0,root@sys,,*NO-ONE*,$OBMYSQL_PORT;
+connection conn_root;
+SELECT t.table_name, c1.column_name
+FROM information_schema.tables t
+INNER JOIN
+information_schema.columns c1
+ON t.table_schema = c1.table_schema AND
+t.table_name = c1.table_name
+WHERE t.table_schema = 'information_schema' AND
+c1.ordinal_position =
+( SELECT COALESCE(MIN(c2.ordinal_position),1)
+FROM information_schema.columns c2
+WHERE c2.table_schema = t.table_schema AND
+c2.table_name = t.table_name AND
+c2.column_name LIKE '%SCHEMA%')
+AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+table_name	column_name
+GLOBAL_STATUS	VARIABLE_NAME
+PARAMETERS	SPECIFIC_SCHEMA
+PARTITIONS	TABLE_SCHEMA
+REFERENTIAL_CONSTRAINTS	CONSTRAINT_SCHEMA
+SCHEMA_PRIVILEGES	TABLE_SCHEMA
+SESSION_STATUS	VARIABLE_NAME
+SESSION_VARIABLES	VARIABLE_NAME
+TABLE_CONSTRAINTS	CONSTRAINT_SCHEMA
+TABLE_PRIVILEGES	TABLE_SCHEMA
+USER_PRIVILEGES	GRANTEE
+SELECT t.table_name, c1.column_name
+FROM information_schema.tables t
+INNER JOIN
+information_schema.columns c1
+ON t.table_schema = c1.table_schema AND
+t.table_name = c1.table_name
+WHERE t.table_schema = 'information_schema' AND
+c1.ordinal_position =
+( SELECT COALESCE(MIN(c2.ordinal_position),1)
+FROM information_schema.columns c2
+WHERE c2.table_schema = 'information_schema' AND
+c2.table_name = t.table_name AND
+c2.column_name LIKE '%SCHEMA%')
+AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+table_name	column_name
+GLOBAL_STATUS	VARIABLE_NAME
+PARAMETERS	SPECIFIC_SCHEMA
+PARTITIONS	TABLE_SCHEMA
+REFERENTIAL_CONSTRAINTS	CONSTRAINT_SCHEMA
+SCHEMA_PRIVILEGES	TABLE_SCHEMA
+SESSION_STATUS	VARIABLE_NAME
+SESSION_VARIABLES	VARIABLE_NAME
+TABLE_CONSTRAINTS	CONSTRAINT_SCHEMA
+TABLE_PRIVILEGES	TABLE_SCHEMA
+USER_PRIVILEGES	GRANTEE
+select 1;
+1
+1
+connection conn1;
+use test;
+create table if not exists t1(i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3), primary key(i1));
+connection conn1;
+create table if not exists t2(i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3), primary key(i1));
+connection conn1;
+create table if not exists t3(i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3), primary key(i1));
+connection conn1;
+create table if not exists t4(i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3), primary key(i1));
+connection conn1;
+SELECT t.table_name, c1.column_name
+FROM information_schema.tables t
+INNER JOIN
+information_schema.columns c1
+ON t.table_schema = c1.table_schema AND
+t.table_name = c1.table_name
+WHERE t.table_schema = 'information_schema' AND
+c1.ordinal_position =
+( SELECT COALESCE(MIN(c2.ordinal_position),1)
+FROM information_schema.columns c2
+WHERE c2.table_schema = t.table_schema AND
+c2.table_name = t.table_name AND
+c2.column_name LIKE '%SCHEMA%')
+AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+table_name	column_name
+SELECT t.table_name, c1.column_name
+FROM information_schema.tables t
+INNER JOIN
+information_schema.columns c1
+ON t.table_schema = c1.table_schema AND
+t.table_name = c1.table_name
+WHERE t.table_schema = 'information_schema' AND
+c1.ordinal_position =
+( SELECT COALESCE(MIN(c2.ordinal_position),1)
+FROM information_schema.columns c2
+WHERE c2.table_schema = 'information_schema' AND
+c2.table_name = t.table_name AND
+c2.column_name LIKE '%SCHEMA%')
+AND t.table_name NOT LIKE 'ndb%'
+AND t.table_name NOT LIKE 'innodb%';
+table_name	column_name
+connect  obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection obsys1;
+drop tenant if exists tt1 force;
+drop resource pool if exists mypool1;
+drop resource unit if exists mybox1;
+disconnect obsys1;

@@ -1,0 +1,68 @@
+
+--disable_abort_on_error
+
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection default;
+
+
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 bigint, c2 bigint unsigned, c3 decimal(40,2), c4 varchar(40));
+insert into t1 (c1, c2, c3, c4) values (-1, 0, 1, "2.1");
+insert into t1 (c1, c2, c3, c4) values (-2, 0, 2.1, "2.9");
+insert into t1 (c1, c2, c3, c4) values (-2, 0, 2.9, "2.9");
+insert into t1 (c1, c2, c3, c4) values (-10, 0, 10, "10");
+insert into t1 (c1, c2, c3, c4) values (4294967296, 4294967296, 4294967296, "4294967296");
+insert into t1 (c1, c2, c3, c4) values (4294967297, 4294967297, 4294967295, "4294967295");
+insert into t1 (c1, c2, c3, c4) values (-4294967296, 4294967296, -4294967296, "-4294967296");
+insert into t1 (c1, c2, c3, c4) values (-4294967297, 4294967297, -4294967295, "-4294967295");
+insert into t1 (c1, c2, c3, c4) values (9223372036854775806, 9223372036854775808, 9223372036854775808, "9223372036854775808");
+insert into t1 (c1, c2, c3, c4) values (9223372036854775807, 9223372036854775807, 9223372036854775807, "9223372036854775807");
+insert into t1 (c1, c2, c3, c4) values (9223372036854775806, 9223372036854775809, 9223372036854775809, "9223372036854775809");
+insert into t1 (c1, c2, c3, c4) values (-9223372036854775807, 9223372036854775807, -9223372036854775807, "-9223372036854775807");
+--enable_warnings
+
+connection syscon;
+
+sleep 1;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select substring_index("a,b,c,d", ",", -1);
+select substring_index("a,b,c,d", ",", 0);
+select substring_index("a,b,c,d", ",", 1);
+select substring_index("a,b,c,d", ",", 2);
+select substring_index("", ",", 2);
+select substring_index("a,b,c,d", "", 2);
+select substring_index(NULL, ",", 2);
+select substring_index("a,b,c,d", NULL, 2);
+select substring_index("a,b,c,d", ",", NULL);
+select substring_index(1.414, 1, 2);
+
+--disable_warnings
+select c1, substring_index("a,b,c,d", ",", c1), c2, substring_index("a,b,c,d", ",", c2), c3, substring_index("a,b,c,d", ",", c3), c4, substring_index("a,b,c,d", ",", c4) from t1;
+
+drop table if exists t2, t3;
+create table t2(c1 varchar(20));
+create table t3(c1 varchar(20));
+insert into t2 values(null), (''), ('1');
+insert into t3 values(''), (null), ('1');
+
+--echo //the result of next 2 sqls should be same
+select c1, substring_index(c1, 'vpprm', -47) from t2 order by c1;
+select c1, substring_index(c1, 'vpprm', -47) from t3 order by c1;
+
+drop table t1, t2,t3;
+--enable_warnings
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 char(10));
+insert into t1 values(null), ('');
+select substring_index(c1, 'a', 1) from t1;
+
+connection syscon;
+--sleep 2

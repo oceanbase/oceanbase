@@ -1,0 +1,107 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+connect (obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys1;
+
+--disable_abort_on_error
+let $cpu = 1;
+let $memory = 536870912;
+let $min_memory = 536870912;
+let $disk = 536870912;
+let $iops = 128;
+let $session = 64;
+
+--disable_warnings
+drop tenant if exists tt1 force;
+drop resource pool if exists mypool1;
+drop resource unit if exists mybox1;
+--enable_warnings
+
+eval create resource unit mybox1 max_cpu $cpu, max_memory $memory, max_iops $iops, max_disk_size $disk, max_session_num $session, MIN_CPU=1, MIN_MEMORY=$min_memory, MIN_IOPS=128;
+let $zone_name=query_get_value(select zone from oceanbase.__all_zone where zone != '' limit 1, zone, 1);
+
+--replace_column 1 create_time 2 modify_time 3 unit_config_id
+select * from oceanbase.__all_unit_config where name='mybox1';
+
+--disable_query_log
+eval create resource pool mypool1 unit = 'mybox1', unit_num = 1, zone_list = ('$zone_name');
+--replace_column 1 create_time 2 modify_time 3 resource_pool_id 6 unit_config_id 7 zone 8 tenant_id
+select * from oceanbase.__all_resource_pool where name='mypool1';
+
+eval create tenant tt1 replica_num = 1, primary_zone='$zone_name', resource_pool_list=('mypool1') set ob_tcp_invited_nodes='%';
+--source mysql_test/include/check_tenant_sync.inc
+--enable_query_log
+--replace_column 1 create_time 2 modify_time 3 tenant_id 6 zone 7 zone 13 locality 14 logonly_replica_num 15 previous_locality 16 storage_format_version 17 storage_format_work_version
+select * from oceanbase.__all_tenant where tenant_name='tt1';
+let $__tenant_name__ = 'tt1';
+--source mysql_test/include/get_tenant_server.inc
+
+disconnect obsys1;
+connect (conn1,$TE_SERVER_IP,root@tt1,,*NO-ONE*,$TE_SERVER_PORT);
+
+use information_schema;
+show variables like "%lower%";
+desc character_sets;
+desc collation_character_set_applicability;
+desc collations;
+desc columns;
+desc global_status;
+desc global_variables;
+desc key_column_usage;
+desc partitions;
+desc processlist;
+desc schema_privileges;
+desc schemata;
+desc session_status;
+desc session_variables;
+desc statistics;
+desc table_constraints;
+desc table_privileges;
+desc tables;
+desc user_privileges;
+desc views;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  character_sets;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  collation_character_set_applicability;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  collations;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  columns;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  global_status;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  global_variables;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  key_column_usage;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  partitions;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  processlist;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  schema_privileges;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  schemata;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  session_status;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  session_variables;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  statistics;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  table_constraints;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  table_privileges;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  tables;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  user_privileges;
+--source mysql_test/include/show_create_table_old_version.inc
+ show create table  views;
+
+connect (conn_sys,$OBMYSQL_MS0,root@sys,,*NO-ONE*,$OBMYSQL_PORT);
+drop tenant tt1 force;
+drop resource pool mypool1;
+drop resource unit mybox1;

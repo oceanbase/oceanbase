@@ -1,0 +1,9 @@
+easy_test(util_test
+easy_buf_test.c
+easy_hash_test.c
+easy_inet_test.c
+easy_list_test.c
+easy_pool_test.c
+easy_string_test.c
+easy_time_test.c
+)

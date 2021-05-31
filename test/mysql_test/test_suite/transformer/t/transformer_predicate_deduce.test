@@ -1,0 +1,432 @@
+
+
+--disable_info
+--disable_metadata
+--disable_abort_on_error
+
+
+
+
+--disable_warnings
+DROP DATABASE IF EXISTS DB_PREDICATE_DEDUCE;
+--enable_warnings
+CREATE DATABASE DB_PREDICATE_DEDUCE;
+USE DB_PREDICATE_DEDUCE;
+
+create table t1(c1 int, c2 int);
+create table t2(c1 int , c2 int, c3 int, c4 int);
+create table t3(c1 bigint, c2 varchar(64), c3 datetime);
+create table is_t1(c1 int);
+create table is_t2(c1 int, c2 int);
+create table is_t3(c1 bigint, c2 varchar(64), c3 datetime);
+
+insert/*trace*/into t3 values(20101010000000, '020101010000000', '2010-10-10 00:00:00');
+insert/*trace*/into t1 values(NULL, NULL);
+insert/*trace*/into t2 values(NULL, NULL, NULL, NULL);
+
+--echo = basic test =
+--echo
+--echo == basic compare: case 1
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 = 2;
+select * from t1 a where a.c1 = a.c2 and a.c1 = 2;
+start transaction;
+update t1 a set c1 = c2 + 1  where a.c1 = a.c2 and a.c1 = 2;
+delete from t1 a where a.c1 = a.c2 and a.c1 = 2;
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 = 2;
+rollback;
+
+--echo
+--echo == basic compare: case 2
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 > 2;
+select * from t1 a where a.c1 = a.c2 and a.c1 > 2;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 > 2;
+delete from t1 a where a.c1 = a.c2 and a.c1 > 2;
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 > 2;
+rollback;
+
+--echo
+--echo == basic compare: case 3
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 >= 2;
+select * from t1 a where a.c1 = a.c2 and a.c1 >= 2;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 >= 2;
+delete from t1 a where a.c1 = a.c2 and a.c1 >= 2;
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 >= 2;
+rollback;
+
+--echo
+--echo == basic compare: case 4
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 < 2;
+select * from t1 a where a.c1 = a.c2 and a.c1 < 2;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 < 2;
+delete from t1 a where a.c1 = a.c2 and a.c1 < 2;
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 < 2;
+rollback;
+
+--echo
+--echo == basic compare: case 5
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 <= 2;
+select * from t1 a where a.c1 = a.c2 and a.c1 <= 2;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 <= 2;
+delete from t1 a where a.c1 = a.c2 and a.c1 <= 2;
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 <= 2;
+rollback;
+
+--echo
+--echo == basic compare: case 6
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 like '2%';
+select * from t1 a where a.c1 = a.c2 and a.c1 like '2%';
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 like '2%';
+delete from t1 a where a.c1 = a.c2 and a.c1 like '2%';
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 like '2%';
+rollback;
+
+--echo
+--echo == basic compare: case 7
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
+select * from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 between 2 and 3;
+delete from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 between 2 and 3;
+rollback;
+
+--echo
+--echo == basic compare: case 7
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
+select * from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 in (2, 3);
+delete from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 in (2, 3);
+rollback;
+
+--echo ************************** deduce on function *******************************
+--echo
+--echo == deduce on function: case 1
+select /*+no_rewrite*/* from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+select * from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+delete from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+insert into is_t2 select * from t1 a where round(a.c1) = round(a.c2) and round(a.c1) = 1;
+rollback;
+
+--echo
+--echo == deduce on function: case 2
+select /*+no_rewrite*/* from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
+select * from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where round(a.c1) = a.c2 and round(a.c1) = 1;
+delete from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
+insert into is_t2 select * from t1 a where round(a.c1) = a.c2 and round(a.c1) = 1;
+rollback;
+
+--echo ***************************** subquery *********************************
+--echo
+--echo == subquery:case 1
+select /*+no_rewrite*/* from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+rollback;
+
+--echo
+--echo == subquery:case 2
+select /*+no_rewrite*/* from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+delete from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+insert into is_t2 select * from t1 a where exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+rollback;
+
+--echo
+--echo == subquery:case 3
+select /*+no_rewrite*/* from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
+select * from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 in (select c1 from t2 b where b.c1 = 2);
+delete from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
+insert into is_t2 select * from t1 a where a.c1 in (select c1 from t2 b where b.c1 = 2);
+rollback;
+
+--echo ***************************** type check *******************************
+--echo
+--echo == type check: case 1
+select /*+no_rewrite*/* from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+select * from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+start transaction;
+update t3 set c1 = 1  where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+#delete from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+#insert into is_t3 select * from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+rollback;
+
+--echo ****************************** remove redundant predicates *************
+--echo
+--echo == remove redundant predicates: case 1
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
+select * from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 = a.c2;
+delete from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 = a.c2;
+rollback;
+
+--echo
+--echo == remove redundant predicates: case 2
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
+select * from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c2 = a.c1;
+delete from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c2 = a.c1;
+rollback;
+
+--echo
+--echo == remove redundant predicates: case 3
+select /*+no_rewrite*/* from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
+select * from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 >= a.c2 and a.c1 >= a.c2;
+delete from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
+insert into is_t2 select * from t1 a where a.c1 >= a.c2 and a.c1 >= a.c2;
+rollback;
+
+--echo
+--echo == remove redundant predicates: case 4
+select /*+no_rewrite*/* from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
+select * from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 >= a.c2 and a.c2 <= a.c1;
+delete from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
+insert into is_t2 select * from t1 a where a.c1 >= a.c2 and a.c2 <= a.c1;
+rollback;
+
+--echo
+--echo == remove redundant predicates: case 5
+select /*+no_rewrite*/* from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+select * from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+delete from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+insert into is_t2 select * from t1 a where (a.c1 between 1 and 2) and (a.c1 between 1 and 2);
+rollback;
+
+--echo
+--echo == remove redundant predicates: case 6
+select /*+no_rewrite*/* from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
+select * from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 in (2, 3) and a.c1 in (2, 3);
+delete from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
+insert into is_t2 select * from t1 a where a.c1 in (2, 3) and a.c1 in (2, 3);
+rollback;
+
+--echo
+--echo == remove redundant predicates: case 7
+select /*+no_rewrite*/* from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+select * from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+delete from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+insert into is_t2 select * from t1 a where a.c1 not in (2, 3) and a.c1 not in (2, 3);
+rollback;
+
+--echo ************************* can not deduce ******************
+--echo
+--echo == can not deduce: case 1
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
+select * from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 not like '2%';
+delete from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 not like '2%';
+rollback;
+
+--echo
+--echo == can not deduce: case 2
+select /*+no_rewrite*/* from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
+select * from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 = a.c2 and a.c1 not in (2, 3);
+delete from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
+insert into is_t2 select * from t1 a where a.c1 = a.c2 and a.c1 not in (2, 3);
+rollback;
+
+--echo ************************* 不能推导 anti semi join ***************
+--echo
+--echo == 不能推导 anti semi join:case 1
+select /*+no_rewrite*/* from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+delete from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+insert into is_t2 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1 and b.c1 = 1);
+rollback;
+
+--echo
+--echo == 能推导 anti semi join:case 2
+select /*+no_rewrite*/* from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+delete from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+insert into is_t2 select * from t1 a where not exists (select 1 from t2 b where a.c1 = b.c1) and a.c1 = 2;
+rollback;
+
+--echo
+--echo == 不能推导 anti semi join:case 3
+select /*+no_rewrite*/* from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+select * from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+start transaction;
+update t1 a set a.c1 = a.c2 + 1 where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+delete from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+insert into is_t2 select * from t1 a where a.c1 not in (select c1 from t2 b) and a.c1 = 1;
+rollback;
+
+--echo ************************* 不能推导 anti semi join ***************
+--echo
+--sorted_result
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
+--sorted_result
+select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
+
+--echo
+--sorted_result
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
+--sorted_result
+select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is not null;
+
+--echo
+--sorted_result
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is null;
+--sorted_result
+select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is null;
+
+--echo
+--sorted_result
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> null;
+--sorted_result
+select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> null;
+
+--echo
+--sorted_result
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> 1;
+--sorted_result
+select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> 1;
+
+--echo
+--sorted_result
+select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 <=> b.c1 and b.c1 <=> 1;
+--sorted_result
+select * from t1 a, t2 b where a.c1 <=> b.c1 and b.c1 <=> 1;
+
+####### outer join 谓词推导测试 #######
+--disable_warnings
+drop table if exists tt1, tt2, tt3;
+--enable_warnings
+create table tt1 (c1 int primary key, c2 varchar(10));
+create table tt2 (c1 int primary key, c2 varchar(10));
+create table tt3 (c1 int primary key, c2 varchar(10));
+
+--disable_query_log
+insert/**/ into tt1 values (1, 'a1'), (2, 'a2'), (3, 'a3');
+insert/**/ into tt2 values (2, 'b2'), (3, 'b3');
+insert/**/ into tt3 values (2, 'c2'), (3, 'c3');
+--enable_query_log
+
+## tt1 left join tt2
+select /*+use_merge(tt1 tt2)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 where tt1.c1 = 1;
+select /*+no_rewrite, use_merge(tt1 tt2)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 where tt1.c1 = 1;
+
+## tt1 left join tt2 left join tt3
+select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
+select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
+
+## tt1 left join tt2 left join tt3
+select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
+select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 left join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
+
+## tt3 left join (tt1 left join tt2)
+select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
+select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt1.c1 = tt3.c1 where tt1.c1 = 1;
+
+## tt3 left join (tt1 left join tt2)
+select /*+use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
+select /*+no_rewrite, use_merge(tt1 tt2 tt3)*/ * from tt1 left join tt2 on tt1.c1 = tt2.c1 right join tt3 on tt2.c1 = tt3.c1 where tt1.c1 = 1;
+
+## online case
+--disable_warnings
+drop table if exists cghldinf, puzdjypf, pujydypf;
+--enable_warnings
+
+CREATE TABLE `cghldinf` (
+    `HLDGDDM` char(10) NOT NULL,
+    `HLDZXWH` char(5)  NOT NULL,
+    `HLDTGDM` decimal(9, 0) NOT NULL,
+    `HLDKMLB` char(2) NOT NULL,
+    PRIMARY KEY (`HLDTGDM`, `HLDGDDM`),
+    KEY `HLDINDEX` (`HLDKMLB`) LOCAL
+    ) partition by key (hldgddm) partitions 13;
+
+CREATE TABLE `puzdjypf` (
+    `PZJZQZH` char(20) NOT NULL,
+    `PZJZDJYDY` char(6) NOT NULL,
+    `PZJSXRQ` decimal(8,0) NOT NULL,
+    PRIMARY KEY (`PZJZQZH`)
+    ) partition by key (pzjzqzh) partitions 13;
+
+CREATE TABLE `pujydypf` (
+    `PJYSCDM` char(2) NOT NULL,
+    `PJYJYDY` char(6) NOT NULL,
+    `PJYJYDYLB` char(3) NOT NULL,
+    `PJYQSBH` char(8) NOT NULL
+    ) partition by key (pjyjydy) partitions 2;
+
+--disable_query_log
+insert/**/ into cghldinf values ('A100013208', 'aaaaa', 1, 'ok');
+insert/**/ into cghldinf values ('A100013208', 'aaaaa', 2, 'ok');
+insert/**/ into puzdjypf values ('A100013208', '20605', 4);
+insert/**/ into pujydypf values ('ok', '20605', 'yes', 'testcase');
+--enable_query_log
+
+select /*+use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzqzh, t2.pzjzdjydy, t3.pjyjydy, t3.pjyscdm from cghldinf t1 left join puzdjypf t2 on t2.pzjzqzh = t1.hldgddm left join pujydypf t3 on t2.pzjzdjydy = t3.pjyjydy and t3.pjyscdm = '01' where hldgddm = 'A100013208';
+select /*+no_rewrite, use_merge(t1 t2), leading(t1 t2 t3)*/ t1.hldgddm, t2.pzjzqzh, t2.pzjzdjydy, t3.pjyjydy, t3.pjyscdm from cghldinf t1 left join puzdjypf t2 on t2.pzjzqzh = t1.hldgddm left join pujydypf t3 on t2.pzjzdjydy = t3.pjyjydy and t3.pjyscdm = '01' where hldgddm = 'A100013208';
+
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+create table t1 (c1 int, c2 int, primary key(c1));
+create table t2 (c1 int, c2 int, primary key(c2));
+
+explain extended_noaddr select count(*) from t1 A, t2 B where A.c1 >= 5630905 and A.c1 < 5631105 and A.c1 = B.c2 and A.c2 = B.c2;
+
+drop table t1, t2;
+create table t1 (c1 int, c2 int, index (c1));
+create table t2 (c1 int, c2 int, index (c2));
+
+explain extended_noaddr select count(*) from t1 A, t2 B where A.c1 >= 5630905 and A.c1 < 5631105 and A.c1 = B.c2 and A.c2 = B.c2;
+
+drop table t1, t2;
+create table t1 (c1 int, c2 int) partition by hash(c1) partitions 4;
+create table t2 (c1 int, c2 int) partition by hash(c2) partitions 4;
+
+explain extended_noaddr select count(*) from t1 A, t2 B where A.c1 >= 5630905 and A.c1 < 5631105 and A.c1 = B.c2 and A.c2 = B.c2;
+
+
+
+--disable_warnings
+drop table if exists t1, t2, t3;
+drop table if exists tt1, tt2, tt3;
+drop table if exists cghldinf, puzdjypf, pujydypf;
+--enable_warnings
+
+USE DB_PREDICATE_DEDUCE;
+drop database DB_PREDICATE_DEDUCE;

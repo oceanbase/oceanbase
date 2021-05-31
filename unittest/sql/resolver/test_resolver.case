@@ -1,0 +1,101 @@
+select c1, sum(c2) from t1 where c1 > 0 and c2 + c1 = 100 group by c2 order by c1 desc limit 0, 1
+insert into t1 values(1, 2)
+insert into t1(c1) values(1), (2)
+update t1 vt1 set c2=c1+1 where c1 > 1 order by c1 desc limit 0, 10
+delete from t1 where c2 > 10 order by c1 limit 0, 1
+select c1 c1, c2 m from t1
+select c1 c1, c2 m from t1 where c1 = 1 or c2 = 2 or c1 < 5
+select c1, c2 from (select c1, c2 from t1) s
+select s.c1, s.c2+1 from (select c1, c2 from t1) s
+select s.c1, s.c2+1 from (select * from t1) s
+select * from (select * from t1) s
+select c1, c2 from t1 limit 2, 10
+select c1, c2 from t1 limit 10
+select c1, sum(c2) from t1 group by c1 order by c1
+select c1, sum(c2) from t1 group by c1 order by sum(c2)
+select c1, sum(c2) from t1 group by c1 order by 1 desc, 2 asc
+select c1, sum(c2) from t1 group by c1 order by c1+1
+select c1, sum(c2) from t1 group by c1+2 order by c1+1
+select c2, sum(c1) as c2 from t1 group by c2 order by c2
+select sum(c1) as c2, c2 from t1 group by c2 order by c2
+select c2+1 as c5, sum(c1) from t1 group by c5
+select c1, sum(c2) from t1 group by c1 having c1 > 1
+select c1, sum(c2) from t1 group by c1 having sum(c2) > 1
+select * from t1 union select * from t1
+select * from t1 union select * from t1 union select * from t1
+select * from t1 union all select * from t1
+select c1 from t1 union all select * from t1
+select c1 from t1 union all select * from t1 order by t1.c1
+(select * from t1 union select * from t1) t2 union select * from t1 order by t2.c1
+insert into t2 values(1, 1, 'test')
+insert into t2(c1, c2, c3) values(1, 1, 'test')
+insert into t2(c1, c2, c3) values(1, 1, 'test'), (2, 2, 'hello'), (3, 3, 'world')
+insert into t2 values(4, 4, 'test', 4)
+insert into t2(c1, c2, c3) values(4, 4, 'test', 4)
+insert into t2(c1, c2, c3, c4) values(4, 4, 'test', 4)
+insert into t2(c1, c2, c3) values('4', '4', 'test')
+insert into t2 select * from t1
+insert into t2(c1, c2) select c1, c2 from t1
+insert into t2(c1, c2) select * from t1
+insert into t2 select * from t2
+insert into t2 values ()
+insert into t2(c1, c2) select c1, c2 from t1
+insert into t2 values (1+1, 'new'||'name', 45)
+insert into t2(c1, c1, c2) values (1, 1, 2)
+insert into t1 t values (5, 5, 5)
+update t1 set c2 = 1 where c1 = 1
+update t1 t set t.c2 = 1 where c1 = 1
+update t2 set c2 = 6, c3 = 'test' where c1 = (select max(c1) from t1)
+update t2 set c2 = c2 + 100, c3 = 'test' where c1 = 1
+update t2 set c2 = max(c1) where c1 = 1
+update t2 set c2 = (select max(c1) from t1) where c1 = 1
+update t2 set c2 = c3 like '%h%' where c1 = 1
+# update pk, column_items should contain whole row
+update test set c1 = 1 where c2 = 2
+update test set c1 = 1, c3 = 3 where c4 = 4 and c5 =5
+update test set c1 = 1, c2 = 2, c3 = 3 where c6 = 6 and c4 = 4
+# update index-column, column_items should contain pk, index's all columns and updated column
+update test set c4 = 4 where c1 = 1 and c2 = 2 and c3 = 3
+update test set c4 = 4, c5 = 5 where c1 = 1 and c6 = 6
+# update non-index column, column_items should contain pk and updated column
+update test set c6 = 6 where c7 = 7
+update test set c6 = 6, c7 = 7 where c1= 1
+delete from t1 where c1 = 1
+delete from t1 t where c1 = 1
+delete from t1, t2 where t1.c1 = t2.c1
+delete from t1 where c5 = 1
+select c1 from t2 where (c1 + 1) between 1 and 10 and c3 between 'A' and 'Z'
+select * from t2 where c1 * 2 + 3 < c2 and c3 < 'XXXX' and c2 is not null
+select count(distinct t1.c1), count(distinct t1.c2) from t1 order by c1, c2
+select t1.c1 from t1, t2 where t1.c1 = t2.c1
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c2 and t1.c1 > 10 limit 10 offset 10
+select /*+ INDEX(t1 primary) */ * from t1, t2 where t1.c1 = t2.c1
+select * from t1 join t2 on t1.c1 = t2.c1
+select * from t1 right join t2 on t1.c1 = t2.c1
+select * from t1 where c1 = now()
+select * from t1 where c1 = 'test'
+select * from t1 where c1 = ?
+select * from t1 where (c1<-100 or c1 between -50 and 50 or c1 between -999 and 0 or c1>100) and (c1<-9 or c1>9) and c2 between -99 and 99
+begin
+update t1 set c1 = c1 + 1 where c1 = 1
+rollback
+begin
+update t1 set c1 = c1 + 2 where c1 = 11
+commit
+select * from t1 for update
+select -(c1 + 1 - 1.2 + 0), concat(t1.c2, 'test'), 'test', 'test', not (true or false), NULL from t1
+select * from t2 where c1 = 1 and c2 = 2 and c3 like '%test%' and c1 between 1 and 10
+select c1, c2 from t1 where (c1, c2) in ((1, 2))
+select * from t1 where exists(select * from t2 where c1 = 1)
+select case 1+1 when 1 then 'hello' when 2 then 'world' else 'test' end
+select sum(c1) + sum(c3) from t2 group by c2 having sum(c3) > 1
+select c1, 1 * 1 from t1
+select * from t1 where not (c1 > 1 and c2 < 10)
+select * from t1 where not (c1 > 1 or c2 < 10)
+select * from t1 where not (not (c1 > 1))
+select * from t1 where not (not (c1 > 1) and c2 < 10)
+select * from t1 where c1 > 1 and (c2 < 10 and c1 <10)
+select * from t1 where c1 > 1 or (c2 < 10 or c1 <10)
+select * from t1 where (c1 > 1 and c2 > 1) or (c1 > 1 and c2 < 10)
+select * from t1 where (c1 > 1 or c2 > 1) and (c1 > 1 or c2 < 10)
+

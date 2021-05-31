@@ -1,0 +1,17 @@
+drop database if exists time_on_update_db;
+create database time_on_update_db;
+use time_on_update_db;
+
+create table ts(c1 int primary key, c2 timestamp default current_timestamp on update current_timestamp, c3 int);
+create table t1(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int, c3 varchar(32));
+
+# same result
+update ts set c3=c1+10, c2=now();
+update ts set c3=c1+10;
+
+# same result
+insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5, c2=now();
+insert into ts(c1, c3) values(1, 11) on duplicate key update c3=5
+
+drop database time_on_update_db;

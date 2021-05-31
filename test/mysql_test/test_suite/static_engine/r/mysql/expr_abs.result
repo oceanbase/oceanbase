@@ -1,0 +1,720 @@
+connect  conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT;
+connection conn_admin;
+alter system flush plan cache global;
+connection default;
+drop table if exists t;
+create table t (t1 tinyint,
+t2 smallint,
+t3 mediumint,
+t4 integer,
+t5 bigint,
+t6 tinyint unsigned,
+t7 smallint unsigned,
+t8 mediumint unsigned,
+t9 integer unsigned,
+t10 bigint unsigned,
+t11 float,
+t12 float unsigned,
+t13 double,
+t14 double unsigned,
+t15 number,
+t16 number unsigned,
+t17 datetime,
+t18 timestamp,
+t19 date,
+t20 time,
+t21 year,
+t22 varchar(255),
+t23 char(255),
+t24 tinytext,
+t25 mediumtext,
+t26 longtext,
+t27 bit,
+t28 enum('a', 'b', 'c'),
+t29 set('a', 'b', 'c'));
+insert into t values (1, -1, 1, -1, 1, 1, 1, 1, 1, 1, -0.2, 0.3, 0.4, 0.5, -0.6, 0.7,
+'1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '0.8', '0.9', '1.0', '1.1',
+'1.2', 1, 'b', 'b');
+insert into t(t1) values (null);
+connection conn_admin;
+alter system flush plan cache global;
+connection default;
+set ob_enable_plan_cache=false;
+select abs(1.0);
+abs(1.0)
+1.0
+explain select abs(1.0);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select abs(1);
+abs(1)
+1
+explain select abs(1);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select abs(1+2+3-4-1-2+5-5);
+abs(1+2+3-4-1-2+5-5)
+1
+explain select abs(1+2+3-4-1-2+5-5);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select abs(abs(1+2+3-4-1-2+5-5)-abs(-3));
+abs(abs(1+2+3-4-1-2+5-5)-abs(-3))
+2
+explain select abs(abs(1+2+3-4-1-2+5-5)-abs(-3));
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select abs(true and false);
+abs(true and false)
+0
+explain select abs(true and false);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select abs(10/0);
+abs(10/0)
+NULL
+SELECT ABS(-9223372036854775808);
+ERROR 22003: value is out of range
+explain SELECT ABS(-9223372036854775808);
+ERROR 22003: value is out of range
+select abs(-9999999999999999999999);
+abs(-9999999999999999999999)
+9999999999999999999999
+explain select abs(-9999999999999999999999);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select abs(9999999999999999999999);
+abs(9999999999999999999999)
+9999999999999999999999
+explain select abs(9999999999999999999999);
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select abs(repeat('1',100));
+abs(repeat('1',100))
+1.111111111111111e99
+explain select abs(repeat('1',100));
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select abs(repeat('1',46));
+abs(repeat('1',46))
+1.1111111111111112e45
+explain select abs(repeat('1',46));
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select abs(0-repeat('1',46));
+abs(0-repeat('1',46))
+1.1111111111111112e45
+explain select abs(0-repeat('1',46));
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |EXPRESSION|    |1        |1   |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([?]), filter(nil)
+      values({?})
+
+select abs(t1) from t;
+abs(t1)
+1
+NULL
+explain select abs(t1) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t1, BIGINT(-1, 0)))]), filter(nil), 
+      access([t.t1]), partitions(p0)
+
+select abs(t2) from t;
+abs(t2)
+1
+NULL
+explain select abs(t2) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t2, BIGINT(-1, 0)))]), filter(nil), 
+      access([t.t2]), partitions(p0)
+
+select abs(t3) from t;
+abs(t3)
+1
+NULL
+explain select abs(t3) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t3, BIGINT(-1, 0)))]), filter(nil), 
+      access([t.t3]), partitions(p0)
+
+select abs(t4) from t;
+abs(t4)
+1
+NULL
+explain select abs(t4) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t4, BIGINT(-1, 0)))]), filter(nil), 
+      access([t.t4]), partitions(p0)
+
+select abs(t5) from t;
+abs(t5)
+1
+NULL
+explain select abs(t5) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(t.t5)]), filter(nil), 
+      access([t.t5]), partitions(p0)
+
+select abs(t6) from t;
+abs(t6)
+1
+NULL
+explain select abs(t6) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t6, BIGINT UNSIGNED(-1, 0)))]), filter(nil), 
+      access([t.t6]), partitions(p0)
+
+select abs(t7) from t;
+abs(t7)
+1
+NULL
+explain select abs(t7) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t7, BIGINT UNSIGNED(-1, 0)))]), filter(nil), 
+      access([t.t7]), partitions(p0)
+
+select abs(t8) from t;
+abs(t8)
+1
+NULL
+explain select abs(t8) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t8, BIGINT UNSIGNED(-1, 0)))]), filter(nil), 
+      access([t.t8]), partitions(p0)
+
+select abs(t9) from t;
+abs(t9)
+1
+NULL
+explain select abs(t9) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t9, BIGINT UNSIGNED(-1, 0)))]), filter(nil), 
+      access([t.t9]), partitions(p0)
+
+select abs(t10) from t;
+abs(t10)
+1
+NULL
+explain select abs(t10) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(t.t10)]), filter(nil), 
+      access([t.t10]), partitions(p0)
+
+select abs(t11) from t;
+abs(t11)
+0.20000000298023224
+NULL
+explain select abs(t11) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t11, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t11]), partitions(p0)
+
+select abs(t12) from t;
+abs(t12)
+0.30000001192092896
+NULL
+explain select abs(t12) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t12, DOUBLE UNSIGNED(-1, -1)))]), filter(nil), 
+      access([t.t12]), partitions(p0)
+
+select abs(t13) from t;
+abs(t13)
+0.4
+NULL
+explain select abs(t13) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(t.t13)]), filter(nil), 
+      access([t.t13]), partitions(p0)
+
+select abs(t14) from t;
+abs(t14)
+0.5
+NULL
+explain select abs(t14) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(t.t14)]), filter(nil), 
+      access([t.t14]), partitions(p0)
+
+select abs(t15) from t;
+abs(t15)
+1
+NULL
+explain select abs(t15) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(t.t15)]), filter(nil), 
+      access([t.t15]), partitions(p0)
+
+select abs(t16) from t;
+abs(t16)
+1
+NULL
+explain select abs(t16) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(t.t16)]), filter(nil), 
+      access([t.t16]), partitions(p0)
+
+select abs(t17) from t;
+abs(t17)
+19930320000000
+NULL
+explain select abs(t17) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t17, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t17]), partitions(p0)
+
+select abs(t18) from t;
+abs(t18)
+19930320000000
+NULL
+explain select abs(t18) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t18, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t18]), partitions(p0)
+
+select abs(t19) from t;
+abs(t19)
+19930320
+NULL
+explain select abs(t19) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t19, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t19]), partitions(p0)
+
+select abs(t20) from t;
+abs(t20)
+101010
+NULL
+explain select abs(t20) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t20, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t20]), partitions(p0)
+
+select abs(t21) from t;
+abs(t21)
+1993
+NULL
+explain select abs(t21) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t21, BIGINT UNSIGNED(-1, 0)))]), filter(nil), 
+      access([t.t21]), partitions(p0)
+
+select abs(t22) from t;
+abs(t22)
+0.8
+NULL
+explain select abs(t22) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t22, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t22]), partitions(p0)
+
+select abs(t23) from t;
+abs(t23)
+0.9
+NULL
+explain select abs(t23) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t23, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t23]), partitions(p0)
+
+select abs(t24) from t;
+abs(t24)
+1
+NULL
+explain select abs(t24) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t24, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t24]), partitions(p0)
+
+select abs(t25) from t;
+abs(t25)
+1.1
+NULL
+explain select abs(t25) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t25, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t25]), partitions(p0)
+
+select abs(t26) from t;
+abs(t26)
+1.2
+NULL
+explain select abs(t26) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t26, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t26]), partitions(p0)
+
+select abs(t27) from t;
+abs(t27)
+1
+NULL
+explain select abs(t27) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t27, BIGINT UNSIGNED(-1, 0)))]), filter(nil), 
+      access([t.t27]), partitions(p0)
+
+select abs(t28) from t;
+abs(t28)
+2
+NULL
+explain select abs(t28) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t28, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t28]), partitions(p0)
+
+select abs(t29) from t;
+abs(t29)
+2
+NULL
+explain select abs(t29) from t;
+Query Plan
+===================================
+|ID|OPERATOR  |NAME|EST. ROWS|COST|
+-----------------------------------
+|0 |TABLE SCAN|t   |2        |37  |
+===================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([abs(cast(t.t29, DOUBLE(-1, -1)))]), filter(nil), 
+      access([t.t29]), partitions(p0)
+
+drop table if exists t1;
+create table t1(c1 decimal unsigned, c2 smallint unsigned);
+insert into t1 values(1, 1);
+select mod(round(abs(c1)), c2) from t1;
+mod(round(abs(c1)), c2)
+0
+drop table t1;
+// abs(hex_string)
+select abs(X'31');
+abs(X'31')
+49
+select abs(binary'-100');
+abs(binary'-100')
+100
+select abs(_utf8'-100');
+abs(_utf8'-100')
+100
+connection conn_admin;

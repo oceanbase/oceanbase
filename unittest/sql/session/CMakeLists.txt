@@ -1,0 +1,2 @@
+ob_unittest(test_basic_session_info)
+ob_unittest(test_session_mgr)

@@ -1,0 +1,57 @@
+connect  conn_admin,$OBMYSQL_MS0,admin@sys,admin,*NO-ONE*,$OBMYSQL_PORT;
+desc oceanbase.__all_virtual_pg_partition_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+table_id	bigint(20)	NO		NULL	
+partition_idx	bigint(20)	NO		NULL	
+tg_id	bigint(20)	NO		NULL	
+pg_idx	bigint(20)	NO		NULL	
+max_decided_trans_version	bigint(20)	NO		NULL	
+max_passed_trans_ts	bigint(20)	NO		NULL	
+freeze_ts	bigint(20)	NO		NULL	
+allow_gc	tinyint(4)	NO		NULL	
+partition_state	varchar(128)	NO		NULL	
+min_log_service_ts	bigint(20)	NO		-1	
+min_trans_service_ts	bigint(20)	NO		-1	
+min_replay_engine_ts	bigint(20)	NO		-1	
+is_pg	tinyint(4)	NO		NULL	
+weak_read_timestamp	bigint(20)	NO		-1	
+replica_type	bigint(20)	NO		0	
+use test;
+create tablegroup tg1 binding true;
+create table test1 (id1 int, id2 int) tablegroup tg1;
+create table test2 (id1 int, id2 int) tablegroup tg1;
+create table test3 (id1 int, id2 int);
+create table test4 (id1 int, id2 int);
+select count(1) from oceanbase.__all_virtual_pg_partition_info
+where table_id in (select table_id from oceanbase.__all_virtual_table where table_name = 'test1') and partition_state = 'L_WORKING';
+count(1)
+1
+select count(1) from oceanbase.__all_virtual_pg_partition_info
+where table_id in (select table_id from oceanbase.__all_virtual_table where table_name = 'test2') and partition_state = 'L_WORKING';
+count(1)
+1
+select count(1) from oceanbase.__all_virtual_pg_partition_info
+where table_id in (select table_id from oceanbase.__all_virtual_table where table_name = 'test3') and partition_state = 'L_WORKING';
+count(1)
+1
+select count(1) from oceanbase.__all_virtual_pg_partition_info
+where table_id in (select table_id from oceanbase.__all_virtual_table where table_name = 'test4') and partition_state = 'L_WORKING';
+count(1)
+1
+select count(1) from oceanbase.__all_virtual_pg_partition_info
+where tg_id in (select tablegroup_id as tg_id from oceanbase.__all_virtual_tablegroup where tablegroup_name = 'tg1') and partition_state = 'L_WORKING';
+count(1)
+2
+select pg_partition_count from oceanbase.__all_virtual_partition_info
+where table_id in (select tablegroup_id as table_id from oceanbase.__all_virtual_tablegroup where tablegroup_name = 'tg1') and partition_state = 'L_WORKING';
+pg_partition_count
+2
+drop table if exists test1;
+drop table if exists test2;
+drop table if exists test3;
+drop table if exists test4;
+purge recyclebin;
+drop tablegroup tg1;

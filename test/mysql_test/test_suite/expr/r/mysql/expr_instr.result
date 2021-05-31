@@ -1,0 +1,167 @@
+================ expression instr ================
+select instr('abc', '');
+instr('abc', '')
+1
+select instr('', '');
+instr('', '')
+1
+select instr('', 'abc');
+instr('', 'abc')
+0
+select instr('abc', 'abcd');
+instr('abc', 'abcd')
+0
+select instr('abc', 'abc');
+instr('abc', 'abc')
+1
+select instr('abc', 'a');
+instr('abc', 'a')
+1
+select instr('abc', 'b');
+instr('abc', 'b')
+2
+select instr('abc', 'c');
+instr('abc', 'c')
+3
+select instr('abc', 'bc');
+instr('abc', 'bc')
+2
+select instr('abcbc', 'bc');
+instr('abcbc', 'bc')
+2
+select instr('阿里巴巴', '阿里');
+instr('阿里巴巴', '阿里')
+1
+select instr('阿里巴巴', '巴巴');
+instr('阿里巴巴', '巴巴')
+3
+select instr('阿里巴巴巴巴', '巴巴');
+instr('阿里巴巴巴巴', '巴巴')
+3
+select instr('阿里巴巴', '阿里巴巴');
+instr('阿里巴巴', '阿里巴巴')
+1
+select instr('123', true);
+instr('123', true)
+1
+select instr('23', true);
+instr('23', true)
+0
+select instr(123, '23');
+instr(123, '23')
+2
+select instr('123', 123);
+instr('123', 123)
+1
+select instr('123.400000', 23.4);
+instr('123.400000', 23.4)
+2
+select instr('123.400000', 123.4);
+instr('123.400000', 123.4)
+1
+select instr('123.400000', null);
+instr('123.400000', null)
+NULL
+select instr(null, '巴巴');
+instr(null, '巴巴')
+NULL
+select instr('巴巴', null);
+instr('巴巴', null)
+NULL
+select instr(null, null);
+instr(null, null)
+NULL
+select instr(true, false);
+instr(true, false)
+0
+select instr(true, true);
+instr(true, true)
+1
+select instr(123, true);
+instr(123, true)
+1
+select instr(123, false);
+instr(123, false)
+0
+select instr(0123, false);
+instr(0123, false)
+0
+select instr(1023, false);
+instr(1023, false)
+2
+select instr(1023.4, false);
+instr(1023.4, false)
+2
+select instr(1023.4, true);
+instr(1023.4, true)
+1
+select instr(null, true);
+instr(null, true)
+NULL
+select instr(true, null);
+instr(true, null)
+NULL
+select instr(123, 23);
+instr(123, 23)
+2
+select instr(123, 23456);
+instr(123, 23456)
+0
+select instr(123.4, 123);
+instr(123.4, 123)
+1
+select instr(1234, 123.4);
+instr(1234, 123.4)
+0
+select instr(1234, null);
+instr(1234, null)
+NULL
+select instr(null, 123);
+instr(null, 123)
+NULL
+select instr(123.400000, 123.4);
+instr(123.400000, 123.4)
+1
+select instr(123.400000, 123.41);
+instr(123.400000, 123.41)
+0
+select instr(123.400000, null);
+instr(123.400000, null)
+NULL
+select instr(null, 123.41);
+instr(null, 123.41)
+NULL
+drop table if exists test;
+create table test(c1 datetime primary key);
+insert into test values('2015-5-5');
+select instr(c1, '201') from test;
+instr(c1, '201')
+1
+select instr(c1, '') from test;
+instr(c1, '')
+1
+select instr(c1, 'haha') from test;
+instr(c1, 'haha')
+0
+select instr(c1, '-5') from test;
+instr(c1, '-5')
+0
+select instr(c1, '2015-5-5') from test;
+instr(c1, '2015-5-5')
+0
+select instr(c1, true) from test;
+instr(c1, true)
+3
+select instr(c1, 201) from test;
+instr(c1, 201)
+1
+select instr(c1, 201.1) from test;
+instr(c1, 201.1)
+0
+select instr(c1, null) from test;
+instr(c1, null)
+NULL
+select instr(null, c1) from test;
+instr(null, c1)
+NULL
+drop table if exists test;

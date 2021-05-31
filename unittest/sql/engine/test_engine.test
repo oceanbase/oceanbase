@@ -1,0 +1,5 @@
+#select * from te1
+#select c1 from te1 where c1 = 1
+#insert into te1 values (0)
+#update te1 set c1 = 1 where c1 = 2
+#delete from te1 where c1 = 1

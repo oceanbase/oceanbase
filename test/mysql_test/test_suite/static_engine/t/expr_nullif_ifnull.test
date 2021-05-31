@@ -1,0 +1,157 @@
+
+--disable_abort_on_error
+
+
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn_admin;
+--sleep 2
+
+set @@ob_enable_plan_cache = 0;
+#set @@ob_log_level='debug';
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1 (c1 int, c2 int unsigned,
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned,
+    c15 double, c16 double unsigned,
+    c17 decimal, c18 decimal unsigned,
+    c19 datetime, c20 timestamp,
+    c21 varchar(30), c22 char(30), c_null int);
+
+insert into t1 values(1, 2,
+    1, 2,
+    1, 2,
+    1, 2,
+    1, 2,
+    1, 2,
+    3.5, 4.5,
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00',
+    '9.5', '10.5', null);
+insert into t1 values(-1, 2,
+    -1, 2,
+    -1, 2,
+    -1, 2,
+    -1, 2,
+    -1, 2,
+    -3.5, 4.5,
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00',
+    '-9.5', '10.5', null);
+
+--sleep 2
+
+
+eval select nullif(null, null), nullif(1, null), nullif(null, 1);
+eval select ifnull(null, null), ifnull(1, null), ifnull(null, 1);
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select c$left, c$right, nullif(c$left, c$right), ifnull(c$left, c$right) from t1;
+    eval select c$left, nullif(c$left, c$left) from t1;
+
+    inc $right;
+  }
+  inc $left;
+}
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v1;
+--enable_warnings
+create table t1 (c1 datetime(5), c2 year);
+insert into t1 values('1901-01-01', 1901);
+--echo // transformed to case when expr
+
+select nullif(c1, c2) from t1;
+select nullif(c2, c1) from t1;
+select nullif(c1, c1) from t1;
+select nullif(c2, c2) from t1;
+
+
+--echo // nullif改写不应该影响show create view，所以show create view还应该是nullif，而非case expr
+create view v1 as select nullif(c1, c2) from t1;
+show create view v1;
+--echo // 类型应该是c1的类型(datetime)
+desc v1;
+select * from v1;
+
+drop view v1;
+create view v1 as select nullif(c2, c1) from t1;
+show create view v1;
+--echo // 类型应该是c1的类型(year)
+desc v1;
+select * from v1;
+
+drop view v1;
+create view v1 as select nullif(c1, c1) from t1;
+show create view v1;
+--echo // 类型应该是c1的类型(datetime)
+desc v1;
+select * from v1;
+
+drop view v1;
+create view v1 as select nullif(c2, c2) from t1;
+show create view v1;
+--echo // 类型应该是c1的类型(datetime)
+desc v1;
+select * from v1;
+
+select collation(nullif('a', binary'b'));
+select NULLIF(14152561829011783680, 1);
+
+drop table t1;
+create table t1 (
+  col_decimal_20_0_unsigned decimal(20,0) unsigned,
+  col_decimal_30_5_signed decimal(30,5) signed,
+  col_tinyint_unsigned tinyint unsigned);
+select mod( nullif( col_decimal_20_0_unsigned, col_decimal_30_5_signed ), col_tinyint_unsigned ) from t1;
+
+--echo // check param num
+select nullif(1) from dual;
+select nullif(1, 2) from dual;
+select nullif(1, 2, 3) from dual;
+select nullif(1, 2, 3, 4) from dual;
+select nullif(1, 2, 3, 4, 5) from dual;
+select nullif(1, 2, 3, 4, 5, 6) from dual;
+select nullif(1, 2, 3, 4, 5, 6, 7) from dual;
+
+drop table t1;
+select 1 from dual where null <= nullif(null,null);
+
+select ifnull(null, 15531789214893998080);
+select ifnull(15531789214893998080, 0);
+SELECT trim(Ifnull(15531789214893998080, 0)) as X from dual;
+create table t1 as select ifnull(15531789214893998080, 0) ;
+desc t1;
+
+drop table t1;
+
+create table t1(z0_test0 enum('中文字符','123456','ABCabc','!@#$%^&*','2020-10-10','2020-10-10 10:10:10','10:10:10') not NULL);
+
+insert into t1 values('中文字符');
+insert into t1 values('123456');
+insert into t1 values('ABCabc');
+insert into t1 values('!@#$%^&*');
+insert into t1 values('2020-10-10');
+insert into t1 values('2020-10-10 10:10:10');
+insert into t1 values('10:10:10');
+
+select nullif(z0_test0,'中文字符') from t1;
+drop table t1;
+--sleep 2

@@ -1,0 +1,31 @@
+
+--disable_abort_on_error
+
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+alter system flush plan cache global;
+
+connection default;
+
+--echo
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+create table t(c1 int, c2 int, primary key(c1, c2));
+insert into t values(1,1);
+insert into t values(2,2);
+insert into t values(3,3);
+insert into t values(4,4);
+insert into t values(5,5);
+insert into t values(6,6);
+
+alter table t partition by range(c1) (partition p0 values less than (4), partition p1 values less than MAXVALUE);
+select c2 from t partition(p1);
+--echo
+explain select c2 from t partition(p1);
+
+drop table t;
+
+connection conn_admin;
+--sleep 2

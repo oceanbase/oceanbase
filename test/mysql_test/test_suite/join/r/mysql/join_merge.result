@@ -1,0 +1,1696 @@
+drop table if exists aa;
+drop table if exists bb;
+drop table if exists cc;
+create table aa(a1 int primary key auto_increment, a2 int, a3 int);
+create table bb(b1 int primary key auto_increment, b2 int, b3 int);
+create table cc(c1 int primary key auto_increment, c2 int, c3 int);
+delete from aa;
+insert into aa(a2, a3) values (10, 15), (10, 14), (10, 12),           (11, 13), (12, 12),           (12, 10);
+delete from bb;
+insert into bb(b2, b3) values           (10, 14),           (11, 14), (11, 13),           (12, 11), (12, 10);
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+a2	b3
+10	14
+11	13
+12	10
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+Query Plan
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |MERGE JOIN  |    |5        |89  |
+|1 | SORT       |    |6        |43  |
+|2 |  TABLE SCAN|aa  |6        |37  |
+|3 | SORT       |    |5        |42  |
+|4 |  TABLE SCAN|bb  |5        |37  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, ASC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p0)
+  3 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, ASC])
+  4 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p0)
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+a2	b3
+10	14
+11	13
+12	10
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+Query Plan
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |MERGE JOIN  |    |5        |89  |
+|1 | SORT       |    |6        |43  |
+|2 |  TABLE SCAN|aa  |6        |37  |
+|3 | SORT       |    |5        |42  |
+|4 |  TABLE SCAN|bb  |5        |37  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p0)
+  3 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  4 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p0)
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+a2	b3
+12	10
+11	13
+10	14
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+Query Plan
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |MERGE JOIN  |    |5        |89  |
+|1 | SORT       |    |6        |43  |
+|2 |  TABLE SCAN|aa  |6        |37  |
+|3 | SORT       |    |5        |42  |
+|4 |  TABLE SCAN|bb  |5        |37  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, ASC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p0)
+  3 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, ASC])
+  4 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p0)
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+a2	b3
+12	10
+11	13
+10	14
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+Query Plan
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |MERGE JOIN  |    |5        |89  |
+|1 | SORT       |    |6        |43  |
+|2 |  TABLE SCAN|aa  |6        |37  |
+|3 | SORT       |    |5        |42  |
+|4 |  TABLE SCAN|bb  |5        |37  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, DESC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p0)
+  3 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, DESC])
+  4 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p0)
+
+delete from aa;
+insert into aa(a2, a3) values (10, 15), (10, 14), (10, 12),           (11, 13), (12, 12),           (12, 10);
+delete from bb;
+insert into bb(b2, b3) values           (10, 14),           (11, 14), (11, 13),           (12, 11), (12, 10);
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+a2	b3
+10	14
+11	13
+12	10
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+Query Plan
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |MERGE JOIN  |    |5        |92  |
+|1 | SORT       |    |6        |44  |
+|2 |  TABLE SCAN|aa  |6        |39  |
+|3 | SORT       |    |5        |43  |
+|4 |  TABLE SCAN|bb  |5        |38  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, ASC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p0)
+  3 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, ASC])
+  4 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p0)
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+a2	b3
+10	14
+11	13
+12	10
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+Query Plan
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |MERGE JOIN  |    |5        |92  |
+|1 | SORT       |    |6        |44  |
+|2 |  TABLE SCAN|aa  |6        |39  |
+|3 | SORT       |    |5        |43  |
+|4 |  TABLE SCAN|bb  |5        |38  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p0)
+  3 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  4 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p0)
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+a2	b3
+12	10
+11	13
+10	14
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+Query Plan
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |MERGE JOIN  |    |5        |92  |
+|1 | SORT       |    |6        |44  |
+|2 |  TABLE SCAN|aa  |6        |39  |
+|3 | SORT       |    |5        |43  |
+|4 |  TABLE SCAN|bb  |5        |38  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, ASC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p0)
+  3 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, ASC])
+  4 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p0)
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+a2	b3
+12	10
+11	13
+10	14
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+Query Plan
+=====================================
+|ID|OPERATOR    |NAME|EST. ROWS|COST|
+-------------------------------------
+|0 |MERGE JOIN  |    |5        |92  |
+|1 | SORT       |    |6        |44  |
+|2 |  TABLE SCAN|aa  |6        |39  |
+|3 | SORT       |    |5        |43  |
+|4 |  TABLE SCAN|bb  |5        |38  |
+=====================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, DESC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p0)
+  3 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, DESC])
+  4 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p0)
+
+delete from cc;
+insert into cc(c2, c3) values (10, 15), (10, 14), (10, 12),           (12, 10);
+select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
+c2	a3
+10	14
+12	10
+explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
+Query Plan
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |MERGE JOIN   |    |4        |136 |
+|1 | MERGE JOIN  |    |5        |92  |
+|2 |  SORT       |    |6        |44  |
+|3 |   TABLE SCAN|aa  |6        |39  |
+|4 |  SORT       |    |5        |43  |
+|5 |   TABLE SCAN|bb  |5        |38  |
+|6 | SORT        |    |4        |41  |
+|7 |  TABLE SCAN |cc  |4        |37  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([cc.c2], [aa.a3]), filter(nil), 
+      equal_conds([bb.b2 = cc.c2], [bb.b3 = cc.c3]), other_conds(nil)
+  1 - output([aa.a3], [bb.b2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  2 - output([aa.a3], [aa.a2]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  3 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p0)
+  4 - output([bb.b2], [bb.b3]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  5 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p0)
+  6 - output([cc.c2], [cc.c3]), filter(nil), sort_keys([cc.c2, ASC], [cc.c3, DESC])
+  7 - output([cc.c2], [cc.c3]), filter(nil), 
+      access([cc.c2], [cc.c3]), partitions(p0)
+
+select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and a2 = c2 and b3 = c3 order by c2, c3 desc;
+c2	a3
+10	14
+12	10
+explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and a2 = c2 and b3 = c3 order by c2, c3 desc;
+Query Plan
+======================================
+|ID|OPERATOR     |NAME|EST. ROWS|COST|
+--------------------------------------
+|0 |MERGE JOIN   |    |1        |133 |
+|1 | MERGE JOIN  |    |5        |92  |
+|2 |  SORT       |    |6        |44  |
+|3 |   TABLE SCAN|aa  |6        |39  |
+|4 |  SORT       |    |5        |43  |
+|5 |   TABLE SCAN|bb  |5        |38  |
+|6 | SORT        |    |4        |41  |
+|7 |  TABLE SCAN |cc  |4        |37  |
+======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([cc.c2], [aa.a3]), filter(nil), 
+      equal_conds([aa.a2 = cc.c2], [bb.b3 = cc.c3]), other_conds(nil)
+  1 - output([aa.a3], [aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  2 - output([aa.a3], [aa.a2]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  3 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p0)
+  4 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  5 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p0)
+  6 - output([cc.c2], [cc.c3]), filter(nil), sort_keys([cc.c2, ASC], [cc.c3, DESC])
+  7 - output([cc.c2], [cc.c3]), filter(nil), 
+      access([cc.c2], [cc.c3]), partitions(p0)
+
+drop table if exists tt1,tt2;
+CREATE TABLE `tt1` (
+`a` int(11) NOT NULL,
+`b` int(11) DEFAULT NULL,
+`c` varchar(20) DEFAULT NULL,
+`d` datetime NOT NULL,
+PRIMARY KEY (`a`)
+);
+CREATE TABLE `tt2` (
+`a` int(11) NOT NULL,
+`b` int(11) DEFAULT NULL,
+`c` varchar(20) DEFAULT NULL,
+`d` datetime NOT NULL,
+PRIMARY KEY (`a`)
+);
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.d desc;
+Query Plan
+======================
+|ID|OPERATOR    |NAME|
+----------------------
+|0 |SORT        |    |
+|1 | MERGE JOIN |    |
+|2 |  TABLE SCAN|tt1 |
+|3 |  TABLE SCAN|tt2 |
+======================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), sort_keys([tt1.d, DESC])
+  1 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      equal_conds([tt1.a = tt2.a]), other_conds(nil)
+  2 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d]), filter(nil), 
+      access([tt1.a], [tt1.b], [tt1.c], [tt1.d]), partitions(p0)
+  3 - output([tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      access([tt2.a], [tt2.b], [tt2.c], [tt2.d]), partitions(p0)
+
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.a desc;
+Query Plan
+=============================
+|ID|OPERATOR   |NAME        |
+-----------------------------
+|0 |MERGE JOIN |            |
+|1 | TABLE SCAN|tt1(Reverse)|
+|2 | TABLE SCAN|tt2(Reverse)|
+=============================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      equal_conds([tt1.a = tt2.a]), other_conds(nil)
+  1 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d]), filter(nil), 
+      access([tt1.a], [tt1.b], [tt1.c], [tt1.d]), partitions(p0)
+  2 - output([tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      access([tt2.a], [tt2.b], [tt2.c], [tt2.d]), partitions(p0)
+
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.c desc;
+Query Plan
+======================
+|ID|OPERATOR    |NAME|
+----------------------
+|0 |SORT        |    |
+|1 | MERGE JOIN |    |
+|2 |  TABLE SCAN|tt1 |
+|3 |  TABLE SCAN|tt2 |
+======================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), sort_keys([tt1.c, DESC])
+  1 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      equal_conds([tt1.a = tt2.a]), other_conds(nil)
+  2 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d]), filter(nil), 
+      access([tt1.a], [tt1.b], [tt1.c], [tt1.d]), partitions(p0)
+  3 - output([tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      access([tt2.a], [tt2.b], [tt2.c], [tt2.d]), partitions(p0)
+
+drop table if exists tt1,tt2;
+== test partitioned table merge join ==
+drop table if exists aa;
+drop table if exists bb;
+drop table if exists cc;
+create table aa(a1 int, a2 int, a3 int) partition by hash(a1) partitions 5;
+create table bb(b1 int, b2 int, b3 int) partition by hash(b1) partitions 5;
+create table cc(c1 int, c2 int, c3 int) partition by hash(c1) partitions 5;
+delete from aa;
+insert into aa values (1, 10, 15), (2, 10, 14), (3, 10, 12), (4, 11, 13), (5, 12, 12), (6, 12, 10);
+delete from bb;
+insert into bb values (1, 10, 14), (2, 11, 14), (3, 11, 13), (4, 12, 11), (5, 12, 10);
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+a2	b3
+10	14
+11	13
+12	10
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+Query Plan
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |MERGE JOIN                 |        |5        |91  |
+|1 | PX COORDINATOR MERGE SORT |        |5        |44  |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|5        |43  |
+|3 |   SORT                    |        |5        |43  |
+|4 |    PX PARTITION ITERATOR  |        |5        |37  |
+|5 |     TABLE SCAN            |aa      |5        |37  |
+|6 | PX COORDINATOR MERGE SORT |        |5        |44  |
+|7 |  EXCHANGE OUT DISTR       |:EX20000|5        |43  |
+|8 |   SORT                    |        |5        |43  |
+|9 |    PX PARTITION ITERATOR  |        |5        |37  |
+|10|     TABLE SCAN            |bb      |5        |37  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, ASC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), dop=1
+  3 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, ASC])
+  4 - output([aa.a2], [aa.a3]), filter(nil)
+  5 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+  6 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, ASC])
+  7 - output([bb.b3], [bb.b2]), filter(nil), dop=1
+  8 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, ASC])
+  9 - output([bb.b2], [bb.b3]), filter(nil)
+  10 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p[0-4])
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+a2	b3
+10	14
+11	13
+12	10
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+Query Plan
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |MERGE JOIN                 |        |5        |91  |
+|1 | PX COORDINATOR MERGE SORT |        |5        |44  |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|5        |43  |
+|3 |   SORT                    |        |5        |43  |
+|4 |    PX PARTITION ITERATOR  |        |5        |37  |
+|5 |     TABLE SCAN            |aa      |5        |37  |
+|6 | PX COORDINATOR MERGE SORT |        |5        |44  |
+|7 |  EXCHANGE OUT DISTR       |:EX20000|5        |43  |
+|8 |   SORT                    |        |5        |43  |
+|9 |    PX PARTITION ITERATOR  |        |5        |37  |
+|10|     TABLE SCAN            |bb      |5        |37  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), dop=1
+  3 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  4 - output([aa.a2], [aa.a3]), filter(nil)
+  5 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+  6 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  7 - output([bb.b3], [bb.b2]), filter(nil), dop=1
+  8 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  9 - output([bb.b2], [bb.b3]), filter(nil)
+  10 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p[0-4])
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+a2	b3
+12	10
+11	13
+10	14
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+Query Plan
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |MERGE JOIN                 |        |5        |91  |
+|1 | PX COORDINATOR MERGE SORT |        |5        |44  |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|5        |43  |
+|3 |   SORT                    |        |5        |43  |
+|4 |    PX PARTITION ITERATOR  |        |5        |37  |
+|5 |     TABLE SCAN            |aa      |5        |37  |
+|6 | PX COORDINATOR MERGE SORT |        |5        |44  |
+|7 |  EXCHANGE OUT DISTR       |:EX20000|5        |43  |
+|8 |   SORT                    |        |5        |43  |
+|9 |    PX PARTITION ITERATOR  |        |5        |37  |
+|10|     TABLE SCAN            |bb      |5        |37  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, ASC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), dop=1
+  3 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, ASC])
+  4 - output([aa.a2], [aa.a3]), filter(nil)
+  5 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+  6 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, ASC])
+  7 - output([bb.b3], [bb.b2]), filter(nil), dop=1
+  8 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, ASC])
+  9 - output([bb.b2], [bb.b3]), filter(nil)
+  10 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p[0-4])
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+a2	b3
+12	10
+11	13
+10	14
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+Query Plan
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |MERGE JOIN                 |        |5        |91  |
+|1 | PX COORDINATOR MERGE SORT |        |5        |44  |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|5        |43  |
+|3 |   SORT                    |        |5        |43  |
+|4 |    PX PARTITION ITERATOR  |        |5        |37  |
+|5 |     TABLE SCAN            |aa      |5        |37  |
+|6 | PX COORDINATOR MERGE SORT |        |5        |44  |
+|7 |  EXCHANGE OUT DISTR       |:EX20000|5        |43  |
+|8 |   SORT                    |        |5        |43  |
+|9 |    PX PARTITION ITERATOR  |        |5        |37  |
+|10|     TABLE SCAN            |bb      |5        |37  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, DESC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), dop=1
+  3 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, DESC])
+  4 - output([aa.a2], [aa.a3]), filter(nil)
+  5 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+  6 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, DESC])
+  7 - output([bb.b3], [bb.b2]), filter(nil), dop=1
+  8 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, DESC])
+  9 - output([bb.b2], [bb.b3]), filter(nil)
+  10 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p[0-4])
+
+delete from aa;
+insert into aa values (1, 10, 15), (2, 10, 14), (3, 10, 12), (4, 11, 13), (5, 12, 12), (6, 12, 10);
+delete from bb;
+insert into bb values (1, 10, 14), (2, 11, 14), (3, 11, 13), (4, 12, 11), (5, 12, 10);
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+a2	b3
+10	14
+11	13
+12	10
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3;
+Query Plan
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |MERGE JOIN                 |        |5        |94  |
+|1 | PX COORDINATOR MERGE SORT |        |5        |45  |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|5        |44  |
+|3 |   SORT                    |        |5        |44  |
+|4 |    PX PARTITION ITERATOR  |        |5        |39  |
+|5 |     TABLE SCAN            |aa      |5        |39  |
+|6 | PX COORDINATOR MERGE SORT |        |5        |45  |
+|7 |  EXCHANGE OUT DISTR       |:EX20000|5        |44  |
+|8 |   SORT                    |        |5        |44  |
+|9 |    PX PARTITION ITERATOR  |        |5        |39  |
+|10|     TABLE SCAN            |bb      |5        |39  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, ASC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), dop=1
+  3 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, ASC])
+  4 - output([aa.a2], [aa.a3]), filter(nil)
+  5 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+  6 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, ASC])
+  7 - output([bb.b3], [bb.b2]), filter(nil), dop=1
+  8 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, ASC])
+  9 - output([bb.b2], [bb.b3]), filter(nil)
+  10 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p[0-4])
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+a2	b3
+10	14
+11	13
+12	10
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
+Query Plan
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |MERGE JOIN                 |        |5        |94  |
+|1 | PX COORDINATOR MERGE SORT |        |5        |45  |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|5        |44  |
+|3 |   SORT                    |        |5        |44  |
+|4 |    PX PARTITION ITERATOR  |        |5        |39  |
+|5 |     TABLE SCAN            |aa      |5        |39  |
+|6 | PX COORDINATOR MERGE SORT |        |5        |45  |
+|7 |  EXCHANGE OUT DISTR       |:EX20000|5        |44  |
+|8 |   SORT                    |        |5        |44  |
+|9 |    PX PARTITION ITERATOR  |        |5        |39  |
+|10|     TABLE SCAN            |bb      |5        |39  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), dop=1
+  3 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  4 - output([aa.a2], [aa.a3]), filter(nil)
+  5 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+  6 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  7 - output([bb.b3], [bb.b2]), filter(nil), dop=1
+  8 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  9 - output([bb.b2], [bb.b3]), filter(nil)
+  10 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p[0-4])
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+a2	b3
+12	10
+11	13
+10	14
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
+Query Plan
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |MERGE JOIN                 |        |5        |94  |
+|1 | PX COORDINATOR MERGE SORT |        |5        |45  |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|5        |44  |
+|3 |   SORT                    |        |5        |44  |
+|4 |    PX PARTITION ITERATOR  |        |5        |39  |
+|5 |     TABLE SCAN            |aa      |5        |39  |
+|6 | PX COORDINATOR MERGE SORT |        |5        |45  |
+|7 |  EXCHANGE OUT DISTR       |:EX20000|5        |44  |
+|8 |   SORT                    |        |5        |44  |
+|9 |    PX PARTITION ITERATOR  |        |5        |39  |
+|10|     TABLE SCAN            |bb      |5        |39  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, ASC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), dop=1
+  3 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, ASC])
+  4 - output([aa.a2], [aa.a3]), filter(nil)
+  5 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+  6 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, ASC])
+  7 - output([bb.b3], [bb.b2]), filter(nil), dop=1
+  8 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, ASC])
+  9 - output([bb.b2], [bb.b3]), filter(nil)
+  10 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p[0-4])
+
+select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+a2	b3
+12	10
+11	13
+10	14
+explain select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
+Query Plan
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |MERGE JOIN                 |        |5        |94  |
+|1 | PX COORDINATOR MERGE SORT |        |5        |45  |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|5        |44  |
+|3 |   SORT                    |        |5        |44  |
+|4 |    PX PARTITION ITERATOR  |        |5        |39  |
+|5 |     TABLE SCAN            |aa      |5        |39  |
+|6 | PX COORDINATOR MERGE SORT |        |5        |45  |
+|7 |  EXCHANGE OUT DISTR       |:EX20000|5        |44  |
+|8 |   SORT                    |        |5        |44  |
+|9 |    PX PARTITION ITERATOR  |        |5        |39  |
+|10|     TABLE SCAN            |bb      |5        |39  |
+========================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  1 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, DESC])
+  2 - output([aa.a2], [aa.a3]), filter(nil), dop=1
+  3 - output([aa.a2], [aa.a3]), filter(nil), sort_keys([aa.a2, DESC], [aa.a3, DESC])
+  4 - output([aa.a2], [aa.a3]), filter(nil)
+  5 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+  6 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, DESC])
+  7 - output([bb.b3], [bb.b2]), filter(nil), dop=1
+  8 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, DESC], [bb.b3, DESC])
+  9 - output([bb.b2], [bb.b3]), filter(nil)
+  10 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p[0-4])
+
+delete from cc;
+insert into cc values (1, 10, 15), (2, 10, 14), (3, 10, 12), (4, 12, 10);
+select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
+c2	a3
+10	14
+12	10
+explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
+Query Plan
+============================================================
+|ID|OPERATOR                    |NAME    |EST. ROWS|COST   |
+------------------------------------------------------------
+|0 |MERGE JOIN                  |        |246      |1726254|
+|1 | MERGE JOIN                 |        |5        |94     |
+|2 |  PX COORDINATOR MERGE SORT |        |5        |45     |
+|3 |   EXCHANGE OUT DISTR       |:EX10000|5        |44     |
+|4 |    SORT                    |        |5        |44     |
+|5 |     PX PARTITION ITERATOR  |        |5        |39     |
+|6 |      TABLE SCAN            |aa      |5        |39     |
+|7 |  PX COORDINATOR MERGE SORT |        |5        |45     |
+|8 |   EXCHANGE OUT DISTR       |:EX20000|5        |44     |
+|9 |    SORT                    |        |5        |44     |
+|10|     PX PARTITION ITERATOR  |        |5        |39     |
+|11|      TABLE SCAN            |bb      |5        |39     |
+|12| PX COORDINATOR MERGE SORT  |        |500000   |1656983|
+|13|  EXCHANGE OUT DISTR        |:EX30000|500000   |1585988|
+|14|   SORT                     |        |500000   |1585988|
+|15|    PX PARTITION ITERATOR   |        |500000   |331321 |
+|16|     TABLE SCAN             |cc      |500000   |331321 |
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([cc.c2], [aa.a3]), filter(nil), 
+      equal_conds([bb.b2 = cc.c2], [bb.b3 = cc.c3]), other_conds(nil)
+  1 - output([aa.a3], [bb.b2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  2 - output([aa.a3], [aa.a2]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  3 - output([aa.a3], [aa.a2]), filter(nil), dop=1
+  4 - output([aa.a3], [aa.a2]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  5 - output([aa.a2], [aa.a3]), filter(nil)
+  6 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+  7 - output([bb.b2], [bb.b3]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  8 - output([bb.b2], [bb.b3]), filter(nil), dop=1
+  9 - output([bb.b2], [bb.b3]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  10 - output([bb.b2], [bb.b3]), filter(nil)
+  11 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p[0-4])
+  12 - output([cc.c2], [cc.c3]), filter(nil), sort_keys([cc.c2, ASC], [cc.c3, DESC])
+  13 - output([cc.c2], [cc.c3]), filter(nil), dop=1
+  14 - output([cc.c2], [cc.c3]), filter(nil), sort_keys([cc.c2, ASC], [cc.c3, DESC])
+  15 - output([cc.c2], [cc.c3]), filter(nil)
+  16 - output([cc.c2], [cc.c3]), filter(nil), 
+      access([cc.c2], [cc.c3]), partitions(p[0-4])
+
+select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and a2 = c2 and b3 = c3 order by c2, c3 desc;
+c2	a3
+10	14
+12	10
+explain select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and a2 = c2 and b3 = c3 order by c2, c3 desc;
+Query Plan
+============================================================
+|ID|OPERATOR                    |NAME    |EST. ROWS|COST   |
+------------------------------------------------------------
+|0 |MERGE JOIN                  |        |246      |1726254|
+|1 | MERGE JOIN                 |        |5        |94     |
+|2 |  PX COORDINATOR MERGE SORT |        |5        |45     |
+|3 |   EXCHANGE OUT DISTR       |:EX10000|5        |44     |
+|4 |    SORT                    |        |5        |44     |
+|5 |     PX PARTITION ITERATOR  |        |5        |39     |
+|6 |      TABLE SCAN            |aa      |5        |39     |
+|7 |  PX COORDINATOR MERGE SORT |        |5        |45     |
+|8 |   EXCHANGE OUT DISTR       |:EX20000|5        |44     |
+|9 |    SORT                    |        |5        |44     |
+|10|     PX PARTITION ITERATOR  |        |5        |39     |
+|11|      TABLE SCAN            |bb      |5        |39     |
+|12| PX COORDINATOR MERGE SORT  |        |500000   |1656983|
+|13|  EXCHANGE OUT DISTR        |:EX30000|500000   |1585988|
+|14|   SORT                     |        |500000   |1585988|
+|15|    PX PARTITION ITERATOR   |        |500000   |331321 |
+|16|     TABLE SCAN             |cc      |500000   |331321 |
+============================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([cc.c2], [aa.a3]), filter(nil), 
+      equal_conds([aa.a2 = cc.c2], [bb.b3 = cc.c3]), other_conds(nil)
+  1 - output([aa.a3], [aa.a2], [bb.b3]), filter(nil), 
+      equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
+  2 - output([aa.a3], [aa.a2]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  3 - output([aa.a3], [aa.a2]), filter(nil), dop=1
+  4 - output([aa.a3], [aa.a2]), filter(nil), sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  5 - output([aa.a2], [aa.a3]), filter(nil)
+  6 - output([aa.a2], [aa.a3]), filter(nil), 
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+  7 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  8 - output([bb.b3], [bb.b2]), filter(nil), dop=1
+  9 - output([bb.b3], [bb.b2]), filter(nil), sort_keys([bb.b2, ASC], [bb.b3, DESC])
+  10 - output([bb.b2], [bb.b3]), filter(nil)
+  11 - output([bb.b2], [bb.b3]), filter(nil), 
+      access([bb.b2], [bb.b3]), partitions(p[0-4])
+  12 - output([cc.c2], [cc.c3]), filter(nil), sort_keys([cc.c2, ASC], [cc.c3, DESC])
+  13 - output([cc.c2], [cc.c3]), filter(nil), dop=1
+  14 - output([cc.c2], [cc.c3]), filter(nil), sort_keys([cc.c2, ASC], [cc.c3, DESC])
+  15 - output([cc.c2], [cc.c3]), filter(nil)
+  16 - output([cc.c2], [cc.c3]), filter(nil), 
+      access([cc.c2], [cc.c3]), partitions(p[0-4])
+
+drop table if exists tt1,tt2;
+CREATE TABLE `tt1` (
+`a` int(11) NOT NULL,
+`b` int(11) DEFAULT NULL,
+`c` varchar(20) DEFAULT NULL,
+`d` datetime NOT NULL,
+PRIMARY KEY (`a`)
+) partition by hash(a) partitions 5;
+CREATE TABLE `tt2` (
+`a` int(11) NOT NULL,
+`b` int(11) DEFAULT NULL,
+`c` varchar(20) DEFAULT NULL,
+`d` datetime NOT NULL,
+PRIMARY KEY (`a`)
+) partition by hash(a) partitions 5;
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.d desc;
+Query Plan
+========================================
+|ID|OPERATOR                  |NAME    |
+----------------------------------------
+|0 |PX COORDINATOR MERGE SORT |        |
+|1 | EXCHANGE OUT DISTR       |:EX10000|
+|2 |  SORT                    |        |
+|3 |   PX PARTITION ITERATOR  |        |
+|4 |    MERGE JOIN            |        |
+|5 |     TABLE SCAN           |tt1     |
+|6 |     TABLE SCAN           |tt2     |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), sort_keys([tt1.d, DESC])
+  1 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), dop=1
+  2 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), sort_keys([tt1.d, DESC])
+  3 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil)
+  4 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      equal_conds([tt1.a = tt2.a]), other_conds(nil)
+  5 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d]), filter(nil), 
+      access([tt1.a], [tt1.b], [tt1.c], [tt1.d]), partitions(p[0-4])
+  6 - output([tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      access([tt2.a], [tt2.b], [tt2.c], [tt2.d]), partitions(p[0-4])
+
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.a desc;
+Query Plan
+============================================
+|ID|OPERATOR                  |NAME        |
+--------------------------------------------
+|0 |PX COORDINATOR MERGE SORT |            |
+|1 | EXCHANGE OUT DISTR       |:EX10000    |
+|2 |  SORT                    |            |
+|3 |   PX PARTITION ITERATOR  |            |
+|4 |    MERGE JOIN            |            |
+|5 |     TABLE SCAN           |tt1(Reverse)|
+|6 |     TABLE SCAN           |tt2(Reverse)|
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), sort_keys([tt1.a, DESC])
+  1 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), dop=1
+  2 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), sort_keys([tt1.a, DESC]), local merge sort
+  3 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil)
+  4 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      equal_conds([tt1.a = tt2.a]), other_conds(nil)
+  5 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d]), filter(nil), 
+      access([tt1.a], [tt1.b], [tt1.c], [tt1.d]), partitions(p[0-4])
+  6 - output([tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      access([tt2.a], [tt2.b], [tt2.c], [tt2.d]), partitions(p[0-4])
+
+explain basic select /*+ use_merge(tt1, tt2) */ * from tt1,tt2 where tt1.a=tt2.a order by tt1.c desc;
+Query Plan
+========================================
+|ID|OPERATOR                  |NAME    |
+----------------------------------------
+|0 |PX COORDINATOR MERGE SORT |        |
+|1 | EXCHANGE OUT DISTR       |:EX10000|
+|2 |  SORT                    |        |
+|3 |   PX PARTITION ITERATOR  |        |
+|4 |    MERGE JOIN            |        |
+|5 |     TABLE SCAN           |tt1     |
+|6 |     TABLE SCAN           |tt2     |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), sort_keys([tt1.c, DESC])
+  1 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), dop=1
+  2 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), sort_keys([tt1.c, DESC])
+  3 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil)
+  4 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d], [tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      equal_conds([tt1.a = tt2.a]), other_conds(nil)
+  5 - output([tt1.a], [tt1.b], [tt1.c], [tt1.d]), filter(nil), 
+      access([tt1.a], [tt1.b], [tt1.c], [tt1.d]), partitions(p[0-4])
+  6 - output([tt2.a], [tt2.b], [tt2.c], [tt2.d]), filter(nil), 
+      access([tt2.a], [tt2.b], [tt2.c], [tt2.d]), partitions(p[0-4])
+
+drop table if exists tt1,tt2;
+drop table if exists aa;
+drop table if exists bb;
+drop table if exists cc;
+drop table if exists t_r4_01_20;
+create table t_r4_01_20(a int, b int, c datetime, primary key (a,b))
+partition by range columns(a)
+(
+partition p6 values less than (6),
+partition p11 values less than (11),
+partition p16 values less than (16),
+partition pm values less than (MAXVALUE)
+);
+insert into t_r4_01_20 values ( 1,  1, 20161101), ( 2,  2, 20161102), ( 3,  3, 20161103), ( 4,  4, 20161104),
+( 5,  5, 20161105), ( 6,  6, 20161106), ( 7,  7, 20161107), ( 8,  8, 20161108),
+( 9,  9, 20161109), (10, 10, 20161110), (11, 11, 20161111), (12, 12, 20161112),
+(13, 13, 20161113), (14, 14, 20161114), (15, 15, 20161115), (16, 16, 20161116),
+(17, 17, 20161117), (18, 18, 20161118), (19, 19, 20161119), (20, 20, 20161120);
+select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20 t2 on t1.a = t2.a order by t1.a desc, t2.a desc;
+a	a
+20	20
+19	19
+18	18
+17	17
+16	16
+15	15
+14	14
+13	13
+12	12
+11	11
+10	10
+9	9
+8	8
+7	7
+6	6
+5	5
+4	4
+3	3
+2	2
+1	1
+explain basic select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20 t2 on t1.a = t2.a order by t1.a desc, t2.a desc;
+Query Plan
+===========================================
+|ID|OPERATOR                  |NAME       |
+-------------------------------------------
+|0 |PX COORDINATOR MERGE SORT |           |
+|1 | EXCHANGE OUT DISTR       |:EX10000   |
+|2 |  PX PARTITION ITERATOR   |           |
+|3 |   MERGE JOIN             |           |
+|4 |    TABLE SCAN            |t1(Reverse)|
+|5 |    TABLE SCAN            |t2(Reverse)|
+===========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, DESC])
+  1 - output([t1.a], [t2.a]), filter(nil), dop=1
+  2 - output([t1.a], [t2.a]), filter(nil)
+  3 - output([t1.a], [t2.a]), filter(nil), 
+      equal_conds([t1.a = t2.a]), other_conds(nil)
+  4 - output([t1.a]), filter(nil), 
+      access([t1.a]), partitions(p[0-3])
+  5 - output([t2.a]), filter(nil), 
+      access([t2.a]), partitions(p[0-3])
+
+explain select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20 t2 on t1.a = t2.a order by t1.a asc, t2.a asc;
+Query Plan
+=======================================================
+|ID|OPERATOR                  |NAME    |EST. ROWS|COST|
+-------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT |        |20       |99  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|20       |97  |
+|2 |  PX PARTITION ITERATOR   |        |20       |97  |
+|3 |   MERGE JOIN             |        |20       |97  |
+|4 |    TABLE SCAN            |t1      |20       |40  |
+|5 |    TABLE SCAN            |t2      |20       |40  |
+=======================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC])
+  1 - output([t1.a], [t2.a]), filter(nil), dop=1
+  2 - output([t1.a], [t2.a]), filter(nil)
+  3 - output([t1.a], [t2.a]), filter(nil), 
+      equal_conds([t1.a = t2.a]), other_conds(nil)
+  4 - output([t1.a]), filter(nil), 
+      access([t1.a]), partitions(p[0-3])
+  5 - output([t2.a]), filter(nil), 
+      access([t2.a]), partitions(p[0-3])
+
+select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20 t2 on t1.a = t2.a order by t1.a asc, t2.a asc;
+a	a
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10	10
+11	11
+12	12
+13	13
+14	14
+15	15
+16	16
+17	17
+18	18
+19	19
+20	20
+drop table if exists t_r4_01_20;
+drop table if exists t2, t7;
+create table t2(a int, b varchar(20), c decimal(20,10));
+create table t7(a int(10), b varchar(10), c char(20), d decimal(20,10));
+insert into t2 values(1, "222", 3.33),(2,"222",3.33),(2,"333",2.22),(3,"3333",1.11), (5, "555", 5.55), (6, "6666", 5.5),(1, '1', 1), (1, '2', 2), (2, '2.00', 2.00001), (3, '3.0', 3.00001), (4, "A", 4.33), (5, "B", 5), (6, "AB", 6);
+insert into t7 values(65, '222', '333', 5), (65, '444', '5.550', 1), (66, '3.0', '555', 3.00001), (66, '2', 'B', 2), (67, 'A', '1', 1);
+drop table if exists t8, t9;
+create table t8(a int primary key, b int, c int, index idx(b,c));
+create table t9(a int primary key, b int, c int, index idx(b,c));
+
+************ 测试full join
+explain select /*+use_merge(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+Query Plan
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |SORT                  |    |13       |159 |
+|1 | MERGE FULL OUTER JOIN|    |13       |117 |
+|2 |  SORT                |    |13       |67  |
+|3 |   TABLE SCAN         |t2  |13       |39  |
+|4 |  SORT                |    |5        |48  |
+|5 |   TABLE SCAN         |t7  |5        |37  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), 
+      equal_conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), other_conds(nil)
+  2 - output([t2.a], [t2.b], [t2.c], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), sort_keys([cast(t2.b, DECIMAL(-1, -1)), ASC], [t2.c, ASC])
+  3 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), 
+      access([t2.b], [t2.c], [t2.a]), partitions(p0)
+  4 - output([t7.a], [t7.b], [t7.c], [t7.d], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), sort_keys([cast(t7.a, DECIMAL(10, 0)), ASC], [t7.d, ASC])
+  5 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), 
+      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
+
+select /*+use_merge(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+a	b	c	a	b	c	d
+NULL	NULL	NULL	65	222	333	5.0000000000
+NULL	NULL	NULL	65	444	5.550	1.0000000000
+NULL	NULL	NULL	66	2	B	2.0000000000
+NULL	NULL	NULL	66	3.0	555	3.0000100000
+NULL	NULL	NULL	67	A	1	1.0000000000
+1	1	1.0000000000	NULL	NULL	NULL	NULL
+1	2	2.0000000000	NULL	NULL	NULL	NULL
+1	222	3.3300000000	NULL	NULL	NULL	NULL
+2	2.00	2.0000100000	NULL	NULL	NULL	NULL
+2	222	3.3300000000	NULL	NULL	NULL	NULL
+2	333	2.2200000000	NULL	NULL	NULL	NULL
+3	3.0	3.0000100000	NULL	NULL	NULL	NULL
+3	3333	1.1100000000	NULL	NULL	NULL	NULL
+4	A	4.3300000000	NULL	NULL	NULL	NULL
+5	555	5.5500000000	NULL	NULL	NULL	NULL
+5	B	5.0000000000	NULL	NULL	NULL	NULL
+6	6666	5.5000000000	NULL	NULL	NULL	NULL
+6	AB	6.0000000000	NULL	NULL	NULL	NULL
+
+explain select /*+use_hash(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+Query Plan
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |SORT                 |    |13       |136 |
+|1 | HASH FULL OUTER JOIN|    |13       |94  |
+|2 |  TABLE SCAN         |t7  |5        |37  |
+|3 |  TABLE SCAN         |t2  |13       |39  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), 
+      equal_conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), other_conds(nil)
+  2 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), 
+      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
+  3 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), 
+      access([t2.b], [t2.c], [t2.a]), partitions(p0)
+
+select /*+use_hash(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+a	b	c	a	b	c	d
+NULL	NULL	NULL	65	222	333	5.0000000000
+NULL	NULL	NULL	65	444	5.550	1.0000000000
+NULL	NULL	NULL	66	2	B	2.0000000000
+NULL	NULL	NULL	66	3.0	555	3.0000100000
+NULL	NULL	NULL	67	A	1	1.0000000000
+1	1	1.0000000000	NULL	NULL	NULL	NULL
+1	2	2.0000000000	NULL	NULL	NULL	NULL
+1	222	3.3300000000	NULL	NULL	NULL	NULL
+2	2.00	2.0000100000	NULL	NULL	NULL	NULL
+2	222	3.3300000000	NULL	NULL	NULL	NULL
+2	333	2.2200000000	NULL	NULL	NULL	NULL
+3	3.0	3.0000100000	NULL	NULL	NULL	NULL
+3	3333	1.1100000000	NULL	NULL	NULL	NULL
+4	A	4.3300000000	NULL	NULL	NULL	NULL
+5	555	5.5500000000	NULL	NULL	NULL	NULL
+5	B	5.0000000000	NULL	NULL	NULL	NULL
+6	6666	5.5000000000	NULL	NULL	NULL	NULL
+6	AB	6.0000000000	NULL	NULL	NULL	NULL
+
+explain select /*+use_nl(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+Query Plan
+==============================================
+|ID|OPERATOR             |NAME|EST. ROWS|COST|
+----------------------------------------------
+|0 |SORT                 |    |13       |136 |
+|1 | HASH FULL OUTER JOIN|    |13       |94  |
+|2 |  TABLE SCAN         |t7  |5        |37  |
+|3 |  TABLE SCAN         |t2  |13       |39  |
+==============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), 
+      equal_conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), other_conds(nil)
+  2 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), 
+      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
+  3 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), 
+      access([t2.b], [t2.c], [t2.a]), partitions(p0)
+
+select /*+use_nl(t2,t7)*/* from t2 full join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+a	b	c	a	b	c	d
+NULL	NULL	NULL	65	222	333	5.0000000000
+NULL	NULL	NULL	65	444	5.550	1.0000000000
+NULL	NULL	NULL	66	2	B	2.0000000000
+NULL	NULL	NULL	66	3.0	555	3.0000100000
+NULL	NULL	NULL	67	A	1	1.0000000000
+1	1	1.0000000000	NULL	NULL	NULL	NULL
+1	2	2.0000000000	NULL	NULL	NULL	NULL
+1	222	3.3300000000	NULL	NULL	NULL	NULL
+2	2.00	2.0000100000	NULL	NULL	NULL	NULL
+2	222	3.3300000000	NULL	NULL	NULL	NULL
+2	333	2.2200000000	NULL	NULL	NULL	NULL
+3	3.0	3.0000100000	NULL	NULL	NULL	NULL
+3	3333	1.1100000000	NULL	NULL	NULL	NULL
+4	A	4.3300000000	NULL	NULL	NULL	NULL
+5	555	5.5500000000	NULL	NULL	NULL	NULL
+5	B	5.0000000000	NULL	NULL	NULL	NULL
+6	6666	5.5000000000	NULL	NULL	NULL	NULL
+6	AB	6.0000000000	NULL	NULL	NULL	NULL
+************ 测试right join
+
+explain select /*+use_merge(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+Query Plan
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |SORT             |    |5        |132 |
+|1 | MERGE OUTER JOIN|    |5        |117 |
+|2 |  SORT           |    |5        |48  |
+|3 |   TABLE SCAN    |t7  |5        |37  |
+|4 |  SORT           |    |13       |67  |
+|5 |   TABLE SCAN    |t2  |13       |39  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), 
+      equal_conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), other_conds(nil)
+  2 - output([t7.a], [t7.b], [t7.c], [t7.d], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), sort_keys([cast(t7.a, DECIMAL(10, 0)), ASC], [t7.d, ASC])
+  3 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), 
+      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
+  4 - output([t2.a], [t2.b], [t2.c], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), sort_keys([cast(t2.b, DECIMAL(-1, -1)), ASC], [t2.c, ASC])
+  5 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), 
+      access([t2.b], [t2.c], [t2.a]), partitions(p0)
+
+select /*+use_merge(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+a	b	c	a	b	c	d
+NULL	NULL	NULL	65	222	333	5.0000000000
+NULL	NULL	NULL	65	444	5.550	1.0000000000
+NULL	NULL	NULL	66	2	B	2.0000000000
+NULL	NULL	NULL	66	3.0	555	3.0000100000
+NULL	NULL	NULL	67	A	1	1.0000000000
+
+explain select /*+use_hash(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+Query Plan
+=========================================
+|ID|OPERATOR        |NAME|EST. ROWS|COST|
+-----------------------------------------
+|0 |SORT            |    |5        |109 |
+|1 | HASH OUTER JOIN|    |5        |94  |
+|2 |  TABLE SCAN    |t7  |5        |37  |
+|3 |  TABLE SCAN    |t2  |13       |39  |
+=========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), 
+      equal_conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), other_conds(nil)
+  2 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), 
+      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
+  3 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), 
+      access([t2.b], [t2.c], [t2.a]), partitions(p0)
+
+select /*+use_hash(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+a	b	c	a	b	c	d
+NULL	NULL	NULL	65	222	333	5.0000000000
+NULL	NULL	NULL	65	444	5.550	1.0000000000
+NULL	NULL	NULL	66	2	B	2.0000000000
+NULL	NULL	NULL	66	3.0	555	3.0000100000
+NULL	NULL	NULL	67	A	1	1.0000000000
+
+explain select /*+use_nl(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+Query Plan
+================================================
+|ID|OPERATOR               |NAME|EST. ROWS|COST|
+------------------------------------------------
+|0 |SORT                   |    |5        |144 |
+|1 | NESTED-LOOP OUTER JOIN|    |5        |129 |
+|2 |  TABLE SCAN           |t7  |5        |37  |
+|3 |  MATERIAL             |    |13       |54  |
+|4 |   TABLE SCAN          |t2  |13       |39  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), 
+      conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), nl_params_(nil)
+  2 - output([t7.a], [t7.d], [t7.b], [t7.c]), filter(nil), 
+      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
+  3 - output([t2.a], [t2.b], [t2.c]), filter(nil)
+  4 - output([t2.b], [t2.c], [t2.a]), filter(nil), 
+      access([t2.b], [t2.c], [t2.a]), partitions(p0)
+
+select /*+use_nl(t2,t7)*/* from t2 right join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+a	b	c	a	b	c	d
+NULL	NULL	NULL	65	222	333	5.0000000000
+NULL	NULL	NULL	65	444	5.550	1.0000000000
+NULL	NULL	NULL	66	2	B	2.0000000000
+NULL	NULL	NULL	66	3.0	555	3.0000100000
+NULL	NULL	NULL	67	A	1	1.0000000000
+explain select /*+leading(t8, t9)*/ t8.b,t8.c,t9.b,t9.c from t8 right join t9 on t8.b = t9.b;
+Query Plan
+==================================================
+|ID|OPERATOR              |NAME   |EST. ROWS|COST|
+--------------------------------------------------
+|0 |MERGE RIGHT OUTER JOIN|       |7        |80  |
+|1 | TABLE SCAN           |t8(idx)|6        |37  |
+|2 | TABLE SCAN           |t9(idx)|7        |38  |
+==================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.b], [t8.c], [t9.b], [t9.c]), filter(nil), 
+      equal_conds([t8.b = t9.b]), other_conds(nil)
+  1 - output([t8.b], [t8.c]), filter(nil), 
+      access([t8.b], [t8.c]), partitions(p0)
+  2 - output([t9.b], [t9.c]), filter(nil), 
+      access([t9.b], [t9.c]), partitions(p0)
+
+select /*+leading(t8, t9)*/ t8.b,t8.c,t9.b,t9.c from t8 right join t9 on t8.b = t9.b;
+b	c	b	c
+2	1	2	1
+2	1	2	2
+2	1	2	3
+2	2	2	1
+2	2	2	2
+2	2	2	3
+2	3	2	1
+2	3	2	2
+2	3	2	3
+NULL	NULL	3	1
+4	1	4	1
+4	1	4	2
+4	1	4	3
+4	2	4	1
+4	2	4	2
+4	2	4	3
+4	3	4	1
+4	3	4	2
+4	3	4	3
+************ 测试left join
+
+explain select /*+use_merge(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+Query Plan
+==========================================
+|ID|OPERATOR         |NAME|EST. ROWS|COST|
+------------------------------------------
+|0 |SORT             |    |13       |159 |
+|1 | MERGE OUTER JOIN|    |13       |117 |
+|2 |  SORT           |    |13       |67  |
+|3 |   TABLE SCAN    |t2  |13       |39  |
+|4 |  SORT           |    |5        |48  |
+|5 |   TABLE SCAN    |t7  |5        |37  |
+==========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), 
+      equal_conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), other_conds(nil)
+  2 - output([t2.a], [t2.b], [t2.c], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), sort_keys([cast(t2.b, DECIMAL(-1, -1)), ASC], [t2.c, ASC])
+  3 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), 
+      access([t2.b], [t2.c], [t2.a]), partitions(p0)
+  4 - output([t7.a], [t7.b], [t7.c], [t7.d], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), sort_keys([cast(t7.a, DECIMAL(10, 0)), ASC], [t7.d, ASC])
+  5 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), 
+      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
+
+select /*+use_merge(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+a	b	c	a	b	c	d
+1	1	1.0000000000	NULL	NULL	NULL	NULL
+1	2	2.0000000000	NULL	NULL	NULL	NULL
+1	222	3.3300000000	NULL	NULL	NULL	NULL
+2	2.00	2.0000100000	NULL	NULL	NULL	NULL
+2	222	3.3300000000	NULL	NULL	NULL	NULL
+2	333	2.2200000000	NULL	NULL	NULL	NULL
+3	3.0	3.0000100000	NULL	NULL	NULL	NULL
+3	3333	1.1100000000	NULL	NULL	NULL	NULL
+4	A	4.3300000000	NULL	NULL	NULL	NULL
+5	555	5.5500000000	NULL	NULL	NULL	NULL
+5	B	5.0000000000	NULL	NULL	NULL	NULL
+6	6666	5.5000000000	NULL	NULL	NULL	NULL
+6	AB	6.0000000000	NULL	NULL	NULL	NULL
+
+explain select /*+use_hash(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+Query Plan
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |SORT                  |    |13       |136 |
+|1 | HASH RIGHT OUTER JOIN|    |13       |94  |
+|2 |  TABLE SCAN          |t7  |5        |37  |
+|3 |  TABLE SCAN          |t2  |13       |39  |
+===============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), 
+      equal_conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), other_conds(nil)
+  2 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), 
+      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
+  3 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), 
+      access([t2.b], [t2.c], [t2.a]), partitions(p0)
+
+select /*+use_hash(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+a	b	c	a	b	c	d
+1	1	1.0000000000	NULL	NULL	NULL	NULL
+1	2	2.0000000000	NULL	NULL	NULL	NULL
+1	222	3.3300000000	NULL	NULL	NULL	NULL
+2	2.00	2.0000100000	NULL	NULL	NULL	NULL
+2	222	3.3300000000	NULL	NULL	NULL	NULL
+2	333	2.2200000000	NULL	NULL	NULL	NULL
+3	3.0	3.0000100000	NULL	NULL	NULL	NULL
+3	3333	1.1100000000	NULL	NULL	NULL	NULL
+4	A	4.3300000000	NULL	NULL	NULL	NULL
+5	555	5.5500000000	NULL	NULL	NULL	NULL
+5	B	5.0000000000	NULL	NULL	NULL	NULL
+6	6666	5.5000000000	NULL	NULL	NULL	NULL
+6	AB	6.0000000000	NULL	NULL	NULL	NULL
+
+explain select /*+use_nl(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+Query Plan
+================================================
+|ID|OPERATOR               |NAME|EST. ROWS|COST|
+------------------------------------------------
+|0 |SORT                   |    |13       |164 |
+|1 | NESTED-LOOP OUTER JOIN|    |13       |122 |
+|2 |  TABLE SCAN           |t2  |13       |39  |
+|3 |  MATERIAL             |    |5        |44  |
+|4 |   TABLE SCAN          |t7  |5        |37  |
+================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), sort_keys([t2.a, ASC], [t2.b, ASC], [t7.a, ASC], [t7.b, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), 
+      conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), nl_params_(nil)
+  2 - output([t2.b], [t2.c], [t2.a]), filter(nil), 
+      access([t2.b], [t2.c], [t2.a]), partitions(p0)
+  3 - output([t7.a], [t7.b], [t7.c], [t7.d]), filter(nil)
+  4 - output([t7.a], [t7.d], [t7.b], [t7.c]), filter(nil), 
+      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
+
+select /*+use_nl(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
+a	b	c	a	b	c	d
+1	1	1.0000000000	NULL	NULL	NULL	NULL
+1	2	2.0000000000	NULL	NULL	NULL	NULL
+1	222	3.3300000000	NULL	NULL	NULL	NULL
+2	2.00	2.0000100000	NULL	NULL	NULL	NULL
+2	222	3.3300000000	NULL	NULL	NULL	NULL
+2	333	2.2200000000	NULL	NULL	NULL	NULL
+3	3.0	3.0000100000	NULL	NULL	NULL	NULL
+3	3333	1.1100000000	NULL	NULL	NULL	NULL
+4	A	4.3300000000	NULL	NULL	NULL	NULL
+5	555	5.5500000000	NULL	NULL	NULL	NULL
+5	B	5.0000000000	NULL	NULL	NULL	NULL
+6	6666	5.5000000000	NULL	NULL	NULL	NULL
+6	AB	6.0000000000	NULL	NULL	NULL	NULL
+********** join condition 必须和 ordering 排序一致
+explain select /*+use_merge(t8 t9)*/ * from t8 join t9 on t8.c = t9.c and t8.b = t9.b;
+Query Plan
+=======================================
+|ID|OPERATOR   |NAME   |EST. ROWS|COST|
+---------------------------------------
+|0 |MERGE JOIN |       |6        |81  |
+|1 | TABLE SCAN|t8(idx)|6        |37  |
+|2 | TABLE SCAN|t9(idx)|7        |38  |
+=======================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), 
+      equal_conds([t8.b = t9.b], [t8.c = t9.c]), other_conds(nil)
+  1 - output([t8.c], [t8.b], [t8.a]), filter(nil), 
+      access([t8.c], [t8.b], [t8.a]), partitions(p0)
+  2 - output([t9.c], [t9.b], [t9.a]), filter(nil), 
+      access([t9.c], [t9.b], [t9.a]), partitions(p0)
+
+select /*+use_merge(t8 t9)*/ * from t8 join t9 on t8.c = t9.c and t8.b = t9.b;
+a	b	c	a	b	c
+1	2	1	1	2	1
+2	2	2	2	2	2
+3	2	3	3	2	3
+4	4	1	5	4	1
+5	4	2	6	4	2
+6	4	3	7	4	3
+explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 join t9 on t8.a = t9.b and t8.b = t9.a;
+Query Plan
+========================================
+|ID|OPERATOR    |NAME   |EST. ROWS|COST|
+----------------------------------------
+|0 |MERGE JOIN  |       |6        |94  |
+|1 | SORT       |       |6        |43  |
+|2 |  TABLE SCAN|t8(idx)|6        |37  |
+|3 | SORT       |       |7        |46  |
+|4 |  TABLE SCAN|t9(idx)|7        |38  |
+========================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), 
+      equal_conds([t8.b = t9.a], [t8.a = t9.b]), other_conds(nil)
+  1 - output([t8.a], [t8.b], [t8.c]), filter(nil), sort_keys([t8.b, ASC], [t8.a, ASC]), prefix_pos(1)
+  2 - output([t8.a], [t8.b], [t8.c]), filter(nil), 
+      access([t8.a], [t8.b], [t8.c]), partitions(p0)
+  3 - output([t9.a], [t9.b], [t9.c]), filter(nil), sort_keys([t9.a, ASC], [t9.b, ASC])
+  4 - output([t9.b], [t9.a], [t9.c]), filter(nil), 
+      access([t9.b], [t9.a], [t9.c]), partitions(p0)
+
+select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 join t9 on t8.a = t9.b and t8.b = t9.a;
+a	b	c	a	b	c
+2	2	2	2	2	2
+explain select /*+use_merge(t8 t9)*/ * from t8 left join t9 on t8.c = t9.c and t8.b = t9.b;
+Query Plan
+============================================
+|ID|OPERATOR        |NAME   |EST. ROWS|COST|
+--------------------------------------------
+|0 |MERGE OUTER JOIN|       |6        |81  |
+|1 | TABLE SCAN     |t8(idx)|6        |37  |
+|2 | TABLE SCAN     |t9(idx)|7        |38  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), 
+      equal_conds([t8.b = t9.b], [t8.c = t9.c]), other_conds(nil)
+  1 - output([t8.c], [t8.b], [t8.a]), filter(nil), 
+      access([t8.c], [t8.b], [t8.a]), partitions(p0)
+  2 - output([t9.c], [t9.b], [t9.a]), filter(nil), 
+      access([t9.c], [t9.b], [t9.a]), partitions(p0)
+
+select /*+use_merge(t8 t9)*/ * from t8 left join t9 on t8.c = t9.c and t8.b = t9.b;
+a	b	c	a	b	c
+1	2	1	1	2	1
+2	2	2	2	2	2
+3	2	3	3	2	3
+4	4	1	5	4	1
+5	4	2	6	4	2
+6	4	3	7	4	3
+explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 left join t9 on t8.a = t9.b and t8.b = t9.a;
+Query Plan
+============================================
+|ID|OPERATOR        |NAME   |EST. ROWS|COST|
+--------------------------------------------
+|0 |MERGE OUTER JOIN|       |6        |94  |
+|1 | SORT           |       |6        |43  |
+|2 |  TABLE SCAN    |t8(idx)|6        |37  |
+|3 | SORT           |       |7        |46  |
+|4 |  TABLE SCAN    |t9(idx)|7        |38  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), 
+      equal_conds([t8.b = t9.a], [t8.a = t9.b]), other_conds(nil)
+  1 - output([t8.a], [t8.b], [t8.c]), filter(nil), sort_keys([t8.b, ASC], [t8.a, ASC]), prefix_pos(1)
+  2 - output([t8.a], [t8.b], [t8.c]), filter(nil), 
+      access([t8.a], [t8.b], [t8.c]), partitions(p0)
+  3 - output([t9.a], [t9.b], [t9.c]), filter(nil), sort_keys([t9.a, ASC], [t9.b, ASC])
+  4 - output([t9.b], [t9.a], [t9.c]), filter(nil), 
+      access([t9.b], [t9.a], [t9.c]), partitions(p0)
+
+select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 left join t9 on t8.a = t9.b and t8.b = t9.a;
+a	b	c	a	b	c
+1	2	1	NULL	NULL	NULL
+2	2	2	2	2	2
+3	2	3	NULL	NULL	NULL
+4	4	1	NULL	NULL	NULL
+5	4	2	NULL	NULL	NULL
+6	4	3	NULL	NULL	NULL
+explain select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
+Query Plan
+============================================
+|ID|OPERATOR        |NAME   |EST. ROWS|COST|
+--------------------------------------------
+|0 |MERGE OUTER JOIN|       |7        |81  |
+|1 | TABLE SCAN     |t9(idx)|7        |38  |
+|2 | TABLE SCAN     |t8(idx)|6        |37  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), 
+      equal_conds([t8.b = t9.b], [t8.c = t9.c]), other_conds(nil)
+  1 - output([t9.c], [t9.b], [t9.a]), filter(nil), 
+      access([t9.c], [t9.b], [t9.a]), partitions(p0)
+  2 - output([t8.c], [t8.b], [t8.a]), filter(nil), 
+      access([t8.c], [t8.b], [t8.a]), partitions(p0)
+
+select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
+a	b	c	a	b	c
+1	2	1	1	2	1
+2	2	2	2	2	2
+3	2	3	3	2	3
+NULL	NULL	NULL	4	3	1
+4	4	1	5	4	1
+5	4	2	6	4	2
+6	4	3	7	4	3
+explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 right join t9 on t8.a = t9.b and t8.b = t9.a;
+Query Plan
+============================================
+|ID|OPERATOR        |NAME   |EST. ROWS|COST|
+--------------------------------------------
+|0 |MERGE OUTER JOIN|       |7        |94  |
+|1 | SORT           |       |7        |44  |
+|2 |  TABLE SCAN    |t9(idx)|7        |38  |
+|3 | SORT           |       |6        |44  |
+|4 |  TABLE SCAN    |t8(idx)|6        |37  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), 
+      equal_conds([t8.a = t9.b], [t8.b = t9.a]), other_conds(nil)
+  1 - output([t9.a], [t9.b], [t9.c]), filter(nil), sort_keys([t9.b, ASC], [t9.a, ASC]), prefix_pos(1)
+  2 - output([t9.b], [t9.a], [t9.c]), filter(nil), 
+      access([t9.b], [t9.a], [t9.c]), partitions(p0)
+  3 - output([t8.a], [t8.b], [t8.c]), filter(nil), sort_keys([t8.a, ASC], [t8.b, ASC])
+  4 - output([t8.a], [t8.b], [t8.c]), filter(nil), 
+      access([t8.a], [t8.b], [t8.c]), partitions(p0)
+
+select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 right join t9 on t8.a = t9.b and t8.b = t9.a;
+a	b	c	a	b	c
+NULL	NULL	NULL	1	2	1
+2	2	2	2	2	2
+NULL	NULL	NULL	3	2	3
+NULL	NULL	NULL	4	3	1
+NULL	NULL	NULL	5	4	1
+NULL	NULL	NULL	6	4	2
+NULL	NULL	NULL	7	4	3
+explain select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
+Query Plan
+============================================
+|ID|OPERATOR        |NAME   |EST. ROWS|COST|
+--------------------------------------------
+|0 |MERGE OUTER JOIN|       |7        |81  |
+|1 | TABLE SCAN     |t9(idx)|7        |38  |
+|2 | TABLE SCAN     |t8(idx)|6        |37  |
+============================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), 
+      equal_conds([t8.b = t9.b], [t8.c = t9.c]), other_conds(nil)
+  1 - output([t9.c], [t9.b], [t9.a]), filter(nil), 
+      access([t9.c], [t9.b], [t9.a]), partitions(p0)
+  2 - output([t8.c], [t8.b], [t8.a]), filter(nil), 
+      access([t8.c], [t8.b], [t8.a]), partitions(p0)
+
+select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
+a	b	c	a	b	c
+1	2	1	1	2	1
+2	2	2	2	2	2
+3	2	3	3	2	3
+NULL	NULL	NULL	4	3	1
+4	4	1	5	4	1
+5	4	2	6	4	2
+6	4	3	7	4	3
+explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 full join t9 on t8.a = t9.b and t8.b = t9.a;
+Query Plan
+=================================================
+|ID|OPERATOR             |NAME   |EST. ROWS|COST|
+-------------------------------------------------
+|0 |MERGE FULL OUTER JOIN|       |7        |94  |
+|1 | SORT                |       |6        |43  |
+|2 |  TABLE SCAN         |t8(idx)|6        |37  |
+|3 | SORT                |       |7        |46  |
+|4 |  TABLE SCAN         |t9(idx)|7        |38  |
+=================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), 
+      equal_conds([t8.b = t9.a], [t8.a = t9.b]), other_conds(nil)
+  1 - output([t8.a], [t8.b], [t8.c]), filter(nil), sort_keys([t8.b, ASC], [t8.a, ASC])
+  2 - output([t8.a], [t8.b], [t8.c]), filter(nil), 
+      access([t8.a], [t8.b], [t8.c]), partitions(p0)
+  3 - output([t9.a], [t9.b], [t9.c]), filter(nil), sort_keys([t9.a, ASC], [t9.b, ASC])
+  4 - output([t9.b], [t9.a], [t9.c]), filter(nil), 
+      access([t9.b], [t9.a], [t9.c]), partitions(p0)
+
+select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 full join t9 on t8.a = t9.b and t8.b = t9.a;
+a	b	c	a	b	c
+NULL	NULL	NULL	1	2	1
+1	2	1	NULL	NULL	NULL
+2	2	2	2	2	2
+3	2	3	NULL	NULL	NULL
+NULL	NULL	NULL	3	2	3
+NULL	NULL	NULL	4	3	1
+4	4	1	NULL	NULL	NULL
+5	4	2	NULL	NULL	NULL
+6	4	3	NULL	NULL	NULL
+NULL	NULL	NULL	5	4	1
+NULL	NULL	NULL	6	4	2
+NULL	NULL	NULL	7	4	3
+drop table if exists BB,CC;
+CREATE TABLE BB ( col_varchar_key varchar (1), col_varchar_10 varchar(10), col_varchar varchar (1), col_int_key int, col_varchar_10_key varchar(10), col_varchar_20_key varchar(20), col_int int, col_varchar_20 varchar(20), pk int, /*Indices*/ key idx3(pk, col_varchar_key ), key idx1(pk, col_int_key ), key idx5(pk, col_varchar_10_key ), key idx7(pk, col_varchar_20_key ), primary key (pk) );
+CREATE TABLE CC ( col_varchar_key varchar (1), col_varchar_20_key varchar(20), col_varchar_20 varchar(20), col_int_key int, col_int int, pk int, col_varchar_10 varchar(10), col_varchar_10_key varchar(10), col_varchar varchar (1), /*Indices*/ key idx3(pk, col_varchar_key ), key idx7(pk, col_varchar_20_key ), key idx1(pk, col_int_key ), primary key (pk) , key idx5(pk, col_varchar_10_key )) ;
+explain SELECT /*+no_rewrite,leading(table1 table2),use_merge(table1 table2)*/   table1 . col_varchar_10_key AS field1  FROM    BB AS table1, CC AS table2    WHERE  table1 . `col_int_key` = table2 . `pk`  and table2 . `col_int_key` = table1 . `pk` ORDER BY table1 . col_int_key DESC;
+Query Plan
+=====================================================
+|ID|OPERATOR    |NAME                |EST. ROWS|COST|
+-----------------------------------------------------
+|0 |MERGE JOIN  |                    |28       |148 |
+|1 | SORT       |                    |28       |80  |
+|2 |  TABLE SCAN|table1              |28       |42  |
+|3 | TABLE SCAN |table2(idx1,Reverse)|29       |42  |
+=====================================================
+
+Outputs & filters: 
+-------------------------------------
+  0 - output([table1.col_varchar_10_key]), filter(nil), 
+      equal_conds([table1.col_int_key = table2.pk], [table2.col_int_key = table1.pk]), other_conds(nil)
+  1 - output([table1.col_varchar_10_key], [table1.col_int_key], [table1.pk]), filter(nil), sort_keys([table1.col_int_key, DESC], [table1.pk, DESC])
+  2 - output([table1.col_int_key], [table1.pk], [table1.col_varchar_10_key]), filter(nil), 
+      access([table1.col_int_key], [table1.pk], [table1.col_varchar_10_key]), partitions(p0)
+  3 - output([table2.pk], [table2.col_int_key]), filter(nil), 
+      access([table2.pk], [table2.col_int_key]), partitions(p0)
+
+SELECT /*+no_rewrite,leading(table1 table2),use_merge(table1 table2)*/   table1 . col_varchar_10_key AS field1  FROM    BB AS table1, CC AS table2    WHERE  table1 . `col_int_key` = table2 . `pk`  and table2 . `col_int_key` = table1 . `pk` ORDER BY table1 . col_int_key DESC;
+field1
+p
+b
+drop table if exists t2, t7, t8, t9, BB, CC;

@@ -1,0 +1,21 @@
+
+--disable_abort_on_error
+
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select lnnvl(1) from dual;
+select lnnvl(-1) from dual;
+select lnnvl(0) from dual;
+select lnnvl(NULL) from dual;
+select lnnvl('abc') from dual;
+
+connection syscon;
+--sleep 2

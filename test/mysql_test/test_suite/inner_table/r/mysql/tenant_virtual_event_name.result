@@ -1,0 +1,28 @@
+use oceanbase;
+desc __tenant_virtual_event_name;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+event_id	bigint(20)	NO		NULL	
+event#	bigint(20)	NO		NULL	
+name	varchar(64)	NO		NULL	
+display_name	varchar(64)	NO		NULL	
+parameter1	varchar(64)	NO		NULL	
+parameter2	varchar(64)	NO		NULL	
+parameter3	varchar(64)	NO		NULL	
+wait_class_id	bigint(20)	NO		NULL	
+wait_class#	bigint(20)	NO		NULL	
+wait_class	varchar(64)	NO		NULL	
+desc v$event_name;
+Field	Type	Null	Key	Default	Extra
+CON_ID	bigint(20)	NO		NULL	
+EVENT_ID	bigint(20)	NO		NULL	
+EVENT#	bigint(20)	NO		NULL	
+NAME	varchar(64)	NO		NULL	
+DISPLAY_NAME	varchar(64)	NO		NULL	
+PARAMETER1	varchar(64)	NO		NULL	
+PARAMETER2	varchar(64)	NO		NULL	
+PARAMETER3	varchar(64)	NO		NULL	
+WAIT_CLASS_ID	bigint(20)	NO		NULL	
+WAIT_CLASS#	bigint(20)	NO		NULL	
+WAIT_CLASS	varchar(64)	NO		NULL	
+succeed

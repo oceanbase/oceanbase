@@ -1,0 +1,145 @@
+ob_set_subtarget(ob_rootserver common
+  ob_rs_thread_checker.cpp
+  ob_all_server_checker.cpp
+  ob_all_server_task.cpp
+  ob_alloc_replica_strategy.cpp
+  ob_alter_locality_checker.cpp
+  ob_balance_group_analyzer.cpp
+  ob_balance_group_container.cpp
+  ob_balance_group_data.cpp
+  ob_balance_info.cpp
+  ob_balancer_interface.cpp
+  ob_bootstrap.cpp
+  ob_daily_merge_scheduler.cpp
+  ob_daily_merge_sequence_generator.cpp
+  ob_server_recovery_machine.cpp
+  ob_ddl_help.cpp
+  ob_ddl_operator.cpp
+  ob_ddl_service.cpp
+  ob_ddl_sql_generator.cpp
+  ob_rs_gts_manager.cpp
+  ob_rs_gts_monitor.cpp
+  ob_rs_gts_task_mgr.cpp
+  ob_empty_server_checker.cpp
+  ob_freeze_info_manager.cpp
+  ob_freeze_info_updater.cpp
+  ob_global_index_builder.cpp
+  ob_global_max_decided_trans_version_mgr.cpp
+  ob_index_builder.cpp
+  ob_inner_table_monitor.cpp
+  ob_leader_coordinator.cpp
+  ob_locality_checker.cpp
+  ob_locality_util.cpp
+  ob_lost_replica_checker.cpp
+  ob_major_freeze_launcher.cpp
+  ob_migrate_unit.cpp
+  ob_partition_balancer.cpp
+  ob_partition_count_balancer.cpp
+  ob_partition_creator.cpp
+  ob_partition_disk_balancer.cpp
+  ob_partition_group_coordinator.cpp
+  ob_partition_leader_count_balancer.cpp
+  ob_partition_spliter.cpp
+  ob_partition_table_util.cpp
+  ob_rebalance_task.cpp
+  ob_rebalance_task_executor.cpp
+  ob_rebalance_task_mgr.cpp
+  ob_replica_creator.cpp
+  ob_replica_stat_operator.cpp
+  ob_rereplication.cpp
+  ob_resource_weight_parser.cpp
+  ob_root_balancer.cpp
+  ob_root_inspection.cpp
+  ob_root_major_freeze_v2.cpp
+  ob_root_minor_freeze.cpp
+  ob_root_backup.cpp
+  ob_root_service.cpp
+  ob_root_utils.cpp
+  ob_rs_event_history_table_operator.cpp
+  ob_rs_job_table_operator.cpp
+  ob_rs_reentrant_thread.cpp
+  ob_schema2ddl_sql.cpp
+  ob_server_balance_plan.cpp
+  ob_server_balancer.cpp
+  ob_server_checker.cpp
+  ob_server_manager.cpp
+  ob_server_table_operator.cpp
+  ob_shrink_resource_pool_checker.cpp
+  ob_single_partition_balance.cpp
+  ob_single_zone_mode_migrate_replica.cpp
+  ob_snapshot_info_manager.cpp
+  ob_system_admin_util.cpp
+  ob_thread_idling.cpp
+  ob_unit_balancer.cpp
+  ob_unit_manager.cpp
+  ob_unit_placement_strategy.cpp
+  ob_unit_stat_manager.cpp
+  ob_update_rs_list_task.cpp
+  ob_schema_spliter.cpp
+  ob_schema_split_executor.cpp
+  ob_upgrade_executor.cpp
+  ob_upgrade_storage_format_version_executor.cpp
+  ob_create_inner_schema_executor.cpp
+  ob_schema_revise_executor.cpp
+  ob_vtable_location_getter.cpp
+  ob_zone_manager.cpp
+  ob_zone_unit_provider.cpp
+  ob_partition_backup.cpp
+  ob_backup_cancel_scheduler.cpp
+  ob_restore_point_service.cpp
+  ob_log_archive_scheduler.cpp
+  ob_backup_data_clean_scheduler.cpp
+  ob_backup_data_clean.cpp
+  ob_schema_history_recycler.cpp
+)
+
+ob_set_subtarget(ob_rootserver vt
+  virtual_table/ob_all_partition_table.cpp
+  virtual_table/ob_all_rebalance_map_item_stat.cpp
+  virtual_table/ob_all_rebalance_map_stat.cpp
+  virtual_table/ob_all_rebalance_replica_stat.cpp
+  virtual_table/ob_all_rebalance_task_stat.cpp
+  virtual_table/ob_all_rebalance_tenant_stat.cpp
+  virtual_table/ob_all_rebalance_unit_distribution_stat.cpp
+  virtual_table/ob_all_rebalance_unit_migrate_stat.cpp
+  virtual_table/ob_all_rebalance_unit_stat.cpp
+  virtual_table/ob_all_replica_task.cpp
+  virtual_table/ob_all_server_stat.cpp
+  virtual_table/ob_all_tenant_stat.cpp
+  virtual_table/ob_all_virtual_leader_stat.cpp
+  virtual_table/ob_all_virtual_rootservice_stat.cpp
+  virtual_table/ob_core_meta_table.cpp
+  virtual_table/ob_virtual_core_inner_table.cpp
+  virtual_table/ob_all_cluster.cpp    
+)
+
+ob_set_subtarget(ob_rootserver restore
+  restore/ob_restore_meta.cpp
+  restore/ob_restore_mgr.cpp
+  restore/ob_restore_replica.cpp
+  restore/ob_restore_sql_modifier_impl.cpp
+  restore/ob_restore_stat.cpp
+  restore/ob_restore_table_operator.cpp
+  restore/ob_restore_util.cpp
+  restore/ob_restore_scheduler.cpp
+)
+
+ob_set_subtarget(ob_rootserver backup
+  backup/ob_tenant_backup_data_clean_mgr.cpp
+  backup/ob_backup_auto_delete_expired_backup.cpp
+  backup/ob_backup_data_mgr.cpp
+  backup/ob_root_validate.cpp
+  backup/ob_partition_validate.cpp
+  backup/ob_cancel_validate_scheduler.cpp
+  backup/ob_backup_lease_service.cpp
+  backup/ob_cancel_delete_backup_scheduler.cpp
+)
+
+ob_server_add_pchs(rootserver
+ob_replica_addr.h
+ob_locality_util.h
+ob_rs_job_table_operator.h
+ob_alter_locality_checker.h
+)
+
+ob_server_add_target(ob_rootserver)

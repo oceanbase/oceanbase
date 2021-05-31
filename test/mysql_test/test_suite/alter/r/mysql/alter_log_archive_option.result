@@ -1,0 +1,35 @@
+connect  obsys1,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection obsys1;
+alter system set backup_log_archive_option='MANDATORY';
+alter system set backup_log_archive_option='MANDATORY compression=disable';
+alter system set backup_log_archive_option='MANDATORY compression =enable';
+alter system set backup_log_archive_option='MANDATORY compression = lz4_1.0';
+alter system set backup_log_archive_option='MANDATORY compression= zstd_1.3.8';
+alter system set backup_log_archive_option='optional compression= zstd_1.3.8';
+alter system set backup_log_archive_option='compression= zstd_1.3.8 optional ';
+alter system set backup_log_archive_option='encryption_mode= none';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='encryption_mode= TRANSPARENT_ENCRYPTION';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='optional compression= none';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='optional compression';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='optional biubiu';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='optional compression disable';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='= compression=disable';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='compression=disable=';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='encryption_mode= password';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='encryption_mode= password_encryption';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='encryption_mode= DUAL_MODE_ENCRYPTION';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='encryption_mode= transparent_encryption ENCRYPTION_ALGORITHM = yyy';
+ERROR HY000: Invalid config
+alter system set backup_log_archive_option='encryption_mode= transparent_encryption ENCRYPTION_ALGORITHM = none';
+ERROR HY000: Invalid config

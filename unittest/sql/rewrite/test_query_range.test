@@ -1,0 +1,216 @@
+(a, b, c) > (?{1}, ?{2}, ?{3}) and (a, b, c) < (?{2}, ?{3}, ?{4})
+a > 1 and b < 1 or (a > 2 and b < 2) 
+(a > 1 or c < 2) and b > 1
+#((a, b), (c, d), (e, f)) < ((1, 2), (2, 3), (3, 4)) and ((a, b), (c, d), (e, f)) < ((1, 1), (2, 2), (3, 3))
+#((a, b), (c, d), (e, f)) > ((1, 2), (2, 3), (3, 4)) and ((a, b), (c, d), (e, f)) < ((1, 1), (2, 2), (3, 3))
+#((a, b), (c, d), (e, f)) > ((?{1}, 2), (?{2}, 3), (3, ?4)) and ((a, b), (c, d), (e, f)) < ((?1, ?1), (?2, ?2), (?3, ?3))
+(a, b, c) < (1, 2, 3) and (a, b, c) < (2, 3, 4)
+(a, b, c) < (1, 2, ?{3}) and (a, b, c) < (2, ?{3}, 4)
+(a, b, c) < (1, 2, 3) and (a, b, c) < (2, 0, 0)
+(a, b, c) < (?{1}, ?{2}, ?{3}) and (a, b, c) < (?{2}, ?{0}, ?{0})
+(a, b, c) < (1, 2, 3) and (a, b, c) < (1, 0, 0)
+(a, b, c) < (1, 2, 3) and (a, b, c) < (?{1}, ?{0}, ?{0})
+(a, b, c) > (1, 2, 3) and (a, b, c) > (2, 0, 0)
+(a, b, c) > (?{1}, ?{2}, ?{3}) and (a, b, c) > (2, 0, 0)
+(a, b, c) > (1, 2, 3) and (a, b, c) < (0, 4, 1)
+(a, b, c) > (?{1}, 2, ?{3}) and (a, b, c) < (0, ?{4}, ?{1})
+(a, b, c) > (1, 2, 3) and (a, b, c) < (2, 0, 0)
+(a, b, c) > (?{1}, ?{2}, 3) and (a, b, c) < (2, ?{0}, ?{0})
+(a, b, c) > (1, 2, 3) and (a, b, c) < (2, 3, 4)
+(a, b, c) > (?{1}, 2, 3) and (a, b, c) < (2, 3, ?{4})
+(a, b, c) > (1, 2, 3) and (1, 2, 3) < (2, 3, 4)
+(1, b, c) < (0, b, c) and (1, b, c) < (2, b, c)
+(1, 2, 3) < (2, 3, 4) and (a, b, c) > (?{1}, 2, 3)
+(a, b, c) < (?{1}, ?{2}, ?{3}) and (a, b, c) > (?{0}, ?{2}, ?{3})
+(a, b, c) < (2, 3, 4) and (a, b, c) > (2, 1, 3)
+(a, b) > (1, 2) and (a, b) < (2, 0) and (a, b) > (2, 3) and (a, b) < (3, 1)
+(a, b, c) > (?{1}, ?{2}, ?{3}) and (a, b, c) > (?{2}, ?{0}, ?{0})
+((a, b, c) > (1, 2, 3) and (a, b, c) < (4, 5, 6)) and ((a, b, c) > (2, 3, 4) and (a, b, c) < (7, 8, 9))
+((a, b, c) > (?{1}, ?{2}, ?{3}) and (a, b, c) < (?{4}, ?{5}, ?{6})) and ((a, b, c) > (?{2}, ?{3}, ?{4}) and (a, b, c) < (?{7}, ?{8}, ?{9}))
+(a > 1 or a < 2) and (b < 1 or b > 2) and (c > 1 or c > 2) and (d > 1 or d < 3)
+NULL and a > 1
+a != 1
+(a > 1 and b > 1) or (b < 0)
+(a < 1 or a > 10) and (a > 3 or b < 0) 
+((a < 1 and b < 1 or b < 4) and c > 1) and ((a > 3 and b < 4 or a < 1 and b < 2) and b = 3) 
+(a < 1 and a >2) and a < 3
+a > 1 and (NULL <=> 0)
+a > 1 and false
+a > 1 or a > 1 or a > 1 or a > 1 or a < 1
+a > 1 or a > 1 or a > 1 or a > 1 or 0 < 1
+a > 1 or a > 1 or a > 1 or a > 1 or 1 < 0
+(a, b, c) > (1, 2, 3) and (a, b, c) <= (2, 3, 4)
+(a, b, c) > (1, 2, 3) or (a, b, c) <= (2, 3, 4)
+(a, b, c) > (1, 2, 3) or (a, b, c) >= (2, 3, 4) and (a, b, c) <= (4, 5, 6)
+(a, b, c) > (1, 2, 3) or (a, b, c) < (1, 2, 3)
+(a, b, c) > (1, 2, 3) or (a, b, c) < (0, 1, 2)
+(a, b, c) > (1, 2, 3) and (a, b, c) < (0, 1, 2) or (a, b, c) < (0, 1, 2)
+a >= 1 and b < 1 and (a <= 1 and b < 1)
+a >= 1 and b < 1 and (0 <= 1 and 2 < 1)
+2 >= 1 and 3 < 1 and (a <= 1 and b < 1)
+a > 3 and b < 10 or (a < 4 and b < 5) 
+a > ?{3} and b < ?{10} or (a < ?{4} and b < ?{5}) 
+a > 3 and b < 10 and (a < 4 and b < 5) 
+a > ?{3} and b < ?{10} and (a < ?{4} and b < ?{5}) 
+1 < 2 or 1 < 3 or 1 < 4 and a > 1
+1 > 2 or 1 > 3 or 1 > 4 and a > 1
+a is NULL
+a is TRUE
+a between 1 and 10
+a not between 1 and 10
+a = (1 + 5)
+a = (1 < 5)
+5 = a
+a = 5 and 1 > 5
+a = 5 and 1 = 5
+a = 5 and 2 >= 1
+a = 5 and 2 <= 1
+a = 5 and ?{1} = ?{1}
+a = 5 and b = 6
+a = ?{5}
+(a = 5) or (a = 6)
+a = ?{5} or a = ?{6}
+a = ?{5} or a = 6
+(a >= 5) or (a < 10)
+a >= ?{5} or a < 10
+a >= 5 and a < 10
+a >= 5 and a < ?{10}
+a >= ?{5} and a < ?{10}
+a >= 5 and a < 10 and a <= 8
+a >= ?{5} and a < ?{10} and a <= ?{8}
+(a >= 5 and a < 10) or a <= 8
+(a >= ?{5} and a < ?{10}) or a <= ?{8}
+(a >= 5 and a < 10) or (a > 8 and a <= 13)
+a < 3 and a = ?{3} or a <= 3
+(a >= ?{5} and a < ?{10}) or (a > ?{8} and a <= ?{13})
+(a >= 10 or a < 5) and (a < 8 or a >= 13)
+a <= 5 and a > 10
+(a >= 10 or a < 5) and (a < 8 or a >= 13)
+(a > 1 or a < 2 or a > 3) and (b > 1)
+a in (5, 6, 8, 15)
+a < 0 or a > 0
+a = 5 and b = 6
+b = 6 and a = 5
+a = ?{5} and b = ?{6}
+b = ?{6} and a = ?{5}
+(b = 6 and a = 5) or (a = 10 and b = 15) 
+(b = 6 and a < 5) or (a > 8 and b = 15)
+(b = ?{6} and a = ?{5}) or (a = ?{10} and b = ?{15})
+(b = 6 and a < 5) or (a < 8 and b = 15)
+(b = ?{6} and a < ?{5}) or (a < ?{8} and b = ?{15})
+(b = 6 and a < 5) or (a > 8 and b = 15)
+(a,b) in ((5,6), (8,15), (20,30), (40,50))
+(a,b) in ((?{5},?{6}),(?{8},?{15}), (?{20},?{30}), (?{40},?{50}))
+(b = 6 and a = 5) and (a = 10 and b = 15)
+(b >= 5 and a = 10) and (a = 10 and b <= 15)
+(b >= ?{5} and a = ?{10}) and (a = 10 and b <= 15)
+a in (?{1}, ?{2}, ?{1})
+(a, b, c) > (?{1} , ?{1}, ?{1}) and (a, b, c) < (?{1}, ?{1}, ?{2})
+(a, b, c) > (?{1} , ?{1}, ?{1}) and (a, b, c) < (?{1}, ?{1}, ?{1})
+a > 207474332 and a = 207474332
+f > "asas" and f < "asasa"
+f = 'a'
+f < ?[a]
+f >= 'a' and f <='b'
+f > ?[a] and f < ?[b]
+f >= 'a' and f <= 'B'
+f > ?[a] and f < ?[B]
+a like 1
+a > 1 and a < 2 and a like 1
+f > 'a' or  f < 'b' and (h < 'a' or h > 'k') 
+NULL and f > 'a'
+1 != 2 and f > 'a'
+1 = 2 and f > 'a'
+f > 'a' and h  < 'b' and g >'j' and a > 1 and b < 2
+1 and a > 1
+0 and a < 1
+1 and 0 and a > 1
+a > 1 and 1 and 0
+a > 1 or 1
+0.0 and a > 1 and 1.0
+a > 1 and 'asasa' and 1.0
+false and 123 or a > 1
+true and 1.0 and 0.000000001 or a > 1
+'asas' or a > 1 and true
+true and 1 and 1.0 or a > 1
+false and a > 1
+a = (20 > 30) or (20 > 30) or (20 > -3)
+a > 1 and null <=> null
+a > 1 and null = null
+a > 1 and a > null
+a > 1 or a <=> null
+a > 1 and null < 0 
+a > 1 and a like null
+a > 1 and 1 <=> null
+a > 1 and null is null
+f like 'h%' OR f like ?[aaa]
+f like ?[h%] OR f like ?[aaa]
+f like ?[h%] OR f like 'aaa'
+f like 'h%' AND f like 'aaa'
+f like ?[h%] AND f like ?[aaa]
+f > 'a' OR f like 'aaa'
+f > ?[a] OR f like ?[aaa]
+f > ?[a] AND f like ?[h%]
+a>1 or '1' like '2'
+a>1 or 1 like 1.0
+a>1 or 1 like 1
+a>1 or 1 like 1.223
+a > 1 and 1 like 1.0
+a > 1 and 1 like '1'
+a > 1 and 1.0 like '1'
+a > 1 and 'a' like 'aa' 
+a > 1 and 'a' like 'aa' escape 'a' 
+a like '1'
+a like '1%'
+f like '1%'
+f like '1'
+f like 1
+a = ?{1} and b = ?{1} and (a, b) = (?{1},?{1})
+a = ?{1} and b = 1 and (a, b) = (1,1)
+a = 1 and b = 1 and (a, b) = (1,1)
+a = 1 and b = 1 and (a, b) = (1,2)
+(a, b) > (1, 1) and (a, b) = (1, 2)
+(a, b) > (1, 1) and (a, b) = (?{1}, 2)
+(a, c) > (1, 2) and (a, b, c) > (1, 2, 3)
+(a, b) > (1, 2) and (a, b) <  (2, 3) and (a, b) > (1, 4) and (a, b) < (2, 5)
+(a, b) > (?{1}, 2) and (a, b) <  (2, 3) and (a, b) > (1, 4) and (a, b) < (2, 5)
+a=50 and (a, b, c) > (50, 55, 60)
+a=50 and b>70 and (a, b, c) > (50, 55, 60)
+a=50 and b=70 and (a, b, c) > (50, 55, 60)
+a=50 and b=70 and c=80 and (a, b, c) > (50, 55, 60)
+a=50 and b=70 and c<80 and (a, b, c) > (50, 55, 60)
+a=50 and b=70 and c<80 or c < 90 or b > 60 and (a, b, c) > (50, 55, 60) 
+a is null
+e=?{-1}
+e= -1
+a <=> ?[NULL] and b=?{1}
+a between ?[NULL] and ?{2}
+d in (9999.99, 0)
+d in (9999, 0)
+d in (?[-99999.99999], ?[0.0])
+(a, b, c) in ((1, 2, 3), (4, 5, 6))
+(a, b, c) in ((1, 2, 3), (4, (select 5), 6))
+(a, b, c) in((1, 2, 3), ((select 4), 5, 6))
+a = 1 and b is null and c=2
+a is null
+a <=> null
+(a, b, c) = (1, 2, 3)
+a <=> ?[NULL] and b = 1
+(a, b, c) = (?{1}, 2, 3)
+a in (NULL, 1, 2, 3)
+a in (1,2,3,NULL)
+a in (NULL, 1,2,3) and b in (NULL,1,2,3)
+a = ?{1} and b = ?{1} and c in (?{1},?{2},?{3})
+a = ?{1} and (b = ?{1} or b = ?{2}) and c in (?{1},?{2},?{3})
+(a = ?{1} or a = ?{2}) and b = ?{1} and c in (?{1}, ?{2}, ?{3})
+a = ?{1} and (b,c) in ((?{1},?{2}),(?{2},?{3}))
+a = ?{1} and b in (?{1},?{2},?{3}) and c = ?{1}
+a = ?{1} and b in (?{1}, ?{2}, ?{3}) and c in (?{1}, ?{2}, ?{3})
+(a = ?{1} or a = ?{2}) and b in (?{1},?{2},?{3})
+(a = ?{1} or a = ?{2}) and b in (?{1},?{2},?{3}) and (c = ?{1} or c = ?{2})
+(a = ?{1} or a = ?{2}) and b in (?{1},?{2},?{3}) and c in (?{1},?{2})
+a in (?{1},?{2},?{3}) and (b = ?{1} or b = ?{2}) and c > ?{1}
+a in (?{1},?{2},?{3}) and b > ?{1} and (c = ?{1} or c = ?{2})
+a in (?{1},?{2},?{3}) and b > ?{1} and (c = ?{1} or c = ?{2}) and false
+a = ?{1} and (b,c) in ((?{1},?{2}),(?{2},?{3})) and false
+(a,b) != (1,2)

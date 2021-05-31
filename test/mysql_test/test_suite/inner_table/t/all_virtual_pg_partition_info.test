@@ -1,0 +1,50 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+--disable_abort_on_error
+--disable_warnings
+
+connect (conn_admin,$OBMYSQL_MS0,admin@sys,admin,*NO-ONE*,$OBMYSQL_PORT);
+
+desc oceanbase.__all_virtual_pg_partition_info;
+
+#测试PG内的表
+use test;
+create tablegroup tg1 binding true;
+create table test1 (id1 int, id2 int) tablegroup tg1;
+create table test2 (id1 int, id2 int) tablegroup tg1;
+
+#创建非PG的表
+create table test3 (id1 int, id2 int);
+create table test4 (id1 int, id2 int);
+sleep 5;
+
+#预期记录有1条
+select count(1) from oceanbase.__all_virtual_pg_partition_info
+    where table_id in (select table_id from oceanbase.__all_virtual_table where table_name = 'test1') and partition_state = 'L_WORKING';
+select count(1) from oceanbase.__all_virtual_pg_partition_info
+    where table_id in (select table_id from oceanbase.__all_virtual_table where table_name = 'test2') and partition_state = 'L_WORKING';
+select count(1) from oceanbase.__all_virtual_pg_partition_info
+    where table_id in (select table_id from oceanbase.__all_virtual_table where table_name = 'test3') and partition_state = 'L_WORKING';
+select count(1) from oceanbase.__all_virtual_pg_partition_info
+    where table_id in (select table_id from oceanbase.__all_virtual_table where table_name = 'test4') and partition_state = 'L_WORKING';
+
+#预期记录有2条
+select count(1) from oceanbase.__all_virtual_pg_partition_info
+    where tg_id in (select tablegroup_id as tg_id from oceanbase.__all_virtual_tablegroup where tablegroup_name = 'tg1') and partition_state = 'L_WORKING';
+
+#根据all_virtual_partition_info来查询pg下的count数量，预期为2
+select pg_partition_count from oceanbase.__all_virtual_partition_info
+    where table_id in (select tablegroup_id as table_id from oceanbase.__all_virtual_tablegroup where tablegroup_name = 'tg1') and partition_state = 'L_WORKING';
+
+--disable_warnings
+drop table if exists test1;
+drop table if exists test2;
+drop table if exists test3;
+drop table if exists test4;
+purge recyclebin;
+drop tablegroup tg1;
+--enable_warnings
+--enable_abort_on_error
+--enable_warnings

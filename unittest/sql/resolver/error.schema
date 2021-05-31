@@ -1,0 +1,8 @@
+mysql> update rongxuan.t1 vt1 set c2=rongxuan.t1.c1+1 where rongxuan.t1.c1 > 1 order by rongxuan.t1.c1 desc;
+ERROR 1054 (42S22): Unknown column 'rongxuan.t1.c1' in 'where clause'
+mysql> update rongxuan.t1 vt1 set c2=rongxuan.t1.c1+1 where c1 > 1 order by rongxuan.t1.c1 desc;
+ERROR 1054 (42S22): Unknown column 'rongxuan.t1.c1' in 'order clause'
+mysql> update rongxuan.t1 vt1 set c2=rongxuan.t1.c1+1 where c1 > 1 order by c1 desc;
+ERROR 1054 (42S22): Unknown column 'rongxuan.t1.c1' in 'field list'
+mysql> update rongxuan.t1 rongxuan.vt1 set c2=c1+1 where c1 > 1 order by c1 desc;
+ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '.vt1 set c2=c1+1 where c1 > 1 order by c1 desc' at line 1

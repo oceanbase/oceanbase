@@ -1,0 +1,127 @@
+drop database if exists dbcmd;
+create database dbcmd;
+use dbcmd;
+
+#create database oceanbase
+#use oceanbase
+### show character set [like 'pattern' | where expr]
+#show character set where charset = 'utf8mb4'
+#show character set like 'utf8%'
+
+### show collation [like 'pattern | where 'expr']
+#show collation like 'utf8mb4_bin%'
+#show collation where chearset = 'utf8mb4'
+
+#### show [FULL] columns {from|in} tb1_name [{from|in}  db_name] [like 'pattern' | where expr]
+#support view
+#show full columns from t1 from rongxuan
+#show columns from t1 from rongxuan like 'c%'
+show columns from rongxuan.t1
+#show columns from rongxuan.t1 where c1 like 'c%'
+#show columns in rongxuan.t1 like 'c%'
+#show columns in t1 in rongxuan where type  = 'int(11)'
+
+
+### show create {database | schema } [if not exists] db_name
+#show create database oceanbase
+#show create schema oceanbase
+#show create database if not exist oceanbase
+
+### show create table table_name
+#support view
+#show create table __all__database
+
+### show create view view_name
+#show create view vt1 from rongxuan
+
+### show {databases | schemas } [like 'pattern' | where expr]
+show databases
+show databases like 'ocean%'
+#show databases where
+#show schemas
+#show schemas like 'ocean%'
+
+### show errors [limit [offset,] row_count]
+#show errors
+#show errors limit 10
+#show errors limit 2, 8
+
+### show warnings [limit [offset,] row_count]
+#show count(*) warnings
+#show warnings limit 10
+#show warnings limit 3, 10
+#show count(*) warnings
+
+### show grants [for user]
+#show grants
+###??show grants for root@localhost
+
+### show {index | indexes |keys} {from | in} table_name [{from | in} db_name] [where expr]
+#show index from rongxuan.t1
+#show indexes from rongxuan.t1
+#show keys from rongxuan.t1
+#show index from t1 from rongxuan
+#show index in t1 in rongxuan
+##show index from rongxuan.t1 where ???
+
+### show privileges
+#show privileges
+
+### show [full] processlist
+#show processlist
+#show full processlist
+
+### show [global | session] status [like 'pattern' |where expr]
+#show status
+#show session status
+#show global session
+#show status where Variable_name = 'Aborted_clients';
+#show status like '%table%'
+
+### show table status [{from | in} db_name] [like 'pattern' | where expr]
+#support view
+#show table status
+#show table status from rongxuan
+#show table status in rongxuan
+#show table status from rongxuan like 't%'
+#show table status from rongxuan where Name='t1'
+
+### show [full] tables [{from | in } db_name] [like 'pattern' | where expr]
+#support view
+show tables
+#show tables from rongxuan
+#show tables in rongxuan
+#show full tables from hualong where Table_type = 'BASE_TABLE'
+#show tables from rongxuan like 't%'
+
+### show [global | session ] variables [like 'pattern' | where expr]
+show variables
+#show global variables
+#show session variables
+#show variables like '%auto%'
+#show variables where value = 'on'
+
+### show parameters [like 'pattern' | where expr]
+#show parameters like '%sql%'
+#show parameters where value = 'off'
+
+### show create tenant
+#show create tenant sys_tenant
+
+### show tenant
+#show tenant
+
+# set names
+set names latin1;
+set names utf8 collate 'utf8_general_ci';
+set charset utf8;
+
+drop database dbcmd;
+alter system bootstrap REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
+alter system bootstrap CLUSTER primary REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
+alter system bootstrap cluster standby REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
+alter system set cluster_id = 3;
+alter system COMMIT TO SWITCHOVER TO PRIMARY;
+alter system COMMIT TO SWITCHOVER TO PHYSICAL STANDBY;
+alter system remove cluster tt cluster_id = 4;
+alter system add cluster verify;

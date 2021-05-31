@@ -1,0 +1,48 @@
+drop table if exists test124,test123,test122,test121,test120;
+create table test124(a int primary key,c datetime default now(),d datetime default now());
+insert into test124(a) values(1);
+select a from test124;
+a
+1
+update test124 set a=10 where a=1;
+select a from test124;
+a
+10
+drop table if exists test123;
+create table test123(a int primary key,b int,c datetime default now(),d datetime default now());
+insert into test123(a,b) values(1,1);
+select a from test123;
+a
+1
+update test123 set a=10 where a=1;
+select a from test123;
+a
+10
+drop table if exists test122;
+create table test122(a int ,b int,c datetime default now(),d datetime default now(),primary key(a,b));
+insert into test122(a,b) values(1,1);
+select a from test122;
+a
+1
+update test122 set a=10 where a=1;
+select a from test122;
+a
+10
+create table test120(a int ,b int,c datetime default now(),d datetime default now(),primary key(a,b));
+insert into test120(a,b) values(1,1);
+select a from test120;
+a
+1
+update test120 set a=10 where a=1;
+select a from test120;
+a
+10
+create table test121(a int ,b int,c datetime default now(),d datetime default now(),e int,primary key(a,b));
+insert into test121(a,b,e) values(1,1,1);
+select a from test121;
+a
+1
+update test121 set a=10 where a=1;
+select a from test121;
+a
+10

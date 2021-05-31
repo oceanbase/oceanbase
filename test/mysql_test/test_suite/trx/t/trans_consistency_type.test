@@ -1,0 +1,110 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+--enable_warnings
+#建表
+create table t1 (c1 int primary key, c2 int);
+create table t2 (c1 int primary key, c2 int);
+desc t1;
+desc t2;
+#准备数据
+insert into t1 values(1,1);
+insert into t1 values(2,1);
+insert into t2 values(2,1);
+#check数据是否插入成功
+select * from t1;
+select * from t2;
+
+#保证备机上版本号是更新过的
+sleep 2;
+
+set autocommit=1;
+select /*+read_consistency(weak)+*/ * from t1;
+select /*+read_consistency(weak)+*/ * from t1 where c1 = 1;
+select /*+read_consistency(weak)+*/ * from t2;
+select /*+read_consistency(weak)+*/ * from t2 where c1 = 2;
+
+select /*+read_consistency(weak)+*/ * from t1 as l join t1 as r where l.c1 = r.c1;
+
+select /*+read_consistency(weak)+*/ * from t1 join t2 where t1.c1 = t2.c1;
+
+set autocommit=0;
+select /*+read_consistency(weak)+*/ * from t1 as l join t1 as r where l.c1 = r.c1;
+select /*+read_consistency(weak)+*/ * from t1 join t2 where t1.c1 = t2.c1;
+select /*+read_consistency(weak)+*/* from t1;
+select /*+read_consistency(weak)+*/* from t2;
+commit;
+
+##下面开始测试备机读异常的情况
+begin;
+insert into t1 values(3, 1);
+insert into t2 values(3, 1);
+#下面的这两条语句，正常来讲，应该报错的，但sql根据前两条语句，将其发到了leader上，没有报错
+select /*+read_consistency(weak)+*/* from t1;
+select /*+read_consistency(weak)+*/* from t2;
+commit;
+
+#插入数据成功了，sleep一下，以便weak读的结果一致
+sleep 2;
+
+begin;
+select /*+read_consistency(weak)+*/* from t1;
+select /*+read_consistency(weak)+*/* from t2;
+#下面的这两条语句，必须要报错:not supportted
+--error 1235 
+insert into t1 values(4, 1);
+#预期按照弱一致性操作执行
+select * from t1;
+--error 1235 
+insert into t2 values(4, 1);
+select * from t2;
+commit;
+
+begin;
+#目前sql是忽略这个hint的，当成强一致性读来操作；
+select /*+read_consistency(weak)+*/* from t1 for update;
+#既然第一条语句判断事务是强一致性操作的，因此下面的语句发给了leader
+select /*+read_consistency(weak)+*/* from t2;
+insert into t1 values(5, 1);
+select * from t1;
+insert into t2 values(5, 1);
+select * from t2;
+commit;
+
+#插入数据成功了，sleep一下，以便weak读的结果一致
+sleep 2;
+
+begin;
+#第一条语句是弱一致性查询，该事务就应该是弱一致性的；
+select /*+read_consistency(weak)+*/* from t2;
+#事务是弱一致性的，下面的语句需要报错
+--error 1235 
+select /*+read_consistency(weak)+*/* from t1 for update;
+--error 1235 
+insert into t1 values(6, 1);
+select * from t1;
+--error 1235 
+insert into t2 values(6, 1);
+select * from t2;
+commit;
+
+begin;
+#事务是强一致性的，下面的语句全部按照强一致性操作
+select /*+read_consistency(strong)*/* from t1;
+#预期strong读
+select /*+read_consistency(weak)*/* from t1;
+commit;
+
+begin;
+#事务是弱一致性的，下面的语句全部走弱一致性逻辑
+select /*+read_consistency(weak)*/* from t1; 
+select * from t1;
+commit;
+

@@ -1,0 +1,9 @@
+
+--source mysql_test/test_suite/px/include/exam_data.inc
+
+## partition wise join
+explain select /*+ USE_PX parallel(2) */ * from stu, score where stu.sid = score.sid;
+--sorted_result
+select /*+ USE_PX parallel(2) */ * from stu, score where stu.sid = score.sid;
+
+

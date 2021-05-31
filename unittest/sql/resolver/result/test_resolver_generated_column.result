@@ -1,0 +1,37 @@
+***************   Case 1   ***************
+drop database if exists generated_column_db;
+{
+  "drop_database_arg":"tenant_id",
+  "database_name":"generated_column_db",
+  "if_exist":true,
+  "to_recyclebin":false
+}
+***************   Case 2   ***************
+create database generated_column_db;
+{
+  "create_database_arg":"database_schema",
+  "database_id":-1,
+  "schema_version":1,
+  "database_name":"generated_column_db",
+  "replica_num":0,
+  "zone_list": [
+  ],
+  "primary_zone":"",
+  "charset_type":2,
+  "collation_type":"utf8mb4_general_ci",
+  "name_case_mode":-1,
+  "comment":"",
+  "read_only":false,
+  "default_tablegroup_id":-1,
+  "default_tablegroup_name":"",
+  "in_recyclebin":false,
+  "primary_zone_array": [
+  ]
+}
+***************   Case 3   ***************
+use generated_column_db;
+{
+  "stmt_type":97
+}
+***************   Case 4   ***************
+create table t1(c1 int primary key, c2 int as (c1 + 1));

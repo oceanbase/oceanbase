@@ -1,0 +1,146 @@
+drop database if exists view_db;
+create database view_db;
+use view_db;
+
+create table t1(c1 int primary key, c2 int) partition by hash(c1 + 1) partitions 3
+create table t2(c1 int, c2 int, c3 varchar(32), primary key(c2, c3)) partition by key(c2, c3) partitions 3
+create table t3(c3 int primary key, c4 int)
+create table test(c1 int , c2 int, c3 varchar(50), c4 varchar(50), c5 int , c6 double, c7 int, primary key(c1, c2, c3))
+
+#
+# view test
+#
+create table view_t1(c1 int primary key, c2 int);
+create table view_t2(c3 int primary key, c4 int);
+create table view_t3(c1 int primary key, c2 int);
+############################################
+# debugging
+############
+#
+# error: dupl column name of 'c1'
+############################################
+#
+# nullable/defaultable
+#
+create table view_t1_not_null(c1 int primary key, c2 int not null);
+create table view_t1_null_default(c1 int primary key, c2 int default 22222);
+create table view_t1_not_null_default(c1 int primary key, c2 int not null default 2222);
+#create view view_v1_not_null as select * from view_t1_not_null;
+create view view_v1_not_null as select c1,c2 from view_t1_not_null;
+#create view view_v1_null_default as select * from view_t1_null_default;
+create view view_v1_null_default as select c1,c2 from view_t1_null_default;
+#create view view_v1_not_null_default as select * from view_t1_not_null_default;
+create view view_v1_not_null_default as select c1,c2 from view_t1_not_null_default;
+#
+# other types (TODO)
+#
+#
+#
+# single table with columns and alias
+#
+#create or replace view view_v1 as select * from view_t1;
+create or replace view view_v1 as select c1, c2 from view_t1;
+select * from view_v1;
+create or replace view view_v2(c1, c2) as select c1, c2 from view_t1;
+select * from view_v2;
+create or replace view view_v3(c2) as select c2 from view_t1;
+select * from view_v3;
+#create or replace view view_v4(vc2) as select c2 from view_t1;
+create or replace view view_v4(vc2) as select c2 as vc2 from view_t1;
+select * from view_v4;
+#create or replace view view_v5(vc2) as select c2 as tc2 from view_t1;
+create or replace view view_v5(vc2) as select c2 as vc2 from view_t1;
+select * from view_v5;
+
+select c1 from view_v1 right join view_v2 using(c1);
+--error 5207
+select c2 from view_v1 right join view_v2 using(c1);
+select c2 from view_v1 right join view_v3 using(c2) right join view_v2 using(c2);
+--error 5207
+select c1 from view_v1 right join view_v3 using(c2) right join view_v2 using(c2);
+
+# todo select 1+5
+#
+# single table with mixed expr
+#
+create or replace view view_v6 as select c1+1 from view_t1;
+select * from view_v6;
+#create or replace view view_v7(vc1,vc2) as select c1+1 as tc1, c2+2 as tc2 from view_t1;
+create or replace view view_v7(vc1,vc2) as select c1+1 as vc1, c2+2 as vc2 from view_t1;
+select * from view_v7;
+#
+# multi-table with alias
+#
+#create or replace view v_2t_1 as select * from view_t1, view_t2;
+create or replace view v_2t_1 as select c1,c2,c3,c4 from view_t1, view_t2;
+select * from v_2t_1;
+# DUP
+#create or replace view v_2t_1 as select * from view_t1, view_t2;
+#create or replace view v_3t_1(vc1, vc2, vc3, vc4, vc5, vc6) as select * from view_t1, view_t2, view_t3;
+create or replace view v_3t_1(vc1, vc2, vc3, vc4, vc5, vc6) as select view_t1.c1 as vc1, view_t1.c2 as vc2, c3 as vc3, c4 as vc4, view_t3.c1 as vc5, view_t3.c2 as vc6 from view_t1, view_t2, view_t3;
+select * from v_3t_1;
+#
+# sub-view
+#
+#create or replace view vv_1 as select * from view_v1;
+create or replace view vv_1 as select c1,c2 from view_v1;
+select * from vv_1;
+#create or replace view vvv_1 as select * from vv_1;
+create or replace view vvv_1 as select c1,c2 from vv_1;
+select * from vvv_1
+#
+# sub-view/table
+#
+# OB_ERR_COLUMN_DUPLICATE
+#create or replace view v_mix_tv as select * from view_v1, view_t1;
+
+# mixed case with x1/x2 but different column names
+#create view v_mix_1 as select * from view_t1;
+create view v_mix_1 as select c1,c2 from view_t1;
+#create view vv_mix_1 as select * from v_mix_1, view_t2;
+create view vv_mix_1 as select c1,c2,c3,c4 from v_mix_1, view_t2;
+select * from (select * from (select * from view_t1) as v_test, view_t2) as vv_test;
+select * from vv_mix_1;
+# mixed case with x1/x3 but same column names
+#create or replace view v_mix_2(v_t1_c1, v_t1_c2) as select * from view_t1;
+create or replace view v_mix_2(v_t1_c1, v_t1_c2) as select c1 as v_t1_c1, c2 as v_t1_c2 from view_t1;
+select * from v_mix_2;
+#create or replace view vv_mix_2 as select * from v_mix_2, view_t3;
+create or replace view vv_mix_2 as select v_t1_c1,v_t1_c2,c1,c2 from v_mix_2, view_t3;
+select * from (select * from (select c1 v_t1_c1, c2 v_t1_c2 from view_t1) as v_test, view_t3) as vv_test;
+
+#create or replace view v_mix_3 as select * from view_t1;
+create or replace view v_mix_3 as select c1,c2 from view_t1;
+select * from v_mix_3;
+#create or replace view vv_mix_3(vv_c1, vv_c2, vv_c3, vv_c4) as select * from v_mix_3, view_t3;
+create or replace view vv_mix_3(vv_c1, vv_c2, vv_c3, vv_c4) as select v_mix_3.c1 as vv_c1, v_mix_3.c2 as vv_c2, view_t3.c1 as vv_c3, view_t3.c2 as vv_c4 from v_mix_3, view_t3;
+select * from (select v_test.c1 vv_c1, v_test.c2 vv_c2, view_t3.c1 vv_c3, view_t3.c2 vv_c4 from (select * from view_t1) as v_test, view_t3) as vv_test;
+select * from vv_mix_3;
+#
+# view join table
+# Unknown column 'c1'
+#select * from vv_mix_3 join view_v6 on vv_mix_3.vv_c1=view_v6.c1+1;
+#
+# clean
+#
+drop view if exists view_v1, view_v2, view_v3, view_v4, view_v5, view_v6, view_v7;
+#drop view if exists xy1.view_v1, xy2.view_v2, xy3.view_v3;
+#drop view if exists xy1.view_v1, view_v2, xy3.view_v3;
+
+# select_stmt with brackets or not
+#create view v1 as select * from t1;
+create view v1 as select c1,c2 from t1;
+#create view v2 as (select * from t1);
+create view v2 as (select c1,c2 from t1);
+#create view v3 as ((select * from t1));
+create view v3 as ((select c1,c2 from t1));
+
+#forbidden to modify view
+--error 4007
+insert into v1 values(1);
+--error 4007
+replace into v1 values(2);
+update v1 set c1 = 3;
+--error 4007
+delete from v1;
+drop database view_db;

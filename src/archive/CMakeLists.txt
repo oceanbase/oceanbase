@@ -1,0 +1,29 @@
+ob_set_subtarget(ob_archive common
+  ob_archive_mgr.cpp
+  ob_archive_allocator.cpp
+  ob_archive_task_queue.cpp
+  ob_archive_thread_pool.cpp
+  ob_archive_scheduler.cpp
+  ob_archive_io.cpp
+  ob_archive_sender.cpp
+  ob_archive_util.cpp
+  ob_ilog_fetcher.cpp
+  ob_pg_archive_task.cpp
+  ob_archive_pg_mgr.cpp
+  ob_archive_clog_split_engine.cpp
+  ob_log_archive_struct.cpp
+  ob_archive_log_wrapper.cpp
+  ob_archive_round_mgr.cpp
+  ob_archive_destination_mgr.cpp
+  ob_start_archive_helper.cpp
+  ob_ilog_fetch_task_mgr.cpp
+  ob_archive_log_file_store.cpp
+  ob_archive_entry_iterator.cpp
+  ob_archive_restore_engine.cpp
+  ob_archive_file_utils.cpp
+  ob_archive_path.cpp
+  ob_archive_block.cpp
+  ob_archive_clear.cpp
+)
+
+ob_server_add_target(ob_archive)

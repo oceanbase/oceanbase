@@ -1,0 +1,420 @@
+***************   Case 1   ***************
+create synonym syn_t1 for t1;
+{
+  "create_synonym_arg": {
+    "synonym_info": {
+      "tenant_id":1,
+      "database_id":-1,
+      "synonym_id":-1,
+      "schema_version":0
+    },
+    "db_name":"rongxuan",
+    "obj_db_name":"rongxuan"
+  }
+}
+***************   Case 2   ***************
+select * from t1;
+{
+  "stmt_type":1,
+  "table": [
+     {
+      "table_id":1099511677777,
+      "table_name":"t1",
+      "alias_name":"",
+      "table_type":0,
+      "ref_id":1099511677777,
+      "database_name":"rongxuan",
+      "for_update":false,
+      "wait":-1,
+      "mock_id":-1
+    }
+  ],
+  "joined_table": [
+  ],
+  "partition_express": [
+     {
+      "table_id":1099511677777,
+      "partition_express": {
+        "item_type":"T_OP_ADD",
+        "result_type": {
+          "meta": {
+            "type":"BIGINT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":12,
+            "scale":0
+          },
+          "flag":1,
+          "calc_type": {
+            "type":"BIGINT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          }
+        },
+        "expr_info": [
+          "CNT_CONST",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+        ],
+        "expr_levels": [
+        ],
+        "children": [
+           {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"INT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":11,
+                "scale":0
+              },
+              "flag":16387,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":1099511677777,
+            "column_id":16,
+            "database_name":"rongxuan",
+            "table_name":"t1",
+            "column_name":"c1",
+            "expr_level":0,
+            "expr_levels": [
+              0
+            ],
+            "column_flags":0,
+            "is_explicited_referece":true,
+            "explicited_ref_count":1
+          },
+           {
+            "item_type":"T_INT",
+            "result_type": {
+              "meta": {
+                "type":"BIGINT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":1,
+                "precision":1,
+                "scale":0
+              },
+              "flag":1,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_CONST",
+              "CNT_CONST"
+            ],
+            "rel_id": [
+            ],
+            "value": {
+              "BIGINT":1
+            }
+          }
+        ]
+      },
+      "partition_express":null
+    }
+  ],
+  "column": [
+     {
+      "column_id":16,
+      "table_id":1099511677777,
+      "column":"c1",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"INT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":11,
+            "scale":0
+          },
+          "flag":16387,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677777,
+        "column_id":16,
+        "database_name":"rongxuan",
+        "table_name":"t1",
+        "column_name":"c1",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1
+      }
+    },
+     {
+      "column_id":17,
+      "table_id":1099511677777,
+      "column":"c2",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"INT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":11,
+            "scale":0
+          },
+          "flag":0,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677777,
+        "column_id":17,
+        "database_name":"rongxuan",
+        "table_name":"t1",
+        "column_name":"c2",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"INT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":11,
+            "scale":0
+          },
+          "flag":16387,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677777,
+        "column_id":16,
+        "database_name":"rongxuan",
+        "table_name":"t1",
+        "column_name":"c1",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1
+      },
+      "is_alias":false,
+      "alias_name":"c1",
+      "expr_name":"c1",
+      "default": {
+        "NULL":"NULL"
+      }
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"INT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":11,
+            "scale":0
+          },
+          "flag":0,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677777,
+        "column_id":17,
+        "database_name":"rongxuan",
+        "table_name":"t1",
+        "column_name":"c2",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "is_explicited_referece":true,
+        "explicited_ref_count":1
+      },
+      "is_alias":false,
+      "alias_name":"c2",
+      "expr_name":"c2",
+      "default": {
+        "NULL":"NULL"
+      }
+    }
+  ],
+  "distinct":false,
+  "rollup":false,
+  "nocycle":false,
+  "from": [
+     {
+      "table_id":1099511677777,
+      "is_join":false
+    }
+  ],
+  "start_with": [
+  ],
+  "connect_by": [
+  ],
+  "where": [
+  ],
+  "group_by": [
+  ],
+  "having": [
+  ],
+  "aggr_func": [
+  ],
+  "order_by": [
+  ],
+  "limit":null,
+  "offset":null,
+  "show_stmt_ctx": {
+    "is_from_show_stmt":false,
+    "global_scope":false,
+    "tenant_id":-1,
+    "show_database_id":-1,
+    "show_table_id":-1,
+    "grants_user_id":-1
+  },
+  "hint": {
+    "read_static":false,
+    "no_rewrite":false,
+    "frozen_version":-1,
+    "topk_precision":-1,
+    "sharding_minimum_row_count":0,
+    "query_timeout":-1,
+    "hotspot":false,
+    "index": [
+    ],
+    "read_consistency":-1,
+    "join_ordered":false,
+    "join_order": [
+    ],
+    "merge_hint_ids": [
+    ],
+    "hash_hint_ids": [
+    ],
+    "no_hash_hint_ids": [
+    ],
+    "nl_hint_ids": [
+    ],
+    "part_hints": [
+    ],
+    "use_late_materialization":-1,
+    "log_level":"",
+    "max_concurrent":-1,
+    "only_concurrent_hint":false,
+    "has_hint_exclude_concurrent":false,
+    "parallel":-1
+  },
+  "query_context": {
+    "param_num":0,
+    "fetch_cur_time":true,
+    "calculable_items": [
+    ]
+  },
+  "extra_output_exprs": [
+  ],
+  "current_level":0,
+  "equal_sets": [
+  ],
+  "child_stmts": [
+  ],
+  "has_transformed_for_hierarchical_query":false,
+  "is_hierarchical_query":false
+}
+***************   Case 3   ***************
+select * from syn_t1;

@@ -1,0 +1,21 @@
+drop database if exists tablegroup_db;
+create database tablegroup_db;
+use tablegroup_db;
+
+create table t1(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int, c3 varchar(32));
+create table t3(c1 int primary key, c2 int, c3 varchar(32));
+
+create tablegroup tg1;
+create tablegroup tg2;
+create tablegroup if not exists tg1;
+
+alter tablegroup tg1 add table t1;
+alter tablegroup tg1 add table t2,t3;
+alter table t1 tablegroup = 'tg1';
+alter table t2 tablegroup = 'tg2';
+alter table t2 drop tablegroup;
+drop tablegroup tg2;
+drop tablegroup if exists tg2;
+
+drop database tablegroup_db;

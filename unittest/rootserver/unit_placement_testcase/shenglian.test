@@ -1,0 +1,68 @@
+{
+    "servers":
+    [
+	{
+	    "server":"192.168.0.1",
+	    "zone":"ZTG",
+	    "resources":
+	    {
+		"cpu": 62,
+		"memory": 363
+	    }
+	},
+	{
+	    "server":"192.168.0.2",
+	    "zone":"ZTG",
+	    "resources":
+	    {
+		"cpu": 62,
+		"memory": 363
+	    }
+	},
+	{
+	    "server":"192.168.1.1",
+	    "zone":"ZUI",
+	    "resources":
+	    {
+		"cpu": 62,
+		"memory": 363
+	    }
+	},
+	{
+	    "server":"192.168.1.2",
+	    "zone":"ZUI",
+	    "resources":
+	    {
+		"cpu": 62,
+		"memory": 363
+	    }
+	},
+	{
+	    "server":"192.168.2.1",
+	    "zone":"SZ",
+	    "resources":
+	    {
+		"cpu": 62,
+		"memory": 363
+	    }
+	},
+	{
+	    "server":"192.168.2.2",
+	    "zone":"SZ",
+	    "resources":
+	    {
+		"cpu": 62,
+		"memory": 363
+	    }
+	}
+    ],
+    "units":
+    [
+	{"tenant":"pcbill", "cpu": 2, "memory": 8, "num": 30},
+	{"tenant":"pcp01", "cpu": 3, "memory": 6, "num": 15},
+	{"tenant":"pcp02", "cpu": 2, "memory": 6, "num": 15},
+	{"tenant":"sys", "cpu": 2, "memory": 28, "num": 3},
+	{"tenant":"transfront", "cpu": 3, "memory": 20, "num": 30},
+	{"tenant":"yeb", "cpu": 2, "memory": 20, "num": 30}
+    ]
+}

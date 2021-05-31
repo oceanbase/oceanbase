@@ -1,0 +1,135 @@
+
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+--error 0,5157
+drop tenant dump_tenant force;
+--error 0,4650
+drop resource pool new_pool1;
+--error 0,4648
+drop resource unit new_box1;
+let $cpu = 1;
+let $memory = '768M';
+let $min_memory = '768M';
+let $disk = 536870912;
+let $iops = 128;
+let $session = 64;
+--disable_query_log
+eval create resource unit new_box1 max_cpu 1, max_memory $memory, max_iops $iops, max_disk_size $disk, max_session_num $session, MIN_CPU= 1, MIN_MEMORY=$min_memory, MIN_IOPS=128;
+let $zone_name=query_get_value(select zone from oceanbase.__all_zone where zone != '' limit 1, zone, 1);
+let $obs_num = query_get_value(select count(1) as cnt from oceanbase.__all_server group by zone limit 1,cnt, 1);
+eval create resource pool new_pool1 unit = 'new_box1', unit_num = $obs_num;
+eval create tenant dump_tenant primary_zone='$zone_name', resource_pool_list('new_pool1') set ob_tcp_invited_nodes='%';
+
+let $t_id = query_get_value(select tenant_id as t_id from oceanbase.__all_tenant where tenant_name = 'dump_tenant' limit 1,t_id, 1);
+--enable_result_log
+--enable_query_log
+--source mysql_test/include/check_tenant_sync.inc
+sleep 2;
+
+connect (conn1,$OBMYSQL_MS0,root@dump_tenant,,test,$OBMYSQL_PORT);
+set global parallel_max_servers=10;
+set global parallel_servers_target=10;
+alter system set _sort_area_size='2M';
+alter system set _hash_area_size='4M';
+
+sleep 2;
+
+--disable_warnings
+--error 0,1051
+drop table t11_set;
+--error 0,1051
+drop table t22_set;
+--error 0,1051
+drop table t111_var;
+--error 0,1051
+drop table t333_var;
+--enable_warnings
+
+create table t11_set(c1 int,c2 int);
+create table t22_set(c1 int,c2 int);
+
+insert into t11_set values(null,null);
+
+insert into t11_set values(1,1);
+insert into t11_set values(5,5);
+insert into t11_set values(1,1);
+insert into t11_set values(5,5);
+
+insert into t11_set values(12,12);
+insert into t11_set values(12,12);
+
+insert into t11_set values(22,22);
+insert into t11_set values(26,26);
+insert into t11_set values(22,22);
+insert into t11_set values(26,26);
+
+
+insert into t22_set select * from t11_set;
+
+
+create table t111_var(c0 bigint primary key,c1 varchar(4000), c2 varchar(4000), c3 varchar(4000), c4 varchar(4000), c5 varchar(4000),c6 varchar(4000), c7 longtext);
+insert into t111_var values(1,repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('a',4000));
+insert into t111_var select c0+1,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+10,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+100,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+1000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+10000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+100000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+1000000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+10000000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+insert into t111_var select c0+100000000,c1,c2,c3,c4,c5,c6,c7 from t111_var;
+commit;
+
+create table t333_var(c0 bigint ,c1 varchar(4000), c2 varchar(4000), c3 varchar(4000), c4 varchar(4000), c5 varchar(4000),c6 varchar(4000), c7 longtext);
+insert into t333_var values(1,repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('ab',1000),repeat('a',4000));
+insert into t333_var select c0+1,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+10,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+100,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+1000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+10000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+100000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+1000000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+10000000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var select c0+100000000,c1,c2,c3,c4,c5,c6,c7 from t333_var;
+insert into t333_var values(null,null,null,null,null,null,null,null);
+commit;
+
+
+
+
+select c1,c2 from t11_set union select c1,c2 from t22_set where c1 > 5 and c1 != 12;
+select c1,c2 from t11_set intersect select c1,c2 from t22_set where c1 > 5 and c1 != 12;
+select c1,c2 from t11_set minus select c1,c2 from t22_set where c1 > 5 and c1 != 12;
+
+select c1,c2 from t11_set where c1 > 5 and c1 != 12 union select c1,c2 from t22_set;
+select c1,c2 from t11_set where c1 > 5 and c1 != 12 intersect select c1,c2 from t22_set;
+select c1,c2 from t11_set where c1 > 5 and c1 != 12 minus select c1,c2 from t22_set;
+
+select c1,c2 from t11_set union select c1,c2 from t22_set where c1 <22;
+select c1,c2 from t11_set intersect select c1,c2 from t22_set where c1 <22;
+select c1,c2 from t11_set minus select c1,c2 from t22_set where c1 <22;
+
+## dump
+set ob_query_timeout=30000000;
+select /*+ use_merge(a b) */SQL_CALC_FOUND_ROWS sum(c0),sum(length(c1)),count(c2),count(c3),count(c4),count(c5),count(c6),count(c7)
+from (select * from t111_var a union select * from t333_var b) order by c1 limit 1;
+
+select /*+ use_merge(a b) */SQL_CALC_FOUND_ROWS sum(c0),sum(length(c1)),count(c2),count(c3),count(c4),count(c5),count(c6),count(c7)
+from (select * from t111_var a intersect select * from t333_var b) order by c1 limit 1;
+
+select /*+ use_merge(a b) */SQL_CALC_FOUND_ROWS sum(c0),sum(length(c1)),count(c2),count(c3),count(c4),count(c5),count(c6),count(c7)
+from (select * from t111_var a minus select * from t333_var b) order by c1 limit 1;
+
+
+--replace_regex /con_id =[0-9]*/con_id =xxx/
+eval select operation_type,
+  case when sum(optimal_executions)>0 then 1 else 0 end pass1,
+  case when sum(onepass_executions)>0 then 1 else 0 end pass2,
+  case when sum(multipasses_executions)>0 then 1 else 0 end pass3
+from oceanbase.gv\$sql_workarea where con_id =$t_id group by operation_type order by 1,2,3,4;
+
+connection syscon;
+drop tenant dump_tenant force;
+drop resource pool new_pool1;
+drop resource unit new_box1;
