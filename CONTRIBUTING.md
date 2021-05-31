@@ -2,12 +2,6 @@
 
 OceanBase Database is a community-driven open source project and we welcome all the contributors. Contributions to the OceanBase Database project are expected to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## Before you contribute
-
-Before you contribute, please click the **Sign in with Github to agree button** to sign the CLA. You can find an example [here](https://cla-assistant.io/pingcap/tidb?pullRequest=16303).
-
-What is [CLA](https://en.wikipedia.org/wiki/Contributor_License_Agreement)?
-
 ## Contribution guide
 
 Please follow these steps to create your Pull Request to this repository.
