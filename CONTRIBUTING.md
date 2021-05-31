@@ -4,7 +4,7 @@ OceanBase Database is a community-driven open source project and we welcome all 
 
 ## Before you contribute
 
-Before you contribute, please click the **Sign in with Github to agree button** to sign the CLA. You can find an example [here](https://cla-assistant.io/pingcap/tidb?pullRequest=16303).
+Before you contribute, please click the **Sign in with Github to agree button** to sign the CLA. You can find an example [here](https://cla-assistant.io/oceanbase/oceanbase?pullRequest=4).
 
 What is [CLA](https://en.wikipedia.org/wiki/Contributor_License_Agreement)?
 
