@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBAE_LIB_OB_TRUNCATED_STRING_H_
-#define OCEANBAE_LIB_OB_TRUNCATED_STRING_H_
+#ifndef OCEANBASE_LIB_OB_TRUNCATED_STRING_H_
+#define OCEANBASE_LIB_OB_TRUNCATED_STRING_H_
 
 #include "lib/string/ob_string.h"
 #include "share/config/ob_server_config.h"
@@ -71,4 +71,4 @@ class ObTruncatedString {
 }  // namespace common
 }  // namespace oceanbase
 
-#endif  // OCEANBAE_LIB_OB_TRUNCATED_STRING_H_
+#endif  // OCEANBASE_LIB_OB_TRUNCATED_STRING_H_
