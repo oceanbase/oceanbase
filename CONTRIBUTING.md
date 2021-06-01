@@ -35,6 +35,9 @@ mkdir -p $working_dir
 cd $working_dir
 git clone git@github.com:<your group>/oceanbase.git
 
+# Go to your clone
+cd oceanbase
+
 # Add upstream
 git remote add upstream git@github.com:<your group>/oceanbase.git
 
@@ -50,7 +53,7 @@ git remote -v
 1. Get your local master up-to-date with the upstream/master.
 
     ```bash
-    cd $working_dir/docs
+    cd $working_dir/oceanbase
     git fetch upstream
     git checkout master
     git rebase upstream/master
@@ -90,5 +93,5 @@ git push -u origin new-branch-name # "-u" is used to track the remote branch fro
 
 ### Step 8: Create a pull request
 
-1. Visit your fork at <https://github.com/$user/docs> (replace `$user` with your GitHub account).
+1. Visit your fork at <https://github.com/$user/oceanbase> (replace `$user` with your GitHub account).
 2. Click the `Compare & pull request` button next to your `new-branch-name` branch to create your PR.
