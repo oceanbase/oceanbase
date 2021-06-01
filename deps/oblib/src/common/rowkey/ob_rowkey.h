@@ -167,7 +167,7 @@ class ObRowkey {
   public:
   int equal(const ObRowkey& rhs, bool& is_equal) const;
   bool simple_equal(const ObRowkey& rhs) const;
-  // FIXME temporarily, rowkey compare with column order use seperate func
+  // FIXME temporarily, rowkey compare with column order use separate func
   OB_INLINE int compare(const ObRowkey& rhs, int& cmp) const
   {
     int ret = OB_SUCCESS;
