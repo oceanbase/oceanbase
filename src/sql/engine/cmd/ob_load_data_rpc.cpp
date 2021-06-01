@@ -293,23 +293,23 @@ int ObRpcLoadDataTaskExecuteP::process()
       succ_row_count = affected_rows;
     }
 
-    // 2. if failed, try insert seperately
+    // 2. if failed, try insert separately
     if (OB_SUCC(ret) && OB_SUCCESS != exec_ret) {
-      ObSqlString seperate_insert_sql_head;
-      ObSqlString seperate_insert_sql;
+      ObSqlString separate_insert_sql_head;
+      ObSqlString separate_insert_sql;
 
       if (OB_FAIL(ObLoadDataUtils::build_insert_sql_string_head(
-              insert_mode, table_name, column_names, seperate_insert_sql_head))) {
+              insert_mode, table_name, column_names, separate_insert_sql_head))) {
         LOG_WARN("gen insert sql column_names failed", K(ret));
       }
       for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < total_row_number; ++row_idx) {
-        if (OB_FAIL(seperate_insert_sql.assign(seperate_insert_sql_head.string()))) {
+        if (OB_FAIL(separate_insert_sql.assign(separate_insert_sql_head.string()))) {
           LOG_WARN("assign insert column_names failed", K(ret));
         } else if (OB_FAIL(ObLoadDataUtils::append_values_in_remote_process(insert_column_number,
                        insert_column_number,
                        expr_bitset,
                        values,
-                       seperate_insert_sql,
+                       separate_insert_sql,
                        escape_data_buffer_,
                        row_idx))) {
           LOG_WARN("append values failed", K(ret));
@@ -318,10 +318,10 @@ int ObRpcLoadDataTaskExecuteP::process()
           affected_rows = 0;
           if (OB_UNLIKELY(
                   OB_SUCCESS != (exec_ret = gctx_.sql_proxy_->write(
-                                     tenant_id, seperate_insert_sql.ptr(), affected_rows, get_compatibility_mode())))) {
+                                     tenant_id, separate_insert_sql.ptr(), affected_rows, get_compatibility_mode())))) {
             LOG_WARN("LOAD DATA row insert failed in remote process",
                 K(exec_ret),
-                K(seperate_insert_sql),
+                K(separate_insert_sql),
                 K(get_compatibility_mode()));
             if (OB_FAIL(result.row_number_.push_back(static_cast<int16_t>(row_idx)))) {
               LOG_WARN("push back row number failed", K(ret));
