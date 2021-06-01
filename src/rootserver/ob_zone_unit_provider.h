@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef __OCENABASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__
-#define __OCENABASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__
+#ifndef __OCEANBASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__
+#define __OCEANBASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__
 
 #include "share/ob_define.h"
 #include "lib/list/ob_dlist.h"
@@ -215,5 +215,5 @@ class ObAllZoneUnitsProvider : public ObZoneUnitsProvider {
 
 }  // namespace rootserver
 }  // namespace oceanbase
-#endif /* __OCENABASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__ */
+#endif /* __OCEANBASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__ */
 //// end of header file

@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBAE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
-#define OCEANBAE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
+#ifndef OCEANBASE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
+#define OCEANBASE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
 
 #include "lib/objectpool/ob_pool.h"
 #include "lib/lock/ob_spin_lock.h"
@@ -111,4 +111,4 @@ void ObCachedAllocator<T>::free(T* obj)
 }  // end namespace common
 }  // end namespace oceanbase
 
-#endif  // OCEANBAE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
+#endif  // OCEANBASE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_

@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef _OB_OCEANBAE_SCHEMA_SCHEMA_SERVICE_H
-#define _OB_OCEANBAE_SCHEMA_SCHEMA_SERVICE_H
+#ifndef _OB_OCEANBASE_SCHEMA_SCHEMA_SERVICE_H
+#define _OB_OCEANBASE_SCHEMA_SCHEMA_SERVICE_H
 
 #include "lib/ob_name_def.h"
 #include "lib/string/ob_string.h"
@@ -954,4 +954,4 @@ class ObSchemaService {
 }  // namespace schema
 }  // namespace share
 }  // namespace oceanbase
-#endif /* _OB_OCEANBAE_SCHEMA_SCHEMA_SERVICE_H */
+#endif /* _OB_OCEANBASE_SCHEMA_SCHEMA_SERVICE_H */

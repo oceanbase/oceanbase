@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBAES_STORAGE_OB_ROW_SAMPLE_ITERATOR_H
-#define OCEANBAES_STORAGE_OB_ROW_SAMPLE_ITERATOR_H
+#ifndef OCEANBASE_STORAGE_OB_ROW_SAMPLE_ITERATOR_H
+#define OCEANBASE_STORAGE_OB_ROW_SAMPLE_ITERATOR_H
 
 #include "storage/ob_i_store.h"
 #include "storage/ob_i_sample_iterator.h"
@@ -36,4 +36,4 @@ class ObRowSampleIterator : public ObISampleIterator {
 }  // namespace storage
 }  // namespace oceanbase
 
-#endif /* OCEANBAES_STORAGE_OB_ROW_SAMPLE_ITERATOR_H */
+#endif /* OCEANBASE_STORAGE_OB_ROW_SAMPLE_ITERATOR_H */
