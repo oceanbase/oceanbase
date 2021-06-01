@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef __OCENABASE_SHARE_RESTORE_URI_PARSER_H__
-#define __OCENABASE_SHARE_RESTORE_URI_PARSER_H__
+#ifndef __OCEANBASE_SHARE_RESTORE_URI_PARSER_H__
+#define __OCEANBASE_SHARE_RESTORE_URI_PARSER_H__
 
 #include "share/backup/ob_physical_restore_info.h"
 #include "share/ob_kv_parser.h"
@@ -160,5 +160,5 @@ class ObPhysicalRestoreOptionParser {
 };
 }  // namespace share
 }  // namespace oceanbase
-#endif /* __OCENABASE_SHARE_RESTORE_URI_PARSER_H__ */
+#endif /* __OCEANBASE_SHARE_RESTORE_URI_PARSER_H__ */
 //// end of header file
