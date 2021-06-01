@@ -21,7 +21,7 @@ OceanBase 数据库支持支付宝的全部核心业务，以及银行、保险�
 
 ## 快速上手
 
-请查看 [快速使用指南](https://open.oceanbase.com/quickStart) 开始试用 OceanBse 数据库。
+请查看 [快速使用指南](https://open.oceanbase.com/quickStart) 开始试用 OceanBase 数据库。
 
 ## 文档
 
@@ -45,7 +45,7 @@ OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPu
 我们十分欢迎并感谢您为我们贡献。以下是您参与贡献的几种方式：
 
 - 向我们提 [issue](https://github.com/oceanbase/oceanbase/issues)。
-- 提交 PR。详情参见 [如何贡献](CONTRIBUTING.md)。
+- 提交 PR，详情参见 [如何贡献](CONTRIBUTING.md)。
 
 ## 获取帮助
 
