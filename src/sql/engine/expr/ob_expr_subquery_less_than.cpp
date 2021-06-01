@@ -20,7 +20,6 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
-;
 
 ObExprSubQueryLessThan::ObExprSubQueryLessThan(ObIAllocator& alloc)
     : ObSubQueryRelationalExpr(alloc, T_OP_SQ_LT, N_SQ_LESS_THAN, 2, NOT_ROW_DIMENSION)

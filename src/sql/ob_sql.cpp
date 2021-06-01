@@ -3232,7 +3232,6 @@ int ObSql::check_batched_multi_stmt_after_parser(
     // only update support batched multi-stmt optimization
     if (OB_ISNULL(parse_result.result_tree_) || OB_ISNULL(parse_result.result_tree_->children_)) {
       ret = OB_ERR_UNEXPECTED;
-      ;
       LOG_WARN("get unexpected null", K(ret), KP(parse_result.result_tree_));
     } else if (OB_UNLIKELY(parse_result.result_tree_->num_child_ < 1)) {
       ret = OB_ERR_UNEXPECTED;
