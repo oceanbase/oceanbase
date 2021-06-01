@@ -45,5 +45,6 @@ OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPu
 如果您在使用 OceanBase 数据库时遇到任何问题，欢迎通过以下方式寻求帮助：
 
 - [GitHub Issue](https://github.com/oceanbase/oceanbase/issues)
+- [Gitee Issue](https://gitee.com/oceanbase/oceanbase/issues)
 - 官方论坛 [link TODO]
 - 知识问答 [link TODO]

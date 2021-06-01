@@ -54,5 +54,6 @@ Contributions are warmly welcomed and greatly appreciated. Here are a few ways y
 In case you have any problems when using OceanBase Database, welcome reach out for help:
 
 - [GitHub Issue](https://github.com/oceanbase/oceanbase/issues)
+- [Gitee Issue](https://gitee.com/oceanbase/oceanbase/issues)
 - Official forum [link TODO]
 - Knowledge base [link TODO]
