@@ -2031,7 +2031,7 @@ bool ObTableSchema::is_valid() const
                     K(max_length));
                 valid_ret = false;
               } else if (!column->is_shadow_column()) {
-                // TODO need seperate inline memtable length from store length
+                // TODO need separate inline memtable length from store length
                 if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470) && !ObSchemaService::g_liboblog_mode_) {
                   varchar_col_total_length += column->get_data_length();
                 } else {
