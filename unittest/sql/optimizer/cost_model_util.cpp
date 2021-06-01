@@ -648,7 +648,7 @@ int group_by_test(int64_t type, int64_t& rc)
 //      if (OB_FAIL(gen->init_schema(*schema))) {
 //        SQL_OPT_LOG(WARN, "failed to init row gen");
 //      } else {
-//        //todo : seperate row count for each table
+//        //todo : separate row count for each table
 //        gen->set_need_row_count(table_sizes.at(0));
 //
 //        if (projector_counts.count() != 0)
