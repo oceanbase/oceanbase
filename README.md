@@ -1,6 +1,6 @@
 # What is OceanBase database
 
-OceanBase Database is a native distributed relational database. It is developed entirely by Alibaba and Ant Group. OceanBase Database is built on a common server cluster. Based on the Paxos protocol and its distributed structure, OceanBase Database provides high availability and linear scalability for financial institutions. OceanBase Database is not dependent on specific hardware architectures.
+OceanBase Database is a native distributed relational database. It is developed entirely by Alibaba and Ant Group. OceanBase Database is built on a common server cluster. Based on the Paxos protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
 
 OceanBase Database has these features:
 
@@ -8,7 +8,7 @@ OceanBase Database has these features:
     Single server failure recovers automatically. OceanBase Database supports cross-city disaster tolerance for multiple IDCs and zero data loss. OceanBase Database meets the financial industry Level 6 disaster recovery standard (RPO=0, RTO<=30 seconds).
 - Linear scalability
     OceanBase Database scales transparently to applications and balances the system load automatically. Its cluster can contain more than 1500 nodes. The data volume can reach petabytes. The records in a single table can be more than a trillion rows.
-- High compatible with MySQL
+- Highly compatible with MySQL
     OceanBase Database is compatible with MySQL protocol and syntax. You can access to OceanBase Database by using MySQL client.
 - High performance
     OceanBase Database supports quasi memory level data change and exclusive encoding compression. Together with the linear scalability, OceanBase Database provides high performance.
@@ -38,14 +38,20 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 
 ## How to build
 
-#### debug mode
-> sh build.sh debug --init --make
+### debug mode
+```sh
+sh build.sh debug --init --make
+```
 
-#### release mode
-> sh build.sh release --init --make
+### release mode
+```sh
+sh build.sh release --init --make
+```
 
-#### rpm packages
-> sh build.sh rpm --init && cd build_rpm && make -j16 rpm
+### rpm packages
+```sh
+sh build.sh rpm --init && cd build_rpm && make -j16 rpm
+```
 
 ## Contributing
 

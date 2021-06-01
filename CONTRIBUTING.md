@@ -4,7 +4,7 @@ OceanBase Database is a community-driven open source project and we welcome all 
 
 ## Before you contribute
 
-Before you contribute, please click the **Sign in with Github to agree button** to sign the CLA. You can find an example [here](https://cla-assistant.io/oceanbase/oceanbase).
+Before you contribute, please click the **Sign in with GitHub to agree button** to sign the CLA. You can find an example [here](https://cla-assistant.io/oceanbase/oceanbase).
 
 What is [CLA](https://en.wikipedia.org/wiki/Contributor_License_Agreement)?
 
@@ -35,6 +35,9 @@ mkdir -p $working_dir
 cd $working_dir
 git clone git@github.com:<your group>/oceanbase.git
 
+# Go to your clone
+cd oceanbase
+
 # Add upstream
 git remote add upstream git@github.com:<your group>/oceanbase.git
 
@@ -50,7 +53,7 @@ git remote -v
 1. Get your local master up-to-date with the upstream/master.
 
     ```bash
-    cd $working_dir/docs
+    cd $working_dir/oceanbase
     git fetch upstream
     git checkout master
     git rebase upstream/master
@@ -90,5 +93,6 @@ git push -u origin new-branch-name # "-u" is used to track the remote branch fro
 
 ### Step 8: Create a pull request
 
-1. Visit your fork at <https://github.com/$user/docs> (replace `$user` with your GitHub account).
+1. Visit your fork at <https://github.com/$user/oceanbase> (replace `$user` with the GitHub account which you performed the fork operation, the repo name is `oceanbase` by default and you may want to modify it).
+
 2. Click the `Compare & pull request` button next to your `new-branch-name` branch to create your PR.
