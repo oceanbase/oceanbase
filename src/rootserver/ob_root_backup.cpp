@@ -2589,7 +2589,7 @@ int ObTenantBackup::generate_tablegroup_backup_task(const share::ObTenantBackupT
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
                  task_info.tenant_id_, *schema_service_, backup_schema_version_, schema_guard))) {
-    LOG_WARN("failed to get tenant schema gaurd", K(ret), K(task_info));
+    LOG_WARN("failed to get tenant schema guard", K(ret), K(task_info));
   } else if (OB_FAIL(schema_guard.get_tablegroup_ids_in_tenant(task_info.tenant_id_, tablegroup_ids))) {
     LOG_WARN("fail to get tablegroup ids", K(ret));
   } else if (OB_FAIL(find_break_table_id_index(tablegroup_ids, point_info, table_id_index))) {

@@ -169,7 +169,7 @@ int ObMicroBlockIndexWriter::merge(const int64_t data_end_offset, const ObMicroB
           K(ret),
           K(other_mark_buffer.length()));
     } else if (OB_FAIL(buffer_[DELTA_BUFFER_IDX].write(other_delta_buffer.data(), other_delta_buffer.length()))) {
-      STORAGE_LOG(WARN, "failed to write delte buffer", K(ret), K(other_delta_buffer.length()));
+      STORAGE_LOG(WARN, "failed to write delta buffer", K(ret), K(other_delta_buffer.length()));
     }
   }
   return ret;

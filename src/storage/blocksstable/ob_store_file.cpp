@@ -833,7 +833,7 @@ int ObStoreFile::get_store_status(ObMacroBlockMarkerStatus& status)
     status.second_index_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::MacroBlockSecondIndex];
     status.lob_data_block_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::LobData];
     status.lob_second_index_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::LobIndex];
-    status.bloomfiter_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::BloomFilterData];
+    status.bloomfilter_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::BloomFilterData];
     status.hold_count_ = hold_macro_cnt_;
     status.pending_free_count_ = 0;
     status.free_count_ = free_block_cnt_;

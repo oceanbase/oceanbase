@@ -173,10 +173,10 @@ class ObPartitionMetaPhysicalReader final {
   DISALLOW_COPY_AND_ASSIGN(ObPartitionMetaPhysicalReader);
 };
 
-class ObPGMetaPyhsicalReader final {
+class ObPGMetaPhysicalReader final {
   public:
-  ObPGMetaPyhsicalReader();
-  virtual ~ObPGMetaPyhsicalReader();
+  ObPGMetaPhysicalReader();
+  virtual ~ObPGMetaPhysicalReader();
   void reset();
   int init(const share::ObPhysicalRestoreArg& arg, const ObPhyRestoreMetaIndexStore& meta_indexs);
   int read_partition_group_meta(ObPartitionGroupMeta& pg_meta);
@@ -197,7 +197,7 @@ class ObPGMetaPyhsicalReader final {
   int64_t data_size_;
   const share::ObPhysicalRestoreArg* arg_;
   const ObPhyRestoreMetaIndexStore* meta_indexs_;
-  DISALLOW_COPY_AND_ASSIGN(ObPGMetaPyhsicalReader);
+  DISALLOW_COPY_AND_ASSIGN(ObPGMetaPhysicalReader);
 };
 
 class ObPartitionBaseDataMetaRestoreReaderV1 {
@@ -336,7 +336,7 @@ class ObPartitionGroupMetaRestoreReaderV1 : public ObIPartitionGroupMetaRestoreR
   bool is_inited_;
   const ObPhysicalRestoreArg* restore_info_;
   const ObPhyRestoreMetaIndexStore* meta_indexs_;
-  ObPGMetaPyhsicalReader reader_;
+  ObPGMetaPhysicalReader reader_;
   ObPartitionGroupMeta pg_meta_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
   int64_t last_read_size_;

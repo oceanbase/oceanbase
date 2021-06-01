@@ -250,14 +250,14 @@ int ObBloomFilterCacheValue::merge_bloom_filter(const ObBloomFilterCacheValue& b
 
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "Unexcepted invalid bloomfilter to merge", K_(rowkey_column_cnt), K_(is_inited), K(ret));
+    STORAGE_LOG(WARN, "Unexpected invalid bloomfilter to merge", K_(rowkey_column_cnt), K_(is_inited), K(ret));
   } else if (OB_UNLIKELY(!bf_cache_value.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid bloomfilter cache to merge", K(ret));
   } else if (OB_UNLIKELY(!could_merge_bloom_filter(bf_cache_value))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN,
-        "Unexcepted bloomfitler cache to merge",
+        "Unexpected bloomfilter cache to merge",
         K(bf_cache_value),
         K_(rowkey_column_cnt),
         K_(bloom_filter),
@@ -283,7 +283,7 @@ DEFINE_SERIALIZE(ObBloomFilterCacheValue)
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(
-        WARN, "Unexcepted invalid bloomfilter cache to serialize", K_(rowkey_column_cnt), K_(is_inited), K(ret));
+        WARN, "Unexpected invalid bloomfilter cache to serialize", K_(rowkey_column_cnt), K_(is_inited), K(ret));
   } else if (OB_UNLIKELY(serialize_size > buf_len - pos)) {
     ret = OB_SIZE_OVERFLOW;
     STORAGE_LOG(WARN, "bloofilter cache serialize size overflow", K(serialize_size), K(buf_len), K(pos), K(ret));
@@ -629,7 +629,7 @@ int ObMacroBloomFilterCacheWriter::append(const storage::ObStoreRow& row)
     STORAGE_LOG(WARN, "ObBloomFilterDataWriter not init", K(ret));
   } else if (OB_UNLIKELY(!row.is_valid() || row.row_val_.count_ < get_rowkey_column_count())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid row to append to bloomfitler", K(row), K_(bf_cache_value), K(ret));
+    STORAGE_LOG(WARN, "Invalid row to append to bloomfilter", K(row), K_(bf_cache_value), K(ret));
   } else if (get_row_count() >= max_row_count_) {
     ret = OB_NOT_SUPPORTED;
     STORAGE_LOG(INFO, "Bloomfilter is full, ", K_(max_row_count), K_(bf_cache_value));
@@ -648,7 +648,7 @@ int ObMacroBloomFilterCacheWriter::append(const ObStoreRowkey& rowkey)
     STORAGE_LOG(WARN, "ObBloomFilterDataWriter not init", K(ret));
   } else if (OB_UNLIKELY(!rowkey.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid rowkey to append to bloomfitler", K(rowkey), K(ret));
+    STORAGE_LOG(WARN, "Invalid rowkey to append to bloomfilter", K(rowkey), K(ret));
   } else if (OB_UNLIKELY(get_rowkey_column_count() != rowkey.get_obj_cnt())) {
     ret = OB_NOT_SUPPORTED;
     STORAGE_LOG(WARN, "Rowkey count count is not same, ", K_(bf_cache_value), K(rowkey), K(ret));
@@ -656,7 +656,7 @@ int ObMacroBloomFilterCacheWriter::append(const ObStoreRowkey& rowkey)
     ret = OB_NOT_SUPPORTED;
     STORAGE_LOG(INFO, "Too many row for bloomfilter", K_(bf_cache_value));
   } else if (OB_FAIL(bf_cache_value_.insert(rowkey))) {
-    STORAGE_LOG(WARN, "Failed to insert rowkey to bloomfitler cache", K(rowkey), K(ret));
+    STORAGE_LOG(WARN, "Failed to insert rowkey to bloomfilter cache", K(rowkey), K(ret));
   }
   return ret;
 }

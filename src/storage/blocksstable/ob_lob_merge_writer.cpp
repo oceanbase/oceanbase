@@ -160,7 +160,7 @@ int ObLobMergeWriter::find_cand_lob_cols(const ObStoreRow& row, ObIArray<int64_t
       } else if (overflow_size > 0) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN,
-            "Unexcepted row which has no more lob column to reduce row size",
+            "Unexpected row which has no more lob column to reduce row size",
             K(row_size),
             K(overflow_size),
             K(ret));
@@ -211,7 +211,7 @@ int ObLobMergeWriter::overflow_lob_objs(const ObStoreRow& row, const ObStoreRow*
 
     } else if (lob_col_idxs.count() <= 0) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexcepted row which has nomore lob column to reduce row size", K(store_row_length), K(ret));
+      STORAGE_LOG(WARN, "Unexpected row which has nomore lob column to reduce row size", K(store_row_length), K(ret));
     } else if (OB_FAIL(copy_row_(row))) {
       LOG_WARN("failed to copy row", K(ret), K(row));
     } else {

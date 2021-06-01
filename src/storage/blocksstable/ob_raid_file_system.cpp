@@ -1186,7 +1186,7 @@ int ObRaidFileSystem::load_raid_super_block(const common::ObIArray<ObScanDiskInf
         } else if (1 == loaded_disk_array.count()) {
           first_disk_super_block = cur_disk_super_block;
         } else if (!first_disk_super_block.equals(cur_disk_super_block)) {
-          ret = OB_RAID_SUPER_BLOCK_NOT_MACTH;
+          ret = OB_RAID_SUPER_BLOCK_NOT_MATCH;
           LOG_WARN("raid super block not match", K(ret), K(i), K(first_disk_super_block), K(cur_disk_super_block));
         }
       }
@@ -1261,10 +1261,10 @@ int ObRaidFileSystem::load_disk_super_block(
     } else if (OB_FAIL(disk_super_block.deserialize(buf + header->header_length_, header->data_size_, pos))) {
       LOG_WARN("failed to decode disk super block", K(ret), K(buf_size), K(pos), K(disk_idx), K(sstable_file_path));
     } else if (!disk_super_block.is_valid()) {
-      ret = OB_RAID_SUPER_BLOCK_NOT_MACTH;
+      ret = OB_RAID_SUPER_BLOCK_NOT_MATCH;
       LOG_WARN("invalid disk super block", K(ret), K(disk_super_block));
     } else if (disk_super_block.disk_idx_ != disk_idx) {
-      ret = OB_RAID_SUPER_BLOCK_NOT_MACTH;
+      ret = OB_RAID_SUPER_BLOCK_NOT_MATCH;
       LOG_ERROR("disk id not match", K(ret), K(disk_idx), K(disk_super_block));
     } else {
       FLOG_INFO("succeed to load disk super block",
@@ -1302,7 +1302,7 @@ int ObRaidFileSystem::build_raid_status(const ObDiskFileSuperBlock& disk_super_b
       ObDiskFileStatus& disk_status = raid_status.disk_status_.at(disk_idx);
 
       if (ObDiskFileInfo::DROP == disk_status.info_.status_) {
-        FLOG_ERROR("skip load droped disk", K(ret), K(disk_idx), K(disk_status));
+        FLOG_ERROR("skip load dropped disk", K(ret), K(disk_idx), K(disk_status));
       } else if (OB_FAIL(databuff_printf(sstable_path,
                      sizeof(sstable_path),
                      "%.*s",
@@ -1847,7 +1847,7 @@ int ObRaidFileStatus::get_fd(const ObString& disk_name, ObDiskFd& fd) const
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K(disk_name));
   } else if (OB_FAIL(get_disk_status(disk_name, disk_status))) {
-    LOG_WARN("Faield to get disk status", K(ret), K(disk_name));
+    LOG_WARN("Failed to get disk status", K(ret), K(disk_name));
   } else if (OB_ISNULL(disk_status)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("disk status must not null", K(ret), K(disk_name), K(*this));
@@ -2236,7 +2236,7 @@ int ObRaidFileSystem::init_recover_io_master(const ObMacroBlockCtx& macro_block_
           if (OB_FAIL(recover_param.recover_index_.push_back(strip_idx))) {
             LOG_WARN("failed to add fail strip_idx", K(ret));
           } else {
-            LOG_DEBUG("add recover strip idx from recovet_index_set", K(ret), K(strip_idx), K(disk_idx));
+            LOG_DEBUG("add recover strip idx from recover_index_set", K(ret), K(strip_idx), K(disk_idx));
           }
         } else {
           break;

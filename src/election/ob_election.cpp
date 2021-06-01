@@ -3625,7 +3625,7 @@ int ObElection::post_election_msg_(
   common::ObAddr server;
 
   /**********should removed after a barrier version bigger than 3.1**********/
-  insert_pyhsical_condition_into_msg_(msg);
+  insert_physical_condition_into_msg_(msg);
   /*************************************************************************************/
   if (mlist.get_member_number() <= 0 || !partition.is_valid() || !msg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -3658,7 +3658,7 @@ int ObElection::post_election_msg_(
   const int64_t dst_cluster_id = obrpc::ObRpcNetHandler::CLUSTER_ID;
 
   /**********should removed after a barrier version bigger than 3.1**********/
-  insert_pyhsical_condition_into_msg_(msg);
+  insert_physical_condition_into_msg_(msg);
   /*************************************************************************************/
   if (!server.is_valid() || !partition.is_valid() || !msg.is_valid() || self_ == server) {
     ret = OB_INVALID_ARGUMENT;
@@ -3786,7 +3786,7 @@ int64_t ObElection::logic_ts_(int64_t real_ts) const
 }
 
 /**********should removed after a barrier version bigger than 3.1**********/
-void ObElection::insert_pyhsical_condition_into_msg_(const ObElectionMsg& msg)
+void ObElection::insert_physical_condition_into_msg_(const ObElectionMsg& msg)
 {
   if (OB_SYS_TENANT_ID != extract_tenant_id(partition_.get_table_id())) {
     int64_t send_timestamp = msg.get_send_timestamp();

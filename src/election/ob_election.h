@@ -426,7 +426,7 @@ class ObElection : public ObIElection, public ObIElectionTimerP, public ObElecti
   PhysicalCondition physical_condition_;
   int64_t temp_election_time_offset_;
   void register_gt1_with_neccessary_retry_(int64_t next_expect_ts);
-  void insert_pyhsical_condition_into_msg_(const ObElectionMsg&);
+  void insert_physical_condition_into_msg_(const ObElectionMsg&);
   PhysicalCondition fetch_others_condition_(const ObElectionMsg&);
   bool update_condition_(const ObElectionMsg&, const int64_t);
   /***************************************************************/

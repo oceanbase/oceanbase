@@ -1841,7 +1841,7 @@ void ObElectionGroup::run_gt1_task(const int64_t expect_ts)
           }
           // avoid print error log while election run at start
           if (cur_ts > start_timestamp_ + (vote_period_ + T_CYCLE_EXTEND_MORE) * T_ELECT2) {
-            // pirnt error log only if leader group's lease expired
+            // print error log only if leader group's lease expired
             if (old_leader == self_ && partition_array_.count() > 0 && !is_all_dropped) {
               ELECT_ASYNC_LOG_(ERROR, "eg leader lease is expired", K(*this), K(old_leader), K(is_all_dropped));
             } else {
@@ -1868,7 +1868,7 @@ void ObElectionGroup::run_gt1_task(const int64_t expect_ts)
               } else if (!is_candidate_(self_)) {
                 FORCE_ELECT_LOG(WARN, "self is not candidate", "self", *this);
               } else if (is_pre_destroy_state()) {
-                // must not do reappoint if group if pre-destoryed
+                // must not do reappoint if group if pre-destroyed
                 ELECT_ASYNC_LOG(INFO, "in pre_destroy_state, give up reappoint", "self", *this);
               } else if (is_empty_()) {
                 FORCE_ELECT_LOG(WARN, "self is empty, no need to reappoint", K(ret), "self", *this);

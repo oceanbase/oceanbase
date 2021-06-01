@@ -222,7 +222,7 @@ class ObPartitionGroupMetaRestoreReaderV2 : public ObIPartitionGroupMetaRestoreR
   bool is_inited_;
   const ObPhysicalRestoreArg* restore_info_;
   const ObPhyRestoreMetaIndexStore* meta_indexs_;
-  ObPGMetaPyhsicalReader reader_;
+  ObPGMetaPhysicalReader reader_;
   ObPartitionGroupMeta pg_meta_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
   int64_t last_read_size_;
