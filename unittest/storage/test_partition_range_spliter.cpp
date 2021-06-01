@@ -606,7 +606,7 @@ TEST_F(TestRangeSpliter, test_mulit_basic)
   build_query_range(ranges, rowkey_data25);
   ASSERT_EQ(true, loop_equal_ranges(ranges, ranges_array.at(4)));
 
-  // seperate range case, 5 ranges
+  // separate range case, 5 ranges
   const char* query_rowkey2 = "bigint   var   bigint  bigint flag    multi_version_row_flag\n"
                               "1        var1   MIN    -9     EXIST   CLF\n"
                               "8        var1   MIN    -9     EXIST   CLF\n"
