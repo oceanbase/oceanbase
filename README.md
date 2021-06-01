@@ -11,7 +11,7 @@ OceanBase Database has these features:
 - High compatible with MySQL
     OceanBase Database is compatible with MySQL protocol and syntax. You can access to OceanBase Database by using MySQL client.
 - High performance
-    OceanBase Database supports quasi memory level data change and exclusive encoding compression. Together with the linear scalability, OceanBase Database provides high performance.
+    OceanBase Database supports multiple memory level data change and exclusive encoding compression. Together with the linear scalability, OceanBase Database provides high performance.
 - Low cost
     OceanBase Database uses PC servers and cheap SSDs. Its high storage compression ratio and high performance also reduce the storage cost and the computing cost.
 - Multi-tenancy
@@ -59,5 +59,5 @@ Contributions are warmly welcomed and greatly appreciated. Here are a few ways y
 In case you have any problems when using OceanBase Database, welcome reach out for help:
 
 - [GitHub Issue](https://github.com/oceanbase/oceanbase/issues)
-- [Official Website](https://open.oceanbase.com/)
-- Knowledge base [link TODO]
+- [Official Website](https://www.oceanbase.com/community/answer)
+- Knowledge base [Coming soon]
