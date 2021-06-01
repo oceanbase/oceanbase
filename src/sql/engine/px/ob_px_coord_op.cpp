@@ -423,19 +423,19 @@ int ObPxCoordOp::write_op_metric_info(
     ObPxTaskMonitorInfo& task_monitor_info, char* metric_info, int64_t len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
-  static const char top_element_seperate[2] = "|";
-  static const char metric_seperate[2] = "+";
+  static const char top_element_separate[2] = "|";
+  static const char metric_separate[2] = "+";
   ObIArray<ObOpMetric>& metrics = task_monitor_info.get_op_metrics();
   if (0 < metrics.count()) {
     for (int64_t nth = 0; nth < metrics.count() && OB_SUCC(ret); ++nth) {
       ObOpMetric& metric = metrics.at(nth);
       if (metric.get_enable_audit()) {
         if (0 == nth) {
-          if (OB_FAIL(databuff_printf(metric_info, len, pos, "%s", top_element_seperate))) {
+          if (OB_FAIL(databuff_printf(metric_info, len, pos, "%s", top_element_separate))) {
             LOG_WARN("fail to print buff", K(ret));
           }
         } else {
-          if (OB_FAIL(databuff_printf(metric_info, len, pos, "%s", metric_seperate))) {
+          if (OB_FAIL(databuff_printf(metric_info, len, pos, "%s", metric_separate))) {
             LOG_WARN("fail to print buff", K(ret));
           }
         }
