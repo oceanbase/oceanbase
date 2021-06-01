@@ -57,7 +57,7 @@ class ObILogReplayEngine {
   // @param[in] need_replay:Whether the log needs to be replayed, the member change log and the
   // transaction log of D replica and log replica do not need to be replayed
   // @param[in] pkey:pkey of PG
-  // @param[in] log_id:🔐id of submited log
+  // @param[in] log_id:🔐id of submitted log
   // @param[in] log_ts:submit_timestamp of log
   // @retval OB_SUCCESS : The task is submitted successfully
   // @retval OB_NOT_INIT: ObLogReplayEngine has not been inited

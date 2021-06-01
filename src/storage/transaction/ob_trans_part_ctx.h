@@ -705,7 +705,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   bool is_redo_prepared_;
   bool has_gen_last_redo_log_;
   // this let clear_log's timestamp always
-  // greate than commit timestamp of all participants
+  // greater than commit timestamp of all participants
   int64_t clear_log_base_ts_;
   TransResultInfo result_info_;
   int64_t end_log_ts_for_batch_commit_;

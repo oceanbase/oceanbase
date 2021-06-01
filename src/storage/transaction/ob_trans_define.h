@@ -3631,7 +3631,7 @@ typedef common::ObSEArray<ObMemtableKeyInfo, 16, TransModulePageAllocator> ObMem
 typedef common::ObSEArray<ObAddrLogId, 10, TransModulePageAllocator> ObAddrLogIdArray;
 const int64_t OB_TRANS_REDO_LOG_RESERVE_SIZE = 128 * 1024;
 const int64_t MAX_ONE_PC_TRANS_SIZE = 1500000;
-// parmeters config transaction related
+// parameters config transaction related
 const int64_t TRANS_ACCESS_STAT_INTERVAL = 60 * 1000 * 1000;  // 60s
 const int64_t TRANS_MEM_STAT_INTERVAL = 5 * 1000 * 1000;      // 60s
 

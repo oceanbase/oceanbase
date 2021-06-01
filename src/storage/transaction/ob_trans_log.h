@@ -380,7 +380,7 @@ class ObTransPrepareLogHelper {
   // will be pre-allocated and recorded in the log body for updating
   // part_ctx's prepare_version during follower's replay process.
   // and it's equal to submit_timestamp recorded in log header, to avoid redundency,
-  // this field is not used in version 2.2 and later versions.(it's not removed for compatability reasons)
+  // this field is not used in version 2.2 and later versions.(it's not removed for compatibility reasons)
   int64_t local_trans_version_;
   common::ObVersion active_memstore_version_;
   common::ObString app_trace_id_str_;

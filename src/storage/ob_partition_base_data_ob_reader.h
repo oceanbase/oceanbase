@@ -271,7 +271,7 @@ class ObPartitionMacroBlockObProducer {
 // end_key(1)
 // end_key(2)
 // ...
-// end_key(n) shoule be MAX
+// end_key(n) should be MAX
 class ObLogicBaseMetaProducer {
   public:
   ObLogicBaseMetaProducer() : is_inited_(false), partition_service_(NULL), arg_(NULL)
