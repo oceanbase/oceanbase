@@ -90,5 +90,5 @@ git push -u origin new-branch-name # "-u" is used to track the remote branch fro
 
 ### Step 8: Create a pull request
 
-1. Visit your fork at <https://github.com/$user/docs> (replace `$user` with your GitHub account).
+1. Visit your fork at <https://github.com/$user/oceanbase> (replace `$user` with the GitHub account which you performed the fork operation, the repo name is `oceanbase` by default and you may want to modify it).
 2. Click the `Compare & pull request` button next to your `new-branch-name` branch to create your PR.
