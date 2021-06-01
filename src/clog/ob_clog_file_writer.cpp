@@ -56,7 +56,7 @@ int ObCLogBaseFileWriter::init(
     CLOG_LOG(WARN, "already inited", K(ret));
   } else if (OB_ISNULL(log_dir) || OB_ISNULL(shm_path) || OB_ISNULL(file_store)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid param", K(ret), K(log_dir), K(align_size), KP(file_store));
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(log_dir), K(align_size), KP(file_store));
   } else if (OB_FAIL(ObBaseLogBufferMgr::get_instance().get_buffer(shm_path, log_ctrl_))) {
     CLOG_LOG(WARN, "get log buf failed", K(ret), K(log_dir));
   } else {
