@@ -8,7 +8,7 @@ OceanBase Database has these features:
     Single server failure recovers automatically. OceanBase Database supports cross-city disaster tolerance for multiple IDCs and zero data loss. OceanBase Database meets the financial industry Level 6 disaster recovery standard (RPO=0, RTO<=30 seconds).
 - Linear scalability
     OceanBase Database scales transparently to applications and balances the system load automatically. Its cluster can contain more than 1500 nodes. The data volume can reach petabytes. The records in a single table can be more than a trillion rows.
-- High compatible with MySQL
+- Highly compatible with MySQL
     OceanBase Database is compatible with MySQL protocol and syntax. You can access to OceanBase Database by using MySQL client.
 - High performance
     OceanBase Database supports quasi memory level data change and exclusive encoding compression. Together with the linear scalability, OceanBase Database provides high performance.
