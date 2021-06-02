@@ -2059,7 +2059,7 @@ int64_t ObLogger::get_wait_us(const int32_t level)
       default: {
         ret_timeout_us = 0;  // 0us
         break;
-        // do nothiong
+        // do nothing
       }
     }
   }

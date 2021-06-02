@@ -264,8 +264,8 @@ class ObElectionGroup : public ObIElectionGroup, public ObIElectionTimerP {
   bool run_time_out_of_range_(const int64_t cur_ts, const int64_t expect_ts) const;
   bool vote_run_time_out_of_range_(const int64_t cur_ts, const int64_t expect_ts) const;
   int get_eg_centralized_candidate_(common::ObAddr& cur_leader, common::ObAddr& new_leader);
-  int try_centrialized_voting_(const int64_t lease_time);
-  int check_centrialized_majority_();
+  int try_centralized_voting_(const int64_t lease_time);
+  int check_centralized_majority_();
   void set_unconfirmed_leader_(const common::ObAddr& unconfirmed_leader);
   int set_unconfirmed_leader_lease_(const int64_t start, const int64_t end);
   bool unconfirmed_leader_lease_is_expired_(const int64_t cur_ts) const;
