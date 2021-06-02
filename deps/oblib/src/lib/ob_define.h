@@ -288,7 +288,7 @@ const int64_t OB_MAX_TRANS_ID_BUFFER_SIZE = 512;
 const int32_t OB_MIN_SAFE_COPY_COUNT = 3;
 const int32_t OB_SAFE_COPY_COUNT = 3;
 const int32_t OB_DEFAULT_REPLICA_NUM = 3;
-const int32_t OB_DEC_AND_LOCK = 2626;                                /* used by remoe_plan in ObPsStore */
+const int32_t OB_DEC_AND_LOCK = 2626;                                /* used by remote_plan in ObPsStore */
 const int32_t OB_MAX_SCHEMA_VERSION_INTERVAL = 40 * 1000 * 1000;     // 40s
 const int64_t UPDATE_SCHEMA_ADDITIONAL_INTERVAL = 5 * 1000 * 1000L;  // 5s
 
@@ -834,7 +834,7 @@ const uint64_t OB_GTS_UNIT_ID = 100;
 const int64_t OB_GTS_QUORUM = 3;
 const char* const OB_ORIGINAL_GTS_NAME = "primary_gts_instance";
 const uint64_t OB_ORIGINAL_GTS_ID = 100;
-// standby unit config tmplate
+// standby unit config template
 const char* const OB_STANDBY_UNIT_CONFIG_TEMPLATE_NAME = "standby_unit_config_template";
 
 const uint64_t OB_SCHEMATA_TID = 2001;
@@ -1494,7 +1494,7 @@ const int64_t OB_MAX_CPU_NUM = 128;
 const int64_t OB_MAX_STATICS_PER_TABLE = 128;
 
 const uint64_t OB_DEFAULT_INDEX_ATTRIBUTES_SET = 0;
-const uint64_t OB_DEFAULT_INDEX_VISIBILITY = 0;  // 0 menas visible;1 means invisible
+const uint64_t OB_DEFAULT_INDEX_VISIBILITY = 0;  // 0 means visible;1 means invisible
 
 const int64_t OB_INDEX_WRITE_START_DELAY = 20 * 1000 * 1000;  // 20s
 

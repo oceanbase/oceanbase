@@ -214,7 +214,7 @@ class ObPLogItem;
   }
 
 //@class ObLogIdLevelMap
-//@brief stroe the level of each par-module and sub-module. The key is module ID.
+//@brief store the level of each par-module and sub-module. The key is module ID.
 //       To be used for SQL hint, this class should be POD-type.
 struct ObLogIdLevelMap {
   static const uint64_t MAX_PAR_MOD_SIZE = OB_LOG_MAX_PAR_MOD_SIZE;
@@ -759,8 +759,8 @@ class ObLogger : public ObBaseLogWriter {
   //@param[in] flag Whether redirect the stdout and stderr to the descriptor of the log-file.
   // FALSE:redirect TRUE:no redirect.
   //@param[in] open_wf whether create warning log-file to store warning buffer.
-  //@param[in] finename of rootservice log-file's name.
-  //@param[in] finename of election log-file's name.
+  //@param[in] filename of rootservice log-file's name.
+  //@param[in] filename of election log-file's name.
   void set_file_name(const char* filename, const bool no_redirect_flag = false, const bool open_wf = false,
       const char* rs_filename = NULL, const char* elec_filename = NULL);
 
@@ -937,10 +937,10 @@ class ObLogger : public ObBaseLogWriter {
   //@brief Rename the log to a filename with fmt. And open a new file with the old, then add old file to file_list.
   //@param[in] filename the old filename to rotate.
   //@param[in] whether redirect, FALSE:redirect TRUE:no redirect
-  //@param[out] after retated log, open new file_fd
-  //@param[out] after retated wf log, open new wf_file_fd
-  //@param[out] add retated log file name to file list
-  //@param[out] add retated wf log file name to file list
+  //@param[out] after rotated log, open new file_fd
+  //@param[out] after rotated wf log, open new wf_file_fd
+  //@param[out] add rotated log file name to file list
+  //@param[out] add rotated wf log file name to file list
   void rotate_log(const char* filename, const ObPLogFDType fd_type, const bool redirect_flag, int32_t& fd,
       int32_t& wf_fd, std::deque<std::string>& file_list, std::deque<std::string>& wf_file_list);
 
@@ -966,7 +966,7 @@ class ObLogger : public ObBaseLogWriter {
 
   private:
   static const char* const errstr_[];
-  // default log rate limiter if there's no tl_log_limiger
+  // default log rate limiter if there's no tl_log_limiter
   static ::oceanbase::lib::ObRateLimiter* default_log_limiter_;
   static RLOCAL(lib::ObRateLimiter*, tl_log_limiter_);
   static constexpr int N_LIMITER = 4096;
@@ -1004,8 +1004,8 @@ class ObLogger : public ObBaseLogWriter {
   bool force_check_;         // whether check log-file at each message logging.
   bool redirect_flag_;       // whether redirect, TRUE: redirect FALSE: no redirect.
   bool open_wf_flag_;        // whether open warning log-file.
-  bool enable_wf_flag_;      // whether write waring log to wf log-file.
-  bool rec_old_file_flag_;   // whether recorde old file.
+  bool enable_wf_flag_;      // whether write warning log to wf log-file.
+  bool rec_old_file_flag_;   // whether record old file.
   volatile bool can_print_;  // when disk has no space, logger control
 
   bool enable_async_log_;  // if false, use sync way logging

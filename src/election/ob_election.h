@@ -286,8 +286,8 @@ class ObElection : public ObIElection, public ObIElectionTimerP, public ObElecti
   bool change_leader_time_out_of_range_(const int64_t cur_ts, const int64_t expect_ts) const;
   int get_decentralized_candidate_(common::ObAddr& server, ObElectionPriority& priority, int64_t& lease_time);
   int get_centralized_candidate_(common::ObAddr& cur_leader, common::ObAddr& new_leader, int64_t msg_t1);
-  int try_centrialized_voting_(const int64_t lease_time, int64_t msg_t1);
-  int check_centrialized_majority_();
+  int try_centralized_voting_(const int64_t lease_time, int64_t msg_t1);
+  int check_centralized_majority_();
   int check_decentralized_majority_(common::ObAddr& new_leader, int64_t& ticket);
   int collect_valid_candidates_(const ObElectionMsgVote& msg);
   int send_devote_prepare_(const ObElectionMsgDEPrepare& msg);

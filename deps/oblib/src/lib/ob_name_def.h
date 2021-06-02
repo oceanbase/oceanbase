@@ -228,7 +228,7 @@
 #define N_ROWKEY_LIST "rowkey_list"
 #define N_READ_MASTER "read_master"
 #define N_RESULT_CACHED "result_cached"
-#define N_NOT_EXIST_COL_RET_NOP "not_exsit_col_ret_as_nop"
+#define N_NOT_EXIST_COL_RET_NOP "not_exist_col_ret_as_nop"
 #define N_RAW_EXPR "raw_expr"
 #define N_ROWKEY_CELL_NUM "rowkey_cell_num"
 #define N_CELL "cell"
