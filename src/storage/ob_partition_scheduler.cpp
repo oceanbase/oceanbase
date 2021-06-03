@@ -181,26 +181,6 @@ int ObBloomFilterBuildTask::build_bloom_filter()
           access_param_.iter_param_.schema_version_ = meta.meta_->schema_version_;
           access_param_.iter_param_.rowkey_cnt_ = meta.schema_->rowkey_column_number_;
           access_param_.iter_param_.out_cols_ = &access_param_.out_col_desc_param_.get_col_descs();
-          scanner = new (buf) ObSSTableRowWholeScanner();
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < prefix_len_; ++i) {
-          col_desc.col_id_ = meta.schema_->column_id_array_[i];
-          col_desc.col_type_ = meta.schema_->column_type_array_[i];
-          if (OB_FAIL(access_param_.out_col_desc_param_.push_back(col_desc))) {
-            LOG_WARN("Fail to push the col to param columns, ", K(ret));
-          }
-        }
-      }
-      // prepare scan param
-      if (OB_SUCC(ret)) {
-        access_param_.reset();
-        if (OB_FAIL(access_param_.out_col_desc_param_.init())) {
-          LOG_WARN("init out cols fail", K(ret));
-        } else {
-          access_param_.iter_param_.table_id_ = table_id_;
-          access_param_.iter_param_.schema_version_ = meta.meta_->schema_version_;
-          access_param_.iter_param_.rowkey_cnt_ = meta.meta_->rowkey_column_number_;
-          access_param_.iter_param_.out_cols_ = &access_param_.out_col_desc_param_.get_col_descs();
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < prefix_len_; ++i) {
           col_desc.col_id_ = meta.schema_->column_id_array_[i];
