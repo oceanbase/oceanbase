@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCENABASE_LIB_LOCK_OB_FCOND_H
-#define OCENABASE_LIB_LOCK_OB_FCOND_H
+#ifndef OCEANBASE_LIB_LOCK_OB_FCOND_H
+#define OCEANBASE_LIB_LOCK_OB_FCOND_H
 #include "lib/thread_local/ob_tsi_utils.h"
 #include "lib/coro/co.h"
 
@@ -50,4 +50,4 @@ struct ObFCond {
 };
 };      // namespace common
 };      // end namespace oceanbase
-#endif  // OCENABASE_LIB_LOCK_OB_FCOND_H
+#endif  // OCEANBASE_LIB_LOCK_OB_FCOND_H

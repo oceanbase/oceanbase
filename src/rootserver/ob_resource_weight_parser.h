@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef __OCENABASE_RS_RESOURCE_WEIGHT_PARSER_H__
-#define __OCENABASE_RS_RESOURCE_WEIGHT_PARSER_H__
+#ifndef __OCEANBASE_RS_RESOURCE_WEIGHT_PARSER_H__
+#define __OCEANBASE_RS_RESOURCE_WEIGHT_PARSER_H__
 
 #include "share/ob_kv_parser.h"
 #include "rootserver/ob_balance_info.h"
@@ -59,5 +59,5 @@ class ObResourceWeightParser {
 };
 }  // namespace rootserver
 }  // namespace oceanbase
-#endif /* __OCENABASE_RS_RESOURCE_WEIGHT_PARSER_H__ */
+#endif /* __OCEANBASE_RS_RESOURCE_WEIGHT_PARSER_H__ */
 //// end of header file

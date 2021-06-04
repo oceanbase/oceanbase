@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace share {
 namespace schema {
 
-// Mysql server backend intialize helper for unittest.
+// Mysql server backend initialize helper for unittest.
 //
 // 1. initialize empty database and mysql client, connect to localhost mysql:
 //     host: 127.0.0.1
@@ -32,7 +32,7 @@ namespace schema {
 //     pass: ""
 //     database: ${USER//./_}_unittest
 //
-// 2. create ocenabase system table schema in mysql server.
+// 2. create oceanbase system table schema in mysql server.
 //
 class DBInitializer {
   public:
