@@ -66,4 +66,4 @@ In case you have any problems when using OceanBase Database, welcome reach out f
 
 - [GitHub Issue](https://github.com/oceanbase/oceanbase/issues)
 - [Official Website](https://open.oceanbase.com/)
-- Knowledge base [link TODO]
+- Knowledge Base [link TODO]
