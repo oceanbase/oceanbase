@@ -169,7 +169,7 @@ class ObIntervalParts {
   {}
   inline void reset()
   {
-    is_negtive_ = false;
+    is_negative_ = false;
     memset(parts_, 0, sizeof(parts_));
   }
   enum PartName {
@@ -185,10 +185,10 @@ class ObIntervalParts {
   };
   inline int32_t get_part_value(PartName part_name)
   {
-    return (part_name < PART_CNT && part_name > INVALID_PART) ? (parts_[part_name] * (is_negtive_ ? -1 : 1))
+    return (part_name < PART_CNT && part_name > INVALID_PART) ? (parts_[part_name] * (is_negative_ ? -1 : 1))
                                                               : INT32_MAX;
   }
-  bool is_negtive_;
+  bool is_negative_;
   int32_t parts_[PART_CNT];
 };
 
