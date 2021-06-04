@@ -170,7 +170,7 @@ int ObExprDateAdjust::calc_result3(ObObj& result, const ObObj& date, const ObObj
           } else {
             uint64_t sub_num = 1;
             number::ObNumber tmp_sub_num;
-            // add a positive or minus a negtive number, truncate decimal part.
+            // add a positive or minus a negative number, truncate decimal part.
             if (OB_FAIL(interval_num.trunc(0))) {
               LOG_WARN("trunc decimal failed", K(ret));
             } else if ((is_add && is_neg)) {
