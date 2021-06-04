@@ -58,7 +58,7 @@ sh build.sh rpm --init && cd build_rpm && make -j16 rpm
 Contributions are warmly welcomed and greatly appreciated. Here are a few ways you can contribute:
 
 - Raise us an [issue](https://github.com/oceanbase/oceanbase/issues).
-- Submit Pull Requests. For details, see [How to contribute](CONTRIBUTING.md).
+- Submit pull requests. For details, see [How to contribute](CONTRIBUTING.md).
 
 ## Support
 
