@@ -136,7 +136,7 @@ int ObExprValuesWithChild::inner_get_next_row(ObExecContext& ctx, const ObNewRow
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get physical operator context failed", K(ret), K_(id));
   } else if (OB_FAIL(THIS_WORKER.check_status())) {
-    LOG_WARN("check physical plan status faild", K(ret));
+    LOG_WARN("check physical plan status failed", K(ret));
   } else if (OB_FAIL(calc_next_row(ctx))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next row from row store failed", K(ret));

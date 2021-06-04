@@ -223,7 +223,7 @@ int ObExprValues::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) c
     plan_ctx->set_autoinc_id_tmp(0);
     if (get_rows() > 10) {
       if (OB_FAIL(THIS_WORKER.check_status())) {
-        LOG_WARN("check physical plan status faild", K(ret));
+        LOG_WARN("check physical plan status failed", K(ret));
       }
     }
   }

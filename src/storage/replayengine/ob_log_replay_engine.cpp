@@ -878,7 +878,7 @@ int ObLogReplayEngine::do_replay_task(storage::ObIPartitionGroup* partition, ObR
           REPLAY_LOG(INFO, "succ to replay offline partition log", K(ret), K(*replay_task));
         } else {
           EVENT_INC(CLOG_FAIL_REPLAY_OFFLINE_COUNT);
-          REPLAY_LOG(WARN, "faild to replay offline partition log", K(ret), K(*replay_task));
+          REPLAY_LOG(WARN, "failed to replay offline partition log", K(ret), K(*replay_task));
         }
       } else {
         // no need replay
@@ -934,7 +934,7 @@ int ObLogReplayEngine::do_replay_task(storage::ObIPartitionGroup* partition, ObR
           EVENT_INC(CLOG_SUCC_REPLAY_META_LOG_COUNT);
           REPLAY_LOG(INFO, "succ to replay partition meta log", K(ret), K(*replay_task));
         } else {
-          REPLAY_LOG(WARN, "faild to replay partition meta log", K(ret), K(*replay_task));
+          REPLAY_LOG(WARN, "failed to replay partition meta log", K(ret), K(*replay_task));
           EVENT_INC(CLOG_FAIL_REPLAY_META_LOG_COUNT);
         }
       } else if (ObStorageLogTypeChecker::is_add_partition_to_pg_log(log_type)) {
@@ -972,7 +972,7 @@ int ObLogReplayEngine::do_replay_task(storage::ObIPartitionGroup* partition, ObR
           REPLAY_LOG(INFO, "succ to replay offline partition log", K(ret), K(*replay_task));
         } else {
           EVENT_INC(CLOG_FAIL_REPLAY_OFFLINE_COUNT);
-          REPLAY_LOG(WARN, "faild to replay offline partition log", K(ret), K(*replay_task));
+          REPLAY_LOG(WARN, "failed to replay offline partition log", K(ret), K(*replay_task));
         }
       } else if (ObStorageLogTypeChecker::is_schema_version_change_log(log_type)) {
         REPLAY_LOG(INFO, "start to replay partition schema version change log", "replay_task", *replay_task);

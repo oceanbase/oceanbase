@@ -560,7 +560,7 @@ int ObPxCoordOp::destroy_all_channel()
   }
 
   const ObIArray<ObDfo*>& dfos = coord_info_.dfo_mgr_.get_all_dfos();
-  /* even if one channel unlink faild, we still continue destroy other channel */
+  /* even if one channel unlink failed, we still continue destroy other channel */
   ARRAY_FOREACH_X(dfos, idx, cnt, true)
   {
     const ObDfo* edge = dfos.at(idx);
@@ -568,7 +568,7 @@ int ObPxCoordOp::destroy_all_channel()
     if (OB_FAIL(edge->get_sqcs(sqcs))) {
       LOG_WARN("fail to get sqcs", K(ret));
     } else {
-      /* one channel unlink faild still continue destroy other channel */
+      /* one channel unlink failed still continue destroy other channel */
       ARRAY_FOREACH_X(sqcs, sqc_idx, sqc_cnt, true)
       {
         const ObDtlChannelInfo& qc_ci = sqcs.at(sqc_idx)->get_qc_channel_info_const();

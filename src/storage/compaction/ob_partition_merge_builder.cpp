@@ -272,7 +272,7 @@ int ObMacroBlockBuilder::init_bloomfilter_if_need(storage::ObSSTableMergeCtx& ct
       } else if (!sstable->has_bloom_filter_macro_block()) {
         need_build_bloom_filter_ = false;
       } else if (OB_FAIL(sstable->get_bf_macro_block_ctx(bf_block_ctx))) {
-        STORAGE_LOG(WARN, "Faild to get bloomfilter block ctx", K(ret));
+        STORAGE_LOG(WARN, "Failed to get bloomfilter block ctx", K(ret));
       } else if (nullptr == file && OB_ISNULL(file = desc_.file_handle_.get_storage_file())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "fail to get pg_file", K(ret), K(desc_.file_handle_));
@@ -568,7 +568,7 @@ int ObMacroBlockBuilder::process(const ObStoreRow& row, const ObCompactRowType::
     } else if (OB_FAIL(writer_->append_row(row))) {  // del_row need been stored when minor merge
       STORAGE_LOG(WARN, "Fail to append row to builder_", K(ret), K_(merge_type));
     } else if (need_build_bloom_filter_ && OB_FAIL(append_bloom_filter(row))) {
-      STORAGE_LOG(WARN, "Faild to append row to bloomfilter", K(ret));
+      STORAGE_LOG(WARN, "Failed to append row to bloomfilter", K(ret));
     } else {
       STORAGE_LOG(DEBUG, "Success to append row to builder_", K(ret), K_(merge_type), K(row));
     }
