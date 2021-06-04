@@ -43,7 +43,7 @@ void ObDtlRpcChannel::SendMsgCB::on_invalid()
 
 void ObDtlRpcChannel::SendMsgCB::on_timeout()
 {
-  LOG_WARN("SendMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate", K_(trace_id));
+  LOG_WARN("SendMsgCB timeout, if negative timeout, check peer cpu load, network packet drop rate", K_(trace_id));
   const ObDtlRpcDataResponse& resp = result_;
   int ret = response_.on_finish(resp.is_block_, OB_TIMEOUT);
   if (OB_FAIL(ret)) {
@@ -90,7 +90,7 @@ void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
 
 void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
 {
-  LOG_WARN("SendBCMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate", K_(trace_id));
+  LOG_WARN("SendBCMsgCB timeout, if negative timeout, check peer cpu load, network packet drop rate", K_(trace_id));
   ObIArray<ObDtlRpcDataResponse>& resps = result_.resps_;
   for (int64_t i = 0; i < resps.count() && i < responses_.count(); ++i) {
     int ret = responses_.at(i)->on_finish(resps.at(i).is_block_, OB_TIMEOUT);
