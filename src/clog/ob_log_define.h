@@ -29,19 +29,22 @@
 
 namespace oceanbase {
 namespace clog {
+#define CLOG_DIO_ALIGN_SIZE 4096
+#define TMP_SUFFIX ".tmp"
+
 typedef uint32_t file_id_t;
 typedef int32_t offset_t;
 
 const int64_t CLOG_RPC_TIMEOUT = 3000 * 1000 - 100 * 1000;
 const int64_t CLOG_TRAILER_SIZE = 512;
 const int64_t CLOG_TRAILER_OFFSET = CLOG_FILE_SIZE - CLOG_TRAILER_SIZE;  // 512B for the trailer block
+const int64_t CLOG_TRAILER_ALIGN_WRITE_OFFSET = CLOG_FILE_SIZE -
+                                                CLOG_DIO_ALIGN_SIZE; // 4k aligned write
 const int64_t CLOG_MAX_DATA_OFFSET = CLOG_TRAILER_OFFSET - common::OB_MAX_LOG_BUFFER_SIZE;
 const int64_t CLOG_CACHE_SIZE = 64 * 1024;
 const int64_t CLOG_REPLAY_CHECKSUM_WINDOW_SIZE = 1 << 9;
 const int64_t CLOG_INFO_BLOCK_SIZE_LIMIT = 1 << 22;
 const offset_t OB_INVALID_OFFSET = -1;
-#define CLOG_DIO_ALIGN_SIZE 4096
-#define TMP_SUFFIX ".tmp"
 
 inline bool is_valid_log_id(const uint64_t log_id)
 {
