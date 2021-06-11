@@ -2822,7 +2822,7 @@ int ObOptimizerUtil::classify_get_scan_ranges(const common::ObIArray<ObNewRange>
         LOG_WARN("failed to push back range", K(ret));
       }
     } else if (OB_FAIL(used_input_ranges.push_back(input_ranges.at(i)))) {
-      LOG_WARN("failede to push back range", K(ret));
+      LOG_WARN("failed to push back range", K(ret));
     }
     if (OB_SUCC(ret)) {
       LOG_TRACE("used input range", K(used_input_ranges.at(used_input_ranges.count() - 1)));
