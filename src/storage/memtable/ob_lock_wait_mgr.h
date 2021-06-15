@@ -88,10 +88,10 @@ class ObLockWaitMgr : public share::ObThreadPool {
   protected:
   // obtain the request waiting on the row or transaction
   Node* fetch_waiter(uint64_t hash);
-  // check whether there exits requests already timeoutt or need be
+  // check whether there exits requests already timeout or need be
   // retried(session is killed, deadlocked or son on), and wakeup and retry them
   ObLink* check_timeout();
-  // reclaim the chained reuqests
+  // reclaim the chained requests
   void retire_node(ObLink*& tail, Node* node);
   // wakeup the request and put into the thread worker queue
   virtual int repost(Node* node);

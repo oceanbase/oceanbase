@@ -32,7 +32,7 @@ class ObMultiVersionValueIterator : public ObIMvccValueIterator {
   public:
   ObMultiVersionValueIterator();
   virtual ~ObMultiVersionValueIterator();
-  // for iterating multi version row or uncommited transaction row
+  // for iterating multi version row or uncommitted transaction row
   public:
   int init(const ObIMvccCtx& ctx, const transaction::ObTransSnapInfo& snapshot_info, const ObMemtableKey* key,
       ObMvccRow* value, transaction::ObTransStateTableGuard& trans_table_guard);

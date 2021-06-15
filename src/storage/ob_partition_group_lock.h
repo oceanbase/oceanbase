@@ -89,7 +89,7 @@ class ObPartitionGroupLockGuard {
 };
 
 // ATTENTION:
-// The lock is designed to resolve the deadlock of code desgin between replay
+// The lock is designed to resolve the deadlock of code design between replay
 // engine and partition group. You need use the guard when adding replay engine
 // lock inside partition group
 class ObPGLockWithPendingReplayGuard {

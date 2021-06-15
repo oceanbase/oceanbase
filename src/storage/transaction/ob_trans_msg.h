@@ -201,9 +201,9 @@ class ObTransMsg : public ObTransMsgBase {
   // 2.extra param: scheduler_, coordinator_, participats_, status_, request_id_
   // 3.note:
   //   (1) scheduler_,coordinator_, participants_: required, use to recovery after coordinator failure
-  //   (2) status_: required, used to idneify participant's commit/abort state
+  //   (2) status_: required, used to identify participant's commit/abort state
   //   (3) request_id_: required, used to reject steal message
-  //   (4) xid: requried for XA
+  //   (4) xid: required for XA
   //   (5) is_xa_prepare: required for XA
   int init(const uint64_t tenant_id, const ObTransID& trans_id, const int64_t msg_type, const int64_t trans_time,
       const common::ObPartitionKey& sender, const common::ObPartitionKey& receiver, const common::ObAddr& scheduler,
@@ -223,7 +223,7 @@ class ObTransMsg : public ObTransMsgBase {
   //   (4) trans_version_: participant's local prepare version
   //   (5) request_id_: used to reject steal message
   //   (6) xid: required for XA
-  //   (7) is_xa_prepare: requried for XA
+  //   (7) is_xa_prepare: required for XA
   int init(const uint64_t tenant_id, const ObTransID& trans_id, const int64_t msg_type, const int64_t trans_time,
       const common::ObPartitionKey& sender, const common::ObPartitionKey& receiver, const common::ObAddr& scheduler,
       const common::ObPartitionKey& coordinator, const common::ObPartitionArray& participants,

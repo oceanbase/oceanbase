@@ -47,7 +47,7 @@ class ObTenantWeakReadClusterVersionMgr {
       const int64_t total_part_count, const int64_t generate_tstamp, bool& is_new_server);
 
   /// get min server version which not smaller than base_version
-  /// if no statisfied server version, return base_version
+  /// if no satisfied server version, return base_version
   int64_t get_version(const int64_t base_version, int64_t& skip_server_count, const bool need_print_server_info) const;
 
   // get server count in cluster master cached registered servers

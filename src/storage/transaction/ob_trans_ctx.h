@@ -138,7 +138,7 @@ class ObTransState {
 // NOTICE: You should **CHANGE** the signature of all inherit class once you
 // change one of the signature of `ObTransCtx`.
 // For Example: If you change the signature of the function `commit` in
-// `ObTransCtx`, you should also modify the signatore of function `commit` in
+// `ObTransCtx`, you should also modify the signature of function `commit` in
 // `ObPartTransCtx`, `ObSlaveTransCtx`, `ObScheTransCtx` and `ObCoordTransCtx`
 class ObTransCtx : public TransCtxHashValue {
   friend class CtxLock;
@@ -690,7 +690,7 @@ class ObDistTransCtx : public ObTransCtx {
   ObITransRpc* rpc_;
   ObILocationAdapter* location_adapter_;
   int64_t commit_start_time_;
-  // the variable is used to get the time between the trans start and respone to client
+  // the variable is used to get the time between the trans start and response to client
   int64_t trans_start_time_;
   bool need_refresh_location_;
   int64_t trans_2pc_timeout_;
