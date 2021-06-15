@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 TOPDIR="$(dirname $(readlink -f "$0"))"
 BUILD_SH=${TOPDIR}/build.sh
 DEP_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/deps/devel
