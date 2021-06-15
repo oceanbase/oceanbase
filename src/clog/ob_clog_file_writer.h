@@ -96,7 +96,7 @@ class ObCLogBaseFileWriter {
   int append_trailer_entry(const uint32_t info_block_offset);
   int flush_trailer_entry();
   // append all data in buffer to log cache
-  int cache_buf(ObLogCache* log_cache);
+  int cache_buf(ObLogCache *log_cache, const char *buf, const uint32_t buf_len);
 
   OB_INLINE bool need_align() const
   {
