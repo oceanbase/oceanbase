@@ -43,7 +43,7 @@ void ObDtlRpcChannel::SendMsgCB::on_invalid()
 
 void ObDtlRpcChannel::SendMsgCB::on_timeout()
 {
-  LOG_WARN("SendMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate", K_(trace_id));
+  LOG_WARN("SendMsgCB timeout, if negative timeout, check peer cpu load, network packet drop rate", K_(trace_id));
   const ObDtlRpcDataResponse& resp = result_;
   int ret = response_.on_finish(resp.is_block_, OB_TIMEOUT);
   if (OB_FAIL(ret)) {
@@ -54,7 +54,7 @@ void ObDtlRpcChannel::SendMsgCB::on_timeout()
 int ObDtlRpcChannel::SendMsgCB::process()
 {
   const ObDtlRpcDataResponse& resp = result_;
-  // if request queue is full or serialize faild, then rcode is set, and rpc process is not called
+  // if request queue is full or serialize failed, then rcode is set, and rpc process is not called
   int tmp_ret = OB_SUCCESS != rcode_.rcode_ ? rcode_.rcode_ : resp.recode_;
   int ret = response_.on_finish(resp.is_block_, tmp_ret);
   if (OB_FAIL(ret)) {
@@ -90,7 +90,7 @@ void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
 
 void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
 {
-  LOG_WARN("SendBCMsgCB timeout, if negtive timeout, check peer cpu load, network packet drop rate", K_(trace_id));
+  LOG_WARN("SendBCMsgCB timeout, if negative timeout, check peer cpu load, network packet drop rate", K_(trace_id));
   ObIArray<ObDtlRpcDataResponse>& resps = result_.resps_;
   for (int64_t i = 0; i < resps.count() && i < responses_.count(); ++i) {
     int ret = responses_.at(i)->on_finish(resps.at(i).is_block_, OB_TIMEOUT);
@@ -107,7 +107,7 @@ int ObDtlRpcChannel::SendBCMsgCB::process()
   if (resps.count() != responses_.count()) {
     LOG_ERROR("unexpected status: response count is not match", K(resps.count()), K(responses_.count()));
   }
-  // if request queue is full or serialize faild, then rcode is set, and rpc process is not called
+  // if request queue is full or serialize failed, then rcode is set, and rpc process is not called
   for (int64_t i = 0; i < responses_.count(); ++i) {
     bool is_block = i < resps.count() ? resps.at(i).is_block_ : false;
     int ret_code =

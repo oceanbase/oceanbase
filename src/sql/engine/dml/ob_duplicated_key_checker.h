@@ -507,7 +507,7 @@ int ObDupKeyCheckerCtx::shuffle_final_data(
           ret = OB_INVALID_ARGUMENT;
           SQL_ENG_LOG(WARN, "eval ctx is null", K(ret));
         } else if (OB_FAIL(constraint_value.baseline_datum_row_->to_expr(output_exprs, *ctx.get_eval_ctx()))) {
-          SQL_ENG_LOG(WARN, "stored row to expr faild", K(ret));
+          SQL_ENG_LOG(WARN, "stored row to expr failed", K(ret));
         } else if (OB_FAIL(shuffle_op.shuffle_final_delete_row(ctx, output_exprs))) {
           SQL_ENG_LOG(WARN, "shuffle delete row failed", K(ret), K(constraint_value));
         }
@@ -518,7 +518,7 @@ int ObDupKeyCheckerCtx::shuffle_final_data(
           ret = OB_INVALID_ARGUMENT;
           SQL_ENG_LOG(WARN, "eval ctx is null", K(ret));
         } else if (OB_FAIL(constraint_value.current_datum_row_->to_expr(output_exprs, *ctx.get_eval_ctx()))) {
-          SQL_ENG_LOG(WARN, "stored row to expr faild", K(ret));
+          SQL_ENG_LOG(WARN, "stored row to expr failed", K(ret));
         } else if (OB_FAIL(shuffle_op.shuffle_final_insert_row(ctx, output_exprs))) {
           SQL_ENG_LOG(WARN, "shuffle insert row failed", K(ret), K(constraint_value));
         }

@@ -409,7 +409,7 @@ int ObBloomFilterMacroBlockWriter::flush_macro_block()
     full_meta.meta_ = &macro_meta;
     ObStorageFile* file = NULL;
     if (OB_FAIL(build_macro_meta(full_meta))) {
-      STORAGE_LOG(WARN, "Faild to generate bloomfilter macro meta", K(ret));
+      STORAGE_LOG(WARN, "Failed to generate bloomfilter macro meta", K(ret));
     } else if (OB_ISNULL(file = file_handle_.get_storage_file())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to get pg file", K(ret), K(file_handle_));

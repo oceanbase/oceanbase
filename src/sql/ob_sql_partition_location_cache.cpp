@@ -575,7 +575,7 @@ int ObSqlPartitionLocationCache::build_distribute_location(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task exec ctx is NULL", K(ret), K(table_id), K(partition_id));
   } else if (OB_FAIL(task_exec_ctx_->get_addr_by_virtual_partition_id(partition_id, addr))) {
-    LOG_WARN("get addr by virtual partition id faild", K(ret), K(table_id), K(partition_id));
+    LOG_WARN("get addr by virtual partition id failed", K(ret), K(table_id), K(partition_id));
   } else if (FALSE_IT(replica_location.server_ = addr)) {
   } else if (OB_FAIL(location.add(replica_location))) {
     LOG_WARN("location add failed", K(ret), K(table_id), K(partition_id));

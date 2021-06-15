@@ -13393,7 +13393,7 @@ int ObDDLService::record_tablegroup_locality_event_history(const AlterLocalityOp
         tablegroup_schema.get_previous_locality_str());
     if (job_id < 1) {
       ret = OB_SQL_OPT_ERROR;
-      LOG_WARN("faild to create rs job", K(tablegroup_schema.get_tenant_id()));
+      LOG_WARN("failed to create rs job", K(tablegroup_schema.get_tenant_id()));
     }
   } else if (ROLLBACK_ALTER_LOCALITY == alter_locality_op) {
     ObRsJobInfo job_info;
@@ -13439,7 +13439,7 @@ int ObDDLService::record_tablegroup_locality_event_history(const AlterLocalityOp
         tablegroup_schema.get_locality_str());
     if (job_id < 1) {
       ret = OB_SQL_OPT_ERROR;
-      LOG_WARN("faild to create rs job", K(tablegroup_schema.get_tenant_id()));
+      LOG_WARN("failed to create rs job", K(tablegroup_schema.get_tenant_id()));
     }
   } else if (NOP_LOCALITY_OP == alter_locality_op) {
     int64_t job_id = RS_JOB_CREATE(ALTER_TABLEGROUP_LOCALITY,
@@ -13456,7 +13456,7 @@ int ObDDLService::record_tablegroup_locality_event_history(const AlterLocalityOp
         tablegroup_schema.get_previous_locality_str());
     if (job_id < 1) {
       ret = OB_SQL_OPT_ERROR;
-      LOG_WARN("faild to create rs job", K(tablegroup_schema.get_tenant_id()));
+      LOG_WARN("failed to create rs job", K(tablegroup_schema.get_tenant_id()));
     } else if (OB_FAIL(RS_JOB_COMPLETE(job_id, 0, trans))) {
       LOG_WARN("failed to complete rs job", K(ret), K(tablegroup_schema.get_tenant_id()));
     }

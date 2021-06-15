@@ -3427,7 +3427,7 @@ int ObSql::calc_pre_calculable_exprs(const ObDMLStmt& stmt, const ObIArray<ObHid
                FALSE_IT(phy_plan_ctx->set_cur_time(ObTimeUtility::current_time(), *(exec_ctx.get_my_session())))) {
       // do nothing
     } else if (OB_FAIL(ObCacheObject::pre_calculation(is_ignore_stmt, *pre_calc_frame, exec_ctx))) {
-      LOG_WARN("failde to pre calculate exprs", K(ret));
+      LOG_WARN("failed to pre calculate exprs", K(ret));
     } else if (OB_UNLIKELY(!phy_plan.get_pre_calc_frames().add_last(pre_calc_frame))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to add list element", K(ret));

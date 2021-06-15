@@ -41,7 +41,7 @@ int ObHJBatch::load_next_chunk()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(chunk_iter_.load_next_chunk(row_store_iter_))) {
-    LOG_WARN("faild to load next chunk", K(ret));
+    LOG_WARN("failed to load next chunk", K(ret));
   }
   return ret;
 }
