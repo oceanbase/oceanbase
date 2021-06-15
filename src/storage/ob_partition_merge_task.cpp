@@ -1046,7 +1046,7 @@ int ObSSTableMergePrepareTask::process()
   } else if (ctx->param_.is_multi_version_minor_merge()) {
     if (ctx->log_ts_range_.is_empty()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("Unexcepted empty log ts range in minor merge", K(ret), K(ctx->log_ts_range_));
+      LOG_ERROR("Unexpected empty log ts range in minor merge", K(ret), K(ctx->log_ts_range_));
     } else {
       ctx->merge_log_ts_ = ctx->log_ts_range_.end_log_ts_;
     }

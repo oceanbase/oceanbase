@@ -115,7 +115,7 @@ int ObAllVirtualMacroBlockMarkerStatus::inner_get_next_row(common::ObNewRow*& ro
         }
         case OB_APP_MIN_COLUMN_ID + 10: {
           // bloomfilter_count_
-          cur_row_.cells_[i].set_int(marker_status_.bloomfiter_count_);
+          cur_row_.cells_[i].set_int(marker_status_.bloomfilter_count_);
           break;
         }
         case OB_APP_MIN_COLUMN_ID + 11: {

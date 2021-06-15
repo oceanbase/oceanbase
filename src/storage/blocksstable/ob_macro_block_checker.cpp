@@ -256,7 +256,7 @@ int ObSSTableMacroBlockChecker::check_lob_block(
     while (OB_SUCC(ret) && OB_SUCC(micro_index_reader.get_next_index_item(index_item))) {
       if (meta.meta_->micro_block_data_offset_ + index_item.offset_ + index_item.data_size_ > macro_block_buf_size) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexcepted lob micro block", K(index_item), K(macro_block_buf_size), K(meta), K(ret));
+        STORAGE_LOG(WARN, "Unexpected lob micro block", K(index_item), K(macro_block_buf_size), K(meta), K(ret));
       } else if (OB_FAIL(record_header.deserialize(data_buf + index_item.offset_, index_item.data_size_, pos))) {
         STORAGE_LOG(WARN, "fail to deserialize record header", K(ret));
       } else if (OB_FAIL(record_header.check_record(
@@ -426,7 +426,7 @@ int ObSSTableMacroBlockChecker::check_micro_data(
             STORAGE_LOG(WARN, "fail to get row", K(ret), K(iter));
           } else if (row.row_val_.count_ != meta.meta_->column_number_) {
             ret = OB_INVALID_DATA;
-            STORAGE_LOG(WARN, "column numbler not match", K(ret));
+            STORAGE_LOG(WARN, "column number not match", K(ret));
           } else {
             for (int64_t i = 0; i < meta.meta_->column_number_; ++i) {
               if (meta.meta_->column_checksum_method_ == CCM_TYPE_AND_VALUE) {

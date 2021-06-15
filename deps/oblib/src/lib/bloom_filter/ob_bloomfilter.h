@@ -256,7 +256,7 @@ int ObBloomFilter<T, HashFunc>::serialize(char* buf, const int64_t buf_len, int6
 
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(WARN, "Unexcepted invalid bloomfilter to serialize", K_(nhash), K_(nbit), KP_(bits), K(ret));
+    LIB_LOG(WARN, "Unexpected invalid bloomfilter to serialize", K_(nhash), K_(nbit), KP_(bits), K(ret));
   } else if (OB_UNLIKELY(serialize_size > buf_len - pos)) {
     ret = OB_SIZE_OVERFLOW;
     LIB_LOG(WARN, "bloofilter serialize size overflow", K(serialize_size), K(buf_len), K(pos), K(ret));
@@ -309,7 +309,7 @@ int ObBloomFilter<T, HashFunc>::deserialize(const char* buf, const int64_t data_
         LIB_LOG(WARN, "Failed to decode bits", K(data_len), K(pos), K(ret));
       } else if (nbyte != decode_byte) {
         ret = OB_ERR_UNEXPECTED;
-        LIB_LOG(WARN, "Unexcepted bits decode length", K(decode_byte), K(nbyte), K(ret));
+        LIB_LOG(WARN, "Unexpected bits decode length", K(decode_byte), K(nbyte), K(ret));
       }
     }
   }

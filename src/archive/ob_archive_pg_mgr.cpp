@@ -756,7 +756,7 @@ int64_t ObArchivePGMgr::thread_index_()
 }
 
 // 1. add pg task if needed
-// 2. handle add/delte pg task
+// 2. handle add/delete pg task
 // 3. check if archive round start
 // 4. delete pg task if needed
 void ObArchivePGMgr::do_thread_task_()

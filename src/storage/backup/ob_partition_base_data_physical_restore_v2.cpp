@@ -426,7 +426,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::do_filter_tables(ObIArray<uint64_t>&
     STORAGE_LOG(WARN, "not inited", K(ret));
   } else if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
                  tenant_id, schema_service, schema_version_, schema_guard))) {
-    STORAGE_LOG(WARN, "failed to get tenant schema gaurd", K(ret), K(pkey_), K(schema_version_));
+    STORAGE_LOG(WARN, "failed to get tenant schema guard", K(ret), K(pkey_), K(schema_version_));
   } else {
     bool is_exist = false;
     for (int i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
@@ -1153,7 +1153,7 @@ int ObPartitionGroupMetaRestoreReaderV2::check_backup_partitions_in_pg(
     // do nothing
   } else if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
                  tenant_id, schema_service, schema_version_, schema_guard))) {
-    STORAGE_LOG(WARN, "failed to get tenant schema gaurd", K(ret), K(restore_info), K(backup_pg_meta));
+    STORAGE_LOG(WARN, "failed to get tenant schema guard", K(ret), K(restore_info), K(backup_pg_meta));
   } else if (!restore_info.pg_key_.is_pg()) {
     if (OB_FAIL(table_ids.push_back(restore_info.pg_key_.get_table_id()))) {
       STORAGE_LOG(WARN, "failed to push table id into array", K(ret), K(restore_info));
@@ -1329,7 +1329,7 @@ int ObPartitionGroupMetaRestoreReaderV2::do_filter_pg_partitions(const ObPGKey& 
     STORAGE_LOG(WARN, "do filter pg partitions get invalid argument", K(ret), K(pg_key));
   } else if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
                  pg_key.get_tenant_id(), schema_service, schema_version_, schema_guard))) {
-    STORAGE_LOG(WARN, "failed to get tenant schema gaurd", K(ret), K(pg_key), K(schema_version_));
+    STORAGE_LOG(WARN, "failed to get tenant schema guard", K(ret), K(pg_key), K(schema_version_));
   } else {
     bool is_exist = false;
     bool filtered = false;
@@ -1346,7 +1346,7 @@ int ObPartitionGroupMetaRestoreReaderV2::do_filter_pg_partitions(const ObPGKey& 
       if (OB_FAIL(ret)) {
       } else if (is_exist) {
         if (OB_FAIL(exist_partitions.push_back(pkey))) {
-          STORAGE_LOG(WARN, "pusk back partition failed", K(ret), K(pkey));
+          STORAGE_LOG(WARN, "push back partition failed", K(ret), K(pkey));
         }
       } else {
         filtered = true;
@@ -1475,7 +1475,7 @@ int ObPGPartitionBaseDataMetaRestoreReaderV2::check_sstable_table_ids_in_table(
     STORAGE_LOG(WARN, "failed to create table ids set", K(ret));
   } else if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
                  tenant_id, schema_service, schema_version_, schema_guard))) {
-    STORAGE_LOG(WARN, "failed to get tenant schema gaurd", K(ret), K(tenant_id), K(schema_version_));
+    STORAGE_LOG(WARN, "failed to get tenant schema guard", K(ret), K(tenant_id), K(schema_version_));
   } else if (OB_FAIL(schema_guard.get_index_status(data_table_id, false /*with global index*/, index_stats))) {
     STORAGE_LOG(WARN, "failed to get index status", K(ret), K(data_table_id));
   } else {
@@ -1579,10 +1579,10 @@ int ObPhyRestoreMacroIndexStoreV2::init(
   common::ObPartitionKey pkey;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "physcial restore macro index store init twice", K(ret));
+    STORAGE_LOG(WARN, "physical restore macro index store init twice", K(ret));
   } else if (backup_task_id < 0 || OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "init physcial restore macro index get invalid argument", K(ret), K(backup_task_id), K(arg));
+    STORAGE_LOG(WARN, "init physical restore macro index get invalid argument", K(ret), K(backup_task_id), K(arg));
   } else if (OB_FAIL(arg.get_backup_base_data_info(path_info))) {
     STORAGE_LOG(WARN, "get backup base data info fail", K(ret));
   } else if (OB_FAIL(arg.get_backup_pgkey(pkey))) {
@@ -1701,11 +1701,11 @@ int ObPhyRestoreMacroIndexStoreV2::init(const int64_t backup_task_id, const comm
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "physcial restore macro index store init twice", K(ret));
+    STORAGE_LOG(WARN, "physical restore macro index store init twice", K(ret));
   } else if (backup_task_id < 0 || !pkey.is_valid() || OB_UNLIKELY(!arg.is_valid()) || !backup_data_type.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN,
-        "init physcial restore macro index get invalid argument",
+        "init physical restore macro index get invalid argument",
         K(ret),
         K(backup_task_id),
         K(pkey),

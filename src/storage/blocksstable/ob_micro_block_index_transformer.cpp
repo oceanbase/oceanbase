@@ -141,7 +141,7 @@ int ObMicroBlockIndexTransformer::block_index_to_node_vector()
 
   for (int64_t i = 0; OB_SUCC(ret) && i < block_count_; ++i) {
     if (OB_FAIL(index_reader_.get_end_key(i, rowkey_array[cur_rowkey_array_index]))) {
-      STORAGE_LOG(WARN, "transformer fail to get next roweky.", K(ret), K(i));
+      STORAGE_LOG(WARN, "transformer fail to get next rowkey.", K(ret), K(i));
     }
 
     if (OB_SUCC(ret)) {
@@ -152,7 +152,7 @@ int ObMicroBlockIndexTransformer::block_index_to_node_vector()
           cur_node.first_child_index_ = 0;
           cur_node.child_num_ = 0;
           if (OB_FAIL(add_node_to_vector(cur_node, j))) {
-            STORAGE_LOG(WARN, "trnasformer fail to add node to vector.", K(ret), K(cur_node), K(j));
+            STORAGE_LOG(WARN, "transformer fail to add node to vector.", K(ret), K(cur_node), K(j));
           }
         }
       } else {
@@ -178,7 +178,7 @@ int ObMicroBlockIndexTransformer::block_index_to_node_vector()
             cur_node.first_child_index_ = 0;
             cur_node.child_num_ = 0;
             if (OB_FAIL(add_node_to_vector(cur_node, j))) {
-              STORAGE_LOG(WARN, "trnasformer fail to add node to vector.", K(ret), K(cur_node), K(j));
+              STORAGE_LOG(WARN, "transformer fail to add node to vector.", K(ret), K(cur_node), K(j));
             }
           }
         } else {

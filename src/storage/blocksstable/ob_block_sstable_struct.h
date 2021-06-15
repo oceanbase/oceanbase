@@ -709,10 +709,10 @@ struct ObMacroBlockMeta {
   // default 0
   int32_t row_count_delta_;
 
-  int32_t micro_block_mark_deletion_offset_;  // micro_block_mark_deletion_size = delte_offset -
+  int32_t micro_block_mark_deletion_offset_;  // micro_block_mark_deletion_size = delete_offset -
                                               // micro_block_mark_deletion_offset_
   bool macro_block_deletion_flag_;
-  int32_t micro_block_delta_offset_;  // delte_size = occupy_size - micro_block_delta_offset;
+  int32_t micro_block_delta_offset_;  // delta_size = occupy_size - micro_block_delta_offset;
   int64_t partition_id_;              // added since 2.0
   int16_t column_checksum_method_;    // 0 for unkown, 1 for ObObj::checksum(), 2 for ObObj::checksum_v2()
   int64_t progressive_merge_round_;
@@ -1377,7 +1377,7 @@ struct ObMacroBlockMarkerStatus {
   int64_t lob_data_block_count_;
   int64_t second_index_count_;
   int64_t lob_second_index_count_;
-  int64_t bloomfiter_count_;
+  int64_t bloomfilter_count_;
   int64_t hold_count_;
   int64_t pending_free_count_;
   int64_t free_count_;
@@ -1757,10 +1757,10 @@ struct ObMacroBlockMetaV2 final {
   // default 0
   int32_t row_count_delta_;
 
-  int32_t micro_block_mark_deletion_offset_;  // micro_block_mark_deletion_size = delte_offset -
+  int32_t micro_block_mark_deletion_offset_;  // micro_block_mark_deletion_size = delete_offset -
                                               // micro_block_mark_deletion_offset_
   bool macro_block_deletion_flag_;
-  int32_t micro_block_delta_offset_;  // delte_size = occupy_size - micro_block_delta_offset;
+  int32_t micro_block_delta_offset_;  // delta_size = occupy_size - micro_block_delta_offset;
   int64_t partition_id_;              // added since 2.0
   int16_t column_checksum_method_;    // 0 for unkown, 1 for ObObj::checksum(), 2 for ObObj::checksum_v2()
   int64_t progressive_merge_round_;
