@@ -235,7 +235,7 @@ int ObTableReplaceOp::try_insert(ObSQLSessionInfo& my_session, const ObPartition
   OZ(project_row(MY_SPEC.output_.get_data(), MY_SPEC.get_output_count(), new_row));
   if (OB_SUCC(ret)) {
     record_++;
-    NG_TRACE_TIMES(2, repalce_start_insert);
+    NG_TRACE_TIMES(2, replace_start_insert);
     if (OB_SUCC(partition_service.insert_row(my_session.get_trans_desc(),
             dml_param,
             part_key,
