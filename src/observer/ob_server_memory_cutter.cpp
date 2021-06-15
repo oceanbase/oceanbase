@@ -46,7 +46,7 @@ void ObServerMemoryCutter::free_cache(int64_t& total_size)
         },
         has_crash);
     if (has_crash) {
-      DLOG(WARN, "restore from crash, let's goon~");
+      DLOG(WARN, "restore from crash, let's go on~");
     }
   }
 }
@@ -59,7 +59,7 @@ void ObServerMemoryCutter::cut(int64_t& total_size)
   int64_t total_size_bak = total_size;
   do_with_crash_restore([&]() { return free_cache(total_size); }, has_crash);
   if (has_crash) {
-    DLOG(WARN, "restore from crash, let's goon~");
+    DLOG(WARN, "restore from crash, let's go on~");
   } else {
     DLOG(INFO, "free_cache, freed: %ld", total_size - total_size_bak);
   }
