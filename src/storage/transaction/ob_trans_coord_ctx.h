@@ -258,7 +258,7 @@ class ObCoordTransCtx : public ObDistTransCtx, public ObTsCbTask {
   ObPartitionArray unconfirmed_participants_;
   ObVersionArray participant_publish_version_array_;
   ObTransSplitInfoArray split_info_arr_;
-  // TRUE by default for xa trans, false is set after receving xa commit
+  // TRUE by default for xa trans, false is set after receiving xa commit
   bool is_waiting_xa_commit_;
   ObTransCtxArray part_ctx_arr_;
   // it is used to store the max commit_log_ts of participants

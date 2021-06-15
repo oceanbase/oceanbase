@@ -145,7 +145,7 @@ class TimeWheelBase : public share::ObThreadPool {
 
   private:
   static const int64_t MAX_BUCKET = 10000;
-  // scaner max sleep 1000000us
+  // scanner max sleep 1000000us
   static const int64_t MAX_SCAN_SLEEP = 1000000;
   static const int64_t MAX_TIMER_NAME_LEN = 16;
 

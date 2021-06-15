@@ -449,7 +449,7 @@ class ObMtHash {
     // if the insert position is very forward and arr_size is big, there is no
     // need to access the same element repeatedly when recursively looking up, just decrease by half.
     // Note: bucket_count can decrease more rapidly, but as long as not access array elements,
-    // it's accesptabale to loop multiple times(< 64) to decreasse by half.
+    // it's acceptable to loop multiple times(< 64) to decrease by half.
     int64_t last_arr_idx = arr_idx;
 
     while (OB_SUCC(ret) && arr_idx > 0) {

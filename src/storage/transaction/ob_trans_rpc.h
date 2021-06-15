@@ -302,7 +302,7 @@ void ObTransRPCCB<PC>::on_timeout()
       // 2. for read-only transaction, if remote server crash stop when tranaction commit,
       //    scheduler no need to retry the request
       // 3. for read-write transaction, if need to rollback, location cache will be refreshed after timeout reached
-      //    clean cache of current transaction and resend reqeust to new leader
+      //    clean cache of current transaction and resend request to new leader
       // 4. for other type of messsage, don't handle but register asynchronouse task
       if (OB_SUCCESS != (tmp_ret = transaction::handle_trans_msg_callback(trans_service_,
                              pkey_,

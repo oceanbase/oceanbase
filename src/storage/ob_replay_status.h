@@ -281,7 +281,7 @@ struct ObSubmitReplayLogTask : public ObReplayTask {
   ObStorageLogType storage_log_type_;  // recode log_type when failed to check condition before submit
   int64_t accum_checksum_;
   //-----------new added members for decoupling of  replay engine and sliding window---------//
-  // the info of last log that sliding window submiteed
+  // the info of last log that sliding window submitted
   struct types::uint128_t last_slide_out_log_info_;
   // the info of last log that replay engine submit to replay queue
   struct types::uint128_t next_submit_log_info_;
