@@ -113,7 +113,7 @@ function build
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo
         ;;
       xdebug)
-        do_build "$@" -DCMAKE_BUILD_TYPE=Debug
+        do_build "$@" -DCMAKE_BUILD_TYPE=Debug, -DCMAKE_EXPORT_COMPILE_COMMANDS=1
         ;;
       xrpm)
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_CCACHE=OFF -DOB_COMPRESS_DEBUG_SECTIONS=ON -DOB_STATIC_LINK_LGPL_DEPS=OFF -DOB_ENABLE_PCH=OFF -DOB_ENALBE_UNITY=OFF

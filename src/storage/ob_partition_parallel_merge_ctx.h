@@ -55,6 +55,15 @@ private:
   int init_parallel_major_merge(ObSSTableMergeCtx& merge_ctx);
   int calc_mini_minor_parallel_degree(
       const int64_t tablet_size, const int64_t total_size, const int64_t sstable_count, int64_t& parallel_degree);
+  int prepare_range_array_for_parallel_major_merge(ObSSTableMergeCtx& merge_ctx);
+  // To get ranges w.r.t. the endkeys of macroblocks of the base sstable.
+  // If the base sstable contains no data, the <ranges> will contain exactly one range which is the whole range.
+  int get_ranges_by_base_sstable(const int64_t tablet_size, common::ObIArray<common::ObStoreRange>& ranges);
+  // To get ranges by scan inc data.
+  // If no inc data, the <ranges> will contain exactly one range which is the whole range.
+  int get_ranges_by_inc_data(
+      ObSSTableMergeCtx& merge_ctx, common::ObIArray<common::ObStoreRange>& ranges,
+      const common::ObStoreRowkey &start_key);
 
 private:
   ParallelMergeType parallel_type_;

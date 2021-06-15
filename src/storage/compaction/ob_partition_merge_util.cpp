@@ -743,7 +743,7 @@ int ObMacroRowIterator::next_range()
       macro_block_opened_ = false;
       choose_merge_level();
 
-      if (OB_NOT_NULL(multi_version_row_info_) && table_->is_sstable()) {
+      if ((OB_NOT_NULL(multi_version_row_info_) && table_->is_sstable()) || table_->is_major_sstable()) {
         // parallel minor merge need consider the range split
         // parallel minor always use macro block level
         if (merge_range_.get_range().is_whole_range()) {
@@ -752,7 +752,7 @@ int ObMacroRowIterator::next_range()
             curr_range_.get_start_key() = merge_range_.get_range().get_start_key();
             need_open = true;
           }
-          if (merge_range_.get_range().get_end_key().compare(curr_range_.get_end_key()) <= 0) {
+          if (merge_range_.get_range().get_end_key().compare(curr_range_.get_end_key()) < 0) {
             curr_range_.get_end_key() = merge_range_.get_range().get_end_key();
             need_open = true;
           }
@@ -760,6 +760,9 @@ int ObMacroRowIterator::next_range()
       }
       if (OB_SUCC(ret) && need_open) {
         // open macro block and next, only use next in base class @attension
+        if (table_->is_major_sstable()) {
+          curr_merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
+        }
         if (OB_FAIL(open_curr_macro_block_())) {
           LOG_WARN("Fail to open curr macro block", K(ret));
         } else if (OB_FAIL(ObMacroRowIterator::next())) {
