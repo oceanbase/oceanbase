@@ -382,7 +382,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_DIVISOR_IS_ZERO, -4333,-1, "HY000", "divisor is equal
 DEFINE_ERROR(OB_ERR_AES_IV_LENGTH, -4336, ER_AES_INVALID_IV, "HY000", "The initialization vector supplied to aes_encrypt is too short. Must be at least 16 bytes long");
 DEFINE_ERROR(OB_STORE_DIR_ERROR, -4337, -1, "HY000", "store directory structure error");
 DEFINE_ERROR(OB_OPEN_TWICE, -4338, -1, "HY000", "open twice");
-DEFINE_ERROR(OB_RAID_SUPER_BLOCK_NOT_MACTH, -4339, -1, "HY000", "raid super block not match");
+DEFINE_ERROR(OB_RAID_SUPER_BLOCK_NOT_MATCH, -4339, -1, "HY000", "raid super block not match");
 DEFINE_ERROR(OB_NOT_OPEN, -4340, -1, "HY000", "not opened");
 DEFINE_ERROR(OB_NOT_IN_SERVICE, -4341, -1, "HY000", "target module is not in service");
 DEFINE_ERROR(OB_RAID_DISK_NOT_NORMAL, -4342, -1, "HY000", "raid disk not in normal status");

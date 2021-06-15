@@ -1395,7 +1395,7 @@ struct ObMacroBlockMarkerStatus {
 
   TO_STRING_KV(K_(total_block_count), K_(reserved_block_count), K_(macro_meta_block_count),
       K_(partition_meta_block_count), K_(data_block_count), K_(lob_data_block_count), K_(second_index_count),
-      K_(lob_second_index_count), K_(bloomfiter_count), K_(hold_count), K_(pending_free_count), K_(free_count),
+      K_(lob_second_index_count), K_(bloomfilter_count), K_(hold_count), K_(pending_free_count), K_(free_count),
       K_(mark_cost_time), K_(sweep_cost_time), K_(hold_alert_time), K_(hold_info));
 };
 
