@@ -189,6 +189,8 @@ class ObRowkey {
     if (obj_ptr_ == rhs.obj_ptr_) {
       cmp = static_cast<int32_t>(obj_cnt_ - rhs.obj_cnt_);
     } else {
+      // Ignore return code because this version of compare does not have
+      // return code. The whole function will be removed later.
       compare_prefix(rhs, cmp);
       if (0 == cmp) {
         cmp = static_cast<int32_t>(obj_cnt_ - rhs.obj_cnt_);
