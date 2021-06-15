@@ -36,7 +36,54 @@ OceanBase 数据库支持支付宝的全部核心业务，以及银行、保险�
 
 OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPubL-2.0/index.html) 许可证。您可以免费复制及使用源代码。当您修改或分发源代码时，请遵守木兰协议。
 
+## 兼容性列表
+
+| 操作系统 | 版本 | 架构 | 编译 | 包部署 | 编译部署 | mysqltest |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| CentOS | 7.2,8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Debian | 9.8,10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Fedora | 33 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| MacOS | any | x86_64 | ❌ | ❌ | ❌ | ❌ |
+| openSUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| OpenAnolis | 8.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| SUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Ubuntu | 16.04,18.04,20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+
 ## 如何构建
+
+### 前置准备
+
+在构建前您需要确认您的机器已经安装必要的软件
+
+#### fedora 类 （CentOS/Fedora/OpenAnolis/RedHat 等）
+```sh
+yum install git wget rpm* cpio make glibc-devel glibc-headers binutils
+```
+
+#### debian 类 （Debian/ubuntu 等）
+```sh
+apt-get install git wget rpm rpm2cpio cpio make build-essential binutils
+```
+
+#### suse 类 （SUSE/openSUSE 等）
+```sh
+zypper install git wget rpm cpio make glibc-devel binutils
+```
+
+### debug 模式
+```bash
+bash build.sh debug --init --make
+```
+
+### release 模式
+```bash
+bash build.sh release --init --make
+```
+
+### 构建 rpm 软件包
+```bash
+bash build.sh rpm --init && cd build_rpm && make -j16 rpm
+```
 
 详细信息，参考 [使用源码构建 OceanBase 数据库](https://open.oceanbase.com/docs/community/oceanbase-database/V3.1.0/get-the-oceanbase-database-by-using-source-code)。
 
