@@ -21,14 +21,14 @@ OceanBase 数据库支持支付宝的全部核心业务，以及银行、保险�
 
 ## 快速上手
 
-请查看 [快速使用指南](https://open.oceanbase.com/quickStart) 开始试用 OceanBase 数据库。
+查看 [快速使用指南](https://open.oceanbase.com/quickStart) 开始试用 OceanBase 数据库。
 
 ## 文档
 
 - [简体中文](https://open.oceanbase.com/docs)
 - 英文（English）（Coming soon）
 
-## 支持的客户端
+## 客户端
 
 - [OBClient](https://github.com/oceanbase/obclient)
 
@@ -40,47 +40,53 @@ OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPu
 
 | 操作系统 | 版本 | 架构 | 编译 | 包部署 | 编译部署 | mysqltest |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
-| CentOS | 7.2,8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| Debian | 9.8,10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| CentOS | 7.2, 8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Debian | 9.8, 10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Fedora | 33 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | MacOS | any | x86_64 | ❌ | ❌ | ❌ | ❌ |
 | openSUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | OpenAnolis | 8.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | SUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| Ubuntu | 16.04,18.04,20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Ubuntu | 16.04, 18.04, 20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 
 ## 如何构建
 
-### 前置准备
+### 前提条件
 
-在构建前您需要确认您的机器已经安装必要的软件
+在构建前您需要确认您的机器已经安装必要的软件：
 
 #### Fedora 系列 （包括 CentOS，Fedora，OpenAnolis，RedHat 等）
+
 ```sh
 yum install git wget rpm* cpio make glibc-devel glibc-headers binutils
 ```
 
 #### Debian 系列 （包括 Debian，ubuntu 等）
+
 ```sh
 apt-get install git wget rpm rpm2cpio cpio make build-essential binutils
 ```
 
 #### SUSE 系列 （包括 SUSE，openSUSE 等）
+
 ```sh
 zypper install git wget rpm cpio make glibc-devel binutils
 ```
 
 ### debug 模式
+
 ```bash
 bash build.sh debug --init --make
 ```
 
 ### release 模式
+
 ```bash
 bash build.sh release --init --make
 ```
 
-### 构建 rpm 软件包
+### 构建 RPM 软件包
+
 ```bash
 bash build.sh rpm --init && cd build_rpm && make -j16 rpm
 ```

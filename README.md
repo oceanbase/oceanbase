@@ -21,7 +21,7 @@ OceanBase Database supports the entire core business of Alipay and the core syst
 
 ## Quick start
 
-Refer to the [Get Started guide](https://open.oceanbase.com/quickStart) (Simplified Chinese, English will be ready soon) to try out OceanBase Database.
+Refer to the [Get Started guide](doc/quick-start-en.md) to try out OceanBase Database.
 
 ## Documentation
 
@@ -40,14 +40,14 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 
 | OS | Ver. | Arch | Compilable | Package Deployable | Compiled Binary Deployable | Mysqltest Passed |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
-| CentOS | 7.2,8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| Debian | 9.8,10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| CentOS | 7.2, 8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Debian | 9.8, 10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Fedora | 33 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | MacOS | any | x86_64 | ❌ | ❌ | ❌ | ❌ |
 | openSUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | OpenAnolis | 8.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | SUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
-| Ubuntu | 16.04,18.04,20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Ubuntu | 16.04, 18.04, 20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 
 ## How to build
 
@@ -56,31 +56,37 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 Before building, you need to confirm that your device has installed the necessary software.
 
 #### Fedora based (, including CentOS, Fedora, OpenAnolis, RedHat, etc.)
+
 ```sh
 yum install git wget rpm* cpio make glibc-devel glibc-headers binutils
 ```
 
 #### Debian based (, including Debian, Ubuntu, etc.)
+
 ```sh
 apt-get install git wget rpm rpm2cpio cpio make build-essential binutils
 ```
 
 #### SUSE based (, including SUSE, openSUSE, etc.)
+
 ```sh
 zypper install git wget rpm cpio make glibc-devel binutils
 ```
 
 ### debug mode
+
 ```bash
 bash build.sh debug --init --make
 ```
 
 ### release mode
+
 ```bash
 bash build.sh release --init --make
 ```
 
-### rpm packages
+### RPM packages
+
 ```bash
 bash build.sh rpm --init && cd build_rpm && make -j16 rpm
 ```
@@ -98,4 +104,4 @@ In case you have any problems when using OceanBase Database, welcome reach out f
 
 - [GitHub Issue](https://github.com/oceanbase/oceanbase/issues)
 - [Official Website](https://open.oceanbase.com/)
-- Knowledge base [link TODO]
+- Knowledge base [Coming soon]
