@@ -129,6 +129,7 @@ struct ObParentDMLStmt {
 
 class ObTransformRule {
   public:
+  static constexpr const double COST_BASE_TRANSFORM_THRESHOLD = 0.999;
   static const int64_t TRANSFORMER_DEFAULT_MAX_RECURSIVE_LEVEL = 150;
   static const uint64_t ALL_TRANSFORM_RULES = TRANSFORM_TYPE_COUNT_PLUS_ONE - 1;
   static const uint64_t ALL_HEURISTICS_RULES = SIMPLIFY | ANYALL | AGGR | ELIMINATE_OJ | VIEW_MERGE | WHERE_SQ_PULL_UP |
