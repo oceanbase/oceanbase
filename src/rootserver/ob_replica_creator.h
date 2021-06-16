@@ -237,6 +237,7 @@ int ObReplicaCreator::alloc_partitions_for_add(const SCHEMA& table, const SCHEMA
     RS_LOG(WARN, "invalid table", K(ret), K(table));
   } else if (OB_FAIL(schema_for_add.assign(table))) {
     RS_LOG(WARN, "fail to assign table", K(ret));
+  } else if (FALSE_IT(schema_for_add.reset_dropped_partition())) {
   } else if (OB_FAIL(schema_for_add.try_assign_part_array(inc_table))) {
     RS_LOG(WARN, "fail to try assign part array", K(ret));
   } else if (OB_FAIL(schema_for_add.try_assign_def_subpart_array(table))) {
