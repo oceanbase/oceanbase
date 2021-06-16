@@ -507,8 +507,12 @@ bool ObLogReplayEngine::is_valid_param(
 }
 
 /* -----------------submit log task related begin------ */
-int ObLogReplayEngine::submit_replay_log_task_sequentially(const common::ObPartitionKey& pkey, const uint64_t log_id,
-    const int64_t log_ts, const bool need_replay, const clog::ObLogType log_type, const int64_t sw_next_replay_log_ts)
+int ObLogReplayEngine::submit_replay_log_task_sequentially(const common::ObPartitionKey &pkey,
+                                                           const uint64_t log_id,
+                                                           const int64_t log_ts,
+                                                           const bool need_replay,
+                                                           const ObLogType log_type,
+                                                           const int64_t next_replay_log_ts)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -549,12 +553,13 @@ int ObLogReplayEngine::submit_replay_log_task_sequentially(const common::ObParti
     } else {
       ObReplayStatus::RLockGuard rlock_guard(replay_status->get_rwlock());
       bool need_submit = true;
-      if (need_replay &&
-          OB_FAIL(check_need_submit_current_log_(pkey, *partition, log_id, log_ts, *replay_status, need_submit))) {
-        REPLAY_LOG(
-            ERROR, "failed to check_need_submit_current_log_", K(pkey), K(need_replay), K(log_id), K(log_ts), K(ret));
-      } else if (OB_FAIL(replay_status->check_and_submit_task(
-                     pkey, log_id, log_ts, (need_replay && need_submit), log_type, sw_next_replay_log_ts))) {
+      if (need_replay && OB_FAIL(check_need_submit_current_log_(pkey, *partition, log_id, log_ts,
+                                                                *replay_status, need_submit))) {
+        REPLAY_LOG(ERROR, "failed to check_need_submit_current_log_",
+                   K(pkey), K(need_replay), K(log_id), K(log_ts), K(ret));
+      } else if (OB_FAIL(replay_status->check_and_submit_task(pkey, log_id, log_ts,
+                                                              (need_replay && need_submit),
+                                                              log_type, next_replay_log_ts))) {
         if (OB_EAGAIN == ret) {
           if (REACH_TIME_INTERVAL(1000 * 1000)) {
             REPLAY_LOG(WARN,

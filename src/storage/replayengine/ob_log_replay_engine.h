@@ -48,29 +48,34 @@ class ObLogReplayEngine : public ObILogReplayEngine, public lib::TGTaskHandler {
   typedef storage::ObReplayLogTask ObReplayLogTask;
   ObLogReplayEngine();
   virtual ~ObLogReplayEngine();
-
   public:
-  virtual int init(transaction::ObTransService* trans_replay_service, storage::ObPartitionService* partition_service,
-      const ObLogReplayEngineConfig& config);
-  virtual int submit_replay_log_task_sequentially(const common::ObPartitionKey& pkey, const uint64_t log_id,
-      const int64_t log_ts, const bool need_replay, const clog::ObLogType log_type,
-      const int64_t sw_next_replay_log_ts);
-  virtual int submit_replay_log_task_by_restore(
-      const common::ObPartitionKey& pkey, const uint64_t log_id, const int64_t log_ts);
+  virtual int init(transaction::ObTransService *trans_replay_service,
+                   storage::ObPartitionService *partition_service,
+                   const ObLogReplayEngineConfig &config);
+  virtual int submit_replay_log_task_sequentially(const common::ObPartitionKey &pkey,
+                                                  const uint64_t log_id,
+                                                  const int64_t log_submit_ts,
+                                                  const bool need_replay,
+                                                  const clog::ObLogType log_type,
+                                                  const int64_t next_replay_log_ts);
+  virtual int submit_replay_log_task_by_restore(const common::ObPartitionKey &pkey,
+                                                const uint64_t log_id,
+                                                const int64_t log_ts);
 
-  virtual int add_partition(const common::ObPartitionKey& partition_key);
-  virtual int remove_partition(const common::ObPartitionKey& pkey, storage::ObIPartitionGroup* partition);
-  virtual int remove_partition(const common::ObPartitionKey& partition_key);
-  virtual int reset_partition(const common::ObPartitionKey& partition_key);
-  virtual int set_need_filter_trans_log(const common::ObPartitionKey& partition_key, const bool need_filter);
+  virtual int add_partition(const common::ObPartitionKey &partition_key);
+  virtual int remove_partition(const common::ObPartitionKey &pkey,
+                               storage::ObIPartitionGroup *partition);
+  virtual int remove_partition(const common::ObPartitionKey &partition_key);
+  virtual int reset_partition(const common::ObPartitionKey &partition_key);
+  virtual int set_need_filter_trans_log(const common::ObPartitionKey &partition_key,
+                                        const bool need_filter);
 
-  virtual int is_replay_finished(const common::ObPartitionKey& partition_key, bool& is_finished) const;
-  virtual int is_submit_finished(const common::ObPartitionKey& partition_key, bool& is_finished) const;
-  virtual int check_can_receive_log(const common::ObPartitionKey& pkey, bool& can_receive_log) const;
-  virtual int get_pending_submit_task_count(const common::ObPartitionKey& partition_key, int64_t& pending_count) const;
-  virtual void handle(void* task);
-  virtual int submit_task_into_queue(storage::ObReplayTask* task);
-
+  virtual int is_replay_finished(const common::ObPartitionKey &partition_key, bool &is_finished) const;
+  virtual int is_submit_finished(const common::ObPartitionKey &partition_key, bool &is_finished) const;
+  virtual int check_can_receive_log(const common::ObPartitionKey &pkey, bool &can_receive_log) const;
+  virtual int get_pending_submit_task_count(const common::ObPartitionKey &partition_key, int64_t &pending_count) const;
+  virtual void handle(void *task);
+  virtual int submit_task_into_queue(storage::ObReplayTask *task);
   virtual int is_tenant_out_of_memory(const common::ObPartitionKey& partition_key, bool& is_out_of_mem);
   virtual void stop();
   virtual void wait();

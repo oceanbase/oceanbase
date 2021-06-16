@@ -498,10 +498,14 @@ class ObLogSlidingWindow : public ObILogSWForCasMgr,
   int leader_active();
   int leader_takeover();
   int leader_revoke();
-  int get_replica_replay_type(ObReplicaReplayType& replay_type) const;
-  // is_meta_log: log type that need been replayed by D replica and log replica
-  int check_is_meta_log(const common::ObPartitionKey& pkey, uint64_t log_id, bool& is_meta_log, int64_t& log_ts,
-      int64_t& accum_checksum, ObLogType& log_type) const;
+  int get_replica_replay_type(ObReplicaReplayType &replay_type) const;
+  //is_meta_log: log type that need been replayed by D replica and log replica
+  int get_log_meta_info(uint64_t log_id,
+                        bool &is_meta_log,
+                        int64_t &log_ts,
+                        int64_t &next_replay_log_ts_for_rg,
+                        int64_t &accum_checksum,
+                        ObLogType &log_type) const;
   void destroy_aggre_buffer();
   uint64_t get_leader_max_unconfirmed_log_count();
   uint64_t get_follower_max_unconfirmed_log_count();

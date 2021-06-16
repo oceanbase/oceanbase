@@ -532,11 +532,15 @@ class ObReplayStatus {
   {
     return submit_log_task_.get_pending_submit_task_count();
   }
-  int check_and_submit_task(const common::ObPartitionKey& pkey, const uint64_t log_id, const int64_t log_ts,
-      const bool need_replay, const clog::ObLogType log_type, const int64_t sw_next_replay_log_ts);
-  int submit_restore_task(const common::ObPartitionKey& pkey, const uint64_t log_id, const int64_t log_ts);
-
-  int push_task(ObReplayLogTask& task, uint64_t task_sign);
+  int check_and_submit_task(const common::ObPartitionKey &pkey,
+                            const uint64_t log_id,
+                            const int64_t log_ts,
+                            const bool need_replay,
+                            const clog::ObLogType log_type,
+                            const int64_t next_replay_log_ts);
+  int submit_restore_task(const common::ObPartitionKey &pkey, const uint64_t log_id,
+                          const int64_t log_ts);
+  int push_task(ObReplayLogTask &task, uint64_t task_sign);
   void add_task(ObReplayLogTask& task);
   void remove_task(ObReplayLogTask& task);
   void dec_task_count(const common::ObPartitionKey& pkey);
