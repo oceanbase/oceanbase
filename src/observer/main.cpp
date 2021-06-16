@@ -498,5 +498,6 @@ int main(int argc, char* argv[])
 
   LOG_INFO("observer is exit");
   OB_LOGGER.set_stop_append_log();
+  OB_LOGGER.destroy();
   return ret;
 }
