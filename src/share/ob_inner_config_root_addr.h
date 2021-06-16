@@ -34,17 +34,18 @@ class ObInnerConfigRootAddr : public ObRootAddrAgent {
 
   int init(common::ObMySQLProxy& sql_proxy, common::ObServerConfig& config);
 
-  virtual int store(const ObIAddrList& addr_list, const ObIAddrList& readonly_addr_list, const bool force,
-      const common::ObClusterType cluster_type, const int64_t timestamp);
-  virtual int fetch(ObIAddrList& add_list, ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_typ);
-  // innerconfig does not need to support delete cluster operations
-  virtual int delete_cluster(const int64_t cluster_id)
-  {
-    UNUSED(cluster_id);
-    return common::OB_SUCCESS;
-  }
-  virtual int fetch_remote_rslist(const int64_t cluster_id, ObIAddrList& addr_list, ObIAddrList& readonly_addr_list,
-      common::ObClusterType& cluster_type) override;
+
+  virtual int store(const ObIAddrList &addr_list, const ObIAddrList &readonly_addr_list,
+                    const bool force, const common::ObClusterType cluster_type,
+                    const int64_t timestamp) override;
+  virtual int fetch(ObIAddrList &add_list, ObIAddrList &readonly_addr_list,
+                    common::ObClusterType &cluster_typ) override;
+  //innerconfig does not need to support delete cluster operations
+  virtual int delete_cluster(const int64_t cluster_id) override { UNUSED(cluster_id); return common::OB_SUCCESS; }
+  virtual int fetch_remote_rslist(const int64_t cluster_id,
+                                  ObIAddrList &addr_list,
+                                  ObIAddrList &readonly_addr_list,
+                                  common::ObClusterType &cluster_type) override;
 
   static int format_rootservice_list(const ObIAddrList& addr_list, common::ObSqlString& str);
 

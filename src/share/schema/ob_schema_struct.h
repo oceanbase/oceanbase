@@ -3193,68 +3193,26 @@ class ObTablegroupSchema : public ObPartitionSchema {
   {
     return PARTITION_LEVEL_TWO == get_part_level();
   }
-  inline virtual uint64_t get_table_id() const override
-  {
-    return tablegroup_id_;
-  }  // for partition schema used
-  inline virtual uint64_t get_database_id() const
-  {
-    return 0;
-  }
-  inline virtual void set_database_id(const uint64_t database_id)
-  {
-    UNUSED(database_id);
-  }
-  inline virtual void set_table_id(const uint64_t tablegroup_id) override
-  {
-    tablegroup_id_ = tablegroup_id;
-  }
-  inline int64_t get_part_func_expr_num() const
-  {
-    return part_func_expr_num_;
-  }
-  inline void set_part_func_expr_num(const int64_t part_func_expr_num)
-  {
-    part_func_expr_num_ = part_func_expr_num;
-  }
-  inline int64_t get_sub_part_func_expr_num() const
-  {
-    return sub_part_func_expr_num_;
-  }
-  inline void set_sub_part_func_expr_num(const int64_t sub_part_func_expr_num)
-  {
-    sub_part_func_expr_num_ = sub_part_func_expr_num;
-  }
-  virtual int64_t get_partition_cnt() const override
-  {
-    return 0;
-  }
-  virtual int calc_part_func_expr_num(int64_t& part_func_expr_num) const;
-  virtual int calc_subpart_func_expr_num(int64_t& subpart_func_expr_num) const;
-  // other methods
-  virtual void reset();
-  int64_t get_convert_size() const;
-  virtual bool has_self_partition() const override
-  {
-    return get_binding();
-  }
-  virtual bool is_valid() const;
-  bool is_mock_global_index_invalid() const
-  {
-    return is_mock_global_index_invalid_;
-  }
-  bool is_global_index_table() const
-  {
-    return false;
-  }
-  void set_mock_global_index_invalid(const bool is_invalid)
-  {
-    is_mock_global_index_invalid_ = is_invalid;
-  }
-  bool can_read_index() const
-  {
-    return true;
-  }
+  inline virtual uint64_t get_table_id() const override { return tablegroup_id_; } // for partition schema used
+  inline virtual uint64_t get_database_id() const { return 0; }
+  inline virtual void set_database_id(const uint64_t database_id) { UNUSED(database_id); }
+  inline virtual void set_table_id(const uint64_t tablegroup_id) override { tablegroup_id_ = tablegroup_id; }
+  inline int64_t get_part_func_expr_num() const override { return part_func_expr_num_; }
+  inline void set_part_func_expr_num(const int64_t part_func_expr_num) override { part_func_expr_num_ = part_func_expr_num; }
+  inline int64_t get_sub_part_func_expr_num() const override { return sub_part_func_expr_num_; }
+  inline void set_sub_part_func_expr_num(const int64_t sub_part_func_expr_num) override { sub_part_func_expr_num_ = sub_part_func_expr_num; }
+  virtual int64_t get_partition_cnt() const override { return 0; }
+  virtual int calc_part_func_expr_num(int64_t &part_func_expr_num) const;
+  virtual int calc_subpart_func_expr_num(int64_t &subpart_func_expr_num) const;
+  //other methods
+  virtual void reset() override;
+  int64_t get_convert_size() const override;
+  virtual bool has_self_partition() const override { return get_binding(); }
+  virtual bool is_valid() const override;
+  bool is_mock_global_index_invalid() const { return is_mock_global_index_invalid_; }
+  bool is_global_index_table() const { return false; }
+  void set_mock_global_index_invalid(const bool is_invalid) {is_mock_global_index_invalid_ = is_invalid; }
+  bool can_read_index() const { return true; }
 
   DECLARE_VIRTUAL_TO_STRING;
 

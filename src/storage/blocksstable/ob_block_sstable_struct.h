@@ -1628,10 +1628,7 @@ struct ObServerSuperBlock : public blocksstable::ObISuperBlock {
 
   ObServerSuperBlock();
 
-  virtual int64_t get_timestamp() const
-  {
-    return content_.modify_timestamp_;
-  }
+  virtual int64_t get_timestamp() const override { return content_.modify_timestamp_; }
   virtual bool is_valid() const override;
   virtual void reset() override;
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;

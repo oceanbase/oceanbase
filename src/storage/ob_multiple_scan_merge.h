@@ -36,7 +36,8 @@ class ObMultipleScanMerge : public ObMultipleScanMergeImpl {
   protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
-  virtual int inner_get_next_row(ObStoreRow& row);
+
+  virtual int inner_get_next_row(ObStoreRow &row) override;
   virtual int is_range_valid() const override;
   virtual int prepare() override;
   virtual void collect_merge_stat(ObTableStoreStat& stat) const override;

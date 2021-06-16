@@ -31,9 +31,12 @@ class ObMultipleMerge : public ObQueryRowIterator {
   ObMultipleMerge();
   virtual ~ObMultipleMerge();
   virtual int init(
-      const ObTableAccessParam& param, ObTableAccessContext& context, const ObGetTableParam& get_table_param);
-  virtual int get_next_row(ObStoreRow*& row);
-  virtual void reset();
+      const ObTableAccessParam &param,
+      ObTableAccessContext &context,
+      const ObGetTableParam &get_table_param
+      );
+  virtual int get_next_row(ObStoreRow *&row) override;
+  virtual void reset() override;
   virtual void reuse();
   inline const ObRowStat& get_row_stat() const
   {

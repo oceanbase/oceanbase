@@ -207,150 +207,49 @@ class ObSimpleTableSchemaV2 : public ObPartitionSchema {
   explicit ObSimpleTableSchemaV2(common::ObIAllocator* allocator);
   ObSimpleTableSchemaV2(const ObSimpleTableSchemaV2& src_schema) = delete;
   virtual ~ObSimpleTableSchemaV2();
-  ObSimpleTableSchemaV2& operator=(const ObSimpleTableSchemaV2& other) = delete;
-  int assign(const ObSimpleTableSchemaV2& src_schema);
-  bool operator==(const ObSimpleTableSchemaV2& other) const;
-  void reset();
+  ObSimpleTableSchemaV2 &operator=(const ObSimpleTableSchemaV2 &other) = delete;
+  int assign(const ObSimpleTableSchemaV2 &src_schema);
+  bool operator ==(const ObSimpleTableSchemaV2 &other) const;
+  void reset() override;
   void reset_partition_schema();
-  bool is_valid() const;
+  bool is_valid() const override;
   bool is_link_valid() const;
-  int64_t get_convert_size() const;
-  inline void set_tenant_id(const uint64_t tenant_id) override
-  {
-    tenant_id_ = tenant_id;
-  }
-  inline uint64_t get_tenant_id() const override
-  {
-    return tenant_id_;
-  }
-  inline virtual void set_table_id(const uint64_t table_id) override
-  {
-    table_id_ = table_id;
-  }
-  inline virtual uint64_t get_table_id() const override
-  {
-    return table_id_;
-  }
-  inline void set_schema_version(const int64_t schema_version) override
-  {
-    schema_version_ = schema_version;
-  }
-  inline int64_t get_schema_version() const override
-  {
-    return schema_version_;
-  }
-  inline const char* get_locality() const
-  {
-    return extract_str(locality_str_);
-  }
-  virtual const common::ObString& get_locality_str() const override
-  {
-    return locality_str_;
-  }
-  virtual common::ObString& get_locality_str() override
-  {
-    return locality_str_;
-  }
-  inline const char* get_previous_locality() const
-  {
-    return extract_str(previous_locality_str_);
-  }
-  virtual const common::ObString& get_previous_locality_str() const override
-  {
-    return previous_locality_str_;
-  }
-  inline int set_locality(const char* locality)
-  {
-    return deep_copy_str(locality, locality_str_);
-  }
-  inline int set_locality(const common::ObString& locality)
-  {
-    return deep_copy_str(locality, locality_str_);
-  }
-  inline int set_previous_locality(const char* previous_locality)
-  {
-    return deep_copy_str(previous_locality, previous_locality_str_);
-  }
-  inline int set_previous_locality(const common::ObString& previous_locality)
-  {
-    return deep_copy_str(previous_locality, previous_locality_str_);
-  }
-  inline void set_database_id(const uint64_t database_id)
-  {
-    database_id_ = database_id;
-  }
-  inline uint64_t get_database_id() const
-  {
-    return database_id_;
-  }
-  virtual void set_tablegroup_id(const uint64_t tablegroup_id) override
-  {
-    tablegroup_id_ = tablegroup_id;
-  }
-  virtual uint64_t get_tablegroup_id() const override
-  {
-    return tablegroup_id_;
-  }
-  inline void set_data_table_id(const uint64_t data_table_id)
-  {
-    data_table_id_ = data_table_id;
-  }
-  inline uint64_t get_data_table_id() const
-  {
-    return data_table_id_;
-  }
-  inline int set_table_name(const common::ObString& table_name)
-  {
-    return deep_copy_str(table_name, table_name_);
-  }
-  inline const char* get_table_name() const
-  {
-    return extract_str(table_name_);
-  }
-  virtual const char* get_entity_name() const override
-  {
-    return extract_str(table_name_);
-  }
-  inline const common::ObString& get_table_name_str() const
-  {
-    return table_name_;
-  }
-  inline const common::ObString& get_origin_index_name_str() const
-  {
-    return origin_index_name_;
-  }
-  inline void set_name_case_mode(const common::ObNameCaseMode cmp_mode)
-  {
-    name_case_mode_ = cmp_mode;
-  }
-  inline common::ObNameCaseMode get_name_case_mode() const
-  {
-    return name_case_mode_;
-  }
-  inline void set_table_type(const ObTableType table_type)
-  {
-    table_type_ = table_type;
-  }
-  inline ObTableType get_table_type() const
-  {
-    return table_type_;
-  }
-  inline void set_table_mode(const int32_t table_mode)
-  {
-    table_mode_.mode_ = table_mode;
-  }
-  inline int32_t get_table_mode() const
-  {
-    return table_mode_.mode_;
-  }
-  inline void set_table_mode_struct(const ObTableMode table_mode)
-  {
-    table_mode_ = table_mode;
-  }
-  inline ObTableMode get_table_mode_struct() const
-  {
-    return table_mode_;
-  }
+  int64_t get_convert_size() const override;
+  inline void set_tenant_id(const uint64_t tenant_id) override { tenant_id_ = tenant_id; }
+  inline uint64_t get_tenant_id() const override { return tenant_id_; }
+  inline virtual void set_table_id(const uint64_t table_id) override { table_id_ = table_id; }
+  inline virtual uint64_t get_table_id() const override { return table_id_; }
+  inline void set_schema_version(const int64_t schema_version) override { schema_version_ = schema_version; }
+  inline int64_t get_schema_version() const override { return schema_version_; }
+  inline const char *get_locality() const { return extract_str(locality_str_); }
+  virtual const common::ObString &get_locality_str() const override { return locality_str_; }
+  virtual common::ObString &get_locality_str() override { return locality_str_; }
+  inline const char *get_previous_locality() const { return extract_str(previous_locality_str_); }
+  virtual const common::ObString &get_previous_locality_str() const override { return previous_locality_str_; }
+  inline int set_locality(const char *locality) { return deep_copy_str(locality, locality_str_); }
+  inline int set_locality(const common::ObString &locality) { return deep_copy_str(locality, locality_str_); }
+  inline int set_previous_locality(const char *previous_locality) { return deep_copy_str(previous_locality, previous_locality_str_); }
+  inline int set_previous_locality(const common::ObString &previous_locality) { return deep_copy_str(previous_locality, previous_locality_str_); }
+  inline void set_database_id(const uint64_t database_id) { database_id_ = database_id; }
+  inline uint64_t get_database_id() const { return database_id_; }
+  virtual void set_tablegroup_id(const uint64_t tablegroup_id) override { tablegroup_id_ = tablegroup_id; }
+  virtual uint64_t get_tablegroup_id() const override { return tablegroup_id_; }
+  inline void set_data_table_id(const uint64_t data_table_id) { data_table_id_ = data_table_id; }
+  inline uint64_t get_data_table_id() const { return data_table_id_; }
+  inline int set_table_name(const common::ObString &table_name)
+  { return deep_copy_str(table_name, table_name_); }
+  inline const char *get_table_name() const { return extract_str(table_name_); }
+  virtual const char *get_entity_name() const override { return extract_str(table_name_); }
+  inline const common::ObString &get_table_name_str() const { return table_name_; }
+  inline const common::ObString &get_origin_index_name_str() const { return origin_index_name_; }
+  inline void set_name_case_mode(const common::ObNameCaseMode cmp_mode) { name_case_mode_ = cmp_mode; }
+  inline common::ObNameCaseMode get_name_case_mode() const { return name_case_mode_; }
+  inline void set_table_type(const ObTableType table_type) { table_type_ = table_type; }
+  inline ObTableType get_table_type() const { return table_type_; }
+  inline void set_table_mode(const int32_t table_mode) { table_mode_.mode_ = table_mode; }
+  inline int32_t get_table_mode() const { return table_mode_.mode_; }
+  inline void set_table_mode_struct(const ObTableMode table_mode) { table_mode_ = table_mode; }
+  inline ObTableMode get_table_mode_struct() const { return table_mode_; }
   inline ObTableModeFlag get_table_mode_flag() const
   {
     return (ObTableModeFlag)table_mode_.mode_flag_;
@@ -361,37 +260,18 @@ class ObSimpleTableSchemaV2 : public ObPartitionSchema {
   }
   // Is it a new table without a primary key
   inline bool is_new_no_pk_table() const
-  {
-    return TPKM_NEW_NO_PK == (enum ObTablePKMode)table_mode_.pk_mode_;
-  }
-  inline int set_primary_zone(const common::ObString& primary_zone)
-  {
-    return deep_copy_str(primary_zone, primary_zone_);
-  }
-  int set_primary_zone_array(const common::ObIArray<ObZoneScore>& primary_zone_array);
-  inline virtual void set_min_partition_id(uint64_t partition_id)
-  {
-    min_partition_id_ = partition_id;
-  }
-  inline void set_session_id(const uint64_t id)
-  {
-    session_id_ = id;
-  }
-  inline virtual uint64_t get_min_partition_id() const
-  {
-    return min_partition_id_;
-  }
-  inline const common::ObString& get_primary_zone() const
-  {
-    return primary_zone_;
-  }
-  inline uint64_t get_session_id() const
-  {
-    return session_id_;
-  }
-  int set_zone_list(const common::ObIArray<common::ObString>& zone_list);
-  int set_zone_list(const common::ObIArray<common::ObZone>& zone_list);
-  int get_zone_list(common::ObIArray<common::ObZone>& zone_list) const;
+  { return TPKM_NEW_NO_PK == (enum ObTablePKMode)table_mode_.pk_mode_; }
+  inline int set_primary_zone(const common::ObString &primary_zone)
+  { return deep_copy_str(primary_zone, primary_zone_); }
+  int set_primary_zone_array(const common::ObIArray<ObZoneScore> &primary_zone_array);
+  inline virtual void set_min_partition_id(uint64_t partition_id) override { min_partition_id_ = partition_id; }
+  inline void set_session_id(const uint64_t id)  { session_id_ = id; }
+  inline virtual uint64_t get_min_partition_id() const override { return min_partition_id_; }
+  inline const common::ObString &get_primary_zone() const { return primary_zone_; }
+  inline uint64_t get_session_id() const { return session_id_; }
+  int set_zone_list(const common::ObIArray<common::ObString> &zone_list);
+  int set_zone_list(const common::ObIArray<common::ObZone> &zone_list);
+  int get_zone_list(common::ObIArray<common::ObZone> &zone_list) const;
   virtual int get_zone_list(
       share::schema::ObSchemaGetterGuard& schema_guard, common::ObIArray<common::ObZone>& zone_list) const override;
   virtual int get_primary_zone_inherit(

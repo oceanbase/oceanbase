@@ -37,24 +37,23 @@ class ObVirtualTableIterator : public ObNewRowIterator {
 
   public:
   ObVirtualTableIterator()
-      : allocator_(NULL),
-        output_column_ids_(),
-        reserved_column_cnt_(0),
-        schema_guard_(NULL),
-        table_schema_(NULL),
-        index_schema_(NULL),
-        cur_row_(),
-        session_(NULL),
-        convert_alloc_(),
-        cast_ctx_(),
-        convert_row_(),
-        need_convert_(false),
-        scan_param_(NULL)
-  {}
-  virtual ~ObVirtualTableIterator()
-  {}
-  virtual void reset();
-  inline void set_allocator(common::ObIAllocator* allocator);
+    : allocator_(NULL),
+      output_column_ids_(),
+      reserved_column_cnt_(0),
+      schema_guard_(NULL),
+      table_schema_(NULL),
+      index_schema_(NULL),
+      cur_row_(),
+      session_(NULL),
+      convert_alloc_(),
+      cast_ctx_(),
+      convert_row_(),
+      need_convert_(false),
+      scan_param_(NULL)
+    {}
+  virtual ~ObVirtualTableIterator() {}
+  virtual void reset() override;
+  inline void set_allocator(common::ObIAllocator *allocator);
   inline void set_reserved_column_cnt(int64_t count);
   inline int set_output_column_ids(const common::ObIArray<uint64_t>& column_ids);
   inline void set_schema_guard(share::schema::ObSchemaGetterGuard* schema_guard);
@@ -66,13 +65,10 @@ class ObVirtualTableIterator : public ObNewRowIterator {
     scan_param_ = scan_param;
   }
   virtual int open();
-  virtual int inner_open()
-  {
-    return common::OB_SUCCESS;
-  };
-  virtual int get_next_row(common::ObNewRow*& row);
-  virtual int inner_get_next_row(common::ObNewRow*& row) = 0;
-  virtual int get_next_row() override;  // interface for static typing engine.
+  virtual int inner_open() { return common::OB_SUCCESS; };
+  virtual int get_next_row(common::ObNewRow *&row) override;
+  virtual int inner_get_next_row(common::ObNewRow *&row) = 0;
+  virtual int get_next_row() override; // interface for static typing engine.
   virtual int close();
   virtual int inner_close()
   {

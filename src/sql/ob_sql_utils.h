@@ -464,10 +464,9 @@ class RelExprPointerChecker : public RelExprCheckerBase {
   virtual ~RelExprPointerChecker()
   {}
   virtual int init(int64_t bucket_num = CHECKER_BUCKET_NUM) override;
-  int add_expr(ObRawExpr*& expr);
-
-  private:
-  common::ObIArray<ObRawExprPointer>& rel_array_;
+  int add_expr(ObRawExpr *&expr) override;
+private:
+  common::ObIArray<ObRawExprPointer> &rel_array_;
   common::hash::ObHashMap<uint64_t, uint64_t, common::hash::NoPthreadDefendMode> expr_id_map_;
 };
 

@@ -183,19 +183,19 @@ class ObPartitionStorage : public ObIPartitionStorage {
   ObPartitionStorage();
   virtual ~ObPartitionStorage();
 
-  inline virtual const share::schema::ObMultiVersionSchemaService* get_schema_service() const
+  inline virtual const share::schema::ObMultiVersionSchemaService *get_schema_service() const override
   {
     return schema_service_;
   }
-  virtual int init(const common::ObPartitionKey& pkey, ObIPartitionComponentFactory* cp_fty,
-      share::schema::ObMultiVersionSchemaService* schema_service, transaction::ObTransService* txs,
-      ObPGMemtableMgr& pg_memtable_mgr);
+  virtual int init(
+      const common::ObPartitionKey &pkey,
+      ObIPartitionComponentFactory *cp_fty,
+      share::schema::ObMultiVersionSchemaService *schema_service,
+      transaction::ObTransService *txs,
+      ObPGMemtableMgr &pg_memtable_mgr) override;
 
-  virtual void destroy();
-  virtual const common::ObPartitionKey& get_partition_key() const
-  {
-    return pkey_;
-  }
+  virtual void destroy() override;
+  virtual const common::ObPartitionKey &get_partition_key() const override { return pkey_; }
   bool is_inited() const;
 
   TO_STRING_KV(K_(pkey), K_(store));
@@ -279,23 +279,31 @@ class ObPartitionStorage : public ObIPartitionStorage {
   // @param affected_rows [out] successfully insert row number
   // @param duplicated_rows [out] the iterator of the rowkey(s) of conflict row(s)
   //
+  virtual int insert_row(const ObStoreCtx &ctx,
+                         const ObDMLBaseParam &dml_param,
+                         const common::ObIArray<uint64_t> &column_ids,
+                         const common::ObNewRow &row);
 
-  virtual int insert_row(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
-      const common::ObIArray<uint64_t>& column_ids, const common::ObNewRow& row);
-
-  virtual int insert_row(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
-      const common::ObIArray<uint64_t>& column_ids, const common::ObIArray<uint64_t>& duplicated_column_ids,
-      const common::ObNewRow& row, const ObInsertFlag flag, int64_t& affected_rows,
-      common::ObNewRowIterator*& duplicated_rows) override;
-  // check whether row has conflict in storage
-  // in_column_ids describe columns of the row, begin with rowey, must include local unique index
-  // out_column_ids describe column of conflict row
-  // check_row_iter is the iterator of rows that will be checked
-  // dup_row_iters are iterators of conflict rows, the number of iterators is same with number of checked rows
-  virtual int fetch_conflict_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
-      const common::ObIArray<uint64_t>& in_column_ids, const common::ObIArray<uint64_t>& out_column_ids,
-      common::ObNewRowIterator& check_row_iter, common::ObIArray<common::ObNewRowIterator*>& dup_row_iters);
-  virtual int revert_insert_iter(common::ObNewRowIterator* iter) override;
+  virtual int insert_row(const ObStoreCtx &ctx,
+                         const ObDMLBaseParam &dml_param,
+                         const common::ObIArray<uint64_t> &column_ids,
+                         const common::ObIArray<uint64_t> &duplicated_column_ids,
+                         const common::ObNewRow &row,
+                         const ObInsertFlag flag,
+                         int64_t &affected_rows,
+                         common::ObNewRowIterator *&duplicated_rows) override;
+  //check whether row has conflict in storage
+  //in_column_ids describe columns of the row, begin with rowey, must include local unique index
+  //out_column_ids describe column of conflict row
+  //check_row_iter is the iterator of rows that will be checked
+  //dup_row_iters are iterators of conflict rows, the number of iterators is same with number of checked rows
+  virtual int fetch_conflict_rows(const ObStoreCtx &ctx,
+                                  const ObDMLBaseParam &dml_param,
+                                  const common::ObIArray<uint64_t> &in_column_ids,
+                                  const common::ObIArray<uint64_t> &out_column_ids,
+                                  common::ObNewRowIterator &check_row_iter,
+                                  common::ObIArray<common::ObNewRowIterator *> &dup_row_iters) override;
+  virtual int revert_insert_iter(common::ObNewRowIterator *iter)  override;
   //
   // update rows
   //     update table rows and index rows
@@ -342,19 +350,29 @@ class ObPartitionStorage : public ObIPartitionStorage {
   // @retval OB_TRANS_IS_READONLY
   // @retval OB_ERR_EXCLUSIVE_LOCK_CONFLICT
   //
-  virtual int lock_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param, const int64_t abs_lock_timeout,
-      common::ObNewRowIterator* row_iter, ObLockFlag lock_flag, int64_t& affected_rows) override;
-  virtual int lock_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param, const int64_t abs_lock_timeout,
-      const common::ObNewRow& row, ObLockFlag lock_flag);
+  virtual int lock_rows(const ObStoreCtx &ctx,
+                        const ObDMLBaseParam &dml_param,
+                        const int64_t abs_lock_timeout,
+                        common::ObNewRowIterator *row_iter,
+                        ObLockFlag lock_flag,
+                        int64_t &affected_rows)  override;
+  virtual int lock_rows(const ObStoreCtx &ctx,
+                        const ObDMLBaseParam &dml_param,
+                        const int64_t abs_lock_timeout,
+                        const common::ObNewRow &row,
+                        ObLockFlag lock_flag) override;
 
-  virtual int get_concurrent_cnt(uint64_t table_id, int64_t schema_version, int64_t& concurrent_cnt);
+  virtual int get_concurrent_cnt(uint64_t table_id, int64_t schema_version, int64_t &concurrent_cnt) override;
 
-  virtual int get_batch_rows(const ObTableScanParam& param, const storage::ObBatch& batch, int64_t& logical_row_count,
-      int64_t& physical_row_count, common::ObIArray<common::ObEstRowCountRecord>& est_records);
+  virtual int get_batch_rows(const ObTableScanParam &param,
+                             const storage::ObBatch &batch,
+                             int64_t &logical_row_count,
+                             int64_t &physical_row_count,
+                             common::ObIArray<common::ObEstRowCountRecord> &est_records) override;
 
-  virtual int get_table_stat(const uint64_t table_id, common::ObTableStat& stat);
+  virtual int get_table_stat(const uint64_t table_id, common::ObTableStat &stat) override;
 
-  virtual int lock(const ObStoreCtx& ctx);
+  virtual int lock(const ObStoreCtx &ctx) override;
 
   virtual void set_merge_status(bool merge_success);
   virtual bool can_schedule_merge();

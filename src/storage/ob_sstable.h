@@ -117,7 +117,7 @@ class ObSSTable : public ObITable {
   virtual int open(const ObCreateSSTableParamWithPartition& param);
   virtual int open(const blocksstable::ObSSTableBaseMeta& meta);
   virtual int close();
-  virtual void destroy();
+  virtual void destroy() override;
 
   // if set success, src ObMacroBlocksWriteCtx will be clear
   // if set failed, dest sstable macro blocks will be clear
@@ -271,40 +271,35 @@ class ObSSTable : public ObITable {
   int get_range(
       const int64_t idx, const int64_t concurrent_cnt, common::ObIAllocator& allocator, common::ObExtStoreRange& range);
 
-  int get_concurrent_cnt(int64_t tablet_size, int64_t& concurrent_cnt);
-  int query_range_to_macros(common::ObIAllocator& allocator, const common::ObIArray<common::ObStoreRange>& ranges,
-      const int64_t type, uint64_t* macros_count, const int64_t* total_task_count,
-      common::ObIArray<common::ObStoreRange>* splitted_ranges, common::ObIArray<int64_t>* split_index);
-  int exist(const ObStoreCtx& ctx, const uint64_t table_id, const common::ObStoreRowkey& rowkey,
-      const common::ObIArray<share::schema::ObColDesc>& column_ids, bool& is_exist, bool& has_found);
-  virtual int prefix_exist(storage::ObRowsInfo& rows_info, bool& may_exist);
-  int exist(ObRowsInfo& rows_info, bool& is_exist, bool& all_rows_found);
-  int64_t get_occupy_size() const
-  {
-    return meta_.occupy_size_;
-  }
-  int64_t get_total_row_count() const
-  {
-    return meta_.row_count_;
-  }
-  int64_t get_macro_block_count() const
-  {
-    return meta_.macro_block_count_;
-  }
-  inline uint64_t get_table_id() const
-  {
-    return meta_.index_id_;
-  }
-  inline int64_t get_rowkey_column_count() const
-  {
-    return meta_.rowkey_column_count_;
-  }
-  OB_INLINE int64_t get_logical_data_version() const
-  {
-    return meta_.logical_data_version_;
-  }
-  int get_table_stat(common::ObTableStat& stat);
-  virtual int get_frozen_schema_version(int64_t& schema_version) const override;
+  int get_concurrent_cnt(int64_t tablet_size, int64_t &concurrent_cnt);
+  int query_range_to_macros(common::ObIAllocator &allocator,
+                            const common::ObIArray<common::ObStoreRange> &ranges,
+                            const int64_t type,
+                            uint64_t *macros_count,
+                            const int64_t *total_task_count,
+                            common::ObIArray<common::ObStoreRange> *splitted_ranges,
+                            common::ObIArray<int64_t> *split_index);
+  int exist(const ObStoreCtx &ctx,
+      const uint64_t table_id,
+      const common::ObStoreRowkey &rowkey,
+      const common::ObIArray<share::schema::ObColDesc> &column_ids,
+      bool &is_exist,
+      bool &has_found) override;
+  virtual int prefix_exist(
+      storage::ObRowsInfo &rows_info,
+      bool &may_exist) override;
+  int exist(
+      ObRowsInfo &rows_info,
+      bool &is_exist,
+      bool &all_rows_found) override;
+  int64_t get_occupy_size() const { return meta_.occupy_size_; }
+  int64_t get_total_row_count() const { return meta_.row_count_; }
+  int64_t get_macro_block_count() const { return meta_.macro_block_count_; }
+  inline uint64_t get_table_id() const {return meta_.index_id_; }
+  inline int64_t get_rowkey_column_count() const { return meta_.rowkey_column_count_; }
+  OB_INLINE int64_t get_logical_data_version() const { return meta_.logical_data_version_; }
+  int get_table_stat(common::ObTableStat &stat);
+  virtual int get_frozen_schema_version(int64_t &schema_version) const override;
   int fill_old_meta_info(
       const int64_t schema_version, const int64_t step_merge_start_version, const int64_t step_merge_end_version);
   virtual int bf_may_contain_rowkey(const common::ObStoreRowkey& rowkey, bool& contain);
@@ -327,7 +322,7 @@ class ObSSTable : public ObITable {
   {
     return is_multi_version_minor_sstable() ? meta_.get_upper_trans_version() : get_snapshot_version();
   }
-  virtual int64_t get_max_merged_trans_version() const
+  virtual int64_t get_max_merged_trans_version() const override
   {
     return is_multi_version_minor_sstable() ? meta_.get_max_merged_trans_version() : get_snapshot_version();
   }

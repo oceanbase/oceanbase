@@ -102,8 +102,8 @@ class ObRowkeyObjComparerOracle : public ObRowkeyObjComparer {
     cmp_ctx_.null_pos_ = NULL_LAST;
   }
   virtual ~ObRowkeyObjComparerOracle() = default;
-  virtual int init_compare_func_collation_free(const common::ObObjMeta& obj_meta);
-  virtual OB_INLINE int32_t compare_semi_nullsafe(const common::ObObj& obj1, const common::ObObj& obj2) override
+  virtual int init_compare_func_collation_free(const common::ObObjMeta &obj_meta) override;
+  virtual OB_INLINE int32_t compare_semi_nullsafe(const common::ObObj &obj1, const common::ObObj &obj2) override
   {
     int32_t cmp_ret = ObObjCmpFuncs::CR_EQ;
     if (obj2.is_null()) {
@@ -124,7 +124,7 @@ class ObRowkeyObjComparerNullsafeMysql : public ObRowkeyObjComparer {
     cmp_ctx_.null_pos_ = NULL_FIRST;
   }
   virtual ~ObRowkeyObjComparerNullsafeMysql() = default;
-  virtual OB_INLINE int32_t compare(const common::ObObj& obj1, const common::ObObj& obj2)
+  virtual OB_INLINE int32_t compare(const common::ObObj &obj1, const common::ObObj &obj2) override
   {
     int32_t cmp_ret = 0;
     if (OB_UNLIKELY(obj1.is_null() || obj2.is_null())) {
@@ -155,7 +155,7 @@ class ObRowkeyObjComparerNullsafeOracle : public ObRowkeyObjComparerOracle {
     cmp_ctx_.null_pos_ = NULL_LAST;
   }
   virtual ~ObRowkeyObjComparerNullsafeOracle() = default;
-  virtual OB_INLINE int32_t compare(const common::ObObj& obj1, const common::ObObj& obj2)
+  virtual OB_INLINE int32_t compare(const common::ObObj &obj1, const common::ObObj &obj2) override
   {
     int32_t cmp_ret = 0;
     if (OB_UNLIKELY(obj1.is_null() || obj2.is_null())) {

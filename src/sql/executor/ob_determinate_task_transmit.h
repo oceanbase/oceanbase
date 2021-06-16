@@ -103,16 +103,14 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
 
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> Id2IdxMap;
   typedef common::hash::ObHashSet<ObTaskID> TaskIDSet;
+public:
+  explicit ObDeterminateTaskTransmit(common::ObIAllocator &alloc);
+  virtual ~ObDeterminateTaskTransmit() {}
 
-  public:
-  explicit ObDeterminateTaskTransmit(common::ObIAllocator& alloc);
-  virtual ~ObDeterminateTaskTransmit()
-  {}
-
-  virtual int init_op_ctx(ObExecContext& exec_ctx) const override;
-  virtual int inner_open(ObExecContext& exec_ctx) const override;
-  virtual int inner_close(ObExecContext& ctx) const override;
-  virtual OperatorOpenOrder get_operator_open_order(ObExecContext& ctx) const;
+  virtual int init_op_ctx(ObExecContext &exec_ctx) const override;
+  virtual int inner_open(ObExecContext &exec_ctx) const override;
+  virtual int inner_close(ObExecContext &ctx) const override;
+  virtual OperatorOpenOrder get_operator_open_order(ObExecContext &ctx) const override;
   typedef common::ObFixedArray<ObTaskInfo::ObRangeLocation, common::ObIAllocator> RangeLocations;
   typedef common::ObFixedArray<TaskIndex, common::ObIAllocator> Tasks;
   typedef common::ObFixedArray<common::ObFixedArray<common::ObNewRange, common::ObIAllocator>, common::ObIAllocator>

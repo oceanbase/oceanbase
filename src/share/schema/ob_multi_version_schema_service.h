@@ -231,7 +231,7 @@ class ObMultiVersionSchemaService : public ObServerSchemaService {
   protected:
   ObMultiVersionSchemaService();
   virtual ~ObMultiVersionSchemaService();
-  virtual int destroy();
+  virtual int destroy() override;
 
   virtual int publish_schema() override;
   virtual int publish_schema(const uint64_t tenant_id) override;
@@ -298,10 +298,10 @@ class ObMultiVersionSchemaService : public ObServerSchemaService {
   // schema_cache related
   int init_sys_tenant_user_schema();
 
-  int update_schema_cache(common::ObIArray<ObTableSchema*>& schema_array, const bool is_force = false);
-  int update_schema_cache(common::ObIArray<ObTableSchema>& schema_array, const bool is_force = false);
-  int update_schema_cache(const common::ObIArray<ObTenantSchema>& schema_array);
-  int update_schema_cache(const share::schema::ObSysVariableSchema& schema);
+  int update_schema_cache(common::ObIArray<ObTableSchema*> &schema_array, const bool is_force = false) override;
+  int update_schema_cache(common::ObIArray<ObTableSchema> &schema_array, const bool is_force = false) override;
+  int update_schema_cache(const common::ObIArray<ObTenantSchema> &schema_array) override;
+  int update_schema_cache(const share::schema::ObSysVariableSchema &schema) override;
   int build_full_materalized_view_schema(
       ObSchemaGetterGuard& schema_guard, common::ObIAllocator& allocator, ObTableSchema*& view_schema);
   virtual int get_schema(const ObSchemaMgr* mgr, const ObRefreshSchemaStatus& schema_status,

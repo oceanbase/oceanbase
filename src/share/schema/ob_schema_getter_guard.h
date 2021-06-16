@@ -475,56 +475,50 @@ class ObSchemaGetterGuard : public common::ObPartMgr {
   int get_table_schema_version(const uint64_t table_id, int64_t& table_version);
 
   template <typename SchemaType>
-  int check_flashback_object_exist(
-      const SchemaType& object_schema, const common::ObString& object_name, bool& object_exist);
+  int check_flashback_object_exist(const SchemaType &object_schema,
+                                   const common::ObString &object_name,
+                                   bool &object_exist);
 
-  virtual int get_part(const uint64_t table_id, const share::schema::ObPartitionLevel part_level, const int64_t part_id,
-      const common::ObNewRange& range, const bool reverse, common::ObIArray<int64_t>& part_ids) override;
-  virtual int get_part(const uint64_t table_id, const share::schema::ObPartitionLevel part_level, const int64_t part_id,
-      const common::ObNewRow& row, common::ObIArray<int64_t>& part_ids);
-  int get_schema_count(int64_t& schema_count);
-  int get_schema_count(const uint64_t tenant_id, int64_t& schema_count);
-  int get_schema_size(const uint64_t tenant_id, int64_t& schema_count);
-  int get_schema_version_v2(const ObSchemaType schema_type, const uint64_t schema_id, int64_t& schema_version);
-  int get_idx_schema_by_origin_idx_name(
-      uint64_t tenant_id, uint64_t database_id, const common::ObString& index_name, const ObTableSchema*& table_schema);
+  virtual int get_part(const uint64_t table_id,
+                       const share::schema::ObPartitionLevel part_level,
+                       const int64_t part_id,
+                       const common::ObNewRange &range,
+                       const bool reverse,
+                       common::ObIArray<int64_t> &part_ids) override;
+  virtual int get_part(const uint64_t table_id,
+                       const share::schema::ObPartitionLevel part_level,
+                       const int64_t part_id,
+                       const common::ObNewRow &row,
+                       common::ObIArray<int64_t> &part_ids) override;
+  int get_schema_count(int64_t &schema_count);
+  int get_schema_count(const uint64_t tenant_id, int64_t &schema_count);
+  int get_schema_size(const uint64_t tenant_id, int64_t &schema_count);
+  int get_schema_version_v2(const ObSchemaType schema_type,
+                            const uint64_t schema_id,
+                            int64_t &schema_version);
+  int get_idx_schema_by_origin_idx_name(uint64_t tenant_id,
+                                        uint64_t database_id,
+                                        const common::ObString &index_name,
+                                        const ObTableSchema *&table_schema);
 
-  int get_tenant_unavailable_index(const uint64_t tenant_id, common::ObIArray<uint64_t>& table_ids);
-  int check_unavailable_index_exist(const uint64_t tenant_id, bool& exist);
-  int check_restore_error_index_exist(const uint64_t tenant_id, bool& exist);
+  int get_tenant_unavailable_index(const uint64_t tenant_id, common::ObIArray<uint64_t> &table_ids);
+  int check_unavailable_index_exist(const uint64_t tenant_id, bool &exist);
+  int check_restore_error_index_exist(const uint64_t tenant_id, bool &exist);
 
-  inline uint64_t get_session_id() const
-  {
-    return session_id_;
-  }
-  inline void set_session_id(const uint64_t id)
-  {
-    session_id_ = id;
-  }
+  inline uint64_t get_session_id() const { return session_id_; }
+  inline void set_session_id(const uint64_t id)  { session_id_ = id; }
 
-  int get_partition_cnt(uint64_t table_id, int64_t& part_cnt);
+  int get_partition_cnt(uint64_t table_id, int64_t &part_cnt);
 
-  bool is_tenant_schema_guard() const
-  {
-    return common::OB_INVALID_TENANT_ID != tenant_id_;
-  }
+  bool is_tenant_schema_guard() const { return common::OB_INVALID_TENANT_ID != tenant_id_; }
 
-  int get_tenant_mv_ids(const uint64_t tenant_id, common::ObArray<uint64_t>& mv_ids) const;
-  int get_all_mv_ids(common::ObArray<uint64_t>& mv_ids) const;
+  int get_tenant_mv_ids(const uint64_t tenant_id, common::ObArray<uint64_t> &mv_ids) const;
+  int get_all_mv_ids(common::ObArray<uint64_t> &mv_ids) const;
 
-  SchemaGuardType get_schema_guard_type() const
-  {
-    return schema_guard_type_;
-  }
+  SchemaGuardType get_schema_guard_type() const { return schema_guard_type_; }
 
-  bool is_standby_cluster()
-  {
-    return is_standby_cluster_;
-  }
-  bool is_schema_splited() const
-  {
-    return 0 != schema_mgr_infos_.count();
-  }
+  bool is_standby_cluster() { return is_standby_cluster_; }
+  bool is_schema_splited() const { return 0 != schema_mgr_infos_.count(); }
   int check_formal_guard() const;
   int is_lazy_mode(const uint64_t tenant_id, bool& is_lazy) const;
 

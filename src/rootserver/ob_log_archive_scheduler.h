@@ -64,20 +64,14 @@ class ObLogArchiveScheduler final : public ObRsReentrantThread, public ObIBackup
       obrpc::ObSrvRpcProxy& rpc_proxy, common::ObMySQLProxy& sql_proxy,
       share::ObIBackupLeaseService& backup_lease_info);
   void set_active();
-  void stop();
+  void stop() override;
   void wakeup();
 
   int handle_enable_log_archive(const bool is_enable);
   virtual void run3() override;
-  virtual int blocking_run() override
-  {
-    BLOCKING_RUN_IMPLEMENT();
-  }
-  int start();
-  virtual bool is_working() const
-  {
-    return is_working_;
-  }
+  virtual int blocking_run() override { BLOCKING_RUN_IMPLEMENT(); }
+  int start() override;
+  virtual bool is_working() const override { return is_working_; }
 
   private:
   void cleanup_();

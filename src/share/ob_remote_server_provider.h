@@ -62,16 +62,18 @@ class ObRemoteServerProvider : public common::sqlclient::ObMySQLServerProvider {
   public:
   ObRemoteServerProvider();
   virtual ~ObRemoteServerProvider();
-  int init(obrpc::ObCommonRpcProxy& rpc_proxy, common::ObMySQLProxy& sql_proxy);
-  virtual int get_cluster_list(common::ObIArray<int64_t>& cluster_list);
-  virtual int get_server(const int64_t cluster_id, const int64_t svr_idx, common::ObAddr& server);
-  virtual int64_t get_cluster_count() const;
-  virtual int64_t get_server_count() const;
-  virtual int64_t get_server_count(const int64_t cluster_id) const;
-  virtual int refresh_server_list(void);
+  int init(obrpc::ObCommonRpcProxy &rpc_proxy, common::ObMySQLProxy &sql_proxy);
+  virtual int get_cluster_list(common::ObIArray<int64_t> &cluster_list) override;
+  virtual int get_server(const int64_t cluster_id,
+                         const int64_t svr_idx,
+                         common::ObAddr &server) override;
+  virtual int64_t get_cluster_count() const override;
+  virtual int64_t get_server_count() const override;
+  virtual int64_t get_server_count(const int64_t cluster_id) const override;
+  virtual int refresh_server_list(void) override;
   virtual int prepare_refresh() override;
   int64_t get_primary_cluster_id() const;
-  bool need_refresh();
+  bool need_refresh() override;
 };
 }  // namespace share
 }  // namespace oceanbase

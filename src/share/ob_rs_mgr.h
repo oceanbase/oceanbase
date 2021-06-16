@@ -38,21 +38,28 @@ class IHeartBeatProcess;
 class ObUnifiedAddrAgent : public ObRootAddrAgent {
   public:
   ObUnifiedAddrAgent();
-  int init(common::ObMySQLProxy& sql_proxy, common::ObServerConfig& config);
-  virtual int store(const ObIAddrList& addr_list, const ObIAddrList& readonly_addr_list, const bool force,
-      const common::ObClusterType cluster_type, const int64_t timestamp);
-  virtual int fetch(ObIAddrList& addr_list, ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_typ);
-  virtual int fetch_remote_rslist(const int64_t cluster_id, ObIAddrList& addr_list, ObIAddrList& readonly_addr_list,
-      common::ObClusterType& cluster_type) override;
-  int fetch_rslist_by_agent_idx(const int64_t index, const int64_t cluster_id, ObIAddrList& addr_list,
-      ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_type);
+  int init(common::ObMySQLProxy &sql_proxy, common::ObServerConfig &config);
+  virtual int store(const ObIAddrList &addr_list, const ObIAddrList &readonly_addr_list,
+                    const bool force, const common::ObClusterType cluster_type,
+                    const int64_t timestamp) override;
+  virtual int fetch(ObIAddrList &addr_list, ObIAddrList &readonly_addr_list,
+                    common::ObClusterType &cluster_typ) override;
+  virtual int fetch_remote_rslist(const int64_t cluster_id,
+                                  ObIAddrList &addr_list,
+                                  ObIAddrList &readonly_addr_list,
+                                  common::ObClusterType &cluster_type) override;
+  int fetch_rslist_by_agent_idx(const int64_t index,
+                                const int64_t cluster_id,
+                                ObIAddrList &addr_list,
+                                ObIAddrList &readonly_addr_list,
+                                common::ObClusterType &cluster_type);
   int64_t get_agent_num() const
   {
     return AGENT_NUM;
   }
-  virtual int delete_cluster(const int64_t cluster_id);
+  virtual int delete_cluster(const int64_t cluster_id) override;
   int reload();
-  bool is_valid();
+  bool is_valid() override;
 
   private:
   const static int64_t AGENT_NUM = 3;

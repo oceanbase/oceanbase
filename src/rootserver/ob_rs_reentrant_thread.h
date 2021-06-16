@@ -37,20 +37,14 @@ class ObRsReentrantThread : public share::ObReentrantThread {
   }
   virtual void run3() = 0;
 
-  // Set RS thread properties
-  virtual int before_blocking_run()
-  {
-    common::ObThreadFlags::set_rs_flag();
-    return common::OB_SUCCESS;
-  }
+  //Set RS thread properties
+  virtual int before_blocking_run() override
+  { common::ObThreadFlags::set_rs_flag(); return common::OB_SUCCESS; }
 
-  virtual int after_blocking_run()
-  {
-    common::ObThreadFlags::cancel_rs_flag();
-    return common::OB_SUCCESS;
-  }
-
-  // check thread
+  virtual int after_blocking_run() override
+  { common::ObThreadFlags::cancel_rs_flag(); return common::OB_SUCCESS; }
+  
+  //check thread
   static CheckThreadSet check_thread_set_;
   static void check_alert(const ObRsReentrantThread& thread);
 
@@ -65,8 +59,8 @@ class ObRsReentrantThread : public share::ObReentrantThread {
 
   int create(const int64_t thread_cnt, const char* name = nullptr);
   int destroy();
-  void stop();
-  void wait();
+  void stop() override;
+  void wait() override;
   TO_STRING_KV("name", get_thread_name());
 
   private:

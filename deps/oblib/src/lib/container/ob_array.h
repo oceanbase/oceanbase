@@ -92,32 +92,17 @@ class ObArrayImpl : public ObIArray<T> {
   ObArrayImpl(int64_t block_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
       const BlockAllocatorT& alloc = BlockAllocatorT(ObNewModIds::OB_COMMON_ARRAY));
   virtual ~ObArrayImpl() __attribute__((noinline));
-  inline void set_label(const lib::ObLabel& label)
-  {
-    block_allocator_.set_label(label);
-  }
-  inline void set_block_size(const int64_t block_size)
-  {
-    block_size_ = block_size;
-  }
-  inline int64_t get_block_size() const
-  {
-    return block_size_;
-  }
-  inline void set_block_allocator(const BlockAllocatorT& alloc)
-  {
-    block_allocator_ = alloc;
-  }
-  inline const BlockAllocatorT& get_block_allocator() const
-  {
-    return block_allocator_;
-  }
-  int push_back(const T& obj);
-  void pop_back();
-  int pop_back(T& obj);
-  int remove(const int64_t idx);
+  inline void set_label(const lib::ObLabel &label) { block_allocator_.set_label(label); }
+  inline void set_block_size(const int64_t block_size) { block_size_ = block_size; }
+  inline int64_t get_block_size() const {return block_size_; }
+  inline void set_block_allocator(const BlockAllocatorT &alloc) { block_allocator_ = alloc; }
+  inline const BlockAllocatorT   &get_block_allocator() const {return block_allocator_;}
+  int push_back(const T &obj) override;
+  void pop_back() override;
+  int pop_back(T &obj) override;
+  int remove(const int64_t idx) override;
 
-  inline int at(const int64_t idx, T& obj) const
+  inline int at(const int64_t idx, T &obj) const override
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(OB_SUCCESS != error_)) {
@@ -138,20 +123,11 @@ class ObArrayImpl : public ObIArray<T> {
     OB_ASSERT(OB_SUCCESS == error_);
   }
 
-  inline T& operator[](const int64_t idx)
-  {
-    return at(idx);
-  }
-  inline const T& operator[](const int64_t idx) const
-  {
-    return at(idx);
-  }
-  T* alloc_place_holder();
-  inline int64_t size() const
-  {
-    return count();
-  }
-  void reuse()
+  inline T &operator[](const int64_t idx) {return at(idx);}
+  inline const T &operator[](const int64_t idx) const {return at(idx);}
+  T *alloc_place_holder() override;
+  inline int64_t size() const { return count();}
+  void reuse() override
   {
     CallBack cb;
     if (data_size_ <= block_size_) {
@@ -160,12 +136,9 @@ class ObArrayImpl : public ObIArray<T> {
       destroy();
     }
   }
-  inline void reset()
-  {
-    destroy();
-  }
-  void destroy();
-  inline int reserve(int64_t capacity)
+  inline void reset() override {destroy();}
+  void destroy() override;
+  inline int reserve(int64_t capacity) override
   {
     int ret = OB_SUCCESS;
     if (capacity > data_size_ / (int64_t)sizeof(T)) {
@@ -176,8 +149,8 @@ class ObArrayImpl : public ObIArray<T> {
     }
     return ret;
   }
-  // prepare allocate can avoid declaring local data
-  int prepare_allocate(int64_t capacity)
+  //prepare allocate can avoid declaring local data
+  int prepare_allocate(int64_t capacity) override
   {
     int ret = OB_SUCCESS;
     ret = reserve(capacity);
@@ -192,19 +165,11 @@ class ObArrayImpl : public ObIArray<T> {
     }
     return ret;
   }
-  int64_t to_string(char* buffer, int64_t length) const;
-  inline int64_t get_data_size() const
-  {
-    return data_size_;
-  }
-  inline bool error() const
-  {
-    return error_ != OB_SUCCESS;
-  }
-  inline int get_copy_assign_ret() const
-  {
-    return error_;
-  }
+
+  int64_t to_string(char *buffer, int64_t length) const override;
+  inline int64_t get_data_size() const {return data_size_;}
+  inline bool error() const {return error_ != OB_SUCCESS;}
+  inline int get_copy_assign_ret() const { return error_; }
   const_iterator begin() const;
   const_iterator end() const;
   iterator begin();
@@ -230,9 +195,9 @@ class ObArrayImpl : public ObIArray<T> {
     return ret;
   }
   // deep copy
-  ObArrayImpl(const ObArrayImpl& other);
-  ObArrayImpl& operator=(const ObArrayImpl& other);
-  int assign(const ObIArray<T>& other);
+  ObArrayImpl(const ObArrayImpl &other);
+  ObArrayImpl &operator=(const ObArrayImpl &other);
+  int assign(const ObIArray<T> &other) override;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   static uint32_t data_offset_bits()

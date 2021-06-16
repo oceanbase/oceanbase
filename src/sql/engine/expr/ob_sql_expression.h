@@ -395,10 +395,7 @@ struct ObExprOperatorFetcher : public ObSqlExpression {
     return ret;
   }
 
-  void reset()
-  {
-    op_ = NULL;
-  }
+  void reset() override { op_ = NULL; }
 
   const ObExprOperator* op_;
 };

@@ -37,37 +37,51 @@ class ObColStatService : public ObColumnStatDataService {
    * Caller should not hold ObColumnStat object for a long time that ObColumnStatCache
    * can not release it.
    */
-  int get_column_stat(const ObColumnStat::Key& key, const bool force_new, ObColumnStatValueHandle& handle);
+  int get_column_stat(const ObColumnStat::Key &key,
+                      const bool force_new,
+                      ObColumnStatValueHandle &handle) override;
 
   /**
    * same as above interface, except do not hold object in cache instead of deep copy
    * so %stat can be written in incremental calculation.
    */
-  int get_column_stat(const ObColumnStat::Key& key, const bool force_new, ObColumnStat& stat, ObIAllocator& alloc);
+  int get_column_stat(const ObColumnStat::Key &key,
+                      const bool force_new,
+                      ObColumnStat &stat,
+                      ObIAllocator &alloc) override;
 
-  int get_batch_stat(const uint64_t table_id, const ObIArray<uint64_t>& partition_id,
-      const ObIArray<uint64_t>& column_id, ObIArray<ObColumnStatValueHandle>& handles);
+  int get_batch_stat(const uint64_t table_id,
+                     const ObIArray<uint64_t> &partition_id,
+                     const ObIArray<uint64_t> &column_id,
+                     ObIArray<ObColumnStatValueHandle> &handles) override;
 
-  int get_batch_stat(const share::schema::ObTableSchema& table_schema, const uint64_t partition_id,
-      ObIArray<ObColumnStat*>& stats, ObIAllocator& allocator);
+  int get_batch_stat(const share::schema::ObTableSchema &table_schema,
+                     const uint64_t partition_id,
+                     ObIArray<ObColumnStat *> &stats,
+                     ObIAllocator &allocator) override; 
   /**
    * item in stats must not NULL, or will return OB_ERR_UNEXPECTED
    */
-  int update_column_stats(const ObIArray<ObColumnStat*>& stats);
-  int update_column_stat(const ObColumnStat& stat);
-  int erase_column_stat(const ObPartitionKey& pkey, const int64_t column_id) override;
-
-  private:
-  int load_and_put_cache(const ObColumnStat::Key& key, ObColumnStatValueHandle& handle);
-  int load_and_put_cache(const ObColumnStat::Key& key, ObColumnStat& new_entry, ObColumnStatValueHandle& handle);
-  int batch_load_and_put_cache(const share::schema::ObTableSchema& table_schema, const uint64_t partition_id,
-      ObIArray<ObColumnStatValueHandle>& handles);
-  int batch_load_and_put_cache(const uint64_t table_id, const ObIArray<uint64_t>& partition_ids,
-      const ObIArray<uint64_t>& column_ids, ObIArray<ObColumnStatValueHandle>& handles);
-  int batch_put_and_fetch_row(ObIArray<ObColumnStat*>& col_stats, ObIArray<ObColumnStatValueHandle>& handles);
-  static int deep_copy(ObIAllocator& alloc, const ObColumnStat& src, ObColumnStat& dst);
-
-  private:
+  int update_column_stats(const ObIArray<ObColumnStat *> &stats) override;
+  int update_column_stat(const ObColumnStat &stat) override;
+  int erase_column_stat(const ObPartitionKey &pkey, const int64_t column_id) override;
+private:
+  int load_and_put_cache(const ObColumnStat::Key &key,
+                         ObColumnStatValueHandle &handle);
+  int load_and_put_cache(const ObColumnStat::Key &key,
+                         ObColumnStat &new_entry,
+                         ObColumnStatValueHandle &handle);
+  int batch_load_and_put_cache(const share::schema::ObTableSchema &table_schema,
+                               const uint64_t partition_id,
+                               ObIArray<ObColumnStatValueHandle> &handles);
+  int batch_load_and_put_cache(const uint64_t table_id,
+                               const ObIArray<uint64_t> &partition_ids,
+                               const ObIArray<uint64_t> &column_ids,
+                               ObIArray<ObColumnStatValueHandle> &handles);
+  int batch_put_and_fetch_row(ObIArray<ObColumnStat *> &col_stats,
+                              ObIArray<ObColumnStatValueHandle> &handles);
+  static int deep_copy(ObIAllocator &alloc, const ObColumnStat &src, ObColumnStat &dst);
+private:
   ObTableColStatSqlService sql_service_;
   ObColumnStatCache column_stat_cache_;
   bool inited_;

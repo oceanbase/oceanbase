@@ -135,104 +135,77 @@ class ObIElectionTimerP {
 
 class ObElection : public ObIElection, public ObIElectionTimerP, public ObElectionInfo {
   typedef ObElectionEventHistory::EventType EventType;
-
-  public:
-  ObElection() : lock_(common::ObLatchIds::ELECTION_LOCK)
-  {
-    reset();
-  }
-  ~ObElection()
-  {
-    destroy();
-  }
-  int init(const common::ObPartitionKey& partition, const common::ObAddr& self, ObIElectionRpc* rpc,
-      common::ObTimeWheel* tw, const int64_t replica_num, ObIElectionCallback* election_cb, ObIElectionGroupMgr* eg_mgr,
-      ObElectionEventHistoryArray* event_history_array);
-  void destroy();
+public:
+  ObElection()
+      : lock_(common::ObLatchIds::ELECTION_LOCK)
+  { reset(); }
+  ~ObElection() { destroy(); }
+  int init(const common::ObPartitionKey &partition, const common::ObAddr &self,
+      ObIElectionRpc *rpc, common::ObTimeWheel *tw, const int64_t replica_num,
+      ObIElectionCallback *election_cb, ObIElectionGroupMgr *eg_mgr,
+      ObElectionEventHistoryArray *event_history_array) override;
+  void destroy() override;
   void reset();
-  int start();
-  int stop();
-
-  public:
-  int handle_devote_prepare(const ObElectionMsgDEPrepare& msg, obrpc::ObElectionRpcResult& result);
-  int handle_devote_vote(const ObElectionMsgDEVote& msg, obrpc::ObElectionRpcResult& result);
-  int handle_devote_success(const ObElectionMsgDESuccess& msg, obrpc::ObElectionRpcResult& result);
-  int handle_vote_prepare(const ObElectionMsgPrepare& msg, obrpc::ObElectionRpcResult& result);
-  int handle_vote_vote(const ObElectionMsgVote& msg, obrpc::ObElectionRpcResult& result);
-  int handle_vote_success(const ObElectionMsgSuccess& msg, obrpc::ObElectionRpcResult& result);
-  int handle_query_leader(const ObElectionQueryLeader& msg, obrpc::ObElectionRpcResult& result);
-  int handle_query_leader_response(const ObElectionQueryLeaderResponse& msg, obrpc::ObElectionRpcResult& result);
-
-  public:
-  int set_candidate(
-      const int64_t replica_num, const common::ObMemberList& curr_mlist, const int64_t membership_version);
-  int change_leader_async(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows);
+  int start() override;
+  int stop() override;
+public:
+  int handle_devote_prepare(const ObElectionMsgDEPrepare &msg, obrpc::ObElectionRpcResult &result) override;
+  int handle_devote_vote(const ObElectionMsgDEVote &msg, obrpc::ObElectionRpcResult &result) override;
+  int handle_devote_success(const ObElectionMsgDESuccess &msg, obrpc::ObElectionRpcResult &result) override;
+  int handle_vote_prepare(const ObElectionMsgPrepare &msg, obrpc::ObElectionRpcResult &result) override;
+  int handle_vote_vote(const ObElectionMsgVote &msg, obrpc::ObElectionRpcResult &result) override;
+  int handle_vote_success(const ObElectionMsgSuccess &msg, obrpc::ObElectionRpcResult &result) override;
+  int handle_query_leader(const ObElectionQueryLeader &msg, obrpc::ObElectionRpcResult &result) override;
+  int handle_query_leader_response(const ObElectionQueryLeaderResponse &msg,obrpc::ObElectionRpcResult &result) override;
+public:
+  int set_candidate(const int64_t replica_num, const common::ObMemberList &curr_mlist, const int64_t membership_version) override;
+  int change_leader_async(const common::ObAddr &leader, common::ObTsWindows &changing_leader_windows) override;
   int change_leader_to_self_async() override;
-  int force_leader_async();
-  int get_curr_candidate(common::ObMemberList& mlist) const;
-  int get_valid_candidate(common::ObMemberList& mlist) const;
-  int get_leader(common::ObAddr& leader, common::ObAddr& previous_leader, int64_t& leader_epoch,
-      bool& is_elected_by_changing_leader) const;
-  int get_leader(common::ObAddr& leader, int64_t& leader_epoch, bool& is_elected_by_changing_leader,
-      common::ObTsWindows& changing_leader_windows) const;
-  int get_current_leader(common::ObAddr& leader) const;
-  int get_election_info(ObElectionInfo& election_info) const;
-  void leader_revoke(const uint32_t revoke_type);
-  int inc_replica_num();
-  int dec_replica_num();
-  int set_replica_num(const int64_t replica_num);
-  int64_t get_election_time_offset() const
-  {
-    return get_election_time_offset_();
-  }
-  static bool is_valid_leader_epoch(const int64_t leader_epoch)
-  {
-    return leader_epoch > 0;
-  }
-
-  public:
-  int leader_takeover(const common::ObAddr& leader, const int64_t lease_start, int64_t& leader_epoch);
-  int64_t get_current_ts() const;
-  int get_priority(ObElectionPriority& priority) const;
-  int get_timestamp(int64_t& gts, common::ObAddr& leader) const;
-  int move_out_election_group(const ObElectionGroupId& eg_id);
-  int move_into_election_group(const ObElectionGroupId& eg_id);
-  int64_t get_replica_num() const
-  {
-    return replica_num_;
-  }
-  uint64_t get_eg_id_hash() const
-  {
-    return eg_id_.hash();
-  }
-  const lease_t& get_leader_lease() const
-  {
-    return leader_lease_;
-  }
-  uint64_t hash() const;
-  int64_t get_last_leader_revoke_time() const
-  {
-    return ATOMIC_LOAD(&last_leader_revoke_time_);
-  }
+  int force_leader_async() override;
+  int get_curr_candidate(common::ObMemberList &mlist) const override;
+  int get_valid_candidate(common::ObMemberList &mlist) const override;
+  int get_leader(common::ObAddr &leader, common::ObAddr &previous_leader,
+      int64_t &leader_epoch, bool &is_elected_by_changing_leader) const override;
+  int get_leader(common::ObAddr &leader, int64_t &leader_epoch,
+      bool &is_elected_by_changing_leader, common::ObTsWindows &changing_leader_windows) const override;
+  int get_current_leader(common::ObAddr &leader) const override;
+  int get_election_info(ObElectionInfo &election_info) const override;
+  void leader_revoke(const uint32_t revoke_type) override;
+  int inc_replica_num() override;
+  int dec_replica_num() override;
+  int set_replica_num(const int64_t replica_num) override;
+  int64_t get_election_time_offset() const override { return get_election_time_offset_(); }
+  static bool is_valid_leader_epoch(const int64_t leader_epoch) { return leader_epoch > 0; }
+public:
+  int leader_takeover(const common::ObAddr &leader, const int64_t lease_start, int64_t &leader_epoch) override;
+  int64_t get_current_ts() const override;
+  int get_priority(ObElectionPriority &priority) const override;
+  int get_timestamp(int64_t &gts, common::ObAddr &leader) const override;
+  int move_out_election_group(const ObElectionGroupId &eg_id) override;
+  int move_into_election_group(const ObElectionGroupId &eg_id) override;
+  int64_t get_replica_num() const override { return replica_num_; }
+  uint64_t get_eg_id_hash() const override { return eg_id_.hash(); }
+  const lease_t &get_leader_lease() const override { return leader_lease_; }
+  uint64_t hash() const override;
+  int64_t get_last_leader_revoke_time() const override { return ATOMIC_LOAD(&last_leader_revoke_time_); }
 
   public:
   TO_STRING_AND_YSON(Y_(partition), Y_(is_running), Y_(is_changing_leader), Y_(self), Y_(proposal_leader),
-      OB_ID(cur_leader), current_leader_, Y_(curr_candidates), Y_(curr_membership_version), Y_(leader_lease),
-      Y_(election_time_offset), Y_(active_timestamp), Y_(T1_timestamp), Y_(leader_epoch), Y_(state), Y_(role),
-      Y_(stage), Y_(type), Y_(replica_num), Y_(unconfirmed_leader), Y_(unconfirmed_leader_lease),
-      Y_(takeover_t1_timestamp), Y_(is_need_query), Y_(valid_candidates), Y_(change_leader_timestamp), Y_(ignore_log),
-      Y_(leader_revoke_timestamp), Y_(vote_period), Y_(lease_time), Y_(move_out_timestamp), OB_ID(eg_part_array_idx),
-      eg_part_array_idx_, OB_ID(eg_id_hash), eg_id_.hash());
-
-  public:
-  void run_gt1_task(const int64_t expect_ts);
-  void run_gt2_task(const int64_t expect_ts);
-  void run_gt3_task(const int64_t expect_ts);
-  void run_gt4_task(const int64_t expect_ts);
-  void run_change_leader_task(const int64_t expect_ts);
-
-  public:
-  /**********should removed after a barrier version bigger than 3.1**********/
+                     OB_ID(cur_leader), current_leader_, Y_(curr_candidates), Y_(curr_membership_version),
+                     Y_(leader_lease), Y_(election_time_offset), Y_(active_timestamp), Y_(T1_timestamp),
+                     Y_(leader_epoch), Y_(state), Y_(role), Y_(stage), Y_(type), Y_(replica_num),
+                     Y_(unconfirmed_leader), Y_(unconfirmed_leader_lease), Y_(takeover_t1_timestamp), Y_(is_need_query),
+                     Y_(valid_candidates), Y_(change_leader_timestamp), Y_(ignore_log),
+                     Y_(leader_revoke_timestamp), Y_(vote_period), Y_(lease_time), Y_(move_out_timestamp),
+                     OB_ID(eg_part_array_idx), eg_part_array_idx_, OB_ID(eg_id_hash), eg_id_.hash());
+public:
+  void run_gt1_task(const int64_t expect_ts) override;
+  void run_gt2_task(const int64_t expect_ts) override;
+  void run_gt3_task(const int64_t expect_ts) override;
+  void run_gt4_task(const int64_t expect_ts) override;
+  void run_change_leader_task(const int64_t expect_ts) override;
+public:
+/**********should removed after a barrier version bigger than 3.1**********/
   static bool IS_CLUSTER_MIN_VSERDION_LESS_THAN_3_1;
   /**************************************************************************************************/
   enum RevokeType {

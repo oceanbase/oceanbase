@@ -25,18 +25,22 @@
 #include "ob_storage_log_replayer.h"
 
 #define SLOGGER (oceanbase::blocksstable::ObBaseStorageLogger::get_instance())
-namespace oceanbase {
-namespace blocksstable {
-// The redo log module of base storage. It is responsible for the write and recovery of all redo logs
-// of block sstable.
-class ObBaseStorageLogger : public ObStorageLogReplayer {
-  public:
-  static ObBaseStorageLogger& get_instance();
-  // NOT thread safe.
-  // Init the redo log and do recovery if there is redo logs in log_dir.
-  virtual int init(const char* log_dir, const int64_t max_log_file_size, ObISLogFilter* filter_before_parse = nullptr,
-      ObISLogFilter* filter_after_parse = nullptr);
-  virtual void destroy();
+namespace oceanbase
+{
+namespace blocksstable
+{
+//The redo log module of base storage. It is responsible for the write and recovery of all redo logs
+//of block sstable.
+class ObBaseStorageLogger : public ObStorageLogReplayer
+{
+public:
+  static ObBaseStorageLogger &get_instance();
+  //NOT thread safe.
+  //Init the redo log and do recovery if there is redo logs in log_dir.
+  virtual int init(const char *log_dir, const int64_t max_log_file_size,
+    ObISLogFilter *filter_before_parse = nullptr,
+    ObISLogFilter *filter_after_parse = nullptr);
+  virtual void destroy() override;
 
   // Thread safe.
   // begin a transaction.

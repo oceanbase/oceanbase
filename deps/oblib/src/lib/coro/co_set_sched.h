@@ -84,9 +84,9 @@ class CoSetSched : public CoBaseSched {
 
   int create_routine(RoutineFunc start) override;
 
-  protected:
-  int prepare();
-  void postrun();
+protected:
+  int prepare() override;
+  void postrun() override;
 
   private:
   void add_runnable(CoBaseSched::Worker& w) override;

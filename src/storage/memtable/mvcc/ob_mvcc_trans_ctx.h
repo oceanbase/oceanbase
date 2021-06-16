@@ -638,90 +638,35 @@ class ObMvccRowCallback : public ObITransCallback {
       tnode_->set_sql_sequence(sql_no_);
     }
   }
-  int callback(const int type, const bool for_replay, const bool need_lock_for_write, ObMemtable* memtable = NULL);
-  int callback(transaction::ObMemtableKeyArray& memtable_key_arr, ObMemtable* memtable);
-  bool on_memtable(const ObMemtable* const memtable) override
-  {
-    return memtable == memtable_;
-  }
-  ObMemtable* get_memtable() const override
-  {
-    return memtable_;
-  };
-  int get_redo(RedoDataNode& node);
-  ObIMvccCtx& get_ctx() const
-  {
-    return ctx_;
-  }
-  const ObRowData& get_old_row() const
-  {
-    return old_row_;
-  }
-  const ObMvccRow& get_mvcc_row() const
-  {
-    return value_;
-  }
-  ObMvccTransNode* get_trans_node()
-  {
-    return tnode_;
-  }
-  const ObMvccTransNode* get_trans_node() const
-  {
-    return tnode_;
-  }
-  const ObMemtableKey* get_key()
-  {
-    return &key_;
-  }
-  int get_memtable_key(uint64_t& table_id, common::ObStoreRowkey& rowkey) const;
+
+  int callback(const int type, const bool for_replay, const bool need_lock_for_write, ObMemtable *memtable = NULL) override;
+  int callback(transaction::ObMemtableKeyArray &memtable_key_arr, ObMemtable *memtable) override;
+  bool on_memtable(const ObMemtable * const memtable) override { return memtable == memtable_; }
+  ObMemtable *get_memtable() const override { return memtable_; };
+  int get_redo(RedoDataNode &node);
+  ObIMvccCtx &get_ctx() const { return ctx_; }
+  const ObRowData &get_old_row() const { return old_row_; }
+  const ObMvccRow &get_mvcc_row() const { return value_; }
+  ObMvccTransNode *get_trans_node() { return tnode_; }
+  const ObMvccTransNode *get_trans_node() const { return tnode_; }
+  const ObMemtableKey *get_key() { return &key_; }
+  int get_memtable_key(uint64_t &table_id, common::ObStoreRowkey &rowkey) const;
   uint32_t get_ctx_descriptor() const;
-  void set_stmt_committed(const bool stmt_committed)
-  {
-    stmt_committed_ = stmt_committed;
-  }
-  bool is_stmt_committed() const
-  {
-    return stmt_committed_;
-  }
-  void set_savepoint()
-  {
-    is_savepoint_ = true;
-  }
-  bool is_savepoint() const
-  {
-    return is_savepoint_;
-  }
-  bool need_fill_redo() const
-  {
-    return need_fill_redo_;
-  }
-  int32_t get_sql_no() const
-  {
-    return sql_no_;
-  }
-  int get_trans_id(transaction::ObTransID& trans_id) const;
-  transaction::ObTransCtx* get_trans_ctx() const;
-  int64_t to_string(char* buf, const int64_t buf_len) const;
-  int64_t get_log_ts() const
-  {
-    return log_ts_;
-  }
-  void set_log_ts(const int64_t log_ts)
-  {
-    if (INT64_MAX == log_ts_) {
-      log_ts_ = log_ts;
-    }
-  }
-  bool log_synced() const override
-  {
-    return INT64_MAX != log_ts_;
-  }
-  int64_t get_data_size()
-  {
-    return data_size_;
-  }
-  virtual int del();
-  int check_sequential_relocate(const ObMemtable* memtable, bool& is_sequential_relocate) const;
+  void set_stmt_committed(const bool stmt_committed) { stmt_committed_ = stmt_committed; }
+  bool is_stmt_committed() const { return stmt_committed_; }
+  void set_savepoint() { is_savepoint_ = true; }
+  bool is_savepoint() const override { return is_savepoint_; }
+  bool need_fill_redo() const { return need_fill_redo_; }
+  int32_t get_sql_no() const override { return sql_no_; }
+  int get_trans_id(transaction::ObTransID &trans_id) const;
+  transaction::ObTransCtx *get_trans_ctx() const;
+  int64_t to_string(char *buf, const int64_t buf_len) const override;
+  int64_t get_log_ts() const { return log_ts_; }
+  void set_log_ts(const int64_t log_ts) { if (INT64_MAX == log_ts_) { log_ts_ = log_ts; } }
+  bool log_synced() const override { return INT64_MAX != log_ts_; }
+  int64_t get_data_size() override { return data_size_; }
+  virtual int del() override;
+  int check_sequential_relocate(const ObMemtable *memtable, bool &is_sequential_relocate) const;
   virtual bool mark_for_logging() override
   {
     if (marked_for_logging_) {

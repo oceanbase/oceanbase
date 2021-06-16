@@ -124,7 +124,7 @@ class ObDistributedTransmit : public ObTransmit {
   explicit ObDistributedTransmit(common::ObIAllocator& alloc);
   virtual ~ObDistributedTransmit();
 
-  virtual int create_operator_input(ObExecContext& ctx) const;
+  virtual int create_operator_input(ObExecContext& ctx) const override;
   inline void set_shuffle_func(ObSqlExpression* shuffle_func);
   int get_part_shuffle_key(
       const share::schema::ObTableSchema* table_schema, int64_t part_idx, ObShuffleKey& part_shuffle_key) const;
@@ -133,29 +133,36 @@ class ObDistributedTransmit : public ObTransmit {
   int get_shuffle_part_key(const share::schema::ObTableSchema* table_schema, int64_t part_idx, int64_t subpart_idx,
       common::ObPartitionKey& shuffle_part_key) const;
 
-  private:
+private:
   int init_slice_infos(
-      const share::schema::ObTableSchema& table_schema, common::ObIArray<ObSliceInfo>& slices_info) const;
-  int get_slice_idx(ObExecContext& exec_ctx, const share::schema::ObTableSchema* table_schema,
-      const common::ObNewRow* row, const ObSqlExpression& part_partition_func,
-      const ObSqlExpression& subpart_partition_func, const ObIArray<ObTransmitRepartColumn>& repart_columns,
-      const ObIArray<ObTransmitRepartColumn>& repart_sub_columns, int64_t slices_count, int64_t& slice_idx,
-      bool& no_match_partiton) const;
+      const share::schema::ObTableSchema &table_schema,
+      common::ObIArray<ObSliceInfo> &slices_info) const;
+  int get_slice_idx(
+      ObExecContext &exec_ctx,
+      const share::schema::ObTableSchema *table_schema,
+      const common::ObNewRow *row,
+      const ObSqlExpression &part_partition_func,
+      const ObSqlExpression &subpart_partition_func,
+      const ObIArray<ObTransmitRepartColumn> &repart_columns,
+      const ObIArray<ObTransmitRepartColumn> &repart_sub_columns,
+      int64_t slices_count,
+      int64_t &slice_idx,
+      bool &no_match_partiton) const;
 
-  protected:
-  virtual int inner_open(ObExecContext& exec_ctx) const;
+protected:
+  virtual int inner_open(ObExecContext &exec_ctx) const override;
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
-  virtual int init_op_ctx(ObExecContext& ctx) const;
+  virtual int init_op_ctx(ObExecContext &ctx) const override;
   bool skip_empty_slice() const;
-  int prepare_interm_result(ObIntermResultManager& interm_result_mgr, ObIntermResult*& interm_result) const;
-  int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const override;
-  int inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const;
-
-  private:
+  int prepare_interm_result(ObIntermResultManager &interm_result_mgr,
+                            ObIntermResult *&interm_result) const;
+  int get_next_row(ObExecContext &ctx, const ObNewRow *&row) const override;
+  int inner_get_next_row(ObExecContext &ctx, const ObNewRow *&row) const override;
+private:
   const static int64_t NO_MATCH_PARTITION = -2;
   ObSqlExpression* shuffle_func_;
 

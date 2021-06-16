@@ -148,7 +148,7 @@ class ObUDF : public ObSchema {
   }
 
   // other
-  int64_t get_convert_size() const;
+  int64_t get_convert_size() const override;
   virtual void reset() override;
   bool is_normal_udf() const
   {

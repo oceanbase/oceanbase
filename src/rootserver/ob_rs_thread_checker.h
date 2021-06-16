@@ -25,10 +25,7 @@ class ObRsThreadChecker : public ObRsReentrantThread {
   virtual ~ObRsThreadChecker();
 
   virtual void run3() override;
-  virtual int blocking_run()
-  {
-    BLOCKING_RUN_IMPLEMENT();
-  }
+  virtual int blocking_run() override { BLOCKING_RUN_IMPLEMENT(); }
 
   int init();
   void check_loop();

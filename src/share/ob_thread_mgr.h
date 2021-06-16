@@ -50,15 +50,9 @@ class ObTG<TGType::OB_THREAD_POOL> : public ITG {
   public:
   ObTG(lib::ThreadCountPair pair) : thread_cnt_(pair.get_thread_cnt())
   {}
-  ~ObTG()
-  {
-    destroy();
-  }
-  int64_t thread_cnt() override
-  {
-    return thread_cnt_;
-  }
-  int set_runnable(lib::TGRunnable& runnable)
+  ~ObTG() { destroy(); }
+  int64_t thread_cnt() override { return thread_cnt_; }
+  int set_runnable(lib::TGRunnable &runnable) override
   {
     int ret = common::OB_SUCCESS;
     if (th_ != nullptr) {

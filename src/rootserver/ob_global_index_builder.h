@@ -208,14 +208,17 @@ class ObGlobalIndexBuilder : public ObRsReentrantThread, public sql::ObIndexSSTa
 
   public:
   virtual void run3() override;
-  virtual int blocking_run()
-  {
-    BLOCKING_RUN_IMPLEMENT();
-  }
-  int init(obrpc::ObSrvRpcProxy* rpc_proxy, common::ObMySQLProxy* mysql_proxy, rootserver::ObServerManager* server_mgr,
-      share::ObPartitionTableOperator* pt_operator, rootserver::ObRebalanceTaskMgr* rebalance_task_mgr,
-      rootserver::ObDDLService* ddl_service, share::schema::ObMultiVersionSchemaService* schema_service,
-      rootserver::ObZoneManager* zone_mgr, rootserver::ObFreezeInfoManager* freeze_info_manager);
+  virtual int blocking_run() override { BLOCKING_RUN_IMPLEMENT(); }
+  int init(
+      obrpc::ObSrvRpcProxy *rpc_proxy,
+      common::ObMySQLProxy *mysql_proxy,
+      rootserver::ObServerManager *server_mgr,
+      share::ObPartitionTableOperator *pt_operator,
+      rootserver::ObRebalanceTaskMgr *rebalance_task_mgr,
+      rootserver::ObDDLService *ddl_service,
+      share::schema::ObMultiVersionSchemaService *schema_service,
+      rootserver::ObZoneManager *zone_mgr,
+      rootserver::ObFreezeInfoManager *freeze_info_manager);
   int reload_building_indexes();
   int on_build_single_replica_reply(const uint64_t index_table_id, int64_t snapshot, int ret_code);
   int on_col_checksum_calculation_reply(
@@ -223,18 +226,22 @@ class ObGlobalIndexBuilder : public ObRsReentrantThread, public sql::ObIndexSSTa
   int on_check_unique_index_reply(const common::ObPartitionKey& pkey, const int ret_code, const bool is_unique);
   int on_copy_multi_replica_reply(const ObRebalanceTask& rebalance_task);
   virtual int pick_data_replica(
-      const common::ObPartitionKey& pkey, const common::ObIArray<common::ObAddr>& previous, common::ObAddr& server);
+      const common::ObPartitionKey &pkey,
+      const common::ObIArray<common::ObAddr> &previous,
+      common::ObAddr &server) override;
   virtual int pick_index_replica(
-      const common::ObPartitionKey& pkey, const common::ObIArray<common::ObAddr>& previous, common::ObAddr& server);
-  int submit_build_global_index_task(const share::schema::ObTableSchema* index_schema);
-  void stop();
-
-  private:
-  static const int64_t BUILD_SINGLE_REPLICA_TIMEOUT = 2LL * 3600LL * 1000000LL;        // 2h
-  static const int64_t COPY_MULTI_REPLICA_TIMEOUT = 2LL * 3600LL * 1000000LL;          // 2h
-  static const int64_t UNIQUE_INDEX_CHECK_TIMEOUT = 2LL * 3600LL * 1000000LL;          // 2h
-  static const int64_t UNIQUE_INDEX_CALC_CHECKSUM_TIMEOUT = 2LL * 3600LL * 1000000LL;  // 2h
-  static const int64_t TASK_RETRY_TIME_INTERVAL_US = 10LL * 1000000LL;                 // 10s
+      const common::ObPartitionKey &pkey,
+      const common::ObIArray<common::ObAddr> &previous,
+      common::ObAddr &server) override;
+  int submit_build_global_index_task(
+      const share::schema::ObTableSchema *index_schema);
+  void stop() override;
+private:
+  static const int64_t BUILD_SINGLE_REPLICA_TIMEOUT = 2LL * 3600LL * 1000000LL; // 2h
+  static const int64_t COPY_MULTI_REPLICA_TIMEOUT = 2LL * 3600LL * 1000000LL; // 2h
+  static const int64_t UNIQUE_INDEX_CHECK_TIMEOUT = 2LL * 3600LL * 1000000LL; // 2h
+  static const int64_t UNIQUE_INDEX_CALC_CHECKSUM_TIMEOUT = 2LL * 3600LL * 1000000LL; // 2h
+  static const int64_t TASK_RETRY_TIME_INTERVAL_US = 10LL * 1000000LL; // 10s
   static const int64_t COPY_MULTI_REPLICA_RETRY_UPPER_LMT = 3;
   static const int64_t THREAD_CNT = 1;
   static const int64_t TASK_MAP_BUCKET_NUM = 256;

@@ -54,14 +54,23 @@ class ObKVCache : public ObIKVCache<Key, Value> {
   int init(const char* cache_name, const int64_t priority = 1);
   void destroy();
   int set_priority(const int64_t priority);
-  virtual int put(const Key& key, const Value& value, bool overwrite = true);
+  virtual int put(const Key &key, const Value &value, bool overwrite = true) override;
   virtual int put_and_fetch(
-      const Key& key, const Value& value, const Value*& pvalue, ObKVCacheHandle& handle, bool overwrite = true);
-  virtual int get(const Key& key, const Value*& pvalue, ObKVCacheHandle& handle);
-  int get_iterator(ObKVCacheIterator& iter);
-  virtual int erase(const Key& key);
-  virtual int alloc(const uint64_t tenant_id, const int64_t key_size, const int64_t value_size, ObKVCachePair*& kvpair,
-      ObKVCacheHandle& handle, ObKVCacheInstHandle& inst_handle) override;
+    const Key &key,
+    const Value &value,
+    const Value *&pvalue,
+    ObKVCacheHandle &handle,
+    bool overwrite = true) override;
+  virtual int get(const Key &key, const Value *&pvalue, ObKVCacheHandle &handle) override;
+  int get_iterator(ObKVCacheIterator &iter);
+  virtual int erase(const Key &key) override;
+  virtual int alloc(
+      const uint64_t tenant_id,
+      const int64_t key_size,
+      const int64_t value_size,
+      ObKVCachePair *&kvpair,
+      ObKVCacheHandle &handle,
+      ObKVCacheInstHandle &inst_handle) override;
   int64_t size(const uint64_t tenant_id = OB_SYS_TENANT_ID) const;
   int64_t count(const uint64_t tenant_id = OB_SYS_TENANT_ID) const;
   int64_t get_hit_cnt(const uint64_t tenant_id = OB_SYS_TENANT_ID) const;
@@ -98,14 +107,15 @@ class ObCacheWorkingSet : public ObIKVCache<Key, Value> {
   {
     return working_set_->get_used();
   }
-  int64_t get_limit() const
-  {
-    return working_set_->get_limit();
-  }
-  virtual int alloc(const uint64_t tenant_id, const int64_t key_size, const int64_t value_size, ObKVCachePair*& kvpair,
-      ObKVCacheHandle& handle, ObKVCacheInstHandle& inst_handle) override;
-
-  private:
+  int64_t get_limit() const { return working_set_->get_limit(); }
+  virtual int alloc(
+      const uint64_t tenant_id,
+      const int64_t key_size,
+      const int64_t value_size,
+      ObKVCachePair *&kvpair,
+      ObKVCacheHandle &handle,
+      ObKVCacheInstHandle &inst_handle) override;
+private:
   bool inited_;
   uint64_t tenant_id_;
   ObKVCache<Key, Value>* cache_;

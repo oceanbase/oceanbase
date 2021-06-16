@@ -486,45 +486,75 @@ class ObLocationFetcher : public ObILocationFetcher {
   static const int64_t OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT = 500 * 1000;  // 500ms
   ObLocationFetcher();
   virtual ~ObLocationFetcher();
-  int init(common::ObServerConfig& config, share::ObPartitionTableOperator& pt,
-      share::ObRemotePartitionTableOperator& remote_pt, ObRsMgr& rs_mgr, obrpc::ObCommonRpcProxy& rpc_proxy,
-      obrpc::ObSrvRpcProxy& srv_rpc_proxy, ObILocalityManager* locality_manager,
-      // ObIRemoteLocatonGetter *remote_location_getter,
-      const int64_t cluster_id);
-  virtual int fetch_location(
-      const uint64_t table_id, const int64_t partition_id, const int64_t cluster_id, ObPartitionLocation& location);
-  virtual int fetch_vtable_location(const uint64_t table_id, common::ObSArray<ObPartitionLocation>& locations);
+  int init(common::ObServerConfig &config,
+           share::ObPartitionTableOperator &pt,
+           share::ObRemotePartitionTableOperator &remote_pt,
+           ObRsMgr &rs_mgr,
+           obrpc::ObCommonRpcProxy &rpc_proxy,
+           obrpc::ObSrvRpcProxy &srv_rpc_proxy,
+           ObILocalityManager *locality_manager,
+           //ObIRemoteLocatonGetter *remote_location_getter,
+           const int64_t cluster_id);
+  virtual int fetch_location(const uint64_t table_id,
+                             const int64_t partition_id,
+                             const int64_t cluster_id,
+                             ObPartitionLocation &location) override;
+  virtual int fetch_vtable_location(const uint64_t table_id,
+                                    common::ObSArray<ObPartitionLocation> &locations) override;
   virtual int renew_location_with_rpc_v2(
-      common::hash::ObHashMap<ObReplicaRenewKey, const obrpc::ObMemberListAndLeaderArg*>* result_map,
-      const ObPartitionLocation& cached_location, ObPartitionLocation& new_location, bool& is_new_location_valid);
-  virtual int batch_renew_sys_table_location_by_rpc(const ObPartitionLocation& core_table_location,
-      const common::ObIArray<ObLocationCacheKey>& keys, common::ObIArray<ObLocationLeader>& results);
+      common::hash::ObHashMap<ObReplicaRenewKey, const obrpc::ObMemberListAndLeaderArg*> *result_map,
+      const ObPartitionLocation &cached_location,
+      ObPartitionLocation &new_location,
+      bool &is_new_location_valid) override;
+  virtual int batch_renew_sys_table_location_by_rpc(
+      const ObPartitionLocation &core_table_location,
+      const common::ObIArray<ObLocationCacheKey> &keys,
+      common::ObIArray<ObLocationLeader> &results) override;
 
-  virtual int batch_fetch_location(const common::ObIArray<common::ObPartitionKey>& keys, const int64_t cluster_id,
-      common::ObIAllocator& allocator, common::ObIArray<ObPartitionLocation*>& new_locations) override;
-  virtual int batch_renew_location_with_rpc(const common::ObIArray<const ObPartitionLocation*>& rpc_locations,
-      common::ObIAllocator& allocator, common::ObIArray<ObPartitionLocation*>& new_locations) override;
+  virtual int batch_fetch_location(
+      const common::ObIArray<common::ObPartitionKey> &keys,
+      const int64_t cluster_id,
+      common::ObIAllocator &allocator,
+      common::ObIArray<ObPartitionLocation*> &new_locations) override;
+  virtual int batch_renew_location_with_rpc(
+      const common::ObIArray<const ObPartitionLocation*> &rpc_locations,
+      common::ObIAllocator &allocator,
+      common::ObIArray<ObPartitionLocation*> &new_locations) override;
+private:
+  static int check_member_list(const common::ObIArray<ObReplicaLocation> &cached_member_list,
+                               const common::ObIArray<common::ObAddr> &server_list,
+                               bool &is_same);
+  int check_non_paxos_replica(
+      const common::ObIArray<ObReplicaLocation> &cached_member_list,
+      const common::ObIArray<ObReplicaMember> &non_paxos_replicas,
+      bool &is_same);
+  int deal_with_replica_type_changed(
+      const bool new_mode,
+      const common::ObPartitionKey &pkey,
+      const ObReplicaLocation &old_replica_location,
+      const obrpc::ObMemberListAndLeaderArg &member_info,
+      ObPartitionLocation &new_location,
+      bool &is_new_location_valid);
+  int add_non_paxos_replica(
+      const obrpc::ObMemberListAndLeaderArg &member_info,
+      common::ObIArray<common::ObReplicaMember> &non_paxos_replicas);
+  int check_leader_and_member_list(
+      const bool new_mode,
+      const ObPartitionKey &pkey,
+      const common::ObAddr &addr,
+      const common::ObIArray<ObReplicaLocation> &location_array,
+      const obrpc::ObMemberListAndLeaderArg &member_info,
+      ObReplicaLocation &new_leader,
+      bool &is_new_location_valid);
 
-  private:
-  static int check_member_list(const common::ObIArray<ObReplicaLocation>& cached_member_list,
-      const common::ObIArray<common::ObAddr>& server_list, bool& is_same);
-  int check_non_paxos_replica(const common::ObIArray<ObReplicaLocation>& cached_member_list,
-      const common::ObIArray<ObReplicaMember>& non_paxos_replicas, bool& is_same);
-  int deal_with_replica_type_changed(const bool new_mode, const common::ObPartitionKey& pkey,
-      const ObReplicaLocation& old_replica_location, const obrpc::ObMemberListAndLeaderArg& member_info,
-      ObPartitionLocation& new_location, bool& is_new_location_valid);
-  int add_non_paxos_replica(const obrpc::ObMemberListAndLeaderArg& member_info,
-      common::ObIArray<common::ObReplicaMember>& non_paxos_replicas);
-  int check_leader_and_member_list(const bool new_mode, const ObPartitionKey& pkey, const common::ObAddr& addr,
-      const common::ObIArray<ObReplicaLocation>& location_array, const obrpc::ObMemberListAndLeaderArg& member_info,
-      ObReplicaLocation& new_leader, bool& is_new_location_valid);
 
-  virtual int init_batch_rpc_renew_struct(const common::ObIArray<const ObPartitionLocation*>& rpc_locations,
-      common::ObIAllocator& allocator, common::ObArray<ObLocationRpcRenewInfo>& infos,
-      common::ObArray<int>& key_results,
-      common::hash::ObHashMap<ObReplicaRenewKey, const obrpc::ObMemberListAndLeaderArg*>& result_map);
-
-  private:
+  virtual int init_batch_rpc_renew_struct(
+    const common::ObIArray<const ObPartitionLocation*> &rpc_locations,
+    common::ObIAllocator &allocator,
+    common::ObArray<ObLocationRpcRenewInfo> &infos,
+    common::ObArray<int> &key_results,
+    common::hash::ObHashMap<ObReplicaRenewKey, const obrpc::ObMemberListAndLeaderArg*> &result_map);
+private:
   bool inited_;
   common::ObServerConfig* config_;
   share::ObPartitionTableOperator* pt_;
@@ -695,7 +725,7 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
 
   int reload_config();
 
-  virtual ObIPartitionLocationCache::PartitionLocationCacheType get_type() const
+  virtual ObIPartitionLocationCache::PartitionLocationCacheType get_type() const override
   {
     return ObIPartitionLocationCache::PART_LOC_CACHE_TYPE_NORMAL;
   }
@@ -760,7 +790,8 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
   virtual int nonblock_renew_with_limiter(
       const common::ObPartitionKey& partition, const int64_t expire_renew_time, bool& is_limited) override;
   // link table.
-  virtual int get_link_table_location(const uint64_t table_id, ObPartitionLocation& location);
+  virtual int get_link_table_location(const uint64_t table_id,
+                                      ObPartitionLocation &location) override;
 
   /*-----batch async renew location-----*/
   virtual int batch_process_tasks(const common::ObIArray<ObLocationAsyncUpdateTask>& tasks, bool& stopped) override;

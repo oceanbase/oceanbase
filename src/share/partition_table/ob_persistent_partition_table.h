@@ -32,16 +32,17 @@ class ObPersistentPartitionTable : public ObIPartitionTable {
   explicit ObPersistentPartitionTable(ObIPartPropertyGetter& prop_getter);
   virtual ~ObPersistentPartitionTable();
 
-  int init(common::ObISQLClient& sql_proxy, common::ObServerConfig* config);
-  bool is_inited() const
-  {
-    return inited_;
-  }
+  int init(common::ObISQLClient &sql_proxy, common::ObServerConfig *config);
+  bool is_inited() const { return inited_; }
 
-  virtual int get(const uint64_t table_id, const int64_t partition_id, ObPartitionInfo& partition_info,
-      const bool need_fetch_faillist = false, const int64_t cluster_id = common::OB_INVALID_ID);
-  virtual int batch_fetch_partition_infos(const common::ObIArray<common::ObPartitionKey>& keys,
-      common::ObIAllocator& allocator, common::ObArray<ObPartitionInfo*>& partitions,
+  virtual int get(const uint64_t table_id, const int64_t partition_id,
+                  ObPartitionInfo &partition_info,
+                  const bool need_fetch_faillist = false,
+                  const int64_t cluster_id = common::OB_INVALID_ID) override;
+  virtual int batch_fetch_partition_infos(
+      const common::ObIArray<common::ObPartitionKey> &keys,
+      common::ObIAllocator &allocator,
+      common::ObArray<ObPartitionInfo*> &partitions,
       const int64_t cluster_id = common::OB_INVALID_ID) override;
 
   virtual int prefetch_by_table_id(const uint64_t tenant_id, const uint64_t start_table_id,
@@ -56,31 +57,35 @@ class ObPersistentPartitionTable : public ObIPartitionTable {
       const int64_t start_partition_id, common::ObIArray<ObPartitionInfo>& partition_infos,
       const bool need_fetch_faillist = false) override;
 
-  virtual int update(const ObPartitionReplica& replica);
+  virtual int update(const ObPartitionReplica &replica) override;
   virtual int batch_report_partition_role(
-      const common::ObIArray<share::ObPartitionReplica>& pkey_array, const common::ObRole new_role);
+      const common::ObIArray<share::ObPartitionReplica> &pkey_array,
+      const common::ObRole new_role) override;
 
-  virtual int batch_execute(const common::ObIArray<ObPartitionReplica>& replicas);
+  virtual int batch_execute(const common::ObIArray<ObPartitionReplica> &replicas) override;
   virtual int batch_report_with_optimization(
-      const common::ObIArray<ObPartitionReplica>& replicas, const bool with_role);
-  virtual int remove(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server);
+      const common::ObIArray<ObPartitionReplica> &replicas,
+      const bool with_role) override;
+  virtual int remove(const uint64_t table_id, const int64_t partition_id,
+      const common::ObAddr &server) override;
 
-  virtual int set_unit_id(
-      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const uint64_t unit_id);
+  virtual int set_unit_id(const uint64_t table_id, const int64_t partition_id,
+                          const common::ObAddr &server, const uint64_t unit_id) override;
 
-  virtual int set_original_leader(const uint64_t table_id, const int64_t partition_id, const bool is_original_leader);
+  virtual int set_original_leader(const uint64_t table_id, const int64_t partition_id,
+                                const bool is_original_leader) override;
 
-  virtual int update_rebuild_flag(
-      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const bool rebuild);
+  virtual int update_rebuild_flag(const uint64_t table_id, const int64_t partition_id,
+      const common::ObAddr &server, const bool rebuild) override;
 
-  virtual int update_fail_list(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server,
-      const ObPartitionReplica::FailList& fail_list);
+  virtual int update_fail_list(const uint64_t table_id, const int64_t partition_id,
+                               const common::ObAddr &server, const ObPartitionReplica::FailList &fail_list) override;
 
-  virtual int handover_partition(
-      const common::ObPGKey& pg_key, const common::ObAddr& src_addr, const common::ObAddr& dest_addr);
+  virtual int handover_partition(const common::ObPGKey &pg_key,
+      const common::ObAddr &src_addr, const common::ObAddr &dest_addr) override;
 
-  virtual int replace_partition(
-      const ObPartitionReplica& replica, const common::ObAddr& src_addr, const common::ObAddr& dest_addr);
+  virtual int replace_partition(const ObPartitionReplica &replica,
+      const common::ObAddr &src_addr, const common::ObAddr &dest_addr) override;
 
   common::ObISQLClient* get_sql_proxy() const
   {

@@ -860,15 +860,20 @@ class ObFuncExprOperator : public ObExprOperator {
 // In ObRelationalExprOperator, there are three concepts: res_type, cmp_type, calc_type
 // The first two are relative to the expression; the latter one is relative to the parameters of the expression.
 //
-class ObRelationalExprOperator : public ObExprOperator {
-  public:
-  virtual int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
-
-  public:
-  ObRelationalExprOperator(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num,
-      int32_t dimension = NOT_ROW_DIMENSION)
-      : ObExprOperator(alloc, type, name, param_num, dimension), cmp_op_func2_(NULL)
-  {}
+class ObRelationalExprOperator : public ObExprOperator
+{
+public:
+  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos) override;
+public:
+  ObRelationalExprOperator(common::ObIAllocator &alloc,
+                           ObExprOperatorType type,
+                           const char *name,
+                           int32_t param_num,
+                           int32_t dimension = NOT_ROW_DIMENSION)
+      : ObExprOperator(alloc, type, name, param_num, dimension),
+        cmp_op_func2_(NULL)
+  {
+  }
 
   virtual ~ObRelationalExprOperator()
   {}
@@ -931,8 +936,11 @@ class ObRelationalExprOperator : public ObExprOperator {
       common::ObCastCtx& cast_ctx, common::ObObjType cmp_type, common::ObCollationType cmp_cs_type);
   // determine the type used for comparison of the two types
   // binary comparison
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
+
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const override;
 
   // deduce binary comparison result type and parameters types
   static int deduce_cmp_type(const ObExprOperator& expr, ObExprResType& type, ObExprResType& type1,
@@ -940,48 +948,73 @@ class ObRelationalExprOperator : public ObExprOperator {
 
   // for between...and, not between...and etc.
   // @todo need refactor, ....yzf....Thu,  6 Aug 2015....16:00....
-  virtual int calc_result_type3(ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
-      common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_calc_type3(ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
-      common::ObExprTypeCtx& type_ctx, const common::ObObjType cmp_type) const;
-  int get_cmp_result_type3(ObExprResType& type, bool& need_no_cast, const ObExprResType* types, const int64_t param_num,
-      const sql::ObSQLSessionInfo& my_session);
+  virtual int calc_result_type3(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                ObExprResType &type3,
+                                common::ObExprTypeCtx &type_ctx) const override;
+  virtual int calc_calc_type3(ObExprResType &type1,
+                              ObExprResType &type2,
+                              ObExprResType &type3,
+                              common::ObExprTypeCtx &type_ctx,
+                              const common::ObObjType cmp_type) const;
+  int get_cmp_result_type3(ObExprResType &type,
+                           bool &need_no_cast,
+                           const ObExprResType *types,
+                           const int64_t param_num,
+                           const sql::ObSQLSessionInfo &my_session);
 
   // vector comparison, e.g. (a,b,c) > (1,2,3)
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
-      common::ObExprCtx& expr_ctx, bool is_null_safe, common::ObCmpOp cmp_op) const;
-  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
-      common::ObExprCtx& expr_ctx, bool is_null_safe, common::ObCmpOp cmp_op) const;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const override;
+  virtual int calc_result2(common::ObObj &result, const common::ObObj &obj1,
+                           const common::ObObj &obj2,
+                           common::ObExprCtx &expr_ctx, bool is_null_safe,
+                           common::ObCmpOp cmp_op) const;
+  virtual int calc_resultN(common::ObObj &result,
+                           const common::ObObj *objs_array,
+                           int64_t param_num,
+                           common::ObExprCtx &expr_ctx,
+                           bool is_null_safe,
+                           common::ObCmpOp cmp_op) const;
 
-  static int is_equivalent(
-      const common::ObObjMeta& meta1, const common::ObObjMeta& meta2, const common::ObObjMeta& meta3, bool& result);
-  int assign(const ObExprOperator& other);
-  int set_cmp_func(const common::ObObjType type1, const common::ObObjType type2);
-  common::obj_cmp_func get_cmp_fun() const
-  {
-    return cmp_op_func2_;
-  }
+  static int is_equivalent(const common::ObObjMeta &meta1,
+                           const common::ObObjMeta &meta2,
+                           const common::ObObjMeta &meta3,
+                           bool &result);
+  int assign(const ObExprOperator &other) override;
+  int set_cmp_func(const common::ObObjType type1,
+                   const common::ObObjType type2);
+   common::obj_cmp_func get_cmp_fun() const { return cmp_op_func2_; }
 
-  // pure virtual but implemented, derived classes can use this implement.
-  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override = 0;
+   // pure virtual but implemented, derived classes can use this implement.
+   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                       const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const override = 0;
 
-  static int cg_row_cmp_expr(const int row_dim, common::ObIAllocator& allocator, const ObRawExpr& raw_expr,
-      const ObExprOperatorInputTypeArray& input_types, ObExpr& rt_expr);
-  static int cg_datum_cmp_expr(
-      const ObRawExpr& raw_expr, const ObExprOperatorInputTypeArray& input_types, ObExpr& rt_expr);
+   static int cg_row_cmp_expr(const int row_dim, common::ObIAllocator &allocator,
+                              const ObRawExpr &raw_expr,
+                              const ObExprOperatorInputTypeArray &input_types,
+                              ObExpr &rt_expr);
+   static int cg_datum_cmp_expr(const ObRawExpr &raw_expr,
+                                const ObExprOperatorInputTypeArray &input_types,
+                                ObExpr &rt_expr);
 
-  static int is_row_cmp(const ObRawExpr&, int& row_dim);
-  static int row_eval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datm);
+   static int is_row_cmp(const ObRawExpr&, int &row_dim);
+   static int row_eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datm);
 
-  // row compare
-  // CAUTION: null safe equal row compare is not included.
-  static int row_cmp(
-      const ObExpr& expr, ObDatum& expr_datum, ObExpr** l_row, ObEvalCtx& l_ctx, ObExpr** r_row, ObEvalCtx& r_ctx);
+   // row compare
+   // CAUTION: null safe equal row compare is not included.
+   static int row_cmp(const ObExpr &expr, ObDatum &expr_datum,
+                      ObExpr **l_row, ObEvalCtx &l_ctx, ObExpr **r_row, ObEvalCtx &r_ctx);
 
-  OB_INLINE static int get_comparator_operands(const ObExpr& expr, ObEvalCtx& ctx, common::ObDatum*& left,
-      common::ObDatum*& right, ObDatum& result, bool& is_finish)
+  OB_INLINE static int get_comparator_operands(
+                         const ObExpr &expr,
+                         ObEvalCtx &ctx,
+                         common::ObDatum *&left, common::ObDatum *&right,
+                         ObDatum &result, bool &is_finish)
   {
     int ret = common::OB_SUCCESS;
     if (OB_FAIL(expr.args_[0]->eval(ctx, left))) {
@@ -1166,30 +1199,41 @@ class ObSubQueryRelationalExpr : public ObExprOperator {
   {
     right_is_iter_ = is_iter;
   }
-  virtual void reset()
+  virtual void reset() override
   {
     subquery_key_ = T_WITH_NONE;
     left_is_iter_ = false;
     right_is_iter_ = false;
   }
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  int calc_resultN(
-      common::ObObj& result, const common::ObObj* param_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-  virtual int call(common::ObObj* stack, int64_t& stack_size, common::ObExprCtx& expr_ctx) const;
-  virtual int eval(
-      common::ObExprCtx& expr_ctx, common::ObObj& val, common::ObObj* params, int64_t param_num) const override;
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const override;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const override;
+  int calc_result2(common::ObObj &result,
+                   const common::ObObj &obj1,
+                   const common::ObObj &obj2,
+                   common::ObExprCtx &expr_ctx) const override;
+  int calc_resultN(common::ObObj &result,
+                   const common::ObObj *param_array,
+                   int64_t param_num,
+                   common::ObExprCtx &expr_ctx) const override;
+  virtual int call(common::ObObj *stack, int64_t &stack_size, common::ObExprCtx &expr_ctx) const override;
+  virtual int eval(common::ObExprCtx &expr_ctx, common::ObObj &val,
+      common::ObObj *params, int64_t param_num) const override;
 
-  static int subquery_cmp_eval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static int subquery_cmp_eval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 
-  VIRTUAL_TO_STRING_KV(N_EXPR_TYPE, get_type_name(type_), N_REAL_PARAM_NUM, real_param_num_, N_RESULT_TYPE,
-      result_type_, K_(subquery_key), K_(left_is_iter), K_(right_is_iter));
-
-  protected:
+  VIRTUAL_TO_STRING_KV(N_EXPR_TYPE, get_type_name(type_),
+                       N_REAL_PARAM_NUM, real_param_num_,
+                       N_RESULT_TYPE, result_type_,
+                       K_(subquery_key),
+                       K_(left_is_iter),
+                       K_(right_is_iter));
+protected:
   // The result of processing the subquery is a vector. In this case, the result
   // of the subquery has at most one row of data, and multiple rows of data are not allowed.
   // According to the characteristics of the vector, the result of the subquery

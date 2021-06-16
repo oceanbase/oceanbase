@@ -14,17 +14,16 @@ if (OB_USE_CLANG)
   target_compile_options(oblib_base_base
     INTERFACE
     -fmax-type-align=8
-    -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS
-    -D_NO_EXCEPTION -Wall -Wextra -Wformat -Wno-deprecated
-    -fno-strict-aliasing -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
-    -Wno-address-of-packed-member
-    -Wno-sign-compare -Wno-sign-conversion -Wno-unused-parameter -Werror
-    $<$<COMPILE_LANGUAGE:CXX>:-Wno-tautological-pointer-compare -Wno-overloaded-virtual
-    -Wno-inconsistent-missing-override -Wno-c++17-compat-mangling -Wno-unused-private-field
-    -Wno-mismatched-tags -Wno-delete-non-virtual-dtor -Wno-dynamic-class-memaccess
+    -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D_NO_EXCEPTION 
+    -Wall -Wextra -Wformat -Wno-deprecated
+    -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
+    -Wno-address-of-packed-member -Wno-sign-compare -Werror 
+    -Wno-inconsistent-missing-override -fno-delete-null-pointer-checks
+    -Wno-delete-non-virtual-dtor -Wno-dynamic-class-memaccess
     -Wno-format-security -Wno-reserved-user-defined-literal -Wno-sometimes-uninitialized
-    -Wno-unused-value -Wno-self-assign -Wno-unused-variable -Wno-invalid-offsetof
-    -Wno-tautological-compare -Wno-psabi -Wno-c99-designator>)
+    -Wno-unused-value -Wno-self-assign -Wno-overloaded-virtual
+    -Wno-unused-private-field -Wno-mismatched-tags -Wno-unused-variable
+    -Wno-invalid-offsetof -Wno-tautological-compare -Wno-psabi -Wno-c99-designator)
 else()
   target_compile_options(oblib_base_base
     INTERFACE

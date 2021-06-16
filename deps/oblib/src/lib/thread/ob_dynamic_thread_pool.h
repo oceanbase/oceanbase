@@ -54,7 +54,7 @@ class ObDynamicThreadPool : public lib::ThreadPool {
   int add_task(ObDynamicThreadTask* task);
 
   void run1() override;
-  void stop();
+  void stop() override;
   void destroy();
   void task_thread_idle();
   int64_t get_task_count() const

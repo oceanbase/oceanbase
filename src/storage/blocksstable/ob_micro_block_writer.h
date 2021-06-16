@@ -47,9 +47,9 @@ class ObMicroBlockWriter : public ObIMicroBlockWriter {
   virtual ~ObMicroBlockWriter();
   int init(const int64_t micro_block_size_limit, const int64_t rowkey_column_count, const int64_t column_count = 0,
       const common::ObRowStoreType row_store_type = common::FLAT_ROW_STORE);
-  virtual int append_row(const storage::ObStoreRow& row);
-  virtual int build_block(char*& buf, int64_t& size);
-  virtual void reuse();
+  virtual int append_row(const storage::ObStoreRow &row) override;
+  virtual int build_block(char *&buf, int64_t &size) override;
+  virtual void reuse() override;
 
   virtual int64_t get_block_size() const override;
   virtual int64_t get_row_count() const override;

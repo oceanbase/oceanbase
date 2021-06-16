@@ -82,9 +82,10 @@ class ObStorageLogWriter : public common::ObBaseLogWriter {
   ObStorageLogWriter();
   virtual ~ObStorageLogWriter();
 
-  int init(const char* log_dir, const int64_t log_file_size, const int64_t max_log_size, const int64_t max_trans_cnt);
-  void destroy();
-  int start_log(const common::ObLogCursor& cursor);
+  int init(const char *log_dir, const int64_t log_file_size,
+      const int64_t max_log_size, const int64_t max_trans_cnt);
+  void destroy() override;
+  int start_log(const common::ObLogCursor &cursor);
   // attention: not thread safe
   int flush_log(
       const common::LogCommand cmd, const ObBaseStorageLogBuffer& log_buffer, common::ObLogCursor& start_cursor);

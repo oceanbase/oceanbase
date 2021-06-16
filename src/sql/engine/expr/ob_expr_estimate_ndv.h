@@ -21,11 +21,16 @@ class ObExprEstimateNdv : public ObFuncExprOperator {
   public:
   explicit ObExprEstimateNdv(common::ObIAllocator& alloc);
   virtual ~ObExprEstimateNdv();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
-  static int llc_estimate_ndv(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx);
-  static void llc_estimate_ndv(int64_t& result, const common::ObString& bitmap_str);
-  static int llc_estimate_ndv(double& estimate_ndv, const common::ObString& bitmap_buf);
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const override;
+  virtual int calc_result1(common::ObObj &result,
+                           const common::ObObj &obj,
+                           common::ObExprCtx &expr_ctx) const override;
+  static int llc_estimate_ndv(common::ObObj &result, const common::ObObj &obj,
+                              common::ObExprCtx &expr_ctx);
+  static void llc_estimate_ndv(int64_t &result, const common::ObString &bitmap_str);
+  static int llc_estimate_ndv(double &estimate_ndv, const common::ObString &bitmap_buf);
   // high several bits of hash value are used to store bucket_id, the param value must
   // remove these bits by left shift, the count of valid bits after removing is bit_width.
   static uint64_t llc_leading_zeros(uint64_t value, uint64_t bit_width);

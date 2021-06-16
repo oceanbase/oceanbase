@@ -93,8 +93,11 @@ class ObMultipleScanMergeImpl : public ObMultipleMerge {
   virtual ~ObMultipleScanMergeImpl();
 
   virtual int init(
-      const ObTableAccessParam& param, ObTableAccessContext& context, const ObGetTableParam& get_table_param);
-  virtual int inner_get_next_row(ObStoreRow& row);
+      const ObTableAccessParam &param,
+      ObTableAccessContext &context,
+      const ObGetTableParam &get_table_param
+      ) override;
+  virtual int inner_get_next_row(ObStoreRow &row) override;
   virtual void reset() override;
   virtual void reuse() override;
   inline bool is_scan_end() const

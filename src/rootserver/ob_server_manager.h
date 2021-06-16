@@ -212,14 +212,10 @@ class ObHeartbeatChecker : public ObRsReentrantThread {
   virtual ~ObHeartbeatChecker();
 
   virtual void run3() override;
-  virtual int blocking_run()
-  {
-    BLOCKING_RUN_IMPLEMENT();
-  }
-  int64_t get_schedule_interval() const;
-
-  private:
-  static const int64_t CHECK_INTERVAL_US = 100 * 1000L;  // 100ms
+  virtual int blocking_run() override { BLOCKING_RUN_IMPLEMENT(); }
+  int64_t get_schedule_interval() const override;
+private:
+  static const int64_t CHECK_INTERVAL_US = 100 * 1000L;  //100ms
   bool inited_;
   ObServerManager* server_manager_;
 };

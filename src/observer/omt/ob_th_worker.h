@@ -55,23 +55,23 @@ class ObThWorker : public share::ObWorker, public lib::CoKThread {
   void worker(int64_t& tenant_id, int64_t& req_recv_timestamp, int32_t& worker_level);
   inline void set_group(ObResourceGroup* group);
 
-  void run(int64_t idx);
+  void run(int64_t idx) override;
 
-  void resume();
+  void resume() override;
   void pause();
 
   Status check_qtime_throttle();
   Status check_throttle();
   Status check_rate_limiter();
-  virtual ObThWorker::Status check_wait();
+  virtual ObThWorker::Status check_wait() override;
   virtual int check_status() override;
-  virtual int check_large_query_quota();
+  virtual int check_large_query_quota() override;
 
   // retry relating
-  virtual bool need_retry() const;
-  virtual void disable_retry();
-  virtual bool set_retry_flag();
-  virtual void reset_retry_flag();
+  virtual bool need_retry() const override;
+  virtual void disable_retry() override;
+  virtual bool set_retry_flag() override;
+  virtual void reset_retry_flag() override;
 
   // active relating
   void wait_active();
