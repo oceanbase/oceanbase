@@ -166,6 +166,8 @@ class ObRestoreScheduler : public ObRsReentrantThread, public share::ObCheckStop
   share::PhysicalRestoreStatus get_next_status(int return_ret, share::PhysicalRestoreStatus current_status);
 
   private:
+  int drop_tenant_force_if_necessary(const share::ObPhysicalRestoreJob &job_info);
+  private:
   bool inited_;
   mutable ObRestoreIdling idling_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
