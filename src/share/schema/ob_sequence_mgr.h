@@ -27,7 +27,7 @@ class ObSchemaStatisticsInfo;
 class ObTenantSequenceId;
 
 class ObSequenceHashWrapper {
-  public:
+public:
   ObSequenceHashWrapper() : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID), sequence_name_()
   {}
   ObSequenceHashWrapper(uint64_t tenant_id, uint64_t database_id, const common::ObString& sequence_name)
@@ -63,7 +63,7 @@ class ObSequenceHashWrapper {
   }
   TO_STRING_KV(K_(tenant_id), K_(database_id), K_(sequence_name));
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString sequence_name_;
@@ -99,7 +99,7 @@ struct ObGetSequenceKey<ObSequenceHashWrapper, ObSequenceSchema*> {
 };
 
 class ObSequenceMgr {
-  public:
+public:
   typedef common::ObSortedVector<ObSequenceSchema*> SequenceInfos;
   typedef common::hash::ObPointerHashMap<ObSequenceHashWrapper, ObSequenceSchema*, ObGetSequenceKey> ObSequenceMap;
   typedef SequenceInfos::iterator SequenceIter;
@@ -136,13 +136,13 @@ class ObSequenceMgr {
   static bool equal_sequence(const ObSequenceSchema* lhs, const ObSequenceSchema* rhs);
   static int rebuild_sequence_hashmap(const SequenceInfos& sequence_infos, ObSequenceMap& sequence_map);
 
-  private:
+private:
   inline static bool compare_with_tenant_sequence_id(
       const ObSequenceSchema* lhs, const ObTenantSequenceId& tenant_outline_id);
   inline static bool equal_to_tenant_sequence_id(
       const ObSequenceSchema* lhs, const ObTenantSequenceId& tenant_outline_id);
 
-  private:
+private:
   bool is_inited_;
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator& allocator_;

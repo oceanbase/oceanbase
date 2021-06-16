@@ -27,33 +27,33 @@ namespace sql {
 class ObExecContext;
 class ObGrantStmt;
 class ObGrantExecutor {
-  public:
+public:
   ObGrantExecutor()
   {}
   virtual ~ObGrantExecutor()
   {}
   int execute(ObExecContext& ctx, ObGrantStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGrantExecutor);
 };
 
 class ObRevokeStmt;
 class ObRevokeExecutor {
-  public:
+public:
   ObRevokeExecutor()
   {}
   virtual ~ObRevokeExecutor()
   {}
   int execute(ObExecContext& ctx, ObRevokeStmt& stmt);
 
-  private:
+private:
   int revoke_user(obrpc::ObCommonRpcProxy* rpc_proxy, ObRevokeStmt& stmt);
   int revoke_db(obrpc::ObCommonRpcProxy* rpc_proxy, ObRevokeStmt& stmt);
   int revoke_table(obrpc::ObCommonRpcProxy* rpc_proxy, ObRevokeStmt& stmt);
   int revoke_sys_priv(obrpc::ObCommonRpcProxy* rpc_proxy, ObRevokeStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRevokeExecutor);
 };
 }  // namespace sql

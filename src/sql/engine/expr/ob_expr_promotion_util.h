@@ -22,10 +22,10 @@ namespace oceanbase {
 namespace sql {
 class ObExprResType;
 class ObExprPromotionUtil {
-  public:
+public:
   static int get_nvl_type(ObExprResType& type, const ObExprResType& type1, const ObExprResType& type2);
 
-  private:
+private:
   static int get_calc_type(ObExprResType& type, const ObExprResType& type1, const ObExprResType& type2,
       const common::ObObjType map[common::ObMaxTC][common::ObMaxTC]);
 };

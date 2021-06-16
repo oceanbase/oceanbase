@@ -40,7 +40,7 @@ class ObZoneManager;
 
 class ObPartitionBackupProvider;
 class ObPartitionBackup {
-  public:
+public:
   ObPartitionBackup();
   virtual ~ObPartitionBackup()
   {}
@@ -50,7 +50,7 @@ class ObPartitionBackup {
       share::ObCheckStopProvider& check_stop_provider);
   int partition_backup(int64_t& task_cnt, const uint64_t tenant_id);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObPartitionBackup);
   // function members
@@ -73,7 +73,7 @@ class ObPartitionBackup {
   int cancel_pending_pg_tasks(
       const share::ObTenantBackupTaskInfo& task_info, const common::ObIArray<share::ObPGBackupTaskInfo>& pg_tasks);
 
-  private:
+private:
   // data members
   bool is_inited_;
   common::ObServerConfig* config_;
@@ -92,7 +92,7 @@ class ObPartitionBackup {
 };
 
 struct ObBackupElement {
-  public:
+public:
   ObBackupElement();
   virtual ~ObBackupElement() = default;
   void reset();
@@ -104,7 +104,7 @@ struct ObBackupElement {
 };
 
 struct ObReplicaBackupElement {
-  public:
+public:
   ObReplicaBackupElement();
   virtual ~ObReplicaBackupElement() = default;
   int assign(const ObReplicaBackupElement& element);
@@ -117,7 +117,7 @@ struct ObReplicaBackupElement {
 };
 
 class ObPartitionBackupProvider {
-  public:
+public:
   ObPartitionBackupProvider();
   virtual ~ObPartitionBackupProvider()
   {}
@@ -127,12 +127,12 @@ class ObPartitionBackupProvider {
   int prepare_choose_src();
   int generate_batch_backup_task(const int64_t backup_task_id, common::ObIArray<ObBackupTaskInfo>& backup_task);
 
-  private:
+private:
   int inner_prepare_choose_src();
   int build_physical_backup_arg(const int64_t backup_task_id, share::ObPhysicalBackupArg& arg);
   int check_can_become_dest(const ObBackupElement& element, bool& can_become);
 
-  private:
+private:
   static const int64_t MAX_BUCKET_NUM = 10240;
   static const int64_t MAX_TASK_NUM = 1024;
   typedef hash::ObHashMap<common::ObPartitionKey, ObReplicaBackupElement*> ReplicaElementMap;

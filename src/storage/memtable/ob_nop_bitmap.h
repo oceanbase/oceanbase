@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace memtable {
 class ObNopBitMap {
-  public:
+public:
   ObNopBitMap() : size_(0), cnt_(0), nop_cnt_(0), rowkey_cnt_(0)
   {}
 
@@ -84,14 +84,14 @@ class ObNopBitMap {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNopBitMap);
   inline int64_t round_up(int64_t n)
   {
     return (n + mask) & ~mask;
   }
 
-  private:
+private:
   static const int64_t mask = 63;
   static const int64_t shift_bits = 6;
   int64_t size_;

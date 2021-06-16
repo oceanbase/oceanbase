@@ -24,7 +24,7 @@ namespace rootserver {
 class ObUpgradeExecutor;
 
 class ObUpgradeTask : public share::ObAsyncTask {
-  public:
+public:
   explicit ObUpgradeTask(ObUpgradeExecutor& upgrade_executor, const int64_t version)
       : upgrade_executor_(&upgrade_executor), version_(version)
   {}
@@ -34,13 +34,13 @@ class ObUpgradeTask : public share::ObAsyncTask {
   share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
   virtual int process();
 
-  private:
+private:
   ObUpgradeExecutor* upgrade_executor_;
   int64_t version_;
 };
 
 class ObUpgradeExecutor : public share::ObCheckStopProvider {
-  public:
+public:
   ObUpgradeExecutor();
   ~ObUpgradeExecutor()
   {}
@@ -55,7 +55,7 @@ class ObUpgradeExecutor : public share::ObCheckStopProvider {
   void start();
   int stop();
 
-  private:
+private:
   int set_execute_mark();
 
   int check_schema_sync();
@@ -63,7 +63,7 @@ class ObUpgradeExecutor : public share::ObCheckStopProvider {
 
   int run_upgrade_job(const int64_t version);
 
-  private:
+private:
   bool inited_;
   bool stopped_;
   bool execute_;

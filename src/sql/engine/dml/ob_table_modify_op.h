@@ -23,7 +23,7 @@ class ObTableModifyOp;
 class ObTableModifySpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableModifySpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   virtual ~ObTableModifySpec()
   {}
@@ -126,10 +126,10 @@ class ObTableModifySpec : public ObOpSpec {
     return false;
   }
 
-  public:
+public:
   virtual bool has_foreign_key() const;
 
-  public:
+public:
   uint64_t table_id_;
   uint64_t index_tid_;
   bool is_ignore_;
@@ -154,16 +154,16 @@ class ObTableModifySpec : public ObOpSpec {
   bool need_skip_log_user_error_;
   bool table_location_uncertain_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModifySpec);
 };
 
 class ObTableModifyOpInput : public ObOpInput {
-  public:
+public:
   friend class ObTableModifyOp;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableModifyOpInput(ObExecContext& ctx, const ObOpSpec& spec)
       : ObOpInput(ctx, spec), location_idx_(common::OB_INVALID_INDEX), part_infos_()
   {}
@@ -197,18 +197,18 @@ class ObTableModifyOpInput : public ObOpInput {
   }
   TO_STRING_KV(K_(location_idx), K_(part_infos));
 
-  private:
+private:
   int64_t location_idx_;
   common::ObFixedArray<DMLPartInfo, common::ObIAllocator> part_infos_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModifyOpInput);
 };
 
 class ObTableModifyOp : public ObOperator {
-  public:
+public:
   class DMLRowIterator : public common::ObNewRowIterator {
-    public:
+  public:
     DMLRowIterator(ObExecContext& ctx, ObTableModifyOp& op) : ctx_(ctx), op_(op)
     {}
     virtual ~DMLRowIterator()
@@ -223,14 +223,14 @@ class ObTableModifyOp : public ObOperator {
     // create project_row_ cells.
     int setup_project_row(const int64_t cnt);
 
-    protected:
+  protected:
     ObExecContext& ctx_;
     ObTableModifyOp& op_;
     common::ObNewRow project_row_;
   };
 
   class ForeignKeyHandle {
-    public:
+  public:
     struct ObFkRowResInfo {
       ObExpr* rt_expr_;
       ObDatum ori_datum_;
@@ -243,7 +243,7 @@ class ObTableModifyOp : public ObOperator {
     static int do_handle(ObTableModifyOp& modify_op, const ObForeignKeyArgArray& fk_args,
         const ObExprPtrIArray& old_row, const ObExprPtrIArray& new_row);
 
-    private:
+  private:
     static int value_changed(ObTableModifyOp& op, const common::ObIArray<ObForeignKeyColumn>& columns,
         const ObExprPtrIArray& old_row, const ObExprPtrIArray& new_row, bool& has_changed);
     static int check_exist(
@@ -263,7 +263,7 @@ class ObTableModifyOp : public ObOperator {
         ObEvalCtx& ctx, const ObExprPtrIArray& row, const ObForeignKeyArg& fk_arg, bool& is_self_ref);
   };
 
-  public:
+public:
   ObTableModifyOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObTableModifyOp()
   {}
@@ -300,7 +300,7 @@ class ObTableModifyOp : public ObOperator {
     ObOperator::destroy();
   }
 
-  public:
+public:
   int open_inner_conn();
   int close_inner_conn();
   int begin_nested_session(bool skip_cur_stmt_tables);
@@ -350,7 +350,7 @@ class ObTableModifyOp : public ObOperator {
     return ObOperator::get_next_row();
   }
 
-  protected:
+protected:
   OperatorOpenOrder get_operator_open_order() const;
   virtual int inner_open();
   virtual int inner_close();
@@ -396,7 +396,7 @@ class ObTableModifyOp : public ObOperator {
 
   bool init_returning_store();
 
-  public:
+public:
   common::ObMySQLProxy* sql_proxy_;
   observer::ObInnerSQLConnection* inner_conn_;
   uint64_t tenant_id_;
@@ -421,7 +421,7 @@ class ObTableModifyOp : public ObOperator {
   ObChunkDatumStore returning_datum_store_;
   ObChunkDatumStore::Iterator returning_datum_iter_;
 
-  private:
+private:
   ObSQLSessionInfo::StmtSavedValue* saved_session_;
   char* saved_session_buf_[sizeof(ObSQLSessionInfo::StmtSavedValue)];
   // when got forgien key self reference, need to change row.

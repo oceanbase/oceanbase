@@ -21,7 +21,7 @@ namespace sql {
 class ObRootTransmitInput : public ObTransmitInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObRootTransmitInput() : ObTransmitInput()
   {}
   virtual ~ObRootTransmitInput()
@@ -34,9 +34,9 @@ class ObRootTransmitInput : public ObTransmitInput {
 };
 
 class ObRootTransmit : public ObTransmit {
-  private:
+private:
   class ObRootTransmitCtx : public ObTransmitCtx {
-    public:
+  public:
     explicit ObRootTransmitCtx(ObExecContext& ctx) : ObTransmitCtx(ctx)
     {}
     ~ObRootTransmitCtx()
@@ -47,12 +47,12 @@ class ObRootTransmit : public ObTransmit {
     }
   };
 
-  public:
+public:
   explicit ObRootTransmit(common::ObIAllocator& alloc);
   virtual ~ObRootTransmit();
   virtual int process_expect_error(ObExecContext& ctx, int errcode) const;
 
-  private:
+private:
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   virtual int init_op_ctx(ObExecContext& ctx) const;
   // disallow copy

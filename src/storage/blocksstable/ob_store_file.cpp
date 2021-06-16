@@ -1273,7 +1273,7 @@ int ObStoreFile::resize_file(const int64_t new_data_file_size, const int64_t new
       LOG_WARN("fail to resize file", K(ret));
     } else {
       const int64_t new_total_file_size =
-        lower_align(store_file_system_->get_total_data_size(), store_file_system_->get_macro_block_size());
+          lower_align(store_file_system_->get_total_data_size(), store_file_system_->get_macro_block_size());
       const int64_t new_macro_block_cnt = new_total_file_size / store_file_system_->get_macro_block_size();
       const int64_t origin_macro_block_cnt = store_file_system_->get_total_macro_block_count();
       if (new_macro_block_cnt > origin_macro_block_cnt) {
@@ -1288,7 +1288,7 @@ int ObStoreFile::resize_file(const int64_t new_data_file_size, const int64_t new
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("error unexpected, file must not be null", K(ret));
         } else if (OB_FAIL(alloc_memory(
-                new_macro_block_cnt, new_free_block_array, new_macro_block_bitmap, macro_block_info_))) {
+                       new_macro_block_cnt, new_free_block_array, new_macro_block_bitmap, macro_block_info_))) {
           LOG_WARN("fail to alloc memory", K(ret), K(new_macro_block_cnt));
         } else if (OB_FAIL(file->write_super_block(super_block))) {
           LOG_WARN("fail to write super block", K(ret));

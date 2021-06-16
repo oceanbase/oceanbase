@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace common {
 template <typename T>
 class ObObjNode : public ObDLinkBase<ObObjNode<T> > {
-  public:
+public:
   ObObjNode() : obj_()
   {}
   explicit ObObjNode(const T& obj) : obj_(obj)
@@ -42,16 +42,16 @@ class ObObjNode : public ObDLinkBase<ObObjNode<T> > {
     return obj_;
   }
 
-  private:
+private:
   T obj_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObObjNode);
 };
 
 template <typename T, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false>
 class ObObjStore {
-  public:
+public:
   explicit ObObjStore(const BlockAllocatorT& alloc = BlockAllocatorT(ObModIds::OB_OBJ_STORE));
   ~ObObjStore()
   {
@@ -73,7 +73,7 @@ class ObObjStore {
     allocator_ = alloc;
   }
 
-  private:
+private:
   ObDList<ObObjNode<T> > obj_list_;
   BlockAllocatorT allocator_;
 };

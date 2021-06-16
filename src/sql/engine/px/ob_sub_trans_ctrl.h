@@ -21,13 +21,13 @@ namespace sql {
 class ObExecContext;
 class ObPxSqcMeta;
 class ObSubTransCtrl {
-  public:
+public:
   ObSubTransCtrl() = default;
   ~ObSubTransCtrl() = default;
   int start_participants(ObExecContext& ctx, ObPxSqcMeta& sqc);
   int end_participants(ObExecContext& ctx, bool is_rb);
 
-  private:
+private:
   /* functions */
   int get_participants(ObPxSqcMeta& sqc, common::ObPartitionArray& participants) const;
   /* variables */

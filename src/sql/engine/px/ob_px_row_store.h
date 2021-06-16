@@ -27,7 +27,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObDtlMsgReader : public dtl::ObDtlMsgIterator {
-  public:
+public:
   virtual void set_iterator_end() = 0;
   virtual bool has_next() = 0;
 
@@ -39,7 +39,7 @@ class ObDtlMsgReader : public dtl::ObDtlMsgIterator {
 };
 
 class ObPxNewRowIterator : public ObDtlMsgReader {
-  public:
+public:
   ObPxNewRowIterator();
   virtual ~ObPxNewRowIterator();
 
@@ -91,7 +91,7 @@ class ObPxNewRowIterator : public ObDtlMsgReader {
   }
   void set_end() override;
 
-  private:
+private:
   bool is_eof_;
   bool is_iter_end_;
   int64_t rows_;
@@ -101,7 +101,7 @@ class ObPxNewRowIterator : public ObDtlMsgReader {
 };
 
 class ObPxDatumRowIterator : public ObDtlMsgReader {
-  public:
+public:
   ObPxDatumRowIterator();
   virtual ~ObPxDatumRowIterator();
 
@@ -152,7 +152,7 @@ class ObPxDatumRowIterator : public ObDtlMsgReader {
   }
   void set_end() override;
 
-  private:
+private:
   bool is_eof_;
   bool is_iter_end_;
   int64_t rows_;
@@ -164,7 +164,7 @@ class ObPxDatumRowIterator : public ObDtlMsgReader {
 class ObPxNewRow : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_NEW_ROW> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   // for deserialize
   ObPxNewRow()
       : des_row_buf_(nullptr),
@@ -240,7 +240,7 @@ class ObPxNewRow : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_NEW_ROW> {
   }
   TO_STRING_KV(K_(row_cell_count), K_(des_row_buf_size));
 
-  private:
+private:
   static const int64_t EOF_ROW_FLAG = -1;
   char* des_row_buf_;
   int64_t des_row_buf_size_;

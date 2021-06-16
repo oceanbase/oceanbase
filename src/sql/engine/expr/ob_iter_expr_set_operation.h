@@ -16,13 +16,13 @@
 namespace oceanbase {
 namespace sql {
 class ObSetOpIterExpr : public ObIterExprOperator {
-  private:
+private:
   class ObSetOpIterExprCtx : public ObExprOperatorCtx {
-    public:
+  public:
     ObSetOpIterExprCtx() : left_row_(NULL), right_row_(NULL), left_is_end_(false), right_is_end_(false)
     {}
 
-    private:
+  private:
     const common::ObNewRow* left_row_;
     const common::ObNewRow* right_row_;
     bool left_is_end_;
@@ -30,7 +30,7 @@ class ObSetOpIterExpr : public ObIterExprOperator {
     friend class ObSetOpIterExpr;
   };
 
-  public:
+public:
   ObSetOpIterExpr() : ObIterExprOperator(), left_iter_(NULL), right_iter_(NULL)
   {}
 
@@ -44,7 +44,7 @@ class ObSetOpIterExpr : public ObIterExprOperator {
   }
   int get_next_row(ObIterExprCtx& expr_ctx, const common::ObNewRow*& result) const;
 
-  protected:
+protected:
   inline int get_left_row(ObIterExprCtx& expr_ctx, ObSetOpIterExprCtx& set_ctx) const;
   inline int get_right_row(ObIterExprCtx& expr_ctx, ObSetOpIterExprCtx& set_ctx) const;
   inline int compare_row(const common::ObNewRow& left_row, const common::ObNewRow& right_row, int& result) const;
@@ -55,7 +55,7 @@ class ObSetOpIterExpr : public ObIterExprOperator {
   inline int get_except_next_row(
       ObIterExprCtx& expr_ctx, ObSetOpIterExprCtx& set_ctx, const common::ObNewRow*& result) const;
 
-  protected:
+protected:
   const ObIterExprOperator* left_iter_;
   const ObIterExprOperator* right_iter_;
 };

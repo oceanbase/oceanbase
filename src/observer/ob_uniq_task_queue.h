@@ -26,7 +26,7 @@ namespace oceanbase {
 namespace observer {
 // implement interface of DefaultSimpleAllocerAllocator
 struct ObHighPrioMemAllocator {
-  public:
+public:
   explicit ObHighPrioMemAllocator(const char* label = common::ObModIds::OB_PARTITION_TABLE_TASK)
   {
     attr_.label_ = label;
@@ -44,12 +44,12 @@ struct ObHighPrioMemAllocator {
     attr_ = attr;
   }
 
-  private:
+private:
   common::ObMemAttr attr_;
 };
 template <typename T>
 struct Compare {
-  public:
+public:
   bool operator()(const T& a, const T& b) const
   {
     return a.compare_without_version(b);
@@ -61,7 +61,7 @@ struct Compare {
 // before process finish.
 template <typename Task, typename Process>
 class ObUniqTaskQueue : public share::ObThreadPool {
-  public:
+public:
   friend class TestBatchProcessQueue_test_reput_Test;
   friend class TestBatchProcessQueue_test_eput2_Test;
   friend class TestBatchProcessQueue_test_update_process_Test;
@@ -105,7 +105,7 @@ class ObUniqTaskQueue : public share::ObThreadPool {
     return task_count_;
   }
 
-  private:
+private:
   struct Group : public common::ObDLinkBase<Group> {
     Group()
     {}

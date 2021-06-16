@@ -37,7 +37,7 @@ class ObOKPParam;
 class ObMySQLResultSet;
 struct ObSMConnection;
 class ObSqlEndTransCb {
-  public:
+public:
   ObSqlEndTransCb();
   virtual ~ObSqlEndTransCb();
 
@@ -54,12 +54,12 @@ class ObSqlEndTransCb {
     need_disconnect_ = need_disconnect;
   }
 
-  private:
+private:
   int revert_session(sql::ObSQLSessionInfo* sess_info);
   ObSMConnection* get_conn() const;
   int get_conn_id(uint32_t& sessid) const;
 
-  protected:
+protected:
   int encode_ok_packet(rpc::ObRequest* req, easy_buf_t* buf, observer::ObOKPParam& ok_param,
       sql::ObSQLSessionInfo& sess_info, uint8_t packet_seq);
   int encode_error_packet(rpc::ObRequest* req, easy_buf_t* ez_buf, sql::ObSQLSessionInfo& sess_info, uint8_t packet_seq,
@@ -68,7 +68,7 @@ class ObSqlEndTransCb {
 
   inline int encode_packet(obmysql::ObMySQLPacket& pkt, const uint8_t packet_seq, const bool is_last);
 
-  protected:
+protected:
   char* data_;
   rpc::ObRequest* mysql_request_;
   sql::ObSQLSessionInfo* sess_info_;
@@ -82,7 +82,7 @@ class ObSqlEndTransCb {
   bool need_disconnect_;
   uint32_t sessid_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlEndTransCb);
 };
 }  // namespace observer

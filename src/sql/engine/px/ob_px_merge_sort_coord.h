@@ -36,10 +36,10 @@ class ObPxMergeSortCoord;
 class ObPxMergeSortCoord;
 
 class ObPxMergeSortCoordInput : public ObPxReceiveInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMergeSortCoordInput() : ObPxReceiveInput()
   {}
   virtual ~ObPxMergeSortCoordInput()
@@ -51,7 +51,7 @@ class ObPxMergeSortCoordInput : public ObPxReceiveInput {
 };
 
 class ObMsgReceiveSortOrder : public dtl::ObIDltChannelLoopPred {
-  public:
+public:
   ObMsgReceiveSortOrder(ObRowHeap<>& heap) : data_ch_idx_start_(-1), data_ch_idx_end_(-1), heap_(heap)
   {}
   ~ObMsgReceiveSortOrder() = default;
@@ -74,28 +74,28 @@ class ObMsgReceiveSortOrder : public dtl::ObIDltChannelLoopPred {
     return data_ch_idx_start_;
   }
 
-  private:
+private:
   int64_t data_ch_idx_start_;
   int64_t data_ch_idx_end_;
   ObRowHeap<>& heap_;
 };
 
 class ObPxMergeSortCoord : public ObPxCoord, public ObSortableTrait {
-  public:
+public:
   class ObPxMergeSortCoordCtx;
 
-  public:
+public:
   class ObPxMergeSortCoordEventListener : public ObIPxCoordEventListener {
-    public:
+  public:
     ObPxMergeSortCoordEventListener(ObPxMergeSortCoordCtx& px_ctx) : px_ctx_(px_ctx)
     {}
     int on_root_data_channel_setup();
 
-    private:
+  private:
     ObPxMergeSortCoordCtx& px_ctx_;
   };
   class ObPxMergeSortCoordCtx : public ObPxCoordCtx {
-    public:
+  public:
     explicit ObPxMergeSortCoordCtx(ObExecContext& ctx)
         : ObPxCoordCtx(ctx),
           listener_(*this),
@@ -153,7 +153,7 @@ class ObPxMergeSortCoord : public ObPxCoord, public ObSortableTrait {
       return msg_proc_;
     }
 
-    protected:
+  protected:
     ObPxMergeSortCoordEventListener listener_;
     ObSerialDfoScheduler serial_scheduler_;
     ObPxMsgProc msg_proc_;
@@ -171,14 +171,14 @@ class ObPxMergeSortCoord : public ObPxCoord, public ObSortableTrait {
     friend class ObPxMergeSortCoord;
   };
 
-  public:
+public:
   explicit ObPxMergeSortCoord(common::ObIAllocator& alloc) : ObPxCoord(alloc), ObSortableTrait(alloc)
   {}
   virtual ~ObPxMergeSortCoord() = default;
   // int open();
   // for debug purpose, should remove later
   // inline void set_dfo_tree(ObDfo &root) { root_ = &root;}
-  private:
+private:
   /**
    * @brief called by get_next_row(), get a row from the child operator or row_store
    * @param ctx[in], execute context

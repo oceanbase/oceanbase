@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprIntDiv : public ObArithExprOperator {
-  public:
+public:
   ObExprIntDiv();
   explicit ObExprIntDiv(common::ObIAllocator& alloc);
   virtual ~ObExprIntDiv(){};
@@ -35,7 +35,7 @@ class ObExprIntDiv : public ObArithExprOperator {
   // temporary used, remove after all expr converted
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   OB_INLINE static int intdiv_int(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
       common::ObIAllocator* allocator, common::ObScale scale);
   OB_INLINE static int intdiv_uint(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,

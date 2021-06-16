@@ -74,7 +74,7 @@ class ObResourcePool {
   };
   typedef common::ObFixedQueue<Node> NodeQueue;
 
-  public:
+public:
   ObResourcePool()
       : inner_allocated_num_(0),
         inner_used_num_(0),
@@ -115,7 +115,7 @@ class ObResourcePool {
     }
   };
 
-  public:
+public:
   T* alloc()
   {
     T* ret = NULL;
@@ -165,7 +165,7 @@ class ObResourcePool {
     return free_list_.get_total();
   }
 
-  private:
+private:
   Node* alloc_node_()
   {
     Node* ret = NULL;
@@ -233,7 +233,7 @@ class ObResourcePool {
     }
   }
 
-  private:
+private:
   common::ObFIFOAllocator allocator_;
   volatile int64_t inner_allocated_num_;
   volatile int64_t inner_used_num_;

@@ -119,7 +119,7 @@ const char* switchover_info_to_str(const ObClusterSwitchoverInfo so_info);
 struct ObClusterSwitchoverInfoWrap {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t DEFAULT_SYNCED_CLUSTER_COUNT = 5;
   typedef common::ObSEArray<int64_t, DEFAULT_SYNCED_CLUSTER_COUNT> ClusterIdArray;
 

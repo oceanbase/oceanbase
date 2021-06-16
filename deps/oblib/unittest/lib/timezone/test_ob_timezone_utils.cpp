@@ -20,13 +20,13 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 
 class ObTimezoneUtilsTest : public ::testing::Test {
-  public:
+public:
   ObTimezoneUtilsTest();
   virtual ~ObTimezoneUtilsTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObTimezoneUtilsTest(const ObTimezoneUtilsTest& other);
   ObTimezoneUtilsTest& operator=(const ObTimezoneUtilsTest& other);

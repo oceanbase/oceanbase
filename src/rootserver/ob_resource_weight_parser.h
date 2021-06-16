@@ -19,19 +19,19 @@
 namespace oceanbase {
 namespace rootserver {
 class ObResourceWeightParser {
-  public:
+public:
   /*
    * if weight doesn't not sum to 1, return OB_INVALID_CONFIG
    */
   static int parse(const char* str, ObResourceWeight& weight);
 
-  private:
+private:
   class MyCb : public share::ObKVMatchCb {
-    public:
+  public:
     MyCb(ObResourceWeight& weight) : weight_(weight){};
     int match(const char* key, const char* value);
 
-    private:
+  private:
     /* functions */
     typedef void (*WeightSetter)(ObResourceWeight& weight, double);
     static void set_iops(ObResourceWeight& weight, double val)
@@ -53,7 +53,7 @@ class ObResourceWeightParser {
     ObResourceWeight& weight_;
   };
 
-  private:
+private:
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObResourceWeightParser);
 };

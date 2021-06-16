@@ -42,7 +42,7 @@ class ObAllVirtualPartitionLocation : public common::ObVirtualTableIterator {
     DATA_VERSION,
   };
 
-  public:
+public:
   ObAllVirtualPartitionLocation();
   virtual ~ObAllVirtualPartitionLocation();
   virtual int inner_open();
@@ -50,11 +50,11 @@ class ObAllVirtualPartitionLocation : public common::ObVirtualTableIterator {
 
   int init(share::ObPartitionTableOperator& pt_operator);
 
-  private:
+private:
   int get_query_key(uint64_t& tenant_id, uint64_t& table_id, int64_t& partition_id);
   int fill_row(const share::ObPartitionReplica& replica, common::ObNewRow*& row);
 
-  private:
+private:
   bool inited_;
   ObArenaAllocator arena_allocator_;
   share::ObPartitionTableOperator* pt_operator_;

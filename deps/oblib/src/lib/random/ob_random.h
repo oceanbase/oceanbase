@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 class ObRandom {
-  public:
+public:
   ObRandom();
   virtual ~ObRandom();
   // get a random int64_t number in [min(a,b), max(a,b)]
@@ -34,10 +34,10 @@ class ObRandom {
   // get a random int32_t number in [min(a,b), max(a,b)]
   int32_t get_int32(const int32_t a, const int32_t b);
 
-  private:
+private:
   uint16_t seed_[3];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRandom);
 };
 

@@ -28,7 +28,7 @@ class ObPGPartitionMTUpdater;
 enum ObPGPartitionMTUpdateType { INSERT_ON_UPDATE, DELETE };
 
 class ObPGPartitionMTUpdateTask : public common::ObDLinkBase<ObPGPartitionMTUpdateTask> {
-  public:
+public:
   friend class ObPGPartitionMTUpdater;
   const static common::ObPartitionKey sync_pt_key_;
   ObPGPartitionMTUpdateTask();
@@ -59,7 +59,7 @@ class ObPGPartitionMTUpdateTask : public common::ObDLinkBase<ObPGPartitionMTUpda
   }
   TO_STRING_KV(K_(pkey), K_(add_timestamp), K_(update_type), K_(version));
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   int64_t add_timestamp_;
   ObPGPartitionMTUpdateType update_type_;
@@ -70,7 +70,7 @@ class ObPGPartitionMTUpdateTask : public common::ObDLinkBase<ObPGPartitionMTUpda
 typedef ObUniqTaskQueue<ObPGPartitionMTUpdateTask, ObPGPartitionMTUpdater> PartitionMetaTableTaskQueue;
 
 class ObPGPartitionMTUpdater {
-  public:
+public:
   ObPGPartitionMTUpdater()
   {
     reset();
@@ -90,18 +90,18 @@ class ObPGPartitionMTUpdater {
   int sync_pg_pt(const int64_t version);
   virtual int process_barrier(const ObPGPartitionMTUpdateTask& task, bool& stopped);
 
-  public:
+public:
   static ObPGPartitionMTUpdater& get_instance();
 
-  private:
+private:
   void add_tasks_to_queue_(const ObPGPartitionMTUpdateTask& task);
   int do_sync_pt_finish_(const int64_t version);
 
-  private:
+private:
   static const int64_t UPDATER_THREAD_CNT = 8;
   static const int64_t MINI_MODE_UPDATER_THREAD_CNT = 1;
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   PartitionMetaTableTaskQueue task_queue_;

@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace archive {
 class ObArchiveClear {
-  public:
+public:
   int get_clean_max_clog_file_id_by_log_id(const share::ObClusterBackupDest& dest, const int64_t archive_round,
       const common::ObPGKey& pg_key, const uint64_t log_id, uint64_t& index_file_id, uint64_t& data_file_id);
 

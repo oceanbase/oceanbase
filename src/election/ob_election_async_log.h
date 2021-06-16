@@ -35,7 +35,7 @@ namespace election {
 
 template <typename Type, int size>
 class ObRingBuffer {
-  public:
+public:
   ObRingBuffer() : destroyed_(false), size_(size), start_(0), end_(0)
   {
     memset(&elems_, 0, sizeof(elems_));
@@ -45,7 +45,7 @@ class ObRingBuffer {
     destroy();
   }
 
-  public:
+public:
   bool is_full(void) const
   {
     return (end_ + 1) % size_ == start_;
@@ -59,7 +59,7 @@ class ObRingBuffer {
   int pop(Type& elem);
   void destroy();
 
-  private:
+private:
   bool destroyed_;
   int size_;
   int start_;
@@ -136,7 +136,7 @@ void ObRingBuffer<Type, size>::destroy()
 }
 
 class ObLogItem {
-  public:
+public:
   static const int64_t MAX_LOG_SIZE = 4096;
 
   ObLogItem(const char* buf = NULL, int64_t size = 0, int log_level = OB_LOG_LEVEL_NONE);
@@ -150,7 +150,7 @@ class ObLogItem {
     reset();
   }
 
-  public:
+public:
   char* get_buf()
   {
     return buf_;
@@ -177,17 +177,17 @@ class ObLogItem {
   }
   ObLogItem& operator=(const ObLogItem& item);
 
-  public:
+public:
   static const int64_t OP_LOCAL_NUM = 4;
 
-  private:
+private:
   int64_t size_;
   int log_level_;
   char buf_[MAX_LOG_SIZE];
 };
 
 class ObLogItemFactory {
-  public:
+public:
   static ObLogItem* alloc();
   static void release(ObLogItem* item);
   static int64_t alloc_count_;
@@ -195,14 +195,14 @@ class ObLogItemFactory {
 };
 
 class ObLogFile {
-  public:
+public:
   ObLogFile();
   virtual ~ObLogFile()
   {
     close();
   }
 
-  public:
+public:
   int open(const char* log_file);
   int close();
   int write(const char* buf, const int64_t len);
@@ -221,7 +221,7 @@ class ObLogFile {
     return last_log_time;
   }
 
-  private:
+private:
   char fname_[common::OB_MAX_FILE_NAME_LENGTH];
   int fd_;
   struct stat stat_;
@@ -361,14 +361,14 @@ class ObLogFile {
   }
 
 class ObAsyncLog : public share::ObThreadPool {
-  public:
+public:
   ObAsyncLog();
   virtual ~ObAsyncLog()
   {
     destroy();
   }
 
-  public:
+public:
   static ObAsyncLog& getLogger(void);
   int init(const char* fname, const int level, const bool open_wf);
   void destroy(void);
@@ -405,7 +405,7 @@ class ObAsyncLog : public share::ObThreadPool {
     log_warn_ = log_warn;
   }
 
-  public:
+public:
   void async_log_message_kv(const char* mod_name, const int level, const char* levelstr, const char* file,
       const int32_t line, const char* func, const char* fmt, ...);
   DEFINE_ASYNC_LOG_PRINT_KV(1);
@@ -425,17 +425,17 @@ class ObAsyncLog : public share::ObThreadPool {
   DEFINE_ASYNC_LOG_PRINT_KV(15);
   DEFINE_ASYNC_LOG_PRINT_KV(16);
 
-  private:
+private:
   void run1() final;
   void do_flush_log_(void);
   int logdata_print_info_(char* buf, int64_t& pos, const char* mod_name, const int level, const char* levelstr,
       const char* file, const int32_t line, const char* func, const int64_t last_log_time);
 
-  public:
+public:
   static const int64_t OB_MAX_LOG_ITEM_COUNT = 81920;
   static const int64_t OB_MAX_LOG_PER_SEC = 1000;
 
-  private:
+private:
   typedef ObRingBuffer<ObLogItem*, OB_MAX_LOG_ITEM_COUNT> ObLogBuffer;
   bool is_inited_;
   bool destroyed_;

@@ -56,7 +56,7 @@ struct ObAtomicOpEvent {
 };
 
 class ObAtomicOpEventRecorder : public ObSeqEventRecorder<ObAtomicOpEvent, 339, 8> {
-  public:
+public:
   ObAtomicOpEventRecorder() : sampling_counter_(0), cat_id_(0)
   {
     STATIC_ASSERT(sizeof(ObAtomicOpEvent) == 24, "sizeof(ObAtomicOpEvent)=24");
@@ -88,14 +88,14 @@ class ObAtomicOpEventRecorder : public ObSeqEventRecorder<ObAtomicOpEvent, 339, 
     return cat_id_;
   }
 
-  private:
+private:
   int64_t sampling_counter_;
   uint64_t cat_id_;  // category id
 };
 
 // binary output of perf data
 class ObAtomicOpEventWriter {
-  public:
+public:
   ObAtomicOpEventWriter() : fd_(-1)
   {}
   ~ObAtomicOpEventWriter()
@@ -111,16 +111,16 @@ class ObAtomicOpEventWriter {
     return fd_ != -1;
   }
 
-  public:
+public:
   static char ATOMIC_MAGIC[8];
 
-  private:
+private:
   int fd_;
 };
 
 // binary input of perf data
 class ObAtomicOpEventReader {
-  public:
+public:
   ObAtomicOpEventReader() : fd_(-1)
   {}
   ~ObAtomicOpEventReader()
@@ -132,7 +132,7 @@ class ObAtomicOpEventReader {
   int close();
   int read(ObAtomicOpEventRecorder& rec);
 
-  private:
+private:
   static const int64_t REC_BUF_SIZE = 8192;
   int fd_;
   char rec_buf_[REC_BUF_SIZE];

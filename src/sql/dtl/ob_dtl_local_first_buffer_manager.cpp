@@ -26,7 +26,7 @@ using namespace oceanbase::lib;
 using namespace oceanbase::share;
 
 class PinFunction {
-  public:
+public:
   void operator()(ObDtlLocalFirstBufferCache* val)
   {
     val->pin();

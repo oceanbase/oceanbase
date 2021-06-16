@@ -28,12 +28,12 @@ using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 
 class Runnable {
-  public:
+public:
   virtual void run() = 0;
 };
 
 class Producer : public ObDtlTask, public Runnable {
-  public:
+public:
   void run()
   {
     cout << "Producer" << endl;
@@ -50,7 +50,7 @@ class Producer : public ObDtlTask, public Runnable {
 };
 
 class Consumer : public ObDtlTask, public Runnable {
-  public:
+public:
   void run()
   {
     cout << "Consumer" << endl;
@@ -73,7 +73,7 @@ void th(void* arg)
 }
 
 class TestDtl : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     cout << "set up" << endl;
@@ -84,7 +84,7 @@ class TestDtl : public ::testing::Test {
     cout << "tear down" << endl;
   }
 
-  protected:
+protected:
   Consumer c;
   Producer p;
   thread* thes_[10];

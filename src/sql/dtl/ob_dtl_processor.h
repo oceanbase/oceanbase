@@ -26,12 +26,12 @@ namespace sql {
 namespace dtl {
 
 class ObDtlInterruptProc {
-  public:
+public:
   virtual int process(const common::ObInterruptCode& ic) = 0;
 };
 
 class ObDtlMsgIterator {
-  public:
+public:
   virtual bool has_next() = 0;
   virtual void set_iterator_end() = 0;
   virtual int get_next_row(common::ObNewRow& row) = 0;
@@ -39,7 +39,7 @@ class ObDtlMsgIterator {
 };
 
 class ObDtlPacketProcBase {
-  public:
+public:
   virtual ~ObDtlPacketProcBase() = default;
   virtual ObDtlMsgType get_proc_type() const = 0;
   virtual OB_INLINE void set_iter(ObDtlMsgIterator* iter)
@@ -55,7 +55,7 @@ class ObDtlPacketProcBase {
 
 template <class Packet>
 class ObDtlPacketProc : public ObDtlPacketProcBase {
-  public:
+public:
   ObDtlMsgType get_proc_type() const override
   {
     return Packet::type();
@@ -68,10 +68,10 @@ class ObDtlPacketProc : public ObDtlPacketProcBase {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   virtual int process(const Packet& pkt) = 0;
 
-  private:
+private:
   Packet pkt_;
 };
 

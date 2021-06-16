@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObSearchMethod {
-  public:
+public:
   typedef struct _BreadthFirstSearchTreeNode {
     _BreadthFirstSearchTreeNode() : child_num_(0), row_(nullptr), children_(nullptr), parent_(nullptr)
     {}
@@ -70,7 +70,7 @@ class ObSearchMethod {
       return bret;
     }
 
-    private:
+  private:
     const common::ObIArray<ObSortColumn>& sort_columns_;
     int* err_;
   };
@@ -78,7 +78,7 @@ class ObSearchMethod {
   // initial size of hash table for loop search
   static const int64_t CTE_SET_NUM = 1 << 5l;
 
-  public:
+public:
   explicit ObSearchMethod(common::ObIAllocator& allocator)
       : allocator_(allocator), input_rows_(), sort_columns_(), cycle_by_columns_(), sort_(), op_schema_objs_(nullptr){};
   virtual ~ObSearchMethod() = default;
@@ -105,7 +105,7 @@ class ObSearchMethod {
     return input_rows_.count();
   }
 
-  protected:
+protected:
   common::ObIAllocator& allocator_;
   common::ObArray<common::ObNewRow*> input_rows_;
   common::ObSEArray<ObSortColumn, 32> sort_columns_;
@@ -118,7 +118,7 @@ class ObSearchMethod {
 class ObDepthFisrtSearch : public ObSearchMethod {
   typedef common::hash::ObHashSet<ObHashCols, common::hash::NoPthreadDefendMode> RowMap;
 
-  public:
+public:
   ObDepthFisrtSearch(common::ObIAllocator& allocator)
       : ObSearchMethod(allocator),
         hash_filter_rows_(),
@@ -150,10 +150,10 @@ class ObDepthFisrtSearch : public ObSearchMethod {
   int get_next_non_cycle_node(
       common::ObList<ObTreeNode, common::ObIAllocator>& result_output, ObTreeNode& node) override;
 
-  private:
+private:
   int is_depth_cycle_node(ObTreeNode& node);
 
-  private:
+private:
   RowMap hash_filter_rows_;
   common::ObSEArray<common::ObColumnInfo, 32> hash_col_idx_;
   // record level of current row in the tree.
@@ -163,7 +163,7 @@ class ObDepthFisrtSearch : public ObSearchMethod {
 };
 
 class ObBreadthFisrtSearch : public ObSearchMethod {
-  public:
+public:
   ObBreadthFisrtSearch(common::ObIAllocator& allocator)
       : ObSearchMethod(allocator),
         bst_root_(),
@@ -185,12 +185,12 @@ class ObBreadthFisrtSearch : public ObSearchMethod {
       common::ObList<ObTreeNode, common::ObIAllocator>& result_output, ObTreeNode& node) override;
   int update_parent_node(ObTreeNode& node);
 
-  private:
+private:
   int init_new_nodes(ObBFSTreeNode* last_bstnode, int64_t child_num);
   int is_breadth_cycle_node(ObTreeNode& node);
   int add_new_level();
 
-  private:
+private:
   ObBFSTreeNode bst_root_;
   /**
    *            A

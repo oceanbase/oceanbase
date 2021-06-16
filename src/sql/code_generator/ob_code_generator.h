@@ -30,7 +30,7 @@ class ObLogicalOperator;
 class ObRawExprUniqueSet;
 
 class ObCodeGenerator {
-  public:
+public:
   ObCodeGenerator(
       bool use_jit, bool use_static_typing_engine, uint64_t min_cluster_version, DatumParamStore* param_store)
       : use_jit_(use_jit),
@@ -43,7 +43,7 @@ class ObCodeGenerator {
 
   int generate(const ObLogPlan& log_plan, ObPhysicalPlan& phy_plan);
 
-  private:
+private:
   int generate_old_plan(const ObLogPlan& log_plan, ObPhysicalPlan& phy_plan);
   int generate_exprs(const ObLogPlan& log_plan, ObPhysicalPlan& phy_plan);
 
@@ -74,7 +74,7 @@ class ObCodeGenerator {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCodeGenerator);
 
-  private:
+private:
   bool use_jit_;
   bool use_static_typing_engine_;
   uint64_t min_cluster_version_;

@@ -19,7 +19,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class TestAllocator : public ObIAllocator {
-  public:
+public:
   TestAllocator() : label_(ObModIds::TEST)
   {}
   virtual ~TestAllocator()
@@ -42,23 +42,23 @@ class TestAllocator : public ObIAllocator {
     label_ = label;
   };
 
-  private:
+private:
   const char* label_;
 };
 
 class TestObExprLocateTest : public ::testing::Test {
-  public:
+public:
   TestObExprLocateTest();
   virtual ~TestObExprLocateTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   TestObExprLocateTest(const TestObExprLocateTest& other);
   TestObExprLocateTest& operator=(const TestObExprLocateTest& other);
 
-  private:
+private:
   // data members
 };
 

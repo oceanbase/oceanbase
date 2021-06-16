@@ -20,13 +20,13 @@ namespace oceanbase {
 using namespace common;
 namespace unittest {
 class TestObMaskSet : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
   {}
 
-  public:
+public:
   static const int64_t PARTITION_KEY_COUNT = 16;
   // valid partition parameters
   static const int64_t VALID_TABLE_ID = 1;

@@ -21,7 +21,7 @@ namespace sql {
 class ObPhysicalPlan;
 class ObTaskInfo;
 class ObRemoteIdentityTaskSpliter : public ObTaskSpliter {
-  public:
+public:
   ObRemoteIdentityTaskSpliter();
   virtual ~ObRemoteIdentityTaskSpliter();
   virtual int get_next_task(ObTaskInfo*& task);
@@ -30,10 +30,10 @@ class ObRemoteIdentityTaskSpliter : public ObTaskSpliter {
     return ObTaskSpliter::REMOTE_IDENTITY_SPLIT;
   }
 
-  private:
+private:
   ObTaskInfo* task_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRemoteIdentityTaskSpliter);
 };
 }  // namespace sql

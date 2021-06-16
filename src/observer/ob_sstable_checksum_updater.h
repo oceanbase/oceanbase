@@ -50,7 +50,7 @@ inline bool is_valid_checksum_update_type(const ObSSTableChecksumUpdateType upda
 }
 
 class ObSSTableChecksumUpdateTask : public common::ObDLinkBase<ObSSTableChecksumUpdateTask> {
-  public:
+public:
   friend class ObSSTableChecksumUpdater;
   ObSSTableChecksumUpdateTask();
   virtual ~ObSSTableChecksumUpdateTask() = default;
@@ -77,7 +77,7 @@ class ObSSTableChecksumUpdateTask : public common::ObDLinkBase<ObSSTableChecksum
   }
   TO_STRING_KV(K_(pkey), K_(sstable_id), K_(sstable_type), K_(is_remove));
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   uint64_t sstable_id_;  // if OB_INVALID_ID == sstable_, we will report information of whole partition
   int sstable_type_;
@@ -90,11 +90,11 @@ class ObSSTableChecksumUpdateTask : public common::ObDLinkBase<ObSSTableChecksum
 typedef ObUniqTaskQueue<ObSSTableChecksumUpdateTask, ObSSTableChecksumUpdater> ObSSTableChecksumTaskQueue;
 
 class ObSSTableChecksumUpdater : public lib::TGRunnable {
-  public:
+public:
   const static int64_t UPDATER_THREAD_CNT = 8;
   const static int64_t MINI_MODE_UPDATER_THREAD_CNT = 1;
 
-  public:
+public:
   ObSSTableChecksumUpdater();
   virtual ~ObSSTableChecksumUpdater()
   {
@@ -112,12 +112,12 @@ class ObSSTableChecksumUpdater : public lib::TGRunnable {
   void destroy();
   void run1() override;
 
-  private:
+private:
   int reput_to_queue(const common::ObIArray<ObSSTableChecksumUpdateTask>& tasks);
   void try_submit_task(int64_t& time_to_wait);
   void add_tasks_to_queue();
 
-  private:
+private:
   const static int64_t EXPECT_BATCH_SIZE = 30;
   const static int64_t MAX_WAIT_TIME_US = 3000 * 1000L;  // 3s
   const static int64_t COND_WAIT_US = 200 * 1000L;       // 200ms

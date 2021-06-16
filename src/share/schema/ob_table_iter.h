@@ -24,7 +24,7 @@ class ObMultiVersionSchemaService;
 class ObSchemaGetterGuard;
 
 class ObTenantIterator {
-  public:
+public:
   ObTenantIterator();
   virtual ~ObTenantIterator()
   {}
@@ -34,7 +34,7 @@ class ObTenantIterator {
   virtual int next(uint64_t& tenant_id);
 
   TO_STRING_KV(K_(is_inited), K_(cur_tenant_idx), K_(tenant_ids))
-  private:
+private:
   int get_tenant_ids(ObMultiVersionSchemaService& schema_service);
   bool is_inited_;
   int64_t cur_tenant_idx_;
@@ -42,7 +42,7 @@ class ObTenantIterator {
 };
 
 class ObITableIterator {
-  public:
+public:
   ObITableIterator()
   {}
   virtual ~ObITableIterator()
@@ -52,7 +52,7 @@ class ObITableIterator {
 };
 
 class ObTableIterator : public ObITableIterator {
-  public:
+public:
   ObTableIterator();
   virtual ~ObTableIterator()
   {}
@@ -64,10 +64,10 @@ class ObTableIterator : public ObITableIterator {
 
   DECLARE_TO_STRING;
 
-  private:
+private:
   int next_batch_tables();
 
-  private:
+private:
   static const int64_t CACHE_TABLE_ARRAY_CAPACITY = 1024;
   ObTenantTableId cur_tenant_table_id_;
   common::ObSEArray<ObTenantTableId, CACHE_TABLE_ARRAY_CAPACITY> cache_table_array_;
@@ -77,7 +77,7 @@ class ObTableIterator : public ObITableIterator {
 };
 
 class ObTenantTableIterator : public ObITableIterator {
-  public:
+public:
   ObTenantTableIterator();
   virtual ~ObTenantTableIterator()
   {}
@@ -87,7 +87,7 @@ class ObTenantTableIterator : public ObITableIterator {
 
   TO_STRING_KV(K_(is_inited), K_(cur_table_idx), K_(table_ids));
 
-  private:
+private:
   int get_table_ids(ObMultiVersionSchemaService* schema_service, const uint64_t tenant_id);
   bool is_inited_;
   int64_t cur_table_idx_;
@@ -101,7 +101,7 @@ class ObTenantTableIterator : public ObITableIterator {
  * 2 binding table group
  */
 class ObTenantPartitionEntityIterator : public ObITableIterator {
-  public:
+public:
   ObTenantPartitionEntityIterator() : is_inited_(false), cur_idx_(0), entity_id_array_()
   {}
   virtual ~ObTenantPartitionEntityIterator()
@@ -112,10 +112,10 @@ class ObTenantPartitionEntityIterator : public ObITableIterator {
 
   TO_STRING_KV(K_(is_inited), K_(cur_idx), K_(entity_id_array));
 
-  private:
+private:
   int get_partition_entity_id_array(ObSchemaGetterGuard& schema_guard, const uint64_t tenant_id);
 
-  private:
+private:
   bool is_inited_;
   int64_t cur_idx_;
   common::ObArray<uint64_t> entity_id_array_;

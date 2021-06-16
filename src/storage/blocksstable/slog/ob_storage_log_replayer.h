@@ -29,9 +29,9 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObISLogFilter {
-  public:
+public:
   struct Param final {
-    public:
+  public:
     Param() : entry_(nullptr), subcmd_(0), attr_()
     {}
     ~Param() = default;
@@ -45,21 +45,21 @@ class ObISLogFilter {
 };
 
 class ObReplayServerSLogFilter : public ObISLogFilter {
-  public:
+public:
   ObReplayServerSLogFilter() = default;
   virtual ~ObReplayServerSLogFilter() = default;
   virtual int filter(const ObISLogFilter::Param& param, bool& is_filtered) const override;
 };
 
 class ObNotReplaySuperBlockAndConfigMetaSLogFilter : public ObISLogFilter {
-  public:
+public:
   ObNotReplaySuperBlockAndConfigMetaSLogFilter() = default;
   virtual ~ObNotReplaySuperBlockAndConfigMetaSLogFilter() = default;
   virtual int filter(const ObISLogFilter::Param& param, bool& is_filtered) const override;
 };
 
 struct ObStorageLogCommittedTrans final {
-  public:
+public:
   ObStorageLogCommittedTrans() : commit_lsn_(0), valid_record_(NULL)
   {}
   int64_t commit_lsn_;
@@ -67,7 +67,7 @@ struct ObStorageLogCommittedTrans final {
 };
 
 struct ObRedoModuleReplayParam final {
-  public:
+public:
   ObRedoModuleReplayParam();
   ~ObRedoModuleReplayParam() = default;
   bool is_valid() const
@@ -84,7 +84,7 @@ struct ObRedoModuleReplayParam final {
 
 // The interface of some modules need to write redo log.
 class ObIRedoModule {
-  public:
+public:
   ObIRedoModule() : enable_write_log_(false), filter_(nullptr){};
   virtual ~ObIRedoModule() = default;
 
@@ -112,13 +112,13 @@ class ObIRedoModule {
   inline static int64_t gen_subcmd(const enum ObRedoLogMainType subcmd_prefix, const int32_t subcmd_suffix);
   inline static void parse_subcmd(const int64_t subcmd, enum ObRedoLogMainType& subcmd_prefix, int32_t& subcmd_suffix);
 
-  protected:
+protected:
   bool enable_write_log_;
   const ObISLogFilter* filter_;
 };
 
 class ObStorageLogCommittedTransGetter final {
-  public:
+public:
   ObStorageLogCommittedTransGetter();
   ~ObStorageLogCommittedTransGetter();
   int init(const char* log_dir, const common::ObLogCursor& replay_start_cursor);
@@ -133,11 +133,11 @@ class ObStorageLogCommittedTransGetter final {
   }
   void destroy();
 
-  private:
+private:
   int load_committed_trans(const char* log_dir, const common::ObLogCursor& replay_start_cursor);
   int revise_log(const char* log_dir);
 
-  private:
+private:
   static const int64_t RECOVERY_TRANS_CNT = 10000;
   common::ObArenaAllocator allocator_;
   common::hash::ObHashMap<int64_t, ObStorageLogCommittedTrans> committed_trans_map_;
@@ -147,7 +147,7 @@ class ObStorageLogCommittedTransGetter final {
 };
 
 class ObStorageLogReplayer {
-  public:
+public:
   ObStorageLogReplayer();
   virtual ~ObStorageLogReplayer();
 
@@ -176,20 +176,20 @@ class ObStorageLogReplayer {
     return log_dir_;
   }
 
-  protected:
+protected:
   virtual int replay_over()
   {
     return common::OB_SUCCESS;
   };
 
-  private:
+private:
   int replay_(
       const common::ObLogCursor& replay_start_cursor, const ObStorageLogCommittedTransGetter& committed_trans_getter);
   int replay_after_ckpt(
       const common::ObLogCursor& replay_start_cursor, const ObStorageLogCommittedTransGetter& committed_trans_getter);
   int filter_single_log(const ObBaseStorageLogHeader& log_header, bool& is_filtered);
 
-  protected:
+protected:
   bool is_inited_;
   int64_t trans_id_;
   uint64_t min_log_file_id_;
@@ -200,7 +200,7 @@ class ObStorageLogReplayer {
   ObISLogFilter* filter_before_parse_;
   ObISLogFilter* filter_after_parse_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageLogReplayer);
 };
 

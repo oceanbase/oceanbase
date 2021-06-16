@@ -29,7 +29,7 @@ namespace rootserver {
 class ObRootService;
 class ObFreezeInfoManager;
 class ObMajorFreezeLauncher : public ObRsReentrantThread {
-  public:
+public:
   ObMajorFreezeLauncher();
   virtual ~ObMajorFreezeLauncher();
   int init(ObRootService& root_service, obrpc::ObCommonRpcProxy& rpc_proxy, common::ObServerConfig& config,
@@ -41,7 +41,7 @@ class ObMajorFreezeLauncher : public ObRsReentrantThread {
   }
   int64_t get_schedule_interval() const;
 
-  private:
+private:
   static const int64_t TRY_LAUNCH_MAJOR_FREEZE_INTERVAL_US = 1000 * 1000;  // 1s
   // daily major freeze will retry when error is OB_MAJOR_FREEZE_NOT_ALLOW.
   static const int64_t MAJOR_FREEZE_RETRY_LIMIT = 300;
@@ -51,7 +51,7 @@ class ObMajorFreezeLauncher : public ObRsReentrantThread {
   int try_launch_major_freeze();
   int try_gc_freeze_info();
 
-  private:
+private:
   bool inited_;
   ObRootService* root_service_;
   obrpc::ObCommonRpcProxy* rpc_proxy_;

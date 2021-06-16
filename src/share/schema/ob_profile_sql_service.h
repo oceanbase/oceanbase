@@ -26,7 +26,7 @@ namespace schema {
 class ObProfileSchema;
 
 class ObProfileSqlService : public ObDDLSqlService {
-  public:
+public:
   ObProfileSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObProfileSqlService()
@@ -39,10 +39,10 @@ class ObProfileSqlService : public ObDDLSqlService {
   int alter_schema(ObISQLClient& sql_client, const ObProfileSchema& schema);
   int drop_schema(ObISQLClient& sql_client, const ObProfileSchema& schema);
 
-  private:
+private:
   int gen_sql(common::ObSqlString& sql, common::ObSqlString& values, const ObProfileSchema& schema);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObProfileSqlService);
 };
 

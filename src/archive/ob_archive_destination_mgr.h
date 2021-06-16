@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace archive {
 // simultaneous unsafe
 class ObArchiveDestination {
-  public:
+public:
   ObArchiveDestination()
   {
     reset();
@@ -38,7 +38,7 @@ class ObArchiveDestination {
       const uint64_t cur_data_file_id, const int64_t data_file_offset, const uint64_t min_log_id,
       const int64_t min_log_ts);
 
-  public:
+public:
   // switch file when the previous file is full or IO error occur
   // file id: N -> N+1
   int switch_file(const common::ObPGKey& pg_key, const LogArchiveFileType file_type, const int64_t incarnation,
@@ -65,10 +65,10 @@ class ObArchiveDestination {
       K(data_file_offset_), K(data_file_min_log_id_), K(data_file_min_log_ts_), K(force_switch_data_file_),
       K(force_switch_index_file_), K(is_data_file_valid_));
 
-  private:
+private:
   int update_file_meta_info_(const LogArchiveFileType file_type);
 
-  public:
+public:
   bool is_inited_;
   bool compatible_;
   uint64_t cur_index_file_id_;

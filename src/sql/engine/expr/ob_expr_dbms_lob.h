@@ -22,18 +22,18 @@ namespace sql {
 
 // https://docs.oracle.com/cd/B28359_01/appdev.111/b28419/d_lob.htm#i998484
 class ObExprDbmsLobGetLength : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprDbmsLobGetLength(common::ObIAllocator& alloc);
   virtual ~ObExprDbmsLobGetLength();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& lob, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result1(common::ObObj& result, const common::ObObj& lob, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDbmsLobGetLength);
 };
 
 class ObExprDbmsLobAppend : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprDbmsLobAppend(common::ObIAllocator& alloc);
   virtual ~ObExprDbmsLobAppend();
   virtual int calc_result_type2(
@@ -43,12 +43,12 @@ class ObExprDbmsLobAppend : public ObStringExprOperator {
   virtual int calc_result2(
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDbmsLobAppend);
 };
 
 class ObExprDbmsLobRead : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprDbmsLobRead(common::ObIAllocator& alloc);
   virtual ~ObExprDbmsLobRead();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
@@ -58,12 +58,12 @@ class ObExprDbmsLobRead : public ObStringExprOperator {
   virtual int calc_result3(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
       const common::ObObj& obj3, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDbmsLobRead);
 };
 
 class ObExprDbmsLobConvertToBlob : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprDbmsLobConvertToBlob(common::ObIAllocator& alloc);
   virtual ~ObExprDbmsLobConvertToBlob();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
@@ -73,24 +73,24 @@ class ObExprDbmsLobConvertToBlob : public ObStringExprOperator {
   virtual int calc_result3(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
       const common::ObObj& obj3, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDbmsLobConvertToBlob);
 };
 
 class ObExprDbmsLobCastClobToBlob : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprDbmsLobCastClobToBlob(common::ObIAllocator& alloc);
   virtual ~ObExprDbmsLobCastClobToBlob();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& clob, common::ObExprTypeCtx& type_ctx) const;
   static int calc(common::ObObj& result, const common::ObObj& obj, common::ObCastCtx& cast_ctx);
   virtual int calc_result1(common::ObObj& result, const common::ObObj& clob, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDbmsLobCastClobToBlob);
 };
 
 class ObExprDbmsLobConvertClobCharset : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprDbmsLobConvertClobCharset(common::ObIAllocator& alloc);
   virtual ~ObExprDbmsLobConvertClobCharset();
   virtual int calc_result_type2(
@@ -100,7 +100,7 @@ class ObExprDbmsLobConvertClobCharset : public ObStringExprOperator {
   virtual int calc_result2(
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDbmsLobConvertClobCharset);
 };
 

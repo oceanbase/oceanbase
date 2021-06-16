@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObModifyTenantSpecialOption final {
-  public:
+public:
   ObModifyTenantSpecialOption();
   ~ObModifyTenantSpecialOption() = default;
   void set_progressive_merge_num(const int64_t progressive_merge_num)
@@ -34,12 +34,12 @@ class ObModifyTenantSpecialOption final {
     return progressive_merge_num_;
   }
 
-  private:
+private:
   int64_t progressive_merge_num_;
 };
 
 class ObModifyTenantStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObModifyTenantStmt(common::ObIAllocator* name_pool);
   ObModifyTenantStmt();
   virtual ~ObModifyTenantStmt();
@@ -116,7 +116,7 @@ class ObModifyTenantStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(modify_tenant_arg));
 
-  private:
+private:
   bool for_current_tenant_;
   obrpc::ObModifyTenantArg modify_tenant_arg_;
   common::ObArray<ObVariableSetStmt::VariableSetNode, common::ModulePageAllocator, true> sys_var_nodes_;

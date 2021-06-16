@@ -62,13 +62,13 @@ class ObFreezeInfoManager;
 class ObUnitManager;
 
 class ObServerRecoveryMachineIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObServerRecoveryMachineIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual ~ObServerRecoveryMachineIdling()
   {}
 
-  public:
+public:
   virtual int64_t get_idle_interval_us()
   {
     return 3600LL * 1000LL * 1000LL;
@@ -115,7 +115,7 @@ enum class FileRecoveryStatus : int64_t {
 class ObServerRecoveryMachine;
 
 class CheckPgRecoveryFinishedTask : public common::IObDedupTask {
-  public:
+public:
   CheckPgRecoveryFinishedTask(const common::ObAddr& server, const volatile bool& is_stopped,
       ObServerRecoveryMachine& host, share::ObPartitionTableOperator& pt_operator,
       share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& mysql_proxy)
@@ -130,7 +130,7 @@ class CheckPgRecoveryFinishedTask : public common::IObDedupTask {
   virtual ~CheckPgRecoveryFinishedTask()
   {}
 
-  public:
+public:
   // virtual interface
   virtual int64_t hash() const;
   virtual bool operator==(const common::IObDedupTask& other) const;
@@ -144,10 +144,10 @@ class CheckPgRecoveryFinishedTask : public common::IObDedupTask {
 
   TO_STRING_KV(K(server_), K(is_stopped_));
 
-  private:
+private:
   int do_check_pg_recovery_finished(bool& is_finished);
 
-  private:
+private:
   const common::ObAddr server_;
   const volatile bool& is_stopped_;
   ObServerRecoveryMachine& host_;
@@ -155,12 +155,12 @@ class CheckPgRecoveryFinishedTask : public common::IObDedupTask {
   share::schema::ObMultiVersionSchemaService& schema_service_;
   common::ObMySQLProxy& mysql_proxy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(CheckPgRecoveryFinishedTask);
 };
 
 class UpdateFileRecoveryStatusTask : public common::IObDedupTask {
-  public:
+public:
   UpdateFileRecoveryStatusTask(const common::ObAddr& server, const common::ObAddr& dest_server,
       const uint64_t tenant_id, const int64_t file_id, const FileRecoveryStatus pre_status,
       const FileRecoveryStatus cur_status, const volatile bool& is_stopped, ObServerRecoveryMachine& host)
@@ -177,7 +177,7 @@ class UpdateFileRecoveryStatusTask : public common::IObDedupTask {
   virtual ~UpdateFileRecoveryStatusTask()
   {}
 
-  public:
+public:
   // virtual interface
   virtual int64_t hash() const;
   virtual bool operator==(const common::IObDedupTask& other) const;
@@ -191,7 +191,7 @@ class UpdateFileRecoveryStatusTask : public common::IObDedupTask {
 
   TO_STRING_KV(K(server_), K(is_stopped_));
 
-  private:
+private:
   const common::ObAddr server_;
   const common::ObAddr dest_server_;
   const uint64_t tenant_id_;
@@ -201,7 +201,7 @@ class UpdateFileRecoveryStatusTask : public common::IObDedupTask {
   const volatile bool& is_stopped_;
   ObServerRecoveryMachine& host_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(UpdateFileRecoveryStatusTask);
 };
 
@@ -230,7 +230,7 @@ struct RefugeeInfo {
 };
 
 struct ObServerRecoveryTask {
-  public:
+public:
   ObServerRecoveryTask();
   virtual ~ObServerRecoveryTask();
   TO_STRING_KV(K(server_), K(rescue_server_), K(progress_), K(refugee_infos_), K(split_server_log_status_),
@@ -238,7 +238,7 @@ struct ObServerRecoveryTask {
   int get_refugee_info(
       const uint64_t tenant_id, const int64_t file_id, const common::ObAddr& dest_server, RefugeeInfo*& refugee_info);
 
-  public:
+public:
   common::ObAddr server_;
   common::ObAddr rescue_server_;
   ServerRecoveryProgress progress_;
@@ -258,7 +258,7 @@ struct SimpleSeqGenerator {
     return seq_++;
   }
 
-  private:
+private:
   int64_t seq_;
 };
 
@@ -268,11 +268,11 @@ class ObServerRecoveryMachine : public ObRsReentrantThread {
   typedef common::hash::ObHashMap<common::ObAddr, ObServerRecoveryTask*>::iterator task_iterator;
   typedef common::hash::ObHashMap<common::ObAddr, ObServerRecoveryTask*>::const_iterator const_task_iterator;
 
-  public:
+public:
   ObServerRecoveryMachine();
   virtual ~ObServerRecoveryMachine();
 
-  public:
+public:
   virtual void run3() override;
   virtual int blocking_run()
   {
@@ -291,7 +291,7 @@ class ObServerRecoveryMachine : public ObRsReentrantThread {
       const uint64_t tenant_id, const int64_t file_id, FileRecoveryStatus pre_status, FileRecoveryStatus cur_status);
   void stop();
 
-  private:
+private:
   // Machine const
   static const int64_t TASK_MAP_BUCKET_NUM = 2048;
   static const int64_t THREAD_CNT = 1;
@@ -335,7 +335,7 @@ class ObServerRecoveryMachine : public ObRsReentrantThread {
   int launch_new_check_pg_recovery_finished(ObServerRecoveryTask* task);
   int submit_check_pg_recovery_finished_task(const common::ObAddr& server);
 
-  private:
+private:
   bool inited_;
   bool loaded_;
   obrpc::ObSrvRpcProxy* rpc_proxy_;

@@ -18,19 +18,19 @@
 namespace oceanbase {
 namespace sql {
 class ObModifyTenantResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObModifyTenantResolver(ObResolverParams& params);
   virtual ~ObModifyTenantResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObModifyTenantResolver);
 
-  private:
+private:
   // data members
 };
 

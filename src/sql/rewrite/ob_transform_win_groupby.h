@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTransformWinGroupBy : public ObTransformRule {
-  private:
+private:
   struct WinGroupByHelper {
     WinGroupByHelper()
         : transformed_stmt_(NULL),
@@ -66,7 +66,7 @@ class ObTransformWinGroupBy : public ObTransformRule {
         K_(outer_old_exprs), K_(outer_new_exprs));
   };
 
-  public:
+public:
   explicit ObTransformWinGroupBy(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
 
@@ -76,7 +76,7 @@ class ObTransformWinGroupBy : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   int do_win_groupby_transform(WinGroupByHelper& helper);
   int adjust_inner_stmt(WinGroupByHelper& helper);
   int adjust_outer_stmt(WinGroupByHelper& helper);

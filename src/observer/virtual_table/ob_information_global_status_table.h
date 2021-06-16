@@ -31,7 +31,7 @@ class ObInfoSchemaGlobalStatusTable : public common::ObVirtualTableScannerIterat
 
   typedef common::hash::ObHashMap<common::ObString, common::ObObj> AllStatus;
 
-  public:
+public:
   ObInfoSchemaGlobalStatusTable();
   virtual ~ObInfoSchemaGlobalStatusTable();
 
@@ -47,11 +47,11 @@ class ObInfoSchemaGlobalStatusTable : public common::ObVirtualTableScannerIterat
     global_ctx_ = global_ctx;
   }
 
-  private:
+private:
   int fetch_all_global_status(AllStatus& all_status);
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaGlobalStatusTable);
 
-  private:
+private:
   sql::ObSQLSessionInfo* cur_session_;
   const observer::ObGlobalContext* global_ctx_;
   static const char* const variables_name[];

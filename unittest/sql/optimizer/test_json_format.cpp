@@ -19,13 +19,13 @@ using namespace oceanbase::json;
 // using namespace oceanbase::sql;
 
 class TestJsonFormat : public ::testing::Test {
-  public:
+public:
   TestJsonFormat(){};
   virtual ~TestJsonFormat(){};
   virtual void SetUp(){};
   virtual void TearDown(){};
 
-  private:
+private:
   // disallow copy and assign
   TestJsonFormat(const TestJsonFormat& other);
   TestJsonFormat& operator=(const TestJsonFormat& ohter);

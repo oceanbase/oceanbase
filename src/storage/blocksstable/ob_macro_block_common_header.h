@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace blocksstable {
 struct ObMacroBlockCommonHeader {
-  public:
+public:
   static const int32_t MACRO_BLOCK_COMMON_HEADER_VERSION = 1;
   static const int32_t MACRO_BLOCK_COMMON_HEADER_MAGIC = 1001;
 
@@ -132,7 +132,7 @@ struct ObMacroBlockCommonHeader {
   TO_STRING_KV(
       K_(header_size), K_(version), K_(magic), K_(attr), K_(data_version), K_(payload_size), K_(payload_checksum));
 
-  private:
+private:
   // NOTE: data members should be 64 bits aligned!!!
   int32_t header_size_;  // struct size
   int32_t version_;      // header version

@@ -28,7 +28,7 @@ namespace sql {
 
 // SQC status
 class ObSqcCtx {
-  public:
+public:
   ObSqcCtx(ObPxRpcInitSqcArgs& sqc_arg)
       : msg_proc_(sqc_arg, *this),
         receive_data_ch_msg_proc_(msg_proc_),
@@ -97,11 +97,11 @@ class ObSqcCtx {
     return temp_table_id_;
   }
 
-  public:
+public:
   int add_whole_msg_provider(uint64_t op_id, ObPxDatahubDataProvider& provider);
   int get_whole_msg_provider(uint64_t op_id, ObPxDatahubDataProvider*& provider);
 
-  public:
+public:
   common::ObArray<ObPxTask> tasks_;
   ObPxReceiveChProvider receive_data_ch_provider_;
   ObPxTransmitChProvider transmit_data_ch_provider_;
@@ -121,7 +121,7 @@ class ObSqcCtx {
   uint64_t temp_table_id_;
   common::ObSEArray<uint64_t, 8> interm_result_ids_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqcCtx);
 };
 

@@ -23,7 +23,7 @@
 namespace oceanbase {
 namespace common {
 class ObRowStore {
-  public:
+public:
   struct BlockInfo;
   // What is reserved_cells_ for?
   // In order by c1 and other calculations, not only must all the columns be written to the ObRowStore, but also need to
@@ -41,7 +41,7 @@ class ObRowStore {
     TO_STRING_KV(N_PAYLOAD, payload_, N_CELLS, ObArrayWrap<ObObj>(reserved_cells_, reserved_cells_count_));
   };
   class Iterator : public ObOuterRowIterator {
-    public:
+  public:
     friend class ObRowStore;
     Iterator();
     /// @param row [in/out] row.size_ is used to verify the data
@@ -58,17 +58,17 @@ class ObRowStore {
     // @pre is_valid
     bool has_next() const;
 
-    private:
+  private:
     explicit Iterator(const ObRowStore* row_store);
     int next_iter_pos(const BlockInfo*& iter_block, int64_t& iter_pos);
 
-    protected:
+  protected:
     const ObRowStore* row_store_;
     const BlockInfo* cur_iter_block_;
     int64_t cur_iter_pos_;
   };
 
-  public:
+public:
   ObRowStore(ObIAllocator& alloc, const lib::ObLabel& label = ObModIds::OB_SQL_ROW_STORE,
       const uint64_t tenant_id = common::OB_SERVER_TENANT_ID, bool use_compact_row = true);
   ObRowStore(const lib::ObLabel& label = ObModIds::OB_SQL_ROW_STORE,
@@ -239,7 +239,7 @@ class ObRowStore {
   TO_STRING_KV(N_BLOCK_SIZE, block_size_, N_DATA_SIZE, data_size_, N_BLOCK_NUM, blocks_.get_block_count(), N_ROW_COUNT,
       row_count_, N_COLUMN_COUNT, col_count_, N_READ_ONLY, is_read_only_);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRowStore);
 
   static const int64_t BIG_BLOCK_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
@@ -247,7 +247,7 @@ class ObRowStore {
 
   // non-circular doubly linked list
   class BlockList {
-    public:
+  public:
     BlockList();
     void reset();
     int add_last(BlockInfo* block);
@@ -281,14 +281,14 @@ class ObRowStore {
       return 0 == count_;
     }
 
-    private:
+  private:
     BlockInfo* first_;
     BlockInfo* last_;
     int64_t count_;
     int64_t used_mem_size_;  // bytes of all blocks
   };
 
-  private:
+private:
   static int64_t get_reserved_cells_size(const int64_t reserved_columns_count);
   int add_row_by_projector(const ObNewRow& row, const StoredRow*& stored_row, int64_t payload);
   int init_pre_project_row(int64_t count);
@@ -304,7 +304,7 @@ class ObRowStore {
   void del_block_list(BlockInfo* del_block);
   int adjust_row_cells_reference();
 
-  private:
+private:
   // @TODO: add control for tenant_id
   DefaultPageAllocator inner_alloc_;
   ObFixedArray<int64_t, common::ObIAllocator> reserved_columns_;

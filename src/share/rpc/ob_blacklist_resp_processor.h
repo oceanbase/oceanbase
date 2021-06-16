@@ -19,16 +19,16 @@
 namespace oceanbase {
 namespace obrpc {
 class ObBlacklistRespP : public ObRpcProcessor<obrpc::ObBlacklistRpcProxy::ObRpc<OB_SERVER_BLACKLIST_RESP> > {
-  public:
+public:
   ObBlacklistRespP()
   {}
   ~ObBlacklistRespP()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBlacklistRespP);
 };
 };  // namespace obrpc

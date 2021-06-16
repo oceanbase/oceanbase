@@ -24,17 +24,17 @@ class ObPartitionService;
 namespace observer {
 
 class ObAllVirtualPartitionTableStoreStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualPartitionTableStoreStat();
   virtual ~ObAllVirtualPartitionTableStoreStat();
   int init(storage::ObPartitionService* partition_service);
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  protected:
+protected:
   int fill_cells(const storage::ObTableStoreStat& stat);
 
-  private:
+private:
   int get_rowkey_prefix_info(const common::ObPartitionKey& pkey);
   char ip_buf_[common::OB_IP_STR_BUFF];
   char rowkey_prefix_info_[common::COLUMN_DEFAULT_LENGTH];  // json format

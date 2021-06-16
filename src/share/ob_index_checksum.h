@@ -52,7 +52,7 @@ struct ObIndexChecksumItem {
 };
 
 class ObIndexChecksumOperator {
-  public:
+public:
   static int update_checksum(
       const common::ObIArray<ObIndexChecksumItem>& checksum_items, common::ObMySQLProxy& sql_proxy);
   static int get_partition_column_checksum(const uint64_t execution_id, const uint64_t table_id,
@@ -65,7 +65,7 @@ class ObIndexChecksumOperator {
   static int get_checksum_method(
       const uint64_t execution_id, const uint64_t table_id, int64_t& checksum_method, common::ObMySQLProxy& sql_proxy);
 
-  private:
+private:
   static int fill_one_item(const ObIndexChecksumItem& item, share::ObDMLSqlSplicer& dml);
   static int get_column_checksum(const common::ObSqlString& sql,
       common::hash::ObHashMap<int64_t, int64_t>& column_checksum_map, common::ObMySQLProxy& sql_proxy);

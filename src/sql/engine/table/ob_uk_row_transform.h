@@ -23,7 +23,7 @@ namespace sql {
 class ObUKRowTransform : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObUKRowTransform(common::ObIAllocator& alloc);
   virtual ~ObUKRowTransform()
   {}
@@ -59,16 +59,16 @@ class ObUKRowTransform : public ObSingleChildPhyOperator {
 
   INHERIT_TO_STRING_KV("parent", ObSingleChildPhyOperator, K(uk_col_cnt_), K(shadow_pk_cnt_), K(columns_));
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const override;
   virtual int inner_close(ObExecContext& ctx) const override;
 
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
 
-  private:
+private:
   class ObUKRowTransformCtx;
 
-  private:
+private:
   int64_t uk_col_cnt_;
   int64_t shadow_pk_cnt_;
   common::ObFixedArray<int64_t, common::ObIAllocator> columns_;

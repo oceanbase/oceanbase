@@ -35,11 +35,11 @@ class ObArchiveIlogFetcher : public share::ObThreadPool {
   static const int64_t ARCHIVE_ILOG_FETCHER_NUM = 1;
   static const int64_t WAIT_TIME_AFTER_EAGAIN = 100;
 
-  public:
+public:
   ObArchiveIlogFetcher();
   virtual ~ObArchiveIlogFetcher();
 
-  public:
+public:
   int start();
   void stop();
   void wait();
@@ -47,7 +47,7 @@ class ObArchiveIlogFetcher : public share::ObThreadPool {
       ObArchivePGMgr* pg_mgr, ObArCLogSplitEngine* clog_split_engine, ObArchiveIlogFetchTaskMgr* ilog_fetch_mgr);
   void destroy();
 
-  public:
+public:
   int build_archive_clog_task(const uint64_t start_log_id, ObGetCursorResult& cursor_result, ObPGArchiveCLogTask& task,
       PGFetchTask& fetch_task);
   void notify_start_archive_round();
@@ -61,7 +61,7 @@ class ObArchiveIlogFetcher : public share::ObThreadPool {
   int set_archive_round_info(const int64_t round, const int64_t incarnation);
   void clear_archive_info();
 
-  private:
+private:
   struct IlogPGClogTask;
   void run1();
   void do_thread_task_();
@@ -97,7 +97,7 @@ class ObArchiveIlogFetcher : public share::ObThreadPool {
   void mark_fatal_error_(
       const ObPGKey& pg_key, const int64_t epoch, const int64_t incarnation, const int64_t round, const int ret_code);
 
-  private:
+private:
   bool inited_;
   bool start_flag_;
   int64_t log_archive_round_;
@@ -112,7 +112,7 @@ class ObArchiveIlogFetcher : public share::ObThreadPool {
 
   ObArchiveAllocator* allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObArchiveIlogFetcher);
 };
 

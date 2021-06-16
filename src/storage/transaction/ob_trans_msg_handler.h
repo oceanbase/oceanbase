@@ -27,7 +27,7 @@ class ObITransRpc;
 class ObCoordTransCtx;
 
 class ObTransMsgHandler {
-  public:
+public:
   ObTransMsgHandler()
   {
     reset();
@@ -50,7 +50,7 @@ class ObTransMsgHandler {
   int coord_ctx_handle_response(const ObTrxMsgBase& msg, const int64_t msg_type);
   int orphan_msg_handle(const ObTrxMsgBase& msg, const int64_t msg_type);
 
-  private:
+private:
   int handle_orphan_2pc_clear_request_(const ObTrx2PCClearRequest& msg);
   int handle_orphan_2pc_abort_request_(const ObTrx2PCAbortRequest& msg);
   int handle_orphan_2pc_commit_request_(const ObTrx2PCCommitRequest& msg);
@@ -63,7 +63,7 @@ class ObTransMsgHandler {
   int coord_ctx_handle_response_helper_(
       ObCoordTransCtx* coord_ctx, const bool alloc, const ObTrxMsgBase& msg, const int64_t msg_type);
 
-  private:
+private:
   ObTransService* txs_;
   ObPartTransCtxMgr* part_trans_ctx_mgr_;
   ObCoordTransCtxMgr* coord_trans_ctx_mgr_;

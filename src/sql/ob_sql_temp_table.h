@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace sql {
 struct ObTempTableSqcInfo {
-  public:
+public:
   ObTempTableSqcInfo()
       : sqc_id_(0),
         temp_sqc_addr_(),
@@ -47,7 +47,7 @@ struct ObTempTableSqcInfo {
 };
 
 class ObSqlTempTableCtx {
-  public:
+public:
   ObSqlTempTableCtx() : temp_table_id_(0)
   {}
   virtual ~ObSqlTempTableCtx()
@@ -61,7 +61,7 @@ class ObSqlTempTableCtx {
 };
 
 class ObSqlTempTableInfo {
-  public:
+public:
   ObSqlTempTableInfo() : ref_table_id_(OB_INVALID_ID), table_name_(), table_query_(NULL), table_plan_(NULL)
   {}
   virtual ~ObSqlTempTableInfo()
@@ -76,7 +76,7 @@ class ObSqlTempTableInfo {
   }
   TO_STRING_KV(K_(ref_table_id), K_(table_name));
 
-  public:
+public:
   uint64_t ref_table_id_;
   common::ObString table_name_;
   ObSelectStmt* table_query_;

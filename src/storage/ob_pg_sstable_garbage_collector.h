@@ -19,17 +19,17 @@ namespace oceanbase {
 namespace storage {
 
 class ObPGSSTableGCTask : public common::ObTimerTask {
-  public:
+public:
   ObPGSSTableGCTask();
   virtual ~ObPGSSTableGCTask();
   virtual void runTimerTask() override;
 
-  private:
+private:
   static const int64_t ONE_ROUND_RECYCLE_COUNT_THRESHOLD = 100000L;
 };
 
 class ObPGSSTableGarbageCollector {
-  public:
+public:
   ObPGSSTableGarbageCollector();
   ~ObPGSSTableGarbageCollector();
   int init();
@@ -38,10 +38,10 @@ class ObPGSSTableGarbageCollector {
   void wait();
   void destroy();
 
-  private:
+private:
   int schedule_gc_task();
 
-  private:
+private:
   static const int64_t GC_INTERVAL_US = 1 * 1000 * 1000L;
   bool is_inited_;
   common::ObTimer timer_;

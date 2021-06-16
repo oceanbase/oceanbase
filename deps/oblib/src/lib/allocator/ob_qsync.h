@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace common {
 class ObQSync {
-  public:
+public:
   enum { MAX_REF_CNT = 256 };
   struct Ref {
     Ref() : ref_(0)
@@ -79,7 +79,7 @@ class ObQSync {
     return bool_ret;
   }
 
-  private:
+private:
   int64_t add_ref(int64_t idx, int64_t x)
   {
     int64_t ret = 0;
@@ -92,7 +92,7 @@ class ObQSync {
     return ret;
   }
 
-  private:
+private:
   Ref ref_array_[MAX_REF_CNT];
 };
 

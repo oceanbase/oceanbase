@@ -38,14 +38,14 @@ struct SqlAndError {
   int64_t expect_error;
 };
 class TestResolver : public TestSqlUtils, public ::testing::Test {
-  public:
+public:
   TestResolver();
   virtual ~TestResolver()
   {}
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestResolver);
 };

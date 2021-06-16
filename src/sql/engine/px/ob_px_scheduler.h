@@ -30,14 +30,14 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxRootDfoAction {
-  public:
+public:
   virtual int receive_channel_root_dfo(ObExecContext& ctx, ObDfo& parent, ObPxTaskChSets& parent_ch_sets) = 0;
   virtual int receive_channel_root_dfo(ObExecContext& ctx, ObDfo& parent, dtl::ObDtlChTotalInfo& ch_info) = 0;
 };
 
 // following infos are varibles on which scheduling depends.
 class ObPxCoordInfo {
-  public:
+public:
   ObPxCoordInfo(ObIAllocator& allocator, dtl::ObDtlChannelLoop& msg_loop, ObInterruptibleTaskID& interrupt_id)
       : dfo_mgr_(allocator),
         rpc_proxy_(),
@@ -60,7 +60,7 @@ class ObPxCoordInfo {
     piece_msg_ctx_mgr_.reset();
   }
 
-  public:
+public:
   ObDfoMgr dfo_mgr_;
   ObPieceMsgCtxMgr piece_msg_ctx_mgr_;
   obrpc::ObPxRpcProxy rpc_proxy_;
@@ -74,7 +74,7 @@ class ObPxCoordInfo {
 class ObDfoSchedulerBasic;
 
 class ObPxTerminateMsgProc : public ObIPxCoordMsgProc {
-  public:
+public:
   ObPxTerminateMsgProc(ObPxCoordInfo& coord_info, ObIPxCoordEventListener& listener)
       : coord_info_(coord_info), listener_(listener)
   {}
@@ -94,7 +94,7 @@ class ObPxTerminateMsgProc : public ObIPxCoordMsgProc {
   ObIPxCoordEventListener& listener_;
 };
 class ObPxMsgProc : public ObIPxCoordMsgProc {
-  public:
+public:
   ObPxMsgProc(ObPxCoordInfo& coord_info, ObIPxCoordEventListener& listener, ObPxRootDfoAction& root_dfo_action)
       : coord_info_(coord_info), listener_(listener), root_dfo_action_(root_dfo_action), scheduler_(NULL)
   {}
@@ -119,12 +119,12 @@ class ObPxMsgProc : public ObIPxCoordMsgProc {
   int on_piece_msg(ObExecContext& ctx, const ObBarrierPieceMsg& pkt);
   int on_piece_msg(ObExecContext& ctx, const ObWinbufPieceMsg& pkt);
   // end DATAHUB msg processing
-  private:
+private:
   int do_cleanup_dfo(ObDfo& dfo);
   int fast_dispatch_sqc(ObExecContext& exec_ctx, ObDfo& dfo, ObArray<ObPxSqcMeta*>& sqcs);
   int wait_for_dfo_finish(ObDfoMgr& dfo_mgr);
 
-  private:
+private:
   ObPxCoordInfo& coord_info_;
   ObIPxCoordEventListener& listener_;
   ObPxRootDfoAction& root_dfo_action_;

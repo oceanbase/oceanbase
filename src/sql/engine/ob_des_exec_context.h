@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDesExecContext : public ObExecContext {
-  public:
+public:
   explicit ObDesExecContext(ObSQLSessionMgr* session_mgr);
   ObDesExecContext(common::ObIAllocator& allocator, ObSQLSessionMgr* session_mgr);
   virtual ~ObDesExecContext();
@@ -29,21 +29,21 @@ class ObDesExecContext : public ObExecContext {
   void show_session();
   void hide_session();
 
-  protected:
+protected:
   ObFreeSessionCtx free_session_ctx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDesExecContext);
 };
 
 class ObDistributedExecContext : public ObDesExecContext {
-  public:
+public:
   explicit ObDistributedExecContext(ObSQLSessionMgr* session_mgr);
   ObDistributedExecContext(common::ObIAllocator& allocator, ObSQLSessionMgr* session_mgr);
   virtual ~ObDistributedExecContext();
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   const char* phy_plan_ctx_buf_;
   int64_t phy_plan_ctx_len_;
   const char* my_session_buf_;

@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace rootserver {
 class ObRsEventHistoryTableOperator : public share::ObEventHistoryTableOperator {
-  public:
+public:
   virtual ~ObRsEventHistoryTableOperator()
   {}
 
@@ -26,7 +26,7 @@ class ObRsEventHistoryTableOperator : public share::ObEventHistoryTableOperator 
 
   static ObRsEventHistoryTableOperator& get_instance();
 
-  private:
+private:
   ObRsEventHistoryTableOperator()
   {}
   DISALLOW_COPY_AND_ASSIGN(ObRsEventHistoryTableOperator);

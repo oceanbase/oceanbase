@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObRawExprPrintVisitor : public ObRawExprVisitor {
-  public:
+public:
   explicit ObRawExprPrintVisitor(ObRawExpr& expr_root);
   virtual ~ObRawExprPrintVisitor();
 
@@ -32,13 +32,13 @@ class ObRawExprPrintVisitor : public ObRawExprVisitor {
   virtual int visit(ObSetOpRawExpr& expr);
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprPrintVisitor);
   // function members
-  private:
+private:
   // data members
   ObRawExpr& expr_root_;
   mutable char* buf_;

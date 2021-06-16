@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObExprLike : public ObFuncExprOperator {
   class ObExprLikeContext : public ObExprOperatorCtx {
-    public:
+  public:
     enum INSTR_MODE {
       START_WITH_PERCENT_SIGN = 0,      //"%%a",etc
       START_END_WITH_PERCENT_SIGN = 1,  //"%abc%%",etc
@@ -91,7 +91,7 @@ class ObExprLike : public ObFuncExprOperator {
   };
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObExprLike(common::ObIAllocator& alloc);
   virtual ~ObExprLike();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
@@ -138,7 +138,7 @@ class ObExprLike : public ObFuncExprOperator {
 
   static int like_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   enum STATE {
     INIT = 0,
     PERCENT = 1,                     //"%", "%%", "%%%",etc
@@ -170,7 +170,7 @@ class ObExprLike : public ObFuncExprOperator {
       const common::ObString pattern_val, bool null_escape, const common::ObString escape_val, bool is_static_engine);
   DISALLOW_COPY_AND_ASSIGN(ObExprLike);
 
-  private:
+private:
   // we may perform optimization via instr only when it holds that
   // is_text_literal_ == false and is_pattern_literal_ == true and is_escape_literal_ == true
   bool is_pattern_literal_;

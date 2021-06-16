@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprUnixTimestamp : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprUnixTimestamp(common::ObIAllocator& alloc);
   virtual ~ObExprUnixTimestamp();
   virtual int calc_result_typeN(
@@ -30,7 +30,7 @@ class ObExprUnixTimestamp : public ObFuncExprOperator {
   static int eval_unix_timestamp(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   int calc_result_type_literal(ObExprResType& type, ObExprResType& type1) const;
   int calc_result_type_column(ObExprResType& type, ObExprResType& type1) const;
   // disallow copy

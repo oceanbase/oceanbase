@@ -22,7 +22,7 @@ class ObExecContext;
 class ObTaskInfo;
 class ObTask;
 class ObRemoteTaskExecutor : public ObTaskExecutor {
-  public:
+public:
   ObRemoteTaskExecutor();
   virtual ~ObRemoteTaskExecutor();
   virtual int execute(ObExecContext& query_ctx, ObJob* job, ObTaskInfo* task_info);
@@ -31,10 +31,10 @@ class ObRemoteTaskExecutor : public ObTaskExecutor {
     ObTaskExecutor::reset();
   }
 
-  private:
+private:
   int build_task(ObExecContext& query_ctx, ObJob& job, ObTaskInfo& task_info, ObTask& task);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRemoteTaskExecutor);
 };
 }  // namespace sql

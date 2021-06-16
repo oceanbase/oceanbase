@@ -47,7 +47,7 @@ namespace obrpc {
 class ObElectionRpcResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionRpcResult() : status_(common::OB_SUCCESS), send_timestamp_(0L)
   {}
   ~ObElectionRpcResult()
@@ -78,40 +78,40 @@ class ObElectionRpcResult {
 
   TO_STRING_KV(K_(status), K_(send_timestamp));
 
-  private:
+private:
   int status_;
   int64_t send_timestamp_;
   DISALLOW_COPY_AND_ASSIGN(ObElectionRpcResult);
 };
 
 class ObElectionRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObElectionRpcProxy);
   RPC_AP(PR1 post_election_msg, OB_ELECTION, (election::ObElectionMsgBuffer), ObElectionRpcResult);
 };
 
 class ObElectionP : public ObRpcProcessor<obrpc::ObElectionRpcProxy::ObRpc<OB_ELECTION> > {
-  public:
+public:
   // ObElectionP(election::ObIElectionMgr *election_mgr) : election_mgr_(election_mgr) {}
   ObElectionP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObElectionP()
   {}
 
-  public:
+public:
   static void statistics(const int64_t fly_us, const int64_t wait_us, const int64_t handle_us);
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   static const int64_t STATISTICS_INTERVAL = 5 * 1000 * 1000;
   static int64_t total_fly_us_;
   static int64_t total_wait_us_;
   static int64_t total_handle_us_;
   static int64_t total_process_;
 
-  private:
+private:
   // election::ObIElectionMgr *election_mgr_;
   storage::ObPartitionService* partition_service_;
   DISALLOW_COPY_AND_ASSIGN(ObElectionP);
@@ -119,7 +119,7 @@ class ObElectionP : public ObRpcProcessor<obrpc::ObElectionRpcProxy::ObRpc<OB_EL
 
 template <ObRpcPacketCode PC>
 class ObElectionRPCCB : public ObElectionRpcProxy::AsyncCB<PC> {
-  public:
+public:
   ObElectionRPCCB() : is_inited_(false), election_mgr_(NULL)
   {}
   virtual ~ObElectionRPCCB()
@@ -140,11 +140,11 @@ class ObElectionRPCCB : public ObElectionRpcProxy::AsyncCB<PC> {
     return newcb;
   }
 
-  public:
+public:
   int process();
   void on_timeout();
 
-  private:
+private:
   bool is_inited_;
   election::ObIElectionMgr* election_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObElectionRPCCB);
@@ -217,7 +217,7 @@ void ObElectionRPCCB<PC>::on_timeout()
 namespace election {
 
 class ObIElectionRpc {
-  public:
+public:
   ObIElectionRpc()
   {}
   virtual ~ObIElectionRpc()
@@ -225,7 +225,7 @@ class ObIElectionRpc {
   virtual int init(obrpc::ObElectionRpcProxy* rpc_proxy, ObIElectionMgr* election_mgr, const common::ObAddr& self) = 0;
   virtual void destroy() = 0;
 
-  public:
+public:
   virtual int post_election_msg(const common::ObAddr& server, const int64_t cluster_id,
       const common::ObPartitionKey& partition, const ObElectionMsg& msg) = 0;
   virtual int post_election_group_msg(const common::ObAddr& server, const int64_t cluster_id,
@@ -233,7 +233,7 @@ class ObIElectionRpc {
 };
 
 class ObElectionRpc : public ObIElectionRpc {
-  public:
+public:
   ObElectionRpc() : is_inited_(false), rpc_proxy_(NULL), election_mgr_(NULL)
   {}
   ~ObElectionRpc()
@@ -243,16 +243,16 @@ class ObElectionRpc : public ObIElectionRpc {
   int init(obrpc::ObElectionRpcProxy* rpc_proxy, ObIElectionMgr* election_mgr, const common::ObAddr& self);
   void destroy();
 
-  public:
+public:
   int post_election_msg(const common::ObAddr& server, const int64_t cluster_id, const common::ObPartitionKey& partition,
       const ObElectionMsg& msg);
   int post_election_group_msg(const common::ObAddr& server, const int64_t cluster_id, const ObElectionGroupId& eg_id,
       const ObPartArrayBuffer& part_array_buf, const ObElectionMsg& msg);
 
-  private:
+private:
   static const int64_t MAX_PROCESS_HANDLER_TIME = 10 * 1000;
 
-  private:
+private:
   bool is_inited_;
   obrpc::ObElectionRpcProxy* rpc_proxy_;
   obrpc::ObElectionRPCCB<obrpc::OB_ELECTION> election_cb_;
@@ -262,7 +262,7 @@ class ObElectionRpc : public ObIElectionRpc {
 };
 
 class ObElectionBatchRpc : public ObIElectionRpc {
-  public:
+public:
   ObElectionBatchRpc() : rpc_(NULL)
   {}
   ~ObElectionBatchRpc()
@@ -285,13 +285,13 @@ class ObElectionBatchRpc : public ObIElectionRpc {
   void destroy()
   {}
 
-  public:
+public:
   int post_election_msg(const common::ObAddr& server, const int64_t cluster_id, const common::ObPartitionKey& partition,
       const ObElectionMsg& msg);
   int post_election_group_msg(const common::ObAddr& server, const int64_t cluster_id, const ObElectionGroupId& eg_id,
       const ObPartArrayBuffer& part_array_buf, const ObElectionMsg& msg);
 
-  private:
+private:
   obrpc::ObBatchRpc* rpc_;
   DISALLOW_COPY_AND_ASSIGN(ObElectionBatchRpc);
 };

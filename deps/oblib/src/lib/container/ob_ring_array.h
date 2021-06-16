@@ -25,7 +25,7 @@ inline ObQSync& get_rb_qs()
 }
 template <typename T>
 class ObRingArray {
-  public:
+public:
   typedef ObLink Link;
   ObRingArray() : alloc_(NULL)
   {}
@@ -120,7 +120,7 @@ class ObRingArray {
     return ret;
   }
 
-  private:
+private:
   void try_purge()
   {
     Link* del_list = NULL;
@@ -135,7 +135,7 @@ class ObRingArray {
     }
   }
 
-  private:
+private:
   static int64_t get_start_pos(int64_t idx)
   {
     return idx * sizeof(T);
@@ -145,7 +145,7 @@ class ObRingArray {
     return (idx + 1) * sizeof(T);
   }
 
-  private:
+private:
   common::ObIAllocator* alloc_;
   ObRingBuffer rbuffer_;
   DISALLOW_COPY_AND_ASSIGN(ObRingArray);

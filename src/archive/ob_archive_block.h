@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace archive {
 
 class ObArchiveBlockMeta {
-  public:
+public:
   ObArchiveBlockMeta();
   ~ObArchiveBlockMeta();
 
@@ -83,7 +83,7 @@ class ObArchiveBlockMeta {
       K(min_log_ts_in_file_), K(max_log_id_), K(max_checkpoint_ts_), K(max_log_submit_ts_), K(input_bytes_),
       K(output_bytes_), K(data_checksum_), K(meta_checksum_));
 
-  private:
+private:
   int generate_block_(const char* buf, const int64_t data_len);
   int64_t calc_data_checksum_(const char* buf, const int64_t data_len) const;
   int64_t calc_meta_checksum_() const;
@@ -91,7 +91,7 @@ class ObArchiveBlockMeta {
   // 0x4142 AB means ARCHIVE BLOCK
   static const int16_t META_MAGIC = oceanbase::share::ObBackupFileType::BACKUP_ARCHIVE_BLOCK_META;
 
-  public:
+public:
   static const int16_t ARCHIVE_BLOCK_VERSION = 1;
   //!!!!attention: remember to modify RESERVED_FOR_BLOCK when sizeof(*this) exceeds 200
   int16_t magic_;

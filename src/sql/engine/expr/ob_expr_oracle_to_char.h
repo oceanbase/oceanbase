@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprToCharCommon : public ObStringExprOperator {
-  public:
+public:
   using ObStringExprOperator::ObStringExprOperator;
 
   static int number_to_char(
@@ -33,7 +33,7 @@ class ObExprToCharCommon : public ObStringExprOperator {
 
   static int eval_oracle_to_char(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  protected:
+protected:
   static int interval_to_char(
       common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx);
 
@@ -73,7 +73,7 @@ class ObExprToCharCommon : public ObStringExprOperator {
 };
 
 class ObExprOracleToChar : public ObExprToCharCommon {
-  public:
+public:
   explicit ObExprOracleToChar(common::ObIAllocator& alloc);
   virtual ~ObExprOracleToChar();
   virtual int calc_result_typeN(
@@ -83,7 +83,7 @@ class ObExprOracleToChar : public ObExprToCharCommon {
 };
 
 class ObExprOracleToNChar : public ObExprToCharCommon {
-  public:
+public:
   explicit ObExprOracleToNChar(common::ObIAllocator& alloc);
   virtual ~ObExprOracleToNChar();
   virtual int calc_result_typeN(

@@ -41,7 +41,7 @@ struct ObYsonToString {
     return pos;
   }
 
-  private:
+private:
   char* yson_buf_;
   int64_t yson_buf_len_;
 };

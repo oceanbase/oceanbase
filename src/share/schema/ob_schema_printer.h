@@ -39,16 +39,16 @@ class ObColumnSchemaV2;
 class ObSchemaGetterGuard;
 
 class ObSchemaPrinter {
-  public:
+public:
   explicit ObSchemaPrinter(ObSchemaGetterGuard& schema_guard);
   virtual ~ObSchemaPrinter()
   {}
 
-  private:
+private:
   ObSchemaPrinter();
   DISALLOW_COPY_AND_ASSIGN(ObSchemaPrinter);
 
-  public:
+public:
   int print_table_definition(uint64_t table_id, char* buf, const int64_t& buf_len, int64_t& pos,
       const common::ObTimeZoneInfo* tz_info, const common::ObLengthSemantics default_length_semantics,
       bool agent_mode) const;
@@ -155,7 +155,7 @@ class ObSchemaPrinter {
   int print_hash_partition_elements(const ObPartitionSchema*& schema, char* buf, const int64_t& buf_len, int64_t& pos,
       bool agent_mode, const common::ObTimeZoneInfo* tz_info) const;
 
-  private:
+private:
   ObSchemaGetterGuard& schema_guard_;
 };
 

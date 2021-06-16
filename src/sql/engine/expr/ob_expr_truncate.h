@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprTruncate : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprTruncate(common::ObIAllocator& alloc);
   virtual ~ObExprTruncate(){};
 
@@ -31,7 +31,7 @@ class ObExprTruncate : public ObFuncExprOperator {
   static int set_trunc_val(
       common::ObObj& result, common::number::ObNumber& nmb, common::ObExprCtx& expr_ctx, common::ObObjType res_type);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprTruncate);
 };
 }  // namespace sql

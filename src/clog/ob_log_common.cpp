@@ -22,7 +22,7 @@ namespace clog {
 char ObNewLogFileBuf::buf_[CLOG_DIO_ALIGN_SIZE] __attribute__((aligned(CLOG_DIO_ALIGN_SIZE)));
 
 static class NEW_LOG_FILE_BUF_CONSTRUCTOR {
-  public:
+public:
   NEW_LOG_FILE_BUF_CONSTRUCTOR()
   {
     const char* mark_str = "NL";

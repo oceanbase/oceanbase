@@ -127,12 +127,12 @@ struct PxInfo {
 };
 
 class ObPxResourceAnalyzer {
-  public:
+public:
   ObPxResourceAnalyzer();
   ~ObPxResourceAnalyzer() = default;
   int analyze(ObLogicalOperator& root_op, int64_t& max_parallel_thread_group_count);
 
-  private:
+private:
   int convert_log_plan_to_nested_px_tree(common::ObIArray<PxInfo>& px_trees, ObLogicalOperator& root_op);
   int create_dfo_tree(ObIArray<PxInfo>& px_trees, ObLogExchange& root_op);
   int do_split(common::ObIArray<PxInfo>& px_trees, PxInfo& px_info, ObLogicalOperator& root_op, DfoInfo* parent_dfo);
@@ -140,7 +140,7 @@ class ObPxResourceAnalyzer {
   int walk_through_dfo_tree(PxInfo& px_root, int64_t& max_parallel_thread_group_count);
   int create_dfo(DfoInfo*& dfo, int64_t dop);
 
-  private:
+private:
   /* variables */
   common::ObArenaAllocator dfo_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObPxResourceAnalyzer);

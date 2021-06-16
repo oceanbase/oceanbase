@@ -19,18 +19,18 @@
 namespace oceanbase {
 namespace sql {
 class ObExprField : public ObVectorExprOperator {
-  public:
+public:
   explicit ObExprField(common::ObIAllocator& alloc);
   virtual ~ObExprField(){};
   virtual int assign(const ObExprOperator& other);
 
-  public:
+public:
   // serialize and deserialize
   virtual int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
   virtual int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
   virtual int64_t get_serialize_size() const;
 
-  public:
+public:
   virtual int calc_result_typeN(
       ObExprResType& type, ObExprResType* type_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
 
@@ -49,10 +49,10 @@ class ObExprField : public ObVectorExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_field(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprField);
 
-  private:
+private:
   bool need_cast_;
 };
 

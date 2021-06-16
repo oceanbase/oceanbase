@@ -21,13 +21,13 @@ using namespace common;
 using namespace transaction;
 namespace unittest {
 class TestObTransMemStat : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
   {}
 
-  public:
+public:
   static const char* LOCAL_IP;
   static const int32_t PORT = 8080;
   static const ObAddr::VER IP_TYPE = ObAddr::IPV4;

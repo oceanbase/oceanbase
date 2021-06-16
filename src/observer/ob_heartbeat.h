@@ -25,7 +25,7 @@ namespace observer {
 class ObServerSchemaUpdater;
 
 class ObHeartBeatProcess : public observer::IHeartBeatProcess {
-  public:
+public:
   ObHeartBeatProcess(
       const ObGlobalContext& gctx, ObServerSchemaUpdater& schema_updater, ObLeaseStateMgr& lease_state_mgr);
   virtual ~ObHeartBeatProcess();
@@ -37,15 +37,15 @@ class ObHeartBeatProcess : public observer::IHeartBeatProcess {
   int update_lease_info();
   int try_update_infos();
 
-  private:
+private:
   class ObZoneLeaseInfoUpdateTask : public common::ObTimerTask {
-    public:
+  public:
     explicit ObZoneLeaseInfoUpdateTask(ObHeartBeatProcess& hb_process);
     virtual ~ObZoneLeaseInfoUpdateTask();
 
     virtual void runTimerTask();
 
-    private:
+  private:
     ObHeartBeatProcess& hb_process_;
   };
 
@@ -53,7 +53,7 @@ class ObHeartBeatProcess : public observer::IHeartBeatProcess {
   int try_reload_config(const int64_t config_version);
   int try_reload_time_zone_info(const int64_t time_zone_info_version);
 
-  private:
+private:
   bool inited_;
   ObZoneLeaseInfoUpdateTask update_task_;
   share::ObZoneLeaseInfo zone_lease_info_;
@@ -63,7 +63,7 @@ class ObHeartBeatProcess : public observer::IHeartBeatProcess {
   ObServerSchemaUpdater& schema_updater_;
   ObLeaseStateMgr& lease_state_mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHeartBeatProcess);
 };
 

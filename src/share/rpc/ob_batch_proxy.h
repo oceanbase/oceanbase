@@ -67,7 +67,7 @@ inline int get_batch_thread_idx(const int batch_type)
 }
 
 class ObIFill {
-  public:
+public:
   ObIFill()
   {}
   virtual ~ObIFill()
@@ -93,7 +93,7 @@ struct ObSimpleReqHeader {
 struct ObBatchPacket {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   typedef ObSimpleReqHeader Req;
   ObBatchPacket() : size_(0), id_(0), src_(0), buf_(nullptr), src_addr_()
   {}
@@ -138,7 +138,7 @@ struct ObBatchPacket {
 };
 
 class ObBatchRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObBatchRpcProxy);
   RPC_AP(PR1 post_packet, OB_BATCH, (ObBatchPacket));
   int post_batch(uint64_t tenant_id, const common::ObAddr& addr, const int64_t cluster_id, ObBatchPacket& pkt);

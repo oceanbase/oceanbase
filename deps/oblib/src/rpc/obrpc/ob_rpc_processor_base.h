@@ -26,10 +26,10 @@ namespace obrpc {
 class ObRpcSessionHandler;
 class ObRpcStreamCond;
 class ObRpcProcessorBase : public rpc::frame::ObReqProcessor {
-  public:
+public:
   static constexpr int64_t DEFAULT_WAIT_NEXT_PACKET_TIMEOUT = 30 * 1000 * 1000L;
 
-  public:
+public:
   ObRpcProcessorBase()
       : rpc_pkt_(NULL),
         sh_(NULL),
@@ -76,7 +76,7 @@ class ObRpcProcessorBase : public rpc::frame::ObReqProcessor {
     return cluster_id;
   }
 
-  protected:
+protected:
   struct Response {
     Response(int64_t sessid, bool is_stream, bool is_stream_last, bool bad_routing, ObRpcPacket* pkt)
         : sessid_(sessid), is_stream_(is_stream), is_stream_last_(is_stream_last), bad_routing_(bad_routing), pkt_(pkt)
@@ -113,7 +113,7 @@ class ObRpcProcessorBase : public rpc::frame::ObReqProcessor {
     result_compress_type_ = t;
   }
 
-  protected:
+protected:
   int part_response(const int retcode, bool is_last);
   int do_response(const Response& rsp);
   void compress_result(const char* src_buf, int64_t src_len, char* dst_buf, int64_t dst_len, ObRpcPacket* pkt);
@@ -140,13 +140,13 @@ class ObRpcProcessorBase : public rpc::frame::ObReqProcessor {
   }
   virtual void cleanup();
 
-  protected:
+protected:
   virtual int decode_base(const char* buf, const int64_t len, int64_t& pos) = 0;
   virtual int m_get_pcode() = 0;
   virtual int encode_base(char* buf, const int64_t len, int64_t& pos) = 0;
   virtual int64_t m_get_encoded_length() = 0;
 
-  protected:
+protected:
   const ObRpcPacket* rpc_pkt_;
   ObRpcSessionHandler* sh_;
   ObRpcStreamCond* sc_;
@@ -180,7 +180,7 @@ class ObRpcProcessorBase : public rpc::frame::ObReqProcessor {
   common::ObCompressorType result_compress_type_;
   const uint64_t unis_version_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcProcessorBase);
 };  // end of class ObRpcProcessorBase
 

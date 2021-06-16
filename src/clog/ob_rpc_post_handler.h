@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace clog {
 class ObILogRpc;
 class ObRpcPostHandler : public share::ObThreadPool {
-  public:
+public:
   struct Task;
   ObRpcPostHandler() : rpc_(NULL)
   {}
@@ -37,11 +37,11 @@ class ObRpcPostHandler : public share::ObThreadPool {
   void wait();
   void destroy();
 
-  private:
+private:
   void run1();
   int handle_task();
 
-  private:
+private:
   const static int64_t WAIT_TASK_TIMEOUT = 100 * 1000;
   ObILogRpc* rpc_;
   common::ObLinkQueue queue_;

@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprFromUnixTime : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFromUnixTime(common::ObIAllocator& alloc);
   virtual ~ObExprFromUnixTime();
   virtual int calc_result_typeN(
@@ -38,7 +38,7 @@ class ObExprFromUnixTime : public ObFuncExprOperator {
 
   static int eval_fromtime_special(const ObExpr& expr, ObEvalCtx& eval_ctx, ObDatum& expr_datum);
 
-  private:
+private:
   static int calc(
       common::ObObj& result, const common::ObObj& param, const common::ObObj& format, common::ObExprCtx& expr_ctx);
   static int get_usec(const common::ObObj& param, common::ObExprCtx& expr_ctx, int64_t& value);

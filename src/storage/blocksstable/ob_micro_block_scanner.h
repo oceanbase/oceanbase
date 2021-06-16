@@ -26,7 +26,7 @@ class ObStoreRow;
 }
 namespace blocksstable {
 class ObMicroBlockScanner {
-  public:
+public:
   ObMicroBlockScanner();
   ~ObMicroBlockScanner();
   void reset();
@@ -120,12 +120,12 @@ class ObMicroBlockScanner {
     return ret;
   }
 
-  private:
+private:
   int locate_range_pos(const common::ObStoreRange& range, const bool is_left_bound_block,
       const bool is_right_bound_block, int64_t& begin, int64_t& end);
   int set_reader(const common::ObRowStoreType sotre_type);
 
-  private:
+private:
   int set_base_scan_param(const common::ObStoreRange& range, const bool is_bound_block, const bool is_reverse_scan);
   inline int end_of_block() const
   {
@@ -148,7 +148,7 @@ class ObMicroBlockScanner {
     return ret;
   }
 
-  private:
+private:
   ObIMicroBlockReader* reader_;
   ObMicroBlockReader flat_reader_;
   ObSparseMicroBlockReader sparse_reader_;  // for dumpsstable

@@ -18,18 +18,18 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
 class ObExprInTest : public ::testing::Test {
-  public:
+public:
   ObExprInTest();
   virtual ~ObExprInTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprInTest(const ObExprInTest& other);
   ObExprInTest& operator=(const ObExprInTest& other);
 
-  protected:
+protected:
   // data members
 };
 
@@ -2330,8 +2330,8 @@ TEST_F(ObExprInTest, basic_test)
   /// 2, datetime, 3); /  R(ObIntType, 1, 8, 2, 4, timestamp, 1, timestamp, 2, timestamp, 2, timestamp, 1, timestamp, 1,
   /// timestamp, 2, timestamp, 2, timestamp, 3); /  R(ObIntType, 1, 8, 2, 4, date, 1, date, 2, date, 2, date, 1, date,
   /// 1, date, 2, date, 2, date, 3); /  R(ObIntType, 1, 8, 2, 4, time, 1, time, 2, time, 2, time, 1, time, 1, time, 2,
-  /// time, 2, time, 3); /  R(ObIntType, 1, 8, 2, 4, year, 1, year, 2, year, 2, year, 1, year, 1, year, 2, year, 2, year,
-  /// 3);
+  /// time, 2, time, 3); /  R(ObIntType, 1, 8, 2, 4, year, 1, year, 2, year, 2, year, 1, year, 1, year, 2, year, 2,
+  /// year, 3);
 
   // string
   R(ObIntType,

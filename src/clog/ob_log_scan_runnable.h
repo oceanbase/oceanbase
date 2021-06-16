@@ -25,22 +25,22 @@ namespace clog {
 class ObIPartitionLogService;
 class ObILogEngine;
 class ObLogScanRunnable : public share::ObThreadPool {
-  public:
+public:
   static const int64_t MAX_THREAD_CNT = FILE_RANGE_THREAD_CNT;
   static const int64_t MINI_MODE_THREAD_CNT = MINI_MODE_FILE_RANGE_THREAD_CNT;
 
-  public:
+public:
   ObLogScanRunnable();
   virtual ~ObLogScanRunnable();
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service, ObILogEngine* log_engine);
   int start();
   void stop();
   void wait();
   void destroy();
 
-  public:
+public:
   // ObLogScanRunnable:
   // 1. Load file_id_cache;
   // 2. Get the next_index_log_id of each partition and update it in partition log service;
@@ -56,14 +56,14 @@ class ObLogScanRunnable : public share::ObThreadPool {
   bool is_before_scan() const;
   bool is_scan_finished() const;
 
-  private:
+private:
   class LocateFileRangeTimerTask : public common::ObTimerTask {
-    public:
+  public:
     LocateFileRangeTimerTask();
     ~LocateFileRangeTimerTask()
     {}
 
-    public:
+  public:
     int init(ObLogScanRunnable* host, const int64_t thread_index, const file_id_t start_file_id,
         const file_id_t last_file_id);
     virtual void runTimerTask();
@@ -76,39 +76,39 @@ class ObLogScanRunnable : public share::ObThreadPool {
       return result_file_id_;
     }
 
-    private:
+  private:
     ObLogScanRunnable* host_;
     int64_t thread_index_;
     file_id_t start_file_id_;
     file_id_t last_file_id_;
     file_id_t result_file_id_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(LocateFileRangeTimerTask);
   };
 
   class ScanTimerTask : public common::ObTimerTask {
-    public:
+  public:
     ScanTimerTask();
     ~ScanTimerTask()
     {}
 
-    public:
+  public:
     int init(ObLogScanRunnable* host, const int64_t scan_thread_index, const file_id_t start_file_id,
         const file_id_t last_file_id);
     virtual void runTimerTask();
 
-    private:
+  private:
     ObLogScanRunnable* host_;
     int64_t scan_thread_index_;
     file_id_t start_file_id_;
     file_id_t last_file_id_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ScanTimerTask);
   };
 
-  private:
+private:
   void do_scan_log_();
   int fill_file_id_cache_();
   int set_next_index_log_id_();
@@ -141,7 +141,7 @@ class ObLogScanRunnable : public share::ObThreadPool {
   int do_locate_file_range_(const int64_t thread_index, const file_id_t start_file_id, const file_id_t last_file_id);
   int wait_locate_task_finished_() const;
 
-  private:
+private:
   enum ScanState { BEFORE_SCAN = 1, SCANNING = 2, SCAN_FINISHED = 3 };
   bool is_inited_;
   bool is_stopped_;
@@ -156,7 +156,7 @@ class ObLogScanRunnable : public share::ObThreadPool {
   int file_range_th_cnt_;
   int scan_th_cnt_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogScanRunnable);
 };
 }  // namespace clog

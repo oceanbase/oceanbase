@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObAlterUserPrimaryZoneResolver : public ObDCLResolver {
-  public:
+public:
   explicit ObAlterUserPrimaryZoneResolver(ObResolverParams& params);
   virtual ~ObAlterUserPrimaryZoneResolver();
   virtual int resolve(const ParseNode& parse_tree);

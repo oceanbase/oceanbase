@@ -27,10 +27,10 @@ class ObILogNetTask;
 class ObConfirmedInfo;
 class ObLogTask;
 class MockObLogEngine : public ObILogEngine {
-  public:
+public:
   typedef ObDiskBufferTask FlushTask;
 
-  public:
+public:
   MockObLogEngine()
   {}
   ~MockObLogEngine()
@@ -554,7 +554,7 @@ class MockObLogEngine : public ObILogEngine {
     return ret;
   }
 
-  private:
+private:
   ObIndexInfoBlockHandler fake_handler_;
   ObLogDir si_dir_;
   ObLogDir ui_dir_;

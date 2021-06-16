@@ -20,16 +20,16 @@
 namespace oceanbase {
 namespace common {
 class ObReloadConfig {
-  public:
+public:
   explicit ObReloadConfig(ObServerConfig* conf) : conf_(conf){};
   virtual ~ObReloadConfig()
   {}
   virtual int operator()();
 
-  protected:
+protected:
   ObServerConfig* conf_;
 
-  private:
+private:
   int reload_ob_logger_set();
   DISALLOW_COPY_AND_ASSIGN(ObReloadConfig);
 };

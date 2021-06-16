@@ -15,14 +15,14 @@
 namespace oceanbase {
 namespace sql {
 class ObDTLDataChannelGroup {
-  public:
+public:
   ObDTLDataChannelGroup();
   virtual ~ObDTLDataChannelGroup();
   int wait(int64_t timeout_ts);
   int notify();
   int add_channel_info(ObDtlChannelInfo& producer, common::ObIArray<ObDtlChannelInfo>& consumers);
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObDTLDataChannelGroup);

@@ -78,15 +78,15 @@ const uint64_t* ob_get_crc64_table();
 class ObBatchChecksum {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // The ob_crc64 function has obvious advantages in calculating integer multiples of 64 bytes
   static const int64_t BUFFER_SIZE = 64;
 
-  public:
+public:
   ObBatchChecksum() : pos_(0), base_(0){};
   ~ObBatchChecksum(){};
 
-  public:
+public:
   inline void reset()
   {
     pos_ = 0;
@@ -131,7 +131,7 @@ class ObBatchChecksum {
   }
   TO_STRING_KV(K_(pos), K_(base), K_(buffer));
 
-  private:
+private:
   char buffer_[BUFFER_SIZE];
   int64_t pos_;
   uint64_t base_;

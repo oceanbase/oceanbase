@@ -25,7 +25,7 @@ namespace common {
  * deps/oblib/src/lib/mysqlclient/ob_mysql_result_impl.cpp for raw type.
  */
 class ObHexUtilsBase {
-  public:
+public:
   static int unhex(const ObString& text, ObIAllocator& alloc, ObObj& result);
   static int hex(const ObString& text, ObIAllocator& alloc, ObObj& result);
 };

@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace common {
 
 class ObErasureCodeTest : public testing::Test {
-  public:
+public:
   const static int64_t BUFFER_TEST_LEN = DATA_BLOCK_SIZE;
   const static int64_t SMALL_BUFFER_TEST_LEN = BUFFER_TEST_LEN / 8;
 

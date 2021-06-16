@@ -28,19 +28,19 @@ using namespace transaction;
 using namespace storage;
 namespace unittest {
 class ObLogReplayEngineTest : public testing::Test {
-  public:
+public:
   void init();
   void destroy();
   char* get_log_buf(storage::ObStorageLogType log_type, int64_t trans_id, int64_t& buf_len);
   char* get_log_buf(storage::ObStorageLogType log_type, int64_t& buf_len);
   char* get_invalid_log_buf(storage::ObStorageLogType log_type, int64_t& buf_len);
 
-  protected:
+protected:
   replayengine::ObLogReplayEngine* log_replay_engine_;
   common::ObPartitionKey partition_key_;
   common::ObPartitionKey ignored_partition_key_;
 
-  protected:
+protected:
   char buffer[1024];
   MockPartitionService mock_partition_service_;
   MockObTransService mock_trans_replay_service_;

@@ -33,7 +33,7 @@ namespace obmysql {
  */
 
 class OMPKPrepare : public ObMySQLPacket {
-  public:
+public:
   OMPKPrepare() : status_(0), statement_id_(0), column_num_(0), param_num_(0), reserved_(0), warning_count_(0)
   {}
   virtual ~OMPKPrepare()
@@ -62,7 +62,7 @@ class OMPKPrepare : public ObMySQLPacket {
     warning_count_ = count;
   }
 
-  private:
+private:
   uint8_t status_;
   uint32_t statement_id_;
   uint16_t column_num_;

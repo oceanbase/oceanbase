@@ -18,18 +18,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObExprHexTest : public ::testing::Test {
-  public:
+public:
   ObExprHexTest();
   virtual ~ObExprHexTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprHexTest(const ObExprHexTest& other);
   ObExprHexTest& operator=(const ObExprHexTest& other);
 
-  private:
+private:
   // data members
 };
 ObExprHexTest::ObExprHexTest()

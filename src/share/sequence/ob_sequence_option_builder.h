@@ -20,14 +20,14 @@ namespace oceanbase {
 namespace share {
 class ObSequenceOption;
 class ObSequenceOptionBuilder {
-  public:
+public:
   ObSequenceOptionBuilder() = default;
   ~ObSequenceOptionBuilder() = default;
   static int build_create_sequence_option(const common::ObBitSet<>& opt_bitset, share::ObSequenceOption& opt_new);
   static int build_alter_sequence_option(
       const common::ObBitSet<>& opt_bitset, const share::ObSequenceOption& opt_old, share::ObSequenceOption& opt_new);
 
-  private:
+private:
   static int pre_check_sequence_option(const share::ObSequenceOption& opt);
   static int check_sequence_option(const common::ObBitSet<>& opt_bitset, const share::ObSequenceOption& opt);
   static int check_sequence_option_integer(const common::ObBitSet<>& opt_bitset, const share::ObSequenceOption& option);

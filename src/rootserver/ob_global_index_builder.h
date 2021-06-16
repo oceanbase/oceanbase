@@ -60,13 +60,13 @@ class ObRebalanceTask;
 class ObFreezeInfoManager;
 
 class ObGlobalIndexBuilderIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObGlobalIndexBuilderIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual ~ObGlobalIndexBuilderIdling()
   {}
 
-  public:
+public:
   virtual int64_t get_idle_interval_us()
   {
     return 3600LL * 1000LL * 1000LL;
@@ -161,7 +161,7 @@ enum BuildSingleReplicaStat {
 };
 
 struct ObGlobalIndexTask {
-  public:
+public:
   ObGlobalIndexTask();
   virtual ~ObGlobalIndexTask();
 
@@ -202,46 +202,39 @@ class ObGlobalIndexBuilder : public ObRsReentrantThread, public sql::ObIndexSSTa
   typedef common::hash::ObHashMap<uint64_t, ObGlobalIndexTask*>::iterator task_iterator;
   typedef common::hash::ObHashMap<uint64_t, ObGlobalIndexTask*>::const_iterator const_task_iterator;
 
-  public:
+public:
   ObGlobalIndexBuilder();
   virtual ~ObGlobalIndexBuilder();
 
-  public:
+public:
   virtual void run3() override;
-  virtual int blocking_run() override { BLOCKING_RUN_IMPLEMENT(); }
-  int init(
-      obrpc::ObSrvRpcProxy *rpc_proxy,
-      common::ObMySQLProxy *mysql_proxy,
-      rootserver::ObServerManager *server_mgr,
-      share::ObPartitionTableOperator *pt_operator,
-      rootserver::ObRebalanceTaskMgr *rebalance_task_mgr,
-      rootserver::ObDDLService *ddl_service,
-      share::schema::ObMultiVersionSchemaService *schema_service,
-      rootserver::ObZoneManager *zone_mgr,
-      rootserver::ObFreezeInfoManager *freeze_info_manager);
+  virtual int blocking_run() override
+  {
+    BLOCKING_RUN_IMPLEMENT();
+  }
+  int init(obrpc::ObSrvRpcProxy* rpc_proxy, common::ObMySQLProxy* mysql_proxy, rootserver::ObServerManager* server_mgr,
+      share::ObPartitionTableOperator* pt_operator, rootserver::ObRebalanceTaskMgr* rebalance_task_mgr,
+      rootserver::ObDDLService* ddl_service, share::schema::ObMultiVersionSchemaService* schema_service,
+      rootserver::ObZoneManager* zone_mgr, rootserver::ObFreezeInfoManager* freeze_info_manager);
   int reload_building_indexes();
   int on_build_single_replica_reply(const uint64_t index_table_id, int64_t snapshot, int ret_code);
   int on_col_checksum_calculation_reply(
       const uint64_t index_table_id, const common::ObPartitionKey& pkey, const int ret_code);
   int on_check_unique_index_reply(const common::ObPartitionKey& pkey, const int ret_code, const bool is_unique);
   int on_copy_multi_replica_reply(const ObRebalanceTask& rebalance_task);
-  virtual int pick_data_replica(
-      const common::ObPartitionKey &pkey,
-      const common::ObIArray<common::ObAddr> &previous,
-      common::ObAddr &server) override;
-  virtual int pick_index_replica(
-      const common::ObPartitionKey &pkey,
-      const common::ObIArray<common::ObAddr> &previous,
-      common::ObAddr &server) override;
-  int submit_build_global_index_task(
-      const share::schema::ObTableSchema *index_schema);
+  virtual int pick_data_replica(const common::ObPartitionKey& pkey, const common::ObIArray<common::ObAddr>& previous,
+      common::ObAddr& server) override;
+  virtual int pick_index_replica(const common::ObPartitionKey& pkey, const common::ObIArray<common::ObAddr>& previous,
+      common::ObAddr& server) override;
+  int submit_build_global_index_task(const share::schema::ObTableSchema* index_schema);
   void stop() override;
+
 private:
-  static const int64_t BUILD_SINGLE_REPLICA_TIMEOUT = 2LL * 3600LL * 1000000LL; // 2h
-  static const int64_t COPY_MULTI_REPLICA_TIMEOUT = 2LL * 3600LL * 1000000LL; // 2h
-  static const int64_t UNIQUE_INDEX_CHECK_TIMEOUT = 2LL * 3600LL * 1000000LL; // 2h
-  static const int64_t UNIQUE_INDEX_CALC_CHECKSUM_TIMEOUT = 2LL * 3600LL * 1000000LL; // 2h
-  static const int64_t TASK_RETRY_TIME_INTERVAL_US = 10LL * 1000000LL; // 10s
+  static const int64_t BUILD_SINGLE_REPLICA_TIMEOUT = 2LL * 3600LL * 1000000LL;        // 2h
+  static const int64_t COPY_MULTI_REPLICA_TIMEOUT = 2LL * 3600LL * 1000000LL;          // 2h
+  static const int64_t UNIQUE_INDEX_CHECK_TIMEOUT = 2LL * 3600LL * 1000000LL;          // 2h
+  static const int64_t UNIQUE_INDEX_CALC_CHECKSUM_TIMEOUT = 2LL * 3600LL * 1000000LL;  // 2h
+  static const int64_t TASK_RETRY_TIME_INTERVAL_US = 10LL * 1000000LL;                 // 10s
   static const int64_t COPY_MULTI_REPLICA_RETRY_UPPER_LMT = 3;
   static const int64_t THREAD_CNT = 1;
   static const int64_t TASK_MAP_BUCKET_NUM = 256;
@@ -312,7 +305,7 @@ private:
     common::ObAddr server_;
   };
 
-  private:
+private:
   int try_drive(ObGlobalIndexTask* task);
   int get_task_count_in_lock(int64_t& task_cnt);
   int fill_global_index_task_result(common::sqlclient::ObMySQLResult* result, ObGlobalIndexTask* task);
@@ -383,7 +376,7 @@ private:
   int do_build_single_replica(
       ObGlobalIndexTask* task, const share::schema::ObTableSchema* index_schema, const int64_t snapshot);
 
-  private:
+private:
   int try_build_single_replica(ObGlobalIndexTask* task);
   int try_copy_multi_replica(ObGlobalIndexTask* task);
   int try_unique_index_calc_checksum(ObGlobalIndexTask* task);
@@ -392,13 +385,13 @@ private:
   int try_handle_index_build_failed(ObGlobalIndexTask* task);
   int try_handle_index_build_finish(ObGlobalIndexTask* task);
 
-  private:
+private:
   int clear_intermediate_result(ObGlobalIndexTask* task);
   int reset_run_condition();
   int check_task_dropped(const ObGlobalIndexTask& task, bool& is_dropped);
   int delete_task_record(const ObGlobalIndexTask& task);
 
-  private:
+private:
   bool inited_;
   bool loaded_;
   obrpc::ObSrvRpcProxy* rpc_proxy_;

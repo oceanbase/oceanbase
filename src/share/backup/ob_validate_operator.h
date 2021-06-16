@@ -31,19 +31,19 @@ class ObMySQLResult;
 namespace share {
 
 class ObIBackupValidateOperator {
-  public:
+public:
   ObIBackupValidateOperator() = default;
   virtual ~ObIBackupValidateOperator() = default;
   static int fill_one_item(const ObBackupValidateTaskItem& item, share::ObDMLSqlSplicer& splicer);
   static int get_backup_validate_task(const common::ObSqlString& sql, common::ObISQLClient& sql_proxy,
       common::ObIArray<ObBackupValidateTaskItem>& items);
 
-  private:
+private:
   static int extract_validate_task(common::sqlclient::ObMySQLResult* result, ObBackupValidateTaskItem& item);
 };
 
 class ObBackupValidateOperator {
-  public:
+public:
   ObBackupValidateOperator() = default;
   virtual ~ObBackupValidateOperator() = default;
   static int insert_task(const ObBackupValidateTaskItem& item, common::ObISQLClient& sql_client);
@@ -60,7 +60,7 @@ class ObBackupValidateOperator {
 };
 
 class ObBackupValidateHistoryOperator {
-  public:
+public:
   ObBackupValidateHistoryOperator() = default;
   virtual ~ObBackupValidateHistoryOperator() = default;
   static int insert_task(const ObBackupValidateTaskItem& item, common::ObISQLClient& sql_client);
@@ -72,19 +72,19 @@ class ObBackupValidateHistoryOperator {
 };
 
 class ObITenantValidateTaskOperator {
-  public:
+public:
   ObITenantValidateTaskOperator() = default;
   virtual ~ObITenantValidateTaskOperator() = default;
   static int fill_one_item(const ObTenantValidateTaskItem& item, share::ObDMLSqlSplicer& splicer);
   static int get_tenant_validate_task(const uint64_t tenant_id, const common::ObSqlString& sql,
       common::ObISQLClient& sql_proxy, common::ObIArray<ObTenantValidateTaskItem>& items);
 
-  private:
+private:
   static int extract_tenant_task(common::sqlclient::ObMySQLResult* result, ObTenantValidateTaskItem& item);
 };
 
 class ObTenantValidateTaskOperator {
-  public:
+public:
   ObTenantValidateTaskOperator() = default;
   virtual ~ObTenantValidateTaskOperator() = default;
   static int insert_task(
@@ -109,7 +109,7 @@ class ObTenantValidateTaskOperator {
 };
 
 class ObTenantValidateHistoryOperator {
-  public:
+public:
   ObTenantValidateHistoryOperator() = default;
   virtual ~ObTenantValidateHistoryOperator() = default;
   static int insert_task(const ObTenantValidateTaskItem& item, common::ObISQLClient& sql_client);
@@ -122,7 +122,7 @@ class ObTenantValidateHistoryOperator {
 };
 
 class ObPGValidateTaskOperator {
-  public:
+public:
   ObPGValidateTaskOperator() = default;
   virtual ~ObPGValidateTaskOperator() = default;
 
@@ -160,7 +160,7 @@ class ObPGValidateTaskOperator {
       common::ObISQLClient& sql_client, const common::ObPartitionKey& pkey,
       const ObPGValidateTaskInfo::ValidateStatus& status, const int32_t result);
 
-  private:
+private:
   static int fill_one_item(const ObPGValidateTaskItem& item, share::ObDMLSqlSplicer& splicer);
   static int get_pg_validate_task(const uint64_t tenant_id, const common::ObSqlString& sql,
       common::ObISQLClient& sql_proxy, common::ObIArray<ObPGValidateTaskItem>& items);

@@ -28,11 +28,11 @@ class ObStmt;
 class ObSQLSessionInfo;
 
 class ObSqlTransHook {
-  public:
+public:
   static int before_end_trans(ObSQLSessionInfo* session);
   static int after_end_trans(ObSQLSessionInfo* session, ObExclusiveEndTransCallback& callback, int64_t timeout);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlTransHook);
 };
 

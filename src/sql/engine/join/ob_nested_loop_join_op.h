@@ -21,18 +21,18 @@ namespace sql {
 class ObNestedLoopJoinSpec : public ObBasicNestedLoopJoinSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   static const int64_t DEFAULT_BATCH_SIZE = 1000;
   ObNestedLoopJoinSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObBasicNestedLoopJoinSpec(alloc, type), use_group_(false), batch_size_(DEFAULT_BATCH_SIZE)
   {}
 
-  public:
+public:
   // for group nested loop join.
   bool use_group_;
   int64_t batch_size_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNestedLoopJoinSpec);
 };
 
@@ -47,7 +47,7 @@ class ObNestedLoopJoinSpec : public ObBasicNestedLoopJoinSpec {
 // Overwrite in blank_right_row(), right child is iterated end when blanked.
 //
 class ObNestedLoopJoinOp : public ObBasicNestedLoopJoinOp {
-  public:
+public:
   enum ObJoinState { JS_JOIN_END = 0, JS_READ_LEFT, JS_READ_RIGHT, JS_STATE_COUNT };
   enum ObFuncType { FT_ITER_GOING = 0, FT_ITER_END, FT_TYPE_COUNT };
 
@@ -69,7 +69,7 @@ class ObNestedLoopJoinOp : public ObBasicNestedLoopJoinOp {
     ObBasicNestedLoopJoinOp::destroy();
   }
 
-  private:
+private:
   // state operation and transfer function type.
   typedef int (ObNestedLoopJoinOp::*state_operation_func_type)();
   typedef int (ObNestedLoopJoinOp::*state_function_func_type)();
@@ -94,7 +94,7 @@ class ObNestedLoopJoinOp : public ObBasicNestedLoopJoinOp {
   // used for rescan and switch iter
   virtual void reset_buf_state();
 
-  public:
+public:
   ObJoinState state_;
   // for bnl join
   lib::MemoryContext* mem_context_;
@@ -104,7 +104,7 @@ class ObNestedLoopJoinOp : public ObBasicNestedLoopJoinOp {
   ObChunkDatumStore::ShadowStoredRow<> last_store_row_;
   bool save_last_row_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNestedLoopJoinOp);
 };
 

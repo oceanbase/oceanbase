@@ -36,7 +36,7 @@ int deserialization(_archive& ar, _value& value)
 }
 
 class SimpleArchive {
-  public:
+public:
   SimpleArchive() : fd_(-1)
   {}
   ~SimpleArchive()
@@ -46,7 +46,7 @@ class SimpleArchive {
     }
   };
 
-  public:
+public:
   int init(const char* filename, int flag)
   {
     int ret = OB_SUCCESS;
@@ -108,17 +108,17 @@ class SimpleArchive {
     return ret;
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(SimpleArchive);
 
-  public:
+public:
   static const int FILE_OPEN_RFLAG = O_CREAT | O_RDONLY;
   static const int FILE_OPEN_WFLAG = O_CREAT | O_TRUNC | O_WRONLY;
 
-  private:
+private:
   static const mode_t FILE_OPEN_MODE = S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;
 
-  private:
+private:
   int fd_;
 };
 

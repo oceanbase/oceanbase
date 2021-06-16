@@ -205,9 +205,9 @@ int ObPartitionLoopWorker::generate_weak_read_timestamp(const int64_t max_stale_
     }
   } else if (!readable_info.is_valid()) {
     if (is_restore) {
-      //ignore pg in restore
+      // ignore pg in restore
       ret = OB_STATE_NOT_MATCH;
-      if (REACH_TIME_INTERVAL(2 *1000 * 1000L)) {
+      if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
         STORAGE_LOG(WARN, "partition is in restore, just ignore", K(ret), K_(pkey), K(readable_info));
       }
     } else {

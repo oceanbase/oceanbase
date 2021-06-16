@@ -36,13 +36,13 @@ class ObOutlineInfo;
 namespace observer {
 
 class ObTenantVirtualOutlineBase : public common::ObVirtualTableIterator {
-  protected:
+protected:
   struct DBInfo {
     common::ObString db_name_;
     bool is_recycle_;
   };
 
-  public:
+public:
   ObTenantVirtualOutlineBase()
       : tenant_id_(common::OB_INVALID_TENANT_ID),
         outline_info_idx_(common::OB_INVALID_INDEX),
@@ -58,17 +58,17 @@ class ObTenantVirtualOutlineBase : public common::ObVirtualTableIterator {
     tenant_id_ = tenant_id;
   }
 
-  protected:
+protected:
   int is_database_recycle(uint64_t database_id, bool& is_recycle);
   int set_database_infos_and_get_value(uint64_t database_id, bool& is_recycle);
 
-  protected:
+protected:
   uint64_t tenant_id_;
   int64_t outline_info_idx_;
   common::ObSEArray<const share::schema::ObOutlineInfo*, 16> outline_infos_;
   common::hash::ObHashMap<uint64_t, DBInfo> database_infos_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantVirtualOutlineBase);
 };
 
@@ -85,7 +85,7 @@ class ObTenantVirtualOutline : public ObTenantVirtualOutlineBase {
     OUTLINE_SQL = OB_APP_MIN_COLUMN_ID + 8,
   };
 
-  public:
+public:
   ObTenantVirtualOutline() : ObTenantVirtualOutlineBase()
   {}
   ~ObTenantVirtualOutline()
@@ -93,11 +93,11 @@ class ObTenantVirtualOutline : public ObTenantVirtualOutlineBase {
   void reset();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int fill_cells(const share::schema::ObOutlineInfo* outline_info);
   int is_output_outline(const share::schema::ObOutlineInfo* outline_info, bool& is_output);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantVirtualOutline);
 };
 }  // namespace observer

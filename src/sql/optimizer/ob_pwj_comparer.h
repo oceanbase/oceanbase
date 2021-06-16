@@ -74,7 +74,7 @@ struct PwjTable {
 typedef common::hash::ObHashMap<uint64_t, PartitionIdArray, common::hash::NoPthreadDefendMode> PWJPartitionIdMap;
 
 class ObPwjComparer {
-  public:
+public:
   ObPwjComparer(bool is_strict)
       : is_strict_(is_strict),
         pwj_tables_(),
@@ -182,7 +182,7 @@ class ObPwjComparer {
 
   TO_STRING_KV(K_(is_strict), K_(pwj_tables), K_(partition_id_group));
 
-  private:
+private:
   bool is_strict_;
   common::ObSEArray<PwjTable, 32, common::ModulePageAllocator, true> pwj_tables_;
   common::ObSEArray<std::pair<int64_t, int64_t>, 32, common::ModulePageAllocator, true> part_id_map_;

@@ -25,7 +25,7 @@ namespace common {
 
 template <int64_t N = common::OB_DEFAULT_BITSET_SIZE, typename BlockAllocatorT = ModulePageAllocator>
 class ObSegmentBitSet {
-  public:
+public:
   template <int64_t, typename>
   friend class ObSegmentBitSet;
 
@@ -124,7 +124,7 @@ class ObSegmentBitSet {
   }
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   static const int64_t PER_BITSETWORD_MOD_BITS = 5;
   static const int64_t PER_BITSETWORD_BITS = (1 << PER_BITSETWORD_MOD_BITS);
   static const int64_t PER_BITSETWORD_MASK = PER_BITSETWORD_BITS - 1;
@@ -184,7 +184,7 @@ template <int64_t N = common::OB_DEFAULT_BITSET_SIZE>
 class ObFixedBitSet {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   typedef uint32_t BitSetWord;
 
   ObFixedBitSet()
@@ -225,7 +225,7 @@ class ObFixedBitSet {
     }
   }
 
-  private:
+private:
   static const int64_t PER_BITSETWORD_MOD_BITS = 5;
   static const int64_t PER_BITSETWORD_BITS = (1 << PER_BITSETWORD_MOD_BITS);
   static const int64_t PER_BITSETWORD_MASK = PER_BITSETWORD_BITS - 1;
@@ -434,7 +434,7 @@ OB_SERIALIZE_MEMBER_TEMP(template <int64_t N>, ObFixedBitSet<N>, bitset_word_arr
 template <int64_t N = common::OB_DEFAULT_BITSET_SIZE, typename BlockAllocatorT = ModulePageAllocator,
     bool auto_free = false>
 class ObBitSet {
-  public:
+public:
   template <int64_t, typename, bool>
   friend class ObBitSet;
 
@@ -583,7 +583,7 @@ class ObBitSet {
   }
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   static const int64_t PER_BITSETWORD_MOD_BITS = 5;
   static const int64_t PER_BITSETWORD_BITS = (1 << PER_BITSETWORD_MOD_BITS);
   static const int64_t PER_BITSETWORD_MASK = PER_BITSETWORD_BITS - 1;

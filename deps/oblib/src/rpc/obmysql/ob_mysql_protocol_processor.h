@@ -25,7 +25,7 @@ namespace obmysql {
 class ObMysqlPktContext;
 
 class ObMysqlProtocolProcessor : public ObVirtualCSProtocolProcessor {
-  public:
+public:
   ObMysqlProtocolProcessor(ObMySQLHandler& handler) : ObVirtualCSProtocolProcessor(handler)
   {}
   virtual ~ObMysqlProtocolProcessor()
@@ -34,7 +34,7 @@ class ObMysqlProtocolProcessor : public ObVirtualCSProtocolProcessor {
   virtual int decode(easy_message_t* m, rpc::ObPacket*& pkt) override;
   virtual int process(easy_request_t* r, bool& is_going_on) override;
 
-  protected:
+protected:
   int decode_hsr_body(easy_message_t& m, const uint32_t pktlen, const uint8_t pktseq, rpc::ObPacket*& pkt);
   int decode_sslr_body(easy_message_t& m, const uint32_t pktlen, const uint8_t pktseq, rpc::ObPacket*& pkt);
 
@@ -57,7 +57,7 @@ class ObMysqlProtocolProcessor : public ObVirtualCSProtocolProcessor {
 
   int process_mysql_packet(easy_connection_t& c, easy_pool_t& pool, void*& ipacket, bool& need_decode_more);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMysqlProtocolProcessor);
 };
 

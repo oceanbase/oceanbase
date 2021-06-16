@@ -19,10 +19,10 @@
 namespace oceanbase {
 namespace sql {
 class ObMergeIntersect : public ObMergeSetOperator {
-  private:
+private:
   class ObMergeIntersectCtx;
 
-  public:
+public:
   explicit ObMergeIntersect(common::ObIAllocator& alloc);
   virtual ~ObMergeIntersect();
   virtual int rescan(ObExecContext& ctx) const;
@@ -31,7 +31,7 @@ class ObMergeIntersect : public ObMergeSetOperator {
 
   virtual void set_distinct(bool is_distinct);
 
-  private:
+private:
   int distinct_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   int all_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   /**
@@ -60,7 +60,7 @@ class ObMergeIntersect : public ObMergeSetOperator {
    */
   virtual int inner_close(ObExecContext& ctx) const;
 
-  private:
+private:
   typedef int (ObMergeIntersect::*GetNextRowFunc)(ObExecContext& ctx, const common::ObNewRow*& row) const;
   GetNextRowFunc get_next_row_func_;
   DISALLOW_COPY_AND_ASSIGN(ObMergeIntersect);

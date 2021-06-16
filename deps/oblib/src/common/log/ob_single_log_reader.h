@@ -23,10 +23,10 @@
 namespace oceanbase {
 namespace common {
 class ObSingleLogReader {
-  public:
+public:
   static const int64_t LOG_BUFFER_MAX_LENGTH;
 
-  public:
+public:
   ObSingleLogReader();
   virtual ~ObSingleLogReader();
 
@@ -88,18 +88,18 @@ class ObSingleLogReader {
     dio_ = false;
   }
 
-  protected:
+protected:
   int read_header(ObLogEntry& entry);
   int trim_last_zero_padding(int64_t header_size);
   int open_with_lucky(const uint64_t file_id, const uint64_t last_log_seq);
 
-  protected:
+protected:
   /**
    * Read data from the log file to the read buffer
    */
   int read_log_();
 
-  protected:
+protected:
   bool is_inited_;                           // Initialization tag
   uint64_t file_id_;                         // Log file id
   uint64_t last_log_seq_;                    // Last log (Mutator) serial number

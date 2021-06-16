@@ -23,7 +23,7 @@ class ObPartitionKey;
 namespace sql {
 class ObSystemCmdStmt;
 class ObAlterSystemResolverUtil {
-  public:
+public:
   static int sanity_check(const ParseNode* parse_tree, ObItemType item_type);
 
   // resolve opt_ip_port
@@ -54,7 +54,7 @@ class ObAlterSystemResolverUtil {
 
 #define DEF_SIMPLE_CMD_RESOLVER(name)                            \
   class name : public ObSystemCmdResolver {                      \
-    public:                                                      \
+  public:                                                        \
     name(ObResolverParams& params) : ObSystemCmdResolver(params) \
     {}                                                           \
     virtual ~name()                                              \
@@ -148,38 +148,38 @@ DEF_SIMPLE_CMD_RESOLVER(ObBackupSetEncryptionResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupSetDecryptionResolver);
 
 class ObPhysicalRestoreTenantResolver : public ObSystemCmdResolver {
-  public:
+public:
   ObPhysicalRestoreTenantResolver(ObResolverParams& params) : ObSystemCmdResolver(params)
   {}
   virtual ~ObPhysicalRestoreTenantResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int resolve_decryption_passwd(obrpc::ObPhysicalRestoreTenantArg& arg);
 };
 
 class ObAlterSystemSetResolver : public ObSystemCmdResolver {
-  public:
+public:
   ObAlterSystemSetResolver(ObResolverParams& params) : ObSystemCmdResolver(params)
   {}
   virtual ~ObAlterSystemSetResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int check_param_valid(int64_t tenant_id, const common::ObString& name_node, const common::ObString& value_node);
 };
 
 class ObSetConfigResolver : public ObSystemCmdResolver {
-  public:
+public:
   ObSetConfigResolver(ObResolverParams& params) : ObSystemCmdResolver(params)
   {}
   virtual ~ObSetConfigResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int check_param_valid(int64_t tenant_id, const common::ObString& name_node, const common::ObString& value_node);
 };
 

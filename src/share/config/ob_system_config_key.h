@@ -23,7 +23,7 @@
 namespace oceanbase {
 namespace common {
 class ObSystemConfigKey {
-  public:
+public:
   ObSystemConfigKey();
   virtual ~ObSystemConfigKey()
   {}
@@ -51,7 +51,7 @@ class ObSystemConfigKey {
   int64_t get_version() const;
   int64_t to_string(char* buf, const int64_t len) const;
 
-  private:
+private:
   static const char* DEFAULT_VALUE;
   ObZone zone_;
   int64_t server_port_;

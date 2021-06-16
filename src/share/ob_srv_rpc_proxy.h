@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace obrpc {
 
 class ObSrvRpcProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObSrvRpcProxy);
 
   // special usage when can't deliver request.

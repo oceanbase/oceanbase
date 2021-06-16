@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace common {
 template <typename T, const char* LABEL, int64_t LOCAL_ARRAY_SIZE>
 class ObSimpleIterator {
-  public:
+public:
   ObSimpleIterator() : item_arr_(LABEL, OB_MALLOC_NORMAL_BLOCK_SIZE)
   {
     reset();
@@ -40,7 +40,7 @@ class ObSimpleIterator {
   }
   int get_next(T& item);
 
-  private:
+private:
   bool is_ready_;
   typename common::ObSEArray<T, LOCAL_ARRAY_SIZE> item_arr_;
   typename common::ObSEArray<T, LOCAL_ARRAY_SIZE>::iterator it_;

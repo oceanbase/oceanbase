@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObServerTraceMap : public share::ObIServerTrace {
-  public:
+public:
   ObServerTraceMap();
   virtual ~ObServerTraceMap();
   int init();
@@ -34,7 +34,7 @@ class ObServerTraceMap : public share::ObIServerTrace {
   virtual int is_server_stopped(const common::ObAddr& server, bool& is_stopped) const;
   int refresh();
 
-  private:
+private:
   static const int64_t DEFAULT_SERVER_COUNT = 2048;
   bool is_inited_;
   mutable common::SpinRWLock lock_;
@@ -43,21 +43,21 @@ class ObServerTraceMap : public share::ObIServerTrace {
 };
 
 class ObServerTraceTask : public common::ObTimerTask {
-  public:
+public:
   ObServerTraceTask();
   virtual ~ObServerTraceTask();
   int init(ObServerTraceMap* trace_map, int tg_id);
   virtual void runTimerTask();
   TO_STRING_KV(KP_(trace_map));
 
-  private:
+private:
   const static int64_t REFRESH_INTERVAL_US = 5L * 1000 * 1000;
   ObServerTraceMap* trace_map_;
   bool is_inited_;
 };
 
 class ObAllServerTracer : public share::ObIServerTrace {
-  public:
+public:
   static ObAllServerTracer& get_instance();
   int init(int tg_id, ObServerTraceTask& trace_task);
   virtual int is_server_exist(const common::ObAddr& server, bool& exist) const;
@@ -67,11 +67,11 @@ class ObAllServerTracer : public share::ObIServerTrace {
   virtual int is_server_stopped(const common::ObAddr& server, bool& is_stopped) const;
   virtual int check_migrate_in_blocked(const common::ObAddr& addr, bool& is_block) const;
 
-  private:
+private:
   ObAllServerTracer();
   virtual ~ObAllServerTracer();
 
-  private:
+private:
   bool is_inited_;
   ObServerTraceMap trace_map_;
 };

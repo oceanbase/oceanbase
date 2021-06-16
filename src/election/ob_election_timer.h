@@ -32,7 +32,7 @@ class ObIElectionRpc;
 
 // election base task
 class ObElectionTask : public common::ObTimeWheelTask {
-  public:
+public:
   ObElectionTask()
   {
     reset();
@@ -43,7 +43,7 @@ class ObElectionTask : public common::ObTimeWheelTask {
   int init(ObIElectionTimerP* e, ObElectionTimer* timer, ObIElectionRpc* rpc);
   void reset();
 
-  public:
+public:
   void set_run_time_expect(const int64_t ts)
   {
     run_time_expect_ = ts;
@@ -76,10 +76,10 @@ class ObElectionTask : public common::ObTimeWheelTask {
   virtual uint64_t hash() const;
   bool is_valid() const;
 
-  public:
+public:
   virtual int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  protected:
+protected:
   bool is_inited_;
   bool is_running_;
   ObIElectionTimerP* e_;
@@ -91,7 +91,7 @@ class ObElectionTask : public common::ObTimeWheelTask {
 
 // election GT1 timer task
 class ObElectionGT1Task : public ObElectionTask {
-  public:
+public:
   ObElectionGT1Task()
   {
     reset();
@@ -103,13 +103,13 @@ class ObElectionGT1Task : public ObElectionTask {
   void reset();
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   int64_t candidate_index_;
 };
 
 // election GT2 timer task
 class ObElectionGT2Task : public ObElectionTask {
-  public:
+public:
   ObElectionGT2Task()
   {
     reset();
@@ -124,7 +124,7 @@ class ObElectionGT2Task : public ObElectionTask {
 
 // election GT3 timer task
 class ObElectionGT3Task : public ObElectionTask {
-  public:
+public:
   ObElectionGT3Task()
   {
     reset();
@@ -139,7 +139,7 @@ class ObElectionGT3Task : public ObElectionTask {
 
 // election GT4 timer task
 class ObElectionGT4Task : public ObElectionTask {
-  public:
+public:
   ObElectionGT4Task()
   {
     reset();
@@ -154,7 +154,7 @@ class ObElectionGT4Task : public ObElectionTask {
 
 // election ChangeLeader Timer task
 class ObElectionChangeLeaderTask : public ObElectionTask {
-  public:
+public:
   ObElectionChangeLeaderTask()
   {
     reset();
@@ -169,7 +169,7 @@ class ObElectionChangeLeaderTask : public ObElectionTask {
 
 // election timer
 class ObElectionTimer {
-  public:
+public:
   ObElectionTimer();
   ~ObElectionTimer();
   int init(ObIElectionTimerP* e, common::ObTimeWheel* tw, ObIElectionRpc* rpc);
@@ -178,20 +178,20 @@ class ObElectionTimer {
   int start(const int64_t start);
   int stop();
   int try_stop();  // don't wait
-  public:
+public:
   int register_gt1_once(const int64_t run_time_expect, int64_t& delay);
   int register_gt2_once(const int64_t run_time_expect, int64_t& delay);
   int register_gt3_once(const int64_t run_time_expect, int64_t& delay);
   int register_gt4_once(const int64_t run_time_expect, int64_t& delay);
   int register_change_leader_once(const int64_t run_time_expect, int64_t& delay);
 
-  private:
+private:
   template <typename GT>
   int register_gt_once_(GT& gt, const int64_t run_time_expect, int64_t& delay);
   template <typename GT>
   int unregister_gt_(GT& gt);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   ObIElectionTimerP* e_;

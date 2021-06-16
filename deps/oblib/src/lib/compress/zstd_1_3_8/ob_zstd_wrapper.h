@@ -31,7 +31,7 @@ typedef struct {
 #define OB_PUBLIC_API __attribute__((visibility("default")))
 
 class OB_PUBLIC_API ObZstdWrapper final {
-  public:
+public:
   // for normal
   static int compress(OB_ZSTD_customMem& zstd_mem, const char* src_buffer, const size_t src_data_size, char* dst_buffer,
       const size_t dst_buffer_size, size_t& compress_ret_size);

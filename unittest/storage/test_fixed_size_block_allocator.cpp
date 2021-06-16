@@ -17,13 +17,13 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
 class FixedSizeBlockAllocatorTest : public ::testing::Test {
-  public:
+public:
   FixedSizeBlockAllocatorTest();
   virtual ~FixedSizeBlockAllocatorTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   FixedSizeBlockAllocatorTest(const FixedSizeBlockAllocatorTest& other);
   FixedSizeBlockAllocatorTest& operator=(const FixedSizeBlockAllocatorTest& other);

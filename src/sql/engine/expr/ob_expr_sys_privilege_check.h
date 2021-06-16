@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprSysPrivilegeCheck : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSysPrivilegeCheck(common::ObIAllocator& alloc);
   virtual ~ObExprSysPrivilegeCheck();
   virtual int calc_result_typeN(
@@ -28,7 +28,7 @@ class ObExprSysPrivilegeCheck : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_sys_privilege_check(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   static int check_show_priv(bool& allow_show, ObExecContext& exec_ctx, const common::ObString& level,
       const uint64_t tenant_id, const common::ObString& db_name, const common::ObString& table_name);
   DISALLOW_COPY_AND_ASSIGN(ObExprSysPrivilegeCheck);

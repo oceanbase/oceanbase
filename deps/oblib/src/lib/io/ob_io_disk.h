@@ -31,7 +31,7 @@ enum ObDiskAdminStatus {
 };
 
 struct ObDiskMemoryStat {
-  public:
+public:
   ObDiskMemoryStat() : used_request_cnt_(0), used_buf_size_(0), used_cache_block_cnt_(0)
   {}
   virtual ~ObDiskMemoryStat()
@@ -46,14 +46,14 @@ struct ObDiskMemoryStat {
   }
   TO_STRING_KV(K_(used_request_cnt), K_(used_buf_size), K_(used_cache_block_cnt));
 
-  public:
+public:
   int64_t used_request_cnt_;
   int64_t used_buf_size_;
   int64_t used_cache_block_cnt_;
 };
 
 class ObDiskDiagnose {
-  public:
+public:
   ObDiskDiagnose();
   virtual ~ObDiskDiagnose();
   void record_read_fail(const int64_t retry_cnt);
@@ -72,7 +72,7 @@ class ObDiskDiagnose {
   TO_STRING_KV(K_(is_disk_error), K_(disk_error_begin_ts), K_(disk_error_last_ts), K_(last_read_failure_warn_ts),
       K_(write_failure_cnt));
 
-  private:
+private:
   // more than 100 times of write failure per second, the disk is considered broken
   static const int64_t WRITE_FAILURE_DETECT_EVENT_CNT = 100;
   ObSpinLock lock_;
@@ -85,7 +85,7 @@ class ObDiskDiagnose {
 };
 
 class ObDisk : public lib::TGRunnable {
-  public:
+public:
   static const int64_t DEFAULT_SYS_IO_PERCENT = 10;
   static const int64_t DEFAULT_SYS_IOPS = 1000;
   static const int64_t DEFAULT_SYS_LOWER_IO_BANDWIDTH = 128 * 1024 * 1024;
@@ -155,10 +155,10 @@ class ObDisk : public lib::TGRunnable {
 
   TO_STRING_KV(K_(fd), K_(ref_cnt), K_(admin_status));
 
-  private:
+private:
   int update_request_deadline(ObIORequest& req);
 
-  private:
+private:
   bool inited_;
   ObDiskFd fd_;
   int64_t ref_cnt_;
@@ -191,7 +191,7 @@ class ObDisk : public lib::TGRunnable {
 typedef ObPointerHolder<ObDisk> DiskHolder;
 
 class ObIOFaultDetector : public lib::TGTaskHandler {
-  public:
+public:
   ObIOFaultDetector();
   virtual ~ObIOFaultDetector();
   int init();
@@ -199,7 +199,7 @@ class ObIOFaultDetector : public lib::TGTaskHandler {
   void submit_retry_task(const ObIOInfo& info, const uint64_t timeout_ms);
   void handle(void* task);
 
-  private:
+private:
   static const int64_t TASK_NUM = 100;
   static const int64_t THREAD_NUM = 1;
 
@@ -210,12 +210,12 @@ class ObIOFaultDetector : public lib::TGTaskHandler {
 
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIOFaultDetector);
 };
 
 class ObDiskGuard {
-  public:
+public:
   ObDiskGuard() : disk_(NULL)
   {}
   virtual ~ObDiskGuard();
@@ -228,13 +228,13 @@ class ObDiskGuard {
   void reset();
   TO_STRING_KV(KP_(disk));
 
-  private:
+private:
   ObDisk* disk_;
   DISALLOW_COPY_AND_ASSIGN(ObDiskGuard);
 };
 
 class ObDiskManager {
-  public:
+public:
   static const int64_t MAX_DISK_NUM =
       common::OB_MAX_DISK_NUMBER;  // replace MAX_DISK_NUM with disk_number_limit_ in cpp
   ObDiskManager();
@@ -264,11 +264,11 @@ class ObDiskManager {
   // simple get
   int get_disk_with_guard(const ObDiskFd& fd, ObDiskGuard& guard);
 
-  private:
+private:
   ObDisk* get_disk(const ObDiskFd& fd);
   bool is_disk_exist(const ObDiskFd& fd);
 
-  private:
+private:
   bool inited_;
   int32_t disk_count_;
   int32_t disk_number_limit_;

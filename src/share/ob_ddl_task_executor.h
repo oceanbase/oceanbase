@@ -34,7 +34,7 @@ enum ObIDDLTaskType {
 };
 
 class ObIDDLTask : public common::ObDLinkBase<ObIDDLTask> {
-  public:
+public:
   explicit ObIDDLTask(const ObIDDLTaskType task_type)
       : need_retry_(false), task_id_(), is_inited_(false), type_(task_type)
   {}
@@ -65,7 +65,7 @@ class ObIDDLTask : public common::ObDLinkBase<ObIDDLTask> {
            common::OB_REPLICA_NOT_READABLE == ret_code;
   }
 
-  protected:
+protected:
   typedef common::ObCurTraceId::TraceId TaskId;
   bool need_retry_;
   TaskId task_id_;
@@ -74,7 +74,7 @@ class ObIDDLTask : public common::ObDLinkBase<ObIDDLTask> {
 };
 
 class ObDDLTaskQueue {
-  public:
+public:
   ObDDLTaskQueue();
   virtual ~ObDDLTaskQueue();
   int init(
@@ -85,7 +85,7 @@ class ObDDLTaskQueue {
   int add_task_to_last(ObIDDLTask* task);
   void destroy();
 
-  private:
+private:
   typedef common::ObDList<ObIDDLTask> TaskList;
   typedef common::hash::ObHashSet<const ObIDDLTask*, common::hash::NoPthreadDefendMode,
       common::hash::hash_func<const ObIDDLTask*>, common::hash::equal_to<const ObIDDLTask*> >
@@ -98,7 +98,7 @@ class ObDDLTaskQueue {
 };
 
 class ObDDLTaskExecutor : public lib::TGRunnable {
-  public:
+public:
   ObDDLTaskExecutor();
   virtual ~ObDDLTaskExecutor();
   int init(const int64_t task_num, int tg_id);
@@ -109,7 +109,7 @@ class ObDDLTaskExecutor : public lib::TGRunnable {
   void stop();
   void wait();
 
-  private:
+private:
   static const int64_t BATCH_EXECUTE_COUNT = 1000;
   static const int64_t CHECK_TASK_INTERVAL = 100;  // 100ms
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;

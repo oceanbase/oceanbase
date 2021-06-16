@@ -23,13 +23,13 @@ class ObLogCursor;
 namespace storage {
 
 class ObServerCheckpointLogReaderV1 final {
-  public:
+public:
   ObServerCheckpointLogReaderV1() = default;
   ~ObServerCheckpointLogReaderV1() = default;
   int read_checkpoint_and_replay_log(
       blocksstable::ObSuperBlockV2& super_block, common::ObIArray<blocksstable::MacroBlockId>& meta_block_list);
 
-  private:
+private:
   int read_checkpoint(blocksstable::ObSuperBlockV2& super_block, common::ObLogCursor& cursor,
       common::ObIArray<blocksstable::MacroBlockId>& meta_block_list);
   int set_replay_log_seq_num(blocksstable::ObSuperBlockV2& super_block);

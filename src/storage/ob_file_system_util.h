@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace storage {
 class ObFileSystemUtil final {
-  public:
+public:
   static int open_tenant_info_file(const common::ObAddr& svr_addr, const uint64_t tenant_id, const int64_t file_id,
       const int open_flag, blocksstable::ObStorageFile*& tenant_info_file);
 
@@ -33,7 +33,7 @@ class ObFileSystemUtil final {
 
   static int close_file(blocksstable::ObStorageFile* storage_file);
 
-  public:
+public:
   static const int CREATE_FLAGS = O_RDWR | O_APPEND | O_CREAT | O_EXCL;
   static const int WRITE_FLAGS = O_RDWR | O_APPEND;
   static const int READ_FLAGS = O_RDONLY;

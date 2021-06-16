@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace share {
 class ObIServerAuth {
-  public:
+public:
   ObIServerAuth()
   {}
   virtual ~ObIServerAuth()

@@ -28,13 +28,13 @@ using namespace oceanbase::storage;
 using namespace oceanbase::share::schema;
 
 class TestBloomFilterDataReaderWriter : public TestDataFilePrepare {
-  public:
+public:
   TestBloomFilterDataReaderWriter();
   virtual ~TestBloomFilterDataReaderWriter();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   int prepare_rowkey(ObStoreRowkey& rowkey, const int64_t rowkey_column_cnt = TEST_ROWKEY_COLUMN_CNT);
   void prepare_schema();
   int prepare_block_ctx(const MacroBlockId& block_id, ObMacroBlockCtx& bf_block_ctx);
@@ -47,7 +47,7 @@ class TestBloomFilterDataReaderWriter : public TestDataFilePrepare {
   int check_bloom_filter_cache(const ObBloomFilterCacheValue& new_bf_cache_value,
       const ObBloomFilterCacheValue& bf_cache_value, const ObBloomFilterCacheValue& bf_cache_value2);
 
-  protected:
+protected:
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 2;
   static const int64_t TEST_ROW_COUNT = 100;

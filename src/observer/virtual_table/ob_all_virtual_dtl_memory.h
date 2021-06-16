@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObAllVirtualDtlMemoryPoolInfo {
-  public:
+public:
   ObAllVirtualDtlMemoryPoolInfo()
       : tenant_id_(0),
         channel_total_cnt_(0),
@@ -45,7 +45,7 @@ class ObAllVirtualDtlMemoryPoolInfo {
 
   TO_STRING_KV(K(tenant_id_), K(seqno_));
 
-  public:
+public:
   uint64_t tenant_id_;  // 1
   int64_t channel_total_cnt_;
   int64_t channel_block_cnt_;
@@ -63,7 +63,7 @@ class ObAllVirtualDtlMemoryPoolInfo {
 };
 
 class ObAllVirtualDtlMemoryIterator {
-  public:
+public:
   ObAllVirtualDtlMemoryIterator(common::ObArenaAllocator* iter_allocator);
   virtual ~ObAllVirtualDtlMemoryIterator();
 
@@ -77,7 +77,7 @@ class ObAllVirtualDtlMemoryIterator {
 
   int get_next_mem_pool_info(ObAllVirtualDtlMemoryPoolInfo& memory_pool_info);
 
-  private:
+private:
   int64_t cur_tenant_idx_;
   int64_t cur_mem_pool_idx_;
   common::ObArenaAllocator* iter_allocator_;
@@ -86,7 +86,7 @@ class ObAllVirtualDtlMemoryIterator {
 };
 
 class ObAllVirtualDtlMemory : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualDtlMemory();
   virtual ~ObAllVirtualDtlMemory();
 
@@ -95,10 +95,10 @@ class ObAllVirtualDtlMemory : public common::ObVirtualTableScannerIterator {
   int inner_open();
   int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int get_row(ObAllVirtualDtlMemoryPoolInfo& mem_pool_info, common::ObNewRow*& row);
 
-  private:
+private:
   enum STORAGE_COLUMN {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -118,7 +118,7 @@ class ObAllVirtualDtlMemory : public common::ObVirtualTableScannerIterator {
     REAL_FREE_CNT,  // OB_APP_MIN_COLUMN_ID + 15
   };
 
-  private:
+private:
   common::ObString ipstr_;
   int32_t port_;
   common::ObArenaAllocator arena_allocator_;

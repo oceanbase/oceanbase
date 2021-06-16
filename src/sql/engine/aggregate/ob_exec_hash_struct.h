@@ -32,7 +32,7 @@ namespace sql {
 // Auto extended hash table, extend to double buckets size if hash table is quarter filled.
 template <typename Item>
 class ObExtendHashTable {
-  public:
+public:
   const static int64_t INITIAL_SIZE = 128;
   const static int64_t SIZE_BUCKET_SCALE = 4;
   ObExtendHashTable() : initial_bucket_num_(0), size_(0), buckets_(NULL), allocator_(NULL)
@@ -113,11 +113,11 @@ class ObExtendHashTable {
     return ret;
   }
 
-  protected:
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObExtendHashTable);
   int extend();
 
-  protected:
+protected:
   lib::ObMemAttr mem_attr_;
   int64_t initial_bucket_num_;
   int64_t size_;
@@ -269,7 +269,7 @@ int ObExtendHashTable<Item>::extend()
 
 // Used for calc hash for columns
 class ObHashCols {
-  public:
+public:
   ObHashCols() : row_(NULL), stored_row_(NULL), hash_col_idx_(NULL), next_(NULL), hash_val_(0)
   {}
   ObHashCols(const common::ObNewRow* row, const common::ObIArray<common::ObColumnInfo>* hash_col_idx)
@@ -310,7 +310,7 @@ class ObHashCols {
 
   TO_STRING_KV(K_(row), K_(stored_row), K_(hash_col_idx), K_(next), K_(hash_val));
 
-  public:
+public:
   const common::ObNewRow* row_;
   const common::ObRowStore::StoredRow* stored_row_;
   const common::ObIArray<common::ObColumnInfo>* hash_col_idx_;
@@ -319,14 +319,14 @@ class ObHashCols {
 };
 
 class ObGbyHashCols : public ObHashCols {
-  public:
+public:
   using ObHashCols::ObHashCols;
   ObGbyHashCols*& next()
   {
     return *reinterpret_cast<ObGbyHashCols**>(&next_);
   };
 
-  public:
+public:
   int64_t group_id_ = 0;
 };
 
@@ -334,7 +334,7 @@ class ObGbyHashCols : public ObHashCols {
 // Used for build hash group row.
 template <typename Item>
 class ObHashCtx {
-  public:
+public:
   explicit ObHashCtx() : group_rows_(), started_(false), bkt_created_(false)
   {}
   virtual ~ObHashCtx()
@@ -350,10 +350,10 @@ class ObHashCtx {
     return group_rows_.mem_used();
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHashCtx);
 
-  protected:
+protected:
   ObExtendHashTable<Item> group_rows_;
   bool started_;
   bool bkt_created_;
@@ -371,7 +371,7 @@ class ObHashCtx {
 //       are the same in one partition.
 //
 class ObGbyBloomFilter {
-  public:
+public:
   explicit ObGbyBloomFilter(const ModulePageAllocator& alloc) : bits_(alloc), cnt_(0), h2_shift_(0)
   {}
 
@@ -404,7 +404,7 @@ class ObGbyBloomFilter {
     h2_shift_ = 0;
   }
 
-  private:
+private:
   inline uint64_t h1(const uint64_t hash_val)
   {
     return hash_val;
@@ -422,7 +422,7 @@ class ObGbyBloomFilter {
     return v >> h2_shift_;
   }
 
-  public:
+public:
   int set(const uint64_t hash_val)
   {
     int ret = common::OB_SUCCESS;
@@ -441,7 +441,7 @@ class ObGbyBloomFilter {
     return bits_.has_member(h1(hash_val) & (cnt_ - 1)) && bits_.has_member(h2(hash_val) & (cnt_ - 1));
   }
 
-  private:
+private:
   ObSegmentBitSet<> bits_;
   int64_t cnt_;  // power of 2
   int64_t h2_shift_;

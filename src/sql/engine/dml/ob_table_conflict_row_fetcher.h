@@ -28,7 +28,7 @@ class ObPhyTableLocation;
 struct ObPartConflictRowStore {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartConflictRowStore() : part_key_(), conflict_row_store_(NULL)
   {}
   TO_STRING_KV(K_(part_key), KPC_(conflict_row_store));
@@ -41,7 +41,7 @@ class ObTCRFetcherInput : public ObIPhyOperatorInput {
   friend class ObTableConflictRowFetcher;
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTCRFetcherInput() : ObIPhyOperatorInput(), part_conflict_rows_(), allocator_(NULL)
   {}
   virtual ~ObTCRFetcherInput()
@@ -57,22 +57,22 @@ class ObTCRFetcherInput : public ObIPhyOperatorInput {
   virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
   void set_deserialize_allocator(common::ObIAllocator* allocator);
 
-  private:
+private:
   common::ObSEArray<ObPartConflictRowStore, 4> part_conflict_rows_;
   common::ObIAllocator* allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTCRFetcherInput);
 };
 
 class ObTableConflictRowFetcher : public ObNoChildrenPhyOperator {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   class ObTCRFetcherCtx : public ObPhyOperatorCtx {
     friend class ObTableConflictRowFetcher;
 
-    public:
+  public:
     explicit ObTCRFetcherCtx(ObExecContext& ctx)
         : ObPhyOperatorCtx(ctx), duplicated_iter_array_(), curr_row_index_(0), curr_rowkey_id_(0)
     {}
@@ -84,14 +84,14 @@ class ObTableConflictRowFetcher : public ObNoChildrenPhyOperator {
       duplicated_iter_array_.reset();
     }
 
-    public:
+  public:
     common::ObSEArray<common::ObNewRowIterator*, 4> duplicated_iter_array_;
     int64_t curr_row_index_;
     int64_t curr_rowkey_id_;
   };
 
   class ObConflictRowIterator : public common::ObNewRowIterator {
-    public:
+  public:
     ObConflictRowIterator(common::ObRowStore::Iterator iter) : row_iter_(iter)
     {}
     virtual int get_next_row(common::ObNewRow*& row) override
@@ -103,11 +103,11 @@ class ObTableConflictRowFetcher : public ObNoChildrenPhyOperator {
       row_iter_.reset();
     }
 
-    private:
+  private:
     common::ObRowStore::Iterator row_iter_;
   };
 
-  public:
+public:
   explicit ObTableConflictRowFetcher(common::ObIAllocator& alloc);
   ~ObTableConflictRowFetcher();
   void set_table_id(uint64_t table_id)
@@ -140,7 +140,7 @@ class ObTableConflictRowFetcher : public ObNoChildrenPhyOperator {
   }
   int create_operator_input(ObExecContext& ctx) const;
 
-  protected:
+protected:
   /**
    * @brief called by get_next_row(), get a row from the child operator or row_store
    * @param ctx[in], execute context
@@ -168,14 +168,14 @@ class ObTableConflictRowFetcher : public ObNoChildrenPhyOperator {
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
   int fetch_conflict_rows(ObExecContext& ctx, storage::ObDMLBaseParam& dml_param) const;
 
-  private:
+private:
   uint64_t table_id_;
   uint64_t index_tid_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> conflict_column_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> access_column_ids_;
   bool only_data_table_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableConflictRowFetcher);
 };
 }  // namespace sql

@@ -33,7 +33,7 @@ struct ObSavedException {
 typedef common::Ob2DArray<common::ObObjParam, common::OB_MALLOC_BIG_BLOCK_SIZE, ObWrapperAllocator, false> ParamStore;
 
 class ObMPStmtExecute : public ObMPBase, public ObIMPPacketSender {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_STMT_EXECUTE;
 
   explicit ObMPStmtExecute(const ObGlobalContext& gctx);
@@ -72,7 +72,7 @@ class ObMPStmtExecute : public ObMPBase, public ObIMPPacketSender {
     return ObMPBase::flush_buffer(is_last);
   }
 
-  protected:
+protected:
   virtual int deserialize()
   {
     return common::OB_SUCCESS;
@@ -113,7 +113,7 @@ class ObMPStmtExecute : public ObMPBase, public ObIMPPacketSender {
     return ObMPBase::after_process();
   }
 
-  private:
+private:
   // for arraybinding
   int init_field_for_arraybinding();
   int init_row_for_arraybinding(ObIAllocator& alloc);
@@ -165,7 +165,7 @@ class ObMPStmtExecute : public ObMPBase, public ObIMPPacketSender {
       const common::ObCollationType dst_type, const common::ObString& src, common::ObString& out,
       int64_t extra_buf_len = 0);
 
-  private:
+private:
   ObQueryRetryCtrl retry_ctrl_;
   sql::ObSqlCtx ctx_;
   int64_t stmt_id_;
@@ -187,7 +187,7 @@ class ObMPStmtExecute : public ObMPBase, public ObIMPPacketSender {
   int64_t exec_start_timestamp_;
   int64_t exec_end_timestamp_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtExecute);
 
 };  // end of class

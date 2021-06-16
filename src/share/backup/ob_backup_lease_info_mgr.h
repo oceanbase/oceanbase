@@ -46,7 +46,7 @@ struct ObBackupLeaseInfo {
 };
 
 class ObBackupLeaseInfoMgr {
-  public:
+public:
   ObBackupLeaseInfoMgr();
   virtual ~ObBackupLeaseInfoMgr();
   int init(const common::ObAddr& addr, common::ObMySQLProxy& sql_proxy);
@@ -55,7 +55,7 @@ class ObBackupLeaseInfoMgr {
   int clean_backup_lease_info(
       const int64_t next_round, const ObBackupLeaseInfo& old_lease_info, ObBackupLeaseInfo& new_lease_info);
 
-  private:
+private:
   int get_backup_scheduler_leader(
       common::ObISQLClient& sql_client, common::ObAddr& backup_leader_addr, bool& has_leader);
   int update_backup_scheduler_leader(const common::ObAddr& backup_leader_addr, common::ObISQLClient& sql_client);
@@ -65,7 +65,7 @@ class ObBackupLeaseInfoMgr {
       const char*& msg);
   int get_core_table_info_(ObRole& role, int64_t& leader_epoch, int64_t& takeover_time);
 
-  private:
+private:
   bool is_inited_;
   common::ObPartitionKey all_core_table_key_;
   common::ObAddr local_addr_;
@@ -75,7 +75,7 @@ class ObBackupLeaseInfoMgr {
 };
 
 class ObIBackupLeaseService {
-  public:
+public:
   virtual ~ObIBackupLeaseService()
   {}
   virtual int check_lease() = 0;
@@ -84,7 +84,7 @@ class ObIBackupLeaseService {
 };
 
 class ObFakeBackupLeaseService : public ObIBackupLeaseService {
-  public:
+public:
   virtual int check_lease();
   virtual int get_lease_status(bool& is_lease_valid);
 };

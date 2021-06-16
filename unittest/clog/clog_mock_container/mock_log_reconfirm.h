@@ -28,7 +28,7 @@ namespace clog {
 class ObILogMembershipMgr;
 
 class MockObLogReconfirm : public ObLogReconfirm {
-  public:
+public:
   MockObLogReconfirm()
   {}
   virtual ~MockObLogReconfirm()
@@ -83,7 +83,7 @@ class MockObLogReconfirm : public ObLogReconfirm {
   static const int64_t SUBMITED_TAG_BIT = 29;
   static const int64_t LOG_EXIST_TAG_BIT = 28;
 
-  private:
+private:
   int init_reconfirm_()
   {
     return OB_SUCCESS;

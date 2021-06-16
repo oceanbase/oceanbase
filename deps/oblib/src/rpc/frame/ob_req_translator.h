@@ -22,7 +22,7 @@ namespace frame {
 class ObReqProcessor;
 
 class ObReqTranslator {
-  public:
+public:
   ObReqTranslator()
   {}
   virtual ~ObReqTranslator()
@@ -37,10 +37,10 @@ class ObReqTranslator {
   virtual int translate(ObRequest& req, ObReqProcessor*& processor);
   virtual int release(ObReqProcessor* processor);
 
-  protected:
+protected:
   virtual ObReqProcessor* get_processor(ObRequest& req) = 0;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObReqTranslator);
 };  // end of class ObReqTranslator
 

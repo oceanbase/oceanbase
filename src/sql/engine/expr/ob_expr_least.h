@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprBaseLeastGreatest : public ObMinMaxExprOperator {
-  public:
+public:
   explicit ObExprBaseLeastGreatest(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num);
   virtual ~ObExprBaseLeastGreatest();
@@ -29,13 +29,13 @@ class ObExprBaseLeastGreatest : public ObMinMaxExprOperator {
   void set_param_type(const ObExprResType& type, ObExprResType* types, int64_t param_num) const;
   static int calc(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum, bool least);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprBaseLeastGreatest);
 };
 
 class ObExprBaseLeast : public ObExprBaseLeastGreatest {
-  public:
+public:
   explicit ObExprBaseLeast(common::ObIAllocator& alloc, int32_t param_num, ObExprOperatorType type = T_FUN_SYS_LEAST,
       const char* name = N_LEAST);
   virtual ~ObExprBaseLeast();
@@ -48,41 +48,41 @@ class ObExprBaseLeast : public ObExprBaseLeastGreatest {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_least(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprBaseLeast);
 };
 
 class ObExprLeastMySQL : public ObExprBaseLeast {
-  public:
+public:
   explicit ObExprLeastMySQL(common::ObIAllocator& alloc);
   virtual ~ObExprLeastMySQL();
   virtual int calc_result_typeN(
       ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLeastMySQL);
 };
 
 class ObExprLeastMySQLInner : public ObExprBaseLeast {
-  public:
+public:
   explicit ObExprLeastMySQLInner(common::ObIAllocator& alloc);
   virtual ~ObExprLeastMySQLInner();
   virtual int calc_result_typeN(
       ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLeastMySQLInner);
 };
 
 class ObExprOracleLeast : public ObExprBaseLeast {
-  public:
+public:
   explicit ObExprOracleLeast(common::ObIAllocator& alloc);
   virtual ~ObExprOracleLeast();
   virtual int calc_result_typeN(
       ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprOracleLeast);
 };
 

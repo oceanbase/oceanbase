@@ -44,7 +44,7 @@ class ObTransformJoinElimination : public ObTransformRule {
     ObSEArray<bool, 16> bitmap_;
   };
 
-  public:
+public:
   explicit ObTransformJoinElimination(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
 
@@ -54,7 +54,7 @@ class ObTransformJoinElimination : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   int eliminate_join_self_foreign_key(ObDMLStmt* stmt, bool& trans_happened);
 
   int eliminate_join_in_from_base_table(ObDMLStmt* stmt, bool& trans_happened);

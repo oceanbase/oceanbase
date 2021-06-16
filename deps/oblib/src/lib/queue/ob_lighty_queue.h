@@ -24,7 +24,7 @@
 namespace oceanbase {
 namespace common {
 struct ObLightyCond {
-  public:
+public:
   ObLightyCond() : n_waiters_(0)
   {}
   ~ObLightyCond()
@@ -50,16 +50,16 @@ struct ObLightyCond {
     }
   }
 
-  private:
+private:
   lib::CoFutex futex_;
   uint32_t n_waiters_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLightyCond);
 };
 
 class ObLightyQueue {
-  public:
+public:
   typedef ObLightyCond Cond;
   ObLightyQueue() : capacity_(0), n_cond_(0), data_(NULL), cond_(NULL), push_(0), pop_(0)
   {}
@@ -160,7 +160,7 @@ class ObLightyQueue {
     return ret;
   }
 
-  private:
+private:
   static uint64_t calc_n_cond(uint64_t capacity)
   {
     return std::min(1024ULL, 1ULL << (63 - __builtin_clzll(capacity)));
@@ -221,7 +221,7 @@ class ObLightyQueue {
     }
   }
 
-  private:
+private:
   uint64_t capacity_;
   uint64_t n_cond_;
   void** data_;
@@ -231,7 +231,7 @@ class ObLightyQueue {
 };
 
 class LightyQueue {
-  public:
+public:
   typedef ObLightyCond Cond;
   LightyQueue()
   {}
@@ -240,7 +240,7 @@ class LightyQueue {
     destroy();
   }
 
-  public:
+public:
   int init(const uint64_t capacity, const lib::ObLabel& label = ObModIds::OB_LIGHTY_QUEUE);
   void destroy()
   {
@@ -267,12 +267,12 @@ class LightyQueue {
   int pop(void*& data, const int64_t timeout = 0);
   int multi_pop(void** data, const int64_t data_count, int64_t& avail_count, const int64_t timeout = 0);
 
-  private:
+private:
   typedef ObFixedQueue<void> Queue;
   Queue queue_;
   Cond cond_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(LightyQueue);
 };
 };  // end namespace common

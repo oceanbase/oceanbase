@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObHashJoinBufMgr : public ObSqlMemoryCallback {
-  public:
+public:
   ObHashJoinBufMgr()
       : reserve_memory_size_(0),
         pre_total_alloc_size_(0),
@@ -95,7 +95,7 @@ class ObHashJoinBufMgr : public ObSqlMemoryCallback {
     return reserve_memory_size_ * RATIO / 100 < total_alloc_size_;
   }
 
-  private:
+private:
   const static int64_t RATIO = 80;
   int64_t reserve_memory_size_;
   int64_t pre_total_alloc_size_;
@@ -143,7 +143,7 @@ struct ObHashJoinStoredJoinRow : public sql::ObChunkDatumStore::StoredRow {
 };
 
 class ObHashJoinBatch {
-  public:
+public:
   ObHashJoinBatch(
       common::ObIAllocator& alloc, ObHashJoinBufMgr* buf_mgr, uint64_t tenant_id, int32_t part_level, int32_t batchno)
       : alloc_(alloc),
@@ -289,7 +289,7 @@ class ObHashJoinBatch {
     return chunk_row_store_;
   }
 
-  private:
+private:
   const int64_t ROW_CNT_PER = 0x3FF;
   common::ObIAllocator& alloc_;
   sql::ObChunkDatumStore chunk_row_store_;
@@ -319,7 +319,7 @@ struct ObHashJoinBatchPair {
 };
 
 class ObHashJoinBatchMgr {
-  public:
+public:
   ObHashJoinBatchMgr(common::ObIAllocator& alloc, ObHashJoinBufMgr* buf_mgr, uint64_t tenant_id)
       : total_dump_count_(0),
         total_dump_size_(0),
@@ -354,12 +354,12 @@ class ObHashJoinBatchMgr {
     }
   }
 
-  public:
+public:
   int64_t total_dump_count_;
   int64_t total_dump_size_;
   int64_t batch_count_;
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObIAllocator& alloc_;
   hj_batch_pair_list_type batch_list_;
@@ -367,7 +367,7 @@ class ObHashJoinBatchMgr {
 };
 
 class ObHashJoinPartition {
-  public:
+public:
   ObHashJoinPartition() : buf_mgr_(nullptr), batch_mgr_(nullptr), batch_(nullptr), part_level_(-1), part_id_(-1)
   {}
 
@@ -460,7 +460,7 @@ class ObHashJoinPartition {
 
   int record_pre_batch_info(int64_t pre_part_count, int64_t pre_bucket_number, int64_t total_size);
 
-  private:
+private:
   ObHashJoinBufMgr* buf_mgr_;
   ObHashJoinBatchMgr* batch_mgr_;
   ObHashJoinBatch* batch_;

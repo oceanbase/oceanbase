@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace lib {
 class RuntimeContext {
-  public:
+public:
   PURE_VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 };
 

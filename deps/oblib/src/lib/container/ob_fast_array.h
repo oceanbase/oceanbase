@@ -25,7 +25,7 @@ class ObFastArrayIterator;
 
 template <typename T, int64_t LOCAL_ARRAY_SIZE = 50>
 class ObFastArray final {
-  public:
+public:
   typedef array::ObFastArrayIterator<T, LOCAL_ARRAY_SIZE> iterator;
   ObFastArray(common::ObIAllocator* allocator = NULL);
   ObFastArray(common::ObIAllocator& allocator);
@@ -127,7 +127,7 @@ class ObFastArray final {
   void destroy();
   int64_t to_string(char* buf, int64_t buf_len) const;
 
-  private:
+private:
   int push_back_when_full(const T& obj);
   inline T* get_buffer()
   {
@@ -138,7 +138,7 @@ class ObFastArray final {
     return capacity_ <= LOCAL_ARRAY_SIZE ? stack_ : heap_;
   }
 
-  private:
+private:
   // data members
   T* stack_;
   char stack_buf_[LOCAL_ARRAY_SIZE * sizeof(T)];

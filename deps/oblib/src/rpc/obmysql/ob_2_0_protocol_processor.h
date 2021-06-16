@@ -23,7 +23,7 @@ namespace obmysql {
 class Ob20ProtocolHeader;
 
 class Ob20ProtocolProcessor : public ObMysqlProtocolProcessor {
-  public:
+public:
   Ob20ProtocolProcessor(ObMySQLHandler& handler) : ObMysqlProtocolProcessor(handler)
   {}
   virtual ~Ob20ProtocolProcessor()
@@ -32,13 +32,13 @@ class Ob20ProtocolProcessor : public ObMysqlProtocolProcessor {
   virtual int decode(easy_message_t* m, rpc::ObPacket*& pkt);
   virtual int process(easy_request_t* r, bool& need_decode_more);
 
-  protected:
+protected:
   int do_header_checksum(char* origin_start, const Ob20ProtocolHeader& hdr);
   int do_body_checksum(easy_message_t& m, const Ob20ProtocolHeader& hdr);
   int decode_ob20_body(easy_message_t& m, const Ob20ProtocolHeader& hdr, rpc::ObPacket*& pkt);
   int process_ob20_packet(easy_connection_t& c, easy_pool_t& pool, void*& ipacket, bool& need_decode_more);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(Ob20ProtocolProcessor);
 };
 

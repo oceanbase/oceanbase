@@ -22286,7 +22286,7 @@ int ObDDLService::get_tenant_primary_zone_entity_count(
         LOG_WARN("database schema is null", K(ret));
       } else if (tablegroup_schema->get_primary_zone().empty()) {
         // go on next
-      }else {
+      } else {
         ++pz_entity_count;
       }
     }

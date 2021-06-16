@@ -42,14 +42,14 @@ enum ObTaskStatus {
 };
 
 class ObReporter {
-  public:
+public:
   ObReporter();
   ObReporter(const ObTaskID& task_id);
   virtual ~ObReporter();
   bool operator==(const ObReporter& rv) const;
   int assign(const ObReporter& rv);
 
-  public:
+public:
   void set_task_id(const ObTaskID& task_id);
   void set_exec_svr(const common::ObAddr& exec_svr);
   void set_status(ObTaskStatus status);
@@ -77,7 +77,7 @@ class ObReporter {
   }
   TO_STRING_KV(K(task_id_), K(exec_svr_), K(part_keys_), K(status_));
 
-  private:
+private:
   // const attributes.
   ObTaskID task_id_;
   common::ObAddr exec_svr_;
@@ -86,7 +86,7 @@ class ObReporter {
   ObTaskStatus status_;
   common::ObSpinLock lock_;
 
-  private:
+private:
   static const int64_t TTL_THRESHOLD = 5;
 };
 
@@ -95,7 +95,7 @@ typedef common::Ob2DArray<ObReporter, common::OB_MALLOC_NORMAL_BLOCK_SIZE> ObRep
 class ObDistributedSchedulerManager;
 class ObAPMiniTaskMgr;
 class ObTransResultCollector {
-  public:
+public:
   ObTransResultCollector()
       : trans_result_(NULL),
         err_code_(OB_SUCCESS),
@@ -111,7 +111,7 @@ class ObTransResultCollector {
   virtual ~ObTransResultCollector()
   {}
 
-  public:
+public:
   int init(ObSQLSessionInfo& session, ObExecutorRpcImpl* exec_rpc, ObDistributedSchedulerManager* dist_task_mgr,
       ObAPMiniTaskMgr* mini_task_mgr);
   int wait_all_task(int64_t timeout, const bool is_build_index = false);
@@ -125,13 +125,13 @@ class ObTransResultCollector {
   int recv_result(const ObTaskID& task_id, const TransResult& trans_result);
   int set_task_status(const ObTaskID& task_id, ObTaskStatus status);
 
-  private:
+private:
   int set_task_info(const ObTaskInfo& task_info, ObTaskStatus status);
   int get_reporter(const ObTaskID& task_id, bool allow_exist, ObReporter*& reporter);
   int ping_reporter(ObReporter& reporter);
   void wait_reporter_event(int64_t wait_timeout);
 
-  private:
+private:
   TransResult* trans_result_;
   int err_code_;
   common::ObSpinLock lock_;
@@ -145,7 +145,7 @@ class ObTransResultCollector {
   ObReporterArray reporters_;
   obrpc::SingleWaitCond reporter_cond_;
 
-  private:
+private:
   static const int64_t TTL_THRESHOLD = 5;
   static const int64_t WAIT_ONCE_TIME = 500000;  // 500ms.
 };

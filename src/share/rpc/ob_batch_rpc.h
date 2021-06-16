@@ -36,7 +36,7 @@ namespace obrpc {
     ob_abort();         \
   }
 class ObSingleRpcBuffer {
-  public:
+public:
   enum { HEADER_SIZE = sizeof(ObBatchPacket) };
   ObSingleRpcBuffer(int64_t seq, int64_t limit)
       : seq_(seq), pos_(HEADER_SIZE), cnt_(0), capacity_(limit - sizeof(*this))
@@ -76,7 +76,7 @@ class ObSingleRpcBuffer {
     return ATOMIC_LOAD(&pos_);
   }
 
-  private:
+private:
   static int64_t faa_bounded(int64_t* addr, int64_t x, int64_t limit)
   {
     int64_t nv = ATOMIC_LOAD(addr);
@@ -87,7 +87,7 @@ class ObSingleRpcBuffer {
     return ov;
   }
 
-  private:
+private:
   int64_t seq_ CACHE_ALIGNED;
   int64_t pos_ CACHE_ALIGNED;
   int64_t cnt_ CACHE_ALIGNED;
@@ -96,13 +96,13 @@ class ObSingleRpcBuffer {
 };
 
 class ObRingRpcBuffer {
-  public:
+public:
   typedef ObSingleRpcBuffer Buffer;
   typedef ObIFill Req;
   typedef ObSimpleReqHeader ReqHeader;
   enum { RESERVED_SIZE = 1024 };
 
-  public:
+public:
   ObRingRpcBuffer(const int64_t buf_size, const int64_t buf_cnt)
       : read_seq_(0), fill_seq_(0), buf_size_(buf_size), buf_cnt_(buf_cnt)
   {
@@ -230,7 +230,7 @@ class ObRingRpcBuffer {
     return bool_ret;
   }
 
-  protected:
+protected:
   int64_t get_fill_seq() const
   {
     return ATOMIC_LOAD(&fill_seq_);
@@ -253,13 +253,13 @@ class ObRingRpcBuffer {
     common::inc_update(&read_seq_, new_seq);
   }
 
-  private:
+private:
   Buffer* get(int64_t seq) const
   {
     return (Buffer*)(buf_ + buf_size_ * (seq % buf_cnt_));
   }
 
-  private:
+private:
   int64_t read_seq_ CACHE_ALIGNED;
   int64_t fill_seq_ CACHE_ALIGNED;
   int64_t buf_size_ CACHE_ALIGNED;
@@ -268,7 +268,7 @@ class ObRingRpcBuffer {
 };
 
 class ObRpcBuffer : public common::SpHashNode {
-  public:
+public:
   typedef ObBatchPacket Packet;
   typedef ObRingRpcBuffer RingBuffer;
   typedef RingBuffer::Req Req;
@@ -376,7 +376,7 @@ class ObRpcBuffer : public common::SpHashNode {
     }
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObAddr server_;
   int64_t last_use_timestamp_;
@@ -386,7 +386,7 @@ class ObRpcBuffer : public common::SpHashNode {
 };
 
 class SingleWaitCond {
-  public:
+public:
   SingleWaitCond() : n_waiters_(0), futex_()
   {}
   ~SingleWaitCond()
@@ -413,13 +413,13 @@ class SingleWaitCond {
     return ready;
   }
 
-  private:
+private:
   int32_t n_waiters_;
   lib::CoFutex futex_;
 };
 
 class ObBatchRpcBase {
-  public:
+public:
   enum { BUCKET_NUM = 64, BATCH_BUFFER_COUNT = 4 };
   typedef ObRpcBuffer RpcBuffer;
   typedef RpcBuffer::Rpc Rpc;
@@ -494,7 +494,7 @@ class ObBatchRpcBase {
   void do_work();
   int get_dst_svr_list(common::ObIArray<share::ObCascadMember>& dst_list);
 
-  protected:
+protected:
   RpcBuffer* fetch(const uint64_t tenant_id, const common::ObAddr& server, const int64_t dst_cluster_id);
   common::ObQSync& get_qs()
   {
@@ -502,11 +502,11 @@ class ObBatchRpcBase {
     return qsync;
   }
 
-  private:
+private:
   RpcBuffer* create_buffer(const uint64_t tenant_id, const common::ObAddr& addr, const int64_t dst_cluster_id);
   void destroy_buffer(RpcBuffer* p);
 
-  private:
+private:
   bool is_inited_;
   int batch_type_;
   common::ObAddr self_;
@@ -517,7 +517,7 @@ class ObBatchRpcBase {
 };
 
 class ObBatchRpc : public lib::TGRunnable {
-  public:
+public:
   enum {
     MAX_THREAD_COUNT = BATCH_REQ_TYPE_COUNT,
     MINI_MODE_THREAD_COUNT = BATCH_REQ_TYPE_COUNT,
@@ -603,7 +603,7 @@ class ObBatchRpc : public lib::TGRunnable {
   }
   int get_dst_svr_list(common::ObIArray<share::ObCascadMember>& dst_list);
 
-  private:
+private:
   Rpc rpc_;
   Rpc hp_rpc_;
   ObBatchRpcBase base_[MAX_THREAD_COUNT];

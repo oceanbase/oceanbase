@@ -29,7 +29,7 @@ namespace balancer {
 class SquareIdMap;
 }
 class ObAllRebalanceMapStat : public common::ObVirtualTableProjector {
-  public:
+public:
   ObAllRebalanceMapStat();
   virtual ~ObAllRebalanceMapStat();
 
@@ -40,7 +40,7 @@ class ObAllRebalanceMapStat : public common::ObVirtualTableProjector {
   virtual int inner_open() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   int get_table_schema(uint64_t tid);
   int get_all_tenant();
   int init_tenant_balance_stat(uint64_t tenant_id);
@@ -48,7 +48,7 @@ class ObAllRebalanceMapStat : public common::ObVirtualTableProjector {
   int next();
   int get_full_row(const share::schema::ObTableSchema* table, common::ObIArray<Column>& columns);
 
-  private:
+private:
   // data members
   bool inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

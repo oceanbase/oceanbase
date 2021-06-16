@@ -71,7 +71,7 @@ enum class ZoneFileRecoveryStatus : int64_t {
 class ObServerRecoveryInstance;
 
 class UpdateFileRecoveryStatusTaskV2 : public common::IObDedupTask {
-  public:
+public:
   UpdateFileRecoveryStatusTaskV2(const common::ObZone& zone, const common::ObAddr& server, const int64_t svr_seq,
       const common::ObAddr& dest_server, const int64_t dest_svr_seq, const uint64_t tenant_id, const int64_t file_id,
       const ZoneFileRecoveryStatus pre_status, const ZoneFileRecoveryStatus cur_status, const volatile bool& is_stopped,
@@ -92,7 +92,7 @@ class UpdateFileRecoveryStatusTaskV2 : public common::IObDedupTask {
   virtual ~UpdateFileRecoveryStatusTaskV2()
   {}
 
-  public:
+public:
   virtual int64_t hash() const;
   virtual bool operator==(const common::IObDedupTask& other) const;
   virtual int64_t get_deep_copy_size() const;
@@ -106,7 +106,7 @@ class UpdateFileRecoveryStatusTaskV2 : public common::IObDedupTask {
   TO_STRING_KV(
       K(zone_), K(server_), K(svr_seq_), K(dest_server_), K(dest_svr_seq_), K(tenant_id_), K(file_id_), K(is_stopped_));
 
-  private:
+private:
   const common::ObZone zone_;
   const common::ObAddr server_;
   const int64_t svr_seq_;
@@ -119,12 +119,12 @@ class UpdateFileRecoveryStatusTaskV2 : public common::IObDedupTask {
   const volatile bool& is_stopped_;
   ObServerRecoveryInstance& host_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(UpdateFileRecoveryStatusTaskV2);
 };
 
 struct RefugeeServerInfo {
-  public:
+public:
   RefugeeServerInfo()
       : zone_(),
         server_(),
@@ -135,13 +135,13 @@ struct RefugeeServerInfo {
   virtual ~RefugeeServerInfo()
   {}
 
-  public:
+public:
   int init(const common::ObZone& zone, const common::ObAddr& server, const int64_t svr_seq,
       const common::ObAddr& rescue_server, ZoneServerRecoveryProgress progress);
   TO_STRING_KV(K_(zone), K_(server), K_(svr_seq), K_(rescue_server), K_(rescue_progress));
   int assign(const RefugeeServerInfo& that);
 
-  public:
+public:
   common::ObZone zone_;
   common::ObAddr server_;
   int64_t svr_seq_;
@@ -150,7 +150,7 @@ struct RefugeeServerInfo {
 };
 
 struct RefugeeFileInfo {
-  public:
+public:
   RefugeeFileInfo()
       : server_(),
         svr_seq_(OB_INVALID_SVR_SEQ),
@@ -168,7 +168,7 @@ struct RefugeeFileInfo {
       K_(file_recovery_status));
   int assign(const RefugeeFileInfo& that);
 
-  public:
+public:
   common::ObAddr server_;
   int64_t svr_seq_;
   uint64_t tenant_id_;
@@ -180,7 +180,7 @@ struct RefugeeFileInfo {
 };
 
 struct ObRecoveryTask {
-  public:
+public:
   ObRecoveryTask();
   virtual ~ObRecoveryTask();
   TO_STRING_KV(K(zone_), K(server_), K(svr_seq_), K(rescue_server_), K(progress_), K(refugee_file_infos_),
@@ -188,7 +188,7 @@ struct ObRecoveryTask {
   int get_refugee_datafile_info(const uint64_t tenant_id, const int64_t file_id, const common::ObAddr& dest_server,
       RefugeeFileInfo*& refugee_info);
 
-  public:
+public:
   common::ObZone zone_;
   common::ObAddr server_;
   int64_t svr_seq_;
@@ -209,18 +209,18 @@ struct ThisSimpleSeqGenerator {
     return seq_++;
   }
 
-  private:
+private:
   int64_t seq_;
 };
 
 class RecoveryPersistenceProxy {
-  public:
+public:
   RecoveryPersistenceProxy()
   {}
   virtual ~RecoveryPersistenceProxy()
   {}
 
-  public:
+public:
   int get_server_recovery_persistence_status(common::ObIArray<RefugeeServerInfo>& refugee_server_array);
 
   int get_server_datafile_recovery_persistence_status(const common::ObZone& zone, const common::ObAddr& refugee_server,
@@ -253,11 +253,11 @@ class ObServerRecoveryInstance {
   typedef common::hash::ObHashMap<common::ObAddr, ObRecoveryTask*>::iterator task_iterator;
   typedef common::hash::ObHashMap<common::ObAddr, ObRecoveryTask*>::const_iterator const_task_iterator;
 
-  public:
+public:
   explicit ObServerRecoveryInstance(volatile bool& stop);
   virtual ~ObServerRecoveryInstance();
 
-  public:
+public:
   int init(obrpc::ObSrvRpcProxy* rpc_proxy, rootserver::ObServerManager* server_mgr,
       rootserver::ObZoneManager* zone_mgr, rootserver::ObUnitManager* unit_mgr,
       rootserver::ObEmptyServerChecker* empty_server_checker, ObZoneRecoveryTaskMgr* zone_recovery_task_mgr);
@@ -276,7 +276,7 @@ class ObServerRecoveryInstance {
   int modify_server_status(ObRecoveryTask* task);
   int finish_recover_server_takenover_by_rs(ObRecoveryTask* task);
 
-  public:
+public:
   int on_pre_process_server_reply(
       const common::ObAddr& server, const common::ObAddr& rescue_server, const int ret_code);
   int on_recover_pg_file_reply(const ObZoneRecoveryTask& task, const int ret_code);
@@ -284,14 +284,14 @@ class ObServerRecoveryInstance {
       const common::ObAddr& dest_server, const int64_t dest_svr_seq, const uint64_t tenant_id, const int64_t file_id,
       ZoneFileRecoveryStatus pre_status, ZoneFileRecoveryStatus cur_status);
 
-  private:
+private:
   bool check_stop()
   {
     return stop_;
   }
   int main_round();
 
-  private:
+private:
   // main round sub recovery task
   int discover_new_server_recovery_task();
   int drive_existing_server_recovery_task();
@@ -303,7 +303,7 @@ class ObServerRecoveryInstance {
   int reload_file_recovery_status();
   int reload_file_recovery_status_by_server(ObRecoveryTask* task);
 
-  private:
+private:
   // Machine const
   static const int64_t TASK_MAP_BUCKET_NUM = 2048;
   static const int64_t PG_RECOVERY_TIMEOUT = 10 * 60 * 1000000;         // 10min
@@ -331,7 +331,7 @@ class ObServerRecoveryInstance {
       const uint64_t dest_unit_id, RefugeeFileInfo& refugee_info);
   int trigger_recover_file_task(ObRecoveryTask* task, RefugeeFileInfo& refugee_info);
 
-  private:
+private:
   bool inited_;
   bool loaded_;
   obrpc::ObSrvRpcProxy* rpc_proxy_;
@@ -350,13 +350,13 @@ class ObServerRecoveryInstance {
 };
 
 class ObZoneServerRecoveryMachineIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObZoneServerRecoveryMachineIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual ~ObZoneServerRecoveryMachineIdling()
   {}
 
-  public:
+public:
   virtual int64_t get_idle_interval_us()
   {
     return 3600LL * 1000LL * 1000LL;
@@ -364,21 +364,21 @@ class ObZoneServerRecoveryMachineIdling : public ObThreadIdling {
 };
 
 class ObZoneServerRecoveryMachine : public ObRsReentrantThread {
-  public:
+public:
   ObZoneServerRecoveryMachine(ObZoneRecoveryTaskMgr& recovery_task_mgr)
       : inited_(false), recovery_task_mgr_(recovery_task_mgr), server_recovery_instance_(stop_), idling_(stop_)
   {}
   virtual ~ObZoneServerRecoveryMachine()
   {}
 
-  public:
+public:
   virtual void run3() override;
   virtual int blocking_run()
   {
     BLOCKING_RUN_IMPLEMENT();
   }
 
-  public:
+public:
   int init(obrpc::ObSrvRpcProxy* rpc_proxy, rootserver::ObServerManager* server_mgr,
       rootserver::ObZoneManager* zone_mgr, rootserver::ObUnitManager* unit_mgr,
       rootserver::ObEmptyServerChecker* empty_server_checker);
@@ -392,13 +392,13 @@ class ObZoneServerRecoveryMachine : public ObRsReentrantThread {
   int check_can_recover_server(const common::ObAddr& server, bool& can_recover);
   int recover_server_takenover_by_rs(const common::ObAddr& server);
 
-  private:
+private:
   int process_daemon_recovery();
   int reset_run_condition();
 
-  private:
+private:
   static const int64_t INTRA_RUNNING_IDLING_US = 1 * 1000000;  // 1s
-  private:
+private:
   bool inited_;
   ObZoneRecoveryTaskMgr& recovery_task_mgr_;
   ObServerRecoveryInstance server_recovery_instance_;

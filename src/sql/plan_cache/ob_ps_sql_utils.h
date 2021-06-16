@@ -28,7 +28,7 @@ class ObString;
 }  // namespace common
 namespace sql {
 class ObPsSqlUtils {
-  public:
+public:
   template <typename T>
   static int alloc_new_var(common::ObIAllocator& allocator, const T& t, T*& new_t);
 
@@ -79,7 +79,7 @@ int ObPsSqlUtils::get_var_mem_total(const T& t, int64_t& size)
 }
 
 class ObPsSqlParamHelper {
-  public:
+public:
   struct TraverseContext {
     TraverseContext()
         : node_(NULL), is_child_not_param_(false), question_marks_(), question_mark_count_(0), insert_vector_level_(0)
@@ -101,12 +101,12 @@ class ObPsSqlParamHelper {
   int find_special_paramalize(const ParseNode& parse_node, int64_t& question_mark_count,
       common::ObIArray<int64_t>& no_check_type_offsets, common::ObIArray<int64_t>& not_param_offsets);
 
-  private:
+private:
   static const int64_t INSERT_VALUE_VECTOR_CHILD_LEVEL = 1;
   int traverse(TraverseContext& ctx, common::ObIArray<int64_t>& no_check_type_offsets,
       common::ObIArray<int64_t>& not_param_offsets);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPsSqlParamHelper);
 };
 

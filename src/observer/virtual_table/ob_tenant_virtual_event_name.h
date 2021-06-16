@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObTenantVirtualEventName : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObTenantVirtualEventName();
   virtual ~ObTenantVirtualEventName();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -30,7 +30,7 @@ class ObTenantVirtualEventName : public common::ObVirtualTableScannerIterator {
   }
   virtual void reset();
 
-  private:
+private:
   enum SYS_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     EVENT_ID,

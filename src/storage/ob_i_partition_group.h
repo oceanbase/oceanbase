@@ -161,7 +161,7 @@ class ObSplitPartitionInfoLogEntry;
 class ObPGPartitionGuard;
 
 class ObIPartitionGroup : public common::ObLink {
-  public:
+public:
   ObIPartitionGroup() : ref_cnt_(0)
   {}
   virtual ~ObIPartitionGroup()
@@ -526,7 +526,7 @@ class ObIPartitionGroup : public common::ObLink {
   virtual int inc_pending_elr_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts) = 0;
   TO_STRING_KV(K_(ref_cnt));
 
-  protected:
+protected:
   // resource usage statistics
   int32_t ref_cnt_;
 };

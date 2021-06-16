@@ -32,7 +32,7 @@ class ObISQLResultHandler;
 
 // execute in sql engine
 class ObIExecutor {
-  public:
+public:
   ObIExecutor()
   {}
   virtual ~ObIExecutor()
@@ -57,7 +57,7 @@ class ObIExecutor {
 
 // SQL client connection interface
 class ObISQLConnection {
-  public:
+public:
   ObISQLConnection() : did_no_retry_on_rpc_error_(false), oracle_mode_(false)
   {}
   virtual ~ObISQLConnection()
@@ -111,7 +111,7 @@ class ObISQLConnection {
     return common::OB_INVALID_ID;
   }
 
-  protected:
+protected:
   bool did_no_retry_on_rpc_error_;
   bool oracle_mode_;
 };

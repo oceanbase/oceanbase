@@ -45,7 +45,7 @@ enum PhysicalRestoreStatus {
 
 struct ObSimplePhysicalRestoreJob;
 struct ObPhysicalRestoreJob final {
-  public:
+public:
   ObPhysicalRestoreJob();
   ~ObPhysicalRestoreJob()
   {}
@@ -73,7 +73,7 @@ struct ObPhysicalRestoreJob final {
       K_(schema_version), K_(frozen_data_version), K_(frozen_snapshot_version), K_(frozen_schema_version),
       K_(passwd_array), K_(source_cluster_version), K_(pre_cluster_version), K_(post_cluster_version), K_(compatible));
 
-  public:
+public:
   /* from rs */
   int64_t job_id_;
   uint64_t tenant_id_;
@@ -117,7 +117,7 @@ struct ObPhysicalRestoreJob final {
 /* physical restore related end */
 
 struct ObSimplePhysicalRestoreJob final {
-  public:
+public:
   ObPhysicalRestoreInfo restore_info_;
   int64_t snapshot_version_;
   int64_t schema_version_;
@@ -133,7 +133,7 @@ struct ObSimplePhysicalRestoreJob final {
 };
 
 struct ObRestoreProgressInfo {
-  public:
+public:
   ObRestoreProgressInfo()
   {
     reset();
@@ -143,7 +143,7 @@ struct ObRestoreProgressInfo {
   void reset();
   TO_STRING_KV(K_(total_pg_cnt), K_(finish_pg_cnt), K_(total_partition_cnt), K_(finish_partition_cnt));
 
-  public:
+public:
   int64_t total_pg_cnt_;  // standalone pg cnt
   int64_t finish_pg_cnt_;
   int64_t total_partition_cnt_;  // partition cnt (sql view)

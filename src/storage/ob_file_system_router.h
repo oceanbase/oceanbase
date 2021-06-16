@@ -24,7 +24,7 @@
 namespace oceanbase {
 namespace storage {
 class ObFileSystemRouter final {
-  public:
+public:
   static ObFileSystemRouter& get_instance();
   int init(const char* data_dir, const char* cluster_name, const int64_t cluster_id, const char* zone,
       const char* svr_ip_port_str);
@@ -58,7 +58,7 @@ class ObFileSystemRouter final {
     return sstable_dir_;
   }
 
-  private:
+private:
   ObFileSystemRouter();
   virtual ~ObFileSystemRouter() = default;
 
@@ -66,7 +66,7 @@ class ObFileSystemRouter final {
   int init_local_dirs(const char* data_dir);
   int init_shm_file(const char* data_dir);
 
-  private:
+private:
   char data_dir_[common::MAX_PATH_SIZE];
   char slog_dir_[common::MAX_PATH_SIZE];
   char clog_dir_[common::MAX_PATH_SIZE];

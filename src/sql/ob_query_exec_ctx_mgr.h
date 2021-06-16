@@ -31,7 +31,7 @@ class ObQueryExecCtx {
   friend ObClassConstructor<ObQueryExecCtx>;
   friend ObClassAllocator<ObQueryExecCtx>;
 
-  public:
+public:
   static ObQueryExecCtx* alloc(ObSQLSessionInfo& session);
   static void free(ObQueryExecCtx* query_ctx);
   inline int64_t inc_ref_count()
@@ -71,7 +71,7 @@ class ObQueryExecCtx {
     return ((NULL == cache_schema_info_) ? NULL : &(cache_schema_info_->get_schema_guard()));
   }
 
-  private:
+private:
   ObQueryExecCtx(ObSQLSessionInfo& session, lib::MemoryContext& mem_context)
       : mem_context_(mem_context),
         result_set_(session, mem_context.get_arena_allocator()),
@@ -82,7 +82,7 @@ class ObQueryExecCtx {
   ~ObQueryExecCtx()
   {}
 
-  private:
+private:
   lib::MemoryContext& mem_context_;
   observer::ObMySQLResultSet result_set_;
   volatile int64_t ref_count_;
@@ -91,7 +91,7 @@ class ObQueryExecCtx {
 };
 
 class ObITaskExecCtx {
-  public:
+public:
   ObITaskExecCtx() : ref_count_(0), ctx_lock_(), execution_id_(), query_exec_ctx_(nullptr)
   {}
   virtual ~ObITaskExecCtx()
@@ -130,7 +130,7 @@ class ObITaskExecCtx {
     return query_exec_ctx_;
   }
 
-  protected:
+protected:
   volatile int64_t ref_count_;
   common::ObSpinLock ctx_lock_;
   ObExecutionID execution_id_;
@@ -138,7 +138,7 @@ class ObITaskExecCtx {
 };
 
 class ObRemoteTaskCtx : public TaskExecCtxHashValue, public ObITaskExecCtx {
-  public:
+public:
   ObRemoteTaskCtx()
       : ObITaskExecCtx(),
         sql_ctx_(),
@@ -201,7 +201,7 @@ class ObRemoteTaskCtx : public TaskExecCtxHashValue, public ObITaskExecCtx {
     return runner_svr_;
   }
 
-  private:
+private:
   ObSqlCtx sql_ctx_;
   observer::ObQueryRetryCtrl retry_ctrl_;
   observer::ObMPPacketSender mppacket_sender_;
@@ -215,7 +215,7 @@ class ObRemoteTaskCtx : public TaskExecCtxHashValue, public ObITaskExecCtx {
 };
 
 class ObTaskExecCtxAlloc {
-  public:
+public:
   ObQueryExecCtx* alloc_value()
   {
     return NULL;
@@ -240,7 +240,7 @@ typedef common::ObLinkHashMap<ObExecutionID, ObRemoteTaskCtx, ObTaskExecCtxAlloc
     TaskExecCtxMap;
 
 class GCQueryExecCtx {
-  public:
+public:
   GCQueryExecCtx()
   {}
   ~GCQueryExecCtx()
@@ -249,7 +249,7 @@ class GCQueryExecCtx {
 };
 
 class ObQueryExecCtxMgr : public lib::TGRunnable {
-  public:
+public:
   ObQueryExecCtxMgr() : tg_id_(-1), task_exec_ctx_map_()
   {}
   virtual ~ObQueryExecCtxMgr()
@@ -261,10 +261,10 @@ class ObQueryExecCtxMgr : public lib::TGRunnable {
   void revert_task_exec_ctx(ObRemoteTaskCtx* task_ctx);
   int drop_task_exec_ctx(const ObExecutionID& execution_id);
 
-  public:
+public:
   void run1();
 
-  private:
+private:
   static const int64_t GC_QUERY_CTX_INTERVAL_US = 100 * 1000;  // 100ms
   int tg_id_;
   TaskExecCtxMap task_exec_ctx_map_;

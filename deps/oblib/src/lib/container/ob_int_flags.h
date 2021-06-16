@@ -43,7 +43,7 @@ struct ObInt64Flags {
 
   TO_STRING_KV("flags", PHEX(&flags_, sizeof(flags_)));
 
-  private:
+private:
   int64_t flags_;
 };
 

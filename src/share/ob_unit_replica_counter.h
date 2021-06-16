@@ -26,7 +26,7 @@ struct UnitReplicaCounter {
   int64_t index_num_;
   int64_t leader_cnt_;
 
-  public:
+public:
   UnitReplicaCounter()
       : f_replica_cnt_(0), d_replica_cnt_(0), l_replica_cnt_(0), r_replica_cnt_(0), index_num_(0), leader_cnt_(0)
   {}
@@ -118,7 +118,7 @@ struct TenantUnitRepCnt {
   int64_t non_table_cnt_;
   int64_t now_time_;
 
-  public:
+public:
   TenantUnitRepCnt()
       : unit_rep_cnt_(),
         unit_id_(common::OB_INVALID_ID),

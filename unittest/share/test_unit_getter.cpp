@@ -26,7 +26,7 @@ using namespace share::schema;
 using namespace share::host;
 namespace share {
 class TestUnitGetter : public ::testing::Test {
-  public:
+public:
   TestUnitGetter()
   {}
   virtual ~TestUnitGetter()
@@ -36,7 +36,7 @@ class TestUnitGetter : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   void check_unit(const ObUnit& l, const ObUnit& r);
   void check_config(const ObUnitConfig& l, const ObUnitConfig& r);
   void check_pool(const ObResourcePool& l, const ObResourcePool& r);

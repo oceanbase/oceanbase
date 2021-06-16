@@ -23,7 +23,7 @@ namespace sql {
 class ObIntermResultPool;
 class ObIntermResultManager;
 class ObIntermResultRead {
-  public:
+public:
   ObIntermResultRead() : ret_(common::OB_SUCCESS), value_(NULL)
   {}
 
@@ -50,13 +50,13 @@ class ObIntermResultRead {
     return value_;
   }
 
-  private:
+private:
   int ret_;
   ObIntermResult* value_;
 };
 
 class ObIntermResultRecycle {
-  public:
+public:
   ObIntermResultRecycle() : ret_(common::OB_SUCCESS), value_(NULL)
   {}
 
@@ -83,13 +83,13 @@ class ObIntermResultRecycle {
     return value_;
   }
 
-  private:
+private:
   int ret_;
   ObIntermResult* value_;
 };
 
 class ObIntermResultGC : public common::ObTimerTask {
-  public:
+public:
   ObIntermResultGC();
   virtual ~ObIntermResultGC();
 
@@ -99,10 +99,10 @@ class ObIntermResultGC : public common::ObTimerTask {
   void set_ir_map(common::hash::ObHashMap<ObIntermResultInfo, ObIntermResult*>* ir_map);
   void set_ir_manager(ObIntermResultManager* ir_manager);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIntermResultGC);
 
-  private:
+private:
   // ir map
   common::hash::ObHashMap<ObIntermResultInfo, ObIntermResult*>* ir_map_;
   // ir manager
@@ -117,7 +117,7 @@ class ObIntermResultGC : public common::ObTimerTask {
 };
 
 class ObIntermResultManager {
-  public:
+public:
   friend class ObIntermResultGC;
 
   static const int64_t DEFAULT_INTERM_RESULT_GC_DELAY_TIME = 1000000;
@@ -143,12 +143,12 @@ class ObIntermResultManager {
   int free_result(ObIntermResult* interm_result);
   const common::hash::ObHashMap<ObIntermResultInfo, ObIntermResult*>& get_ir_map() const;
 
-  private:
+private:
   int init();
   int free_result(const ObIntermResultInfo& ir_info);
   DISALLOW_COPY_AND_ASSIGN(ObIntermResultManager);
 
-  private:
+private:
   static ObIntermResultManager* instance_;
   bool inited_;
   common::hash::ObHashMap<ObIntermResultInfo, ObIntermResult*> ir_map_;

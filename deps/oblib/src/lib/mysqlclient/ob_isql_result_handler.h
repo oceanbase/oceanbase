@@ -20,7 +20,7 @@ namespace sqlclient {
 class ObMySQLResult;
 
 class ObISQLResultHandler {
-  public:
+public:
   ObISQLResultHandler()
   {}
   virtual ~ObISQLResultHandler()

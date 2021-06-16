@@ -20,7 +20,7 @@ namespace sql {
 
 // https://docs.oracle.com/cd/B28359_01/server.111/b28286/functions186.htm#SQLRF30029
 class ObExprToBlob : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprToBlob(common::ObIAllocator& alloc);
   virtual ~ObExprToBlob();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
@@ -28,7 +28,7 @@ class ObExprToBlob : public ObStringExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int eval_to_blob(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToBlob);
 };
 

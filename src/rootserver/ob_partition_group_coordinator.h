@@ -20,7 +20,7 @@ class ObRebalanceTaskMgr;
 class ObLocalityChecker;
 class TestPartitionGroupCoordinate;
 class ObPartitionGroupCoordinator {
-  public:
+public:
   friend class TestPg_try_coordinate_primary_by_unit1_Test;
   friend class TestPg_try_coordinate_primary_by_unit2_Test;
   friend class TestPg_try_coordinate_primary_by_unit3_Test;
@@ -42,9 +42,9 @@ class ObPartitionGroupCoordinator {
   // In each zone, replicas of the same partition group are migrated to the same unit
   int coordinate_pg_member(int64_t& task_cnt);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObPartitionGroupCoordinator);
   int prepare();
@@ -119,7 +119,7 @@ class ObPartitionGroupCoordinator {
   int normal_pg_member_coordinate(
       common::ObArray<Partition*>::iterator& p, Partition& primary_partition, int64_t& task_cnt);
 
-  private:
+private:
   // data members
   bool inited_;
   ObRebalanceTaskMgr* task_mgr_;

@@ -28,7 +28,7 @@ class ObObj;
 }
 namespace observer {
 class ObSessionVariables : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObSessionVariables();
   virtual ~ObSessionVariables();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -38,10 +38,10 @@ class ObSessionVariables : public common::ObVirtualTableScannerIterator {
     sys_variable_schema_ = sys_variable_schema;
   }
 
-  private:
+private:
   int set_pc_conf(const share::ObBasicSysVar* sys_var, common::ObObj& cell);
 
-  private:
+private:
   const share::schema::ObSysVariableSchema* sys_variable_schema_;
   DISALLOW_COPY_AND_ASSIGN(ObSessionVariables);
 };

@@ -56,13 +56,13 @@ enum ObElectionMsgType {
 };
 
 class ObElectionMsgTypeChecker {
-  private:
+private:
   ObElectionMsgTypeChecker()
   {}
   ~ObElectionMsgTypeChecker()
   {}
 
-  public:
+public:
   static bool is_valid_msg_type(const int msg_type)
   {
     return ((OB_ELECTION_DEVOTE_PREPARE <= msg_type && OB_ELECTION_EG_DESTROY >= msg_type) ||
@@ -82,7 +82,7 @@ class ObElectionMsgTypeChecker {
 class ObElectionMsgBuffer : public common::ObDataBuffer {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObElectionMsgBuffer()
   {
     (void)set_data(buf_, MAX_MSGBUF_SIZE);
@@ -92,10 +92,10 @@ class ObElectionMsgBuffer : public common::ObDataBuffer {
 
   TO_STRING_KV(K_(capacity), K_(position), K_(limit));
 
-  public:
+public:
   static const int64_t MAX_MSGBUF_SIZE = 8192 - 256;
 
-  private:
+private:
   char buf_[MAX_MSGBUF_SIZE];
 };
 
@@ -103,7 +103,7 @@ class ObElectionMsgBuffer : public common::ObDataBuffer {
 class ObElectionMsg : public obrpc::ObIFill {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObElectionMsg() : msg_type_(UNKNOWN_TYPE), send_timestamp_(0), reserved_(0)
   {}
   ObElectionMsg(const int msg_type, const int64_t send_ts, const common::ObAddr& sender)
@@ -150,7 +150,7 @@ class ObElectionMsg : public obrpc::ObIFill {
   virtual int64_t to_string(char* buf, const int64_t buf_len) const;
   VIRTUAL_TO_YSON_KV(Y_(msg_type), Y_(send_timestamp), Y_(sender));
 
-  protected:
+protected:
   int msg_type_;
   int64_t send_timestamp_;
   int64_t reserved_;
@@ -161,7 +161,7 @@ class ObElectionMsg : public obrpc::ObIFill {
 class ObElectionVoteMsg : public ObElectionMsg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObElectionVoteMsg() : T1_timestamp_(0)
   {}
   ObElectionVoteMsg(const int msg_type, const int64_t send_ts, const common::ObAddr& sender, const int64_t t1)
@@ -170,7 +170,7 @@ class ObElectionVoteMsg : public ObElectionMsg {
   ~ObElectionVoteMsg()
   {}
 
-  public:
+public:
   int64_t get_T1_timestamp() const
   {
     return T1_timestamp_;
@@ -185,7 +185,7 @@ class ObElectionVoteMsg : public ObElectionMsg {
   virtual int64_t to_string(char* buf, const int64_t buf_len) const;
   VIRTUAL_TO_YSON_KV(Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(T1_timestamp));
 
-  protected:
+protected:
   int64_t T1_timestamp_;
 };
 
@@ -193,7 +193,7 @@ class ObElectionVoteMsg : public ObElectionMsg {
 class ObElectionMsgDEPrepare : public ObElectionVoteMsg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionMsgDEPrepare() : lease_time_(0)
   {}
   ObElectionMsgDEPrepare(const ObElectionPriority& priority, const int64_t t1, const int64_t send_ts,
@@ -225,7 +225,7 @@ class ObElectionMsgDEPrepare : public ObElectionVoteMsg {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   TO_YSON_KV(Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(T1_timestamp), Y_(lease_time), Y_(priority));
 
-  private:
+private:
   ObElectionPriority priority_;
   int64_t lease_time_;
 };
@@ -234,7 +234,7 @@ class ObElectionMsgDEPrepare : public ObElectionVoteMsg {
 class ObElectionMsgDEVote : public ObElectionVoteMsg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionMsgDEVote()
   {}
   ObElectionMsgDEVote(
@@ -255,7 +255,7 @@ class ObElectionMsgDEVote : public ObElectionVoteMsg {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   TO_YSON_KV(Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(T1_timestamp), Y_(vote_leader));
 
-  private:
+private:
   common::ObAddr vote_leader_;
 };
 
@@ -263,7 +263,7 @@ class ObElectionMsgDEVote : public ObElectionVoteMsg {
 class ObElectionMsgDESuccess : public ObElectionVoteMsg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionMsgDESuccess() : lease_time_(0)
   {}
   ObElectionMsgDESuccess(const common::ObAddr& leader, const int64_t t1, const int64_t send_ts,
@@ -287,7 +287,7 @@ class ObElectionMsgDESuccess : public ObElectionVoteMsg {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   TO_YSON_KV(Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(lease_time), Y_(T1_timestamp), Y_(leader));
 
-  private:
+private:
   common::ObAddr leader_;
   int64_t lease_time_;
 };
@@ -296,7 +296,7 @@ class ObElectionMsgDESuccess : public ObElectionVoteMsg {
 class ObElectionMsgPrepare : public ObElectionVoteMsg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionMsgPrepare() : lease_time_(0)
   {}
   ObElectionMsgPrepare(const common::ObAddr& cur_leader, const common::ObAddr& new_leader, const int64_t t1,
@@ -331,7 +331,7 @@ class ObElectionMsgPrepare : public ObElectionVoteMsg {
   TO_YSON_KV(
       Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(T1_timestamp), Y_(cur_leader), Y_(new_leader), Y_(lease_time));
 
-  private:
+private:
   common::ObAddr cur_leader_;
   common::ObAddr new_leader_;
   int64_t lease_time_;
@@ -341,7 +341,7 @@ class ObElectionMsgPrepare : public ObElectionVoteMsg {
 class ObElectionMsgVote : public ObElectionVoteMsg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionMsgVote()
   {}
   ObElectionMsgVote(const ObElectionPriority& priority, const common::ObAddr& cur_leader,
@@ -376,7 +376,7 @@ class ObElectionMsgVote : public ObElectionVoteMsg {
   TO_YSON_KV(
       Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(T1_timestamp), Y_(priority), Y_(cur_leader), Y_(new_leader));
 
-  private:
+private:
   ObElectionPriority priority_;
   common::ObAddr cur_leader_;
   common::ObAddr new_leader_;
@@ -386,7 +386,7 @@ class ObElectionMsgVote : public ObElectionVoteMsg {
 class ObElectionMsgSuccess : public ObElectionVoteMsg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionMsgSuccess()
       : lease_time_(0), last_gts_(common::OB_INVALID_TIMESTAMP), last_leader_epoch_(common::OB_INVALID_TIMESTAMP)
   {}
@@ -423,7 +423,7 @@ class ObElectionMsgSuccess : public ObElectionVoteMsg {
   TO_YSON_KV(
       Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(T1_timestamp), Y_(cur_leader), Y_(new_leader), Y_(lease_time));
 
-  private:
+private:
   common::ObAddr cur_leader_;
   common::ObAddr new_leader_;
   int64_t lease_time_;
@@ -435,14 +435,14 @@ class ObElectionMsgSuccess : public ObElectionVoteMsg {
 class ObElectionQueryLeader : public ObElectionMsg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObElectionQueryLeader()
   {}
   ObElectionQueryLeader(const int64_t send_ts, const common::ObAddr& sender);
   ~ObElectionQueryLeader()
   {}
 
-  public:
+public:
   bool is_valid() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
   TO_YSON_KV(Y_(msg_type), Y_(send_timestamp), Y_(sender));
@@ -452,7 +452,7 @@ class ObElectionQueryLeader : public ObElectionMsg {
 class ObElectionQueryLeaderResponse : public ObElectionMsg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObElectionQueryLeaderResponse() : epoch_(0), t1_(0), lease_time_(0)
   {}
   ObElectionQueryLeaderResponse(const int64_t send_ts, const common::ObAddr& sender, const common::ObAddr& leader,
@@ -460,7 +460,7 @@ class ObElectionQueryLeaderResponse : public ObElectionMsg {
   ~ObElectionQueryLeaderResponse()
   {}
 
-  public:
+public:
   const common::ObAddr& get_leader() const
   {
     return leader_;
@@ -482,7 +482,7 @@ class ObElectionQueryLeaderResponse : public ObElectionMsg {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   TO_YSON_KV(Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(leader), Y_(epoch), Y_(t1), Y_(lease_time));
 
-  private:
+private:
   common::ObAddr leader_;
   int64_t epoch_;
   int64_t t1_;
@@ -493,7 +493,7 @@ class ObElectionQueryLeaderResponse : public ObElectionMsg {
 class ObElectionMsgEGPrepare : public ObElectionVoteMsg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionMsgEGPrepare() : lease_time_(0)
   {}
   ObElectionMsgEGPrepare(const common::ObAddr& cur_leader, const common::ObAddr& new_leader, const int64_t t1,
@@ -518,7 +518,7 @@ class ObElectionMsgEGPrepare : public ObElectionVoteMsg {
   TO_YSON_KV(
       Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(T1_timestamp), Y_(cur_leader), Y_(new_leader), Y_(lease_time));
 
-  private:
+private:
   common::ObAddr cur_leader_;
   common::ObAddr new_leader_;
   int64_t lease_time_;
@@ -529,7 +529,7 @@ class ObElectionMsgEGPrepare : public ObElectionVoteMsg {
 class ObElectionMsgEGVote : public ObElectionVoteMsg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionMsgEGVote()
   {}
   ObElectionMsgEGVote(const ObElectionMsgEGVote& msg);
@@ -554,7 +554,7 @@ class ObElectionMsgEGVote : public ObElectionVoteMsg {
   TO_YSON_KV(
       Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(T1_timestamp), Y_(priority), Y_(cur_leader), Y_(new_leader));
 
-  protected:
+protected:
   ObElectionGroupPriority priority_;
   common::ObAddr cur_leader_;
   common::ObAddr new_leader_;
@@ -562,7 +562,7 @@ class ObElectionMsgEGVote : public ObElectionVoteMsg {
 
 // stored vote messages on leader
 class ObElectionMsgEGVote4Store : public ObElectionMsgEGVote {
-  public:
+public:
   ObElectionMsgEGVote4Store() : eg_version_(0)
   {}
   ObElectionMsgEGVote4Store(const ObElectionMsgEGVote& eg_vote_msg);
@@ -590,7 +590,7 @@ class ObElectionMsgEGVote4Store : public ObElectionMsgEGVote {
   TO_YSON_KV(Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(T1_timestamp), OB_ID(priority), get_priority(),
       OB_ID(cur_leader), get_cur_leader(), OB_ID(new_leader), get_new_leader(), Y_(eg_version));
 
-  protected:
+protected:
   int64_t eg_version_;
   common::ObPartitionArray vote_part_array_;
 };
@@ -599,7 +599,7 @@ class ObElectionMsgEGVote4Store : public ObElectionMsgEGVote {
 class ObElectionMsgEGSuccess : public ObElectionVoteMsg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionMsgEGSuccess() : is_all_part_merged_in_(false), lease_time_(0)
   {}
   ObElectionMsgEGSuccess(const common::ObAddr& cur_leader, const common::ObAddr& new_leader, const int64_t t1,
@@ -633,7 +633,7 @@ class ObElectionMsgEGSuccess : public ObElectionVoteMsg {
   TO_YSON_KV(
       Y_(msg_type), Y_(send_timestamp), Y_(sender), Y_(T1_timestamp), Y_(cur_leader), Y_(new_leader), Y_(lease_time));
 
-  private:
+private:
   common::ObAddr cur_leader_;
   common::ObAddr new_leader_;
   bool is_all_part_merged_in_;
@@ -642,7 +642,7 @@ class ObElectionMsgEGSuccess : public ObElectionVoteMsg {
 };
 
 class ObEGBatchReq : public obrpc::ObIFill {
-  public:
+public:
   ObEGBatchReq()
   {
     reset();
@@ -661,7 +661,7 @@ class ObEGBatchReq : public obrpc::ObIFill {
   virtual int fill_buffer(char* buf, int64_t size, int64_t& filled_size) const;
   virtual int64_t get_req_size() const;
 
-  private:
+private:
   int64_t eg_version_;
   const char* array_buf_;
   int64_t buf_ser_size_;

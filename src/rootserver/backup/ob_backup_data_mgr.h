@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace rootserver {
 
 class ObBackupDataMgr {
-  public:
+public:
   ObBackupDataMgr();
   virtual ~ObBackupDataMgr();
   int init(const share::ObClusterBackupDest& backup_dest, const uint64_t tenant_id, const int64_t full_backup_set_id,
@@ -32,10 +32,10 @@ class ObBackupDataMgr {
   int get_pg_meta_index(const ObPartitionKey& pkey, ObBackupMetaIndex& meta_index);
   int get_pg_meta(const ObPartitionKey& pkey, storage::ObPartitionGroupMeta& pg_meta);
 
-  private:
+private:
   int get_clog_pkey_list(common::ObIArray<common::ObPartitionKey>& pkeys);
 
-  private:
+private:
   bool is_inited_;
   storage::ObPhyRestoreMetaIndexStore meta_index_;
   share::ObClusterBackupDest cluster_backup_dest_;
@@ -43,24 +43,24 @@ class ObBackupDataMgr {
   int64_t inc_backup_set_id_;
   uint64_t tenant_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataMgr);
 };
 
 class ObBackupListDataMgr {
-  public:
+public:
   ObBackupListDataMgr();
   virtual ~ObBackupListDataMgr();
   int init(const share::ObClusterBackupDest& backup_dest, const int64_t log_archive_round, const uint64_t tenant_id);
   int get_clog_pkey_list(common::ObIArray<common::ObPartitionKey>& pkeys);
 
-  private:
+private:
   bool is_inited_;
   share::ObClusterBackupDest cluster_backup_dest_;
   int64_t log_archive_round_;
   uint64_t tenant_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupListDataMgr);
 };
 

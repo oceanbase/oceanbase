@@ -41,7 +41,7 @@ typedef Ob2DArray<common::ObObjParam, common::OB_MALLOC_BIG_BLOCK_SIZE, common::
 struct ObColumnConvInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObColumnConvInfo() : type_(), column_flags_(0), column_info_(), str_values_()
   {}
   ObColumnConvInfo(common::ObIAllocator& allocator)
@@ -332,7 +332,7 @@ struct ObTableDMLCtx {
 struct DMLPartInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   TO_STRING_KV(K_(partition_key), K_(part_row_cnt));
 
   common::ObPartitionKey partition_key_;
@@ -343,7 +343,7 @@ class ObTableModifyInput : public ObIPhyOperatorInput {
   friend class ObTableModify;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableModifyInput() : location_idx_(common::OB_INVALID_INDEX), is_single_part_(false), part_infos_()
   {}
   virtual ~ObTableModifyInput()
@@ -377,21 +377,21 @@ class ObTableModifyInput : public ObIPhyOperatorInput {
   }
   TO_STRING_KV(K_(location_idx), K_(is_single_part), K_(part_infos));
 
-  private:
+private:
   int64_t location_idx_;
   bool is_single_part_;
   common::ObFixedArray<DMLPartInfo, common::ObIAllocator> part_infos_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModifyInput);
 };
 
 typedef common::ObFixedArray<ObForeignKeyArg, common::ObIAllocator> ObForeignKeyArgArray;
 
 class ObTableModify : public ObSingleChildPhyOperator {
-  protected:
+protected:
   class ObTableModifyCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     explicit ObTableModifyCtx(ObExecContext& exec_ctx)
         : ObPhyOperatorCtx(exec_ctx),
           exec_ctx_(exec_ctx),
@@ -443,7 +443,7 @@ class ObTableModify : public ObSingleChildPhyOperator {
     }
     int check_stack();
 
-    public:
+  public:
     ObExecContext& exec_ctx_;
     common::ObMySQLProxy* sql_proxy_;
     observer::ObInnerSQLConnection* inner_conn_;
@@ -462,12 +462,12 @@ class ObTableModify : public ObSingleChildPhyOperator {
     RowkeyDistCtx* rowkey_dist_ctx_;
     bool iter_end_;
 
-    private:
+  private:
     ObSQLSessionInfo::StmtSavedValue* saved_session_;
     char* saved_session_buf_[sizeof(ObSQLSessionInfo::StmtSavedValue)];
   };
   class ObDMLRowIterator : public common::ObNewRowIterator {
-    public:
+  public:
     explicit ObDMLRowIterator(ObExecContext& ctx, const ObTableModify& op) : ctx_(ctx), op_(op), project_row_()
     {}
     ~ObDMLRowIterator()
@@ -479,13 +479,13 @@ class ObTableModify : public ObSingleChildPhyOperator {
     int get_next_rows(common::ObNewRow*& row, int64_t& row_count);
     void reset();
 
-    private:
+  private:
     ObExecContext& ctx_;
     const ObTableModify& op_;
     common::ObNewRow project_row_;
   };
   class ForeignKeyHandle {
-    public:
+  public:
     static int do_handle_old_row(
         ObTableModify* modify_op, ObTableModifyCtx& modify_ctx, const common::ObNewRow& old_row);
     static int do_handle_old_row(
@@ -499,7 +499,7 @@ class ObTableModify : public ObSingleChildPhyOperator {
     static int do_handle(ObTableModifyCtx& modify_ctx, const ObForeignKeyArgArray& fk_args,
         const common::ObNewRow& old_row, const common::ObNewRow& new_row);
 
-    private:
+  private:
     static int value_changed(const common::ObIArray<ObForeignKeyColumn>& columns, const common::ObNewRow& old_row,
         const common::ObNewRow& new_row, bool& has_changed);
     static int check_exist(
@@ -516,7 +516,7 @@ class ObTableModify : public ObSingleChildPhyOperator {
     static bool is_self_ref_row(const ObNewRow& row, const ObForeignKeyArg& fk_arg);
   };
 
-  private:
+private:
   // The multi-table semantics of update and delete, such as udpate t1, t2, the data source
   // is the Cartesian product of t1 and t2, if there are duplicate rows, only the first row
   // is processed each time, and it needs to be filtered out later. Here, a constant is
@@ -529,7 +529,7 @@ class ObTableModify : public ObSingleChildPhyOperator {
 
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObTableModify(common::ObIAllocator& alloc);
   ~ObTableModify();
 
@@ -674,7 +674,7 @@ class ObTableModify : public ObSingleChildPhyOperator {
     stmt_id_idx_ = stmt_id_idx;
   }
 
-  public:
+public:
   int init_foreign_key_args(int64_t fk_count);
   int add_foreign_key_arg(const ObForeignKeyArg& fk_arg);
   int init_foreign_key_operation(ObExecContext& ctx) const;
@@ -737,7 +737,7 @@ class ObTableModify : public ObSingleChildPhyOperator {
     return false;
   }
 
-  protected:
+protected:
   /**
    * @brief open operator, not including children operators.
    * called by open.
@@ -771,10 +771,10 @@ class ObTableModify : public ObSingleChildPhyOperator {
   void log_user_error_inner(int ret, int64_t col_idx, int64_t row_num, ObExecContext& ctx) const;
   int calc_row_for_pdml(ObExecContext& ctx, ObNewRow& cur_row) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModify);
 
-  protected:
+protected:
   uint64_t table_id_;
   uint64_t index_tid_;
   bool is_ignore_;
@@ -826,9 +826,9 @@ int ObTableModify::check_updated_value(UpdateCtx& update_ctx, const UpdateOp& up
 
 class ObMultiDMLCtx;
 class ObMultiDMLInfo {
-  public:
+public:
   class ObIsMultiDMLGuard {
-    public:
+  public:
     explicit ObIsMultiDMLGuard(ObPhysicalPlanCtx& plan_ctx) : is_multi_dml_(plan_ctx.get_is_multi_dml())
     {
       is_multi_dml_ = true;
@@ -838,11 +838,11 @@ class ObMultiDMLInfo {
       is_multi_dml_ = false;
     }
 
-    private:
+  private:
     bool& is_multi_dml_;
   };
 
-  public:
+public:
   ObMultiDMLInfo(common::ObIAllocator& alloc)
       : allocator_(alloc), table_dml_infos_(), subplan_root_(NULL), se_subplan_root_(NULL)
   {}
@@ -871,7 +871,7 @@ class ObMultiDMLInfo {
   bool sesubplan_has_foreign_key() const;
   int wait_all_task(ObMultiDMLCtx* dml_ctx, ObPhysicalPlanCtx* plan_ctx) const;
 
-  public:
+public:
   common::ObIAllocator& allocator_;
   common::ObArrayWrap<ObTableDMLInfo> table_dml_infos_;
   const ObPhyOperator* subplan_root_;
@@ -881,7 +881,7 @@ class ObMultiDMLInfo {
 class ObMultiDMLCtx {
   friend class ObMultiDMLInfo;
 
-  public:
+public:
   explicit ObMultiDMLCtx(common::ObIAllocator& allocator)
       : table_dml_ctxs_(),
         multi_dml_plan_mgr_(allocator),
@@ -905,7 +905,7 @@ class ObMultiDMLCtx {
       const ObPhysicalPlan* phy_plan, const ObPhyOperator* subplan_root, const ObOpSpec* se_subplan_root = NULL);
   void release_multi_part_shuffle_info();
 
-  public:
+public:
   common::ObArrayWrap<ObTableDMLCtx> table_dml_ctxs_;
   ObMultiDMLPlanMgr multi_dml_plan_mgr_;
   ObDMLMiniTaskExecutor mini_task_executor_;

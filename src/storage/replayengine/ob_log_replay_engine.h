@@ -44,47 +44,41 @@ class ObReplayLogTaskQueue;
 
 namespace replayengine {
 class ObLogReplayEngine : public ObILogReplayEngine, public lib::TGTaskHandler {
-  public:
+public:
   typedef storage::ObReplayLogTask ObReplayLogTask;
   ObLogReplayEngine();
   virtual ~ObLogReplayEngine();
-  public:
-  virtual int init(transaction::ObTransService *trans_replay_service,
-                   storage::ObPartitionService *partition_service,
-                   const ObLogReplayEngineConfig &config);
-  virtual int submit_replay_log_task_sequentially(const common::ObPartitionKey &pkey,
-                                                  const uint64_t log_id,
-                                                  const int64_t log_submit_ts,
-                                                  const bool need_replay,
-                                                  const clog::ObLogType log_type,
-                                                  const int64_t next_replay_log_ts);
-  virtual int submit_replay_log_task_by_restore(const common::ObPartitionKey &pkey,
-                                                const uint64_t log_id,
-                                                const int64_t log_ts);
 
-  virtual int add_partition(const common::ObPartitionKey &partition_key);
-  virtual int remove_partition(const common::ObPartitionKey &pkey,
-                               storage::ObIPartitionGroup *partition);
-  virtual int remove_partition(const common::ObPartitionKey &partition_key);
-  virtual int reset_partition(const common::ObPartitionKey &partition_key);
-  virtual int set_need_filter_trans_log(const common::ObPartitionKey &partition_key,
-                                        const bool need_filter);
+public:
+  virtual int init(transaction::ObTransService* trans_replay_service, storage::ObPartitionService* partition_service,
+      const ObLogReplayEngineConfig& config);
+  virtual int submit_replay_log_task_sequentially(const common::ObPartitionKey& pkey, const uint64_t log_id,
+      const int64_t log_submit_ts, const bool need_replay, const clog::ObLogType log_type,
+      const int64_t next_replay_log_ts);
+  virtual int submit_replay_log_task_by_restore(
+      const common::ObPartitionKey& pkey, const uint64_t log_id, const int64_t log_ts);
 
-  virtual int is_replay_finished(const common::ObPartitionKey &partition_key, bool &is_finished) const;
-  virtual int is_submit_finished(const common::ObPartitionKey &partition_key, bool &is_finished) const;
-  virtual int check_can_receive_log(const common::ObPartitionKey &pkey, bool &can_receive_log) const;
-  virtual int get_pending_submit_task_count(const common::ObPartitionKey &partition_key, int64_t &pending_count) const;
-  virtual void handle(void *task);
-  virtual int submit_task_into_queue(storage::ObReplayTask *task);
+  virtual int add_partition(const common::ObPartitionKey& partition_key);
+  virtual int remove_partition(const common::ObPartitionKey& pkey, storage::ObIPartitionGroup* partition);
+  virtual int remove_partition(const common::ObPartitionKey& partition_key);
+  virtual int reset_partition(const common::ObPartitionKey& partition_key);
+  virtual int set_need_filter_trans_log(const common::ObPartitionKey& partition_key, const bool need_filter);
+
+  virtual int is_replay_finished(const common::ObPartitionKey& partition_key, bool& is_finished) const;
+  virtual int is_submit_finished(const common::ObPartitionKey& partition_key, bool& is_finished) const;
+  virtual int check_can_receive_log(const common::ObPartitionKey& pkey, bool& can_receive_log) const;
+  virtual int get_pending_submit_task_count(const common::ObPartitionKey& partition_key, int64_t& pending_count) const;
+  virtual void handle(void* task);
+  virtual int submit_task_into_queue(storage::ObReplayTask* task);
   virtual int is_tenant_out_of_memory(const common::ObPartitionKey& partition_key, bool& is_out_of_mem);
   virtual void stop();
   virtual void wait();
   virtual void destroy();
 
-  private:
+private:
   typedef common::ObSEArray<storage::ObReplayLogTaskEx, 16> ReplayLogTaskArray;
   struct ObTenantThreadKey {
-    public:
+  public:
     ObTenantThreadKey()
     {
       reset();
@@ -116,12 +110,12 @@ class ObLogReplayEngine : public ObILogReplayEngine, public lib::TGTaskHandler {
     }
     TO_STRING_KV(K_(tenant_id), K_(thread_idx));
 
-    public:
+  public:
     uint64_t tenant_id_;
     uint64_t thread_idx_;
   };
   struct ObThrottleEndTime {
-    public:
+  public:
     ObThrottleEndTime()
     {
       reset();
@@ -136,14 +130,14 @@ class ObLogReplayEngine : public ObILogReplayEngine, public lib::TGTaskHandler {
     }
     TO_STRING_KV(K(end_ts_));
 
-    public:
+  public:
     union {
       int64_t end_ts_;      // Writing throttling end time
       int64_t fail_count_;  // count of consecutive failures
     };
   };
 
-  private:
+private:
   void add_task(storage::ObReplayStatus& replay_status, ObReplayLogTask& replay_task);
   void remove_task(storage::ObReplayStatus& replay_status, ObReplayLogTask& replay_task);
   void destroy_task(storage::ObReplayStatus& replay_status, ObReplayLogTask& replay_task);
@@ -205,7 +199,7 @@ class ObLogReplayEngine : public ObILogReplayEngine, public lib::TGTaskHandler {
   int get_throttle_end_time_(
       const uint64_t tenant_id, const bool create_if_not_exist_in_map, ObThrottleEndTime*& throttle_end_time);
 
-  private:
+private:
   const int64_t MAX_REPLAY_TIME_PER_ROUND = 10 * 1000;                             // 10ms
   const int64_t MAX_SUBMIT_TIME_PER_ROUND = 10 * 1000;                             // 10ms
   const int64_t TASK_QUEUE_WAIT_IN_GLOBAL_QUEUE_TIME_THRESHOLD = 5 * 1000 * 1000;  // 10s
@@ -225,7 +219,7 @@ class ObLogReplayEngine : public ObILogReplayEngine, public lib::TGTaskHandler {
   static const int64_t REPLAY_CONTROL_ARRAY_SIZE = 128 * 1024L;
   const uint64_t MAX_CACHE_TENANT_ID = 5000;
 
-  private:
+private:
   bool is_inited_;
   bool is_stopped_;
   int tg_id_;

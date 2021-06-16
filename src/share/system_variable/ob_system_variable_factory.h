@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace share {
 class ObSysVarAutoIncrementIncrement : public ObIntSysVar {
-  public:
+public:
   ObSysVarAutoIncrementIncrement() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -34,7 +34,7 @@ class ObSysVarAutoIncrementIncrement : public ObIntSysVar {
   }
 };
 class ObSysVarAutoIncrementOffset : public ObIntSysVar {
-  public:
+public:
   ObSysVarAutoIncrementOffset() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -47,7 +47,7 @@ class ObSysVarAutoIncrementOffset : public ObIntSysVar {
   }
 };
 class ObSysVarAutocommit : public ObBoolSysVar {
-  public:
+public:
   ObSysVarAutocommit() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -60,7 +60,7 @@ class ObSysVarAutocommit : public ObBoolSysVar {
   }
 };
 class ObSysVarCharacterSetClient : public ObCharsetSysVar {
-  public:
+public:
   ObSysVarCharacterSetClient()
       : ObCharsetSysVar(ObSysVarOnCheckFuncs::check_and_convert_charset_not_null, NULL,
             ObSysVarToObjFuncs::to_obj_charset, ObSysVarToStrFuncs::to_str_charset,
@@ -76,7 +76,7 @@ class ObSysVarCharacterSetClient : public ObCharsetSysVar {
   }
 };
 class ObSysVarCharacterSetConnection : public ObCharsetSysVar {
-  public:
+public:
   ObSysVarCharacterSetConnection()
       : ObCharsetSysVar(ObSysVarOnCheckFuncs::check_and_convert_charset_not_null, NULL,
             ObSysVarToObjFuncs::to_obj_charset, ObSysVarToStrFuncs::to_str_charset,
@@ -92,7 +92,7 @@ class ObSysVarCharacterSetConnection : public ObCharsetSysVar {
   }
 };
 class ObSysVarCharacterSetDatabase : public ObCharsetSysVar {
-  public:
+public:
   ObSysVarCharacterSetDatabase()
       : ObCharsetSysVar(ObSysVarOnCheckFuncs::check_and_convert_charset_not_null, NULL,
             ObSysVarToObjFuncs::to_obj_charset, ObSysVarToStrFuncs::to_str_charset,
@@ -108,7 +108,7 @@ class ObSysVarCharacterSetDatabase : public ObCharsetSysVar {
   }
 };
 class ObSysVarCharacterSetResults : public ObCharsetSysVar {
-  public:
+public:
   ObSysVarCharacterSetResults()
       : ObCharsetSysVar(ObSysVarOnCheckFuncs::check_and_convert_charset, NULL, ObSysVarToObjFuncs::to_obj_charset,
             ObSysVarToStrFuncs::to_str_charset, ObSysVarGetMetaTypeFuncs::get_meta_type_varchar)
@@ -123,7 +123,7 @@ class ObSysVarCharacterSetResults : public ObCharsetSysVar {
   }
 };
 class ObSysVarCharacterSetServer : public ObCharsetSysVar {
-  public:
+public:
   ObSysVarCharacterSetServer()
       : ObCharsetSysVar(ObSysVarOnCheckFuncs::check_and_convert_charset_not_null, NULL,
             ObSysVarToObjFuncs::to_obj_charset, ObSysVarToStrFuncs::to_str_charset,
@@ -139,7 +139,7 @@ class ObSysVarCharacterSetServer : public ObCharsetSysVar {
   }
 };
 class ObSysVarCharacterSetSystem : public ObCharsetSysVar {
-  public:
+public:
   ObSysVarCharacterSetSystem()
       : ObCharsetSysVar(NULL, NULL, ObSysVarToObjFuncs::to_obj_charset, ObSysVarToStrFuncs::to_str_charset,
             ObSysVarGetMetaTypeFuncs::get_meta_type_varchar)
@@ -154,7 +154,7 @@ class ObSysVarCharacterSetSystem : public ObCharsetSysVar {
   }
 };
 class ObSysVarCollationConnection : public ObCharsetSysVar {
-  public:
+public:
   ObSysVarCollationConnection()
       : ObCharsetSysVar(ObSysVarOnCheckFuncs::check_and_convert_collation_not_null, NULL,
             ObSysVarToObjFuncs::to_obj_collation, ObSysVarToStrFuncs::to_str_collation,
@@ -170,7 +170,7 @@ class ObSysVarCollationConnection : public ObCharsetSysVar {
   }
 };
 class ObSysVarCollationDatabase : public ObCharsetSysVar {
-  public:
+public:
   ObSysVarCollationDatabase()
       : ObCharsetSysVar(ObSysVarOnCheckFuncs::check_and_convert_collation_not_null, NULL,
             ObSysVarToObjFuncs::to_obj_collation, ObSysVarToStrFuncs::to_str_collation,
@@ -186,7 +186,7 @@ class ObSysVarCollationDatabase : public ObCharsetSysVar {
   }
 };
 class ObSysVarCollationServer : public ObCharsetSysVar {
-  public:
+public:
   ObSysVarCollationServer()
       : ObCharsetSysVar(ObSysVarOnCheckFuncs::check_and_convert_collation_not_null, NULL,
             ObSysVarToObjFuncs::to_obj_collation, ObSysVarToStrFuncs::to_str_collation,
@@ -202,7 +202,7 @@ class ObSysVarCollationServer : public ObCharsetSysVar {
   }
 };
 class ObSysVarInteractiveTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarInteractiveTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -215,7 +215,7 @@ class ObSysVarInteractiveTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarLastInsertId : public ObSessionSpecialIntSysVar {
-  public:
+public:
   ObSysVarLastInsertId()
       : ObSessionSpecialIntSysVar(NULL, ObSysVarSessionSpecialUpdateFuncs::update_last_insert_id, NULL, NULL, NULL)
   {}
@@ -229,7 +229,7 @@ class ObSysVarLastInsertId : public ObSessionSpecialIntSysVar {
   }
 };
 class ObSysVarMaxAllowedPacket : public ObIntSysVar {
-  public:
+public:
   ObSysVarMaxAllowedPacket()
       : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_max_allowed_packet, NULL, NULL, NULL, NULL)
   {}
@@ -243,7 +243,7 @@ class ObSysVarMaxAllowedPacket : public ObIntSysVar {
   }
 };
 class ObSysVarSqlMode : public ObSqlModeVar {
-  public:
+public:
   ObSysVarSqlMode()
       : ObSqlModeVar(ObSysVarOnCheckFuncs::check_and_convert_sql_mode, ObSysVarOnUpdateFuncs::update_sql_mode,
             ObSysVarToObjFuncs::to_obj_sql_mode, ObSysVarToStrFuncs::to_str_sql_mode,
@@ -259,7 +259,7 @@ class ObSysVarSqlMode : public ObSqlModeVar {
   }
 };
 class ObSysVarTimeZone : public ObTimeZoneSysVar {
-  public:
+public:
   ObSysVarTimeZone() : ObTimeZoneSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -272,7 +272,7 @@ class ObSysVarTimeZone : public ObTimeZoneSysVar {
   }
 };
 class ObSysVarTxIsolation : public ObSessionSpecialVarcharSysVar {
-  public:
+public:
   ObSysVarTxIsolation()
       : ObSessionSpecialVarcharSysVar(ObSysVarOnCheckFuncs::check_and_convert_tx_isolation,
             ObSysVarOnUpdateFuncs::update_tx_isolation, ObSysVarSessionSpecialUpdateFuncs::update_tx_isolation, NULL,
@@ -288,7 +288,7 @@ class ObSysVarTxIsolation : public ObSessionSpecialVarcharSysVar {
   }
 };
 class ObSysVarVersionComment : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarVersionComment() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -301,7 +301,7 @@ class ObSysVarVersionComment : public ObVarcharSysVar {
   }
 };
 class ObSysVarWaitTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarWaitTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -314,10 +314,10 @@ class ObSysVarWaitTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarBinlogRowImage : public ObEnumSysVar {
-  public:
+public:
   const static char* BINLOG_ROW_IMAGE_NAMES[];
 
-  public:
+public:
   ObSysVarBinlogRowImage() : ObEnumSysVar(BINLOG_ROW_IMAGE_NAMES, NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -330,7 +330,7 @@ class ObSysVarBinlogRowImage : public ObEnumSysVar {
   }
 };
 class ObSysVarCharacterSetFilesystem : public ObCharsetSysVar {
-  public:
+public:
   ObSysVarCharacterSetFilesystem()
       : ObCharsetSysVar(ObSysVarOnCheckFuncs::check_and_convert_charset_not_null, NULL,
             ObSysVarToObjFuncs::to_obj_charset, ObSysVarToStrFuncs::to_str_charset,
@@ -346,7 +346,7 @@ class ObSysVarCharacterSetFilesystem : public ObCharsetSysVar {
   }
 };
 class ObSysVarConnectTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarConnectTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -359,7 +359,7 @@ class ObSysVarConnectTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarDatadir : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarDatadir() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -372,7 +372,7 @@ class ObSysVarDatadir : public ObVarcharSysVar {
   }
 };
 class ObSysVarDebugSync : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarDebugSync() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -385,7 +385,7 @@ class ObSysVarDebugSync : public ObVarcharSysVar {
   }
 };
 class ObSysVarDivPrecisionIncrement : public ObIntSysVar {
-  public:
+public:
   ObSysVarDivPrecisionIncrement() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -398,7 +398,7 @@ class ObSysVarDivPrecisionIncrement : public ObIntSysVar {
   }
 };
 class ObSysVarExplicitDefaultsForTimestamp : public ObBoolSysVar {
-  public:
+public:
   ObSysVarExplicitDefaultsForTimestamp() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -411,7 +411,7 @@ class ObSysVarExplicitDefaultsForTimestamp : public ObBoolSysVar {
   }
 };
 class ObSysVarGroupConcatMaxLen : public ObIntSysVar {
-  public:
+public:
   ObSysVarGroupConcatMaxLen() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -424,7 +424,7 @@ class ObSysVarGroupConcatMaxLen : public ObIntSysVar {
   }
 };
 class ObSysVarIdentity : public ObSessionSpecialIntSysVar {
-  public:
+public:
   ObSysVarIdentity()
       : ObSessionSpecialIntSysVar(NULL, ObSysVarSessionSpecialUpdateFuncs::update_identity, NULL, NULL, NULL)
   {}
@@ -438,7 +438,7 @@ class ObSysVarIdentity : public ObSessionSpecialIntSysVar {
   }
 };
 class ObSysVarLowerCaseTableNames : public ObIntSysVar {
-  public:
+public:
   ObSysVarLowerCaseTableNames() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -451,7 +451,7 @@ class ObSysVarLowerCaseTableNames : public ObIntSysVar {
   }
 };
 class ObSysVarNetReadTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarNetReadTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -464,7 +464,7 @@ class ObSysVarNetReadTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarNetWriteTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarNetWriteTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -477,7 +477,7 @@ class ObSysVarNetWriteTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarReadOnly : public ObBoolSysVar {
-  public:
+public:
   ObSysVarReadOnly() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -490,7 +490,7 @@ class ObSysVarReadOnly : public ObBoolSysVar {
   }
 };
 class ObSysVarSqlAutoIsNull : public ObBoolSysVar {
-  public:
+public:
   ObSysVarSqlAutoIsNull() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -503,7 +503,7 @@ class ObSysVarSqlAutoIsNull : public ObBoolSysVar {
   }
 };
 class ObSysVarSqlSelectLimit : public ObIntSysVar {
-  public:
+public:
   ObSysVarSqlSelectLimit() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -516,7 +516,7 @@ class ObSysVarSqlSelectLimit : public ObIntSysVar {
   }
 };
 class ObSysVarTimestamp : public ObNumericSysVar {
-  public:
+public:
   ObSysVarTimestamp()
       : ObNumericSysVar(ObSysVarOnCheckFuncs::check_and_convert_max_min_timestamp, NULL, NULL, NULL, NULL)
   {}
@@ -530,7 +530,7 @@ class ObSysVarTimestamp : public ObNumericSysVar {
   }
 };
 class ObSysVarTxReadOnly : public ObSessionSpecialBoolSysVar {
-  public:
+public:
   ObSysVarTxReadOnly()
       : ObSessionSpecialBoolSysVar(ObSysVarOnCheckFuncs::check_and_convert_tx_read_only,
             ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope, ObSysVarSessionSpecialUpdateFuncs::update_tx_read_only,
@@ -546,7 +546,7 @@ class ObSysVarTxReadOnly : public ObSessionSpecialBoolSysVar {
   }
 };
 class ObSysVarVersion : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarVersion() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -559,7 +559,7 @@ class ObSysVarVersion : public ObVarcharSysVar {
   }
 };
 class ObSysVarSqlWarnings : public ObBoolSysVar {
-  public:
+public:
   ObSysVarSqlWarnings() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -572,7 +572,7 @@ class ObSysVarSqlWarnings : public ObBoolSysVar {
   }
 };
 class ObSysVarMaxUserConnections : public ObIntSysVar {
-  public:
+public:
   ObSysVarMaxUserConnections()
       : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_max_user_connections, NULL, NULL, NULL, NULL)
   {}
@@ -586,7 +586,7 @@ class ObSysVarMaxUserConnections : public ObIntSysVar {
   }
 };
 class ObSysVarInitConnect : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarInitConnect() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -599,7 +599,7 @@ class ObSysVarInitConnect : public ObVarcharSysVar {
   }
 };
 class ObSysVarLicense : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarLicense() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -612,7 +612,7 @@ class ObSysVarLicense : public ObVarcharSysVar {
   }
 };
 class ObSysVarNetBufferLength : public ObIntSysVar {
-  public:
+public:
   ObSysVarNetBufferLength()
       : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_net_buffer_length, NULL, NULL, NULL, NULL)
   {}
@@ -626,7 +626,7 @@ class ObSysVarNetBufferLength : public ObIntSysVar {
   }
 };
 class ObSysVarSystemTimeZone : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarSystemTimeZone() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -639,7 +639,7 @@ class ObSysVarSystemTimeZone : public ObVarcharSysVar {
   }
 };
 class ObSysVarQueryCacheSize : public ObIntSysVar {
-  public:
+public:
   ObSysVarQueryCacheSize() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -652,10 +652,10 @@ class ObSysVarQueryCacheSize : public ObIntSysVar {
   }
 };
 class ObSysVarQueryCacheType : public ObEnumSysVar {
-  public:
+public:
   const static char* QUERY_CACHE_TYPE_NAMES[];
 
-  public:
+public:
   ObSysVarQueryCacheType() : ObEnumSysVar(QUERY_CACHE_TYPE_NAMES, NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -668,7 +668,7 @@ class ObSysVarQueryCacheType : public ObEnumSysVar {
   }
 };
 class ObSysVarSqlQuoteShowCreate : public ObBoolSysVar {
-  public:
+public:
   ObSysVarSqlQuoteShowCreate() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -681,7 +681,7 @@ class ObSysVarSqlQuoteShowCreate : public ObBoolSysVar {
   }
 };
 class ObSysVarMaxSpRecursionDepth : public ObIntSysVar {
-  public:
+public:
   ObSysVarMaxSpRecursionDepth() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -694,7 +694,7 @@ class ObSysVarMaxSpRecursionDepth : public ObIntSysVar {
   }
 };
 class ObSysVarSqlSafeUpdates : public ObBoolSysVar {
-  public:
+public:
   ObSysVarSqlSafeUpdates() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -707,7 +707,7 @@ class ObSysVarSqlSafeUpdates : public ObBoolSysVar {
   }
 };
 class ObSysVarConcurrentInsert : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarConcurrentInsert() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -720,7 +720,7 @@ class ObSysVarConcurrentInsert : public ObVarcharSysVar {
   }
 };
 class ObSysVarDefaultAuthenticationPlugin : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarDefaultAuthenticationPlugin() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -733,7 +733,7 @@ class ObSysVarDefaultAuthenticationPlugin : public ObVarcharSysVar {
   }
 };
 class ObSysVarDisabledStorageEngines : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarDisabledStorageEngines() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -746,7 +746,7 @@ class ObSysVarDisabledStorageEngines : public ObVarcharSysVar {
   }
 };
 class ObSysVarErrorCount : public ObIntSysVar {
-  public:
+public:
   ObSysVarErrorCount() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -759,7 +759,7 @@ class ObSysVarErrorCount : public ObIntSysVar {
   }
 };
 class ObSysVarGeneralLog : public ObBoolSysVar {
-  public:
+public:
   ObSysVarGeneralLog() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -772,7 +772,7 @@ class ObSysVarGeneralLog : public ObBoolSysVar {
   }
 };
 class ObSysVarHaveOpenssl : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarHaveOpenssl() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -785,7 +785,7 @@ class ObSysVarHaveOpenssl : public ObVarcharSysVar {
   }
 };
 class ObSysVarHaveProfiling : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarHaveProfiling() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -798,7 +798,7 @@ class ObSysVarHaveProfiling : public ObVarcharSysVar {
   }
 };
 class ObSysVarHaveSsl : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarHaveSsl() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -811,7 +811,7 @@ class ObSysVarHaveSsl : public ObVarcharSysVar {
   }
 };
 class ObSysVarHostname : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarHostname() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -824,7 +824,7 @@ class ObSysVarHostname : public ObVarcharSysVar {
   }
 };
 class ObSysVarLcMessages : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarLcMessages() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -837,7 +837,7 @@ class ObSysVarLcMessages : public ObVarcharSysVar {
   }
 };
 class ObSysVarLocalInfile : public ObBoolSysVar {
-  public:
+public:
   ObSysVarLocalInfile() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -850,7 +850,7 @@ class ObSysVarLocalInfile : public ObBoolSysVar {
   }
 };
 class ObSysVarLockWaitTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarLockWaitTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -863,7 +863,7 @@ class ObSysVarLockWaitTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarLongQueryTime : public ObNumericSysVar {
-  public:
+public:
   ObSysVarLongQueryTime() : ObNumericSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -876,7 +876,7 @@ class ObSysVarLongQueryTime : public ObNumericSysVar {
   }
 };
 class ObSysVarMaxConnections : public ObIntSysVar {
-  public:
+public:
   ObSysVarMaxConnections() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -889,7 +889,7 @@ class ObSysVarMaxConnections : public ObIntSysVar {
   }
 };
 class ObSysVarMaxExecutionTime : public ObIntSysVar {
-  public:
+public:
   ObSysVarMaxExecutionTime() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -902,7 +902,7 @@ class ObSysVarMaxExecutionTime : public ObIntSysVar {
   }
 };
 class ObSysVarProtocolVersion : public ObIntSysVar {
-  public:
+public:
   ObSysVarProtocolVersion() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -915,7 +915,7 @@ class ObSysVarProtocolVersion : public ObIntSysVar {
   }
 };
 class ObSysVarServerId : public ObIntSysVar {
-  public:
+public:
   ObSysVarServerId() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -928,7 +928,7 @@ class ObSysVarServerId : public ObIntSysVar {
   }
 };
 class ObSysVarSslCa : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarSslCa() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -941,7 +941,7 @@ class ObSysVarSslCa : public ObVarcharSysVar {
   }
 };
 class ObSysVarSslCapath : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarSslCapath() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -954,7 +954,7 @@ class ObSysVarSslCapath : public ObVarcharSysVar {
   }
 };
 class ObSysVarSslCert : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarSslCert() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -967,7 +967,7 @@ class ObSysVarSslCert : public ObVarcharSysVar {
   }
 };
 class ObSysVarSslCipher : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarSslCipher() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -980,7 +980,7 @@ class ObSysVarSslCipher : public ObVarcharSysVar {
   }
 };
 class ObSysVarSslCrl : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarSslCrl() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -993,7 +993,7 @@ class ObSysVarSslCrl : public ObVarcharSysVar {
   }
 };
 class ObSysVarSslCrlpath : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarSslCrlpath() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1006,7 +1006,7 @@ class ObSysVarSslCrlpath : public ObVarcharSysVar {
   }
 };
 class ObSysVarSslKey : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarSslKey() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1019,7 +1019,7 @@ class ObSysVarSslKey : public ObVarcharSysVar {
   }
 };
 class ObSysVarTimeFormat : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarTimeFormat() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1032,7 +1032,7 @@ class ObSysVarTimeFormat : public ObVarcharSysVar {
   }
 };
 class ObSysVarTlsVersion : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarTlsVersion() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1045,7 +1045,7 @@ class ObSysVarTlsVersion : public ObVarcharSysVar {
   }
 };
 class ObSysVarTmpTableSize : public ObIntSysVar {
-  public:
+public:
   ObSysVarTmpTableSize() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1058,7 +1058,7 @@ class ObSysVarTmpTableSize : public ObIntSysVar {
   }
 };
 class ObSysVarTmpdir : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarTmpdir() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1071,7 +1071,7 @@ class ObSysVarTmpdir : public ObVarcharSysVar {
   }
 };
 class ObSysVarUniqueChecks : public ObBoolSysVar {
-  public:
+public:
   ObSysVarUniqueChecks() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1084,7 +1084,7 @@ class ObSysVarUniqueChecks : public ObBoolSysVar {
   }
 };
 class ObSysVarVersionCompileMachine : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarVersionCompileMachine() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1097,7 +1097,7 @@ class ObSysVarVersionCompileMachine : public ObVarcharSysVar {
   }
 };
 class ObSysVarVersionCompileOs : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarVersionCompileOs() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1110,7 +1110,7 @@ class ObSysVarVersionCompileOs : public ObVarcharSysVar {
   }
 };
 class ObSysVarWarningCount : public ObIntSysVar {
-  public:
+public:
   ObSysVarWarningCount() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1123,7 +1123,7 @@ class ObSysVarWarningCount : public ObIntSysVar {
   }
 };
 class ObSysVarObDefaultReplicaNum : public ObIntSysVar {
-  public:
+public:
   ObSysVarObDefaultReplicaNum() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1136,7 +1136,7 @@ class ObSysVarObDefaultReplicaNum : public ObIntSysVar {
   }
 };
 class ObSysVarObIntermResultMemLimit : public ObIntSysVar {
-  public:
+public:
   ObSysVarObIntermResultMemLimit() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1149,7 +1149,7 @@ class ObSysVarObIntermResultMemLimit : public ObIntSysVar {
   }
 };
 class ObSysVarObProxyPartitionHit : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObProxyPartitionHit() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1162,7 +1162,7 @@ class ObSysVarObProxyPartitionHit : public ObBoolSysVar {
   }
 };
 class ObSysVarObLogLevel : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarObLogLevel() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1175,7 +1175,7 @@ class ObSysVarObLogLevel : public ObVarcharSysVar {
   }
 };
 class ObSysVarObMaxParallelDegree : public ObIntSysVar {
-  public:
+public:
   ObSysVarObMaxParallelDegree() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1188,7 +1188,7 @@ class ObSysVarObMaxParallelDegree : public ObIntSysVar {
   }
 };
 class ObSysVarObQueryTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarObQueryTimeout()
       : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large, NULL, NULL, NULL, NULL)
   {}
@@ -1202,10 +1202,10 @@ class ObSysVarObQueryTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarObReadConsistency : public ObEnumSysVar {
-  public:
+public:
   const static char* OB_READ_CONSISTENCY_NAMES[];
 
-  public:
+public:
   ObSysVarObReadConsistency() : ObEnumSysVar(OB_READ_CONSISTENCY_NAMES, NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1218,7 +1218,7 @@ class ObSysVarObReadConsistency : public ObEnumSysVar {
   }
 };
 class ObSysVarObEnableTransformation : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnableTransformation() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1231,7 +1231,7 @@ class ObSysVarObEnableTransformation : public ObBoolSysVar {
   }
 };
 class ObSysVarObTrxTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarObTrxTimeout()
       : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large, NULL, NULL, NULL, NULL)
   {}
@@ -1245,7 +1245,7 @@ class ObSysVarObTrxTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarObEnablePlanCache : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnablePlanCache() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1258,7 +1258,7 @@ class ObSysVarObEnablePlanCache : public ObBoolSysVar {
   }
 };
 class ObSysVarObEnableIndexDirectSelect : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnableIndexDirectSelect() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1271,7 +1271,7 @@ class ObSysVarObEnableIndexDirectSelect : public ObBoolSysVar {
   }
 };
 class ObSysVarObProxySetTrxExecuted : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObProxySetTrxExecuted() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1284,7 +1284,7 @@ class ObSysVarObProxySetTrxExecuted : public ObBoolSysVar {
   }
 };
 class ObSysVarObEnableAggregationPushdown : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnableAggregationPushdown() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1297,7 +1297,7 @@ class ObSysVarObEnableAggregationPushdown : public ObBoolSysVar {
   }
 };
 class ObSysVarObLastSchemaVersion : public ObIntSysVar {
-  public:
+public:
   ObSysVarObLastSchemaVersion() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1310,7 +1310,7 @@ class ObSysVarObLastSchemaVersion : public ObIntSysVar {
   }
 };
 class ObSysVarObGlobalDebugSync : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarObGlobalDebugSync() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1323,7 +1323,7 @@ class ObSysVarObGlobalDebugSync : public ObVarcharSysVar {
   }
 };
 class ObSysVarObProxyGlobalVariablesVersion : public ObIntSysVar {
-  public:
+public:
   ObSysVarObProxyGlobalVariablesVersion() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1336,7 +1336,7 @@ class ObSysVarObProxyGlobalVariablesVersion : public ObIntSysVar {
   }
 };
 class ObSysVarObEnableTraceLog : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnableTraceLog() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1349,7 +1349,7 @@ class ObSysVarObEnableTraceLog : public ObBoolSysVar {
   }
 };
 class ObSysVarObEnableHashGroupBy : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnableHashGroupBy() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1362,7 +1362,7 @@ class ObSysVarObEnableHashGroupBy : public ObBoolSysVar {
   }
 };
 class ObSysVarObEnableBlkNestedloopJoin : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnableBlkNestedloopJoin() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1375,7 +1375,7 @@ class ObSysVarObEnableBlkNestedloopJoin : public ObBoolSysVar {
   }
 };
 class ObSysVarObBnlJoinCacheSize : public ObIntSysVar {
-  public:
+public:
   ObSysVarObBnlJoinCacheSize() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1388,7 +1388,7 @@ class ObSysVarObBnlJoinCacheSize : public ObIntSysVar {
   }
 };
 class ObSysVarObProxyUserPrivilege : public ObIntSysVar {
-  public:
+public:
   ObSysVarObProxyUserPrivilege() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1401,7 +1401,7 @@ class ObSysVarObProxyUserPrivilege : public ObIntSysVar {
   }
 };
 class ObSysVarObOrgClusterId : public ObStrictRangeIntSysVar {
-  public:
+public:
   ObSysVarObOrgClusterId()
       : ObStrictRangeIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_ob_org_cluster_id, NULL, NULL, NULL, NULL)
   {}
@@ -1415,7 +1415,7 @@ class ObSysVarObOrgClusterId : public ObStrictRangeIntSysVar {
   }
 };
 class ObSysVarObPlanCachePercentage : public ObIntSysVar {
-  public:
+public:
   ObSysVarObPlanCachePercentage() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1428,7 +1428,7 @@ class ObSysVarObPlanCachePercentage : public ObIntSysVar {
   }
 };
 class ObSysVarObPlanCacheEvictHighPercentage : public ObIntSysVar {
-  public:
+public:
   ObSysVarObPlanCacheEvictHighPercentage() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1441,7 +1441,7 @@ class ObSysVarObPlanCacheEvictHighPercentage : public ObIntSysVar {
   }
 };
 class ObSysVarObPlanCacheEvictLowPercentage : public ObIntSysVar {
-  public:
+public:
   ObSysVarObPlanCacheEvictLowPercentage() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1454,7 +1454,7 @@ class ObSysVarObPlanCacheEvictLowPercentage : public ObIntSysVar {
   }
 };
 class ObSysVarRecyclebin : public ObBoolSysVar {
-  public:
+public:
   ObSysVarRecyclebin() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1467,7 +1467,7 @@ class ObSysVarRecyclebin : public ObBoolSysVar {
   }
 };
 class ObSysVarObCapabilityFlag : public ObIntSysVar {
-  public:
+public:
   ObSysVarObCapabilityFlag() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1480,7 +1480,7 @@ class ObSysVarObCapabilityFlag : public ObIntSysVar {
   }
 };
 class ObSysVarObStmtParallelDegree : public ObIntSysVar {
-  public:
+public:
   ObSysVarObStmtParallelDegree() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1493,7 +1493,7 @@ class ObSysVarObStmtParallelDegree : public ObIntSysVar {
   }
 };
 class ObSysVarIsResultAccurate : public ObBoolSysVar {
-  public:
+public:
   ObSysVarIsResultAccurate() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1506,7 +1506,7 @@ class ObSysVarIsResultAccurate : public ObBoolSysVar {
   }
 };
 class ObSysVarErrorOnOverlapTime : public ObBoolSysVar {
-  public:
+public:
   ObSysVarErrorOnOverlapTime() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1519,10 +1519,10 @@ class ObSysVarErrorOnOverlapTime : public ObBoolSysVar {
   }
 };
 class ObSysVarObCompatibilityMode : public ObEnumSysVar {
-  public:
+public:
   const static char* OB_COMPATIBILITY_MODE_NAMES[];
 
-  public:
+public:
   ObSysVarObCompatibilityMode() : ObEnumSysVar(OB_COMPATIBILITY_MODE_NAMES, NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1535,7 +1535,7 @@ class ObSysVarObCompatibilityMode : public ObEnumSysVar {
   }
 };
 class ObSysVarObCreateTableStrictMode : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObCreateTableStrictMode() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1548,7 +1548,7 @@ class ObSysVarObCreateTableStrictMode : public ObBoolSysVar {
   }
 };
 class ObSysVarObSqlWorkAreaPercentage : public ObIntSysVar {
-  public:
+public:
   ObSysVarObSqlWorkAreaPercentage() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1561,7 +1561,7 @@ class ObSysVarObSqlWorkAreaPercentage : public ObIntSysVar {
   }
 };
 class ObSysVarObSafeWeakReadSnapshot : public ObIntSysVar {
-  public:
+public:
   ObSysVarObSafeWeakReadSnapshot()
       : ObIntSysVar(NULL, ObSysVarOnUpdateFuncs::update_safe_weak_read_snapshot, NULL, NULL, NULL)
   {}
@@ -1575,10 +1575,10 @@ class ObSysVarObSafeWeakReadSnapshot : public ObIntSysVar {
   }
 };
 class ObSysVarObRoutePolicy : public ObEnumSysVar {
-  public:
+public:
   const static char* OB_ROUTE_POLICY_NAMES[];
 
-  public:
+public:
   ObSysVarObRoutePolicy() : ObEnumSysVar(OB_ROUTE_POLICY_NAMES, NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1591,7 +1591,7 @@ class ObSysVarObRoutePolicy : public ObEnumSysVar {
   }
 };
 class ObSysVarObEnableTransmissionChecksum : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnableTransmissionChecksum() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1604,7 +1604,7 @@ class ObSysVarObEnableTransmissionChecksum : public ObBoolSysVar {
   }
 };
 class ObSysVarForeignKeyChecks : public ObBoolSysVar {
-  public:
+public:
   ObSysVarForeignKeyChecks() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1617,7 +1617,7 @@ class ObSysVarForeignKeyChecks : public ObBoolSysVar {
   }
 };
 class ObSysVarObStatementTraceId : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarObStatementTraceId() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1630,7 +1630,7 @@ class ObSysVarObStatementTraceId : public ObVarcharSysVar {
   }
 };
 class ObSysVarObEnableTruncateFlashback : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnableTruncateFlashback() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1643,7 +1643,7 @@ class ObSysVarObEnableTruncateFlashback : public ObBoolSysVar {
   }
 };
 class ObSysVarObTcpInvitedNodes : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarObTcpInvitedNodes() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1656,7 +1656,7 @@ class ObSysVarObTcpInvitedNodes : public ObVarcharSysVar {
   }
 };
 class ObSysVarSqlThrottleCurrentPriority : public ObIntSysVar {
-  public:
+public:
   ObSysVarSqlThrottleCurrentPriority() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1669,7 +1669,7 @@ class ObSysVarSqlThrottleCurrentPriority : public ObIntSysVar {
   }
 };
 class ObSysVarSqlThrottlePriority : public ObIntSysVar {
-  public:
+public:
   ObSysVarSqlThrottlePriority() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1682,7 +1682,7 @@ class ObSysVarSqlThrottlePriority : public ObIntSysVar {
   }
 };
 class ObSysVarSqlThrottleRt : public ObNumericSysVar {
-  public:
+public:
   ObSysVarSqlThrottleRt() : ObNumericSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1695,7 +1695,7 @@ class ObSysVarSqlThrottleRt : public ObNumericSysVar {
   }
 };
 class ObSysVarSqlThrottleCpu : public ObNumericSysVar {
-  public:
+public:
   ObSysVarSqlThrottleCpu() : ObNumericSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1708,7 +1708,7 @@ class ObSysVarSqlThrottleCpu : public ObNumericSysVar {
   }
 };
 class ObSysVarSqlThrottleIo : public ObIntSysVar {
-  public:
+public:
   ObSysVarSqlThrottleIo() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1721,7 +1721,7 @@ class ObSysVarSqlThrottleIo : public ObIntSysVar {
   }
 };
 class ObSysVarSqlThrottleNetwork : public ObNumericSysVar {
-  public:
+public:
   ObSysVarSqlThrottleNetwork()
       : ObNumericSysVar(ObSysVarOnCheckFuncs::check_and_convert_sql_throttle_queue_time, NULL, NULL, NULL, NULL)
   {}
@@ -1735,7 +1735,7 @@ class ObSysVarSqlThrottleNetwork : public ObNumericSysVar {
   }
 };
 class ObSysVarSqlThrottleLogicalReads : public ObIntSysVar {
-  public:
+public:
   ObSysVarSqlThrottleLogicalReads() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1748,7 +1748,7 @@ class ObSysVarSqlThrottleLogicalReads : public ObIntSysVar {
   }
 };
 class ObSysVarAutoIncrementCacheSize : public ObIntSysVar {
-  public:
+public:
   ObSysVarAutoIncrementCacheSize() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1761,10 +1761,10 @@ class ObSysVarAutoIncrementCacheSize : public ObIntSysVar {
   }
 };
 class ObSysVarObEnableJit : public ObEnumSysVar {
-  public:
+public:
   const static char* OB_ENABLE_JIT_NAMES[];
 
-  public:
+public:
   ObSysVarObEnableJit() : ObEnumSysVar(OB_ENABLE_JIT_NAMES, NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1777,7 +1777,7 @@ class ObSysVarObEnableJit : public ObEnumSysVar {
   }
 };
 class ObSysVarObTempTablespaceSizePercentage : public ObIntSysVar {
-  public:
+public:
   ObSysVarObTempTablespaceSizePercentage() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1790,7 +1790,7 @@ class ObSysVarObTempTablespaceSizePercentage : public ObIntSysVar {
   }
 };
 class ObSysVarOptimizerAdaptiveCursorSharing : public ObBoolSysVar {
-  public:
+public:
   ObSysVarOptimizerAdaptiveCursorSharing() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1803,10 +1803,10 @@ class ObSysVarOptimizerAdaptiveCursorSharing : public ObBoolSysVar {
   }
 };
 class ObSysVarObTimestampService : public ObEnumSysVar {
-  public:
+public:
   const static char* OB_TIMESTAMP_SERVICE_NAMES[];
 
-  public:
+public:
   ObSysVarObTimestampService()
       : ObEnumSysVar(OB_TIMESTAMP_SERVICE_NAMES, ObSysVarOnCheckFuncs::check_and_convert_timestamp_service, NULL, NULL,
             NULL, NULL)
@@ -1821,7 +1821,7 @@ class ObSysVarObTimestampService : public ObEnumSysVar {
   }
 };
 class ObSysVarPluginDir : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarPluginDir() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1834,7 +1834,7 @@ class ObSysVarPluginDir : public ObVarcharSysVar {
   }
 };
 class ObSysVarUndoRetention : public ObIntSysVar {
-  public:
+public:
   ObSysVarUndoRetention() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1847,7 +1847,7 @@ class ObSysVarUndoRetention : public ObIntSysVar {
   }
 };
 class ObSysVarObUseParallelExecution : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObUseParallelExecution() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1860,7 +1860,7 @@ class ObSysVarObUseParallelExecution : public ObBoolSysVar {
   }
 };
 class ObSysVarObSqlAuditPercentage : public ObIntSysVar {
-  public:
+public:
   ObSysVarObSqlAuditPercentage() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1873,7 +1873,7 @@ class ObSysVarObSqlAuditPercentage : public ObIntSysVar {
   }
 };
 class ObSysVarObEnableSqlAudit : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnableSqlAudit() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1886,7 +1886,7 @@ class ObSysVarObEnableSqlAudit : public ObBoolSysVar {
   }
 };
 class ObSysVarOptimizerUseSqlPlanBaselines : public ObBoolSysVar {
-  public:
+public:
   ObSysVarOptimizerUseSqlPlanBaselines() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1899,7 +1899,7 @@ class ObSysVarOptimizerUseSqlPlanBaselines : public ObBoolSysVar {
   }
 };
 class ObSysVarOptimizerCaptureSqlPlanBaselines : public ObBoolSysVar {
-  public:
+public:
   ObSysVarOptimizerCaptureSqlPlanBaselines() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1912,7 +1912,7 @@ class ObSysVarOptimizerCaptureSqlPlanBaselines : public ObBoolSysVar {
   }
 };
 class ObSysVarParallelMaxServers : public ObIntSysVar {
-  public:
+public:
   ObSysVarParallelMaxServers() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1925,7 +1925,7 @@ class ObSysVarParallelMaxServers : public ObIntSysVar {
   }
 };
 class ObSysVarParallelServersTarget : public ObIntSysVar {
-  public:
+public:
   ObSysVarParallelServersTarget() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1938,7 +1938,7 @@ class ObSysVarParallelServersTarget : public ObIntSysVar {
   }
 };
 class ObSysVarObEarlyLockRelease : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEarlyLockRelease() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1951,7 +1951,7 @@ class ObSysVarObEarlyLockRelease : public ObBoolSysVar {
   }
 };
 class ObSysVarObTrxIdleTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarObTrxIdleTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1964,10 +1964,10 @@ class ObSysVarObTrxIdleTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarBlockEncryptionMode : public ObEnumSysVar {
-  public:
+public:
   const static char* BLOCK_ENCRYPTION_MODE_NAMES[];
 
-  public:
+public:
   ObSysVarBlockEncryptionMode() : ObEnumSysVar(BLOCK_ENCRYPTION_MODE_NAMES, NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1980,7 +1980,7 @@ class ObSysVarBlockEncryptionMode : public ObEnumSysVar {
   }
 };
 class ObSysVarNlsDateFormat : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsDateFormat() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -1993,7 +1993,7 @@ class ObSysVarNlsDateFormat : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsTimestampFormat : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsTimestampFormat() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2006,7 +2006,7 @@ class ObSysVarNlsTimestampFormat : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsTimestampTzFormat : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsTimestampTzFormat() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2019,7 +2019,7 @@ class ObSysVarNlsTimestampTzFormat : public ObVarcharSysVar {
   }
 };
 class ObSysVarObReservedMetaMemoryPercentage : public ObIntSysVar {
-  public:
+public:
   ObSysVarObReservedMetaMemoryPercentage() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2032,7 +2032,7 @@ class ObSysVarObReservedMetaMemoryPercentage : public ObIntSysVar {
   }
 };
 class ObSysVarObCheckSysVariable : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObCheckSysVariable() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2045,7 +2045,7 @@ class ObSysVarObCheckSysVariable : public ObBoolSysVar {
   }
 };
 class ObSysVarNlsLanguage : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsLanguage() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2058,7 +2058,7 @@ class ObSysVarNlsLanguage : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsTerritory : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsTerritory() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2071,7 +2071,7 @@ class ObSysVarNlsTerritory : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsSort : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsSort() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2084,7 +2084,7 @@ class ObSysVarNlsSort : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsComp : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsComp() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2097,7 +2097,7 @@ class ObSysVarNlsComp : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsCharacterset : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsCharacterset() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2110,7 +2110,7 @@ class ObSysVarNlsCharacterset : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsNcharCharacterset : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsNcharCharacterset() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2123,7 +2123,7 @@ class ObSysVarNlsNcharCharacterset : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsDateLanguage : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsDateLanguage() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2136,7 +2136,7 @@ class ObSysVarNlsDateLanguage : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsLengthSemantics : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsLengthSemantics() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2149,7 +2149,7 @@ class ObSysVarNlsLengthSemantics : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsNcharConvExcp : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsNcharConvExcp() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2162,7 +2162,7 @@ class ObSysVarNlsNcharConvExcp : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsCalendar : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsCalendar() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2175,7 +2175,7 @@ class ObSysVarNlsCalendar : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsNumericCharacters : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsNumericCharacters() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2188,7 +2188,7 @@ class ObSysVarNlsNumericCharacters : public ObVarcharSysVar {
   }
 };
 class ObSysVarNljBatchingEnabled : public ObBoolSysVar {
-  public:
+public:
   ObSysVarNljBatchingEnabled() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2201,7 +2201,7 @@ class ObSysVarNljBatchingEnabled : public ObBoolSysVar {
   }
 };
 class ObSysVarTracefileIdentifier : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarTracefileIdentifier() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2214,7 +2214,7 @@ class ObSysVarTracefileIdentifier : public ObVarcharSysVar {
   }
 };
 class ObSysVarGroupbyNopushdownCutRatio : public ObIntSysVar {
-  public:
+public:
   ObSysVarGroupbyNopushdownCutRatio() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2227,7 +2227,7 @@ class ObSysVarGroupbyNopushdownCutRatio : public ObIntSysVar {
   }
 };
 class ObSysVarPxBroadcastFudgeFactor : public ObIntSysVar {
-  public:
+public:
   ObSysVarPxBroadcastFudgeFactor() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2240,7 +2240,7 @@ class ObSysVarPxBroadcastFudgeFactor : public ObIntSysVar {
   }
 };
 class ObSysVarPrimaryZoneEntityCount : public ObIntSysVar {
-  public:
+public:
   ObSysVarPrimaryZoneEntityCount() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2253,7 +2253,7 @@ class ObSysVarPrimaryZoneEntityCount : public ObIntSysVar {
   }
 };
 class ObSysVarTransactionIsolation : public ObSessionSpecialVarcharSysVar {
-  public:
+public:
   ObSysVarTransactionIsolation()
       : ObSessionSpecialVarcharSysVar(ObSysVarOnCheckFuncs::check_and_convert_tx_isolation,
             ObSysVarOnUpdateFuncs::update_tx_isolation, ObSysVarSessionSpecialUpdateFuncs::update_tx_isolation, NULL,
@@ -2269,7 +2269,7 @@ class ObSysVarTransactionIsolation : public ObSessionSpecialVarcharSysVar {
   }
 };
 class ObSysVarObTrxLockTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarObTrxLockTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2282,10 +2282,10 @@ class ObSysVarObTrxLockTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarValidatePasswordCheckUserName : public ObEnumSysVar {
-  public:
+public:
   const static char* VALIDATE_PASSWORD_CHECK_USER_NAME_NAMES[];
 
-  public:
+public:
   ObSysVarValidatePasswordCheckUserName()
       : ObEnumSysVar(VALIDATE_PASSWORD_CHECK_USER_NAME_NAMES, NULL, NULL, NULL, NULL, NULL)
   {}
@@ -2299,7 +2299,7 @@ class ObSysVarValidatePasswordCheckUserName : public ObEnumSysVar {
   }
 };
 class ObSysVarValidatePasswordLength : public ObIntSysVar {
-  public:
+public:
   ObSysVarValidatePasswordLength() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2312,7 +2312,7 @@ class ObSysVarValidatePasswordLength : public ObIntSysVar {
   }
 };
 class ObSysVarValidatePasswordMixedCaseCount : public ObIntSysVar {
-  public:
+public:
   ObSysVarValidatePasswordMixedCaseCount() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2325,7 +2325,7 @@ class ObSysVarValidatePasswordMixedCaseCount : public ObIntSysVar {
   }
 };
 class ObSysVarValidatePasswordNumberCount : public ObIntSysVar {
-  public:
+public:
   ObSysVarValidatePasswordNumberCount() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2338,10 +2338,10 @@ class ObSysVarValidatePasswordNumberCount : public ObIntSysVar {
   }
 };
 class ObSysVarValidatePasswordPolicy : public ObEnumSysVar {
-  public:
+public:
   const static char* VALIDATE_PASSWORD_POLICY_NAMES[];
 
-  public:
+public:
   ObSysVarValidatePasswordPolicy() : ObEnumSysVar(VALIDATE_PASSWORD_POLICY_NAMES, NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2354,7 +2354,7 @@ class ObSysVarValidatePasswordPolicy : public ObEnumSysVar {
   }
 };
 class ObSysVarValidatePasswordSpecialCharCount : public ObIntSysVar {
-  public:
+public:
   ObSysVarValidatePasswordSpecialCharCount() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2367,7 +2367,7 @@ class ObSysVarValidatePasswordSpecialCharCount : public ObIntSysVar {
   }
 };
 class ObSysVarDefaultPasswordLifetime : public ObIntSysVar {
-  public:
+public:
   ObSysVarDefaultPasswordLifetime() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2380,7 +2380,7 @@ class ObSysVarDefaultPasswordLifetime : public ObIntSysVar {
   }
 };
 class ObSysVarObTraceInfo : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarObTraceInfo() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2393,7 +2393,7 @@ class ObSysVarObTraceInfo : public ObVarcharSysVar {
   }
 };
 class ObSysVarObEnableBatchedMultiStatement : public ObBoolSysVar {
-  public:
+public:
   ObSysVarObEnableBatchedMultiStatement() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2406,7 +2406,7 @@ class ObSysVarObEnableBatchedMultiStatement : public ObBoolSysVar {
   }
 };
 class ObSysVarPxPartitionScanThreshold : public ObIntSysVar {
-  public:
+public:
   ObSysVarPxPartitionScanThreshold() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2419,10 +2419,10 @@ class ObSysVarPxPartitionScanThreshold : public ObIntSysVar {
   }
 };
 class ObSysVarObPxBcastOptimization : public ObEnumSysVar {
-  public:
+public:
   const static char* _OB_PX_BCAST_OPTIMIZATION_NAMES[];
 
-  public:
+public:
   ObSysVarObPxBcastOptimization() : ObEnumSysVar(_OB_PX_BCAST_OPTIMIZATION_NAMES, NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2435,7 +2435,7 @@ class ObSysVarObPxBcastOptimization : public ObEnumSysVar {
   }
 };
 class ObSysVarObPxSlaveMappingThreshold : public ObIntSysVar {
-  public:
+public:
   ObSysVarObPxSlaveMappingThreshold() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2448,7 +2448,7 @@ class ObSysVarObPxSlaveMappingThreshold : public ObIntSysVar {
   }
 };
 class ObSysVarEnableParallelDml : public ObBoolSysVar {
-  public:
+public:
   ObSysVarEnableParallelDml() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2461,7 +2461,7 @@ class ObSysVarEnableParallelDml : public ObBoolSysVar {
   }
 };
 class ObSysVarPxMinGranulesPerSlave : public ObIntSysVar {
-  public:
+public:
   ObSysVarPxMinGranulesPerSlave() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2474,7 +2474,7 @@ class ObSysVarPxMinGranulesPerSlave : public ObIntSysVar {
   }
 };
 class ObSysVarSecureFilePriv : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarSecureFilePriv() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2487,7 +2487,7 @@ class ObSysVarSecureFilePriv : public ObVarcharSysVar {
   }
 };
 class ObSysVarPlsqlWarnings : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarPlsqlWarnings()
       : ObVarcharSysVar(ObSysVarOnCheckFuncs::check_and_convert_plsql_warnings, NULL, NULL, NULL, NULL)
   {}
@@ -2501,7 +2501,7 @@ class ObSysVarPlsqlWarnings : public ObVarcharSysVar {
   }
 };
 class ObSysVarEnableParallelQuery : public ObBoolSysVar {
-  public:
+public:
   ObSysVarEnableParallelQuery() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2514,7 +2514,7 @@ class ObSysVarEnableParallelQuery : public ObBoolSysVar {
   }
 };
 class ObSysVarForceParallelQueryDop : public ObIntSysVar {
-  public:
+public:
   ObSysVarForceParallelQueryDop() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2527,7 +2527,7 @@ class ObSysVarForceParallelQueryDop : public ObIntSysVar {
   }
 };
 class ObSysVarForceParallelDmlDop : public ObIntSysVar {
-  public:
+public:
   ObSysVarForceParallelDmlDop() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2540,7 +2540,7 @@ class ObSysVarForceParallelDmlDop : public ObIntSysVar {
   }
 };
 class ObSysVarObPlBlockTimeout : public ObIntSysVar {
-  public:
+public:
   ObSysVarObPlBlockTimeout()
       : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large, NULL, NULL, NULL, NULL)
   {}
@@ -2554,7 +2554,7 @@ class ObSysVarObPlBlockTimeout : public ObIntSysVar {
   }
 };
 class ObSysVarTransactionReadOnly : public ObSessionSpecialBoolSysVar {
-  public:
+public:
   ObSysVarTransactionReadOnly()
       : ObSessionSpecialBoolSysVar(ObSysVarOnCheckFuncs::check_and_convert_tx_read_only,
             ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope, ObSysVarSessionSpecialUpdateFuncs::update_tx_read_only,
@@ -2570,7 +2570,7 @@ class ObSysVarTransactionReadOnly : public ObSessionSpecialBoolSysVar {
   }
 };
 class ObSysVarResourceManagerPlan : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarResourceManagerPlan() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2583,7 +2583,7 @@ class ObSysVarResourceManagerPlan : public ObVarcharSysVar {
   }
 };
 class ObSysVarPerformanceSchema : public ObBoolSysVar {
-  public:
+public:
   ObSysVarPerformanceSchema() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2596,7 +2596,7 @@ class ObSysVarPerformanceSchema : public ObBoolSysVar {
   }
 };
 class ObSysVarNlsCurrency : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsCurrency() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2609,7 +2609,7 @@ class ObSysVarNlsCurrency : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsIsoCurrency : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsIsoCurrency() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2622,7 +2622,7 @@ class ObSysVarNlsIsoCurrency : public ObVarcharSysVar {
   }
 };
 class ObSysVarNlsDualCurrency : public ObVarcharSysVar {
-  public:
+public:
   ObSysVarNlsDualCurrency() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL)
   {}
   inline virtual ObSysVarClassType get_type() const
@@ -2636,7 +2636,7 @@ class ObSysVarNlsDualCurrency : public ObVarcharSysVar {
 };
 
 class ObSysVarFactory {
-  public:
+public:
   ObSysVarFactory();
   virtual ~ObSysVarFactory();
   void destroy();
@@ -2658,7 +2658,7 @@ class ObSysVarFactory {
   // increase OB_MAX_SYS_VAR_ID if you need a sys_var_id greater than it.
   const static int32_t OB_MAX_SYS_VAR_ID = 20000;
 
-  private:
+private:
   static bool sys_var_name_case_cmp(const char* name1, const common::ObString& name2);
   const static char* SYS_VAR_NAMES_SORTED_BY_NAME[ALL_SYS_VARS_COUNT];
   const static ObSysVarClassType SYS_VAR_IDS_SORTED_BY_NAME[ALL_SYS_VARS_COUNT];

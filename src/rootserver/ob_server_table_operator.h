@@ -31,7 +31,7 @@ class ObMySQLResult;
 }  // namespace common
 namespace rootserver {
 class ObServerTableOperator {
-  public:
+public:
   ObServerTableOperator();
   virtual ~ObServerTableOperator();
 
@@ -50,10 +50,10 @@ class ObServerTableOperator {
   virtual int update_stop_time(const common::ObAddr& server, const int64_t stop_time);
   virtual int update_with_partition(const common::ObAddr& server, bool with_partition);
 
-  private:
+private:
   int build_server_status(const common::sqlclient::ObMySQLResult& res, share::ObServerStatus& server_status) const;
 
-  private:
+private:
   bool inited_;
   common::ObISQLClient* proxy_;
 };

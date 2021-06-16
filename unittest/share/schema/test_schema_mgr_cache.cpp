@@ -110,7 +110,7 @@ static void consume(ObSchemaMgrCache* mgr_cache)
 }
 
 class Consumer : public share::ObThreadPool {
-  public:
+public:
   void run1()
   {
 
@@ -120,7 +120,7 @@ class Consumer : public share::ObThreadPool {
 };
 
 class Refresher : public share::ObThreadPool {
-  public:
+public:
   void run1()
   {
 
@@ -164,7 +164,7 @@ TEST_F(TestSchemaMgrCache, multithread_put_and_get)
 }
 
 class Refresher2 : public share::ObThreadPool {
-  public:
+public:
   void run1()
   {
 

@@ -53,7 +53,7 @@ enum OperatorOpenOrder {
   OPEN_EXIT = 6
 };
 struct ObPhyOpSeriCtx {
-  public:
+public:
   ObPhyOpSeriCtx() : row_id_list_(NULL), exec_ctx_(NULL)
   {}
   const void* row_id_list_;
@@ -69,7 +69,7 @@ struct ObPhyOpSeriCtx {
 class ObIPhyOperatorInput {
   OB_UNIS_VERSION_PV();
 
-  public:
+public:
   ObIPhyOperatorInput()
   {}
   virtual ~ObIPhyOperatorInput()
@@ -103,7 +103,7 @@ class ObIPhyOperatorInput {
 struct ColumnContent {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ColumnContent()
       : projector_index_(0),
         auto_filled_timestamp_(false),
@@ -132,7 +132,7 @@ struct ColumnContent {
 struct ObForeignKeyColumn {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObForeignKeyColumn() : name_(), idx_(-1), name_idx_(-1)
   {}
   inline void reset()
@@ -150,7 +150,7 @@ struct ObForeignKeyColumn {
 class ObForeignKeyArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObForeignKeyArg()
       : ref_action_(share::schema::ACTION_INVALID), database_name_(), table_name_(), columns_(), is_self_ref_(false)
   {}
@@ -163,7 +163,7 @@ class ObForeignKeyArg {
   }
   TO_STRING_KV(K_(ref_action), K_(database_name), K_(table_name), K_(columns), K_(is_self_ref));
 
-  public:
+public:
   share::schema::ObReferenceAction ref_action_;
   common::ObString database_name_;
   common::ObString table_name_;
@@ -176,7 +176,7 @@ class ObForeignKeyArg {
 class ObOpSchemaObj {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObOpSchemaObj() : obj_type_(common::ObMaxType), is_not_null_(false), order_type_(default_asc_direction())
   {}
   ObOpSchemaObj(common::ObObjType obj_type)
@@ -197,22 +197,22 @@ class ObOpSchemaObj {
   }
   TO_STRING_KV(K_(obj_type), K_(is_not_null), K_(order_type));
 
-  public:
+public:
   common::ObObjType obj_type_;
   bool is_not_null_;
   ObOrderDirection order_type_;
 };
 
 class ObPhyOperator {
-  public:
+public:
   static const int32_t FIRST_CHILD = 0;
   static const int32_t SECOND_CHILD = 1;
   static const int32_t THRID_CHIID = 2;
   static const int32_t FOURTH_CHILD = 3;
   class ObPhyOperatorCtx {
-    public:
+  public:
     static const int64_t BULK_COUNT = 500;  // get 500 rows when get_next_rows is called
-    public:
+  public:
     explicit ObPhyOperatorCtx(ObExecContext& ctx)
         : exec_ctx_(ctx),
           calc_mem_(NULL),
@@ -371,14 +371,14 @@ class ObPhyOperator {
     inline int init_base(uint64_t tenant_id);
     inline void destroy_base();
 
-    protected:
+  protected:
     ObExecContext& exec_ctx_;
     lib::MemoryContext* calc_mem_;
     common::ObArenaAllocator* calc_buf_;
     common::ObNewRow cur_row_;
     common::ObNewRow* cur_rows_;
 
-    public:
+  public:
     common::ObExprCtx expr_ctx_;
     bool is_filtered_;
     bool is_filtered_has_set_;
@@ -387,7 +387,7 @@ class ObPhyOperator {
     ObMonitorNode op_monitor_info_;
     int64_t check_times_;
 
-    public:
+  public:
     int64_t index_;
     int64_t row_count_;
     int64_t column_count_;
@@ -397,7 +397,7 @@ class ObPhyOperator {
 
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObPhyOperator(common::ObIAllocator& alloc);
   virtual ~ObPhyOperator();
 
@@ -702,7 +702,7 @@ class ObPhyOperator {
   // register operator in datahub, for parallel execution.
   virtual int register_to_datahub(ObExecContext& ctx) const;
 
-  protected:
+protected:
   OB_INLINE virtual bool need_filter_row() const
   {
     return true;
@@ -785,7 +785,7 @@ class ObPhyOperator {
   int try_open_and_get_operator_ctx(
       ObExecContext& ctx, ObPhyOperatorCtx*& op_ctx, bool* has_been_opened = nullptr) const;
 
-  public:
+public:
   // check if this operator is some kind of table scan.
   // the default return value is false
   // Note: The default table scan operator ObTableScan overrides this
@@ -801,13 +801,13 @@ class ObPhyOperator {
     return false;
   }
 
-  public:
+public:
   int copy_cur_row_by_projector(common::ObNewRow& cur_row, const common::ObNewRow*& row) const;
   int copy_cur_row(common::ObNewRow& cur_row, const common::ObNewRow*& row, bool need_copy_cell) const;
   static int deep_copy_row(
       const common::ObNewRow& src_row, common::ObNewRow*& dst_row, common::ObIAllocator& allocator);
 
-  public:
+public:
   virtual int accept(ObPhyOperatorVisitor& visitor) const
   {
     UNUSED(visitor);
@@ -829,9 +829,9 @@ class ObPhyOperator {
     return op_schema_objs_;
   }
 
-  private:
+private:
   static const int64_t CHECK_STATUS_MASK = 0x3FF;  // check_status for each 1024 rows
-  protected:
+protected:
   ObSqlExpressionFactory sql_expression_factory_;
   /*
    * the physical plan object who owns this operator.
@@ -858,7 +858,7 @@ class ObPhyOperator {
   int32_t plan_depth_;      // for plan cache explain
   common::ObSEArray<ObOpSchemaObj, 8> op_schema_objs_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPhyOperator);
 };
 
@@ -867,7 +867,7 @@ class ObDoubleChildrenPhyOperator;
 class ObMultiChildrenPhyOperator;
 class ObNoChildrenPhyOperator;
 class ObPhyOperatorVisitor {
-  public:
+public:
   virtual int pre_visit(const ObSingleChildPhyOperator& op) = 0;
   virtual int post_visit(const ObSingleChildPhyOperator& op) = 0;
   virtual int pre_visit(const ObDoubleChildrenPhyOperator& op) = 0;

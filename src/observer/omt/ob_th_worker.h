@@ -38,11 +38,11 @@ static const int64_t WORKER_CHECK_PERIOD = 500L;
 static const int64_t REQUEST_WAIT_TIME = 10 * 1000L;
 
 class ObThWorker : public share::ObWorker, public lib::CoKThread {
-  public:
+public:
   enum RequestType { RT_NOTASK, RT_NEW, RT_OLD };
   enum class WStatus { STOPPED, IDLE, RUNNING, WAITING, RUNNABLE };
 
-  public:
+public:
   explicit ObThWorker(ObIWorkerProcessor& procor);
   virtual ~ObThWorker();
 
@@ -119,7 +119,7 @@ class ObThWorker : public share::ObWorker, public lib::CoKThread {
     return group_;
   }
 
-  private:
+private:
   void set_th_worker_thread_name(uint64_t tenant_id);
   void wait_runnable();
   void process_request(rpc::ObRequest& req);
@@ -127,7 +127,7 @@ class ObThWorker : public share::ObWorker, public lib::CoKThread {
   void th_created();
   void th_destroy();
 
-  private:
+private:
   ObIWorkerProcessor& procor_;
 
   bool is_inited_;
@@ -164,7 +164,7 @@ class ObThWorker : public share::ObWorker, public lib::CoKThread {
   int64_t active_inactive_ts_;
   bool lq_token_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);
 };  // end of class ObThWorker
 

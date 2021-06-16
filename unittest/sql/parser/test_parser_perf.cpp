@@ -30,15 +30,15 @@ static bool PRINT_STAT = false;
 static bool IS_FP = false;
 
 class TestParserPerf {
-  public:
+public:
   TestParserPerf();
   virtual ~TestParserPerf();
   void do_parse(const char* query_str);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestParserPerf);
 
-  public:
+public:
   ObArenaAllocator allocator_;
   int64_t total_t_;
   int64_t total_cnt_;

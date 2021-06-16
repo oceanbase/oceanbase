@@ -54,7 +54,7 @@ enum ObMaxIdType {
 };
 
 class ObMaxIdFetcher {
-  public:
+public:
   explicit ObMaxIdFetcher(common::ObMySQLProxy& proxy);
   virtual ~ObMaxIdFetcher();
 
@@ -67,7 +67,7 @@ class ObMaxIdFetcher {
   static const char* get_max_id_info(const ObMaxIdType max_id_type);
   static int str_to_uint(const common::ObString& str, uint64_t& value);
 
-  private:
+private:
   static bool valid_max_id_type(const ObMaxIdType max_id_type)
   {
     return max_id_type >= 0 && max_id_type < OB_MAX_ID_TYPE;
@@ -76,10 +76,10 @@ class ObMaxIdFetcher {
   int insert_initial_value(
       common::ObISQLClient& sql_client, uint64_t tenant_id, ObMaxIdType max_id_type, const uint64_t initial_value);
 
-  private:
+private:
   static const char* max_id_name_info_[OB_MAX_ID_TYPE][2];
 
-  private:
+private:
   common::ObMySQLProxy& proxy_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMaxIdFetcher);

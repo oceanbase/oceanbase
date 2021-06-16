@@ -22,13 +22,13 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObVirtualTraceLog : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObVirtualTraceLog();
   virtual ~ObVirtualTraceLog();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObVirtualTraceLog);
   enum TRACE_COLUMN { TITLE = common::OB_APP_MIN_COLUMN_ID, KEY_VALUE, TIME };
   int fill_scanner();

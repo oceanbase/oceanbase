@@ -25,7 +25,7 @@ struct ObSchemaOperation;
 class ObTenantSchema;
 
 class ObTenantSqlService : public ObDDLSqlService {
-  public:
+public:
   ObTenantSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObTenantSqlService()
@@ -45,11 +45,11 @@ class ObTenantSqlService : public ObDDLSqlService {
       common::ObISQLClient& sql_client, const common::ObString* ddl_stmt_str = NULL);
   virtual int delete_tenant_content(common::ObISQLClient& client, const uint64_t tenant_id, const char* table_name);
 
-  private:
+private:
   int replace_tenant(const ObTenantSchema& tenant_schema, const ObSchemaOperationType op,
       common::ObISQLClient& sql_client, const common::ObString* ddl_stmt_str);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantSqlService);
 };
 

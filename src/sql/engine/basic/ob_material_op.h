@@ -23,13 +23,13 @@ namespace sql {
 class ObMaterialSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMaterialSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObOpSpec(alloc, type)
   {}
 };
 
 class ObMaterialOp : public ObOperator {
-  public:
+public:
   ObMaterialOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input),
         mem_context_(nullptr),
@@ -52,7 +52,7 @@ class ObMaterialOp : public ObOperator {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   int process_dump();
   int get_all_row_from_child(ObSQLSessionInfo& session);
 
@@ -68,7 +68,7 @@ class ObMaterialOp : public ObOperator {
     }
   }
 
-  private:
+private:
   lib::MemoryContext* mem_context_;
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator datum_store_it_;

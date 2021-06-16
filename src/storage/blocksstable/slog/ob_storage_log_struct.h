@@ -33,7 +33,7 @@ enum ObRedoLogMainType {
 enum ObRedoLogSysType { OB_REDO_LOG_BEGIN = 0, OB_REDO_LOG_COMMIT = 1 };
 
 class ObIBaseStorageLogEntry {
-  public:
+public:
   ObIBaseStorageLogEntry()
   {}
   virtual ~ObIBaseStorageLogEntry()
@@ -62,7 +62,7 @@ struct ObBaseStorageLogHeader {
 };
 
 struct ObStorageLogAttribute {
-  public:
+public:
   ObStorageLogAttribute() : tenant_id_(common::OB_INVALID_TENANT_ID), data_file_id_(common::OB_INVALID_DATA_FILE_ID)
   {}
   ObStorageLogAttribute(const uint64_t tenant_id, const int64_t data_file_id)
@@ -80,7 +80,7 @@ struct ObStorageLogAttribute {
 };
 
 class ObBaseStorageLogBuffer : public ObBufferHolder {
-  public:
+public:
   ObBaseStorageLogBuffer();
   virtual ~ObBaseStorageLogBuffer();
   int assign(char* buf, const int64_t buf_len);
@@ -91,11 +91,11 @@ class ObBaseStorageLogBuffer : public ObBufferHolder {
   void reuse();
   bool is_empty() const;
 
-  public:
+public:
   NEED_SERIALIZE_AND_DESERIALIZE;
   TO_STRING_KV(KP_(data), K_(capacity), K_(pos));
 
-  private:
+private:
   int append_log_head(const int64_t trans_id, const int64_t log_seq, const int64_t subcmd, const int64_t log_len,
       const ObStorageLogAttribute& log_attr);
 };

@@ -19,7 +19,7 @@ using namespace oceanbase::lib;
 TEST(TestInterruptable, Main)
 {
   class : public EventBase {
-    public:
+  public:
     using EventBase::signal;
     using EventBase::wait4event;
   } eb;

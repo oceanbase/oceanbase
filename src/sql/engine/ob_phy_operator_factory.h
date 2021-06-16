@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObPhyOperatorFactory {
-  public:
+public:
   explicit ObPhyOperatorFactory(common::ObIAllocator& alloc) : alloc_(alloc)
   {}
   ~ObPhyOperatorFactory()
@@ -30,14 +30,14 @@ class ObPhyOperatorFactory {
     // All memory is released by alloc;
   }
 
-  private:
+private:
   template <typename ClassT, ObPhyOperatorType type>
   static int alloc(common::ObIAllocator& alloc, ObPhyOperator*& phy_op);
 
   typedef int (*AllocFunc)(common::ObIAllocator& alloc, ObPhyOperator*& phy_op);
   static AllocFunc PHY_OPERATOR_ALLOC[PHY_END];
 
-  private:
+private:
   common::ObIAllocator& alloc_;
 };
 

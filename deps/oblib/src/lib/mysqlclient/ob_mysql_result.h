@@ -890,7 +890,7 @@ class ObIntervalYMValue;
 class ObIntervalDSValue;
 namespace sqlclient {
 class ObMySQLResult {
-  public:
+public:
   // see this for template virtual function
   // http://cxh.me/2014/07/01/nvi-usage-of-virtual-template/
   DEFINE_ALLOCATOR_WRAPPER
@@ -1032,11 +1032,11 @@ class ObMySQLResult {
     return NULL;
   }
 
-  protected:
+protected:
   static const int64_t FAKE_TABLE_ID = 1;
   int varchar2datetime(const ObString& varchar, int64_t& datetime) const;
 
-  private:
+private:
   virtual int inner_get_number(
       const int64_t col_idx, common::number::ObNumber& nmb_val, IAllocator& allocator) const = 0;
   virtual int inner_get_number(

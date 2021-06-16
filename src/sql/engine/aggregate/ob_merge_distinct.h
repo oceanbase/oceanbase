@@ -23,10 +23,10 @@ namespace sql {
 class ObMergeDistinct : public ObDistinct {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   class ObMergeDistinctCtx;
 
-  public:
+public:
   explicit ObMergeDistinct(common::ObIAllocator& alloc);
   // ObMergeDistinct();
   virtual ~ObMergeDistinct();
@@ -34,7 +34,7 @@ class ObMergeDistinct : public ObDistinct {
   virtual void reuse();
   virtual int rescan(ObExecContext& ctx) const;
 
-  private:
+private:
   // member function
   int compare_equal(const common::ObNewRow& this_row, const common::ObNewRow& last_row, bool& result) const;
   /**

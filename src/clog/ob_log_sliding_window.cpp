@@ -3357,8 +3357,8 @@ int ObLogSlidingWindow::need_replay_for_data_or_log_replica_(const bool is_trans
   return ret;
 }
 
-int ObLogSlidingWindow::get_log_meta_info(uint64_t log_id, bool &is_meta_log, int64_t &log_ts,
-    int64_t &next_replay_log_ts_for_rg, int64_t &accum_checksum, ObLogType &log_type) const
+int ObLogSlidingWindow::get_log_meta_info(uint64_t log_id, bool& is_meta_log, int64_t& log_ts,
+    int64_t& next_replay_log_ts_for_rg, int64_t& accum_checksum, ObLogType& log_type) const
 {
   int ret = OB_SUCCESS;
   is_meta_log = false;
@@ -3369,7 +3369,8 @@ int ObLogSlidingWindow::get_log_meta_info(uint64_t log_id, bool &is_meta_log, in
   } else {
     clog::ObLogEntry log_entry;
     bool is_batch_committed = false;
-    if (OB_FAIL(clog_mgr->query_log_info_with_log_id(partition_key_, log_id, log_entry, accum_checksum, is_batch_committed))) {
+    if (OB_FAIL(clog_mgr->query_log_info_with_log_id(
+            partition_key_, log_id, log_entry, accum_checksum, is_batch_committed))) {
       if (OB_EAGAIN == ret) {
         if (REACH_TIME_INTERVAL(100 * 1000)) {
           CLOG_LOG(WARN, "failed to query_log_info_with_log_id ", K(partition_key_), K(log_id), K(ret));
@@ -3513,9 +3514,10 @@ int ObLogSlidingWindow::try_submit_replay_task_(const uint64_t log_id, const ObL
 
     if (OB_SUCC(ret)) {
       if (state_mgr_->is_offline()) {
-        CLOG_LOG(WARN, "no need to submit log to replay when partition is offline", KR(ret), K(partition_key_), K(log_id));
-      } else if (OB_FAIL(replay_engine_->submit_replay_log_task_sequentially(partition_key_, log_id, log_submit_timestamp,
-                                                                             need_replay, header_log_type, next_replay_log_ts))) {
+        CLOG_LOG(
+            WARN, "no need to submit log to replay when partition is offline", KR(ret), K(partition_key_), K(log_id));
+      } else if (OB_FAIL(replay_engine_->submit_replay_log_task_sequentially(
+                     partition_key_, log_id, log_submit_timestamp, need_replay, header_log_type, next_replay_log_ts))) {
         if (OB_EAGAIN != ret) {
           CLOG_LOG(WARN,
               "failed to submit replay task",

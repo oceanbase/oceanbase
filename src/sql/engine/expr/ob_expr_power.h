@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprPower : public ObExprOperator {
-  public:
+public:
   explicit ObExprPower(common::ObIAllocator& alloc);
   virtual ~ObExprPower(){};
 
@@ -30,7 +30,7 @@ class ObExprPower : public ObExprOperator {
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx);
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprPower) const;
 };
 }  // namespace sql

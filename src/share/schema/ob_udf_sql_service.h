@@ -26,7 +26,7 @@ namespace schema {
 class ObUDF;
 
 class ObUDFSqlService : public ObDDLSqlService {
-  public:
+public:
   ObUDFSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObUDFSqlService()
@@ -46,10 +46,10 @@ class ObUDFSqlService : public ObDDLSqlService {
   virtual int drop_udf(const ObUDF& udf_info, const int64_t new_schema_version, common::ObISQLClient* sql_client,
       const common::ObString* ddl_stmt_str = NULL);
 
-  private:
+private:
   int add_udf(common::ObISQLClient& sql_client, const ObUDF& udf_info, const bool only_history = false);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUDFSqlService);
 };
 

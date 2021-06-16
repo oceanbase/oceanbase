@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprPad : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprPad(common::ObIAllocator& alloc);
   virtual ~ObExprPad();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& source, ObExprResType& padding_str,
@@ -28,7 +28,7 @@ class ObExprPad : public ObStringExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_pad_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprPad);
 };

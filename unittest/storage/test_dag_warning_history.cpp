@@ -24,7 +24,7 @@ using namespace storage;
 
 namespace unittest {
 class TestDagWarningHistory : public ::testing::Test {
-  public:
+public:
   TestDagWarningHistory()
   {}
   virtual ~TestDagWarningHistory()

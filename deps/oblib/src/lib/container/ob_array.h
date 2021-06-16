@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 template <typename T>
 class ObArrayDefaultCallBack {
-  public:
+public:
   void operator()(T* ptr)
   {
     UNUSED(ptr);
@@ -29,7 +29,7 @@ class ObArrayDefaultCallBack {
 
 template <typename T>
 class ObArrayExpressionCallBack {
-  public:
+public:
   void operator()(T* ptr)
   {
     ptr->reset();
@@ -80,7 +80,7 @@ template <typename T, typename BlockAllocatorT = ModulePageAllocator, bool auto_
 class ObArrayImpl : public ObIArray<T> {
   typedef ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode> self_t;
 
-  public:
+public:
   typedef array::Iterator<self_t, T> iterator;
   typedef array::Iterator<self_t, const T> const_iterator;
   typedef T value_type;
@@ -88,21 +88,36 @@ class ObArrayImpl : public ObIArray<T> {
   using ObIArray<T>::count;
   using ObIArray<T>::at;
 
-  public:
+public:
   ObArrayImpl(int64_t block_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
       const BlockAllocatorT& alloc = BlockAllocatorT(ObNewModIds::OB_COMMON_ARRAY));
   virtual ~ObArrayImpl() __attribute__((noinline));
-  inline void set_label(const lib::ObLabel &label) { block_allocator_.set_label(label); }
-  inline void set_block_size(const int64_t block_size) { block_size_ = block_size; }
-  inline int64_t get_block_size() const {return block_size_; }
-  inline void set_block_allocator(const BlockAllocatorT &alloc) { block_allocator_ = alloc; }
-  inline const BlockAllocatorT   &get_block_allocator() const {return block_allocator_;}
-  int push_back(const T &obj) override;
+  inline void set_label(const lib::ObLabel& label)
+  {
+    block_allocator_.set_label(label);
+  }
+  inline void set_block_size(const int64_t block_size)
+  {
+    block_size_ = block_size;
+  }
+  inline int64_t get_block_size() const
+  {
+    return block_size_;
+  }
+  inline void set_block_allocator(const BlockAllocatorT& alloc)
+  {
+    block_allocator_ = alloc;
+  }
+  inline const BlockAllocatorT& get_block_allocator() const
+  {
+    return block_allocator_;
+  }
+  int push_back(const T& obj) override;
   void pop_back() override;
-  int pop_back(T &obj) override;
+  int pop_back(T& obj) override;
   int remove(const int64_t idx) override;
 
-  inline int at(const int64_t idx, T &obj) const override
+  inline int at(const int64_t idx, T& obj) const override
   {
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(OB_SUCCESS != error_)) {
@@ -123,10 +138,19 @@ class ObArrayImpl : public ObIArray<T> {
     OB_ASSERT(OB_SUCCESS == error_);
   }
 
-  inline T &operator[](const int64_t idx) {return at(idx);}
-  inline const T &operator[](const int64_t idx) const {return at(idx);}
-  T *alloc_place_holder() override;
-  inline int64_t size() const { return count();}
+  inline T& operator[](const int64_t idx)
+  {
+    return at(idx);
+  }
+  inline const T& operator[](const int64_t idx) const
+  {
+    return at(idx);
+  }
+  T* alloc_place_holder() override;
+  inline int64_t size() const
+  {
+    return count();
+  }
   void reuse() override
   {
     CallBack cb;
@@ -136,7 +160,10 @@ class ObArrayImpl : public ObIArray<T> {
       destroy();
     }
   }
-  inline void reset() override {destroy();}
+  inline void reset() override
+  {
+    destroy();
+  }
   void destroy() override;
   inline int reserve(int64_t capacity) override
   {
@@ -149,7 +176,7 @@ class ObArrayImpl : public ObIArray<T> {
     }
     return ret;
   }
-  //prepare allocate can avoid declaring local data
+  // prepare allocate can avoid declaring local data
   int prepare_allocate(int64_t capacity) override
   {
     int ret = OB_SUCCESS;
@@ -166,10 +193,19 @@ class ObArrayImpl : public ObIArray<T> {
     return ret;
   }
 
-  int64_t to_string(char *buffer, int64_t length) const override;
-  inline int64_t get_data_size() const {return data_size_;}
-  inline bool error() const {return error_ != OB_SUCCESS;}
-  inline int get_copy_assign_ret() const { return error_; }
+  int64_t to_string(char* buffer, int64_t length) const override;
+  inline int64_t get_data_size() const
+  {
+    return data_size_;
+  }
+  inline bool error() const
+  {
+    return error_ != OB_SUCCESS;
+  }
+  inline int get_copy_assign_ret() const
+  {
+    return error_;
+  }
   const_iterator begin() const;
   const_iterator end() const;
   iterator begin();
@@ -195,9 +231,9 @@ class ObArrayImpl : public ObIArray<T> {
     return ret;
   }
   // deep copy
-  ObArrayImpl(const ObArrayImpl &other);
-  ObArrayImpl &operator=(const ObArrayImpl &other);
-  int assign(const ObIArray<T> &other) override;
+  ObArrayImpl(const ObArrayImpl& other);
+  ObArrayImpl& operator=(const ObArrayImpl& other);
+  int assign(const ObIArray<T>& other) override;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   static uint32_t data_offset_bits()
@@ -229,11 +265,11 @@ class ObArrayImpl : public ObIArray<T> {
     return offsetof(ObArrayImpl, reserve_) * 8;
   }
 
-  protected:
+protected:
   using ObIArray<T>::data_;
   using ObIArray<T>::count_;
 
-  private:
+private:
   inline int extend_buf()
   {
     int64_t new_size = MAX(2 * data_size_, block_size_);
@@ -307,7 +343,7 @@ class ObArrayImpl : public ObIArray<T> {
     error_ = OB_SUCCESS;
   }
 
-  private:
+private:
   int64_t valid_count_;  // constructed item count
   int64_t data_size_;
   int64_t block_size_;
@@ -574,7 +610,7 @@ inline int databuff_encode_element(char* buf, const int64_t buf_len, int64_t& po
 template <typename T, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false,
     typename CallBack = ObArrayDefaultCallBack<T>, typename ItemEncode = NotImplementItemEncode<T> >
 class ObArray final : public ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode> {
-  public:
+public:
   // use ObArrayImpl constructors
   using ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>::ObArrayImpl;
 };

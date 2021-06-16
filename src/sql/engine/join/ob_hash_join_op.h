@@ -27,7 +27,7 @@ namespace sql {
 class ObHashJoinSpec : public ObJoinSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObHashJoinSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   ExprFixedArray equal_join_conds_;
@@ -41,7 +41,7 @@ class ObHashJoinSpec : public ObJoinSpec {
 //  RIGHT: overwrite with blank_right_row() in JS_FILL_LEFT state, right child also iterated end.
 
 class ObHashJoinOp : public ObJoinOp {
-  public:
+public:
   ObHashJoinOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObHashJoinOp()
   {}
@@ -49,7 +49,7 @@ class ObHashJoinOp : public ObJoinOp {
   using BucketFunc = std::function<int64_t(int64_t, int64_t)>;
   using NextFunc = std::function<int(const ObHashJoinStoredJoinRow*& right_read_row)>;
 
-  private:
+private:
   enum HJState { INIT, NORMAL, NEXT_BATCH };
   enum HJProcessor { NONE = 0, NEST_LOOP = 1, RECURSIVE = 2, IN_MEMORY = 4 };
   enum ObJoinState {
@@ -63,7 +63,7 @@ class ObHashJoinOp : public ObJoinOp {
   enum ObFuncType { FT_ITER_GOING = 0, FT_ITER_END, FT_TYPE_COUNT };
   enum HJLoopState { LOOP_START, LOOP_GOING, LOOP_RECURSIVE, LOOP_END };
 
-  private:
+private:
   struct HashTableCell {
     HashTableCell() = default;
     // do NOT init these members below in constructor, since we will set them
@@ -181,7 +181,7 @@ class ObHashJoinOp : public ObJoinOp {
     bool is_match_;
   };
   class HashJoinHistogram {
-    public:
+  public:
     HashJoinHistogram()
         : h1_(nullptr),
           h2_(nullptr),
@@ -257,7 +257,7 @@ class ObHashJoinOp : public ObJoinOp {
     void switch_histogram();
     void switch_prefix_hist_count();
 
-    public:
+  public:
     using HistItemArray = common::ObSegmentArray<HistItem, OB_MALLOC_BIG_BLOCK_SIZE, common::ModulePageAllocator>;
     using HistPrefixArray = common::ObSegmentArray<int64_t, OB_MALLOC_BIG_BLOCK_SIZE, common::ModulePageAllocator>;
     HistItemArray* h1_;
@@ -272,7 +272,7 @@ class ObHashJoinOp : public ObJoinOp {
     int64_t bucket_cnt_;
   };
   class PartitionSplitter {
-    public:
+  public:
     PartitionSplitter()
         : alloc_(nullptr),
           part_count_(0),
@@ -353,7 +353,7 @@ class ObHashJoinOp : public ObJoinOp {
       return total_row_count_;
     }
 
-    public:
+  public:
     ObIAllocator* alloc_;
     int64_t part_count_;
     ObHashJoinPartition* hj_parts_;
@@ -367,14 +367,14 @@ class ObHashJoinOp : public ObJoinOp {
     int64_t total_row_count_;
   };
 
-  public:
+public:
   virtual int inner_open() override;
   virtual int rescan() override;
   virtual int inner_get_next_row() override;
   virtual void destroy() override;
   virtual int inner_close() override;
 
-  private:
+private:
   void calc_cache_aware_partition_count();
   int recursive_postprocess();
   int insert_batch_row(const int64_t cur_partition_in_memory);
@@ -480,7 +480,7 @@ class ObHashJoinOp : public ObJoinOp {
   int get_match_row(bool& is_matched);
   int get_next_right_row_for_batch(NextFunc next_func);
 
-  private:
+private:
   OB_INLINE int64_t get_part_idx(const uint64_t hash_value)
   {
     return (hash_value >> part_shift_) & (part_count_ - 1);
@@ -585,7 +585,7 @@ class ObHashJoinOp : public ObJoinOp {
       bool is_build_side);
   int get_next_probe_partition();
 
-  private:
+private:
   typedef int (ObHashJoinOp::*ReadFunc)();
   typedef int (ObHashJoinOp::*state_function_func_type)();
   typedef int (ObHashJoinOp::*state_operation_func_type)();

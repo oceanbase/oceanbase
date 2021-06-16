@@ -115,7 +115,7 @@ class ObObjFreeList {
   friend class ObObjFreeListList;
   friend struct ObThreadCache;
 
-  public:
+public:
   ObObjFreeList();
   ~ObObjFreeList()
   {
@@ -168,7 +168,7 @@ class ObObjFreeList {
 
   SLINK(ObObjFreeList, link_);
 
-  private:
+private:
   void show_info(const char* file, const int line, const char* tag, ObThreadCache* thread_cache);
   ObChunkInfo*& get_chunk_info(void* item);
 #ifdef DOUBLE_FREE_CHECK
@@ -242,7 +242,7 @@ class ObObjFreeList {
     return ret;
   }
 
-  private:
+private:
   static const int64_t THREAD_CACHE_TOTAL_SIZE;
   static const int64_t THREAD_CACHE_LOW_MARK;
 
@@ -295,7 +295,7 @@ class ObObjFreeList {
 
 // Allocator for fixed size memory blocks.
 class ObFixedMemAllocator {
-  public:
+public:
   ObFixedMemAllocator()
   {
     fl_ = NULL;
@@ -338,7 +338,7 @@ class ObFixedMemAllocator {
     }
   }
 
-  protected:
+protected:
   ObObjFreeList* fl_;
 
   DISALLOW_COPY_AND_ASSIGN(ObFixedMemAllocator);
@@ -349,7 +349,7 @@ struct __is_default_constructible__;
 
 template <>
 struct __is_default_constructible__<void> {
-  protected:
+protected:
   // Put base typedefs here to avoid pollution
   struct twoc {
     char a, b;
@@ -359,7 +359,7 @@ struct __is_default_constructible__<void> {
     typedef char type;
   };
 
-  public:
+public:
   static bool const value = false;
 };
 
@@ -370,13 +370,13 @@ struct __is_default_constructible__<>::test<true> {
 
 template <class T>
 struct __is_default_constructible__ : __is_default_constructible__<> {
-  private:
+private:
   template <class U>
   static typename test<!!sizeof(::new U())>::type sfinae(U*);
   template <class U>
   static char sfinae(...);
 
-  public:
+public:
   static bool const value = sizeof(sfinae<T>(0)) > 1;
 };
 
@@ -415,7 +415,7 @@ struct ObClassConstructor {
 // copied onto the new objects. This is done for performance reasons.
 template <class T>
 class ObClassAllocator : public ObFixedMemAllocator {
-  public:
+public:
   ObClassAllocator()
   {
     fl_ = NULL;
@@ -488,11 +488,11 @@ class ObClassAllocator : public ObFixedMemAllocator {
     free(reinterpret_cast<T*>(ptr));
   }
 
-  protected:
+protected:
   static volatile int64_t once_;  // for creating singleton instance
   static volatile ObClassAllocator<T>* instance_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObClassAllocator);
 };
 
@@ -503,7 +503,7 @@ class ObClassAllocator : public ObFixedMemAllocator {
 // need an especial allocator to allocate themself.
 template <class T>
 class ObMetaAllocator : public ObFixedMemAllocator {
-  public:
+public:
   // Create a new class specific ClassAllocator.
   // @param mod allocate mode.
   explicit ObMetaAllocator(const lib::ObLabel& label)
@@ -569,7 +569,7 @@ class ObMetaAllocator : public ObFixedMemAllocator {
     free(reinterpret_cast<T*>(ptr));
   }
 
-  private:
+private:
   void* free_list_;
   PageArena<char> allocator_;
   ::ObMutex0 allocator_lock_;
@@ -580,7 +580,7 @@ class ObMetaAllocator : public ObFixedMemAllocator {
 class ObObjFreeListList {
   friend class ObObjFreeList;
 
-  public:
+public:
   static const int64_t MAX_NUM_FREELIST;
   static pthread_key_t objpool_key_;
 
@@ -630,7 +630,7 @@ class ObObjFreeListList {
   void snap_baseline();
   int64_t to_string(char* buf, const int64_t len) const;
 
-  private:
+private:
   int init()
   {
     int ret = OB_SUCCESS;
@@ -651,7 +651,7 @@ class ObObjFreeListList {
     return ret;
   }
 
-  private:
+private:
   static volatile int64_t once_;  // for creating singleton instance
 
   ObObjFreeListList();

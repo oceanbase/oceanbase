@@ -35,7 +35,7 @@ namespace transaction {
 class ObTransMsgBase : public obrpc::ObIFill {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTransMsgBase()
   {
     reset();
@@ -48,7 +48,7 @@ class ObTransMsgBase : public obrpc::ObIFill {
   void reset();
   bool is_valid() const;
 
-  public:
+public:
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -86,7 +86,7 @@ class ObTransMsgBase : public obrpc::ObIFill {
     return sender_addr_;
   }
 
-  protected:
+protected:
   uint64_t tenant_id_;
   ObTransID trans_id_;
   int64_t msg_type_;
@@ -101,7 +101,7 @@ class ObTransMsgBase : public obrpc::ObIFill {
 class ObTransMsg : public ObTransMsgBase {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTransMsg()
       : participants_(common::ObModIds::OB_TRANS_PARTITION_ARRAY, common::OB_MALLOC_NORMAL_BLOCK_SIZE),
         partition_log_info_arr_(
@@ -301,7 +301,7 @@ class ObTransMsg : public ObTransMsgBase {
       const ObStartTransParam& trans_param, const common::ObAddr& sender_addr, const common::ObAddr& scheduler,
       const int32_t status);
 
-  public:
+public:
   const common::ObAddr& get_scheduler() const
   {
     return scheduler_;
@@ -491,16 +491,16 @@ class ObTransMsg : public ObTransMsgBase {
       K_(can_elr), K_(is_dup_table_trans), K_(is_not_create_ctx_participant), K_(batch_same_leader_partitions),
       K_(app_trace_info), K_(xid), K_(is_xa_prepare), K_(stmt_rollback_participants), K_(msg_timeout));
 
-  public:
+public:
   bool is_valid() const;
 
-  private:
+private:
   bool cluster_version_before_2271_() const
   {
     return cluster_version_ < CLUSTER_VERSION_2271;
   }
 
-  private:
+private:
   bool is_inited_;
   common::ObAddr scheduler_;
   common::ObPartitionKey coordinator_;

@@ -25,13 +25,13 @@ class ObAllDataTypeTable : public common::ObVirtualTableScannerIterator {
     DATA_TYPE_CLASS,
   };
 
-  public:
+public:
   ObAllDataTypeTable();
   virtual ~ObAllDataTypeTable();
 
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllDataTypeTable);
 };
 }  // namespace observer

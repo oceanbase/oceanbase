@@ -39,15 +39,15 @@ class ObIDMap {
     T* data;
   };
 
-  public:
+public:
   ObIDMap();
   ~ObIDMap();
 
-  public:
+public:
   int init(const ID_TYPE num);
   void destroy();
 
-  public:
+public:
   int assign(T* value, ID_TYPE& id);
   int get(const ID_TYPE id, T*& value) const;
   T* fetch(const ID_TYPE id, const FetchMod mod = FM_SHARED);
@@ -55,7 +55,7 @@ class ObIDMap {
   void erase(const ID_TYPE id);
   int size() const;
 
-  public:
+public:
   // callback::operator()(const ID_TYPE id)
   template <typename Callback>
   void traverse(Callback& cb) const
@@ -69,7 +69,7 @@ class ObIDMap {
     }
   };
 
-  private:
+private:
   ID_TYPE num_;
   ID_TYPE overflow_limit_;
   Node* array_;

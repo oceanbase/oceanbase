@@ -22,7 +22,7 @@ namespace rootserver {
 class ObGCPartitionBuilder;
 
 class ObBuildGCPartitionTask : public share::ObAsyncTask {
-  public:
+public:
   explicit ObBuildGCPartitionTask(ObGCPartitionBuilder& gc_partition_builder)
       : gc_partition_builder_(&gc_partition_builder)
   {}
@@ -32,12 +32,12 @@ class ObBuildGCPartitionTask : public share::ObAsyncTask {
   share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
   virtual int process();
 
-  private:
+private:
   ObGCPartitionBuilder* gc_partition_builder_;
 };
 
 class ObGCPartitionBuilder {
-  public:
+public:
   ObGCPartitionBuilder();
   ~ObGCPartitionBuilder()
   {}
@@ -51,7 +51,7 @@ class ObGCPartitionBuilder {
   void start();
   int stop();
 
-  private:
+private:
   int check_stop();
   int set_build_mark();
 
@@ -60,10 +60,10 @@ class ObGCPartitionBuilder {
   int batch_insert_partitions(common::ObIArray<common::ObPartitionKey>& partitions);
   int check_tenant_gc_partition_info(uint64_t tenant_id, int64_t partition_cnt);
 
-  private:
+private:
   static const int64_t BATCH_INSERT_COUNT = 100;
 
-  private:
+private:
   bool inited_;
   bool stopped_;
   bool build_;

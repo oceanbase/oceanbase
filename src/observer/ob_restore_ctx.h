@@ -37,7 +37,7 @@ namespace observer {
 class ObVTIterCreator;
 
 class ObRestoreCtx {
-  public:
+public:
   ObRestoreCtx()
       : schema_service_(NULL),
         sql_client_(NULL),
@@ -62,7 +62,7 @@ class ObRestoreCtx {
   common::ObServerConfig* server_config_;
   obrpc::ObCommonRpcProxy* rs_rpc_proxy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRestoreCtx);
 };
 

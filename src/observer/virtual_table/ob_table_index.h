@@ -29,7 +29,7 @@ class ObDatabaseSchema;
 }  // namespace share
 namespace observer {
 class ObTableIndex : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObTableIndex();
   virtual ~ObTableIndex();
   virtual int inner_open();
@@ -40,7 +40,7 @@ class ObTableIndex : public common::ObVirtualTableScannerIterator {
     tenant_id_ = tenant_id;
   }
 
-  private:
+private:
   int add_table_indexes(const share::schema::ObTableSchema& table_schema, const common::ObString& database_name,
       common::ObObj* cells, int64_t col_count, bool& is_end);
   int add_database_indexes(
@@ -58,7 +58,7 @@ class ObTableIndex : public common::ObVirtualTableScannerIterator {
   int get_show_column_name(const share::schema::ObTableSchema& table_schema,
       const share::schema::ObColumnSchemaV2& column_schema, common::ObString& column_name);
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t show_table_id_;
   common::ObSArray<const share::schema::ObDatabaseSchema*> database_schemas_;

@@ -21,17 +21,17 @@ class ObExecContext;
 class ObAppendSpec : public ObOpSpec {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAppendSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObOpSpec(alloc, type)
   {}
   virtual ~ObAppendSpec(){};
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAppendSpec);
 };
 
 class ObAppendOp : public ObOperator {
-  public:
+public:
   ObAppendOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input), current_child_op_idx_(0)
   {}
@@ -57,10 +57,10 @@ class ObAppendOp : public ObOperator {
    */
   int get_next_row();
 
-  public:
+public:
   int64_t current_child_op_idx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAppendOp);
 };
 

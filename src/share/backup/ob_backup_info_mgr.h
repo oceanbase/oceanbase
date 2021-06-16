@@ -22,7 +22,7 @@ namespace share {
 class ObRsMgr;
 class ObBackupDestDetector;
 class ObLogArchiveInfoMgr final {
-  public:
+public:
   struct ObLogArchiveSimpleInfo final {
     int64_t update_ts_;
     int64_t checkpoint_ts_;
@@ -41,14 +41,14 @@ class ObLogArchiveInfoMgr final {
   int get_log_archive_status(const uint64_t tenant_id, const int64_t need_ts, ObLogArchiveSimpleInfo& status);
   TO_STRING_KV(K_(update_count));
 
-  private:
+private:
   ObLogArchiveInfoMgr();
   ~ObLogArchiveInfoMgr();
   int get_log_archive_status_(const uint64_t tenant_id, ObLogArchiveSimpleInfo& status);
   int try_retire_status_();
   int renew_log_archive_status_(const uint64_t tenant_id, ObLogArchiveSimpleInfo& status);
 
-  private:
+private:
   typedef common::hash::ObHashMap<uint64_t, ObLogArchiveSimpleInfo, common::hash::NoPthreadDefendMode> STATUS_MAP;
   bool is_inited_;
   common::ObMySQLProxy* sql_proxy_;
@@ -60,7 +60,7 @@ class ObLogArchiveInfoMgr final {
 };
 
 class ObBackupInfoMgr final {
-  public:
+public:
   typedef common::ObArray<ObPhysicalRestoreJob> RestoreJobArray;
   static ObBackupInfoMgr& get_instance();
 
@@ -83,18 +83,18 @@ class ObBackupInfoMgr final {
   int is_base_backup_start(bool& is_started);
   int get_base_data_restore_schema_version(const uint64_t tenant_id, int64_t& schema_version);
 
-  private:
+private:
   static const int64_t DEFAULT_UPDATE_INTERVAL_US = 10 * 1000 * 1000;  // 10s
   int get_restore_info_from_cache(const uint64_t tenant_id, ObSimplePhysicalRestoreJob& simple_job_info);
   int get_restore_status_from_cache(const uint64_t tenant_id, PhysicalRestoreStatus& status);
   int check_backup_dest_(ObLogArchiveBackupInfo& backup_info);
 
-  private:
+private:
   ObBackupInfoMgr();
   ~ObBackupInfoMgr();
 
   class ObBackupInfoUpdateTask : public common::ObTimerTask {
-    public:
+  public:
     ObBackupInfoUpdateTask()
     {}
     virtual ~ObBackupInfoUpdateTask()
@@ -102,7 +102,7 @@ class ObBackupInfoMgr final {
     virtual void runTimerTask() override;
   };
 
-  private:
+private:
   bool is_inited_;
   common::ObMySQLProxy* sql_proxy_;
   common::ObTimer timer_;
@@ -121,7 +121,7 @@ class ObBackupInfoMgr final {
 };
 
 class ObRestoreBackupInfoUtil final {
-  public:
+public:
   struct GetRestoreBackupInfoParam final {
     GetRestoreBackupInfoParam();
     const char* backup_dest_;
@@ -139,7 +139,7 @@ class ObRestoreBackupInfoUtil final {
 };
 
 class ObRestoreFatalErrorReporter : public share::ObThreadPool {
-  public:
+public:
   static ObRestoreFatalErrorReporter& get_instance();
 
   int init(obrpc::ObCommonRpcProxy& rpc_proxy, share::ObRsMgr& rs_mgr);
@@ -149,7 +149,7 @@ class ObRestoreFatalErrorReporter : public share::ObThreadPool {
   virtual void stop() override;
   virtual void wait() override;
 
-  private:
+private:
   ObRestoreFatalErrorReporter();
   virtual ~ObRestoreFatalErrorReporter();
   virtual void run1() override;
@@ -157,7 +157,7 @@ class ObRestoreFatalErrorReporter : public share::ObThreadPool {
   int report_restore_error_(const obrpc::ObPhysicalRestoreResult& result);
   int remove_restore_error_task_(const obrpc::ObPhysicalRestoreResult& result);
 
-  private:
+private:
   bool is_inited_;
   obrpc::ObCommonRpcProxy* rpc_proxy_;
   share::ObRsMgr* rs_mgr_;
@@ -167,7 +167,7 @@ class ObRestoreFatalErrorReporter : public share::ObThreadPool {
 };
 
 class ObBackupDestDetector : public share::ObThreadPool {
-  public:
+public:
   static ObBackupDestDetector& get_instance();
   int init();
   virtual int start() override;
@@ -177,7 +177,7 @@ class ObBackupDestDetector : public share::ObThreadPool {
   int get_is_backup_dest_bad(const int64_t round_id, bool& is_bad);
   int update_backup_info(const ObLogArchiveBackupInfo& info);
 
-  private:
+private:
   ObBackupDestDetector();
   virtual ~ObBackupDestDetector();
   virtual void run1() override;
@@ -185,7 +185,7 @@ class ObBackupDestDetector : public share::ObThreadPool {
   int check_backup_dest_(ObLogArchiveBackupInfo& backup_info, bool& is_bad);
   void idle();
 
-  private:
+private:
   bool is_inited_;
   common::SpinRWLock lock_;
   ObLogArchiveBackupInfo info_;

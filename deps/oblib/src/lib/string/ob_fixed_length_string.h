@@ -23,7 +23,7 @@ template <int64_t N>
 class ObFixedLengthString {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFixedLengthString();
   ObFixedLengthString(const char* str);
   ObFixedLengthString(const ObString& str);
@@ -77,7 +77,7 @@ class ObFixedLengthString {
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   char buf_[N];
 };
 

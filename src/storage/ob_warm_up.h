@@ -32,7 +32,7 @@ class ObTransDesc;
 
 namespace storage {
 class ObWarmUpCtx {
-  public:
+public:
   ObWarmUpCtx();
   ~ObWarmUpCtx();
   void record_exist_check(const common::ObPartitionKey& pkey, const int64_t table_id,
@@ -66,7 +66,7 @@ class ObWarmUpCtx {
   }
   TO_STRING_KV(K_(request_list));
 
-  private:
+private:
   const static int64_t MAX_WARM_UP_REQUESTS_SIZE = 32 * 1024;
   common::ObArenaAllocator allocator_;
   ObWarmUpRequestList request_list_;
@@ -77,7 +77,7 @@ class ObWarmUpCtx {
 
 class ObWarmUpService;
 class ObSendWarmUpTask : public common::IObDedupTask {
-  public:
+public:
   ObSendWarmUpTask();
   virtual ~ObSendWarmUpTask();
   void assign(ObWarmUpService& warm_service, ObWarmUpCtx& warm_ctx, int64_t task_create_time);
@@ -98,18 +98,18 @@ class ObSendWarmUpTask : public common::IObDedupTask {
   virtual int process();
   TO_STRING_KV(K_(warm_ctx));
 
-  private:
+private:
   const static int64_t TASK_EXPIRE_TIME = 1000 * 1000;  // 1s
   ObWarmUpService* warm_service_;
   ObWarmUpCtx* warm_ctx_;
   int64_t task_create_time_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSendWarmUpTask);
 };
 
 class ObWarmUpService {
-  public:
+public:
   ObWarmUpService();
   ~ObWarmUpService();
   void stop();
@@ -119,11 +119,11 @@ class ObWarmUpService {
   int deregister_warm_up_ctx(transaction::ObTransDesc& trans_desc);
   int send_warm_up_request(const ObWarmUpCtx& warm_up_ctx);
 
-  private:
+private:
   int check_need_warm_up(bool& is_need);
   int get_members(const common::ObPartitionKey& pkey, common::ObMemberList& members);
 
-  private:
+private:
   typedef common::hash::ObHashMap<ObPartitionKey, ObMemberList*, common::hash::NoPthreadDefendMode> MemberMap;
   typedef common::hash::ObHashMap<ObAddr, obrpc::ObWarmUpRequestArg*, common::hash::NoPthreadDefendMode> ServerMap;
   static const int32_t MAX_SEND_TASK_THREAD_CNT = 1;

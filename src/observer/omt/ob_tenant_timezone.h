@@ -24,9 +24,9 @@ class ObTenantTimezoneMgr;
 class ObTenantTimezone {
   friend class ObTenantTimezoneMgr;
 
-  public:
+public:
   class TenantTZUpdateTask : public common::ObTimerTask {
-    public:
+  public:
     TenantTZUpdateTask() : tenant_tz_mgr_(nullptr), tenant_tz_(nullptr), task_lock_()
     {}
     int init(ObTenantTimezoneMgr* tz_mgr, ObTenantTimezone* timezone)
@@ -51,7 +51,7 @@ class ObTenantTimezone {
   };
   friend class TenantTZUpdateTask;
 
-  public:
+public:
   ObTenantTimezone();
   ObTenantTimezone(uint64_t tenant_id);
   virtual ~ObTenantTimezone();
@@ -105,7 +105,7 @@ class ObTenantTimezone {
   };
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ref_count));
 
-  private:
+private:
   bool is_inited_;
   uint64_t tenant_id_;
   ObTenantTimezoneMgr* tenant_tz_mgr_;

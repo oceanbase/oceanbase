@@ -23,7 +23,7 @@ using namespace election;
 namespace unittest {
 
 class MockElectionCallback : public ObIElectionCallback, public ObIElectionGroupPriorityGetter {
-  public:
+public:
   MockElectionCallback()
   {}
   virtual ~MockElectionCallback()
@@ -58,7 +58,7 @@ class MockElectionCallback : public ObIElectionCallback, public ObIElectionGroup
     return OB_SUCCESS;
   }
 
-  public:
+public:
   ObElectionPriority priority_;
   ObElectionGroupPriority eg_priority_;
 };

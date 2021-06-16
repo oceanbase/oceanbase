@@ -28,11 +28,11 @@ namespace sql {
 //
 template <int64_t NUM_CNT = 1>
 class ObNumStackAllocator : public common::ObDataBuffer {
-  public:
+public:
   ObNumStackAllocator() : ObDataBuffer(local_buf_, sizeof(local_buf_))
   {}
 
-  private:
+private:
   char local_buf_[NUM_CNT * common::number::ObNumber::MAX_BYTE_LEN];
 };
 typedef ObNumStackAllocator<1> ObNumStackOnceAlloc;
@@ -40,7 +40,7 @@ typedef ObNumStackAllocator<1> ObNumStackOnceAlloc;
 #define array_elements(A) ((uint)(sizeof(A) / sizeof(A[0])))
 
 class ObExprUtil {
-  public:
+public:
   static int get_trunc_int64(const common::ObObj& obj, common::ObExprCtx& expr_ctx, int64_t& out);
   static int get_round_int64(const common::ObObj& obj, common::ObExprCtx& expr_ctx, int64_t& out);
 
@@ -92,7 +92,7 @@ class ObExprUtil {
 
   static int eval_stack_overflow_check(const ObExpr& rt_expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   static int get_int64_from_num(common::number::ObNumber& nmb, common::ObExprCtx& expr_ctx,
       const bool is_trunc,  // true: trunc; false: round
       int64_t& out);

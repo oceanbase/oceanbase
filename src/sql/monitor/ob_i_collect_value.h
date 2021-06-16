@@ -17,7 +17,7 @@ namespace sql {
 enum StatType { OB_INVALID_STAT_TYPE = 0, PLAN_MONITOR_INFO };
 
 class ObIValue {
-  public:
+public:
   explicit ObIValue(StatType type)
   {
     value_type_ = type;
@@ -29,7 +29,7 @@ class ObIValue {
     return value_type_;
   }
 
-  protected:
+protected:
   StatType value_type_;
 };
 }  // namespace sql

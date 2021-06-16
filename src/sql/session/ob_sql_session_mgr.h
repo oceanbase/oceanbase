@@ -27,7 +27,7 @@ class ObSMConnection;
 namespace sql {
 
 class ObFreeSessionCtx {
-  public:
+public:
   ObFreeSessionCtx()
       : has_inc_active_num_(false), tenant_id_(common::OB_INVALID_ID), version_(0), sessid_(0), proxy_sessid_(0)
   {}
@@ -42,7 +42,7 @@ class ObFreeSessionCtx {
 };
 
 class ObSQLSessionMgr : public common::ObTimerTask {
-  public:
+public:
   static const int64_t SCHEDULE_PERIOD = 1000 * 1000 * 5;  // 5s
   static const uint32_t NON_DURABLE_VALUE = 0;
   static const uint32_t MAX_VERSION = UINT8_MAX;  // 255
@@ -125,24 +125,24 @@ class ObSQLSessionMgr : public common::ObTimerTask {
   int mark_sessid_used(uint32_t sess_id);
   int mark_sessid_unused(uint32_t sess_id);
   // inline ObNullEndTransCallback &get_null_callback() { return null_callback_; }
-  private:
+private:
   int create_session_by_version(
       uint64_t tenant_id, uint32_t sessid, uint64_t proxy_sessid, ObSQLSessionInfo*& sess_info, uint32_t& out_version);
   int get_avaiable_local_seq(uint32_t& local_seq);
   int set_first_seq(int64_t first_seq);
 
   class SessionPool {
-    public:
+  public:
     SessionPool();
 
-    public:
+  public:
     int init();
     int pop_session(uint64_t tenant_id, ObSQLSessionInfo*& session);
     int push_session(uint64_t tenant_id, ObSQLSessionInfo*& session);
     int64_t count() const;
     TO_STRING_KV(K(session_pool_.capacity()), K(session_pool_.get_total()), K(session_pool_.get_free()));
 
-    private:
+  private:
     static const int64_t POOL_CAPACIPY = 512;
     static const uint64_t POOL_INITED = 0;
     common::ObFixedQueue<ObSQLSessionInfo> session_pool_;
@@ -150,32 +150,32 @@ class ObSQLSessionMgr : public common::ObTimerTask {
   };
 
   class SessionPoolMap {
-    public:
+  public:
     SessionPoolMap(ObIAllocator& alloc) : pool_blocks_(ObWrapperAllocator(alloc)), alloc_(alloc), lock_()
     {}
     int get_session_pool(uint64_t tenant_id, SessionPool*& session_pool);
 
-    private:
+  private:
     static const uint64_t BLOCK_ID_SHIFT = 10;
     static const uint64_t SLOT_ID_MASK = 0x3FF;
     static const uint64_t SLOT_PER_BLOCK = 1ULL << BLOCK_ID_SHIFT;
     typedef SessionPool* SessionPoolBlock[SLOT_PER_BLOCK];
     typedef Ob2DArray<SessionPoolBlock*, 1024, ObWrapperAllocator> SessionPoolBlocks;
 
-    private:
+  private:
     int create_pool_block(uint64_t block_id, SessionPoolBlock*& pool_block);
     int create_session_pool(SessionPoolBlock& pool_block, uint64_t slot_id, SessionPool*& session_pool);
     uint64_t get_block_id(uint64_t tenant_id) const;
     uint64_t get_slot_id(uint64_t tenant_id) const;
 
-    private:
+  private:
     SessionPoolBlocks pool_blocks_;
     ObIAllocator& alloc_;
     ObSpinLock lock_;
   };
 
   class ValueAlloc {
-    public:
+  public:
     ValueAlloc()
         : session_pool_map_(allocator_),
           alloc_total_count_(0),
@@ -201,10 +201,10 @@ class ObSQLSessionMgr : public common::ObTimerTask {
       }
     }
 
-    private:
+  private:
     bool is_valid_tenant_id(uint64_t tenant_id) const;
 
-    private:
+  private:
     SessionPoolMap session_pool_map_;
     ObArenaAllocator allocator_;
     common::ObSpinLock lock_;
@@ -219,7 +219,7 @@ class ObSQLSessionMgr : public common::ObTimerTask {
   typedef common::ObTenantLinkHashMap<Key, ObSQLSessionInfo, ValueAlloc> HashMap;
 
   class CheckSessionFunctor {
-    public:
+  public:
     CheckSessionFunctor() : sess_mgr_(NULL)
     {}
     explicit CheckSessionFunctor(ObSQLSessionMgr* sess_mgr) : sess_mgr_(sess_mgr)
@@ -228,22 +228,22 @@ class ObSQLSessionMgr : public common::ObTimerTask {
     {}
     bool operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessionInfo* sess_info);
 
-    private:
+  private:
     ObSQLSessionMgr* sess_mgr_;
   };
 
   class KillTenant {
-    public:
+  public:
     KillTenant(ObSQLSessionMgr* mgr, const uint64_t tenant_id) : mgr_(mgr), tenant_id_(tenant_id)
     {}
     bool operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessionInfo* sess_info);
 
-    private:
+  private:
     ObSQLSessionMgr* mgr_;
     const uint64_t tenant_id_;
   };
 
-  private:
+private:
   // ObNullEndTransCallback null_callback_;
   // used for manage ObSQLSessionInfo
   HashMap sessinfo_map_;

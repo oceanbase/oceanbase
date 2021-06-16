@@ -16,18 +16,18 @@
 using namespace oceanbase::common;
 
 class TestRowStore : public ::testing::Test {
-  public:
+public:
   TestRowStore();
   virtual ~TestRowStore();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   TestRowStore(const TestRowStore& other);
   TestRowStore& operator=(const TestRowStore& other);
 
-  protected:
+protected:
   void add_row(int32_t i, int64_t COL_NUM, ObRowStore& store, int expect_ret = OB_SUCCESS);
   void add_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store);
   void verify_rows(int64_t COL_NUM, int64_t ROW_NUM, ObRowStore& store);

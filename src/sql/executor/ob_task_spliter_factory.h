@@ -22,16 +22,16 @@ class ObIAllocator;
 }
 namespace sql {
 class ObTaskSpliterFactory {
-  public:
+public:
   ObTaskSpliterFactory();
   virtual ~ObTaskSpliterFactory();
   void reset();
   int create(ObExecContext& exec_ctx, ObJob& job, int spliter_type, ObTaskSpliter*& spliter);
 
-  private:
+private:
   common::ObSEArray<ObTaskSpliter*, 4> store_;
 
-  private:
+private:
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObTaskSpliterFactory);
 };

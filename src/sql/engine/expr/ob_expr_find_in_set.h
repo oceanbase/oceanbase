@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprFindInSet : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFindInSet(common::ObIAllocator& alloc);
   virtual ~ObExprFindInSet();
   virtual int calc_result_type2(
@@ -29,7 +29,7 @@ class ObExprFindInSet : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_find_in_set_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprFindInSet);
 };
 

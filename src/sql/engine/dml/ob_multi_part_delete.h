@@ -18,11 +18,11 @@ namespace sql {
 class ObMultiPartDelete : public ObTableModify, public ObMultiDMLInfo {
   class ObMultiPartDeleteCtx;
 
-  public:
+public:
   static const int64_t DELETE_OP = 0;
   static const int64_t DML_OP_CNT = 1;
 
-  public:
+public:
   explicit ObMultiPartDelete(common::ObIAllocator& allocator);
   virtual ~ObMultiPartDelete();
 
@@ -40,7 +40,7 @@ class ObMultiPartDelete : public ObTableModify, public ObMultiDMLInfo {
     return true;
   }
 
-  private:
+private:
   /**
    * @brief open operator, not including children operators.
    * called by open.

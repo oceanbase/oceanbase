@@ -37,7 +37,7 @@ typedef ObItemType ObExprOperatorType;
 struct ObDatumMeta {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDatumMeta() : type_(common::ObNullType), cs_type_(common::CS_TYPE_INVALID), scale_(-1), precision_(-1)
   {}
   ObDatumMeta(const common::ObObjType type, const common::ObCollationType cs_type, const int8_t scale)
@@ -122,18 +122,18 @@ struct ObEvalCtx {
     return tmp_alloc_;
   }
 
-  private:
+private:
   // Allocate expression result memory.
   void* alloc_expr_res(const int64_t size)
   {
     return expr_res_alloc_.alloc(size);
   }
 
-  public:
+public:
   char** frames_;
   ObExecContext& exec_ctx_;
 
-  private:
+private:
   // Expression result allocator, never reset.
   common::ObArenaAllocator& expr_res_alloc_;
 
@@ -181,7 +181,7 @@ typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ObStrValues
 struct ObExpr {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   const static uint32_t INVALID_EXP_CTX_ID = UINT32_MAX;
 
   ObExpr();
@@ -249,10 +249,10 @@ struct ObExpr {
       KP_(inner_functions), K_(inner_func_cnt), K_(arg_cnt), K_(parent_cnt), K_(frame_idx), K_(datum_off),
       K_(res_buf_off), K_(res_buf_len), K_(expr_ctx_id), K_(extra), KP(this));
 
-  private:
+private:
   char* alloc_str_res_mem(ObEvalCtx& ctx, const int64_t size) const;
 
-  public:
+public:
   typedef int (*EvalFunc)(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   typedef int (*EvalEnumSetFunc)(const ObExpr& expr, const common::ObIArray<common::ObString>& str_values,
       const uint64_t cast_mode, ObEvalCtx& ctx, ObDatum& expr_datum);
@@ -338,27 +338,27 @@ struct ObExprExtraInfoAccess {
 // Please try not to use this, if you mast use it, make sure it only allocate one time and is
 // for expression result.
 class ObExprStrResAlloc : public common::ObIAllocator {
-  public:
+public:
   ObExprStrResAlloc(const ObExpr& expr, ObEvalCtx& ctx) : off_(0), expr_(expr), ctx_(ctx)
   {}
 
   void* alloc(const int64_t size) override;
 
-  private:
+private:
   int64_t off_;
   const ObExpr& expr_;
   ObEvalCtx& ctx_;
 };
 
 struct ObDatumObj {
-  public:
+public:
   void set_scale(common::ObScale scale)
   {
     meta_.scale_ = scale;
   }
   TO_STRING_KV(K_(meta));
 
-  public:
+public:
   ObDatumMeta meta_;
   common::ObDatum datum_;
 };
@@ -374,7 +374,7 @@ struct ObDatumObjParam : public ObDatumObj {
 
   TO_STRING_KV(K_(accuracy), K_(res_flags), K_(datum), K_(meta));
 
-  public:
+public:
   int from_objparam(const common::ObObjParam& objparam);
 
   int to_objparam(common::ObObjParam& obj_param);
@@ -498,7 +498,7 @@ struct ObDatumObjParam : public ObDatumObj {
     return offsetof(ObDatumObjParam, flag_) * 8;
   }
 
-  private:
+private:
   common::ObAccuracy accuracy_;
   uint32_t res_flags_;  // BINARY, NUM, NOT_NULL, TIMESTAMP, etc
                         // reference: src/lib/regex/include/mysql_com.h

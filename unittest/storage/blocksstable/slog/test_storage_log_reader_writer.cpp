@@ -24,7 +24,7 @@ using namespace ::testing;
 namespace oceanbase {
 namespace blocksstable {
 class TestStorageLogReaderWriter : public ::testing::Test {
-  public:
+public:
   TestStorageLogReaderWriter()
   {}
   virtual ~TestStorageLogReaderWriter()
@@ -499,7 +499,7 @@ TEST_F(TestStorageLogReaderWriter, switch_file_revise)
 {
   int ret = OB_SUCCESS;
   const char LOG_DIR[512] = "./test_storage_log_rw";
-  const int64_t LOG_FILE_SIZE = 16 * 1024; // 16KB
+  const int64_t LOG_FILE_SIZE = 16 * 1024;  // 16KB
   const int64_t CONCURRENT_TRANS_CNT = 8;
   const int64_t LOG_BUFFER_SIZE = 1966080L;  // 1.875MB
 
@@ -546,14 +546,14 @@ TEST_F(TestStorageLogReaderWriter, switch_file_revise)
   int64_t revise_size = 0;
   ret = FileDirectoryUtils::get_file_size("./test_storage_log_rw/1", revise_size);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(3 * 4096, revise_size); // truncate last 4k
+  ASSERT_EQ(3 * 4096, revise_size);  // truncate last 4k
 }
 
 TEST_F(TestStorageLogReaderWriter, errsim_io_hung)
 {
   int ret = OB_SUCCESS;
   const char LOG_DIR[512] = "./test_storage_log_rw";
-  const int64_t LOG_FILE_SIZE = 16 * 1024; // 16KB
+  const int64_t LOG_FILE_SIZE = 16 * 1024;  // 16KB
   const int64_t CONCURRENT_TRANS_CNT = 8;
   const int64_t LOG_BUFFER_SIZE = 1966080L;  // 1.875MB
 

@@ -20,21 +20,21 @@ namespace sql {
 class ObJoinSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObJoinSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type), join_type_(UNKNOWN_JOIN), other_join_conds_(alloc)
   {}
 
-  public:
+public:
   ObJoinType join_type_;
   common::ObFixedArray<ObExpr*, common::ObIAllocator> other_join_conds_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObJoinSpec);
 };
 
 class ObJoinOp : public ObOperator {
-  public:
+public:
   ObJoinOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input), output_row_produced_(false), left_row_joined_(false)
   {}
@@ -71,11 +71,11 @@ class ObJoinOp : public ObOperator {
     return static_cast<const ObJoinSpec&>(spec_);
   }
 
-  public:
+public:
   bool output_row_produced_;
   bool left_row_joined_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObJoinOp);
 };
 

@@ -65,10 +65,10 @@ struct expr_equal_to {
 
 /// the base class of all statements
 class ObStmt {
-  public:
+public:
   typedef common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ObSynonymIds;
 
-  public:
+public:
   ObStmt()
       : stmt_type_(stmt::T_NONE),
         literal_stmt_type_(stmt::T_NONE),
@@ -501,16 +501,16 @@ class ObStmt {
     return sql_stmt_coll_type_;
   }
 
-  protected:
+protected:
   void print_indentation(FILE* fp, int32_t level) const;
 
-  public:
+public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStmt);
   // protected:
-  public:
+public:
   stmt::StmtType stmt_type_;
   stmt::StmtType literal_stmt_type_;
   common::ObString sql_stmt_;
@@ -564,7 +564,7 @@ inline bool ObStmt::is_px_dml_supported_stmt() const
 }
 
 class ObStmtFactory {
-  public:
+public:
   explicit ObStmtFactory(common::ObIAllocator& alloc)
       : allocator_(alloc), stmt_store_(alloc), free_list_(alloc), query_ctx_(NULL)
   {}
@@ -618,13 +618,13 @@ class ObStmtFactory {
     return allocator_;
   }
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   common::ObObjStore<ObStmt*, common::ObIAllocator&, true> stmt_store_;
   common::ObObjStore<ObSelectStmt*, common::ObIAllocator&, true> free_list_;
   ObQueryCtx* query_ctx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStmtFactory);
 };
 }  // namespace sql

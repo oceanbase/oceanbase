@@ -28,9 +28,9 @@ namespace omt {
 class ObMultiTenant;
 // monitor tenant units and create/delete/modify local OMT.
 class ObTenantNodeBalancer : public share::ObThreadPool {
-  public:
+public:
   struct ServerResource {
-    public:
+  public:
     ServerResource() : max_cpu_(0), min_cpu_(0), max_memory_(0), min_memory_(0)
     {}
     ~ServerResource()
@@ -48,7 +48,7 @@ class ObTenantNodeBalancer : public share::ObThreadPool {
     int64_t min_memory_;
   };
 
-  public:
+public:
   static OB_INLINE ObTenantNodeBalancer& get_instance();
 
   int init(ObMultiTenant* omt, common::ObMySQLProxy& sql_proxy, const common::ObAddr& myaddr);
@@ -71,7 +71,7 @@ class ObTenantNodeBalancer : public share::ObThreadPool {
 
   virtual void run1();
 
-  private:
+private:
   static const int64_t RECYCLE_LATENCY = 1000L * 1000L * 180L;
   ObTenantNodeBalancer();
   ~ObTenantNodeBalancer();
@@ -85,7 +85,7 @@ class ObTenantNodeBalancer : public share::ObThreadPool {
   int create_new_tenant(share::ObUnitInfoGetter::ObTenantConfig& unit);
   DISALLOW_COPY_AND_ASSIGN(ObTenantNodeBalancer);
 
-  private:
+private:
   ObMultiTenant* omt_;
   common::ObAddr myaddr_;
   share::ObUnitInfoGetter unit_getter_;

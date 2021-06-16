@@ -30,7 +30,7 @@ class ObMultiVersionSchemaService;
 }  // namespace share
 namespace observer {
 class ObAllVirtualZoneStat : public common::ObVirtualTableProjector {
-  public:
+public:
   struct ZoneStat {
     ZoneStat();
     ~ZoneStat()
@@ -50,14 +50,14 @@ class ObAllVirtualZoneStat : public common::ObVirtualTableProjector {
   int init(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy* sql_proxy);
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int get_all_stat();
   int get_full_row(
       const share::schema::ObTableSchema* table, const ZoneStat& zone_stat, common::ObIArray<Column>& columns);
 
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualZoneStat);
 
-  private:
+private:
   bool inited_;
   common::ObArray<ZoneStat> zone_stats_;
   common::ObFixedLengthString<common::MAX_ZONE_INFO_LENGTH> cluster_name_;

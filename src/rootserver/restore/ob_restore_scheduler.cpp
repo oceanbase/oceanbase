@@ -2759,7 +2759,7 @@ int ObRestoreScheduler::do_upgrade_post(const ObPhysicalRestoreJob& job_info)
   return ret;
 }
 
-int ObRestoreScheduler::drop_tenant_force_if_necessary(const ObPhysicalRestoreJob &job_info)
+int ObRestoreScheduler::drop_tenant_force_if_necessary(const ObPhysicalRestoreJob& job_info)
 {
   int ret = OB_SUCCESS;
   const bool need_force_drop = GCONF._auto_drop_tenant_if_restore_failed;
@@ -2775,8 +2775,8 @@ int ObRestoreScheduler::drop_tenant_force_if_necessary(const ObPhysicalRestoreJo
     arg.if_exist_ = true;
     arg.delay_to_drop_ = false;
     ObSqlString sql;
-    const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout; // default 2s
-    const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L; // 10s
+    const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default 2s
+    const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
     int64_t rpc_timeout = max(TIMEOUT_PER_RPC, DEFAULT_TIMEOUT);
     if (OB_FAIL(sql.append_fmt("DROP TENANT IF EXISTS %s FORCE", arg.tenant_name_.ptr()))) {
       LOG_WARN("fail to generate sql", K(ret), K(arg));
@@ -2792,5 +2792,5 @@ int ObRestoreScheduler::drop_tenant_force_if_necessary(const ObPhysicalRestoreJo
   return ret;
 }
 
-} // end namespace rootserver
-} // end namespace oceanbase
+}  // end namespace rootserver
+}  // end namespace oceanbase

@@ -38,7 +38,7 @@ namespace clog {
  *
  * */
 class ObLogLineCache {
-  public:
+public:
   static const int64_t LINE_SIZE = 1L << 16L;  // 64K
   // BLOCK size
   // Note: BLOCK_SIZE must be able to divide CLOG_FILE_SIZE, ensure a file will not cross BLOCK.
@@ -82,7 +82,7 @@ class ObLogLineCache {
   // time interval for printing obsolete information
   static const int64_t PRINT_WASH_STAT_INFO_INTERVAL = 1 * 1000L * 1000L;
 
-  public:
+public:
   ObLogLineCache();
   ~ObLogLineCache()
   {
@@ -179,7 +179,7 @@ class ObLogLineCache {
   // single thread call
   void stat();
 
-  public:
+public:
   // assume that the number of Token and Block will not exceed int32_t
   typedef int32_t TokenIDType;
   typedef int32_t TokenValueType;
@@ -199,7 +199,7 @@ class ObLogLineCache {
   };
 
   // private member function
-  private:
+private:
   int do_wash_(const int64_t expire_time, int64_t& washed_block_count, int64_t& washed_line_count);
   int do_lru_wash_();
   int do_wash_block_(const TokenValueType block_index, const int64_t expire_time, const int64_t cur_tstamp,
@@ -212,7 +212,7 @@ class ObLogLineCache {
   int handle_when_block_not_hit_(
       const int64_t block_index, const file_id_t file_id, const int64_t end_tstamp, bool& exceed_mem_limit_occured);
 
-  private:
+private:
   // Use [file_id, ref_cnt] to identify the structure of a Block,
   // which is also used to synchronize and mutually exclusive operations.
   //
@@ -349,7 +349,7 @@ class ObLogLineCache {
 
     TO_STRING_KV(K_(key), KP_(lines), K_(token_id), K_(read_size), K_(last_access_timestamp));
 
-    private:
+  private:
     int do_get_line_(
         const int64_t line_index, LineFutex& futex, const int64_t timeout_us, char*& line, bool& need_load);
   };
@@ -399,7 +399,7 @@ class ObLogLineCache {
       return free_list_.capacity();
     }
 
-    private:
+  private:
     int push_free_list_(const TokenIDType token_id);
     int pop_free_list_(TokenIDType& token_id);
   };
@@ -437,7 +437,7 @@ class ObLogLineCache {
     static const char* get_str(REASON reason);
   };
 
-  private:
+private:
   int inited_;
   Block* blocks_;
   int64_t block_array_size_;
@@ -468,7 +468,7 @@ class ObLogLineCache {
   int64_t repeated_block_load_count_;  // count of blocks loaded repeatedly in a short time
   int64_t repeated_block_load_interval_;  // The interval between repeated loading of the block
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogLineCache);
 };
 

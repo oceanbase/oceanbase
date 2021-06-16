@@ -30,7 +30,7 @@ class ObRebalanceTaskMgr;
 class ObZoneManager;
 // The algorithm to balance the replicas in units of one tenant.
 class ObUnitBalancer {
-  public:
+public:
   ObUnitBalancer();
   virtual ~ObUnitBalancer()
   {}
@@ -47,9 +47,9 @@ class ObUnitBalancer {
     disable_random_behavior_ = disable;
   }
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUnitBalancer);
   // function members
@@ -64,7 +64,7 @@ class ObUnitBalancer {
   // debug
   int print_pg_distribution();
 
-  private:
+private:
   // data members
   bool inited_;
   bool disable_random_behavior_;

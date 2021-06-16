@@ -24,7 +24,7 @@ namespace sql {
 class ObMultiTableInsertUp::ObMultiTableInsertUpCtx : public ObTableInsertUp::ObTableInsertUpCtx, public ObMultiDMLCtx {
   friend class ObMultiTableInsertUp;
 
-  public:
+public:
   explicit ObMultiTableInsertUpCtx(ObExecContext& ctx)
       : ObTableInsertUpCtx(ctx),
         ObMultiDMLCtx(ctx.get_allocator()),
@@ -52,7 +52,7 @@ class ObMultiTableInsertUp::ObMultiTableInsertUpCtx : public ObTableInsertUp::Ob
     ++affected_rows_;
   }
 
-  private:
+private:
   common::ObRowStore replace_row_store_;
   ObDupKeyCheckerCtx dupkey_checker_ctx_;
   int64_t changed_rows_;

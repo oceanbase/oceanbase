@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace blocksstable {
 class ObSuperBlockBufferHolder {
-  public:
+public:
   ObSuperBlockBufferHolder();
   virtual ~ObSuperBlockBufferHolder();
 
@@ -42,7 +42,7 @@ class ObSuperBlockBufferHolder {
 
   TO_STRING_KV(KP_(buf), K_(len));
 
-  private:
+private:
   bool is_inited_;
   char* buf_;
   int64_t len_;

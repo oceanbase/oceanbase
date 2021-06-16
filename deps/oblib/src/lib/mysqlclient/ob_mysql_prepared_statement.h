@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace common {
 namespace sqlclient {
 class ObMySQLPreparedStatement {
-  public:
+public:
   ObMySQLPreparedStatement();
   ~ObMySQLPreparedStatement();
   ObIAllocator& get_allocator();
@@ -65,7 +65,7 @@ class ObMySQLPreparedStatement {
    */
   ObMySQLPreparedResult* execute_query();
 
-  private:
+private:
   ObMySQLConnection* conn_;
   ObArenaAllocator arena_allocator_;  // TODO: used right allocator?
   ObIAllocator* alloc_;               // bind to arena_allocator_

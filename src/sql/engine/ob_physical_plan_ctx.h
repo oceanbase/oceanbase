@@ -57,7 +57,7 @@ struct ObRemoteSqlInfo {
 class ObPhysicalPlanCtx {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   typedef common::Ob2DArray<common::ObObjParam, common::OB_MALLOC_BIG_BLOCK_SIZE, common::ObWrapperAllocator, false>
       ParamStore;
   explicit ObPhysicalPlanCtx(common::ObIAllocator& allocator);
@@ -537,14 +537,14 @@ class ObPhysicalPlanCtx {
   void add_px_dml_row_info(const ObPxDmlRowInfo& dml_row_info);
   TO_STRING_KV("tenant_id", tenant_id_);
 
-  private:
+private:
   int extend_param_frame(const int64_t old_size);
   int reserve_param_frame(const int64_t capacity);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalPlanCtx);
 
-  private:
+private:
   static const int64_t ESTIMATE_PS_RESERVE_TIME = 100 * 1000;
   static const int64_t ESTIMATE_TRANS_RESERVE_TIME = 70 * 1000;
   // oracle calc time during running, not before running.
@@ -553,7 +553,7 @@ class ObPhysicalPlanCtx {
   static const int64_t DELTA_TARDY_TIME_US = 5;
   common::ObIAllocator& allocator_;
 
-  private:
+private:
   /**
    * @note these member need serialize
    */
@@ -590,7 +590,7 @@ class ObPhysicalPlanCtx {
   int64_t bind_array_idx_;
   int64_t tenant_schema_version_;
 
-  private:
+private:
   /**
    * @note these member not need serialize
    */

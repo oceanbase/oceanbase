@@ -48,7 +48,7 @@ using ::testing::Invoke;
 using ::testing::Return;
 ObServerConfig& config = ObServerConfig::get_instance();
 class TestPartitionTableIterator : public ::testing::Test {
-  public:
+public:
   TestPartitionTableIterator() : operator_(prop_getter_)
   {}
 
@@ -70,7 +70,7 @@ class TestPartitionTableIterator : public ::testing::Test {
   int gen_tenant_space_schema(uint64_t tenant_id);
   int release_tenant_space_schema(uint64_t tenant_id);
 
-  protected:
+protected:
   DBInitializer db_initer_;
   FakePartPropertyGetter prop_getter_;
   MockObCommonRpcProxy rpc_proxy_;
@@ -1051,12 +1051,12 @@ TEST_F(TestPartitionTableIterator, all_table_partition)
 }
 
 class MockPartitionInfo : public ObPartitionInfo {
-  public:
+public:
   MOCK_METHOD1(filter, int(const ObIReplicaFilter&));
 };
 
 class MockPartitionTableOperator : public ObPartitionTableOperator {
-  public:
+public:
   MockPartitionTableOperator(ObIPartPropertyGetter& prop_getter, ObPartitionTableOperator& pt_operator)
       : ObPartitionTableOperator(prop_getter), pt_operator_(pt_operator), return_error_(false)
   {}
@@ -1079,7 +1079,7 @@ class MockPartitionTableOperator : public ObPartitionTableOperator {
     return_error_ = return_error;
   }
 
-  private:
+private:
   ObPartitionTableOperator& pt_operator_;
   bool return_error_;
 };

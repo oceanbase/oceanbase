@@ -24,7 +24,7 @@ using namespace share::schema;
 namespace unittest {
 
 class TestMicroBlockRowScanner : public ObMultiVersionSSTableTest {
-  public:
+public:
   TestMicroBlockRowScanner() : ObMultiVersionSSTableTest("testmicroblockrowscanner")
   {}
   virtual ~TestMicroBlockRowScanner()

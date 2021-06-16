@@ -19,12 +19,12 @@ namespace oceanbase {
 namespace sql {
 
 class ObXaEndResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObXaEndResolver(ObResolverParams& params);
   virtual ~ObXaEndResolver();
   virtual int resolve(const ParseNode& parse_node);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXaEndResolver);
 };
 

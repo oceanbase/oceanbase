@@ -28,7 +28,7 @@ class ObTransResultInfoStat;
 
 namespace observer {
 class ObGVTransResultInfo : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObGVTransResultInfo(transaction::ObTransService* trans_service) : trans_service_(trans_service)
   {
     reset();
@@ -41,7 +41,7 @@ class ObGVTransResultInfo : public common::ObVirtualTableScannerIterator {
   void reset();
   void destroy();
 
-  private:
+private:
   int prepare_start_to_read_();
   int get_next_trans_result_info_(transaction::ObTransResultInfoStat& trans_result_info);
   static const int64_t OB_MIN_BUFFER_SIZE = 128;
@@ -49,7 +49,7 @@ class ObGVTransResultInfo : public common::ObVirtualTableScannerIterator {
   char partition_buffer_[OB_MIN_BUFFER_SIZE];
   char trans_id_buffer_[OB_MIN_BUFFER_SIZE];
 
-  private:
+private:
   transaction::ObTransService* trans_service_;
   transaction::ObPartitionIterator partition_iter_;
   transaction::ObTransResultInfoStatIterator trans_result_info_stat_iter_;

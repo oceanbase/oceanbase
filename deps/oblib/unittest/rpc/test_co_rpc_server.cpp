@@ -36,7 +36,7 @@ using namespace std;
 #define ERROR_MSG "Common error"
 
 class TestProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(TestProxy);
 
   RPC_S(@PR5 test, OB_TEST_PCODE);
@@ -44,7 +44,7 @@ class TestProxy : public ObRpcProxy {
 };
 
 class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
-  protected:
+protected:
   int process()
   {
     static int64_t rpc_count_ = 0;
@@ -67,7 +67,7 @@ class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
 };
 
 class ObTestDeliver : public rpc::frame::ObReqDeliver {
-  public:
+public:
   int init()
   {
     return 0;
@@ -97,7 +97,7 @@ class ObTestDeliver : public rpc::frame::ObReqDeliver {
 };
 
 class TestRpcServer : public ::testing::Test {
-  public:
+public:
   TestRpcServer() : handler_(server_), transport_(NULL)
   {}
 
@@ -118,7 +118,7 @@ class TestRpcServer : public ::testing::Test {
     net_.stop();
   }
 
-  protected:
+protected:
   rpc::frame::ObNetEasy net_;
   obrpc::ObRpcHandler handler_;
   ObTestDeliver server_;

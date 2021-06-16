@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace memtable {
 class ObRedoLogGenerator {
-  public:
+public:
   ObRedoLogGenerator()
       : is_inited_(false),
         consume_cursor_(NULL),
@@ -49,7 +49,7 @@ class ObRedoLogGenerator {
     return generate_data_size_;
   }
 
-  private:
+private:
   bool big_row_log_fully_filled() const;
   int generate_and_fill_big_row_redo(const int64_t big_row_size, RedoDataNode& redo, ObMvccRowCallback* callback,
       char* buf, const int64_t buf_len, int64_t& buf_pos);
@@ -57,7 +57,7 @@ class ObRedoLogGenerator {
   int fill_row_redo(ObMemtableMutatorWriter& mmw, const RedoDataNode& redo);
   ObMemtable* get_first_not_null_memtable_if_exit_(ObMvccRowCallback* start, ObMvccRowCallback* end);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRedoLogGenerator);
   bool is_inited_;
   ObMvccRowCallback* consume_cursor_;

@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObMPQuit : public ObMPBase {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_QUIT;
 
   explicit ObMPQuit(const ObGlobalContext& gctx) : ObMPBase(gctx)
@@ -27,14 +27,14 @@ class ObMPQuit : public ObMPBase {
   virtual ~ObMPQuit()
   {}
 
-  protected:
+protected:
   int process();
   int deserialize()
   {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPQuit);
 };  // end of class ObMPQuit
 

@@ -17,11 +17,11 @@
 namespace oceanbase {
 namespace sql {
 class ObExprPosition : public ObLocationExprOperator {
-  public:
+public:
   explicit ObExprPosition(common::ObIAllocator& alloc);
   virtual ~ObExprPosition();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprPosition);
 };

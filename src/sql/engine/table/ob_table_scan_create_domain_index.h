@@ -19,24 +19,24 @@ namespace oceanbase {
 namespace sql {
 
 class ObTableScanCreateDomainIndex : public ObTableScan {
-  public:
+public:
   explicit ObTableScanCreateDomainIndex(common::ObIAllocator& allocator);
   virtual ~ObTableScanCreateDomainIndex();
   void set_create_index_table_id(const uint64_t create_index_id);
   uint64_t get_create_index_table_id() const;
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const override;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
 
-  private:
+private:
   int get_domain_index_col_pos(ObExecContext& ctx, const common::ObIArray<int32_t>& col_ids,
       const int64_t schema_version, int64_t& domain_index_pos) const;
 
-  protected:
+protected:
   using ObTableScan::ObTableScanCtx;
 
-  private:
+private:
   static const int64_t DEFAULT_WORD_COUNT = 8;
   mutable ObSEArray<ObString, DEFAULT_WORD_COUNT> words_;
   mutable int64_t word_index_;

@@ -59,14 +59,14 @@ class ObAllVirtualBackupSetHistoryMgr : public common::ObVirtualTableScannerIter
     BACKUP_RECOVERY_WINDOW,
   };
 
-  public:
+public:
   ObAllVirtualBackupSetHistoryMgr();
   virtual ~ObAllVirtualBackupSetHistoryMgr();
   int init(common::ObMySQLProxy& sql_proxy);
   virtual void reset() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   bool is_inited_;
   ObMySQLProxy::MySQLResult res_;
   sqlclient::ObMySQLResult* result_;
@@ -75,7 +75,7 @@ class ObAllVirtualBackupSetHistoryMgr : public common::ObVirtualTableScannerIter
   char backup_dest_str_[share::OB_MAX_BACKUP_DEST_LENGTH];
   char cluster_version_display_[OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualBackupSetHistoryMgr);
 };
 

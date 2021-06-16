@@ -122,7 +122,7 @@ TEST(TestTenantMemoryMgr, basic)
 }
 
 class FakeCacheWasher : public ObICacheWasher {
-  public:
+public:
   FakeCacheWasher(const uint64_t tenant_id, const int64_t mb_size)
       : tenant_id_(tenant_id), mb_size_(mb_size), mb_blocks_(NULL)
   {}
@@ -192,7 +192,7 @@ class FakeCacheWasher : public ObICacheWasher {
     }
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t mb_size_;
   ObCacheMemBlock* mb_blocks_;

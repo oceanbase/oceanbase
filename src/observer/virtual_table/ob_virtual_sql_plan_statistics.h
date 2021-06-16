@@ -23,7 +23,7 @@ class ObPlanCacheManager;
 }
 namespace observer {
 class ObVirtualSqlPlanStatistics : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObVirtualSqlPlanStatistics();
   virtual ~ObVirtualSqlPlanStatistics();
   int inner_open();
@@ -38,12 +38,12 @@ class ObVirtualSqlPlanStatistics : public common::ObVirtualTableScannerIterator 
     tenant_id_ = tenant_id;
   }
 
-  private:
+private:
   int get_all_tenant_id();
   int get_row_from_specified_tenant(uint64_t tenant_id, bool& is_end);
   int fill_cells(const sql::ObOperatorStat& pstat);
 
-  private:
+private:
   enum COLUMN_ID {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,

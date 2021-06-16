@@ -26,13 +26,13 @@ class ObServerMemoryCutter;
 namespace common {
 template <typename MBWrapper>
 class ObIKVCacheStore {
-  public:
+public:
   int store(ObKVCacheInst& inst, const ObIKVCacheKey& key, const ObIKVCacheValue& value, ObKVCachePair*& kvpair,
       MBWrapper*& mb_wrapper, const enum ObKVCachePolicy policy = LRU);
   int alloc_kvpair(ObKVCacheInst& inst, const int64_t key_size, const int64_t value_size, ObKVCachePair*& kvpair,
       MBWrapper*& mb_wrapper, const enum ObKVCachePolicy policy = LRU);
 
-  protected:
+protected:
   virtual bool add_handle_ref(MBWrapper* mb_wrapper) = 0;
   virtual void de_handle_ref(MBWrapper* mb_wrapper) = 0;
   virtual int alloc(
@@ -46,7 +46,7 @@ class ObIKVCacheStore {
 class ObKVCacheStore : public ObIKVCacheStore<ObKVMemBlockHandle>, public ObIMBHandleAllocator {
   friend class observer::ObServerMemoryCutter;
 
-  public:
+public:
   ObKVCacheStore();
   virtual ~ObKVCacheStore();
   int init(
@@ -80,7 +80,7 @@ class ObKVCacheStore : public ObIKVCacheStore<ObKVMemBlockHandle>, public ObIMBH
   virtual ObKVMemBlockHandle*& get_curr_mb(ObKVCacheInst& inst, const enum ObKVCachePolicy policy);
   virtual bool mb_status_match(ObKVCacheInst& inst, const enum ObKVCachePolicy policy, ObKVMemBlockHandle* mb_handle);
 
-  private:
+private:
   static const int64_t SYNC_WASH_MB_TIMEOUT_US = 100 * 1000;  // 100ms
   static const int64_t RETIRE_LIMIT = 16;
   static const int64_t WASH_THREAD_RETIRE_LIMIT = 2048;
@@ -89,7 +89,7 @@ class ObKVCacheStore : public ObIKVCacheStore<ObKVMemBlockHandle>, public ObIMBH
     bool operator()(const ObKVMemBlockHandle* a, const ObKVMemBlockHandle* b) const;
   };
   struct WashHeap {
-    public:
+  public:
     WashHeap();
     virtual ~WashHeap();
     ObKVMemBlockHandle* add(ObKVMemBlockHandle* mb_handle);
@@ -99,7 +99,7 @@ class ObKVCacheStore : public ObIKVCacheStore<ObKVMemBlockHandle>, public ObIMBH
     int64_t mb_cnt_;
   };
   struct TenantWashInfo {
-    public:
+  public:
     TenantWashInfo();
     int add(ObKVMemBlockHandle* mb_handle);
     // put wash memblocks in cache_wash_heaps_ to wash_heap_
@@ -115,7 +115,7 @@ class ObKVCacheStore : public ObIKVCacheStore<ObKVMemBlockHandle>, public ObIMBH
   };
   typedef ObFixedHashMap<uint64_t, TenantWashInfo*> WashMap;
 
-  private:
+private:
   ObKVMemBlockHandle* alloc_mbhandle(ObKVCacheInst& inst, const enum ObKVCachePolicy policy, const int64_t block_size);
   int alloc_mbhandle(
       ObKVCacheInst& inst, const enum ObKVCachePolicy policy, const int64_t block_size, ObKVMemBlockHandle*& mb_handle);
@@ -150,7 +150,7 @@ class ObKVCacheStore : public ObIKVCacheStore<ObKVMemBlockHandle>, public ObIMBH
   void reuse_mb_handles(HazardList& reclaim_list);
   bool try_supply_mb(const int64_t mb_count);
 
-  private:
+private:
   bool inited_;
   ObKVCacheInstMap* insts_;
   // data structures for store

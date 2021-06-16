@@ -35,7 +35,7 @@ static const int64_t table_id = 3001;
 const int64_t test_row_num = 10;
 
 class TestMicroBlockScanner : public ::testing::Test {
-  public:
+public:
   TestMicroBlockScanner();
   virtual void SetUp();
   virtual void TearDown()
@@ -46,7 +46,7 @@ class TestMicroBlockScanner : public ::testing::Test {
   {}
   int check_row(ObMicroBlockScanner& scanner, const int64_t start_row, const int64_t end_row, const bool reverse);
 
-  protected:
+protected:
   ObRowGenerate row_generate_;
   ObColumnMap column_map_;
   ObArenaAllocator allocator_;

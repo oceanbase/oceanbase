@@ -27,7 +27,7 @@ class ObExecContext;
 class ObRawExpr;
 class ObCreateSynonymStmt;
 class ObCreateSynonymExecutor {
-  public:
+public:
   const static int OB_DEFAULT_ARRAY_SIZE = 16;
   ObCreateSynonymExecutor()
   {}
@@ -35,20 +35,20 @@ class ObCreateSynonymExecutor {
   {}
   int execute(ObExecContext& ctx, ObCreateSynonymStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateSynonymExecutor);
 };
 
 class ObDropSynonymStmt;
 class ObDropSynonymExecutor {
-  public:
+public:
   ObDropSynonymExecutor()
   {}
   virtual ~ObDropSynonymExecutor()
   {}
   int execute(ObExecContext& ctx, ObDropSynonymStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDropSynonymExecutor);
 };
 

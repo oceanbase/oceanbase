@@ -59,7 +59,7 @@ struct ObSqlMonitorStatIds {
 // static const int64_t MAX_MONITOR_STAT_DESC_LENGTH = 200;
 
 struct ObMonitorStat {
-  public:
+public:
   const char* name_;
   const char* description_;
 };

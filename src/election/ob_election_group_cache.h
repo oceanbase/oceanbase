@@ -34,7 +34,7 @@ typedef common::ObLinkHashMap<ObElectionGroupId, ObIElectionGroup, ElectionGroup
 
 // ElectionGroupKey specified by [tenant_id,part_leader,replica_num,member_list]
 class ObElectionGroupKey {
-  public:
+public:
   ObElectionGroupKey() : tenant_id_(common::OB_INVALID_TENANT_ID), replica_num_(0), hash_value_(0)
   {}
   ObElectionGroupKey(const uint64_t tenant_id, const common::ObAddr& part_leader, const int64_t replica_num,
@@ -66,7 +66,7 @@ class ObElectionGroupKey {
     return member_list_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObAddr part_leader_;
   int64_t replica_num_;
@@ -75,14 +75,14 @@ class ObElectionGroupKey {
 };
 
 class ObElectionGroupCache {
-  public:
+public:
   ObElectionGroupCache() : is_inited_(false), election_group_map_(nullptr), election_group_mgr_(nullptr)
   {}
   ObElectionGroupCache(const ObElectionGroupCache&) = delete;
   ObElectionGroupCache& operator=(const ObElectionGroupCache&) = delete;
   ~ObElectionGroupCache() = default;
 
-  public:
+public:
   int init(ElectionGroupMap* election_group_map, ObElectionGroupMgr* election_group_mgr);
   void reset();
   void destroy();
@@ -93,9 +93,9 @@ class ObElectionGroupCache {
   int64_t get_queue_num();  // for now, just for unit test
   int64_t get_node_num();   // for now, just for unit test
 
-  private:
+private:
   class LinkedElectionGroupId : public common::ObSpLinkQueue::Link {
-    public:
+  public:
     explicit LinkedElectionGroupId(const ObElectionGroupId& id) : id_(id)
     {}
     LinkedElectionGroupId& operator=(const LinkedElectionGroupId&) = default;
@@ -105,16 +105,16 @@ class ObElectionGroupCache {
       return id_;
     }
 
-    private:
+  private:
     ObElectionGroupId id_;
   };
   class ElementFactory {
-    public:
+  public:
     ElementFactory() : queue_count_(0), egid_count_(0){};
     ~ElementFactory() = default;
     ElementFactory& operator=(const ElementFactory& rhs) = delete;
 
-    public:
+  public:
     int create_queue(common::ObSpLinkQueue*& queue);
     int create_egid_node(const ObElectionGroupId& id, LinkedElectionGroupId*& node);
     void release_queue(common::ObSpLinkQueue* queue);
@@ -122,12 +122,12 @@ class ObElectionGroupCache {
     int64_t get_queue_count() const;
     int64_t get_egid_count() const;
 
-    private:
+  private:
     int64_t queue_count_;
     int64_t egid_count_;
   };
   class PutOperation {
-    public:
+  public:
     PutOperation(const ObElectionGroupId& eg_id, ElementFactory& factory)
         : operation_ret_(common::OB_ERR_UNEXPECTED), eg_id_(eg_id), factory_(factory){};
     ~PutOperation() = default;
@@ -138,13 +138,13 @@ class ObElectionGroupCache {
       return operation_ret_;
     }
 
-    private:
+  private:
     int operation_ret_;
     const ObElectionGroupId& eg_id_;
     ElementFactory& factory_;
   };
   class GetOrCreateOperation {
-    public:
+  public:
     GetOrCreateOperation(ObElectionGroupId& eg_id, ElectionGroupMap* election_group_map,
         ObElectionGroupMgr* election_group_mgr, ElementFactory& factory)
         : operation_ret_(common::OB_ERR_UNEXPECTED),
@@ -160,7 +160,7 @@ class ObElectionGroupCache {
       return operation_ret_;
     }
 
-    private:
+  private:
     int operation_ret_;
     ObElectionGroupId& eg_id_;
     ElectionGroupMap* election_group_map_;
@@ -168,18 +168,18 @@ class ObElectionGroupCache {
     ElementFactory& factory_;
   };
   class ClearOperation {
-    public:
+  public:
     explicit ClearOperation(ElementFactory& factory) : factory_(factory){};
     ClearOperation(const ClearOperation&) = delete;
     ClearOperation& operator=(const ClearOperation&) = delete;
     ~ClearOperation() = default;
     bool operator()(const ObElectionGroupKey& key, common::ObSpLinkQueue*& value);
 
-    private:
+  private:
     ElementFactory& factory_;
   };
   class TryGCNodeOperation {
-    public:
+  public:
     TryGCNodeOperation(ElectionGroupMap* election_group_map, ElementFactory& factory)
         : election_group_map_(election_group_map), factory_(factory){};
     TryGCNodeOperation(const TryGCNodeOperation&) = delete;
@@ -187,7 +187,7 @@ class ObElectionGroupCache {
     ~TryGCNodeOperation() = default;
     bool operator()(const ObElectionGroupKey& key, common::ObSpLinkQueue*& value);
 
-    private:
+  private:
     ElectionGroupMap* election_group_map_;
     ElementFactory& factory_;
   };

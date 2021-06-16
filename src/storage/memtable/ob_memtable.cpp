@@ -43,7 +43,7 @@ using namespace storage;
 using namespace transaction;
 namespace memtable {
 class ObStoreRowWrapper : public ObStoreRow, public ObWithArena {
-  public:
+public:
   static const int64_t PAGE_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE;
   explicit ObStoreRowWrapper(ObIAllocator& allocator)
       : ObStoreRow(), ObWithArena(allocator, PAGE_SIZE), allocator_(allocator)
@@ -58,13 +58,13 @@ class ObStoreRowWrapper : public ObStoreRow, public ObWithArena {
     return allocator_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStoreRowWrapper);
   ObIAllocator& allocator_;
 };
 
 class ObGlobalMtAlloc {
-  public:
+public:
   ObGlobalMtAlloc()
   {
     int ret = OB_SUCCESS;
@@ -84,7 +84,7 @@ class ObGlobalMtAlloc {
     ptr = NULL;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGlobalMtAlloc);
   ObLfFIFOAllocator allocator_;
 };

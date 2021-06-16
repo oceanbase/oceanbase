@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObColumnRef {
-  public:
+public:
   ObColumnRef()
       : database_name_(), table_name_(), column_name_(), is_star_(false), collation_type_(common::CS_TYPE_INVALID)
   {}
@@ -92,7 +92,7 @@ class ObColumnRef {
   TO_STRING_KV(K(database_name_), K(table_name_), K(column_name_), K(is_star_), N_COLLATION,
       common::ObCharset::collation_name(collation_type_));
 
-  private:
+private:
   common::ObString database_name_;
   common::ObString table_name_;
   common::ObString column_name_;

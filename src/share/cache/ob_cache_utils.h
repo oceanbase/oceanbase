@@ -38,7 +38,7 @@ class ObFixedHashMap;
 
 template <typename Key, typename Value, typename HashFunc = common::hash::hash_func<Key> >
 class ObFixedHashMapIterator {
-  public:
+public:
   typedef ObFixedHashMap<Key, Value, HashFunc> HashMap;
   typedef ObFixedHashMapIterator<Key, Value, HashFunc> Iterator;
 
@@ -98,7 +98,7 @@ class ObFixedHashMapIterator {
     return iter;
   }
 
-  private:
+private:
   const HashMap* hash_map_;
   int64_t bucket_pos_;
   MapNode<Key, Value>* node_;
@@ -106,7 +106,7 @@ class ObFixedHashMapIterator {
 
 template <typename Key, typename Value, typename HashFunc>
 class ObFixedHashMap {
-  public:
+public:
   typedef MapNode<Key, Value> Node;
   typedef ObFixedHashMapIterator<Key, Value, HashFunc> iterator;
   friend class ObFixedHashMapIterator<Key, Value, HashFunc>;
@@ -124,7 +124,7 @@ class ObFixedHashMap {
   iterator begin();
   iterator end();
 
-  private:
+private:
   void push_free_node(Node* node);
   Node* pop_free_node();
 
@@ -362,7 +362,7 @@ typename ObFixedHashMap<Key, Value, HashFunc>::Node* ObFixedHashMap<Key, Value, 
 // sbrk many times, then reuse
 template <typename T>
 class ObFreeHeap {
-  public:
+public:
   ObFreeHeap();
   virtual ~ObFreeHeap();
   int init(const int64_t count, const char* label);
@@ -372,7 +372,7 @@ class ObFreeHeap {
   int sbrk(const int64_t count, T*& buf);
   void reuse();
 
-  private:
+private:
   bool inited_;
   common::ObArenaAllocator allocator_;
   T* buf_;
@@ -476,7 +476,7 @@ void ObFreeHeap<T>::reuse()
 
 template <typename T>
 class ObSimpleFixedArray final : public common::ObFixedArrayImpl<T, common::ObArenaAllocator> {
-  public:
+public:
   ObSimpleFixedArray();
   virtual ~ObSimpleFixedArray();
 
@@ -484,12 +484,12 @@ class ObSimpleFixedArray final : public common::ObFixedArrayImpl<T, common::ObAr
   void reuse();
   void destroy();
 
-  protected:
+protected:
   using ObIArray<T>::data_;
   using ObIArray<T>::count_;
   using ObFixedArrayImpl<T, common::ObArenaAllocator>::init_cnt_;
 
-  private:
+private:
   bool is_destructor_safe() const
   {
     // no need to call destructor

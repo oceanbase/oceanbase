@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 struct IOWorkload {
-  public:
+public:
   IOWorkload() : category_(USER_IO), size_(0), iops_(0), depth_(0), is_sequence_(0)
   {}
   bool is_valid() const
@@ -29,7 +29,7 @@ struct IOWorkload {
   }
   TO_STRING_KV(K_(category), K_(size), K_(iops), K_(depth), K_(is_sequence))
 
-  public:
+public:
   ObIOCategory category_;
   int32_t size_;
   int64_t iops_;
@@ -40,7 +40,7 @@ struct IOWorkload {
 class IOInfoGenerator {
   friend struct IORunContext;
 
-  public:
+public:
   IOInfoGenerator() : inited_(false), mode_(IO_MODE_READ), io_category_(USER_IO), io_size_(0), is_sequence_(false)
   {}
   virtual ~IOInfoGenerator()
@@ -52,7 +52,7 @@ class IOInfoGenerator {
   virtual int get_io_info(const char* buf, ObIOInfo& info) = 0;
   TO_STRING_KV(K_(inited), K_(mode), K_(io_category), K_(io_size), K_(is_sequence));
 
-  protected:
+protected:
   bool inited_;
   ObIOMode mode_;
   ObIOCategory io_category_;
@@ -61,7 +61,7 @@ class IOInfoGenerator {
 };
 
 struct IORunContext {
-  public:
+public:
   IORunContext() : thread_cnt_(0), generator_(NULL), succ_cnt_(0), fail_cnt_(0), sum_rt_(0)
   {}
   TO_STRING_KV(K_(thread_cnt), K_(workload), K_(succ_cnt), K_(fail_cnt), KP_(generator), K_(sum_rt));
@@ -73,7 +73,7 @@ struct IORunContext {
     return bret;
   }
 
-  public:
+public:
   int64_t thread_cnt_;
   IOWorkload workload_;
   IOInfoGenerator* generator_;
@@ -83,7 +83,7 @@ struct IORunContext {
 };
 
 class IORunner : public lib::ThreadPool {
-  public:
+public:
   IORunner() : inited_(0), duration_ms_(0), begin_time_(0), end_time_(0){};
   ~IORunner()
   {}
@@ -95,14 +95,14 @@ class IORunner : public lib::ThreadPool {
   }
   TO_STRING_KV(K_(inited), K_(duration_ms), K_(read_ctx), K_(write_ctx), K_(begin_time), K_(end_time));
 
-  private:
+private:
   void run1() override;
   int run_read();
   int run_write(const char* data);
   void print_result();
   inline int64_t get_wait_interval(const int64_t iops, const int64_t thread_cnt, const int32_t io_depth);
 
-  private:
+private:
   bool inited_;
   int64_t duration_ms_;
   IORunContext read_ctx_;
@@ -112,7 +112,7 @@ class IORunner : public lib::ThreadPool {
 };
 
 class SingleIOInfoGenerator : public IOInfoGenerator {
-  public:
+public:
   SingleIOInfoGenerator() : fd_(), file_size_(0), last_offset_(0)
   {}
   virtual ~SingleIOInfoGenerator()
@@ -120,14 +120,14 @@ class SingleIOInfoGenerator : public IOInfoGenerator {
   int init(const ObIOMode mode, const IOWorkload& workload, const ObDiskFd& fd, const int64_t file_size);
   virtual int get_io_info(const char* buf, ObIOInfo& info) override;
 
-  private:
+private:
   ObDiskFd fd_;
   int64_t file_size_;
   int64_t last_offset_;
 };
 
 class MultiIOInfoGenerator : public IOInfoGenerator {
-  public:
+public:
   MultiIOInfoGenerator() : file_size_(0), last_offset_(0)
   {}
   virtual ~MultiIOInfoGenerator()
@@ -135,14 +135,14 @@ class MultiIOInfoGenerator : public IOInfoGenerator {
   int init(const ObIOMode mode, const IOWorkload& workload, const ObArray<ObDiskFd>& fds, const int64_t file_size);
   virtual int get_io_info(const char* buf, ObIOInfo& info) override;
 
-  private:
+private:
   ObArray<ObDiskFd> fds_;
   int64_t file_size_;
   int64_t last_offset_;
 };
 
 class IOStress {
-  public:
+public:
   IOStress() : inited_(false), file_ready_(false), file_size_(0)
   {}
   ~IOStress();
@@ -151,14 +151,14 @@ class IOStress {
   int run();
   int prepare_files(const int64_t file_num, const int64_t file_size);
 
-  private:
+private:
   int prepare_one_file(const char* file_path, const int64_t file_size, int& fd);
   void destroy_files();
   int load_io_runner(FILE* config_file, IORunner& runner);
   int get_info_generator(
       const ObIOMode mode, const bool multi_disk, const IOWorkload& workload, IOInfoGenerator*& generator);
 
-  private:
+private:
   bool inited_;
   bool file_ready_;
   int64_t file_size_;

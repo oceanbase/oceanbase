@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObNopPos {
-  public:
+public:
   ObNopPos() : allocator_(NULL), capacity_(0), count_(0), nops_(NULL)
   {}
   ~ObNopPos()
@@ -49,7 +49,7 @@ class ObNopPos {
   int set_count(const int64_t count);
   int set_nop_pos(const int64_t idx, const int64_t pos);
 
-  public:
+public:
   common::ObIAllocator* allocator_;
   int64_t capacity_;
   int64_t count_;
@@ -57,7 +57,7 @@ class ObNopPos {
 };
 
 class ObObjShallowCopy {
-  public:
+public:
   OB_INLINE int operator()(const common::ObObj& src_obj, common::ObObj& dst_obj)
   {
     dst_obj = src_obj;
@@ -66,7 +66,7 @@ class ObObjShallowCopy {
 };
 
 class ObObjDeepCopy {
-  public:
+public:
   ObObjDeepCopy(common::ObArenaAllocator& allocator) : allocator_(allocator)
   {}
   OB_INLINE int operator()(const common::ObObj& src_obj, common::ObObj& dst_obj)
@@ -74,12 +74,12 @@ class ObObjDeepCopy {
     return common::deep_copy_obj(allocator_, src_obj, dst_obj);
   }
 
-  private:
+private:
   common::ObArenaAllocator& allocator_;
 };
 
 class ObRowFuse {
-  public:
+public:
   //
   // fuse multiple versions rows
   // @param [in] former, the row with smaller version

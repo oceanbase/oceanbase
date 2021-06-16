@@ -19,7 +19,7 @@ namespace sql {
 
 // https://docs.oracle.com/cd/E11882_01/server.112/e41084/functions202.htm#SQLRF06131
 class ObExprToClob : public ObExprToCharCommon {
-  public:
+public:
   explicit ObExprToClob(common::ObIAllocator& alloc);
   virtual ~ObExprToClob();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
@@ -28,7 +28,7 @@ class ObExprToClob : public ObExprToCharCommon {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_to_clob_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToClob);
 };
 

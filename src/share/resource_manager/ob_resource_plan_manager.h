@@ -26,16 +26,16 @@ class ObString;
 namespace share {
 
 class ObResourcePlanManager {
-  public:
+public:
   typedef common::ObSEArray<ObPlanDirective, 2> ObPlanDirectiveSet;
 
-  public:
+public:
   ObResourcePlanManager() = default;
   virtual ~ObResourcePlanManager() = default;
   int init();
   int refresh_resource_plan(uint64_t tenant_id, common::ObString& plan_name);
 
-  private:
+private:
   /* functions */
   int flush_directive_to_cgroup_fs(ObPlanDirectiveSet& directives);
   int create_cgroup_dir_if_not_exist(const ObPlanDirectiveSet& directives);

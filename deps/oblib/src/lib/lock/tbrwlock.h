@@ -23,7 +23,7 @@ enum ELockMode { NO_PRIORITY, WRITE_PRIORITY, READ_PRIORITY };
  * @brief Encapsulation of read lock in linux-thread read-write lock
  */
 class CRLock {
-  public:
+public:
   explicit CRLock(pthread_rwlock_t* lock) : _rlock(lock)
   {}
   ~CRLock()
@@ -33,7 +33,7 @@ class CRLock {
   int tryLock() const;
   int unlock() const;
 
-  private:
+private:
   mutable pthread_rwlock_t* _rlock;
 };
 
@@ -41,7 +41,7 @@ class CRLock {
  * @brief Encapsulation of write lock in linux-thread read-write lock
  */
 class CWLock {
-  public:
+public:
   explicit CWLock(pthread_rwlock_t* lock) : _wlock(lock)
   {}
   ~CWLock()
@@ -51,12 +51,12 @@ class CWLock {
   int tryLock() const;
   int unlock() const;
 
-  private:
+private:
   mutable pthread_rwlock_t* _wlock;
 };
 
 class CRWLock {
-  public:
+public:
   CRWLock(ELockMode lockMode = NO_PRIORITY);
   ~CRWLock();
 
@@ -69,7 +69,7 @@ class CRWLock {
     return _wlock;
   }
 
-  private:
+private:
   CRLock* _rlock;
   CWLock* _wlock;
   pthread_rwlock_t _rwlock;
@@ -77,7 +77,7 @@ class CRWLock {
 
 template <class T>
 class CLockGuard {
-  public:
+public:
   CLockGuard(const T& lock, bool block = true) : _lock(lock)
   {
     _acquired = !(block ? _lock.lock() : _lock.tryLock());
@@ -94,7 +94,7 @@ class CLockGuard {
     return _acquired;
   }
 
-  private:
+private:
   const T& _lock;
   mutable bool _acquired;
 };
@@ -102,7 +102,7 @@ class CLockGuard {
  * @brief Helper class for read lock in linux thread lock
  */
 class CRLockGuard {
-  public:
+public:
   CRLockGuard(const CRWLock& rwlock, bool block = true) : _guard((*rwlock.rlock()), block)
   {}
   ~CRLockGuard()
@@ -113,7 +113,7 @@ class CRLockGuard {
     return _guard.acquired();
   }
 
-  private:
+private:
   CLockGuard<CRLock> _guard;
 };
 
@@ -121,7 +121,7 @@ class CRLockGuard {
  * @brief Helper class for write lock in linux thread lock
  */
 class CWLockGuard {
-  public:
+public:
   CWLockGuard(const CRWLock& rwlock, bool block = true) : _guard((*rwlock.wlock()), block)
   {}
   ~CWLockGuard()
@@ -132,7 +132,7 @@ class CWLockGuard {
     return _guard.acquired();
   }
 
-  private:
+private:
   CLockGuard<CWLock> _guard;
 };
 }  // namespace obsys

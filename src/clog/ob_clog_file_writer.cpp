@@ -257,16 +257,20 @@ int ObCLogBaseFileWriter::append_trailer_entry(const uint32_t info_block_offset)
   const file_id_t phy_file_id = file_id_ + 1;
   // build trailer from last 512 byte offset (4096-512)
   int64_t trailer_pos = CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
-  char *buf = shm_data_buf_ + trailer_pos;
+  char* buf = shm_data_buf_ + trailer_pos;
   reset_buf();
 
   if (CLOG_TRAILER_OFFSET != file_offset_) {  // Defense code
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "file_offset_ mismatch trailer offset", K(ret), K_(file_offset),
-        LITERAL_K(CLOG_TRAILER_OFFSET));
+    CLOG_LOG(WARN, "file_offset_ mismatch trailer offset", K(ret), K_(file_offset), LITERAL_K(CLOG_TRAILER_OFFSET));
   } else if (OB_FAIL(trailer.build_serialized_trailer(buf, CLOG_TRAILER_SIZE, info_block_offset, phy_file_id, pos))) {
-    CLOG_LOG(WARN, "build_serialized_trailer fail", K(ret), LITERAL_K(CLOG_DIO_ALIGN_SIZE),
-        K(info_block_offset), K_(file_id), K(phy_file_id));
+    CLOG_LOG(WARN,
+        "build_serialized_trailer fail",
+        K(ret),
+        LITERAL_K(CLOG_DIO_ALIGN_SIZE),
+        K(info_block_offset),
+        K_(file_id),
+        K(phy_file_id));
   } else {
     buf_write_pos_ += (uint32_t)CLOG_DIO_ALIGN_SIZE;
   }
@@ -284,8 +288,13 @@ int ObCLogBaseFileWriter::flush_trailer_entry()
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "buf write position mismatch", K_(buf_write_pos), LITERAL_K(CLOG_DIO_ALIGN_SIZE));
   } else if (OB_FAIL(store_->write(shm_data_buf_, buf_write_pos_, CLOG_TRAILER_ALIGN_WRITE_OFFSET))) {
-    CLOG_LOG(ERROR, "write fail", K(ret), K(buf_write_pos_), K_(file_offset),
-        LITERAL_K(CLOG_TRAILER_ALIGN_WRITE_OFFSET), K(errno));
+    CLOG_LOG(ERROR,
+        "write fail",
+        K(ret),
+        K(buf_write_pos_),
+        K_(file_offset),
+        LITERAL_K(CLOG_TRAILER_ALIGN_WRITE_OFFSET),
+        K(errno));
   }
   return ret;
 }
@@ -386,7 +395,7 @@ int ObCLogBaseFileWriter::append_padding_entry(const uint32_t padding_size)
   return ret;
 }
 
-int ObCLogBaseFileWriter::cache_buf(ObLogCache *log_cache, const char *buf, const uint32_t buf_len)
+int ObCLogBaseFileWriter::cache_buf(ObLogCache* log_cache, const char* buf, const uint32_t buf_len)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || 0 == buf_len) {
@@ -680,7 +689,7 @@ int ObCLogLocalFileWriter::end_current_file(ObIInfoBlockHandler* info_getter, Ob
 
   // - Flush trailer entry to log file
   // - Cache trailer entry to log cache
-  char *trailer_buf = shm_data_buf_ + CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
+  char* trailer_buf = shm_data_buf_ + CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
   if (OB_SUCC(ret)) {
     if (OB_FAIL(append_trailer_entry(info_block_offset))) {
       CLOG_LOG(WARN, "fail to add trailer", K(ret));

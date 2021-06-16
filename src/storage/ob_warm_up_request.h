@@ -43,7 +43,7 @@ struct ObWarmUpRequestType {
 };
 
 class ObIWarmUpRequest {
-  public:
+public:
   explicit ObIWarmUpRequest(common::ObIAllocator& allocator);
   virtual ~ObIWarmUpRequest();
   virtual ObWarmUpRequestType::ObWarmUpRequestEnum get_request_type() const = 0;
@@ -60,7 +60,7 @@ class ObIWarmUpRequest {
   TO_STRING_KV(K_(pkey), K_(table_id));
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   int assign(const common::ObPartitionKey& pkey, const uint64_t table_id,
       const common::ObIArray<share::schema::ObColDesc>& column_ids);
   int prepare_store_ctx(memtable::ObIMemtableCtxFactory* memctx_factory, ObStoreCtx* store_ctx) const;
@@ -72,17 +72,17 @@ class ObIWarmUpRequest {
   common::ObSEArray<share::schema::ObColDesc, 16, common::ObIAllocator&> column_ids_;
   common::ObIAllocator& allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIWarmUpRequest);
 };
 
 class ObIWarmUpReadRequest : public ObIWarmUpRequest {
-  public:
+public:
   explicit ObIWarmUpReadRequest(common::ObIAllocator& allocator);
   virtual ~ObIWarmUpReadRequest();
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   int assign(const ObTableAccessParam& param, const ObTableAccessContext& ctx);
   int prepare(ObTableAccessParam& param, ObTableAccessContext& context, common::ObArenaAllocator& allocator,
       blocksstable::ObBlockCacheWorkingSet& block_cache_ws, ObStoreCtx& store_ctx) const;
@@ -92,12 +92,12 @@ class ObIWarmUpReadRequest : public ObIWarmUpRequest {
   common::ObSEArray<share::schema::ObColumnParam*, 16, common::ObIAllocator&> out_cols_param_;
   common::ObQueryFlag query_flag_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIWarmUpReadRequest);
 };
 
 class ObWarmUpExistRequest : public ObIWarmUpRequest {
-  public:
+public:
   explicit ObWarmUpExistRequest(common::ObIAllocator& allocator);
   virtual ~ObWarmUpExistRequest();
   int assign(const common::ObPartitionKey& pkey, const int64_t table_id, const common::ObStoreRowkey& rowkey,
@@ -106,13 +106,13 @@ class ObWarmUpExistRequest : public ObIWarmUpRequest {
   virtual int warm_up(memtable::ObIMemtableCtxFactory* memctx_factory, const common::ObIArray<ObITable*>& stores) const;
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   common::ObStoreRowkey rowkey_;
   DISALLOW_COPY_AND_ASSIGN(ObWarmUpExistRequest);
 };
 
 class ObWarmUpGetRequest : public ObIWarmUpReadRequest {
-  public:
+public:
   explicit ObWarmUpGetRequest(common::ObIAllocator& allocator);
   virtual ~ObWarmUpGetRequest();
   int assign(const ObTableAccessParam& param, const ObTableAccessContext& ctx, const common::ObExtStoreRowkey& rowkey);
@@ -120,13 +120,13 @@ class ObWarmUpGetRequest : public ObIWarmUpReadRequest {
   virtual int warm_up(memtable::ObIMemtableCtxFactory* memctx_factory, const common::ObIArray<ObITable*>& stores) const;
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   common::ObExtStoreRowkey rowkey_;
   DISALLOW_COPY_AND_ASSIGN(ObWarmUpGetRequest);
 };
 
 class ObWarmUpMultiGetRequest : public ObIWarmUpReadRequest {
-  public:
+public:
   explicit ObWarmUpMultiGetRequest(common::ObIAllocator& allocator);
   virtual ~ObWarmUpMultiGetRequest();
   int assign(const ObTableAccessParam& param, const ObTableAccessContext& ctx,
@@ -135,13 +135,13 @@ class ObWarmUpMultiGetRequest : public ObIWarmUpReadRequest {
   virtual int warm_up(memtable::ObIMemtableCtxFactory* memctx_factory, const common::ObIArray<ObITable*>& stores) const;
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   common::ObArray<common::ObExtStoreRowkey, common::ObIAllocator&> rowkeys_;
   DISALLOW_COPY_AND_ASSIGN(ObWarmUpMultiGetRequest);
 };
 
 class ObWarmUpScanRequest : public ObIWarmUpReadRequest {
-  public:
+public:
   explicit ObWarmUpScanRequest(common::ObIAllocator& allocator);
   virtual ~ObWarmUpScanRequest();
   int assign(const ObTableAccessParam& param, const ObTableAccessContext& ctx, const common::ObExtStoreRange& range);
@@ -149,13 +149,13 @@ class ObWarmUpScanRequest : public ObIWarmUpReadRequest {
   virtual int warm_up(memtable::ObIMemtableCtxFactory* memctx_factory, const common::ObIArray<ObITable*>& stores) const;
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   common::ObExtStoreRange range_;
   DISALLOW_COPY_AND_ASSIGN(ObWarmUpScanRequest);
 };
 
 class ObWarmUpMultiScanRequest : public ObIWarmUpReadRequest {
-  public:
+public:
   explicit ObWarmUpMultiScanRequest(common::ObIAllocator& allocator);
   virtual ~ObWarmUpMultiScanRequest();
   int assign(const ObTableAccessParam& param, const ObTableAccessContext& ctx,
@@ -164,7 +164,7 @@ class ObWarmUpMultiScanRequest : public ObIWarmUpReadRequest {
   virtual int warm_up(memtable::ObIMemtableCtxFactory* memctx_factory, const common::ObIArray<ObITable*>& stores) const;
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   common::ObSEArray<common::ObExtStoreRange, 2, common::ObIAllocator&> ranges_;
   DISALLOW_COPY_AND_ASSIGN(ObWarmUpMultiScanRequest);
 };
@@ -172,7 +172,7 @@ class ObWarmUpMultiScanRequest : public ObIWarmUpReadRequest {
 typedef common::ObList<const ObIWarmUpRequest*, common::ObIAllocator&> ObWarmUpRequestList;
 
 class ObWarmUpRequestWrapper {
-  public:
+public:
   ObWarmUpRequestWrapper();
   virtual ~ObWarmUpRequestWrapper();
   int add_request(const ObIWarmUpRequest& request);
@@ -188,7 +188,7 @@ class ObWarmUpRequestWrapper {
   TO_STRING_KV(K_(request_list));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   ObWarmUpRequestList request_list_;
 };

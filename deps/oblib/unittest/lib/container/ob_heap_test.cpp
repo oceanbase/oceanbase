@@ -15,7 +15,7 @@
 using namespace oceanbase::common;
 
 class TestComp {
-  public:
+public:
   int get_error_code()
   {
     return OB_SUCCESS;
@@ -27,18 +27,18 @@ class TestComp {
 };
 
 class ObHeapTest : public ::testing::Test {
-  public:
+public:
   ObHeapTest();
   virtual ~ObHeapTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObHeapTest(const ObHeapTest& other);
   ObHeapTest& operator=(const ObHeapTest& other);
 
-  private:
+private:
   // data members
 };
 

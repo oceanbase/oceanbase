@@ -20,7 +20,7 @@ namespace common {
 extern volatile int64_t g_cur_time;
 
 class TimeUpdateDuty : public common::ObTimerTask {
-  public:
+public:
   static const int64_t SCHEDULE_PERIOD = 2000;
   TimeUpdateDuty(){};
   virtual ~TimeUpdateDuty(){};

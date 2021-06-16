@@ -52,7 +52,7 @@ struct ObPartitionMigrationStatus {
 };
 
 class ObPartitionMigrationStatusGuard {
-  public:
+public:
   explicit ObPartitionMigrationStatusGuard();
   virtual ~ObPartitionMigrationStatusGuard();
 
@@ -67,14 +67,14 @@ class ObPartitionMigrationStatusGuard {
     return lock_;
   }
 
-  private:
+private:
   ObPartitionMigrationStatus* status_;
   common::SpinRWLock* lock_;
   DISALLOW_COPY_AND_ASSIGN(ObPartitionMigrationStatusGuard);
 };
 
 class ObPartitionMigrationStatusMgr {
-  public:
+public:
   ObPartitionMigrationStatusMgr();
   virtual ~ObPartitionMigrationStatusMgr();
   static ObPartitionMigrationStatusMgr& get_instance();
@@ -84,10 +84,10 @@ class ObPartitionMigrationStatusMgr {
   int get_iter(ObPartitionMigrationStatusMgrIter& iter);
   int del_status(const share::ObTaskId& task_id);
 
-  private:
+private:
   int remove_oldest_status();
 
-  private:
+private:
   common::SpinRWLock lock_;
   common::ObArray<ObPartitionMigrationStatus> status_array_;
 

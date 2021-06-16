@@ -32,7 +32,7 @@ namespace share {
 namespace schema {
 
 class ObSchemaCacheKey : public common::ObIKVCacheKey {
-  public:
+public:
   ObSchemaCacheKey();
   ObSchemaCacheKey(const ObSchemaType schema_type, const uint64_t schema_id, const uint64_t schema_version);
   virtual ~ObSchemaCacheKey()
@@ -50,7 +50,7 @@ class ObSchemaCacheKey : public common::ObIKVCacheKey {
 };
 
 class ObSchemaCacheValue : public common::ObIKVCacheValue {
-  public:
+public:
   ObSchemaCacheValue();
   ObSchemaCacheValue(ObSchemaType schema_type, const ObSchema* schema);
   virtual ~ObSchemaCacheValue()
@@ -66,7 +66,7 @@ class ObSchemaCacheValue : public common::ObIKVCacheValue {
 class ObSchemaCache {
   static const int64_t OB_SCHEMA_CACHE_SYS_CACHE_MAP_BUCKET_NUM = 512;
 
-  public:
+public:
   ObSchemaCache();
   virtual ~ObSchemaCache();
 
@@ -79,14 +79,14 @@ class ObSchemaCache {
       common::ObKVCacheHandle& handle, const ObSchema*& new_schema);
   const ObTableSchema* get_all_core_table() const;
 
-  private:
+private:
   bool check_inner_stat() const;
   bool is_valid_key(ObSchemaType schema_type, uint64_t schema_id, int64_t schema_version) const;
   bool need_use_sys_cache(const ObSchemaCacheKey& cache_key) const;
   int init_all_core_table();
   int put_sys_schema(const ObSchemaCacheKey& cache_key, const ObSchema& schema, const bool is_force);
 
-  private:
+private:
   typedef common::hash::ObHashMap<ObSchemaCacheKey, const ObSchemaCacheValue*, common::hash::ReadWriteDefendMode>
       NoSwapCache;
   typedef common::ObKVCache<ObSchemaCacheKey, ObSchemaCacheValue> KVCache;
@@ -97,14 +97,14 @@ class ObSchemaCache {
   bool is_inited_;
   ObTableSchema all_core_table_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaCache);
 };
 
 class ObSchemaService;
 class ObTableSchema;
 class ObSchemaFetcher {
-  public:
+public:
   ObSchemaFetcher();
   virtual ~ObSchemaFetcher()
   {}
@@ -113,7 +113,7 @@ class ObSchemaFetcher {
   int fetch_schema(ObSchemaType schema_type, const ObRefreshSchemaStatus& schema_status, uint64_t schema_id,
       int64_t schema_version, common::ObIAllocator& allocator, ObSchema*& schema);
 
-  private:
+private:
   int fetch_tenant_schema(
       uint64_t tenant_id, int64_t schema_version, common::ObIAllocator& allocator, ObTenantSchema*& tenant_schema);
   int fetch_sys_variable_schema(const ObRefreshSchemaStatus& schema_status, uint64_t tenant_id, int64_t schema_version,
@@ -145,7 +145,7 @@ class ObSchemaFetcher {
 #undef DEF_SCHEMA_INFO_FETCHER
 #endif
 
-  private:
+private:
   ObSchemaService* schema_service_;
   common::ObISQLClient* sql_client_;
   bool is_inited_;

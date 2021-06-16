@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObAlterOutlineStmt : public ObDDLStmt {
-  public:
+public:
   ObAlterOutlineStmt() : ObDDLStmt(stmt::T_ALTER_OUTLINE), alter_outline_arg_(), outline_stmt_(NULL)
   {}
   virtual ~ObAlterOutlineStmt()
@@ -70,7 +70,7 @@ class ObAlterOutlineStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(alter_outline_arg), K_(outline_stmt));
 
-  private:
+private:
   obrpc::ObAlterOutlineArg alter_outline_arg_;
   ObStmt* outline_stmt_;  // the stmt for outline
   DISALLOW_COPY_AND_ASSIGN(ObAlterOutlineStmt);

@@ -21,11 +21,11 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObBlockMarkDeletionMaker {
-  public:
+public:
   typedef common::ObSEArray<int32_t, common::OB_DEFAULT_COL_DEC_NUM> OutColsProject;
   static const int64_t MAX_REUSE_MEMORY_LIMIT = 100;
 
-  public:
+public:
   ObBlockMarkDeletionMaker();
   virtual ~ObBlockMarkDeletionMaker();
   int init(const share::schema::ObTableSchema& table_schema, const common::ObPartitionKey& pkey,
@@ -33,13 +33,13 @@ class ObBlockMarkDeletionMaker {
   void reset();
   int can_mark_delete(bool& can_mark_deletion, common::ObExtStoreRange& range);
 
-  private:
+private:
   int prepare_tables_(const common::ObPartitionKey& pkey, const uint64_t index_id, const int64_t snapshot_version,
       const uint64_t end_log_id);
   int init_(const share::schema::ObTableSchema& table_schema, const common::ObPartitionKey& pkey,
       const uint64_t index_id, const int64_t snapshot_version, memtable::ObIMemtableCtxFactory* ctx_factory);
 
-  private:
+private:
   bool is_inited_;
   storage::ObTableAccessParam access_param_;
   storage::ObTableAccessContext access_context_;

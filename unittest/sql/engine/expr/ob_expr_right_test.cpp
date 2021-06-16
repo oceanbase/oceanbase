@@ -20,18 +20,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObExprFuncRightTest : public ::testing::Test {
-  public:
+public:
   ObExprFuncRightTest();
   virtual ~ObExprFuncRightTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprFuncRightTest(const ObExprFuncRightTest& other);
   ObExprFuncRightTest& operator=(const ObExprFuncRightTest& other);
 
-  protected:
+protected:
   // data members
 };
 

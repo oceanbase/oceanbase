@@ -38,7 +38,7 @@ const int64_t OB_CLOG_ENCRYPT_MASTER_KEY_LEN = 32;
 const int64_t OB_CLOG_ENCRYPT_TABLE_KEY_LEN = 32;
 
 class ObEncryptionUtil {
-  public:
+public:
   static bool need_encrypt(int64_t encrypt_id);
   static int parse_encryption_algorithm(const common::ObString& str, ObAesOpMode& encryption_algorithm);
   static int parse_encryption_algorithm(const char* str, ObAesOpMode& encryption_algorithm);

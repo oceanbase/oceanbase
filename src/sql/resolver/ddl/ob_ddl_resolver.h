@@ -96,7 +96,7 @@ struct ObColumnResolveStat {
 };
 
 class ObDDLResolver : public ObStmtResolver {
-  public:
+public:
   enum INDEX_TYPE { NOT_SPECIFIED = 0, LOCAL_INDEX = 1, GLOBAL_INDEX = 2 };
   enum INDEX_KEYNAME { NORMAL_KEY = 0, UNIQUE_KEY = 1, DOMAIN_KEY = 2 };
   enum COLUMN_NODE {
@@ -240,7 +240,7 @@ class ObDDLResolver : public ObStmtResolver {
   int resolve_subpartition_option(
       ObPartitionedStmt* stmt, ParseNode* subpart_node, share::schema::ObTableSchema& table_schema);
 
-  protected:
+protected:
   static int check_same_substr_expr(ObRawExpr& left, ObRawExpr& right, bool& same);
   static int check_uniq_allow(ObResolverParams& params, share::schema::ObTableSchema& table_schema,
       obrpc::ObCreateIndexArg& index_arg, ObRawExpr* part_func_expr, common::ObIArray<ObRawExpr*>& constraint_exprs,
@@ -505,7 +505,7 @@ class ObDDLResolver : public ObStmtResolver {
   int64_t table_dop_;  // default value is 1
   int64_t hash_subpart_num_;
 
-  private:
+private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);
 };

@@ -64,7 +64,7 @@ class ObPartitionMetaRedoModule;
 class ObSSTableV1;
 
 class ObSSTable : public ObITable {
-  public:
+public:
   static const int64_t DEFAULT_MACRO_BLOCK_NUM = 4;
   static const int64_t DEFAULT_ALLOCATOR_BLOCK_SIZE = 512;
   static const int64_t DEFAULT_MACRO_BLOCK_ARRAY_PAGE_SIZE =
@@ -77,9 +77,9 @@ class ObSSTable : public ObITable {
   typedef common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_NUM> MacroBlockArray;
   typedef common::hash::ObCuckooHashMap<common::ObLogicMacroBlockId, blocksstable::MacroBlockId> LogicBlockIdMap;
 
-  public:
+public:
   class ObSSTableGroupMacroBlocks {
-    public:
+  public:
     ObSSTableGroupMacroBlocks(const MacroBlockArray& data_macro_blocks, const MacroBlockArray& lob_macro_blocks);
     ~ObSSTableGroupMacroBlocks();
     OB_INLINE int64_t data_macro_block_count() const
@@ -98,16 +98,16 @@ class ObSSTable : public ObITable {
     int at(const int64_t idx, blocksstable::MacroBlockId& block_id) const;
     virtual int64_t to_string(char* buf, int64_t buf_len) const;
 
-    private:
+  private:
     ObSSTableGroupMacroBlocks();
     DISALLOW_COPY_AND_ASSIGN(ObSSTableGroupMacroBlocks);
 
-    private:
+  private:
     const MacroBlockArray& data_macro_blocks_;
     const MacroBlockArray& lob_macro_blocks_;
   };
 
-  public:
+public:
   ObSSTable();
   virtual ~ObSSTable();
 
@@ -271,35 +271,40 @@ class ObSSTable : public ObITable {
   int get_range(
       const int64_t idx, const int64_t concurrent_cnt, common::ObIAllocator& allocator, common::ObExtStoreRange& range);
 
-  int get_concurrent_cnt(int64_t tablet_size, int64_t &concurrent_cnt);
-  int query_range_to_macros(common::ObIAllocator &allocator,
-                            const common::ObIArray<common::ObStoreRange> &ranges,
-                            const int64_t type,
-                            uint64_t *macros_count,
-                            const int64_t *total_task_count,
-                            common::ObIArray<common::ObStoreRange> *splitted_ranges,
-                            common::ObIArray<int64_t> *split_index);
-  int exist(const ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const common::ObStoreRowkey &rowkey,
-      const common::ObIArray<share::schema::ObColDesc> &column_ids,
-      bool &is_exist,
-      bool &has_found) override;
-  virtual int prefix_exist(
-      storage::ObRowsInfo &rows_info,
-      bool &may_exist) override;
-  int exist(
-      ObRowsInfo &rows_info,
-      bool &is_exist,
-      bool &all_rows_found) override;
-  int64_t get_occupy_size() const { return meta_.occupy_size_; }
-  int64_t get_total_row_count() const { return meta_.row_count_; }
-  int64_t get_macro_block_count() const { return meta_.macro_block_count_; }
-  inline uint64_t get_table_id() const {return meta_.index_id_; }
-  inline int64_t get_rowkey_column_count() const { return meta_.rowkey_column_count_; }
-  OB_INLINE int64_t get_logical_data_version() const { return meta_.logical_data_version_; }
-  int get_table_stat(common::ObTableStat &stat);
-  virtual int get_frozen_schema_version(int64_t &schema_version) const override;
+  int get_concurrent_cnt(int64_t tablet_size, int64_t& concurrent_cnt);
+  int query_range_to_macros(common::ObIAllocator& allocator, const common::ObIArray<common::ObStoreRange>& ranges,
+      const int64_t type, uint64_t* macros_count, const int64_t* total_task_count,
+      common::ObIArray<common::ObStoreRange>* splitted_ranges, common::ObIArray<int64_t>* split_index);
+  int exist(const ObStoreCtx& ctx, const uint64_t table_id, const common::ObStoreRowkey& rowkey,
+      const common::ObIArray<share::schema::ObColDesc>& column_ids, bool& is_exist, bool& has_found) override;
+  virtual int prefix_exist(storage::ObRowsInfo& rows_info, bool& may_exist) override;
+  int exist(ObRowsInfo& rows_info, bool& is_exist, bool& all_rows_found) override;
+  int64_t get_occupy_size() const
+  {
+    return meta_.occupy_size_;
+  }
+  int64_t get_total_row_count() const
+  {
+    return meta_.row_count_;
+  }
+  int64_t get_macro_block_count() const
+  {
+    return meta_.macro_block_count_;
+  }
+  inline uint64_t get_table_id() const
+  {
+    return meta_.index_id_;
+  }
+  inline int64_t get_rowkey_column_count() const
+  {
+    return meta_.rowkey_column_count_;
+  }
+  OB_INLINE int64_t get_logical_data_version() const
+  {
+    return meta_.logical_data_version_;
+  }
+  int get_table_stat(common::ObTableStat& stat);
+  virtual int get_frozen_schema_version(int64_t& schema_version) const override;
   int fill_old_meta_info(
       const int64_t schema_version, const int64_t step_merge_start_version, const int64_t step_merge_end_version);
   virtual int bf_may_contain_rowkey(const common::ObStoreRowkey& rowkey, bool& contain);
@@ -349,7 +354,7 @@ class ObSSTable : public ObITable {
   INHERIT_TO_STRING_KV(
       "ObITable", ObITable, KP(this), K_(status), K_(meta), K_(file_handle), K_(dump_memtable_timestamp));
 
-  private:
+private:
   int read_second_index(const MacroBlockArray& indexes, MacroBlockArray& blocks, const int64_t block_cnt);
   int sort_ranges(
       const common::ObIArray<common::ObStoreRange>& ranges, common::ObIArray<common::ObStoreRange>& ordered_ranges);
@@ -391,7 +396,7 @@ class ObSSTable : public ObITable {
   int64_t get_schema_map_serialize_size() const;
   int add_macro_ref();
 
-  private:
+private:
   void set_multi_version_rowkey_type(const ObMultiVersionRowkeyHelpper::MultiVersionRowkeyType rowkey_type)
   {
     if (is_multi_version_table()) {
@@ -401,7 +406,7 @@ class ObSSTable : public ObITable {
     }
   }
 
-  private:
+private:
   static const int64_t DDL_VERSION_COUNT = 16;
   friend class ObMacroBlockIterator;
   common::ObArenaAllocator allocator_;

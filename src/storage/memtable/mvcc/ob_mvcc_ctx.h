@@ -29,7 +29,7 @@ class ObMemtableKey;
 
 class ObMvccRow;
 class ObIMvccCtx {
-  public:
+public:
   ObIMvccCtx()
       : alloc_type_(0),
         ctx_descriptor_(0),
@@ -59,7 +59,7 @@ class ObIMvccCtx {
   virtual ~ObIMvccCtx()
   {}
 
-  public:  // for mvcc engine invoke
+public:  // for mvcc engine invoke
   // for write
   virtual int write_auth() = 0;
   virtual int write_done() = 0;
@@ -111,7 +111,7 @@ class ObIMvccCtx {
   virtual void set_contain_hotspot_row() = 0;
   virtual void update_max_durable_sql_no(const int64_t sql_no) = 0;
 
-  public:
+public:
   inline int get_alloc_type() const
   {
     return alloc_type_;
@@ -330,7 +330,7 @@ class ObIMvccCtx {
     return 0 != abs_lock_wait_timeout_;
   }
 
-  public:
+public:
   virtual void reset()
   {
     ctx_descriptor_ = 0;
@@ -399,7 +399,7 @@ class ObIMvccCtx {
     return pos;
   }
 
-  public:
+public:
   ObMvccRowCallback* alloc_row_callback(
       ObIMvccCtx& ctx, ObMvccRow& value, ObMemtable* memtable, const bool is_savepoint);
   ObMvccRowCallback* alloc_row_callback(ObMvccRowCallback& cb, ObMemtable* memtable, const bool is_savepoint);
@@ -408,7 +408,7 @@ class ObIMvccCtx {
   ObMvccTransNode* alloc_trans_node();
   int append_callback(ObITransCallback* cb);
 
-  protected:
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObIMvccCtx);
   int alloc_type_;
   uint32_t ctx_descriptor_;
@@ -433,7 +433,7 @@ class ObIMvccCtx {
 };
 
 class ObMvccWriteGuard {
-  public:
+public:
   ObMvccWriteGuard() : ctx_(NULL)
   {}
   ~ObMvccWriteGuard()
@@ -457,7 +457,7 @@ class ObMvccWriteGuard {
     return ret;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMvccWriteGuard);
   ObIMvccCtx* ctx_;
 };

@@ -30,13 +30,13 @@ using namespace transaction;
 namespace unittest {
 
 class MyConnectionPool : public ObISQLConnectionPool {
-  public:
+public:
   MyConnectionPool()
   {}
   ~MyConnectionPool()
   {}
 
-  public:
+public:
   // sql string escape
   int escape(const char* from, const int64_t from_size, char* to, const int64_t to_size, int64_t& out_size)
   {
@@ -63,7 +63,7 @@ class MyConnectionPool : public ObISQLConnectionPool {
 };
 
 class MyPartitionInfo {
-  public:
+public:
   MyPartitionInfo() : tenant_id_(0), table_id_(0), partition_id_(0)
   {}
   MyPartitionInfo(const int64_t tenant_id, const int64_t table_id, const int64_t partition_id)
@@ -88,20 +88,20 @@ class MyPartitionInfo {
   }
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(partition_id));
 
-  private:
+private:
   int64_t tenant_id_;
   int64_t table_id_;
   int64_t partition_id_;
 };
 
 class MyResult : public ObMySQLResult {
-  public:
+public:
   MyResult() : index_(-1)
   {}
   ~MyResult()
   {}
 
-  public:
+public:
   void reset()
   {
     array_.reset();
@@ -117,7 +117,7 @@ class MyResult : public ObMySQLResult {
   }
   TO_STRING_KV(K_(array), K_(index));
 
-  public:
+public:
   int close()
   {
     return OB_SUCCESS;
@@ -383,7 +383,7 @@ class MyResult : public ObMySQLResult {
     return OB_NOT_SUPPORTED;
   }
 
-  private:
+private:
   int inner_get_number(const int64_t col_idx, common::number::ObNumber& nmb_val, IAllocator& allocator) const
   {
     UNUSEDx(col_idx, nmb_val, allocator);
@@ -414,42 +414,42 @@ class MyResult : public ObMySQLResult {
     return OB_NOT_SUPPORTED;
   }
 
-  private:
+private:
   ObSEArray<MyPartitionInfo, 16> array_;
   int64_t index_;
 };
 
 class MyResultHandler : public ObISQLResultHandler {
-  public:
+public:
   explicit MyResultHandler(MyResult& my_result) : my_result_(my_result)
   {}
   ~MyResultHandler()
   {}
 
-  public:
+public:
   ObMySQLResult* mysql_result()
   {
     return &my_result_;
   }
 
-  private:
+private:
   MyResult& my_result_;
 };
 
 class MyProxy : public ObMySQLProxy {
-  public:
+public:
   MyProxy()
   {}
   ~MyProxy()
   {}
 
-  public:
+public:
   MyResult& get_result()
   {
     return my_result_;
   }
 
-  public:
+public:
   int read(ReadResult& res, const uint64_t tenant_id, const char* sql) override
   {
     int ret = OB_SUCCESS;
@@ -462,12 +462,12 @@ class MyProxy : public ObMySQLProxy {
     return ret;
   }
 
-  private:
+private:
   MyResult my_result_;
 };
 
 class TestObGcPartitionAdapter : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     GCTX.split_schema_version_ = OB_INVALID_VERSION;

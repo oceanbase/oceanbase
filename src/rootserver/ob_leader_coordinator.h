@@ -64,7 +64,7 @@ class ITenantStatFinder;
 }  // namespace balancer
 
 class ObRandomZoneSelector {
-  public:
+public:
   const static int64_t DEFAULT_ZONE_CNT = 7;
   int init(ObZoneManager& zone_mgr);
   int update_score(const uint64_t tg_id, const int64_t partition_id);
@@ -75,12 +75,12 @@ class ObRandomZoneSelector {
     return !zones_.empty();
   }
 
-  private:
+private:
   common::ObSEArray<std::pair<common::ObZone, int64_t>, DEFAULT_ZONE_CNT> zones_;
 };
 
 class ObILeaderCoordinator {
-  public:
+public:
   struct ServerLeaderCount {
     ServerLeaderCount() : server_(), count_(0)
     {}
@@ -128,7 +128,7 @@ class ObILeaderCoordinator {
 };
 
 class ObServerSwitchLeaderInfoStat {
-  public:
+public:
   static const int64_t ALL_SWITCH_PERCENT = 100;
   static const int64_t MIN_SWITCH_TIMEOUT = 5 * 60 * 1000 * 1000;  // 5m
   static const int64_t MIN_SWITCH_INTERVAL = 1 * 1000 * 1000;      // 1s
@@ -194,7 +194,7 @@ class ObServerSwitchLeaderInfoStat {
   }
   int check_smooth_switch_condition(common::ObIArray<common::ObAddr>& candidate_leaders, bool& can_swith_more);
 
-  private:
+private:
   virtual int get_server_partition_count(common::ObAddr& server, int64_t& partition_count);
   virtual int prepare_next_smooth_turn(const volatile bool& is_stop,
       const common::ObIArray<common::ObAddr>& server_list, const int64_t switch_duration_time, const int64_t now);
@@ -211,7 +211,7 @@ class ObServerSwitchLeaderInfoStat {
 };
 
 class ObLeaderCoordinatorIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObLeaderCoordinatorIdling(volatile bool& stop) : ObThreadIdling(stop), idle_interval_us_(0)
   {}
   virtual ~ObLeaderCoordinatorIdling()
@@ -226,25 +226,25 @@ class ObLeaderCoordinatorIdling : public ObThreadIdling {
     idle_interval_us_ = idle_interval_us;
   }
 
-  private:
+private:
   int64_t idle_interval_us_;
 };
 
 class ObLeaderCoordinator;
 
 class PartitionInfoContainer {
-  public:
+public:
   typedef common::hash::ObHashMap<common::ObPartitionKey, share::ObPartitionInfo, common::hash::NoPthreadDefendMode>
       PartitionInfoMap;
   const int64_t PART_INFO_MAP_SIZE = 1024 * 1024;
 
-  public:
+public:
   PartitionInfoContainer()
       : host_(nullptr), partition_info_map_(), pt_operator_(NULL), schema_service_(NULL), is_inited_(false)
   {}
   ~PartitionInfoContainer()
   {}  // no one shall derive from this class
-  public:
+public:
   int init(share::ObPartitionTableOperator* pt_operator, share::schema::ObMultiVersionSchemaService* schema_service,
       ObLeaderCoordinator* host);
   int build_tenant_partition_info(const uint64_t tenant_id);
@@ -252,7 +252,7 @@ class PartitionInfoContainer {
       const uint64_t tenant_id, const uint64_t partition_entity_id, const int64_t partition_id);
   int get(const uint64_t table_id, const int64_t phy_partition_id, const share::ObPartitionInfo*& partition_info);
 
-  private:
+private:
   ObLeaderCoordinator* host_;
   PartitionInfoMap partition_info_map_;
   share::ObPartitionTableOperator* pt_operator_;
@@ -265,7 +265,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   friend class ObAllVirtualLeaderStat;
   friend class PartitionInfoContainer;
 
-  public:
+public:
   static const int64_t WAIT_SWITCH_LEADER_TIMEOUT = 16 * 1000 * 1000;  // 16s
   static const int64_t ALL_PARTITIONS = -1;
 
@@ -340,7 +340,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
       common::ObIArray<share::ObRawPrimaryZoneUtil::ZoneScore>& zone_score_array,
       common::ObIArray<share::ObRawPrimaryZoneUtil::RegionScore>& region_score_array) const;
 
-  private:
+private:
   enum LastSwitchTurnStat {
     LAST_SWITCH_TURN_SUCCEED = 0,
     LAST_SWITCH_TURN_FAILED = 1,
@@ -363,13 +363,13 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   };
 
   class IPartitionEntity {
-    public:
+  public:
     IPartitionEntity()
     {}
     virtual ~IPartitionEntity()
     {}
 
-    public:
+  public:
     virtual bool has_self_partition() const = 0;
     virtual uint64_t get_partition_entity_id() const = 0;
     virtual uint64_t get_tablegroup_id() const = 0;
@@ -378,31 +378,31 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   };
 
   class TablegroupEntity : public IPartitionEntity {
-    public:
+  public:
     TablegroupEntity(const share::schema::ObSimpleTablegroupSchema& tg_schema)
         : IPartitionEntity(), tg_schema_(tg_schema)
     {}
     virtual ~TablegroupEntity()
     {}
 
-    public:
+  public:
     virtual bool has_self_partition() const override;
     virtual uint64_t get_partition_entity_id() const override;
     virtual uint64_t get_tablegroup_id() const override;
 
-    private:
+  private:
     const share::schema::ObSimpleTablegroupSchema& tg_schema_;
   };
 
   class SATableEntity : public IPartitionEntity {
-    public:
+  public:
     SATableEntity(const share::schema::ObSimpleTableSchemaV2& table_schema)
         : IPartitionEntity(), table_schema_(table_schema)
     {}
     virtual ~SATableEntity()
     {}
 
-    public:
+  public:
     virtual bool has_self_partition() const override
     {
       return table_schema_.has_self_partition();
@@ -416,12 +416,12 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
       return table_schema_.get_tablegroup_id();
     }
 
-    private:
+  private:
     const share::schema::ObSimpleTableSchemaV2& table_schema_;
   };
 
   struct Partition {
-    public:
+  public:
     typedef common::ObSEArray<common::ObAddr, common::OB_MAX_MEMBER_NUMBER> ServerList;
     typedef common::ObSEArray<obrpc::CandidateStatus, common::OB_MAX_MEMBER_NUMBER> CandidateStatusList;
     Partition() : table_id_(0), tg_id_(0), info_(nullptr), candidates_(), prep_candidates_(), candidate_status_array_()
@@ -445,12 +445,12 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     CandidateStatusList candidate_status_array_;
     TO_STRING_KV(K_(table_id), K_(tg_id), K_(info), K_(candidates), K_(prep_candidates), K_(candidate_status_array));
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(Partition);
   };
 
   class PartitionArray : public common::ObFixedArrayImpl<Partition, common::ObIAllocator> {
-    public:
+  public:
     PartitionArray(common::ObIAllocator& allocator)
         : common::ObFixedArrayImpl<Partition, common::ObIAllocator>(allocator),
           primary_zone_(),
@@ -460,7 +460,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     {}
     ~PartitionArray()
     {}  // no one shall derive from this
-    public:
+  public:
     inline void set_primary_zone(const ObZone& zone)
     {
       primary_zone_ = zone;
@@ -494,7 +494,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
       return advised_leader_;
     }
 
-    private:
+  private:
     common::ObZone primary_zone_;
     uint64_t tablegroup_id_;
     int64_t anchor_pos_;
@@ -584,7 +584,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   };
 
   struct ServerReplicaCounter {
-    public:
+  public:
     ServerReplicaCounter() : full_replica_cnt_(0), leader_cnt_(0), zone_()
     {}
 
@@ -596,7 +596,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   };
 
   struct ZoneReplicaCounter {
-    public:
+  public:
     ZoneReplicaCounter()
         : max_full_replica_cnt_(0),
           // The maximum number of full replicas on the server in the zone
@@ -642,17 +642,17 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   };
 
   class ServerReplicaMsgContainer {
-    public:
+  public:
     typedef common::hash::ObHashMap<common::ObAddr, ServerReplicaCounter, common::hash::NoPthreadDefendMode>
         ServerReplicaCounterMap;
     typedef common::hash::ObHashMap<common::ObZone, ZoneReplicaCounter, common::hash::NoPthreadDefendMode>
         ZoneReplicaCounterMap;
 
-    public:
+  public:
     ServerReplicaMsgContainer(common::ObIAllocator& allocator, ObLeaderCoordinator& host);
     virtual ~ServerReplicaMsgContainer();
 
-    public:
+  public:
     int init(const int64_t pg_cnt);
     int check_and_build_available_zones_and_servers(const int64_t balance_group_id,
         const common::ObIArray<common::ObZone>& primary_zone_array, const common::ObIArray<share::ObUnit>& tenant_unit,
@@ -693,7 +693,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
       return zone_replica_counter_map_;
     }
 
-    private:
+  private:
     int check_and_build_available_servers(
         const int64_t balance_group_id, const common::ObIArray<share::ObUnit>& tenant_unit, bool& need_balance);
     int check_and_build_available_zones(const int64_t balance_group_id,
@@ -704,7 +704,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
         bool& need_balance);
     void destroy_and_free_server_leader_msg(ObServerLeaderMsg* msg);
 
-    private:
+  private:
     common::ObIAllocator& inner_allocator_;
     ObLeaderCoordinator& host_;
     ObAllServerLeaderMsg server_leader_info_;
@@ -717,16 +717,16 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   };
 
   class LcBalanceGroupContainer : public balancer::ObLeaderBalanceGroupContainer {
-    public:
+  public:
     typedef common::hash::ObHashMap<int64_t, LcBalanceGroupInfo*, common::hash::NoPthreadDefendMode> LcBgInfoMap;
     typedef common::hash::ObHashMap<common::ObPartitionKey, int64_t, common::hash::NoPthreadDefendMode> PkeyIndexMap;
 
-    public:
+  public:
     LcBalanceGroupContainer(ObLeaderCoordinator& host, share::schema::ObSchemaGetterGuard& schema_guard,
         balancer::ITenantStatFinder& stat_finder, common::ObIAllocator& allocator);
     virtual ~LcBalanceGroupContainer();
 
-    public:
+  public:
     int init(const uint64_t tenant_id);
     int build_base_info();
     int collect_balance_group_array_index(const common::ObIArray<PartitionArray*>& tenant_partition);
@@ -736,7 +736,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     int generate_leader_balance_plan(ServerReplicaMsgContainer& server_replica_msg_container,
         LcBalanceGroupInfo& bg_info, const common::ObIArray<PartitionArray*>& tenant_partition);
 
-    private:
+  private:
     int build_valid_zone_locality_map(const common::ObIArray<common::ObZone>& primary_zone_array,
         const common::ObIArray<share::ObZoneReplicaAttrSet>& zone_locality,
         common::hash::ObHashMap<common::ObZone, const share::ObZoneReplicaAttrSet*>& map);
@@ -763,7 +763,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     int get_need_balance_addr(
         ObAllServerLeaderMsg& server_leader_info, ObIArray<common::ObAddr>& addr_arr, int64_t& total_partition_cnt);
 
-    private:
+  private:
     const int64_t BG_INFO_MAP_SIZE = 1024L * 1024L;
     ObLeaderCoordinator& host_;
     common::hash::ObHashMap<int64_t, LcBalanceGroupInfo*, common::hash::NoPthreadDefendMode> bg_info_map_;
@@ -776,7 +776,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   };
 
   class NewLeaderStrategy {
-    public:
+  public:
     NewLeaderStrategy(ObIAllocator& allocator, ObAllServerLeaderMsg& all_server_leader_msg,
         ObAllPartitionSwitchMsg& all_part_switch_msg,
         ServerReplicaMsgContainer::ServerReplicaCounterMap& server_replica_counter_map,
@@ -784,11 +784,11 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
 
     virtual ~NewLeaderStrategy();
 
-    public:
+  public:
     virtual int execute();
     int init();
 
-    private:
+  private:
     int get_sorted_server(ObIArray<common::ObAddr>& server_arr);
     int switch_to_exp_max_leader(const ObIArray<common::ObAddr>& server_arr);
     int execute_new_leader_strategy(const common::ObAddr& addr, const bool to_max_exp_leader, bool& is_balance);
@@ -830,7 +830,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     int do_map_reuse(const ObAddr& addr, ObSerMapInfo& map_info);
     int all_map_reuse();
 
-    private:
+  private:
     ObIAllocator& allocator_;
     ObAllServerLeaderMsg& all_server_leader_msg_;  // all server
     ObAllPartitionSwitchMsg& all_part_switch_msg_;
@@ -847,13 +847,13 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   };
 
   class WaitElectionCycleIdling : public ObThreadIdling {
-    public:
+  public:
     explicit WaitElectionCycleIdling(volatile bool& stop) : ObThreadIdling(stop)
     {}
     virtual ~WaitElectionCycleIdling()
     {}
 
-    public:
+  public:
     static const int64_t ELECTION_CYCLE = 1500000;  // 1.5s
     virtual int64_t get_idle_interval_us()
     {
@@ -862,11 +862,11 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   };
 
   class ExpectedLeaderWaitOperator {
-    public:
+  public:
     typedef common::hash::ObHashMap<common::ObAddr, int64_t, common::hash::NoPthreadDefendMode> ServerLeaderCounter;
     static const int64_t MAX_SERVER_CNT = 256;
 
-    public:
+  public:
     ExpectedLeaderWaitOperator(share::ObPartitionTableOperator& pt_operator, common::ObMySQLProxy& mysql_proxy,
         volatile bool& stop, ObLeaderCoordinator& host)
         : sys_leader_waiter_(pt_operator, stop),
@@ -885,7 +885,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     virtual ~ExpectedLeaderWaitOperator()
     {}
 
-    public:
+  public:
     int init(const uint64_t tenant_id);
     int check_can_switch_more_leader(
         const common::ObAddr& new_leader, const common::ObAddr& old_leader, bool& can_switch);
@@ -897,17 +897,17 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
         share::ObLeaderElectionWaiter::ExpectedLeader& expected_leader, const bool is_sys_tg_partition);
     int get_wait_ret() const;
 
-    private:
+  private:
     int64_t generate_wait_leader_timeout(const bool is_sys);
 
-    private:
+  private:
     static const int64_t WAIT_LEADER_US_PER_PARTITION = 10 * 1000;  // 10ms
     int get_non_sys_part_leader_cnt(const common::ObIArray<common::ObZone>& zones, int64_t& leader_cnt);
     int do_get_non_sys_part_leader_cnt(
         const uint64_t sql_tenant_id, const common::ObIArray<common::ObZone>& zones, int64_t& leader_cnt);
     int do_wait();
 
-    private:
+  private:
     share::ObLeaderElectionWaiter sys_leader_waiter_;
     share::ObUserPartitionLeaderWaiter user_leader_waiter_;
     common::ObArray<share::ObLeaderElectionWaiter::ExpectedLeader> sys_tg_expected_leaders_;
@@ -921,11 +921,11 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     ObLeaderCoordinator& host_;
     int wait_ret_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ExpectedLeaderWaitOperator);
   };
   class GetLeaderCandidatesAsyncV2Operator {
-    public:
+  public:
     struct PartIndex {
       PartIndex() : first_level_idx_(-1), second_level_idx_(-1)
       {}
@@ -959,7 +959,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     typedef common::ObArray<PartIndex> PartIndexArray;
     typedef common::hash::ObHashMap<common::ObAddr, int64_t, common::hash::NoPthreadDefendMode> IndexMap;
 
-    public:
+  public:
     GetLeaderCandidatesAsyncV2Operator(
         obrpc::ObSrvRpcProxy& rpc_proxy, const AsyncRpcFunc& async_rpc_func, common::ObServerConfig& config)
         : allocator_(ObModIds::OB_RS_LEADER_COORDINATOR_PA),
@@ -973,7 +973,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     {}
     ~GetLeaderCandidatesAsyncV2Operator()
     {}  // no one will derive from this class
-    public:
+  public:
     int init();
     void clear_after_wait();
     bool reach_accumulate_threshold(const PartIndexInfo& info) const;
@@ -997,7 +997,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     int wait();
     int fill_partitions_leader_candidates(common::ObIArray<PartitionArray*>& partition_arrays);
 
-    private:
+  private:
     static const int64_t MAX_CANDIDATE_INFO_ARRAY_SIZE = 1024;
     static const int64_t ACCUMULATE_THRESHOLD = 1024;  // batch process threshold
     static const int64_t SEND_TO_WAIT_THRESHOLD = 32;  // cnt of send_requests() before wait()
@@ -1008,7 +1008,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     static const int64_t MIN_RPC_TIMEOUT = 2L * 1000000L;
     static const int64_t MAX_RPC_TIMEOUT = 180L * 1000000L;
 
-    private:
+  private:
     common::ObArenaAllocator allocator_;
     ObGetLeaderCandidatesAsyncProxyV2 async_proxy_;
     // max count 1024
@@ -1024,7 +1024,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     typedef int (obrpc::ObSrvRpcProxy::*AsyncRpcFunc)(const obrpc::ObSwitchLeaderListArg&,
         obrpc::ObSrvRpcProxy::AsyncCB<obrpc::OB_SWITCH_LEADER_LIST_ASYNC>*, const obrpc::ObRpcOpts&);
 
-    public:
+  public:
     SwitchLeaderListAsyncOperator(
         obrpc::ObSrvRpcProxy& rpc_proxy, const AsyncRpcFunc& async_rpc_func, common::ObServerConfig& config)
         : async_proxy_(rpc_proxy, async_rpc_func),
@@ -1037,7 +1037,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     {}
     ~SwitchLeaderListAsyncOperator()
     {}  // no one will derive from this class
-    public:
+  public:
     void reuse();
     bool reach_accumulate_threshold() const;
     bool reach_send_to_wait_threshold() const;
@@ -1070,12 +1070,12 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
       saved_new_leader_ = leader;
     }
 
-    private:
+  private:
     static const int64_t ACCUMULATE_THRESHOLD = 128;  // batch process threshold
     static const int64_t SEND_TO_WAIT_THRESHOLD = 4;  // cnt of send_requests() before wait()
     static const int64_t RPC_TIMEOUT = 9L * 1000000L;
 
-    private:
+  private:
     ObSwitchLeaderListAsyncProxy async_proxy_;
     obrpc::ObSwitchLeaderListArg arg_;
     common::ObArray<bool> is_sys_tg_partitions_;
@@ -1085,7 +1085,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     common::ObAddr saved_new_leader_;
   };
   struct CandidateZoneInfo {
-    public:
+  public:
     CandidateZoneInfo() : zone_(), region_score_(INT64_MAX), candidate_count_(0)
     {}
     TO_STRING_KV(K_(zone), K_(region_score), K_(candidate_count));
@@ -1134,21 +1134,21 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   };
 
   class ChooseLeaderCmp {
-    public:
+  public:
     ChooseLeaderCmp(const uint64_t tenant_id, const uint64_t tablegroup_id)
         : tenant_id_(tenant_id), tablegroup_id_(tablegroup_id), ret_(common::OB_SUCCESS)
     {}
     ~ChooseLeaderCmp()
     {}
 
-    public:
+  public:
     bool operator()(const CandidateLeaderInfo& left, const CandidateLeaderInfo& right);
     int get_ret() const
     {
       return ret_;
     }
 
-    public:
+  public:
     bool cmp_region_score(const CandidateLeaderInfo& left, const CandidateLeaderInfo& right);
     bool cmp_not_merging(const CandidateLeaderInfo& left, const CandidateLeaderInfo& right);
     bool cmp_start_service(const CandidateLeaderInfo& left, const CandidateLeaderInfo& right);
@@ -1163,20 +1163,20 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     bool cmp_random_score(const CandidateLeaderInfo& left, const CandidateLeaderInfo& right);
     bool cmp_server_addr(const CandidateLeaderInfo& left, const CandidateLeaderInfo& right);
 
-    private:
+  private:
     const uint64_t tenant_id_;
     const uint64_t tablegroup_id_;
     int ret_;
   };
 
   struct CandidateZoneInfoCmp {
-    public:
+  public:
     CandidateZoneInfoCmp() : ret_(common::OB_SUCCESS)
     {}
     ~CandidateZoneInfoCmp()
     {}
 
-    public:
+  public:
     bool operator()(const CandidateZoneInfo& left, const CandidateZoneInfo& right);
     int get_ret()
     {
@@ -1184,10 +1184,10 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     }
     bool same_level(const CandidateZoneInfo& left, const CandidateZoneInfo& right);
 
-    private:
+  private:
     int64_t cmp_candidate_cnt(const int64_t left_cnt, const int64_t right_cnt);
 
-    private:
+  private:
     int ret_;
   };
 
@@ -1227,16 +1227,16 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     bool ignore_switch_percent_;
   };
   struct CursorContainer {
-    public:
+  public:
     CursorContainer() : cursor_array_()
     {}
     virtual ~CursorContainer()
     {}
 
-    public:
+  public:
     int reorganize();
 
-    public:
+  public:
     TO_STRING_KV(K(cursor_array_));
     common::ObArray<PartitionArrayCursor> cursor_array_;
   };
@@ -1266,18 +1266,18 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   typedef common::hash::ObHashMap<common::ObAddr, CandidateLeaderInfo, common::hash::NoPthreadDefendMode>
       RawLeaderInfoMap;
   class CandidateLeaderInfoMap : public RawLeaderInfoMap {
-    public:
+  public:
     CandidateLeaderInfoMap(ObLeaderCoordinator& host) : host_(host)
     {}
 
-    public:
+  public:
     int locate_candidate_leader_info(const common::ObAddr& advised_leader, const share::ObPartitionReplica& replica,
         const common::ObIArray<share::ObRawPrimaryZoneUtil::ZoneScore>& zone_score,
         const common::ObIArray<share::ObRawPrimaryZoneUtil::RegionScore>& region_score,
         const ObRandomZoneSelector& random_selector, const ObZoneList& excluded_zones,
         const common::ObIArray<common::ObAddr>& excluded_servers, CandidateLeaderInfo& candidate_leader_info);
 
-    private:
+  private:
     int build_candidate_basic_statistic(const common::ObAddr& server_addr, const common::ObAddr& advised_leader,
         const common::ObIArray<share::ObRawPrimaryZoneUtil::ZoneScore>& zone_score,
         const common::ObIArray<share::ObRawPrimaryZoneUtil::RegionScore>& region_score,
@@ -1294,17 +1294,17 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     int build_candidate_balance_group_score(
         const common::ObAddr& server_addr, const common::ObAddr& advised_leader, CandidateLeaderInfo& info);
 
-    private:
+  private:
     ObLeaderCoordinator& host_;
   };
   typedef common::hash::ObHashMap<common::ObZone, int64_t, common::hash::NoPthreadDefendMode> ZoneCandidateCountMap;
   typedef common::hash::ObHashMap<common::ObZone, int64_t, common::hash::NoPthreadDefendMode> RawZoneMigrateCountMap;
   class ZoneMigrateCountMap : public RawZoneMigrateCountMap {
-    public:
+  public:
     ZoneMigrateCountMap() : RawZoneMigrateCountMap()
     {}
 
-    public:
+  public:
     int locate(const common::ObZone& zone, int64_t& count);
   };
   typedef CandidateLeaderInfoMap::iterator leader_info_iter;
@@ -1315,7 +1315,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
   typedef CandidateZoneInfoMap::const_iterator const_zone_info_iter;
   typedef common::ObArray<share::ObUnit> TenantUnit;
   class SwitchLeaderStrategy {
-    public:
+  public:
     SwitchLeaderStrategy(ObLeaderCoordinator& leader_coordinator, common::ObArray<PartitionArray*>& partition_arrays,
         CursorContainer& cursor_container)
         : host_(leader_coordinator), partition_arrays_(partition_arrays), cursor_container_(cursor_container)
@@ -1323,11 +1323,11 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     virtual ~SwitchLeaderStrategy()
     {}
 
-    public:
+  public:
     virtual int execute(
         TenantUnit& tenant_unit, ExpectedLeaderWaitOperator& leader_wait_operator, const bool force) = 0;
 
-    protected:
+  protected:
     int coordinate_partitions_per_tg(TenantUnit& tenant_unit, PartitionArray& partition_array,
         PartitionArrayCursor& cursor, const bool force, ExpectedLeaderWaitOperator& leader_wait_operator,
         SwitchLeaderListAsyncOperator& async_rpc_operator, bool& do_switch_leader);
@@ -1336,7 +1336,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
         bool& need_switch);
     int check_tenant_on_server(const TenantUnit& tenant_unit, const common::ObAddr& server, bool& tenant_on_server);
 
-    protected:
+  protected:
     ObLeaderCoordinator& host_;
     common::ObArray<PartitionArray*>& partition_arrays_;
     CursorContainer& cursor_container_;
@@ -1371,7 +1371,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     };
     typedef common::hash::ObHashMap<common::ObAddr, CursorQueue*, common::hash::NoPthreadDefendMode> CursorQueueMap;
 
-    public:
+  public:
     ConcurrentSwitchLeaderStrategy(ObLeaderCoordinator& leader_coordinator,
         common::ObArray<PartitionArray*>& partition_arrays, CursorContainer& cursor_container)
         : SwitchLeaderStrategy(leader_coordinator, partition_arrays, cursor_container),
@@ -1381,10 +1381,10 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     virtual ~ConcurrentSwitchLeaderStrategy()
     {}
 
-    public:
+  public:
     virtual int execute(TenantUnit& tenant_unit, ExpectedLeaderWaitOperator& leader_wait_operator, const bool force);
 
-    private:
+  private:
     int init_cursor_queue_map();
     int get_next_cursor_link(ExpectedLeaderWaitOperator& leader_wait_operator, CursorLink*& cursor_link,
         LinkType& link_type, bool& no_leader_pa);
@@ -1394,7 +1394,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
     bool is_switch_finished();
     int try_reconnect_cursor_queue(CursorLink* cursor_link, const LinkType link_type);
 
-    private:
+  private:
     CursorQueueMap cursor_queue_map_;
     common::ObArenaAllocator link_node_allocator_;
   };
@@ -1545,7 +1545,7 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
       const CandidateZoneInfoMap& candidate_zone_map, const common::ObIArray<common::ObZone>& zone_list,
       common::ObIArray<bool>& results);
 
-  private:
+private:
   bool inited_;
   share::ObPartitionTableOperator* pt_operator_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

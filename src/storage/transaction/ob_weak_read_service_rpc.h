@@ -25,11 +25,11 @@ class ObRpcResultCode;
 namespace transaction {
 
 class ObIWrsRpc {
-  public:
+public:
   virtual ~ObIWrsRpc()
   {}
 
-  public:
+public:
   virtual int get_cluster_version(const common::ObAddr& server, const uint64_t tenant_id,
       const obrpc::ObWrsGetClusterVersionRequest& req, obrpc::ObWrsGetClusterVersionResponse& res) = 0;
 
@@ -39,7 +39,7 @@ class ObIWrsRpc {
 
 class ObWrsRpc : public ObIWrsRpc {
   static const int64_t MAX_RPC_PROCESS_HANDLER_TIME = 100 * 1000L;  // report warn threshold
-  public:
+public:
   ObWrsRpc();
   virtual ~ObWrsRpc()
   {}
@@ -52,15 +52,15 @@ class ObWrsRpc : public ObIWrsRpc {
   virtual int post_cluster_heartbeat(
       const common::ObAddr& server, const uint64_t tenant_id, const obrpc::ObWrsClusterHeartbeatRequest& req);
 
-  public:
+public:
   class ClusterHeartbeatCB : public obrpc::ObWrsRpcProxy::AsyncCB<obrpc::OB_WRS_CLUSTER_HEARTBEAT> {
-    public:
+  public:
     ClusterHeartbeatCB() : wrs_(NULL)
     {}
     virtual ~ClusterHeartbeatCB()
     {}
 
-    public:
+  public:
     void init(ObIWeakReadService* wrs)
     {
       wrs_ = wrs;
@@ -74,14 +74,14 @@ class ObWrsRpc : public ObIWrsRpc {
     void on_timeout();
     void on_invalid();
 
-    private:
+  private:
     int do_process_(const obrpc::ObRpcResultCode& rcode);
 
-    private:
+  private:
     ObIWeakReadService* wrs_;
   };
 
-  private:
+private:
   bool inited_;
   obrpc::ObWrsRpcProxy proxy_;
   ClusterHeartbeatCB cluster_heartbeat_cb_;

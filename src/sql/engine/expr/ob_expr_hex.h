@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprHex : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprHex(common::ObIAllocator& alloc);
   virtual ~ObExprHex();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
@@ -29,12 +29,12 @@ class ObExprHex : public ObStringExprOperator {
 
   static int eval_hex(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // helper func
   static int get_uint64(const common::ObObj& obj, common::ObCastCtx& cast_ctx, uint64_t& out);
   static int number_uint64(const common::number::ObNumber& num_val, uint64_t& out);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprHex);
 };
 

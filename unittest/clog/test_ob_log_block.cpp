@@ -20,7 +20,7 @@ using namespace oceanbase::clog;
 namespace oceanbase {
 namespace unittest {
 class TestObLogBlock : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     type = OB_DATA_BLOCK;

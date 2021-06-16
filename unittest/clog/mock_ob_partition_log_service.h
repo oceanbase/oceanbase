@@ -25,7 +25,7 @@ class ObILogAllocator;
 }
 namespace clog {
 class MockPartitionLogService : public ObIPartitionLogService {
-  public:
+public:
   virtual int init(ObILogEngine* log_engine, ObLogReplayEngineWrapper* replay_engine,
       ObIFetchLogEngine* fetch_log_engine, election::ObIElectionMgr* election_mgr,
       storage::ObPartitionService* partition_mgr, ObILogCallbackEngine* cb_engine, common::ObILogAllocator* alloc_mgr,
@@ -1502,7 +1502,7 @@ class MockPartitionLogService : public ObIPartitionLogService {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   common::ObPartitionKey p_k_;
 };
 

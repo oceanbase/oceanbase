@@ -24,19 +24,19 @@ struct ObQualifiedName;
 struct JoinedTable;
 class ObColumnNamespaceChecker {
   class ObTableItemIterator {
-    public:
+  public:
     explicit ObTableItemIterator(const ObColumnNamespaceChecker& table_container)
         : next_table_item_idx_(0), table_container_(table_container)
     {}
 
     const TableItem* get_next_table_item();
 
-    private:
+  private:
     int64_t next_table_item_idx_;
     const ObColumnNamespaceChecker& table_container_;
   };
 
-  public:
+public:
   explicit ObColumnNamespaceChecker(ObResolverParams& resolver_params)
       : params_(resolver_params), equal_columns_(), cur_joined_table_(NULL), check_unique_(true)
   {}
@@ -85,7 +85,7 @@ class ObColumnNamespaceChecker {
   int set_equal_columns(const common::ObIArray<common::ObString>& columns);
   void clear_equal_columns();
 
-  private:
+private:
   int find_column_in_single_table(const TableItem& table_item, const ObQualifiedName& q_name, bool& need_check_unique);
   int find_column_in_joined_table(const JoinedTable& joined_table, const ObQualifiedName& q_name,
       const TableItem*& found_table, bool& need_check_unique);
@@ -95,7 +95,7 @@ class ObColumnNamespaceChecker {
   int check_column_existence_in_using_clause(
       const uint64_t table_id, const common::ObString& column_name, const TableItem& table_item, bool& exist);
 
-  private:
+private:
   ObResolverParams& params_;
   // record the table root reference by query
   // single(contain basic table, alias table or generated table) table is itself

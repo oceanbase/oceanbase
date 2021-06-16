@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 class DIRWLock {
-  public:
+public:
   DIRWLock();
   ~DIRWLock();
   int try_rdlock();
@@ -34,7 +34,7 @@ class DIRWLock {
     return lock_;
   }
 
-  private:
+private:
   static const uint32_t WRITE_MASK = 1 << 30;
   volatile uint32_t lock_;
 };
@@ -45,12 +45,12 @@ class DIRWLock {
 // NOTE the class T must be a POD type
 template <class T, int64_t N>
 class ObStatArrayIter {
-  public:
+public:
   ObStatArrayIter();
   int init(T* item, const int64_t curr_idx, int64_t max_item_idx);
   int get_next(const T*& item);
 
-  private:
+private:
   T* items_;
   int64_t curr_idx_;
   int64_t max_item_idx_;
@@ -59,17 +59,17 @@ class ObStatArrayIter {
 // NOTE the class T must be a POD type
 template <class T, int64_t N>
 class ObStatArray {
-  public:
+public:
   typedef ObStatArrayIter<T, N> Iterator;
 
-  public:
+public:
   ObStatArray();
   int add(const ObStatArray& other);
   T* get(const int64_t idx);
   int get_iter(Iterator& iter);
   void reset();
 
-  private:
+private:
   T items_[N];
   int64_t min_item_idx_;
   int64_t max_item_idx_;
@@ -78,13 +78,13 @@ class ObStatArray {
 // NOTE the class T must be a POD type
 template <class T, int64_t N>
 class ObStatHistoryIter {
-  public:
+public:
   ObStatHistoryIter();
   int init(T* items, const int64_t start_pos, int64_t item_cnt);
   int get_next(T*& item);
   void reset();
 
-  private:
+private:
   T* items_;
   int64_t curr_;
   int64_t start_pos_;
@@ -94,10 +94,10 @@ class ObStatHistoryIter {
 // NOTE the class T must be a POD type
 template <class T, int64_t N>
 class ObStatHistory {
-  public:
+public:
   typedef ObStatHistoryIter<T, N> Iterator;
 
-  public:
+public:
   ObStatHistory();
   int push(const T& item);
   int add(const ObStatHistory& other);
@@ -105,7 +105,7 @@ class ObStatHistory {
   int get_last(T*& item);
   void reset();
 
-  private:
+private:
   T items_[N];
   int64_t curr_pos_;
   int64_t item_cnt_;

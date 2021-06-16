@@ -33,7 +33,7 @@ using namespace oceanbase::sql;
 #define BUF_LEN 102400
 namespace test {
 class TestRawExpr : public TestSqlUtils, public ::testing::Test {
-  public:
+public:
   TestRawExpr();
   virtual ~TestRawExpr();
   virtual void SetUp();
@@ -41,17 +41,17 @@ class TestRawExpr : public TestSqlUtils, public ::testing::Test {
   ObArenaAllocator allocator;
   ObRawExprFactory expr_factory_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRawExpr);
 
-  protected:
+protected:
   // function members
   int get_raw_expr(const char* expr, ObRawExpr*& raw_expr, const char*& json_expr);
   int get_result_tree(const char* sql, ParseResult& parse_result, ObIAllocator& allocator);
   void resolver(const char* expr, const char*& json_expr);
 
-  protected:
+protected:
   // data members
 };
 

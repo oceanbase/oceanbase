@@ -23,9 +23,9 @@
 namespace oceanbase {
 namespace sql {
 class ObPxTaskProcess {
-  private:
+private:
   class OpPreparation : public ObPxOperatorVisitor::ApplyFunc {
-    public:
+  public:
     OpPreparation()
         : task_id_(common::OB_INVALID_ID),
           sqc_id_(common::OB_INVALID_ID),
@@ -73,7 +73,7 @@ class ObPxTaskProcess {
       ctx_ = ctx;
     }
 
-    private:
+  private:
     int64_t task_id_;
     int64_t sqc_id_;
     int64_t dfo_id_;
@@ -87,7 +87,7 @@ class ObPxTaskProcess {
     ObExecContext* ctx_;
   };
   class OpPreCloseProcessor : public ObPxOperatorVisitor::ApplyFunc {
-    public:
+  public:
     OpPreCloseProcessor(ObPxTask& task) : task_(task)
     {}
     ~OpPreCloseProcessor() = default;
@@ -97,11 +97,11 @@ class ObPxTaskProcess {
     virtual int apply(ObExecContext& ctx, ObOpSpec& op);
     virtual int reset(ObOpSpec& op);
 
-    private:
+  private:
     ObPxTask& task_;
   };
 
-  public:
+public:
   ObPxTaskProcess(const observer::ObGlobalContext& gctx, ObPxRpcInitTaskArgs& arg);
   virtual ~ObPxTaskProcess();
   int process();
@@ -122,7 +122,7 @@ class ObPxTaskProcess {
     return arg_.sqc_handler_;
   }
 
-  public:
+public:
   // for sql audit to monitor worker exec time
   void set_enqueue_timestamp(int64_t v)
   {
@@ -187,7 +187,7 @@ class ObPxTaskProcess {
   int execute(ObPhyOperator& root);
   int execute(ObOpSpec& root);
 
-  private:
+private:
   /* functions */
   int do_process();
   int check_inner_stat();

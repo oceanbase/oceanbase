@@ -22,7 +22,7 @@ namespace common {
 class ObTraceIdAdaptor {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTraceIdAdaptor()
   {
     reset();
@@ -41,7 +41,7 @@ class ObTraceIdAdaptor {
   bool operator==(const ObTraceIdAdaptor& other) const;
   ObTraceIdAdaptor& operator=(const ObTraceIdAdaptor& other);
 
-  private:
+private:
   uint64_t uval_[2];
 };
 

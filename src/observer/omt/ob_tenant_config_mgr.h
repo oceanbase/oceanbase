@@ -28,7 +28,7 @@ namespace oceanbase {
 namespace omt {
 
 class ObTenantConfigGuard {
-  public:
+public:
   ObTenantConfigGuard();
   ObTenantConfigGuard(ObTenantConfig* config);
   virtual ~ObTenantConfigGuard();
@@ -49,7 +49,7 @@ class ObTenantConfigGuard {
     return config_;
   }
 
-  private:
+private:
   ObTenantConfig* config_;
 };
 
@@ -130,7 +130,7 @@ using SuccessFunctor = std::function<void(const ObTenantConfig& config)>;
 using FailureFunctor = std::function<void()>;
 
 class ObTenantConfigMgr {
-  public:
+public:
   static ObTenantConfigMgr& get_instance();
   virtual ~ObTenantConfigMgr();
   ObTenantConfigMgr(const ObTenantConfigMgr& config) = delete;
@@ -184,7 +184,7 @@ class ObTenantConfigMgr {
 
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   ObTenantConfigMgr();
   bool inited_;
   common::ObAddr self_;

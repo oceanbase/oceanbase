@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObEndTransStmt : public ObTCLStmt {
-  public:
+public:
   ObEndTransStmt() : ObTCLStmt(stmt::T_END_TRANS), is_rollback_(false)
   {}
   virtual ~ObEndTransStmt()
@@ -32,14 +32,14 @@ class ObEndTransStmt : public ObTCLStmt {
     return is_rollback_;
   }
 
-  private:
+private:
   // types and constants
   // function members
-  private:
+private:
   // data members
   bool is_rollback_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObEndTransStmt);
 };

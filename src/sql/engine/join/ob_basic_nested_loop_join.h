@@ -20,15 +20,15 @@ namespace sql {
 class ObBasicNestedLoopJoin : public ObJoin {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   static const int64_t DEFAULT_MEM_LIMIT = 10 * 1024 * 1024;
   static const int64_t DEFAULT_CACHE_LIMIT = 1000;
 
-  protected:
+protected:
   class ObBasicNestedLoopJoinCtx : public ObJoinCtx {
     friend class ObBasicNestedLoopJoin;
 
-    public:
+  public:
     ObBasicNestedLoopJoinCtx(ObExecContext& ctx) : ObJoinCtx(ctx), open_right_child_(false)
     {}
     virtual ~ObBasicNestedLoopJoinCtx()
@@ -47,14 +47,14 @@ class ObBasicNestedLoopJoin : public ObJoin {
       open_right_child_ = true;
     }
 
-    protected:
+  protected:
     common::ObExprCtx expr_ctx_;
     bool open_right_child_;
   };
   struct RescanParam {
     OB_UNIS_VERSION_V(1);
 
-    public:
+  public:
     RescanParam() : my_phy_plan_(NULL), expr_(NULL), param_idx_(-1)
     {}
     RescanParam(ObPhysicalPlan* my_plan, ObSqlExpression* expr, int64_t idx)
@@ -63,14 +63,14 @@ class ObBasicNestedLoopJoin : public ObJoin {
     ~RescanParam()
     {}
 
-    public:
+  public:
     ObPhysicalPlan* my_phy_plan_;
     ObSqlExpression* expr_;  // freed by the physical plan
     int64_t param_idx_;
     TO_STRING_KV(N_EXPR, expr_, N_INDEX, param_idx_);
   };
 
-  public:
+public:
   explicit ObBasicNestedLoopJoin(common::ObIAllocator& alloc);
   virtual ~ObBasicNestedLoopJoin();
   virtual void reset();
@@ -94,7 +94,7 @@ class ObBasicNestedLoopJoin : public ObJoin {
       calc_exprs_, N_JOIN_TYPE, ob_join_type_str(join_type_), N_JOIN_EQ_COND, rescan_params_, N_JOIN_OTHER_COND,
       other_join_conds_, N_INNER_GET, is_inner_get_, N_SELF_JOIN, is_self_join_);
 
-  protected:
+protected:
   int get_next_left_row(ObJoinCtx& join_ctx) const;
   int prepare_rescan_params(ObBasicNestedLoopJoinCtx& join_ctx) const;
   inline bool use_batch_index_join(ObPhyOperatorType right_op_type) const
@@ -114,7 +114,7 @@ class ObBasicNestedLoopJoin : public ObJoin {
   // open right child
   int open_right_child(ObBasicNestedLoopJoinCtx& join_ctx) const;
 
-  protected:
+protected:
   common::ObFixedArray<RescanParam, common::ObIAllocator> rescan_params_;  // @todo a better name
   common::ObFixedArray<int64_t, common::ObIAllocator> left_scan_index_;
   bool is_inner_get_;

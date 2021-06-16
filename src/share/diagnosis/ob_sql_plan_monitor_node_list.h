@@ -28,7 +28,7 @@ namespace oceanbase {
 namespace sql {
 
 class TimingGuard {
-  public:
+public:
   explicit TimingGuard(int64_t& v) : v_(v), begin_(common::ObTimeUtility::fast_current_time())
   {}
   ~TimingGuard()
@@ -36,7 +36,7 @@ class TimingGuard {
     v_ = v_ + common::ObTimeUtility::fast_current_time() - begin_;
   }
 
-  private:
+private:
   int64_t& v_;
   int64_t begin_;
 };
@@ -44,7 +44,7 @@ class TimingGuard {
 class ObMonitorNode : public common::ObDLinkBase<ObMonitorNode> {
   friend class ObPlanMonitorNodeList;
 
-  public:
+public:
   ObMonitorNode()
       : tenant_id_(0),
         op_id_(0),
@@ -130,17 +130,17 @@ class ObMonitorNode : public common::ObDLinkBase<ObMonitorNode> {
   }
   TO_STRING_KV(K_(tenant_id), K_(op_id), "op_name", get_operator_name(), K_(thread_id));
 
-  public:
+public:
   int64_t tenant_id_;
   int64_t op_id_;
   int64_t plan_depth_;
   ObPhyOperatorType op_type_;
 
-  private:
+private:
   int64_t thread_id_;
   uint64_t trace_id_[2];
 
-  public:
+public:
   // information each operator need to record.
   int64_t open_time_;
   int64_t first_row_time_;
@@ -168,18 +168,18 @@ class ObMonitorNode : public common::ObDLinkBase<ObMonitorNode> {
 
 class ObPlanMonitorNodeList;
 class ObSqlPlanMonitorRecycleTask : public common::ObTimerTask {
-  public:
+public:
   ObSqlPlanMonitorRecycleTask() : node_list_(nullptr){};
   virtual ~ObSqlPlanMonitorRecycleTask() = default;
   void runTimerTask();
   int init(ObPlanMonitorNodeList* node_list);
 
-  private:
+private:
   ObPlanMonitorNodeList* node_list_;
 };
 
 class ObPlanMonitorNodeList {
-  public:
+public:
   static const int64_t MONITOR_NODE_PAGE_SIZE = (1LL << 21) - (1LL << 13);  // 2M - 8k
   static const int64_t EVICT_INTERVAL = 1000000;                            // 1s
   static const int32_t BATCH_RELEASE_COUNT = 5000;
@@ -189,7 +189,7 @@ class ObPlanMonitorNodeList {
   static const char* MOD_LABEL;
   typedef common::ObRaQueue::Ref Ref;
 
-  public:
+public:
   ObPlanMonitorNodeList() = default;
   ~ObPlanMonitorNodeList();
   static int mtl_init(ObPlanMonitorNodeList*& node_list);
@@ -256,11 +256,11 @@ class ObPlanMonitorNodeList {
     ptr = NULL;
   }
 
-  private:
+private:
   int init(uint64_t tenant_id, const int64_t max_mem_size, const int64_t queue_size);
   void destroy();
 
-  private:
+private:
   common::ObConcurrentFIFOAllocator allocator_;  // alloc mem for string buf
   common::ObRaQueue queue_;
   ObSqlPlanMonitorRecycleTask task_;  // release memory of sql plan monitor periodically.
@@ -271,7 +271,7 @@ class ObPlanMonitorNodeList {
   uint64_t tenant_id_;
   int tg_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanMonitorNodeList);
 };
 

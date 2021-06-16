@@ -24,13 +24,13 @@ namespace common {
 class ObStoreRange;
 
 class ObBorderFlag {
-  public:
+public:
   static const int8_t INCLUSIVE_START = 0x1;
   static const int8_t INCLUSIVE_END = 0x2;
   static const int8_t MIN_VALUE = 0x4;
   static const int8_t MAX_VALUE = 0x8;
 
-  public:
+public:
   ObBorderFlag() : data_(0)
   {}
   virtual ~ObBorderFlag()
@@ -103,7 +103,7 @@ class ObBorderFlag {
 
   TO_STRING_KV(N_FLAG, data_);
 
-  private:
+private:
   int8_t data_;
 };
 
@@ -291,7 +291,7 @@ struct ObVersion {
 };
 
 class ObVersionProvider {
-  public:
+public:
   virtual ~ObVersionProvider()
   {}
   virtual const ObVersion get_frozen_version() const = 0;
@@ -310,7 +310,7 @@ class ObVersionProvider {
 struct ObVersionRange {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t MIN_VERSION = 0;
   static const int64_t MAX_VERSION = INT64_MAX;
 
@@ -337,7 +337,7 @@ struct ObVersionRange {
 struct ObLogTsRange {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t MIN_TS = 0;
   static const int64_t MAX_TS = INT64_MAX;
 
@@ -383,7 +383,7 @@ struct ObLogTsRange {
 
 class ObNewRange {
 
-  public:
+public:
   uint64_t table_id_;
   ObBorderFlag border_flag_;
   ObRowkey start_key_;

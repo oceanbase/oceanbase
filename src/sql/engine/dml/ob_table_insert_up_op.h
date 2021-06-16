@@ -21,7 +21,7 @@ namespace sql {
 class ObTableInsertUpOpInput : public ObTableModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableInsertUpOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableModifyOpInput(ctx, spec)
   {}
   virtual int init(ObTaskInfo& task_info) override
@@ -33,7 +33,7 @@ class ObTableInsertUpOpInput : public ObTableModifyOpInput {
 class ObTableInsertUpSpec : public ObTableModifySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableInsertUpSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   ~ObTableInsertUpSpec()
   {}
@@ -45,7 +45,7 @@ class ObTableInsertUpSpec : public ObTableModifySpec {
   INHERIT_TO_STRING_KV("table_modify_spec", ObTableModifySpec, K_(scan_column_ids), K_(update_related_column_ids),
       K_(updated_column_ids), K_(updated_column_infos), K_(insert_row), K_(old_row), K_(new_row));
 
-  public:
+public:
   common::ObFixedArray<uint64_t, common::ObIAllocator> scan_column_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> update_related_column_ids_;
 
@@ -61,7 +61,7 @@ class ObTableInsertUpSpec : public ObTableModifySpec {
 };
 
 class ObTableInsertUpOp : public ObTableModifyOp {
-  public:
+public:
   ObTableInsertUpOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   int inner_open() override;
@@ -75,7 +75,7 @@ class ObTableInsertUpOp : public ObTableModifyOp {
     ObTableModifyOp::destroy();
   }
 
-  protected:
+protected:
   int init_autoinc_param(const common::ObPartitionKey& pkey);
 
   int calc_insert_row();
@@ -92,11 +92,11 @@ class ObTableInsertUpOp : public ObTableModifyOp {
 
   int update_auto_increment(const ObExpr& expr, const uint64_t cid, bool& is_auto_col_changed);
 
-  private:
+private:
   int do_table_insert_up();
   void reset();
 
-  protected:
+protected:
   storage::ObRow2ExprsProjector row2exprs_projector_;
   int64_t found_rows_;
   int64_t get_count_;

@@ -50,7 +50,7 @@ class ObIndexEntry;
 class ObLogEntry;
 
 class ObLogExecutor {
-  public:
+public:
   ObLogExecutor() : is_inited_(false), pkt_handler_(NULL), log_engine_(NULL)
   {}
   ~ObLogExecutor()
@@ -69,10 +69,10 @@ class ObLogExecutor {
   int req_heartbeat_info(
       const obrpc::ObLogReqHeartbeatInfoRequest& req_msg, obrpc::ObLogReqHeartbeatInfoResponse& result);
 
-  private:
+private:
   int handle_request(const common::ObAddr& server, const char* data, int64_t len, int64_t& pos);
 
-  private:
+private:
   bool is_inited_;
   ObIPartitionLogPacketHandler* pkt_handler_;
   ObILogEngine* log_engine_;

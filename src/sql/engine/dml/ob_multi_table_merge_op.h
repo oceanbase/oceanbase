@@ -20,7 +20,7 @@ namespace sql {
 class ObMultiTableMergeSpec : public ObTableMergeSpec, public ObMultiDMLInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMultiTableMergeSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableMergeSpec(alloc, type), ObMultiDMLInfo(alloc)
   {}
@@ -33,19 +33,19 @@ class ObMultiTableMergeSpec : public ObTableMergeSpec, public ObMultiDMLInfo {
 };
 
 class ObMultiTableMergeOp : public ObTableMergeOp, public ObMultiDMLCtx {
-  public:
+public:
   static const int64_t DELETE_OP = 0;
   static const int64_t UPDATE_INSERT_OP = 1;
   static const int64_t INSERT_OP = 2;
   static const int64_t DML_OP_CNT = 3;
 
-  public:
+public:
   ObMultiTableMergeOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableMergeOp(ctx, spec, input), ObMultiDMLCtx(ctx.get_allocator())
   {}
   virtual ~ObMultiTableMergeOp(){};
 
-  protected:
+protected:
   virtual int inner_open() override;
   virtual int inner_close() override;
 

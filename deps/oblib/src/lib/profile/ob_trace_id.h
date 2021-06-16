@@ -21,15 +21,15 @@ namespace common {
 #define TRACE_ID_FORMAT "Y%lX-%016lX"
 struct ObCurTraceId {
   class Guard {
-    public:
+  public:
     explicit Guard(const ObAddr& addr);
     ~Guard();
 
-    private:
+  private:
     bool need_reset_;
   };
   class SeqGenerator {
-    public:
+  public:
     enum { BATCH = 1 << 20 };
     static uint64_t gen_seq()
     {
@@ -44,7 +44,7 @@ struct ObCurTraceId {
   class TraceId {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     inline TraceId()
     {
       uval_[0] = 0;
@@ -130,7 +130,7 @@ struct ObCurTraceId {
       return 0 != id_.is_user_request_;
     }
 
-    private:
+  private:
     union {
       struct {
         uint32_t ip_ : 32;

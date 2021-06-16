@@ -20,7 +20,7 @@ namespace sql {
 class ObDDLStmt : public ObStmt, public ObICmd {
   const static int OB_DEFAULT_ARRAY_SIZE = 16;
 
-  public:
+public:
   ObDDLStmt(common::ObIAllocator* name_pool, stmt::StmtType type) : ObStmt(name_pool, type)
   {}
   explicit ObDDLStmt(stmt::StmtType type) : ObStmt(type)
@@ -40,7 +40,7 @@ class ObDDLStmt : public ObStmt, public ObICmd {
   }
   virtual int get_first_stmt(common::ObString& first_stmt);
 
-  private:
+private:
   ObArenaAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObDDLStmt);
 };

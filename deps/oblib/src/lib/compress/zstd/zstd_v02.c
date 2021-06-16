@@ -639,12 +639,13 @@ extern "C" {
 
 #define ERROR(name) (size_t) - PREFIX(name)
 
-#define ERROR_LIST(ITEM)                                                                                      \
-  ITEM(PREFIX(No_Error))                                                                                      \
-  ITEM(PREFIX(GENERIC))                                                                                       \
-  ITEM(PREFIX(dstSize_tooSmall)) ITEM(PREFIX(srcSize_wrong)) ITEM(PREFIX(prefix_unknown))                     \
-      ITEM(PREFIX(corruption_detected)) ITEM(PREFIX(tableLog_tooLarge)) ITEM(PREFIX(maxSymbolValue_tooLarge)) \
-          ITEM(PREFIX(maxSymbolValue_tooSmall)) ITEM(PREFIX(maxCode))
+#define ERROR_LIST(ITEM)                                                                                          \
+  ITEM(PREFIX(No_Error))                                                                                          \
+  ITEM(PREFIX(GENERIC))                                                                                           \
+  ITEM(PREFIX(dstSize_tooSmall))                                                                                  \
+  ITEM(PREFIX(srcSize_wrong)) ITEM(PREFIX(prefix_unknown)) ITEM(PREFIX(corruption_detected))                      \
+      ITEM(PREFIX(tableLog_tooLarge)) ITEM(PREFIX(maxSymbolValue_tooLarge)) ITEM(PREFIX(maxSymbolValue_tooSmall)) \
+          ITEM(PREFIX(maxCode))
 
 #define ERROR_GENERATE_ENUM(ENUM) ENUM,
 typedef enum {

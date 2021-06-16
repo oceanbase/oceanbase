@@ -23,7 +23,7 @@ using namespace common;
 
 namespace sql {
 class ObMergeExcept::ObMergeExceptCtx : public ObMergeSetOperatorCtx {
-  public:
+public:
   explicit ObMergeExceptCtx(ObExecContext& ctx) : ObMergeSetOperatorCtx(ctx), right_iter_end_(false), right_row_(NULL)
   {
     need_skip_init_row_ = true;
@@ -42,7 +42,7 @@ class ObMergeExcept::ObMergeExceptCtx : public ObMergeSetOperatorCtx {
     ObMergeSetOperatorCtx::destroy();
   }
 
-  private:
+private:
   bool right_iter_end_;
   const ObNewRow* right_row_;
   friend class ObMergeExcept;

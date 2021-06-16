@@ -29,7 +29,7 @@ class ObTransLockStat;
 
 namespace observer {
 class ObGVTransLockStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   explicit ObGVTransLockStat(transaction::ObTransService* trans_service) : trans_service_(trans_service)
   {
     reset();
@@ -42,7 +42,7 @@ class ObGVTransLockStat : public common::ObVirtualTableScannerIterator {
   void reset();
   void destroy();
 
-  private:
+private:
   int prepare_start_to_read_();
   int get_next_trans_lock_stat_(transaction::ObTransLockStat& trans_lock_stat);
   static const int64_t OB_MIN_BUFFER_SIZE = 128;
@@ -53,7 +53,7 @@ class ObGVTransLockStat : public common::ObVirtualTableScannerIterator {
   char proxy_sessid_buffer_[OB_MIN_BUFFER_SIZE];
   char memtable_key_buffer_[OB_MEMTABLE_KEY_BUFFER_SIZE];
 
-  private:
+private:
   transaction::ObTransService* trans_service_;
   transaction::ObPartitionIterator partition_iter_;
   transaction::ObTransLockStatIterator trans_lock_stat_iter_;

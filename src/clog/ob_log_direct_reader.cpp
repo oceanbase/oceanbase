@@ -1073,11 +1073,11 @@ int ObLogDirectReader::read_trailer(
     ObReadRes res;
     ObReadParam trailer_param;
     trailer_param.file_id_ = param.file_id_;
-    trailer_param.offset_ = CLOG_TRAILER_ALIGN_WRITE_OFFSET; // 4k aligned write, but data is in last 512bytes
+    trailer_param.offset_ = CLOG_TRAILER_ALIGN_WRITE_OFFSET;  // 4k aligned write, but data is in last 512bytes
     trailer_param.read_len_ = CLOG_DIO_ALIGN_SIZE;
     trailer_param.timeout_ = param.timeout_;
 
-    const char *trailer_buf = NULL;
+    const char* trailer_buf = NULL;
     int64_t trailer_len = 0;
 
     // always read trailed from disk, handling error code  specially

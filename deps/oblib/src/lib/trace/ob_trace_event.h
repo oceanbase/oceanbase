@@ -48,7 +48,7 @@ struct ObTraceEvent {
 
 template <int64_t EVENT_COUNT, int64_t INFO_BUFFER_SIZE>
 class ObTraceEventRecorderBase : public ObSeqEventRecorder<ObTraceEvent, EVENT_COUNT, INFO_BUFFER_SIZE> {
-  public:
+public:
   ObTraceEventRecorderBase(bool need_lock = false, uint32_t latch_id = ObLatchIds::TRACE_RECORDER_LOCK)
       : lock_(latch_id), need_lock_(need_lock)
   {
@@ -102,7 +102,7 @@ class ObTraceEventRecorderBase : public ObSeqEventRecorder<ObTraceEvent, EVENT_C
     }
   }
 
-  private:
+private:
   lib::ObMutex lock_;
   bool need_lock_;
 };

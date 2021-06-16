@@ -28,7 +28,7 @@ class ObSysVariableSchema;
 class ObSysVarSchema;
 
 class ObSysVariableSqlService : public ObDDLSqlService {
-  public:
+public:
   ObSysVariableSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObSysVariableSqlService()
@@ -37,13 +37,13 @@ class ObSysVariableSqlService : public ObDDLSqlService {
   virtual int replace_sys_variable(ObSysVariableSchema& sys_variable_schema, common::ObISQLClient& sql_client,
       const ObSchemaOperationType& operation_type, const common::ObString* ddl_stmt_str = NULL);
 
-  private:
+private:
   int replace_system_variable(const ObSysVarSchema& sysvar_schema, const ObSchemaOperationType& op,
       common::ObISQLClient& sql_client, const common::ObString* ddl_stmt_str);
   int replace_system_variable(const ObSysVarSchema& sysvar_schema, common::ObISQLClient& sql_client);
   int gen_sys_variable_dml(ObDMLSqlSplicer& dml, const ObSysVarSchema& sysvar_schema, bool is_history);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSysVariableSqlService);
 };
 

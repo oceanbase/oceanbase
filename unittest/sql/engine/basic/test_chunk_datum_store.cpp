@@ -30,7 +30,7 @@ namespace sql {
 using namespace common;
 
 class TestEnv : public ::testing::Environment {
-  public:
+public:
   virtual void SetUp() override
   {
     GCONF.enable_sql_operator_dump.set_value("True");
@@ -54,7 +54,7 @@ class TestEnv : public ::testing::Environment {
   ASSERT_FALSE(HasFatalFailure());
 
 class TestChunkDatumStore : public blocksstable::TestDataFilePrepare {
-  public:
+public:
   TestChunkDatumStore()
       : blocksstable::TestDataFilePrepare("TestDisk_chunk_datum_store", 2 << 20, 5000),
         eval_ctx_(exec_ctx_, eval_res_, eval_tmp_)
@@ -253,7 +253,7 @@ class TestChunkDatumStore : public blocksstable::TestDataFilePrepare {
 
   void with_or_without_chunk(bool is_with);
 
-  protected:
+protected:
   const static int64_t COLS = 3;
   bool enable_big_row_ = false;
   int64_t cell_cnt_;

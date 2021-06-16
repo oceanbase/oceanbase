@@ -39,18 +39,18 @@ using namespace sql;
 using namespace transaction;
 
 class TestTransVersion {
-  public:
+public:
   static const int64_t TRANS_VERSION = 1;
 };
 class MyIter : public ObStoreRowIterator {
-  public:
+public:
   enum IterType {
     T_INVALID,
     T_GET,
     T_SCAN,
   };
 
-  public:
+public:
   MyIter()
   {
     clear();
@@ -62,7 +62,7 @@ class MyIter : public ObStoreRowIterator {
   inline int set_type(const IterType& type, const ObIArray<common::ObStoreRowkey>* rowkeys = NULL);
   inline void clear();
 
-  private:
+private:
   IterType type_;
   ObStoreRow row_;
   const common::ObIArray<common::ObStoreRowkey>* rowkeys_;
@@ -133,7 +133,7 @@ int MyIter::get_next_row(const ObStoreRow*& row)
 }
 
 class MySSStore : public ObIStore {
-  public:
+public:
   MySSStore() : allocator_(ObModIds::OB_ST_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE)
   {
     set_version(ObVersion(1));
@@ -243,7 +243,7 @@ class MySSStore : public ObIStore {
     return 0;
   }
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   ObStoreRow not_exist_row_;
 };
@@ -333,7 +333,7 @@ inline int MySSStore::multi_get(const ObStoreCtx& ctx, const ObQueryFlag flag, c
 }
 
 class MySchemaService : public oceanbase::share::schema::MockSchemaService {
-  public:
+public:
   inline int init(const char* file_name);
   void get_schema_guard(ObSchemaGetterGuard*& schema_guard)
   {
@@ -342,10 +342,10 @@ class MySchemaService : public oceanbase::share::schema::MockSchemaService {
   // inline virtual int release_schema(const ObSchemaManager *schema);
   // inline virtual const ObSchemaManager *get_schema_manager_by_version(const int64_t version = 0,
   //                                                                    const bool for_merge = false);
-  private:
+private:
   // inline virtual const ObSchemaManager *get_user_schema_manager(const int64_t version);
   // inline virtual int get_all_schema(ObSchemaManager &out_schema, const int64_t frozen_version = -1);
-  private:
+private:
   ObRestoreSchema restore_schema_;
   ObSchemaGetterGuard* schema_guard_;
   // ObSchemaManager *manager_;
@@ -394,7 +394,7 @@ int MySchemaService::init(const char* file_name)
 class TestObSchemaService : public MySchemaService {};
 
 class MyNewRowIter : public ObNewRowIterator {
-  public:
+public:
   MyNewRowIter() : iter_(NULL)
   {}
   virtual ~MyNewRowIter()
@@ -404,7 +404,7 @@ class MyNewRowIter : public ObNewRowIterator {
   virtual void reset();
   virtual int get_next_row(ObNewRow*& row);
 
-  private:
+private:
   ObStoreRowIterator* iter_;
 };
 inline void MyNewRowIter::reset()
@@ -433,13 +433,13 @@ inline int MyNewRowIter::get_next_row(ObNewRow*& row)
 
 template <typename T, int64_t ARRAY_SIZE>
 class TestArray : public ObIArray<T> {
-  public:
+public:
   TestArray() : count_(0)
   {}
   virtual ~TestArray()
   {}
 
-  public:
+public:
   virtual int push_back(const T& obj);
   virtual void pop_back()
   {}
@@ -478,7 +478,7 @@ class TestArray : public ObIArray<T> {
     return OB_ERR_UNEXPECTED;
   }
 
-  private:
+private:
   T array_[ARRAY_SIZE];
   int64_t count_;
 };
@@ -525,7 +525,7 @@ const T& TestArray<T, ARRAY_SIZE>::at(int64_t idx) const
 
 template <typename T>
 class TestArray2 : public TestArray<T, 1> {
-  public:
+public:
   virtual int push_back(const T& obj)
   {
     UNUSED(obj);
@@ -534,7 +534,7 @@ class TestArray2 : public TestArray<T, 1> {
 };
 
 class TestPartitionComponentFactory : public ObPartitionComponentFactory {
-  public:
+public:
   TestPartitionComponentFactory()
   {}
   virtual ~TestPartitionComponentFactory()
@@ -546,7 +546,7 @@ class TestPartitionComponentFactory : public ObPartitionComponentFactory {
 };
 
 class TestObMemtable : public ObMemtable {
-  public:
+public:
   virtual int set(const storage::ObStoreCtx& ctx, const uint64_t table_id, const int64_t rowkey_len,
       const common::ObIArray<share::schema::ObColDesc>& columns, const storage::ObStoreRow& row)
   {
@@ -564,7 +564,7 @@ class TestObMemtable : public ObMemtable {
 };
 
 class TestObMemtable2 : public ObMemtable {
-  public:
+public:
   virtual int set(const storage::ObStoreCtx& ctx, const uint64_t table_id, const int64_t rowkey_len,
       const common::ObIArray<share::schema::ObColDesc>& columns, const storage::ObStoreRow& row)
   {
@@ -592,7 +592,7 @@ class TestObMemtable2 : public ObMemtable {
 };
 
 class TestObMemtable3 : public ObMemtable {
-  public:
+public:
   TestObMemtable3()
   {
     row_.flag_ = ObActionFlag::OP_DEL_ROW;
@@ -629,12 +629,12 @@ class TestObMemtable3 : public ObMemtable {
     return ret;
   }
 
-  private:
+private:
   ObStoreRow row_;
 };
 
 class TestNewRowIter : public ObNewRowIterator {
-  public:
+public:
   inline TestNewRowIter();
   virtual ~TestNewRowIter()
   {}
@@ -642,7 +642,7 @@ class TestNewRowIter : public ObNewRowIterator {
   {}
   inline virtual int get_next_row(ObNewRow*& row);
 
-  private:
+private:
   ObNewRow row_;
 };
 

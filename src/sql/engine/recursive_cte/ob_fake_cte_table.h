@@ -27,9 +27,9 @@ class ObExecContext;
 class ObFakeCTETable : public ObNoChildrenPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   class ObFakeCTETableOperatorCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     explicit ObFakeCTETableOperatorCtx(ObExecContext& ctx)
         : ObPhyOperatorCtx(ctx), empty_(false), pump_row_(nullptr), alloc_(ctx.get_allocator())
     {}
@@ -45,14 +45,14 @@ class ObFakeCTETable : public ObNoChildrenPhyOperator {
     int add_row(common::ObNewRow*& row);
     void reuse();
 
-    public:
+  public:
     bool empty_;
     common::ObNewRow* pump_row_;
     common::ObSEArray<int64_t, 64> column_involved_offset_;
     ObIAllocator& alloc_;
   };
 
-  public:
+public:
   explicit ObFakeCTETable(common::ObIAllocator& alloc) : ObNoChildrenPhyOperator(alloc), column_involved_offset_(alloc)
   {}
   virtual ~ObFakeCTETable()

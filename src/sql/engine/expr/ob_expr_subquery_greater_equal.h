@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprSubQueryGreaterEqual : public ObSubQueryRelationalExpr {
-  public:
+public:
   explicit ObExprSubQueryGreaterEqual(common::ObIAllocator& alloc);
   virtual ~ObExprSubQueryGreaterEqual();
 
@@ -28,11 +28,11 @@ class ObExprSubQueryGreaterEqual : public ObSubQueryRelationalExpr {
     return ObSubQueryRelationalExpr::cg_expr(op_cg_ctx, raw_expr, rt_expr);
   }
 
-  private:
+private:
   virtual int compare_single_row(const common::ObNewRow& left_row, const common::ObNewRow& right_row,
       common::ObExprCtx& expr_ctx, common::ObObj& result) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSubQueryGreaterEqual);
 };
 }  // namespace sql

@@ -21,17 +21,17 @@
 namespace oceanbase {
 namespace common {
 class ObVirtualTableScannerIterator : public common::ObVirtualTableIterator {
-  public:
+public:
   ObVirtualTableScannerIterator();
   virtual ~ObVirtualTableScannerIterator();
   virtual void reset();
 
-  protected:
+protected:
   common::ObScanner scanner_;
   common::ObScanner::Iterator scanner_it_;
   bool start_to_read_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObVirtualTableScannerIterator);
 };
 }  // namespace common

@@ -38,20 +38,20 @@ class ObAllVirtualPGBackupLogArchiveStatus : public common::ObVirtualTableIterat
     MAX_LOG_TS,
   };
 
-  public:
+public:
   ObAllVirtualPGBackupLogArchiveStatus();
   virtual ~ObAllVirtualPGBackupLogArchiveStatus();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   void reset();
   int init(storage::ObPartitionService* partition_service, common::ObAddr& addr);
 
-  private:
+private:
   int inner_get_next_row_(common::ObNewRow*& row);
   const char* get_log_archive_status_str_(share::ObLogArchiveStatus::STATUS status);
 
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* ps_;
   common::ObAddr addr_;

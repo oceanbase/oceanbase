@@ -26,7 +26,7 @@ class ObOriginalDBKey;
 class ObTablePrivSortKey;
 
 class ObPrivSqlService : public ObDDLSqlService {
-  public:
+public:
   ObPrivSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObPrivSqlService()
@@ -77,7 +77,7 @@ class ObPrivSqlService : public ObDDLSqlService {
 
   virtual int delete_obj_priv(const ObObjPriv& obj_priv, const int64_t new_schema_version, ObISQLClient& sql_client);
 
-  private:
+private:
   int log_obj_priv_operation(const ObObjPrivSortKey& obj_priv_key, const int64_t new_schema_version,
       const ObSchemaOperationType op_type, const ObString* ddl_stmt_str, ObISQLClient& sql_client);
 
@@ -103,7 +103,7 @@ class ObPrivSqlService : public ObDDLSqlService {
   int gen_obj_priv_dml_ora(const uint64_t exec_tenant_id, const ObObjPrivSortKey& obj_priv_key,
       share::ObRawObjPriv& raw_obj_priv, const uint64_t option, ObDMLSqlSplicer& dml, bool is_deleted);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPrivSqlService);
 };
 

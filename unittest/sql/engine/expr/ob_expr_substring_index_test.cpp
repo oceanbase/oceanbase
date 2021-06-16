@@ -18,18 +18,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObExprSubstringIndexTest : public ::testing::Test {
-  public:
+public:
   ObExprSubstringIndexTest();
   virtual ~ObExprSubstringIndexTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprSubstringIndexTest(const ObExprSubstringIndexTest& other);
   ObExprSubstringIndexTest& operator=(const ObExprSubstringIndexTest& other);
 
-  private:
+private:
   // data members
 };
 ObExprSubstringIndexTest::ObExprSubstringIndexTest()

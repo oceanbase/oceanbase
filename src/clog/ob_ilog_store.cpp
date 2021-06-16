@@ -103,13 +103,13 @@ void ObIlogStore::IlogWriterTask::runTimerTask()
 }
 
 class ObIlogStore::UpdateMaxFlushedIlogFunctor {
-  public:
+public:
   UpdateMaxFlushedIlogFunctor(ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~UpdateMaxFlushedIlogFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObPartitionKey& partition_key, const IndexInfoBlockEntry& index_info_block_entry)
   {
     int ret = OB_SUCCESS;
@@ -133,15 +133,15 @@ class ObIlogStore::UpdateMaxFlushedIlogFunctor {
     return OB_SUCCESS == ret;
   }
 
-  private:
+private:
   ObPartitionService* partition_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(UpdateMaxFlushedIlogFunctor);
 };
 
 class ObIlogStore::MergeIlogMemstoreContainer {
-  public:
+public:
   MergeIlogMemstoreContainer() : is_inited_(false)
   {}
   ~MergeIlogMemstoreContainer()
@@ -246,13 +246,13 @@ class ObIlogStore::MergeIlogMemstoreContainer {
     return ret;
   }
 
-  private:
+private:
   typedef ObHashMap<common::ObPartitionKey, IndexInfoBlockEntry>::iterator InfoBlockIterator;
   typedef ObHashMap<common::ObPartitionKey, MemberListInfo>::iterator MemberListIterator;
   typedef ObHashMap<ObPartitionLogInfo, ObLogCursorExt>::iterator LogCursorIterator;
   static const int64_t BUCKET_NUM = 1000 * 50;
 
-  private:
+private:
   int insert_into_info_block_(const common::ObPartitionKey pkey, const IndexInfoBlockEntry& entry_to_merge)
   {
     int ret = OB_SUCCESS;
@@ -313,7 +313,7 @@ class ObIlogStore::MergeIlogMemstoreContainer {
   }
 
   class MergePartitionMetaInfoFunctor {
-    public:
+  public:
     MergePartitionMetaInfoFunctor(MergeIlogMemstoreContainer& host) : host_(host), ret_code_(OB_SUCCESS)
     {}
     bool operator()(const ObPartitionKey& pkey, const IndexInfoBlockEntry& entry_to_merge)
@@ -331,14 +331,14 @@ class ObIlogStore::MergeIlogMemstoreContainer {
       return ret_code_;
     }
 
-    private:
+  private:
     MergeIlogMemstoreContainer& host_;
     int ret_code_;
   };
 
   // not support
   class MergePartitionMemberListInfoFunctor {
-    public:
+  public:
     MergePartitionMemberListInfoFunctor(MergeIlogMemstoreContainer& host) : host_(host), ret_code_(OB_SUCCESS)
     {}
     bool operator()(const ObPartitionKey& pkey, const MemberListInfo& memberlist_to_merge)
@@ -356,13 +356,13 @@ class ObIlogStore::MergeIlogMemstoreContainer {
       return ret_code_;
     }
 
-    private:
+  private:
     MergeIlogMemstoreContainer& host_;
     int ret_code_;
   };
 
   class MergeLogCursorInfoFunctor {
-    public:
+  public:
     MergeLogCursorInfoFunctor(MergeIlogMemstoreContainer& host) : host_(host), ret_code_(OB_SUCCESS)
     {}
     bool operator()(const ObPartitionLogInfo& log_info, const ObLogCursorExt& log_cursor_to_merge)
@@ -379,7 +379,7 @@ class ObIlogStore::MergeIlogMemstoreContainer {
       return ret_code_;
     }
 
-    private:
+  private:
     MergeIlogMemstoreContainer& host_;
     int ret_code_;
   };
@@ -459,14 +459,14 @@ class ObIlogStore::MergeIlogMemstoreContainer {
     return ret;
   }
 
-  private:
+private:
   ObHashMap<ObPartitionKey, IndexInfoBlockEntry> partition_info_block_map_;
   ObHashMap<ObPartitionKey, MemberListInfo> partition_memberlist_info_map_;
   ObHashMap<ObPartitionLogInfo, ObLogCursorExt> partition_log_cursor_map_;
   bool is_inited_;
   ObTimeGuard time_gurad_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(MergeIlogMemstoreContainer);
 };
 

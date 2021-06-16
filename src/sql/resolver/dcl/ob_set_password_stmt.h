@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObSetPasswordStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObSetPasswordStmt(common::ObIAllocator* name_pool);
   ObSetPasswordStmt();
   virtual ~ObSetPasswordStmt();
@@ -63,7 +63,7 @@ class ObSetPasswordStmt : public ObDDLStmt {
   }
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   // data members
   common::ObStrings user_pwd_;  // username1, hostname1, passwd1;
                                 // username2, hostname2, passwd2...
@@ -73,7 +73,7 @@ class ObSetPasswordStmt : public ObDDLStmt {
   bool for_current_user_;
   obrpc::ObSetPasswdArg set_password_arg_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSetPasswordStmt);
 };
 }  // end namespace sql

@@ -20,7 +20,7 @@ namespace sql {
 class ObBasicCostInfo;
 
 class ObLogSet : public ObLogicalOperator {
-  public:
+public:
   ObLogSet(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         is_distinct_(true),
@@ -180,7 +180,7 @@ class ObLogSet : public ObLogicalOperator {
     return SM_NONE != slave_mapping_type_;
   }
 
-  private:
+private:
   virtual int inner_replace_generated_agg_expr(
       const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*>>& to_replace_exprs) override;
   int allocate_implicit_sort_v2_for_set(const int64_t index, common::ObIArray<OrderItem>& order_keys);
@@ -206,7 +206,7 @@ class ObLogSet : public ObLogicalOperator {
     return ret;
   }
 
-  private:
+private:
   bool is_distinct_;
   bool is_recursive_union_;
   bool is_breadth_search_;

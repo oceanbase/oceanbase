@@ -21,12 +21,12 @@ namespace sql {
 class ObMergeUnionSpec : public ObMergeSetSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMergeUnionSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 };
 
 class ObMergeUnionOp : public ObMergeSetOp {
-  public:
+public:
   ObMergeUnionOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;
@@ -35,12 +35,12 @@ class ObMergeUnionOp : public ObMergeSetOp {
   virtual void destroy() override;
   virtual int inner_get_next_row() override;
 
-  private:
+private:
   int get_first_row(const ObIArray<ObExpr*>*& output_row);
   int distinct_get_next_row();
   int all_get_next_row();
 
-  private:
+private:
   typedef int (ObMergeUnionOp::*GetNextRowFunc)();
   ObOperator* cur_child_op_;
   ObOperator* candidate_child_op_;

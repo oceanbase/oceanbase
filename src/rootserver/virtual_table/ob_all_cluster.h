@@ -34,7 +34,7 @@ class ObZoneManager;
 class ObServerManager;
 
 class ObAllVirtualCluster : public common::ObVirtualTableProjector {
-  public:
+public:
   ObAllVirtualCluster()
       : inited_(false),
         zone_manager_(NULL),
@@ -53,12 +53,12 @@ class ObAllVirtualCluster : public common::ObVirtualTableProjector {
       obrpc::ObSrvRpcProxy& rpc_proxy, ObServerManager& server_manager, ObRootService& root_service);
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int get_full_row(const share::schema::ObTableSchema* table, common::ObIArray<Column>& columns, bool& full_columns);
 
-  private:
+private:
   static const int64_t RPC_TIMEOOUT = 1 * 1000 * 1000;  // 1s
-  private:
+private:
   bool inited_;
   ObZoneManager* zone_manager_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
@@ -70,7 +70,7 @@ class ObAllVirtualCluster : public common::ObVirtualTableProjector {
   ObRootService* root_service_;
   ObArenaAllocator arena_allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualCluster);
 };
 }  // namespace rootserver

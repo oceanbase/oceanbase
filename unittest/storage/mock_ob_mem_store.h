@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace storage {
 
 class MockObMemStore : public ObIStore {
-  public:
+public:
   MOCK_METHOD0(destroy, void());
   MOCK_METHOD6(get, int(const ObStoreCtx& ctx, const ObQueryFlag query_flag, const uint64_t table_id,
                         const common::ObStoreRowkey& rowkey, const common::ObIArray<share::schema::ObColDesc>& columns,

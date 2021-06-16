@@ -23,7 +23,7 @@ namespace observer {
 class ObAllVirtualDiagIndexScan {
   typedef common::ObSEArray<int64_t, 16> ObIndexArray;
 
-  public:
+public:
   ObAllVirtualDiagIndexScan() : index_ids_()
   {}
   virtual ~ObAllVirtualDiagIndexScan()
@@ -36,7 +36,7 @@ class ObAllVirtualDiagIndexScan {
     return index_ids_;
   }
 
-  private:
+private:
   ObIndexArray index_ids_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualDiagIndexScan);
 };

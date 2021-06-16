@@ -19,15 +19,15 @@
 namespace oceanbase {
 namespace storage {
 class ObTenantConfigMetaBlockReader : public blocksstable::ObMetaBlockReader {
-  public:
+public:
   ObTenantConfigMetaBlockReader();
   virtual ~ObTenantConfigMetaBlockReader();
 
-  protected:
+protected:
   virtual int parse(const blocksstable::ObMacroBlockCommonHeader& common_header,
       const blocksstable::ObLinkedMacroBlockHeader& linked_header, const char* buf, const int64_t buf_len);
 
-  private:
+private:
   share::TenantUnits tenant_units_;
 };
 

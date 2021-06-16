@@ -36,7 +36,7 @@ void ObBlacklistResp::reset()
 }
 
 class BlacklistReqCallBack : public ObBlacklistRpcProxy::AsyncCB<OB_SERVER_BLACKLIST_REQ> {
-  public:
+public:
   BlacklistReqCallBack()
   {}
   virtual ~BlacklistReqCallBack()
@@ -55,7 +55,7 @@ class BlacklistReqCallBack : public ObBlacklistRpcProxy::AsyncCB<OB_SERVER_BLACK
     return newcb;
   }
 
-  public:
+public:
   int process()
   {
     return common::OB_SUCCESS;
@@ -63,12 +63,12 @@ class BlacklistReqCallBack : public ObBlacklistRpcProxy::AsyncCB<OB_SERVER_BLACK
   void on_timeout()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(BlacklistReqCallBack);
 };
 
 class BlacklistRespCallBack : public ObBlacklistRpcProxy::AsyncCB<OB_SERVER_BLACKLIST_RESP> {
-  public:
+public:
   BlacklistRespCallBack()
   {}
   virtual ~BlacklistRespCallBack()
@@ -87,7 +87,7 @@ class BlacklistRespCallBack : public ObBlacklistRpcProxy::AsyncCB<OB_SERVER_BLAC
     return newcb;
   }
 
-  public:
+public:
   int process()
   {
     return common::OB_SUCCESS;
@@ -95,7 +95,7 @@ class BlacklistRespCallBack : public ObBlacklistRpcProxy::AsyncCB<OB_SERVER_BLAC
   void on_timeout()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(BlacklistRespCallBack);
 };
 

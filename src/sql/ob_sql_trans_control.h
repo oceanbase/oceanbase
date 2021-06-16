@@ -44,7 +44,7 @@ class ObNullEndTransCallback;
 class ObExclusiveEndTransCallback;
 
 class TransState {
-  private:
+private:
   static const uint32_t START_TRANS_EXECUTED_BIT = (1 << 0);
   static const uint32_t END_TRANS_EXECUTED_BIT = (1 << 2);
   static const uint32_t START_STMT_EXECUTED_BIT = (1 << 4);
@@ -70,7 +70,7 @@ class TransState {
   static const uint32_t START_PART_EXECUTED_MASK = (0xFFFFFFFF ^ (0x3 << 8));
   static const uint32_t END_PART_EXECUTED_MASK = (0xFFFFFFFF ^ (0x3 << 10));
 
-  public:
+public:
   TransState() : state_(0)
   {}
   ~TransState()
@@ -188,14 +188,14 @@ class TransState {
     return participants_;
   }
 
-  private:
+private:
   uint32_t state_;
   // cached for start_stmt, start_participants, end_participants
   common::ObPartitionArray participants_;
 };
 
 class ObConsistencyLevelAdaptor {
-  public:
+public:
   explicit ObConsistencyLevelAdaptor(common::ObConsistencyLevel sql_consistency)
   {
     switch (sql_consistency) {
@@ -215,12 +215,12 @@ class ObConsistencyLevelAdaptor {
     return trans_consistency_;
   }
 
-  private:
+private:
   int64_t trans_consistency_;
 };
 
 class ObSqlTransControl {
-  public:
+public:
   static int on_plan_start(ObExecContext& exec_ctx, bool is_remote = false);
   // static int on_plan_end(ObExecContext &exec_ctx, bool is_rollback, ObExclusiveEndTransCallback &callback);
 
@@ -293,7 +293,7 @@ class ObSqlTransControl {
   static int xa_rollback_all_changes(ObExecContext& exec_ctx);
   static int start_cursor_stmt(ObExecContext& exec_ctx);
 
-  public:
+public:
   static int get_participants(ObExecContext& exec_ctx, common::ObPartitionArray& participants);
   static int get_root_job_participants(
       ObExecContext& exec_ctx, const ObPhyOperator& root_job_root_op, common::ObPartitionArray& participants);
@@ -323,7 +323,7 @@ class ObSqlTransControl {
       ObExecContext& exec_ctx, ObSQLSessionInfo& session_info, ObPhysicalPlanCtx& phy_plan_ctx, bool is_remote);
   static bool is_isolation_RR_or_SE(int32_t isolation);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlTransControl);
   /* functions */
   static int implicit_start_trans(ObExecContext& exec_ctx, bool is_remote = false);

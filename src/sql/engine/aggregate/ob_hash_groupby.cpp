@@ -33,7 +33,7 @@ using namespace common::hash;
 namespace sql {
 
 struct ObGbyPartition : public common::ObDLinkBase<ObGbyPartition> {
-  public:
+public:
   ObGbyPartition(common::ObIAllocator* alloc = nullptr) : row_store_(alloc), level_(0)
   {}
   ObChunkRowStore row_store_;
@@ -41,7 +41,7 @@ struct ObGbyPartition : public common::ObDLinkBase<ObGbyPartition> {
 };
 
 class ObHashGroupBy::ObHashGroupByCtx : public ObGroupByCtx, public ObHashCtx<ObGbyHashCols> {
-  public:
+public:
   explicit ObHashGroupByCtx(ObExecContext& exec_ctx)
       : ObGroupByCtx(exec_ctx),
         ObHashCtx(),
@@ -138,11 +138,11 @@ class ObHashGroupBy::ObHashGroupByCtx : public ObGroupByCtx, public ObHashCtx<Ob
     return sql_mem_processor_.get_mem_bound();
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHashGroupByCtx);
   friend class ObHashGroupBy;
 
-  private:
+private:
   static const int64_t FIX_SIZE_PER_PART = sizeof(ObGbyPartition) + ObChunkRowStore::BLOCK_SIZE;
   int64_t group_idx_;
 

@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObSqlMemoryCallback {
-  public:
+public:
   virtual void alloc(int64_t size) = 0;
   virtual void free(int64_t size) = 0;
   virtual void dumped(int64_t size) = 0;

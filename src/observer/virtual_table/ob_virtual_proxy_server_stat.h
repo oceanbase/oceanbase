@@ -29,7 +29,7 @@ class ObServerConfig;
 }  // namespace common
 namespace observer {
 class ObVirtualProxyServerStat : public common::ObVirtualTableProjector {
-  public:
+public:
   ObVirtualProxyServerStat();
   virtual ~ObVirtualProxyServerStat();
 
@@ -38,7 +38,7 @@ class ObVirtualProxyServerStat : public common::ObVirtualTableProjector {
 
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   struct ObServerStateInfo {
     ObServerStateInfo();
     ~ObServerStateInfo()

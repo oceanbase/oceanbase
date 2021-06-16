@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDropTablegroupStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObDropTablegroupStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_DROP_TABLEGROUP)
   {}
   ObDropTablegroupStmt() : ObDDLStmt(stmt::T_DROP_TABLEGROUP)
@@ -50,7 +50,7 @@ class ObDropTablegroupStmt : public ObDDLStmt {
     return drop_tablegroup_arg_.tablegroup_name_;
   }
 
-  private:
+private:
   obrpc::ObDropTablegroupArg drop_tablegroup_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObDropTablegroupStmt);
 };

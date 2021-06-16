@@ -20,7 +20,7 @@ namespace sql {
 
 class ObOraSysChecker {
 
-  private:
+private:
   static int map_obj_priv_array_to_sys_priv_array(const ObIArray<share::ObRawObjPriv>& raw_obj_priv_array,
       const uint64_t obj_id, const uint64_t obj_type, ObIArray<share::ObRawPriv>& sys_priv_array);
 
@@ -171,7 +171,7 @@ class ObOraSysChecker {
 
   static int build_related_plist(uint64_t obj_type, share::ObRawPriv& sys_priv, share::ObRawPrivArray& plist);
 
-  public:
+public:
   static bool is_super_user(const uint64_t user_id);
 
   static bool is_owner_user(const uint64_t user_id, const uint64_t owner_user_id);

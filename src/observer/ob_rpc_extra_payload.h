@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObRpcExtraPayload : public obrpc::ObIRpcExtraPayload {
-  public:
+public:
   ObRpcExtraPayload()
   {}
   virtual ~ObRpcExtraPayload()
@@ -35,7 +35,7 @@ class ObRpcExtraPayload : public obrpc::ObIRpcExtraPayload {
     return global_rpc_extra_payload;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcExtraPayload);
 };
 

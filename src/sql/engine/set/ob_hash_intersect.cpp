@@ -26,7 +26,7 @@ class ObHashIntersect::ObHashIntersectCtx : public ObHashSetOperatorCtx {
   ~ObHashIntersectCtx()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHashIntersectCtx);
   friend class ObHashIntersect;
 };

@@ -20,7 +20,7 @@ namespace oceanbase {
 using namespace common;
 namespace blocksstable {
 class ObMacroMetaGenerator {
-  public:
+public:
   ObMacroMetaGenerator()
   {}
   virtual ~ObMacroMetaGenerator()

@@ -41,7 +41,7 @@ struct ObVirtualPartitionSplitInfo {
 };
 
 class ObTableStore {
-  public:
+public:
   friend class ObPrintableTableSchema;
   static const int64_t OB_TABLE_STORE_VERSION = 1;
   struct ObITableIDCompare {
@@ -161,7 +161,7 @@ class ObTableStore {
   int get_recovery_point_tables(const int64_t snapshot_version, ObTablesHandle& handle);
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   // Common Section
   bool is_multi_version_break(const ObVersionRange& new_version_range, const int64_t last_snapshot_vesion);
   int classify_tables(const ObTablesHandle& old_handle, common::ObArray<ObITable*>& major_tables,
@@ -237,7 +237,7 @@ class ObTableStore {
       const ObTablesHandle& old_handle, int64_t& first_reference_pos, int64_t& last_reference_pos);
   int get_major_split_table_pos(const ObTablesHandle& old_handle, int64_t& pos);
 
-  protected:
+protected:
   static const int64_t INVAID_TABLE_POS = -1;
   static const int64_t DEFAULT_SSTABLE_CNT = 6;
   static const int64_t OB_HIST_MINOR_FACTOR = 3;
@@ -271,7 +271,7 @@ OB_INLINE bool ObTableStore::is_valid() const
 }
 
 class ObLogTsCompater {
-  public:
+public:
   ObLogTsCompater() : version_(0), log_ts_range_(nullptr), is_base_(false)
   {}
   ~ObLogTsCompater()
@@ -299,7 +299,7 @@ class ObLogTsCompater {
 };
 
 class ObTableCompater {
-  public:
+public:
   static const int64_t OB_MAX_COMPAT_LOG_TS = MAX_SSTABLE_CNT_IN_STORAGE * MAX_SSTABLE_CNT_IN_STORAGE;
   ObTableCompater() : compaters_()
   {}
@@ -314,15 +314,15 @@ class ObTableCompater {
   int fill_log_ts();
   TO_STRING_KV(K_(compaters));
 
-  private:
+private:
   ObSEArray<ObLogTsCompater, 8> compaters_;
 };
 
 class ObPrintableTableStore final : public ObTableStore {
-  public:
+public:
   virtual int64_t to_string(char* buf, const int64_t buf_len) const override;
 
-  private:
+private:
   void table_to_string(ObITable* table, const char* table_type, char* buf, const int64_t buf_len, int64_t& pos) const;
   ObPrintableTableStore() = delete;
 };

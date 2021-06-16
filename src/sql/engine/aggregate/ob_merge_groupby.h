@@ -16,15 +16,15 @@
 namespace oceanbase {
 namespace sql {
 class ObMergeGroupBy : public ObGroupBy {
-  protected:
+protected:
   class ObMergeGroupByCtx;
 
-  public:
+public:
   explicit ObMergeGroupBy(common::ObIAllocator& alloc);
   virtual ~ObMergeGroupBy();
   virtual int rescan(ObExecContext& ctx) const;
 
-  private:
+private:
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   /**
    * @brief open operator, not including children operators.

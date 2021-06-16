@@ -22,7 +22,7 @@ namespace sql {
 class ObDistributedScheduler;
 
 class ObSqlExecutionIDMap {
-  public:
+public:
   static const uint64_t OUTER_ID_BASE = UINT64_MAX / 4;
   static const int64_t EXECUTION_ID_TSI_HOLD_NUM = 4096;
 
@@ -59,7 +59,7 @@ class ObSqlExecutionIDMap {
     }
   }
 
-  private:
+private:
   bool inited_;
   common::ObIDMap<ObDistributedScheduler, uint64_t, EXECUTION_ID_TSI_HOLD_NUM> inner_id_map_;
   common::hash::ObHashMap<uint64_t, std::pair<ObDistributedScheduler*, common::SpinRWLock*> > outer_id_map_;

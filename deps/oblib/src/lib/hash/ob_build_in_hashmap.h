@@ -22,7 +22,7 @@ namespace common {
 namespace hash {
 template <typename H, int64_t bucket_num = 16>
 class ObBuildInHashMap {
-  public:
+public:
   // Make embedded types easier to use by importing them to the class namespace.
   typedef H Hasher;                            // Rename and promote.
   typedef typename Hasher::Key Key;            // Key type.
@@ -94,14 +94,14 @@ class ObBuildInHashMap {
       return !(*this == that);
     }
 
-    protected:
+  protected:
     // Internal iterator constructor.
     iterator(ObBuildInBucket* b, Value* v) : value_(v), bucket_(b)
     {}
     friend class ObBuildInHashMap;
   };
 
-  public:
+public:
   ObBuildInHashMap() : count_(0)
   {}
 
@@ -211,7 +211,7 @@ class ObBuildInHashMap {
     return ret;
   }
 
-  private:
+private:
   ObBuildInBucket buckets_[bucket_num];
   int64_t count_;  // of elements stored in the map.
   BucketChain bucket_chain_;

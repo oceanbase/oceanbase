@@ -46,7 +46,7 @@ namespace frame {
 // after having response.
 //
 class ObReqProcessor {
-  public:
+public:
   ObReqProcessor();
   virtual ~ObReqProcessor()
   {}
@@ -103,7 +103,7 @@ class ObReqProcessor {
     enqueue_timestamp_ = enqueue_timestamp;
   }
 
-  protected:
+protected:
   virtual int check_timeout()
   {
     return common::OB_SUCCESS;
@@ -137,10 +137,10 @@ class ObReqProcessor {
                 common::OB_TRANS_KILLED == process_ret || common::OB_TRANS_CTX_NOT_EXIST == process_ret));
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObReqProcessor);
 
-  protected:
+protected:
   ObRequest* req_;
   // mark if request has wokenup
   bool req_has_wokenup_;
@@ -153,7 +153,7 @@ class ObReqProcessor {
   // share by all processors of this thread
   int process_ret_;
 
-  private:
+private:
   int64_t receive_timestamp_;
   int64_t run_timestamp_;
   int64_t enqueue_timestamp_;

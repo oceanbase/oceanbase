@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObLfFIFOAllocator : public ObIAllocator, public ObVSliceAlloc {
-  public:
+public:
   typedef ObBlockAllocMgr BlockAlloc;
   static const int64_t DEFAULT_CACHE_PAGE_COUNT = 64;
   ObLfFIFOAllocator()
@@ -45,7 +45,7 @@ class ObLfFIFOAllocator : public ObIAllocator, public ObVSliceAlloc {
     ObVSliceAlloc::purge_extra_cached_block(0);
   }
 
-  public:
+public:
   void* alloc(const int64_t size)
   {
     return ObVSliceAlloc::alloc(size);
@@ -80,7 +80,7 @@ class ObLfFIFOAllocator : public ObIAllocator, public ObVSliceAlloc {
     return get_block_using_ratio(ptr) < 0.8;
   }
 
-  private:
+private:
   BlockAlloc block_alloc_;
 };
 };  // namespace common

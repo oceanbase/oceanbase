@@ -21,13 +21,13 @@
 namespace oceanbase {
 namespace clog {
 class ObSimpleMemberList final {
-  public:
+public:
   ObSimpleMemberList()
   {
     reset();
   }
 
-  public:
+public:
   int add_server(const common::ObAddr& server);
   bool contains(const common::ObAddr& server) const;
   int64_t get_count() const
@@ -40,7 +40,7 @@ class ObSimpleMemberList final {
   int deep_copy_to(common::ObMemberList& member_list);
   int remove_server(const common::ObAddr& server);
 
-  private:
+private:
   int8_t count_;
   common::ObAddr server_[common::OB_MAX_MEMBER_NUMBER];
 };
@@ -48,7 +48,7 @@ class ObSimpleMemberList final {
 typedef common::ObSEArray<ObSimpleMemberList, 16> ObSimpleMemberListArray;
 
 class ObAckList {
-  public:
+public:
   ObAckList()
   {
     reset();
@@ -56,13 +56,13 @@ class ObAckList {
   ~ObAckList()
   {}
 
-  public:
+public:
   int add_server(const common::ObAddr& server);
   int64_t get_count() const;
   void reset();
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   const static int64_t ACK_LIST_SERVER_NUM = common::OB_MAX_MEMBER_NUMBER / 2;
   common::ObAddr server_[ACK_LIST_SERVER_NUM];
 };

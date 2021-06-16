@@ -24,7 +24,7 @@ namespace common {
 extern ObBlockAllocMgr default_blk_alloc;
 
 class ObSimpleSync {
-  public:
+public:
   ObSimpleSync() : ref_(0)
   {}
   int32_t ref(int32_t x)
@@ -38,12 +38,12 @@ class ObSimpleSync {
     }
   }
 
-  private:
+private:
   int32_t ref_;
 };
 
 class ObDListWithLock {
-  public:
+public:
   typedef ObDLink DLink;
   ObDListWithLock() : lock_()
   {
@@ -68,7 +68,7 @@ class ObDListWithLock {
     return &head_ == p ? NULL : p;
   }
 
-  private:
+private:
   void add_(DLink* p)
   {
     DLink* prev = head_.prev_;
@@ -86,13 +86,13 @@ class ObDListWithLock {
     next->prev_ = prev;
   }
 
-  private:
+private:
   mutable common::ObSpinLock lock_;
   DLink head_ CACHE_ALIGNED;
 };
 
 class ObEmbedFixedQueue {
-  public:
+public:
   ObEmbedFixedQueue() : push_(0), pop_(0), capacity_(0)
   {}
   ~ObEmbedFixedQueue()
@@ -119,7 +119,7 @@ class ObEmbedFixedQueue {
     return p;
   }
 
-  private:
+private:
   uint32_t push_ CACHE_ALIGNED;
   uint32_t pop_ CACHE_ALIGNED;
   uint32_t capacity_ CACHE_ALIGNED;
@@ -135,7 +135,7 @@ class ObEmbedFixedQueue {
   list.
  */
 class ObStockCtrl {
-  public:
+public:
   enum { K = INT32_MAX / 2 };
   ObStockCtrl() : total_(0), stock_(0)
   {}
@@ -147,7 +147,7 @@ class ObStockCtrl {
     stock_ = n;
   }
 
-  public:
+public:
   uint32_t total()
   {
     return total_;
@@ -175,7 +175,7 @@ class ObStockCtrl {
     return ov == K + total_ - 1;
   }
 
-  private:
+private:
   int32_t faa(int32_t x)
   {
     return ATOMIC_FAA(&stock_, x);
@@ -213,17 +213,17 @@ class ObStockCtrl {
     return ov;
   }
 
-  private:
+private:
   int32_t total_ CACHE_ALIGNED;
   int32_t stock_ CACHE_ALIGNED;
 };
 
 class ObBlockSlicer : public ObStockCtrl {
-  public:
+public:
   typedef ObEmbedFixedQueue FList;
   typedef ObBlockSlicer Host;
   struct Item {
-    public:
+  public:
     Item(Host* host) : host_(host)
     {}
     ~Item()
@@ -232,10 +232,10 @@ class ObBlockSlicer : public ObStockCtrl {
   } __attribute__((aligned(16)));
   ;
 
-  public:
+public:
   ObDLink dlink_ CACHE_ALIGNED;
 
-  public:
+public:
   ObBlockSlicer(int32_t limit, int32_t slice_size, void* tmallocator = NULL) : tmallocator_(tmallocator)
   {
     int64_t isize = lib::align_up2((int32_t)sizeof(Item) + slice_size, 16);
@@ -282,21 +282,21 @@ class ObBlockSlicer : public ObStockCtrl {
     return tmallocator_;
   }
 
-  private:
+private:
   uint64_t hash_;
   void* tmallocator_;
   FList flist_ CACHE_ALIGNED;
 };
 
 class ObSliceAlloc {
-  public:
+public:
   enum { MAX_ARENA_NUM = 32, MAX_REF_NUM = 4096, DEFAULT_BLOCK_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE };
   typedef ObSimpleSync Sync;
   typedef ObBlockSlicer Block;
   typedef ObBlockAllocMgr BlockAlloc;
   typedef ObDListWithLock BlockList;
   class Arena {
-    public:
+  public:
     Arena() : blk_(NULL)
     {}
     Block* blk()
@@ -312,7 +312,7 @@ class ObSliceAlloc {
       return ATOMIC_TAS(&blk_, NULL);
     }
 
-    private:
+  private:
     Block* blk_;
   } CACHE_ALIGNED;
   ObSliceAlloc() : nway_(0), bsize_(0), isize_(0), slice_limit_(0), blk_alloc_(default_blk_alloc), tmallocator_(NULL)
@@ -439,7 +439,7 @@ class ObSliceAlloc {
         to_cstring(attr_));
   }
 
-  private:
+private:
   void release_block(Block* blk)
   {
     if (blk->release()) {
@@ -491,7 +491,7 @@ class ObSliceAlloc {
     // try_purge();
   }
 
-  protected:
+protected:
   int nway_ CACHE_ALIGNED;
   int32_t bsize_;
   int32_t isize_;

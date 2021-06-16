@@ -20,7 +20,7 @@ using namespace common;
 namespace sql {
 
 class ObAppend::ObAppendCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObAppendCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx), current_child_op_idx_(0)
   {}
   ~ObAppendCtx()
@@ -30,7 +30,7 @@ class ObAppend::ObAppendCtx : public ObPhyOperatorCtx {
     ObPhyOperatorCtx::destroy_base();
   }
 
-  public:
+public:
   int64_t current_child_op_idx_;
 };
 

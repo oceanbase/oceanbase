@@ -37,11 +37,11 @@ class ObPxMergeSortCoord;
 class ObPxCoord : public ObPxReceive {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   class ObPxCoordCtx : public ObPxReceiveCtx, public ObPxRootDfoAction {
     static const int64_t QC_INTP_CONTEXT_HASH_BUCKET = 32;
 
-    public:
+  public:
     explicit ObPxCoordCtx(ObExecContext& ctx);
     virtual ~ObPxCoordCtx();
     virtual void destroy()
@@ -79,7 +79,7 @@ class ObPxCoord : public ObPxReceive {
     virtual int receive_channel_root_dfo(ObExecContext& ctx, ObDfo& parent, ObPxTaskChSets& parent_ch_sets);
     virtual int receive_channel_root_dfo(ObExecContext& ctx, ObDfo& parent, dtl::ObDtlChTotalInfo& ch_info);
 
-    protected:
+  protected:
     common::ObArenaAllocator allocator_;
     common::ObArenaAllocator row_allocator_;
     ObPxCoordInfo coord_info_;
@@ -100,7 +100,7 @@ class ObPxCoord : public ObPxReceive {
     friend class ObPxCoord;
   };
 
-  public:
+public:
   explicit ObPxCoord(common::ObIAllocator& alloc);
   virtual ~ObPxCoord();
   inline void set_expected_worker_count(int64_t c)
@@ -114,7 +114,7 @@ class ObPxCoord : public ObPxReceive {
   // int open();
   // for debug purpose, should remove later
   // inline void set_dfo_tree(ObDfo &root) { root_ = &root;}
-  protected:
+protected:
   /**
    * @brief open operator, not including children operators.
    * called by open.
@@ -135,7 +135,7 @@ class ObPxCoord : public ObPxReceive {
     return common::OB_SUCCESS;
   }
 
-  protected:
+protected:
   /* destroy all channel */
   int destroy_all_channel(ObPxCoordCtx& px_ctx) const;
   /* setup input for every op with in dfo */
@@ -170,7 +170,7 @@ class ObPxCoord : public ObPxReceive {
   int register_interrupt(ObPxCoordCtx* px_ctx) const;
   void clear_interrupt(ObPxCoordCtx* px_ctx) const;
 
-  private:
+private:
   // for multi-px concurrent limiting
   int64_t px_expected_worker_count_;
   /* variables */

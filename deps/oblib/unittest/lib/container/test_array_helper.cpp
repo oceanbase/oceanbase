@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class TestArrayHelper : public ::testing::Test {
-  public:
+public:
   TestArrayHelper()
   {}
   virtual ~TestArrayHelper()

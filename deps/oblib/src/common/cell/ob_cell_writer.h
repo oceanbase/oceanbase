@@ -36,7 +36,7 @@ enum ObCompactStoreType {
 const uint8_t TEXT_CELL_META_VERSION = 1;
 
 class ObCellWriter {
-  public:
+public:
   struct CellMeta {
     static const uint64_t SF_BIT_TYPE = 6;
     static const uint64_t SF_BIT_ATTR = 2;
@@ -66,7 +66,7 @@ class ObCellWriter {
     EV_LOCK_ROW = 5
   };
 
-  public:
+public:
   ObCellWriter();
   virtual ~ObCellWriter()
   {}
@@ -111,7 +111,7 @@ class ObCellWriter {
     return true;
   }
 
-  private:
+private:
   template <class T>
   int append(const T& value);
   inline int write_int(const ObObj& obj, const enum common::ObObjType meta_type, const int64_t value);
@@ -133,7 +133,7 @@ class ObCellWriter {
     return old_text_format_;
   }
 
-  private:
+private:
   char* buf_;
   int64_t buf_size_;
   int64_t pos_;

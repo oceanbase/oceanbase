@@ -212,7 +212,7 @@ struct ObBaseSort::TypedRowComparer {
     return bret;
   }
 
-  private:
+private:
   bool inited_;
   ObSortColumn* sort_columns_;
   ObCmpNullPos* null_poses_;
@@ -285,7 +285,7 @@ struct ObBaseSort::TypelessRowComparer {
     return bret;
   }
 
-  private:
+private:
   bool inited_;
   ObSortColumn* sort_columns_;
   ObCmpNullPos* null_poses_;

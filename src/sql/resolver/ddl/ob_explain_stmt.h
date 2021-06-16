@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExplainStmt : public ObDMLStmt {
-  public:
+public:
   ObExplainStmt();
   virtual ~ObExplainStmt();
   void set_explain_format(ExplainType format)
@@ -49,7 +49,7 @@ class ObExplainStmt : public ObDMLStmt {
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   // bool  verbose_;
   ExplainType format_;
   ObDMLStmt* explain_query_stmt_;

@@ -22,7 +22,7 @@ namespace lib {
 
 // CoThread is a thread with co-routine schedule support.
 class CoThread : public Thread, public CoSched, public common::ObDLinkBase<CoThread> {
-  public:
+public:
   CoThread();
   // overwrite
   int start();

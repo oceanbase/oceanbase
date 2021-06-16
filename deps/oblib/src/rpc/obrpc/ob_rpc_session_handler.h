@@ -28,7 +28,7 @@ class ObRequest;
 namespace obrpc {
 
 class ObRpcSessionHandler {
-  public:
+public:
   ObRpcSessionHandler();
   virtual ~ObRpcSessionHandler(){};
 
@@ -60,7 +60,7 @@ class ObRpcSessionHandler {
     max_waiting_thread_count_ = max_wait_count;
   }
 
-  private:
+private:
   enum { MAX_COND_COUNT = common::OB_MAX_CPU_NUM * 32 };
   struct WaitObject {
     int64_t thid_;
@@ -77,12 +77,12 @@ class ObRpcSessionHandler {
     return next_cond_[id % MAX_COND_COUNT];
   }
 
-  private:
+private:
   static const int32_t DEFAULT_WAIT_TIMEOUT_MS = 1000;
   static const int32_t MAX_WAIT_TIMEOUT_MS = 30000;
   static const int64_t MAX_WAIT_THREAD_COUNT = 100;
 
-  private:
+private:
   common::hash::ObHashMap<int64_t, WaitObject, common::hash::SpinReadWriteDefendMode> next_wait_map_;
   common::ObThreadCond next_cond_[MAX_COND_COUNT];
 
@@ -90,7 +90,7 @@ class ObRpcSessionHandler {
   volatile uint64_t waiting_thread_count_;
   uint64_t max_waiting_thread_count_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcSessionHandler);
 };
 

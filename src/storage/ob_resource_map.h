@@ -31,7 +31,7 @@ class ObResourceMap;
 
 template <typename Value>
 class ObResourceValueStore {
-  public:
+public:
   ObResourceValueStore();
   virtual ~ObResourceValueStore();
   virtual int inc_ref_cnt();
@@ -46,7 +46,7 @@ class ObResourceValueStore {
     ptr_ = ptr;
   }
 
-  private:
+private:
   Value* ptr_;
   int64_t ref_cnt_;
 };
@@ -94,7 +94,7 @@ class ObResourceHandle {
   template <typename, typename>
   friend class oceanbase::storage::ObResourceMap;
 
-  public:
+public:
   ObResourceHandle() : ptr_(NULL)
   {}
   virtual ~ObResourceHandle()
@@ -105,14 +105,14 @@ class ObResourceHandle {
   }
   virtual void reset() = 0;
 
-  protected:
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObResourceHandle);
   ObResourceValueStore<Value>* ptr_;
 };
 
 template <typename Key, typename Value>
 class ObResourceDefaultCallback {
-  public:
+public:
   ObResourceDefaultCallback(){};
   virtual ~ObResourceDefaultCallback()
   {}
@@ -125,12 +125,12 @@ class ObResourceDefaultCallback {
 
 template <typename Key, typename Value, typename Callback>
 class ObForeachCallbackAdaptor {
-  public:
+public:
   ObForeachCallbackAdaptor(Callback& callback);
   virtual ~ObForeachCallbackAdaptor();
   int operator()(common::hash::HashMapPair<Key, ObResourceValueStore<Value>*>& pair);
 
-  private:
+private:
   Callback& callback_;
 };
 
@@ -154,7 +154,7 @@ int ObForeachCallbackAdaptor<Key, Value, Callback>::operator()(
 
 template <typename Key, typename Value>
 class ObResourceMap {
-  public:
+public:
   explicit ObResourceMap();
   virtual ~ObResourceMap();
   int init(const int64_t bucket_num, const char* label, const int64_t total_limit, const int64_t hold_limit,
@@ -174,11 +174,11 @@ class ObResourceMap {
     return allocator_;
   }
 
-  private:
+private:
   int inc_handle_ref(ObResourceValueStore<Value>* ptr);
   void free_resource(ObResourceValueStore<Value>* ptr);
 
-  private:
+private:
   typedef ObResourceValueStore<Value> ValueStore;
   typedef common::hash::ObHashMap<Key, ValueStore*, common::hash::NoPthreadDefendMode> MAP;
   MAP map_;

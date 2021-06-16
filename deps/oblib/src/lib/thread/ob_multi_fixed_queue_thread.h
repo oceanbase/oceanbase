@@ -26,18 +26,18 @@ class ObMQThread {
 
   typedef ObMultiFixedQueue<MAX_THREAD_NUM> MQueue;
 
-  public:
+public:
   ObMQThread();
   virtual ~ObMQThread();
 
-  public:
+public:
   virtual int handle(void* data, const int64_t thread_index, volatile bool& stop_flag) = 0;
 
-  public:
+public:
   virtual int thread_begin();
   virtual void thread_end();
 
-  public:
+public:
   int init(const int64_t thread_num, const int64_t queue_size);
   void destroy();
   int start();
@@ -66,11 +66,11 @@ class ObMQThread {
   // Get number of tasks in the queue corresponding to thread with thread_idx
   int get_task_num(const int64_t thread_idx, int64_t& task_count);
 
-  private:
+private:
   static void* thread_func_(void* arg);
   int next_task_(int64_t queue_index, void*& task);
 
-  private:
+private:
   bool inited_;
   int64_t thread_num_;
   int64_t thread_counter_;
@@ -80,7 +80,7 @@ class ObMQThread {
   pthread_t tids_[MAX_THREAD_NUM];
   MQueue queue_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMQThread);
 };
 

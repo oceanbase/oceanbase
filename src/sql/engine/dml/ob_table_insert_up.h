@@ -20,7 +20,7 @@ namespace sql {
 class ObTableInsertUpInput : public ObTableModifyInput {
   friend class ObTableInsertUp;
 
-  public:
+public:
   ObTableInsertUpInput() : ObTableModifyInput()
   {}
   virtual ~ObTableInsertUpInput()
@@ -30,16 +30,16 @@ class ObTableInsertUpInput : public ObTableModifyInput {
     return PHY_INSERT_ON_DUP;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertUpInput);
 };
 
 class ObTableInsertUp : public ObTableModify {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   class ObTableInsertUpCtx : public ObTableModifyCtx {
-    public:
+  public:
     explicit ObTableInsertUpCtx(ObExecContext& ctx);
     ~ObTableInsertUpCtx();
     common::ObNewRow& get_update_row();
@@ -64,7 +64,7 @@ class ObTableInsertUp : public ObTableModify {
       ++found_rows_;
     }
 
-    public:
+  public:
     common::ObNewRow rowkey_row_;
     int64_t found_rows_;
     int64_t get_count_;
@@ -80,7 +80,7 @@ class ObTableInsertUp : public ObTableModify {
     bool cur_gi_task_iter_end_;
   };
 
-  public:
+public:
   explicit ObTableInsertUp(common::ObIAllocator& alloc);
   virtual ~ObTableInsertUp();
 
@@ -136,7 +136,7 @@ class ObTableInsertUp : public ObTableModify {
     return init_array_size<>(assignment_infos_, count);
   }
 
-  protected:
+protected:
   /**
    * @brief open operator, not including children operators.
    * called by open.
@@ -173,7 +173,7 @@ class ObTableInsertUp : public ObTableModify {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertUp);
   // function members
-  protected:
+protected:
   int32_t* old_projector_;
   int64_t old_projector_size_;
   int32_t* new_projector_;

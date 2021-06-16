@@ -16,10 +16,10 @@
 namespace oceanbase {
 namespace obrpc {
 struct ObRpcCostTime {
-  public:
+public:
   static const uint8_t RPC_COST_TIME_SIZE = 40;
 
-  public:
+public:
   ObRpcCostTime()
   {
     memset(this, 0, sizeof(*this));

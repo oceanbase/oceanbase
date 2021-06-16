@@ -25,21 +25,17 @@
 #include "ob_storage_log_replayer.h"
 
 #define SLOGGER (oceanbase::blocksstable::ObBaseStorageLogger::get_instance())
-namespace oceanbase
-{
-namespace blocksstable
-{
-//The redo log module of base storage. It is responsible for the write and recovery of all redo logs
-//of block sstable.
-class ObBaseStorageLogger : public ObStorageLogReplayer
-{
+namespace oceanbase {
+namespace blocksstable {
+// The redo log module of base storage. It is responsible for the write and recovery of all redo logs
+// of block sstable.
+class ObBaseStorageLogger : public ObStorageLogReplayer {
 public:
-  static ObBaseStorageLogger &get_instance();
-  //NOT thread safe.
-  //Init the redo log and do recovery if there is redo logs in log_dir.
-  virtual int init(const char *log_dir, const int64_t max_log_file_size,
-    ObISLogFilter *filter_before_parse = nullptr,
-    ObISLogFilter *filter_after_parse = nullptr);
+  static ObBaseStorageLogger& get_instance();
+  // NOT thread safe.
+  // Init the redo log and do recovery if there is redo logs in log_dir.
+  virtual int init(const char* log_dir, const int64_t max_log_file_size, ObISLogFilter* filter_before_parse = nullptr,
+      ObISLogFilter* filter_after_parse = nullptr);
   virtual void destroy() override;
 
   // Thread safe.
@@ -70,10 +66,10 @@ public:
   int parse_log(const char* log_dir, const int64_t log_file_id, FILE* stream);
   int get_using_disk_space(int64_t& using_space) const;
 
-  protected:
+protected:
   virtual int replay_over() override;
 
-  private:
+private:
   struct FindMinLogCursor {
     inline void operator()(common::hash::HashMapPair<int64_t, ObStorageLogActiveTrans*>& entry);
     common::ObLogCursor log_cursor_;
@@ -86,7 +82,7 @@ public:
   static const int64_t TRANS_ENTRY_BUF_SIZE =
       NORMAL_LOG_ITEM_SIZE - ObStorageLogWriter::LOG_BUF_RESERVED_SIZE - ObStorageLogWriter::LOG_FILE_ALIGN_SIZE;
 
-  private:
+private:
   ObBaseStorageLogger();
   virtual ~ObBaseStorageLogger();
   int write_log(ObStorageLogActiveTrans& trans_entry, const int64_t subcmd, const ObStorageLogAttribute& log_attr,
@@ -94,14 +90,14 @@ public:
   int flush_log(ObStorageLogActiveTrans& trans_entry, int64_t* log_seq_num = NULL);
   int erase_trans(const int64_t trans_id);
 
-  private:
+private:
   ObStorageLogWriter log_writer_;
   common::hash::ObHashMap<int64_t, ObStorageLogActiveTrans*> active_trans_;
   common::ObFixedQueue<ObStorageLogActiveTrans> trans_entries_;
   common::DRWLock log_sync_lock_;
   static RLOCAL(int64_t, thread_trans_id_);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBaseStorageLogger);
 };
 

@@ -29,7 +29,7 @@ using namespace oceanbase::observer;
 
 namespace test {
 class TestOptimizer : public TestOptimizerUtils {
-  public:
+public:
   TestOptimizer()
   {}
   ~TestOptimizer()

@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace obmysql {
 
 class OMPKOK : public ObMySQLPacket {
-  public:
+public:
   OMPKOK();
   virtual ~OMPKOK()
   {}
@@ -112,7 +112,7 @@ class OMPKOK : public ObMySQLPacket {
 
   virtual int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   int decode_session_state_info(const char*& pos);
   uint64_t get_state_info_len() const;
   uint64_t get_track_system_vars_len() const;
@@ -121,7 +121,7 @@ class OMPKOK : public ObMySQLPacket {
   static uint64_t get_kv_encode_len(const ObStringKV& string_kv);
   static ObStringKV get_separator_kv();
 
-  private:
+private:
   const static int64_t SESSION_TRACK_SYSTEM_VARIABLES = 0x00;
   const static int64_t SESSION_TRACK_SCHEMA = 0x01;
   const static int64_t SESSION_TRACK_STATE_CHANGE = 0x02;

@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace lib {
 
 class ObRateLimiter {
-  public:
+public:
   ObRateLimiter();
   virtual ~ObRateLimiter();
 
@@ -34,7 +34,7 @@ class ObRateLimiter {
   virtual int try_acquire(int64_t permits = 1) = 0;
   virtual int acquire(int64_t permits = 1) = 0;
 
-  protected:
+protected:
   int64_t rate_;
   const char* name_;
 };

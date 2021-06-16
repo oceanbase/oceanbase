@@ -18,13 +18,13 @@
 namespace oceanbase {
 namespace storage {
 class ObColMap {
-  public:
+public:
   static const int64_t RP_LOCAL_NUM = 3;
   static const uint64_t FIRST_LEVEL_MAX_COL_NUM = 1024;
   static const uint64_t FIRST_LEVEL_MAP_COL_NUM = 1031;
   static const uint64_t FINAL_LEVEL_MAX_COL_NUM = 65536;
 
-  public:
+public:
   ObColMap() : is_inited_(false), col_map_first_(), col_map_final_(NULL)
   {}
 
@@ -48,12 +48,12 @@ class ObColMap {
   typedef common::hash::ObPlacementHashMap<uint64_t, int64_t, FIRST_LEVEL_MAP_COL_NUM> ColMapFirst;
   typedef common::hash::ObPlacementHashMap<uint64_t, int64_t, FINAL_LEVEL_MAX_COL_NUM> ColMapFinal;
 
-  private:
+private:
   bool is_inited_;
   ColMapFirst col_map_first_;
   ColMapFinal* col_map_final_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObColMap);
 };

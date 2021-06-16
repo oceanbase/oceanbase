@@ -36,7 +36,7 @@ template <class Sched>
 class CoUserThreadTemp : public Sched {
   using RunFuncT = std::function<void()>;
 
-  public:
+public:
   explicit CoUserThreadTemp(const RunFuncT& runnable, int64_t stack_size = 0)
       : worker_(*this, runnable), stack_size_(stack_size), max_tasks_(INT64_MAX), cur_tasks_(0)
   {}
@@ -88,7 +88,7 @@ class CoUserThreadTemp : public Sched {
     return cur_tasks_;
   }
 
-  private:
+private:
   typename Sched::Worker worker_;
   int64_t stack_size_;
   int64_t max_tasks_;
@@ -97,7 +97,7 @@ class CoUserThreadTemp : public Sched {
 
 template <class Thread>
 class CoKThreadTemp {
-  public:
+public:
   using RunFuncT = std::function<void()>;
 
   explicit CoKThreadTemp(int64_t n_threads = 1)
@@ -151,7 +151,7 @@ class CoKThreadTemp {
     return threads_[0]->get_tid();
   }
 
-  public:
+public:
   void set_thread_max_tasks(uint64_t cnt);
 
   int submit_to(uint64_t idx, RunFuncT& func);
@@ -162,7 +162,7 @@ class CoKThreadTemp {
 
   int64_t get_cur_tasks() const;
 
-  protected:
+protected:
   virtual bool has_set_stop() const
   {
     return ATOMIC_LOAD(&stop_);
@@ -176,7 +176,7 @@ class CoKThreadTemp {
     return n_threads_;
   }
 
-  private:
+private:
   virtual void run(int64_t idx) = 0;
 
   /// \brief Create thread with start entry \c entry.
@@ -185,7 +185,7 @@ class CoKThreadTemp {
   /// \brief Destroy thread.
   void destroy_thread(Thread* thread);
 
-  private:
+private:
   int64_t n_threads_;
   Thread** threads_;
   int64_t stack_size_;

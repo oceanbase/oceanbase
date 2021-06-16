@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 class ObTruncatedString {
-  public:
+public:
   ObTruncatedString(const ObString& str, const int32_t limit)
   {
     const int32_t len = (limit < str.length()) ? (limit < 0 ? 0 : limit) : str.length();
@@ -62,7 +62,7 @@ class ObTruncatedString {
     return pos;
   }
 
-  private:
+private:
   ObString str_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTruncatedString);

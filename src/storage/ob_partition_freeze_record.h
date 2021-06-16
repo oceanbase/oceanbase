@@ -35,7 +35,7 @@ namespace storage {
 class ObIPartitionGroup;
 
 class ObFreezeRecord {
-  public:
+public:
   // check whether the memtable is available to execute a new minor freeze
   // the function is used to guarantee there is only one ongoing minor freeze
   bool available() const;
@@ -88,7 +88,7 @@ class ObFreezeRecord {
 
   TO_STRING_KV(K(snapshot_version_), K(emergency_), K(active_protection_clock_), K(storage_info_), K(is_valid_));
 
-  private:
+private:
   int64_t snapshot_version_;
   bool emergency_;
   int64_t active_protection_clock_;

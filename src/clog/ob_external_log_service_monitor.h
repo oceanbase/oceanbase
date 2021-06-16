@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace logservice {
 
 class ObExtLogServiceMonitor {
-  public:
+public:
   inline static void locate_count()
   {
     ATOMIC_INC(&locate_count_);
@@ -214,7 +214,7 @@ class ObExtLogServiceMonitor {
     return dividend == 0 ? 0 : divisor / dividend;
   }
 
-  private:
+private:
   // request count
   static int64_t locate_count_;
   static int64_t open_count_;

@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprGetUserVar : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprGetUserVar(common::ObIAllocator& alloc);
   virtual ~ObExprGetUserVar();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
@@ -27,7 +27,7 @@ class ObExprGetUserVar : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& expr) const override;
   static int eval_get_user_var(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprGetUserVar);
 };

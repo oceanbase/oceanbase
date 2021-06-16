@@ -20,9 +20,9 @@ namespace oceanbase {
 namespace storage {
 
 class ObSSTableRowWholeScanner : public ObISSTableRowIterator {
-  private:
+private:
   struct MacroScanHandle {
-    public:
+  public:
     MacroScanHandle() : macro_io_handle_(), meta_(), is_left_border_(false), is_right_border_(false)
     {}
     ~MacroScanHandle()
@@ -38,11 +38,11 @@ class ObSSTableRowWholeScanner : public ObISSTableRowIterator {
     bool is_left_border_;
     bool is_right_border_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(MacroScanHandle);
   };
 
-  public:
+public:
   ObSSTableRowWholeScanner()
       : iter_param_(NULL),
         access_ctx_(NULL),
@@ -61,7 +61,7 @@ class ObSSTableRowWholeScanner : public ObISSTableRowIterator {
       const common::ObExtStoreRange* query_range, const blocksstable::ObMacroBlockCtx& macro_block_ctx,
       ObSSTable* sstable);
 
-  protected:
+protected:
   virtual int inner_open(const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table,
       const void* query_range) override;
   virtual int inner_get_next_row(const ObStoreRow*& row) override;
@@ -69,7 +69,7 @@ class ObSSTableRowWholeScanner : public ObISSTableRowIterator {
   virtual void reuse() override;
   virtual const common::ObIArray<ObRowkeyObjComparer*>* get_rowkey_cmp_funcs();
 
-  private:
+private:
   int open_macro_block();
   int prefetch();
   int open_micro_block(const bool is_first_open);
@@ -83,7 +83,7 @@ class ObSSTableRowWholeScanner : public ObISSTableRowIterator {
                range.get_start_key().get_obj_cnt() == multi_version_rowkey_col_cnt);
   }
 
-  private:
+private:
   static const int64_t DEFAULT_MACRO_BLOCK_CTX = 1024;
 
   static const int64_t PREFETCH_DEPTH = 2;

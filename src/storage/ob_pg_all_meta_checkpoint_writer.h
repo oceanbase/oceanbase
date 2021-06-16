@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace storage {
 
 struct ObPGCheckpointInfo final {
-  public:
+public:
   ObPGCheckpointInfo();
   ~ObPGCheckpointInfo() = default;
   bool is_valid() const
@@ -37,7 +37,7 @@ struct ObPGCheckpointInfo final {
 };
 
 class ObPGAllMetaCheckpointWriter final {
-  public:
+public:
   ObPGAllMetaCheckpointWriter();
   ~ObPGAllMetaCheckpointWriter() = default;
   int init(ObPGCheckpointInfo& pg_checkpoint_info, blocksstable::ObStorageFile* file,
@@ -45,7 +45,7 @@ class ObPGAllMetaCheckpointWriter final {
   int write_checkpoint();
   void reset();
 
-  private:
+private:
   bool is_inited_;
   ObPGMacroMetaCheckpointWriter macro_meta_writer_;
   ObPGMetaCheckpointWriter pg_meta_writer_;

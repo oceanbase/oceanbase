@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObStoreRowkeyHashFunc {
-  public:
+public:
   uint64_t operator()(const common::ObStoreRowkey& rowkey, const uint64_t hash)
   {
     return rowkey.murmurhash(hash);
@@ -30,7 +30,7 @@ class ObStoreRowkeyHashFunc {
 };
 
 class ObBloomFilterCacheKey : public common::ObIKVCacheKey {
-  public:
+public:
   ObBloomFilterCacheKey(
       const uint64_t table_id, const MacroBlockId& block_id, const int64_t file_id, const int8_t prefix_rowkey_len);
   virtual ~ObBloomFilterCacheKey();
@@ -46,18 +46,18 @@ class ObBloomFilterCacheKey : public common::ObIKVCacheKey {
   }
   TO_STRING_KV(K_(table_id), K_(macro_block_id), K_(file_id), K_(prefix_rowkey_len));
 
-  private:
+private:
   uint64_t table_id_;
   MacroBlockId macro_block_id_;
   int64_t file_id_;
   int8_t prefix_rowkey_len_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilterCacheKey);
 };
 
 class ObBloomFilterCacheValue : public common::ObIKVCacheValue {
-  public:
+public:
   static const int64_t BLOOM_FILTER_CACHE_VALUE_VERSION = 1;
   ObBloomFilterCacheValue();
   virtual ~ObBloomFilterCacheValue();
@@ -104,7 +104,7 @@ class ObBloomFilterCacheValue : public common::ObIKVCacheValue {
   TO_STRING_KV(K_(version), K_(rowkey_column_cnt), K_(row_count), K_(bloom_filter), K_(is_inited));
   OB_UNIS_VERSION(BLOOM_FILTER_CACHE_VALUE_VERSION);
 
-  private:
+private:
   typedef common::ObBloomFilter<common::ObStoreRowkey, ObStoreRowkeyHashFunc> BloomFilter;
   int16_t version_;
   int16_t rowkey_column_cnt_;
@@ -112,7 +112,7 @@ class ObBloomFilterCacheValue : public common::ObIKVCacheValue {
   BloomFilter bloom_filter_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilterCacheValue);
 };
 
@@ -181,12 +181,12 @@ struct ObEmptyReadCell {
   volatile uint64_t hashcode_;
   volatile int64_t build_time_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObEmptyReadCell);
 };
 
 class ObBFCacheKeyHashFunc {
-  public:
+public:
   uint64_t operator()(const ObBloomFilterCacheKey& cacheKey, const uint64_t hash)
   {
     UNUSED(hash);
@@ -195,7 +195,7 @@ class ObBFCacheKeyHashFunc {
 };
 
 class ObBloomFilterCache : public common::ObKVCache<ObBloomFilterCacheKey, ObBloomFilterCacheValue> {
-  public:
+public:
   ObBloomFilterCache();
   virtual ~ObBloomFilterCache();
   int init(const char* cache_name, const int64_t priority, const int64_t size = DEFAULT_BUCKET_SIZE);
@@ -257,7 +257,7 @@ class ObBloomFilterCache : public common::ObKVCache<ObBloomFilterCacheKey, ObBlo
   }
   TO_STRING_KV(K_(bf_cache_miss_count_threshold), KP_(buckets), K_(bucket_size), K_(bucket_magic));
 
-  private:
+private:
   int get_cell(const uint64_t hashcode, ObEmptyReadCell*& cell);
   OB_INLINE uint64_t get_bucket_size() const
   {
@@ -278,7 +278,7 @@ class ObBloomFilterCache : public common::ObKVCache<ObBloomFilterCacheKey, ObBlo
   uint64_t bucket_size_;
   uint64_t bucket_magic_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilterCache);
 };
 
@@ -295,7 +295,7 @@ inline int ObBloomFilterCache::set_bf_cache_miss_count_threshold(const int64_t t
 }
 
 class ObMacroBloomFilterCacheWriter {
-  public:
+public:
   ObMacroBloomFilterCacheWriter();
   virtual ~ObMacroBloomFilterCacheWriter();
   int init(const int64_t rowkey_column_count, const int64_t row_count);
@@ -326,7 +326,7 @@ class ObMacroBloomFilterCacheWriter {
   }
   TO_STRING_KV(K_(is_inited), K_(need_build), K_(max_row_count), K_(bf_cache_value));
 
-  private:
+private:
   ObBloomFilterCacheValue bf_cache_value_;
   int64_t max_row_count_;
   bool need_build_;

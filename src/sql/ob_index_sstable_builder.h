@@ -36,7 +36,7 @@ class ObExecutorRpcCtx;
 
 // Build global index data from snapshot of data table.
 class ObIndexSSTableBuilder {
-  public:
+public:
   typedef common::ObArray<common::ObArray<common::ObNewRange>> RangeArrayArray;
   struct BuildIndexJob {
     int64_t job_id_;  // system job id
@@ -66,7 +66,7 @@ class ObIndexSSTableBuilder {
   };
 
   class ReplicaPicker : public ObDeterminateTaskTransmit::ITaskRouting {
-    public:
+  public:
     ReplicaPicker(){};
     virtual ~ReplicaPicker()
     {}
@@ -83,7 +83,7 @@ class ObIndexSSTableBuilder {
 
   // routeing task && record task location
   class TaskRoutingPorxy : public ObDeterminateTaskTransmit::ITaskRouting {
-    public:
+  public:
     TaskRoutingPorxy(ObIndexSSTableBuilder& builder) : routing_(NULL), builder_(builder)
     {}
     virtual int route(Policy policy, const ObTaskInfo& task, const common::ObIArray<common::ObAddr>& previous,
@@ -93,7 +93,7 @@ class ObIndexSSTableBuilder {
       routing_ = routing;
     }
 
-    private:
+  private:
     ObDeterminateTaskTransmit::ITaskRouting* routing_;
     ObIndexSSTableBuilder& builder_;
   };
@@ -125,7 +125,7 @@ class ObIndexSSTableBuilder {
   static int query_execution_id(
       uint64_t& execution_id, const int64_t job_id, const int64_t snapshot_version, common::ObMySQLProxy& sql_proxy);
 
-  private:
+private:
   class BuildIndexGuard;
   int build(ObSql& sql_engine, ObSqlCtx& sql_ctx, ObResultSet& result);
 
@@ -166,7 +166,7 @@ class ObIndexSSTableBuilder {
     return oracle_mode_ ? "\"" : "`";
   }
 
-  private:
+private:
   bool inited_;
   common::ObMySQLProxy* sql_proxy_;
   common::ObCommonSqlProxy* user_sql_proxy_;

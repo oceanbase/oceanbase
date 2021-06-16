@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprFromDays : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFromDays(common::ObIAllocator& alloc);
   virtual ~ObExprFromDays();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& date, common::ObExprTypeCtx& type_ctx) const;
@@ -25,7 +25,7 @@ class ObExprFromDays : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_fromdays(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprFromDays);
 };
 inline int ObExprFromDays::calc_result_type1(

@@ -15,19 +15,19 @@
 #include "lib/utility/ob_test_util.h"
 using namespace oceanbase::common;
 class TestScanner : public ::testing::Test {
-  public:
+public:
   TestScanner();
   virtual ~TestScanner();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestScanner);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 

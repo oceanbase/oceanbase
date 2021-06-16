@@ -39,10 +39,10 @@ struct ObMultiVersionRowInfo {
 };
 
 class ObMultiVersionColDescGenerate {
-  public:
+public:
   typedef common::ObSEArray<int32_t, common::OB_DEFAULT_COL_DEC_NUM> OutColsProject;
 
-  public:
+public:
   ObMultiVersionColDescGenerate();
   ~ObMultiVersionColDescGenerate();
   int init(const share::schema::ObTableSchema* schema);
@@ -54,10 +54,10 @@ class ObMultiVersionColDescGenerate {
   }
   int generate_multi_version_row_info(const ObMultiVersionRowInfo*& multi_version_row_info);
 
-  private:
+private:
   int generate_out_cols_project(const common::ObIArray<share::schema::ObColDesc>& column_ids);
 
-  private:
+private:
   bool is_inited_;
   const share::schema::ObTableSchema* schema_;
   ObMultiVersionRowInfo row_info_;

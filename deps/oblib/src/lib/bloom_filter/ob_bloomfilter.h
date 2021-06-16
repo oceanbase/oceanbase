@@ -26,7 +26,7 @@ namespace oceanbase {
 namespace common {
 template <class T, class HashFunc>
 class ObBloomFilter {
-  public:
+public:
   ObBloomFilter();
   ~ObBloomFilter();
   int init(int64_t element_count, double false_positive_prob = BLOOM_FILTER_FALSE_POSITIVE_PROB);
@@ -66,7 +66,7 @@ class ObBloomFilter {
   TO_STRING_KV(K_(nhash), K_(nbit), KP_(bits));
   INLINE_NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilter);
   static constexpr double BLOOM_FILTER_FALSE_POSITIVE_PROB = 0.01;
   mutable HashFunc hash_func_;

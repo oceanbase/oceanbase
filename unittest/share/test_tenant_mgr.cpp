@@ -76,7 +76,7 @@ int init_tenant_mgr()
 }
 
 class TestTenantStress : public share::ObThreadPool {
-  public:
+public:
   TestTenantStress();
   virtual ~TestTenantStress();
   virtual void run1();

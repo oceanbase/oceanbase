@@ -41,15 +41,15 @@ namespace common {
  */
 template <typename T>
 class ObCacheLineSegregatedArray {
-  private:
+private:
   void* array_;
   int64_t step_len_;
   int64_t arena_num_;
 
-  public:
+public:
   TO_STRING_KV(KP(this), K_(array), K_(step_len), K_(arena_num));
 
-  public:
+public:
   int init(void* array, int64_t step_len, int64_t arena_num)
   {
     int ret = OB_SUCCESS;
@@ -123,12 +123,12 @@ class ObCacheLineSegregatedArray {
  *             +---------------------------------------+
  */
 class ObCacheLineSegregatedArrayBase {
-  public:
+public:
   static const int64_t ALLOC_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
   static const int64_t CHUNK_SIZE = ALLOC_SIZE - 16;
   static const int64_t CHUNK_MAGIC = 0xFFEEE000000EEEFF;
 
-  public:
+public:
   static ObCacheLineSegregatedArrayBase& get_instance()
   {
     static ObCacheLineSegregatedArrayBase instance_;
@@ -159,10 +159,10 @@ class ObCacheLineSegregatedArrayBase {
     return ret;
   }
 
-  public:
+public:
   TO_STRING_KV(KP(this), K_(chunk), K_(arena_num), K_(arena_size), K_(alloc_pos), K_(mutex));
 
-  private:
+private:
   ObCacheLineSegregatedArrayBase() : chunk_(0), arena_num_(0), arena_size_(0), alloc_pos_(0)
   {
     arena_num_ = get_cpu_count();
@@ -185,7 +185,7 @@ class ObCacheLineSegregatedArrayBase {
     return ret;
   }
 
-  private:
+private:
   void* chunk_;
   int64_t arena_num_;
   int64_t arena_size_;

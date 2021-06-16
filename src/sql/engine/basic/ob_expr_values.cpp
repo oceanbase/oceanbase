@@ -27,7 +27,7 @@ namespace sql {
 OB_SERIALIZE_MEMBER(ObExprValuesInput, partition_id_values_);
 
 class ObExprValues::ObExprValuesCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObExprValuesCtx(ObExecContext& ctx)
       : ObPhyOperatorCtx(ctx),
         node_idx_(0),
@@ -44,7 +44,7 @@ class ObExprValues::ObExprValuesCtx : public ObPhyOperatorCtx {
     ObPhyOperatorCtx::destroy_base();
   }
 
-  private:
+private:
   int64_t node_idx_;
   ObIterExprCtx iter_expr_ctx_;
   int64_t value_count_;

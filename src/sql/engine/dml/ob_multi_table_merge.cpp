@@ -28,7 +28,7 @@ namespace sql {
 class ObMultiTableMerge::ObMultiTableMergeCtx : public ObTableMergeCtx, public ObMultiDMLCtx {
   friend class ObMultiTableMerge;
 
-  public:
+public:
   explicit ObMultiTableMergeCtx(ObExecContext& ctx) : ObTableMergeCtx(ctx), ObMultiDMLCtx(ctx.get_allocator())
   {}
   ~ObMultiTableMergeCtx()

@@ -24,7 +24,7 @@ class ObBarrierPieceMsg;
 class ObWinbufWholeMsg;
 class ObWinbufPieceMsg;
 class ObIPxCoordMsgProc {
-  public:
+public:
   // msg processor callback
   virtual int on_sqc_init_msg(ObExecContext& ctx, const ObPxInitSqcResultMsg& pkt) = 0;
   virtual int on_sqc_finish_msg(ObExecContext& ctx, const ObPxFinishSqcResultMsg& pkt) = 0;
@@ -36,7 +36,7 @@ class ObIPxCoordMsgProc {
 };
 
 class ObIPxSubCoordMsgProc {
-  public:
+public:
   virtual int on_transmit_data_ch_msg(const ObPxTransmitDataChannelMsg& pkt) const = 0;
   virtual int on_receive_data_ch_msg(const ObPxReceiveDataChannelMsg& pkt) const = 0;
   virtual int on_whole_msg(const ObBarrierWholeMsg& pkt) const = 0;
@@ -47,7 +47,7 @@ class ObIPxSubCoordMsgProc {
 class ObPxRpcInitSqcArgs;
 class ObSqcCtx;
 class ObPxSubCoordMsgProc : public ObIPxSubCoordMsgProc {
-  public:
+public:
   ObPxSubCoordMsgProc(ObPxRpcInitSqcArgs& sqc_arg, ObSqcCtx& sqc_ctx) : sqc_arg_(sqc_arg), sqc_ctx_(sqc_ctx)
   {}
   ~ObPxSubCoordMsgProc() = default;
@@ -57,7 +57,7 @@ class ObPxSubCoordMsgProc : public ObIPxSubCoordMsgProc {
   virtual int on_whole_msg(const ObBarrierWholeMsg& pkt) const;
   virtual int on_whole_msg(const ObWinbufWholeMsg& pkt) const;
 
-  private:
+private:
   ObPxRpcInitSqcArgs& sqc_arg_;
   ObSqcCtx& sqc_ctx_;
 };

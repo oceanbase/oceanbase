@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace memtable {
 // The structure actually written to MvccTransNode::buf_
 class ObMemtableDataHeader {
-  public:
+public:
   ObMemtableDataHeader(storage::ObRowDml dml_type, int64_t buf_len) : dml_type_(dml_type), buf_len_(buf_len)
   {}
   ~ObMemtableDataHeader()
@@ -69,7 +69,7 @@ class ObMemtableDataHeader {
 
 // only used for more conveniently passsing parameters
 class ObMemtableData {
-  public:
+public:
   ObMemtableData(storage::ObRowDml dml_type, int64_t buf_len, const char* buf)
       : dml_type_(dml_type), buf_len_(buf_len), buf_(buf)
   {}

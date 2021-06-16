@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprStrcmp : public ObRelationalExprOperator {
-  public:
+public:
   ObExprStrcmp();
   explicit ObExprStrcmp(common::ObIAllocator& alloc);
   virtual ~ObExprStrcmp(){};
@@ -32,7 +32,7 @@ class ObExprStrcmp : public ObRelationalExprOperator {
     return ObRelationalExprOperator::cg_expr(expr_cg_ctx, raw_expr, rt_expr);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprStrcmp);
 };
 }  // namespace sql

@@ -50,7 +50,7 @@ struct Pair : public ::oceanbase::common::ObDLinkBase<Pair> {
   {}
 };
 struct Value : public common::ObDLinkBase<Value> {
-  public:
+public:
   Value() : type_(JT_NULL), int_(0), str_(), obj_(), arr_()
   {}
   virtual ~Value()
@@ -106,7 +106,7 @@ struct Value : public common::ObDLinkBase<Value> {
     arr_.add_last(v);
   }
 
-  private:
+private:
   Type type_;
   int64_t int_;
   String str_;
@@ -116,13 +116,13 @@ struct Value : public common::ObDLinkBase<Value> {
 ////////////////////////////////////////////////////////////////
 // callback utility of Parser
 class JsonProcessor {
-  public:
+public:
   virtual ~JsonProcessor()
   {}
   virtual void process_value(String& key, Value* value) = 0;
 };
 class ToStringJsonProcessor : public json::JsonProcessor {
-  public:
+public:
   virtual void process_value(json::String& key, json::Value* value)
   {
     if ((key == N_TID) && (value->get_type() == JT_NUMBER) && (value->get_number() <= 0)) {
@@ -132,7 +132,7 @@ class ToStringJsonProcessor : public json::JsonProcessor {
 };
 
 class Parser {
-  public:
+public:
   Parser() : cur_token_(), allocator_(NULL), json_processor_(NULL)
   {}
   virtual ~Parser()
@@ -149,7 +149,7 @@ class Parser {
 
   int parse(const char* buf, const int64_t buf_len, Value*& root);
 
-  private:
+private:
   // types and constants
   enum TokenType {
     TK_INVALID = -1,
@@ -178,7 +178,7 @@ class Parser {
     } value_;
   };
 
-  private:
+private:
   friend class ::ObJsonTest_token_test_Test;
   friend class ::ObJsonTest_basic_test_Test;
   // function members
@@ -192,18 +192,18 @@ class Parser {
   int alloc_value(Type t, Value*& value);
   int alloc_pair(Pair*& pair);
 
-  private:
+private:
   // data members
   Token cur_token_;
   common::ObArenaAllocator* allocator_;
   JsonProcessor* json_processor_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(Parser);
 };
 ////////////////////////////////////////////////////////////////
 class Walker {
-  public:
+public:
   explicit Walker(const Value* root) : root_(root), step_in_(true)
   {}
   virtual ~Walker()
@@ -216,7 +216,7 @@ class Walker {
 
   int go();
 
-  protected:
+protected:
   virtual int on_null(int level, Type parent) = 0;
   virtual int on_true(int level, Type parent) = 0;
   virtual int on_false(int level, Type parent) = 0;
@@ -233,16 +233,16 @@ class Walker {
   virtual int on_walk_start() = 0;
   virtual int on_walk_end() = 0;
 
-  private:
+private:
   // function members
   int step(int level, const Value* node, Type parent);
 
-  protected:
+protected:
   // data members
   const Value* root_;
   bool step_in_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(Walker);
 };
 
@@ -261,7 +261,7 @@ struct Tidy : public Walker {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 
-  protected:
+protected:
   virtual int on_null(int level, Type parent);
   virtual int on_true(int level, Type parent);
   virtual int on_false(int level, Type parent);
@@ -286,43 +286,43 @@ struct Tidy : public Walker {
 
   int print_indent(int level);
 
-  protected:
+protected:
   mutable common::ObDataBuffer print_buffer_;
 };
 
 class RegexFilter : public Tidy {
   typedef common::ObList<regex_t, common::ObArenaAllocator> RegexList;
 
-  public:
+public:
   RegexFilter();
   virtual ~RegexFilter();
   void reset();
 
-  public:
+public:
   virtual int on_obj_name(common::ObDataBuffer& path_buffer, bool& is_match) const;
 
-  public:
+public:
   void register_regex(const char* pattern);
   void set_root(const Value* root)
   {
     root_ = root;
   }
 
-  protected:
+protected:
   virtual int on_walk_start();
   virtual int on_object_member_start(int level, Type parent, const Pair* kv);
   virtual int on_object_member_end(int level, Type parent, const Pair* kv, bool is_last);
 
-  private:
+private:
   int mark_need_print(Value* node, common::ObDataBuffer path_buffer, bool& is_need_print) const;
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   RegexList regex_list_;
 };
 
 class JsonFilter {
-  public:
+public:
   JsonFilter(const char** regexs, const int64_t regexn)
       : allocator_(common::ObModIds::OB_SQL_PHY_PLAN_STRING), parser_(), filter_(), root_(NULL)
   {
@@ -336,7 +336,7 @@ class JsonFilter {
   virtual ~JsonFilter()
   {}
 
-  public:
+public:
   void reset()
   {
     allocator_.reuse();  // FIXME ?
@@ -354,7 +354,7 @@ class JsonFilter {
     return filter_.to_string(buf, buf_len);
   };
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   json::Parser parser_;
   json::RegexFilter filter_;
@@ -362,7 +362,7 @@ class JsonFilter {
 };
 
 class Path {
-  public:
+public:
   explicit Path(Value* root) : root_(root)
   {}
   virtual ~Path()
@@ -370,15 +370,15 @@ class Path {
   int for_all_path();
   virtual int on_path(String& path, Pair* kv) = 0;
 
-  private:
+private:
   // function members
   int iterate(Value* node, common::ObDataBuffer path_buffer);
 
-  private:
+private:
   // data members
   Value* root_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(Path);
 };
 /*

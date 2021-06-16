@@ -29,7 +29,7 @@ class ObSqlString;
 namespace transaction {
 
 class ObSqlTask {
-  public:
+public:
   ObSqlTask()
   {
     reset();
@@ -44,7 +44,7 @@ class ObSqlTask {
   void reset();
   void destroy();
 
-  private:
+private:
   bool is_inited_;
   ObSqlString sql_;
   int64_t max_retry_time_;
@@ -53,7 +53,7 @@ class ObSqlTask {
 };
 
 class ObSqlPool : public common::ObSimpleThreadPool {
-  public:
+public:
   ObSqlPool();
   ~ObSqlPool()
   {
@@ -68,11 +68,11 @@ class ObSqlPool : public common::ObSimpleThreadPool {
   int add_task(void* task);
   void handle(void* task);
 
-  private:
+private:
   static const int64_t MAX_TASK_PER_SEC = 100;
   static const int64_t TOTAL_TASK = 10000;
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   common::ObMySQLProxy sql_proxy_;

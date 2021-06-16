@@ -18,16 +18,16 @@
 namespace oceanbase {
 namespace sql {
 class ObHashUnion : public ObHashSetOperator {
-  private:
+private:
   class ObHashUnionCtx;
 
-  public:
+public:
   explicit ObHashUnion(common::ObIAllocator& alloc);
 
   virtual ~ObHashUnion();
   virtual int rescan(ObExecContext& ctx) const;
 
-  private:
+private:
   virtual int inner_create_operator_ctx(ObExecContext& ctx, ObPhyOperatorCtx*& op_ctx) const;
 
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;

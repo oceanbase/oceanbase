@@ -28,7 +28,7 @@ typedef common::ObFixedArray<ObRawExpr*, common::ObIAllocator> ObRawExprSet;
 typedef common::ObSEArray<ObRawExprSet*, 8, common::ModulePageAllocator, true> ObRawExprSets;
 
 class ObRawExprSetUtils {
-  public:
+public:
   static int to_expr_set(
       common::ObIAllocator* allocator, const common::ObIArray<ObRawExpr*>& exprs, ObRawExprSet& expr_set);
 

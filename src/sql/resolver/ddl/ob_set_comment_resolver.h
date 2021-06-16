@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObSetCommentResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObSetCommentResolver(ObResolverParams& params);
   virtual ~ObSetCommentResolver();
   virtual int resolve(const ParseNode& parse_tree);
@@ -28,7 +28,7 @@ class ObSetCommentResolver : public ObDDLResolver {
     return static_cast<ObAlterTableStmt*>(stmt_);
   };
 
-  private:
+private:
   share::schema::ObTableSchema table_schema_;
   common::ObCollationType collation_type_;
   common::ObCharsetType charset_type_;

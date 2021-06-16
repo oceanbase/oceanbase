@@ -26,7 +26,7 @@ namespace oceanbase {
 namespace election {
 
 class ObElectionGroupInfo {
-  public:
+public:
   ObElectionGroupInfo()
   {
     reset();
@@ -37,7 +37,7 @@ class ObElectionGroupInfo {
   }
   void reset();
 
-  public:
+public:
   bool is_running() const
   {
     return is_running_;
@@ -200,7 +200,7 @@ class ObElectionGroupInfo {
       K_(replica_num), K_(takeover_t1_timestamp), K_(T1_timestamp), K_(leader_lease), K_(role), K_(state),
       K_(pre_destroy_state));
 
-  private:
+private:
   bool is_running_;
   ObElectionGroupId eg_id_;
   int64_t eg_version_;

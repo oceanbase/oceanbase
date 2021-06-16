@@ -73,7 +73,7 @@ struct ObParingHeapNodeBase {
 
 #define PHNODE(type, phlink)                                              \
   class ObParingHeapNode##_##phlink : public ObParingHeapNodeBase<type> { \
-    public:                                                               \
+  public:                                                                 \
     OB_INLINE static type* get_next(const type* n)                        \
     {                                                                     \
       return n->phlink##_.get_next();                                     \
@@ -115,7 +115,7 @@ struct ObDummyCompHelper {
 
 template <class T, class Compare, class L = typename T::ObParingHeapNode_phlink>
 class ObParingHeap {
-  public:
+public:
   typedef Compare ObCompHepler;
   typedef ObParingHeap<T, Compare, L> Paringheap;
 
@@ -533,7 +533,7 @@ class ObParingHeap {
     L::set_lchild(node_source, node_target);
   }
 
-  private:
+private:
   T* root_;
   ObCompHepler compare_;
 };

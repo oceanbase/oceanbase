@@ -33,7 +33,7 @@ class ObAllVirtualTableModifications : public common::ObVirtualTableScannerItera
     MAX_SNAPSHOT_VERSION
   };
 
-  public:
+public:
   ObAllVirtualTableModifications();
   virtual ~ObAllVirtualTableModifications();
   int init();
@@ -44,18 +44,18 @@ class ObAllVirtualTableModifications : public common::ObVirtualTableScannerItera
     addr_ = addr;
   }
 
-  private:
+private:
   static const int64_t DEFAULT_TABLE_INFO_CNT = 2048;
   int get_next_table_info(storage::ObTableModificationInfo*& info);
 
-  private:
+private:
   common::ObAddr addr_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   common::ObSEArray<storage::ObTableModificationInfo, DEFAULT_TABLE_INFO_CNT> infos_;
   int64_t info_idx_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTableModifications);
 };
 

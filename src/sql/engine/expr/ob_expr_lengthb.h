@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprLengthb : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprLengthb(common::ObIAllocator& alloc);
   virtual ~ObExprLengthb();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
@@ -30,7 +30,7 @@ class ObExprLengthb : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_lengthb_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLengthb);
 };
 

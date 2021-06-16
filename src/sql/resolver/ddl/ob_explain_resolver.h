@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExplainResolver : public ObDMLResolver {
-  public:
+public:
   ObExplainResolver(ObResolverParams& params) : ObDMLResolver(params)
   {}
   virtual ~ObExplainResolver()

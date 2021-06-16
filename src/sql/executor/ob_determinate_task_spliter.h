@@ -20,7 +20,7 @@ namespace sql {
 class ObDeterminateTaskTransmit;
 
 class ObDeterminateTaskSpliter : public ObTaskSpliter {
-  public:
+public:
   ObDeterminateTaskSpliter();
   virtual ~ObDeterminateTaskSpliter();
   virtual int get_next_task(ObTaskInfo*& task) override;
@@ -29,10 +29,10 @@ class ObDeterminateTaskSpliter : public ObTaskSpliter {
     return ObTaskSpliter::DETERMINATE_TASK_SPLIT;
   }
 
-  private:
+private:
   struct SliceIDCompare;
 
-  private:
+private:
   int fetch_child_result(const ObTaskID& task_id, ObTaskInfo& task);
   int set_task_destination(const ObDeterminateTaskTransmit& transmit, const ObTaskID& task_id, ObTaskInfo& task);
 
@@ -40,7 +40,7 @@ class ObDeterminateTaskSpliter : public ObTaskSpliter {
   int task_executed_servers(
       const int64_t sys_job_id, const ObTaskID& task_id, common::ObIArray<common::ObAddr>& servers);
 
-  private:
+private:
   int64_t task_idx_;
   common::ObAddr pre_addr_;
 

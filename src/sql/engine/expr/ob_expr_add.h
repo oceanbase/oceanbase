@@ -23,7 +23,7 @@ class ObRawExpr;
 class ObExprCGCtx;
 
 class ObExprAdd : public ObArithExprOperator {
-  public:
+public:
   ObExprAdd();
   explicit ObExprAdd(common::ObIAllocator& alloc, ObExprOperatorType type = T_OP_ADD);
   virtual ~ObExprAdd(){};
@@ -41,7 +41,7 @@ class ObExprAdd : public ObArithExprOperator {
 
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  public:
+public:
   // very very effective implementation
   // if false is returned, the addition of multiplication will be stored in res
   template <typename T1, typename T2, typename T3>
@@ -86,7 +86,7 @@ class ObExprAdd : public ObArithExprOperator {
   static int add_datetime(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
       common::ObIAllocator* allocator, common::ObScale scale);
 
-  private:
+private:
   static int add_int(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
       common::ObIAllocator* allocator, common::ObScale scale);
   static int add_uint(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
@@ -102,7 +102,7 @@ class ObExprAdd : public ObArithExprOperator {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprAdd);
 
-  public:
+public:
   static int add_null(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int add_int_int(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int add_int_uint(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
@@ -202,7 +202,7 @@ class ObExprAdd : public ObArithExprOperator {
   }
   static int add_datetime_datetime(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   static ObArithFunc add_funcs_[common::ObMaxTC];
   static ObArithFunc agg_add_funcs_[common::ObMaxTC];
   static const int64_t SHIFT_OFFSET = 63;
@@ -211,7 +211,7 @@ class ObExprAdd : public ObArithExprOperator {
 // Add expr for aggregation, different with ObExprAdd:
 //  No overflow check for float/double type.
 class ObExprAggAdd : public ObExprAdd {
-  public:
+public:
   explicit ObExprAggAdd(common::ObIAllocator& alloc) : ObExprAdd(alloc, T_OP_AGG_ADD)
   {}
 };

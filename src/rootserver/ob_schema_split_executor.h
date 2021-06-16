@@ -23,7 +23,7 @@ namespace rootserver {
 class ObSchemaSplitExecutor;
 
 class ObSchemaSplitTask : public share::ObAsyncTask {
-  public:
+public:
   explicit ObSchemaSplitTask(ObSchemaSplitExecutor& schema_split_executor, ObRsJobType type)
       : schema_split_executor_(&schema_split_executor), type_(type)
   {}
@@ -33,13 +33,13 @@ class ObSchemaSplitTask : public share::ObAsyncTask {
   share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
   virtual int process();
 
-  private:
+private:
   ObSchemaSplitExecutor* schema_split_executor_;
   ObRsJobType type_;
 };
 
 class ObSchemaSplitExecutor {
-  public:
+public:
   ObSchemaSplitExecutor();
   ~ObSchemaSplitExecutor()
   {}
@@ -54,7 +54,7 @@ class ObSchemaSplitExecutor {
   void start();
   int stop();
 
-  private:
+private:
   int set_execute_mark();
 
   int do_execute();
@@ -76,7 +76,7 @@ class ObSchemaSplitExecutor {
       obrpc::ObTenantSchemaVersions& standby_schema_versions, bool& schema_sync);
   int migrate_core_table_schema();
 
-  private:
+private:
   bool inited_;
   bool stopped_;
   bool execute_;

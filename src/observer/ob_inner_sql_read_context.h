@@ -27,7 +27,7 @@ namespace observer {
 class ObInnerSQLConnection;
 
 class ObInnerSQLReadContext : public common::sqlclient::ObISQLResultHandler {
-  public:
+public:
   explicit ObInnerSQLReadContext(ObInnerSQLConnection& conn);
   virtual ~ObInnerSQLReadContext();
   virtual common::sqlclient::ObMySQLResult* mysql_result()
@@ -43,7 +43,7 @@ class ObInnerSQLReadContext : public common::sqlclient::ObISQLResultHandler {
     return vt_iter_factory_;
   }
 
-  private:
+private:
   // define order dependent:
   // %conn_ref_ (session info) need be destructed after %result_
   // %vt_iter_factory_ need be destructed after %result_

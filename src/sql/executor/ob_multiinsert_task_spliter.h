@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObMultiInsertTaskSpliter : public ObTaskSpliter {
-  public:
+public:
   ObMultiInsertTaskSpliter();
   virtual ~ObMultiInsertTaskSpliter();
   virtual int get_next_task(ObTaskInfo*& task);
@@ -31,19 +31,19 @@ class ObMultiInsertTaskSpliter : public ObTaskSpliter {
     return ObTaskSpliter::INSERT_SPLIT;
   }
 
-  private:
+private:
   /* functions */
   int prepare();
   int get_next_range_location(ObTaskInfo::ObRangeLocation& range_loc);
 
-  private:
+private:
   /* variables */
   const ObPhyTableLocation* phy_table_loc_;
   bool prepare_done_flag_;
   common::ObSEArray<ObTaskInfo*, 2> store_;
   int64_t next_task_idx_;
 
-  private:
+private:
   /* other */
   DISALLOW_COPY_AND_ASSIGN(ObMultiInsertTaskSpliter);
 };

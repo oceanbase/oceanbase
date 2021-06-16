@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprChar : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprChar(common::ObIAllocator& alloc);
   virtual ~ObExprChar();
   virtual int calc_result_typeN(
@@ -26,7 +26,7 @@ class ObExprChar : public ObFuncExprOperator {
       common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   int calc_result_type(ObExprResType& type, ObExprResType& type1) const;
   DISALLOW_COPY_AND_ASSIGN(ObExprChar);
 };

@@ -22,13 +22,13 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 
 class ObTimeConvertTest : public ::testing::Test {
-  public:
+public:
   ObTimeConvertTest();
   virtual ~ObTimeConvertTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObTimeConvertTest(const ObTimeConvertTest& other);
   ObTimeConvertTest& operator=(const ObTimeConvertTest& other);

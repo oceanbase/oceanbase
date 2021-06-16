@@ -19,7 +19,7 @@ using namespace clog;
 namespace unittest {
 
 class ObLogReconfirmAccessor {
-  public:
+public:
   void set_assert_on(ObLogReconfirm& reconfirm, bool assert)
   {
     reconfirm.set_assert_on_ = assert;

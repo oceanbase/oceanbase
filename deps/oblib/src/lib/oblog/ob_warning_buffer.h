@@ -30,11 +30,11 @@ namespace oceanbase {
 namespace common {
 // one global error message buffer and multi global warning buffers
 class ObWarningBuffer {
-  public:
+public:
   struct WarningItem final {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     WarningItem() : timestamp_(0), log_level_(ObLogger::USER_WARN), line_no_(0), code_(OB_MAX_ERROR_CODE), column_no_(0)
     {
       msg_[0] = '\0';
@@ -94,10 +94,10 @@ class ObWarningBuffer {
     TO_STRING_KV(K_(msg), K_(code));
   };
 
-  private:
+private:
   static constexpr int64_t ARRAY_BLOCK_SIZE = sizeof(WarningItem) * 2;
 
-  public:
+public:
   ObWarningBuffer() : item_(ARRAY_BLOCK_SIZE), append_idx_(0), total_warning_count_(0), error_ret_(OB_SUCCESS)
   {
     item_.set_label(ObModIds::OB_SQL_SESSION_WARNING_BUFFER);
@@ -180,10 +180,10 @@ class ObWarningBuffer {
    */
   inline const ObWarningBuffer::WarningItem* get_warning_item(const uint32_t idx) const;
 
-  private:
+private:
   inline void append_msg(ObLogger::UserMsgLevel msg_level, const char* str, int code);
 
-  private:
+private:
   // const define
   static const uint32_t MAX_BUFFER_SIZE = 64;
   static const uint32_t DEFAULT_BUFFER_SIZE = 4;

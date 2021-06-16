@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDropIndexStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObDropIndexStmt(common::ObIAllocator* name_pool);
   ObDropIndexStmt();
   virtual ~ObDropIndexStmt();
@@ -56,10 +56,10 @@ class ObDropIndexStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(drop_index_arg));
 
-  protected:
+protected:
   common::ObIAllocator* name_pool_;
 
-  private:
+private:
   obrpc::ObDropIndexArg drop_index_arg_;
   uint64_t table_id_;
   DISALLOW_COPY_AND_ASSIGN(ObDropIndexStmt);

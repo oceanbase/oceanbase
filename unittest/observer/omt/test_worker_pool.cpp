@@ -21,7 +21,7 @@ using namespace oceanbase::omt;
 using namespace oceanbase::observer;
 
 class TestWorkerPool : public ::testing::Test {
-  public:
+public:
   TestWorkerPool() : pool_(procor_)
   {}
 
@@ -35,7 +35,7 @@ class TestWorkerPool : public ::testing::Test {
     pool_.destroy();
   }
 
-  protected:
+protected:
   ObFakeWorkerProcessor procor_;
   ObGlobalContext gctx_;
   ObWorkerPool pool_;

@@ -20,7 +20,7 @@ namespace storage {
 class ObIPartitionMacroBlockReader;
 class ObPartitionMacroBlockOfsReader;
 class ObIMigrateMacroBlockWriter {
-  public:
+public:
   ObIMigrateMacroBlockWriter()
   {}
   virtual ~ObIMigrateMacroBlockWriter()
@@ -29,7 +29,7 @@ class ObIMigrateMacroBlockWriter {
 };
 
 class ObMigrateMacroBlockWriter : public ObIMigrateMacroBlockWriter {
-  public:
+public:
   ObMigrateMacroBlockWriter();
   virtual ~ObMigrateMacroBlockWriter()
   {}
@@ -37,7 +37,7 @@ class ObMigrateMacroBlockWriter : public ObIMigrateMacroBlockWriter {
 
   virtual int process(blocksstable::ObMacroBlocksWriteCtx& copied_ctx);
 
-  private:
+private:
   int check_macro_block(const blocksstable::ObFullMacroBlockMeta& meta, const blocksstable::ObBufferReader& data);
   bool is_inited_;
   uint64_t tenant_id_;

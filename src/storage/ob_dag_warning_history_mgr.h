@@ -26,7 +26,7 @@ namespace storage {
 
 template <typename T>
 class ObNodeArray {
-  public:
+public:
   ObNodeArray();
   ~ObNodeArray();
   void destory();
@@ -49,7 +49,7 @@ class ObNodeArray {
 
 template <typename Key, typename Value>
 class ObInfoManager {
-  public:
+public:
   ObInfoManager();
   virtual ~ObInfoManager();
 
@@ -64,15 +64,15 @@ class ObInfoManager {
     return map_.size();
   }
 
-  private:
+private:
   typedef common::hash::ObHashMap<Key, int64_t> InfoMap;  // Value of map: index in node_array_
 
-  protected:
+protected:
   common::SpinRWLock lock_;
   int64_t max_cnt_;
   ObNodeArray<Value> node_array_;
 
-  private:
+private:
   bool is_inited_;
   InfoMap map_;
 };
@@ -105,7 +105,7 @@ static common::ObString ObDagModuleStr[share::ObIDag::DAG_TYPE_MAX] = {"EMPTY",
     "OTHER"};
 
 struct ObDagWarningInfo {
-  public:
+public:
   ObDagWarningInfo();
   ~ObDagWarningInfo();
   void reset();
@@ -113,9 +113,9 @@ struct ObDagWarningInfo {
       K_(warning_info));
   ObDagWarningInfo& operator=(const ObDagWarningInfo& other);
 
-  private:
+private:
   bool operator==(const ObDagWarningInfo& other) const;  // for unittest
-  public:
+public:
   int64_t tenant_id_;
   share::ObDagId task_id_;
   share::ObIDag::ObIDagType dag_type_;
@@ -143,7 +143,7 @@ inline void ObDagWarningInfo::reset()
  * */
 
 class ObDagWarningHistoryManager : public ObInfoManager<int64_t, ObDagWarningInfo> {
-  public:
+public:
   ObDagWarningHistoryManager()
   {}
   ~ObDagWarningHistoryManager()
@@ -163,10 +163,10 @@ class ObDagWarningHistoryManager : public ObInfoManager<int64_t, ObDagWarningInf
   int add_dag_warning_info(share::ObIDag* dag);
   int get_info(const int64_t pos, ObDagWarningInfo& info);
 
-  private:
+private:
   friend class ObDagWarningInfoIterator;
 
-  private:
+private:
   static const int64_t BUCKET_NUM = 98317l;
   static const int64_t DAG_WARNING_INFO_MAX_CNT = 100 * 1000;  // 10w
 };
@@ -176,7 +176,7 @@ class ObDagWarningHistoryManager : public ObInfoManager<int64_t, ObDagWarningInf
  * */
 
 class ObDagWarningInfoIterator {
-  public:
+public:
   ObDagWarningInfoIterator() : cur_idx_(0), is_opened_(false)
   {}
   virtual ~ObDagWarningInfoIterator()
@@ -191,7 +191,7 @@ class ObDagWarningInfoIterator {
     is_opened_ = false;
   }
 
-  private:
+private:
   int64_t cur_idx_;
   bool is_opened_;
 };

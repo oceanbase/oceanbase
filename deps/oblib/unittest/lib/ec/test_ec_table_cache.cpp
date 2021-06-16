@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 class ObECTableCacheTest : public testing::Test {
-  public:
+public:
   static void SetUpTestCase()
   {
     ASSERT_EQ(ObECCacheManager::get_ec_cache_mgr().init(1024 /*bucket num*/), OB_SUCCESS);

@@ -33,7 +33,7 @@ class ObSplitInfo;
 namespace schema {
 
 class ObPartDMLGenerator {
-  public:
+public:
   ObPartDMLGenerator()
   {
     MEMSET(high_bound_val_, 0, common::OB_MAX_B_HIGH_BOUND_VAL_LENGTH);
@@ -44,7 +44,7 @@ class ObPartDMLGenerator {
   int gen_dml(ObDMLSqlSplicer& dml);
   static int add_part_name_column(const ObPartitionSchema* table, const ObPartition& part, share::ObDMLSqlSplicer& dml);
 
-  protected:
+protected:
   struct PartInfo {
     uint64_t tenant_id_;
     uint64_t table_id_;
@@ -81,7 +81,7 @@ class ObPartDMLGenerator {
   int gen_list_val_str(const common::ObIArray<common::ObNewRow>& list_value, common::ObString& list_val_str,
       common::ObString& b_list_val_str, uint64_t tenant_id);
 
-  private:
+private:
   char high_bound_val_[common::OB_MAX_B_HIGH_BOUND_VAL_LENGTH];
   char b_high_bound_val_[common::OB_MAX_B_HIGH_BOUND_VAL_LENGTH];
   char list_val_[common::OB_MAX_PARTITION_EXPR_LENGTH];
@@ -89,7 +89,7 @@ class ObPartDMLGenerator {
 };
 
 class ObAddIncPartDMLGenerator : public ObPartDMLGenerator {
-  public:
+public:
   ObAddIncPartDMLGenerator(const ObPartitionSchema* ori_table, const ObPartition& part, const int64_t inc_part_num,
       const int64_t part_idx, const int64_t schema_version)
       : ObPartDMLGenerator(),
@@ -103,12 +103,12 @@ class ObAddIncPartDMLGenerator : public ObPartDMLGenerator {
   {}
   int gen_dml_for_delay_delete(ObDMLSqlSplicer& dml);
 
-  protected:
+protected:
   int extract_part_info(PartInfo& part_info);
   int extract_part_info_for_delay_delete(PartInfo& part_info);
   int convert_to_dml(const PartInfo& part_info, ObDMLSqlSplicer& dml);
 
-  private:
+private:
   const ObPartitionSchema* ori_table_;
   const ObPartition& part_;
   int64_t inc_part_num_;
@@ -117,7 +117,7 @@ class ObAddIncPartDMLGenerator : public ObPartDMLGenerator {
 };
 
 class ObAddIncSubPartDMLGenerator : public ObPartDMLGenerator {
-  public:
+public:
   ObAddIncSubPartDMLGenerator(const ObPartitionSchema* ori_table, const ObPartition& part,
       const ObSubPartition& sub_part, const int64_t inc_part_num, const int64_t part_idx, const int64_t subpart_idx,
       const int64_t schema_version)
@@ -134,12 +134,12 @@ class ObAddIncSubPartDMLGenerator : public ObPartDMLGenerator {
   {}
   int gen_dml_for_delay_delete(ObDMLSqlSplicer& dml);
 
-  protected:
+protected:
   int extract_part_info(PartInfo& part_info);
   int extract_part_info_for_delay_delete(PartInfo& part_info);
   int convert_to_dml(const PartInfo& part_info, ObDMLSqlSplicer& dml);
 
-  private:
+private:
   const ObPartitionSchema* ori_table_;
   const ObPartition& part_;
   const ObSubPartition& sub_part_;
@@ -150,25 +150,25 @@ class ObAddIncSubPartDMLGenerator : public ObPartDMLGenerator {
 };
 
 class ObDropIncPartDMLGenerator : public ObPartDMLGenerator {
-  public:
+public:
   ObDropIncPartDMLGenerator(const ObPartitionSchema* ori_table, const ObPartition& part, const int64_t schema_version)
       : ObPartDMLGenerator(), ori_table_(ori_table), part_(part), schema_version_(schema_version)
   {}
   virtual ~ObDropIncPartDMLGenerator()
   {}
 
-  protected:
+protected:
   int extract_part_info(PartInfo& part_info);
   int convert_to_dml(const PartInfo& part_info, ObDMLSqlSplicer& dml);
 
-  private:
+private:
   const ObPartitionSchema* ori_table_;
   const ObPartition& part_;
   int64_t schema_version_;
 };
 
 class ObDropIncSubPartDMLGenerator : public ObPartDMLGenerator {
-  public:
+public:
   ObDropIncSubPartDMLGenerator(
       const ObPartitionSchema* ori_table, const ObSubPartition& sub_part, const int64_t schema_version)
       : ObPartDMLGenerator(), ori_table_(ori_table), sub_part_(sub_part), schema_version_(schema_version)
@@ -176,18 +176,18 @@ class ObDropIncSubPartDMLGenerator : public ObPartDMLGenerator {
   virtual ~ObDropIncSubPartDMLGenerator()
   {}
 
-  protected:
+protected:
   int extract_part_info(PartInfo& part_info);
   int convert_to_dml(const PartInfo& part_info, ObDMLSqlSplicer& dml);
 
-  private:
+private:
   const ObPartitionSchema* ori_table_;
   const ObSubPartition& sub_part_;
   int64_t schema_version_;
 };
 
 class ObPartSqlHelper {
-  public:
+public:
   ObPartSqlHelper(const ObPartitionSchema* table, common::ObISQLClient& sql_client, bool is_tablegroup_def)
       : table_(table), sql_client_(sql_client), is_tablegroup_def_(is_tablegroup_def)
   {}
@@ -195,7 +195,7 @@ class ObPartSqlHelper {
   {}
   virtual bool is_tablegroup_def();
 
-  protected:
+protected:
   virtual bool is_deleted() const = 0;
   virtual int add_part_info_dml_column(
       const uint64_t exec_tenant_id, const ObPartitionSchema* table, ObDMLSqlSplicer& dml) = 0;
@@ -213,12 +213,12 @@ class ObPartSqlHelper {
       const bool deal_with_delay_delete_subparts = false);
   int iterate_all_def_sub_part(const bool only_history);
 
-  private:
+private:
   int iterate_all_sub_part_for_template(const bool only_history);
   int iterate_all_sub_part_for_nontemplate(const bool only_history, const bool deal_with_delay_delete_parts = false,
       const bool deal_with_delay_delete_subparts = false);
 
-  protected:
+protected:
   static const int64_t MAX_DML_NUM = 128;
   const ObPartitionSchema* table_;
   common::ObISQLClient& sql_client_;
@@ -226,7 +226,7 @@ class ObPartSqlHelper {
 };
 
 class ObAddPartInfoHelper : public ObPartSqlHelper {
-  public:
+public:
   ObAddPartInfoHelper(const ObPartitionSchema* table, common::ObISQLClient& sql_client, bool is_tablegroup_def)
       : ObPartSqlHelper(table, sql_client, is_tablegroup_def), high_bound_val_(NULL), list_val_(NULL), allocator_()
   {}
@@ -235,7 +235,7 @@ class ObAddPartInfoHelper : public ObPartSqlHelper {
   int add_partition_info();
   int add_partition_info_for_gc();
 
-  protected:
+protected:
   bool is_deleted() const
   {
     return false;
@@ -249,7 +249,7 @@ class ObAddPartInfoHelper : public ObPartSqlHelper {
       const int64_t def_subpart_idx, const int64_t mapping_pg_sub_part_id, const ObSubPartition* subpart,
       ObDMLSqlSplicer& dml);
 
-  private:
+private:
   int add_subpart_name_column(const ObPartitionSchema* table, const int64_t part_idx, const int64_t subpart_idx,
       const bool is_def_subpart, share::ObDMLSqlSplicer& dml);
   // add part high bound val column to dml
@@ -271,7 +271,7 @@ class ObAddPartInfoHelper : public ObPartSqlHelper {
   template <class P>  // ObPartition or ObSubPartition
   int add_list_val_column(const P& partition, ObDMLSqlSplicer& dml);
 
-  private:
+private:
   char* high_bound_val_;
   char* list_val_;
   common::ObArenaAllocator allocator_;
@@ -279,7 +279,7 @@ class ObAddPartInfoHelper : public ObPartSqlHelper {
 };
 
 class ObDropPartInfoHelper : public ObPartSqlHelper {
-  public:
+public:
   ObDropPartInfoHelper(const ObPartitionSchema* table, common::ObISQLClient& sql_client, bool is_tablegroup_def)
       : ObPartSqlHelper(table, sql_client, is_tablegroup_def)
   {}
@@ -288,7 +288,7 @@ class ObDropPartInfoHelper : public ObPartSqlHelper {
   int delete_partition_info();
   int delete_dropped_partition_info();
 
-  protected:
+protected:
   bool is_deleted() const
   {
     return true;
@@ -302,12 +302,12 @@ class ObDropPartInfoHelper : public ObPartSqlHelper {
       const int64_t def_subpart_idx, const int64_t mapping_pg_sub_part_id, const ObSubPartition* subpart,
       ObDMLSqlSplicer& dml);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDropPartInfoHelper);
 };
 
 class ObAddIncPartHelper {
-  public:
+public:
   ObAddIncPartHelper(const ObPartitionSchema* ori_table, const ObPartitionSchema* inc_table,
       const int64_t schema_version, common::ObISQLClient& sql_client, bool is_tablegroup_def)
       : ori_table_(ori_table),
@@ -323,7 +323,7 @@ class ObAddIncPartHelper {
   int add_partition_info_for_nontemplate(const bool is_delay_delete = false);
   int add_partition_info_for_gc();
 
-  private:
+private:
   const ObPartitionSchema* ori_table_;
   const ObPartitionSchema* inc_table_;
   int64_t schema_version_;
@@ -333,7 +333,7 @@ class ObAddIncPartHelper {
 };
 
 class ObAddIncSubPartHelper {
-  public:
+public:
   ObAddIncSubPartHelper(const ObPartitionSchema* ori_table, const ObPartitionSchema* inc_table,
       const int64_t schema_version, common::ObISQLClient& sql_client, bool is_tablegroup_def)
       : ori_table_(ori_table),
@@ -349,7 +349,7 @@ class ObAddIncSubPartHelper {
   int add_subpartition_info_for_nontemplate(const bool is_delay_delete = false);
   int add_subpartition_info_for_gc();
 
-  private:
+private:
   const ObPartitionSchema* ori_table_;
   const ObPartitionSchema* inc_table_;
   int64_t schema_version_;
@@ -359,7 +359,7 @@ class ObAddIncSubPartHelper {
 };
 
 class ObDropIncPartHelper {
-  public:
+public:
   ObDropIncPartHelper(const ObPartitionSchema* ori_table, const ObPartitionSchema* inc_table,
       const int64_t schema_version, common::ObISQLClient& sql_client, bool is_tablegroup_def)
       : ori_table_(ori_table),
@@ -374,7 +374,7 @@ class ObDropIncPartHelper {
   int drop_partition_info_for_template();
   int drop_partition_info_for_nontemplate();
 
-  private:
+private:
   const ObPartitionSchema* ori_table_;
   const ObPartitionSchema* inc_table_;
   int64_t schema_version_;
@@ -384,7 +384,7 @@ class ObDropIncPartHelper {
 };
 
 class ObDropIncSubPartHelper {
-  public:
+public:
   ObDropIncSubPartHelper(const ObPartitionSchema* ori_table, const ObPartitionSchema* inc_table,
       const int64_t schema_version, common::ObISQLClient& sql_client, bool is_tablegroup_def)
       : ori_table_(ori_table),
@@ -400,7 +400,7 @@ class ObDropIncSubPartHelper {
   int drop_subpartition_info_for_template();
   int drop_subpartition_info_for_nontemplate(const bool deal_with_delay_delete_parts = false);
 
-  private:
+private:
   const ObPartitionSchema* ori_table_;
   const ObPartitionSchema* inc_table_;
   int64_t schema_version_;
@@ -410,7 +410,7 @@ class ObDropIncSubPartHelper {
 };
 
 class ObSplitPartHelperV2 {
-  public:
+public:
   ObSplitPartHelperV2(const ObPartitionSchema& new_schema, const int64_t schema_version,
       const share::ObSplitInfo& split_info, common::ObISQLClient& sql_client)
       : new_schema_(new_schema), schema_version_(schema_version), sql_client_(sql_client), split_info_(split_info)
@@ -419,7 +419,7 @@ class ObSplitPartHelperV2 {
   {}
   int split_partition();
 
-  private:
+private:
   const ObPartitionSchema& new_schema_;
   int64_t schema_version_;
   common::ObISQLClient& sql_client_;
@@ -428,41 +428,41 @@ class ObSplitPartHelperV2 {
 };
 
 class ObSplitPartDMLGeneratorV2 : public ObPartDMLGenerator {
-  public:
+public:
   ObSplitPartDMLGeneratorV2(const ObPartitionSchema& new_schema, const ObPartition& part, const int64_t schema_version)
       : ObPartDMLGenerator(), new_schema_(new_schema), part_(part), schema_version_(schema_version)
   {}
   virtual ~ObSplitPartDMLGeneratorV2()
   {}
 
-  protected:
+protected:
   int extract_part_info(PartInfo& part_info);
   int convert_to_dml(const PartInfo& part_info, ObDMLSqlSplicer& dml);
 
-  private:
+private:
   const ObPartitionSchema& new_schema_;
   const ObPartition& part_;
   int64_t schema_version_;
 };
 
 class ObUpdatePartHisDMLGenerator : public ObPartDMLGenerator {
-  public:
+public:
   ObUpdatePartHisDMLGenerator(const ObPartition& part, int64_t schema_version, const ObPartitionSchema& table_schema);
   virtual ~ObUpdatePartHisDMLGenerator()
   {}
 
-  protected:
+protected:
   int extract_part_info(PartInfo& part_info);
   int convert_to_dml(const PartInfo& part_info, ObDMLSqlSplicer& dml);
 
-  private:
+private:
   const ObPartition& part_;
   int64_t schema_version_;
   const ObPartitionSchema& table_schema_;
 };
 
 class ObUpdatePartHisInfoHelper {
-  public:
+public:
   ObUpdatePartHisInfoHelper(const obrpc::ObSplitPartitionArg& arg, const ObSimpleTableSchemaV2& table_schema,
       common::ObISQLClient& sql_client, const int64_t schema_version)
       : arg_(arg), table_schema_(table_schema), sql_client_(sql_client), schema_version_(schema_version)
@@ -471,14 +471,14 @@ class ObUpdatePartHisInfoHelper {
   {}
   int update_partition_info();
 
-  private:
+private:
   const obrpc::ObSplitPartitionArg& arg_;
   const ObSimpleTableSchemaV2& table_schema_;
   common::ObISQLClient& sql_client_;
   int64_t schema_version_;
 };
 class ObUpdatePartHisInfoHelperV2 {
-  public:
+public:
   ObUpdatePartHisInfoHelperV2(const ObTablegroupSchema& tablegroup_schema, common::ObISQLClient& sql_client)
       : schema_(tablegroup_schema), sql_client_(sql_client)
   {}
@@ -486,7 +486,7 @@ class ObUpdatePartHisInfoHelperV2 {
   {}
   int update_partition_info();
 
-  private:
+private:
   const ObTablegroupSchema& schema_;
   common::ObISQLClient& sql_client_;
 };

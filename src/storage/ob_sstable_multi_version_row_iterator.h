@@ -22,13 +22,13 @@ namespace oceanbase {
 namespace storage {
 
 class ObSSTableMultiVersionRowIterator : public ObISSTableRowIterator {
-  public:
+public:
   ObSSTableMultiVersionRowIterator();
   virtual ~ObSSTableMultiVersionRowIterator();
   virtual void reset();
   virtual void reuse() override;
 
-  protected:
+protected:
   virtual int inner_open(const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table,
       const void* query_range) = 0;
   virtual int inner_get_next_row(const ObStoreRow*& row) = 0;
@@ -36,7 +36,7 @@ class ObSSTableMultiVersionRowIterator : public ObISSTableRowIterator {
   int new_iterator(common::ObArenaAllocator& allocator);
   int get_not_exist_row(const common::ObStoreRowkey& rowkey, const ObStoreRow*& row);
 
-  protected:
+protected:
   const ObTableIterParam* iter_param_;
   ObTableAccessContext* access_ctx_;
   ObSSTable* sstable_;
@@ -56,7 +56,7 @@ class ObSSTableMultiVersionRowIterator : public ObISSTableRowIterator {
 };
 
 class ObSSTableMultiVersionRowScannerBase : public ObSSTableMultiVersionRowIterator {
-  public:
+public:
   ObSSTableMultiVersionRowScannerBase() : skip_range_(), trans_version_range_(), gap_rowkey_()
   {}
   virtual ~ObSSTableMultiVersionRowScannerBase()
@@ -65,14 +65,14 @@ class ObSSTableMultiVersionRowScannerBase : public ObSSTableMultiVersionRowItera
   virtual void reset();
   virtual void reuse() override;
 
-  protected:
+protected:
   common::ObExtStoreRange skip_range_;
   common::ObVersionRange trans_version_range_;
   common::ObStoreRowkey gap_rowkey_;
 };
 
 class ObSSTableMultiVersionRowGetter : public ObSSTableMultiVersionRowIterator {
-  public:
+public:
   ObSSTableMultiVersionRowGetter()
   {}
   virtual ~ObSSTableMultiVersionRowGetter()
@@ -80,17 +80,17 @@ class ObSSTableMultiVersionRowGetter : public ObSSTableMultiVersionRowIterator {
   virtual void reset() override;
   virtual void reuse() override;
 
-  protected:
+protected:
   virtual int inner_open(const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table,
       const void* query_range) override;
   virtual int inner_get_next_row(const ObStoreRow*& row) override;
 
-  private:
+private:
   common::ObExtStoreRange multi_version_range_;
 };
 
 class ObSSTableMultiVersionRowScanner : public ObSSTableMultiVersionRowScannerBase {
-  public:
+public:
   ObSSTableMultiVersionRowScanner() : multi_version_range_()
   {}
   virtual ~ObSSTableMultiVersionRowScanner()
@@ -100,17 +100,17 @@ class ObSSTableMultiVersionRowScanner : public ObSSTableMultiVersionRowScannerBa
   virtual int skip_range(int64_t range_idx, const common::ObStoreRowkey* gap_key, const bool include_gap_key) override;
   virtual int get_gap_end(int64_t& range_idx, const common::ObStoreRowkey*& gap_key, int64_t& gap_size) override;
 
-  protected:
+protected:
   virtual int inner_open(const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table,
       const void* query_range) override;
   virtual int inner_get_next_row(const ObStoreRow*& row) override;
 
-  private:
+private:
   common::ObExtStoreRange multi_version_range_;
 };
 
 class ObSSTableMultiVersionRowMultiGetter : public ObSSTableMultiVersionRowIterator {
-  public:
+public:
   ObSSTableMultiVersionRowMultiGetter() : multi_version_ranges_(), pending_row_(NULL)
   {}
   virtual ~ObSSTableMultiVersionRowMultiGetter()
@@ -118,18 +118,18 @@ class ObSSTableMultiVersionRowMultiGetter : public ObSSTableMultiVersionRowItera
   virtual void reset() override;
   virtual void reuse() override;
 
-  protected:
+protected:
   virtual int inner_open(const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table,
       const void* query_range) override;
   virtual int inner_get_next_row(const ObStoreRow*& row) override;
 
-  private:
+private:
   common::ObArray<common::ObExtStoreRange> multi_version_ranges_;
   const ObStoreRow* pending_row_;
 };
 
 class ObSSTableMultiVersionRowMultiScanner : public ObSSTableMultiVersionRowScannerBase {
-  public:
+public:
   ObSSTableMultiVersionRowMultiScanner()
       : multi_version_ranges_(),
         pending_row_(NULL),
@@ -144,12 +144,12 @@ class ObSSTableMultiVersionRowMultiScanner : public ObSSTableMultiVersionRowScan
   virtual int skip_range(int64_t range_idx, const ObStoreRowkey* gap_rowkey, const bool include_gap_key) override;
   virtual int get_gap_end(int64_t& range_idx, const common::ObStoreRowkey*& gap_key, int64_t& gap_size) override;
 
-  protected:
+protected:
   virtual int inner_open(const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table,
       const void* query_range) override;
   virtual int inner_get_next_row(const ObStoreRow*& row) override;
 
-  private:
+private:
   common::ObArray<common::ObExtStoreRange> multi_version_ranges_;
   const ObStoreRow* pending_row_;
   int64_t last_pending_range_idx_;

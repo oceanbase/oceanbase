@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObUseDatabaseStmt : public ObDDLStmt {
-  public:
+public:
   ObUseDatabaseStmt()
       : ObDDLStmt(stmt::T_USE_DATABASE),
         db_id_(common::OB_INVALID),
@@ -87,7 +87,7 @@ class ObUseDatabaseStmt : public ObDDLStmt {
     return use_database_arg_;
   }
 
-  private:
+private:
   int64_t db_id_;
   common::ObString db_name_;
   common::ObString db_charset_;

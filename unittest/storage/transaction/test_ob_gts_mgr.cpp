@@ -26,7 +26,7 @@ using namespace obrpc;
 namespace unittest {
 
 class MyTimestampService : public ObITimestampService {
-  public:
+public:
   MyTimestampService()
   {}
   ~MyTimestampService()
@@ -42,7 +42,7 @@ class MyTimestampService : public ObITimestampService {
     leader_.reset();
   }
 
-  public:
+public:
   int get_timestamp(const ObPartitionKey& partition, int64_t& gts, ObAddr& leader) const
   {
     UNUSEDx(partition);
@@ -59,19 +59,19 @@ class MyTimestampService : public ObITimestampService {
     return ret;
   }
 
-  private:
+private:
   ObAddr self_;
   ObAddr leader_;
 };
 
 class MyResponseRpc : public ObIGtsResponseRpc {
-  public:
+public:
   MyResponseRpc()
   {}
   ~MyResponseRpc()
   {}
 
-  public:
+public:
   void set_valid_arg(
       const uint64_t tenant_id, const int status, const ObAddr& leader, const ObAddr& sender, const ObAddr self)
   {
@@ -93,7 +93,7 @@ class MyResponseRpc : public ObIGtsResponseRpc {
   }
   TO_STRING_KV(K_(tenant_id), K_(status), K_(leader), K_(sender), K_(self));
 
-  private:
+private:
   uint64_t tenant_id_;
   int status_;
   ObAddr leader_;
@@ -102,7 +102,7 @@ class MyResponseRpc : public ObIGtsResponseRpc {
 };
 
 class TestObGtsMgr : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

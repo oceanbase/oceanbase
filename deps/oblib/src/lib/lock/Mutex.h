@@ -24,7 +24,7 @@ Mutex non-recursive lock, you need to pay attention to the following points when
 2.Unless the calling thread holds a certain mutex, do not call unlock for the mutex
 */
 class Mutex {
-  public:
+public:
   typedef LockT<Mutex> Lock;
   typedef TryLockT<Mutex> TryLock;
 
@@ -59,7 +59,7 @@ class Mutex {
    */
   bool willUnlock() const;
 
-  private:
+private:
   Mutex(const Mutex&);
   Mutex& operator=(const Mutex&);
 

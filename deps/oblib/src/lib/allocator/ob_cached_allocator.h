@@ -21,7 +21,7 @@ namespace common {
 // @note thread-safe
 template <typename T>
 class ObCachedAllocator {
-  public:
+public:
   ObCachedAllocator();
   virtual ~ObCachedAllocator();
 
@@ -36,11 +36,11 @@ class ObCachedAllocator {
     return cached_count_;
   };
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCachedAllocator);
 
-  private:
+private:
   // data members
   ObSpinLock lock_;
   ObPool<> pool_;

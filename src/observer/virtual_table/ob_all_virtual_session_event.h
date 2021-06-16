@@ -25,7 +25,7 @@ class ObObj;
 namespace observer {
 
 class ObAllVirtualSessionEvent : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualSessionEvent();
   virtual ~ObAllVirtualSessionEvent();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -36,12 +36,12 @@ class ObAllVirtualSessionEvent : public common::ObVirtualTableScannerIterator {
   }
   virtual int set_ip(common::ObAddr* addr);
 
-  protected:
+protected:
   virtual int get_all_diag_info();
   common::ObSEArray<std::pair<uint64_t, common::ObDISessionCollect*>, common::OB_MAX_SERVER_SESSION_CNT + 1>
       session_status_;
 
-  private:
+private:
   enum EVENT_COLUMN {
     SESSION_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
@@ -69,7 +69,7 @@ class ObAllVirtualSessionEvent : public common::ObVirtualTableScannerIterator {
 };
 
 class ObAllVirtualSessionEventI1 : public ObAllVirtualSessionEvent, public ObAllVirtualDiagIndexScan {
-  public:
+public:
   ObAllVirtualSessionEventI1()
   {}
   virtual ~ObAllVirtualSessionEventI1()
@@ -79,10 +79,10 @@ class ObAllVirtualSessionEventI1 : public ObAllVirtualSessionEvent, public ObAll
     return set_index_ids(key_ranges_);
   }
 
-  protected:
+protected:
   virtual int get_all_diag_info();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSessionEventI1);
 };
 

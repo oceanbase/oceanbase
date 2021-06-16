@@ -142,9 +142,9 @@ struct HashRoot {
 
 template <typename key_t, typename val_t>
 class HashBase {
-  public:
+public:
   class IKVRCallback {
-    public:
+  public:
     IKVRCallback()
     {}
     virtual ~IKVRCallback()
@@ -271,7 +271,7 @@ class HashBase {
   };  // end struct Node
 
   class Iterator {
-    public:
+  public:
     Iterator() : head_(NULL)
     {}
     ~Iterator()
@@ -298,11 +298,11 @@ class HashBase {
       return err;
     }
 
-    private:
+  private:
     Node* head_;
   };
   class BaseHandle {
-    public:
+  public:
     explicit BaseHandle(HashBase& host)
         : alloc_(host.get_alloc()),
           kvr_callback_(host.get_kvr_callback()),
@@ -355,7 +355,7 @@ class HashBase {
       retire_list_handle_.add_del(node);
     }
 
-    private:
+  private:
     int acquire_ref()
     {
       return (NULL == hazard_handle_.acquire_ref()) ? -EOVERFLOW : 0;
@@ -365,7 +365,7 @@ class HashBase {
       hazard_handle_.release_ref();
     }
 
-    private:
+  private:
     IHashAlloc& alloc_;
     IKVRCallback& kvr_callback_;
     HazardHandle hazard_handle_;
@@ -373,7 +373,7 @@ class HashBase {
   };
 
   class Handle : public BaseHandle {
-    public:
+  public:
     Handle(HashBase& host, HashRoot& root) : BaseHandle(host), array_(host.get_array_base()), root_(root)
     {}
     ~Handle()
@@ -460,7 +460,7 @@ class HashBase {
       return ret;
     }
 
-    private:
+  private:
     int get_pre(key_t key, Node*& pre, bool need_add_bucket = true)
     {
       int err = 0;
@@ -708,12 +708,12 @@ class HashBase {
       return err;
     }
 
-    private:
+  private:
     ArrayBase& array_;
     HashRoot& root_;
   };
 
-  public:
+public:
   HashBase(IHashAlloc& hash_alloc, IArrayAlloc& array_alloc, IKVRCallback& kvr_callback, int64_t array_node_size)
       : alloc_(hash_alloc), kvr_callback_(kvr_callback), array_base_(array_alloc, array_node_size)
   {}
@@ -794,7 +794,7 @@ class HashBase {
     return err;
   }
 
-  private:
+private:
   void clean_retire_list()
   {
     LIB_LOG(INFO, "clean retire list");
@@ -810,7 +810,7 @@ class HashBase {
     }
   }
 
-  private:
+private:
   IHashAlloc& alloc_;
   IKVRCallback& kvr_callback_;
   HazardRef hazard_ref_;

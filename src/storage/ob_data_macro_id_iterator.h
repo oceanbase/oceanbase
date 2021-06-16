@@ -23,7 +23,7 @@ class ObPartitionService;
 class ObPGPartitionIterator;
 
 class ObDataMacroIdIterator {
-  public:
+public:
   ObDataMacroIdIterator();
   virtual ~ObDataMacroIdIterator();
   int init(ObPartitionService& partition_service, ObIPartitionGroup* pg = nullptr);
@@ -33,7 +33,7 @@ class ObDataMacroIdIterator {
       blocksstable::MacroBlockId& block_id, blocksstable::ObMacroBlockCommonHeader::MacroBlockType& block_type);
   int get_next_macro_info(blocksstable::ObMacroBlockInfoPair& pair, ObTenantFileKey& file_key);
 
-  private:
+private:
   bool is_inited_;
   ObPartitionService* partition_service_;
   int64_t cur_store_idx_;

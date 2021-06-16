@@ -24,7 +24,7 @@ class ObPartitionService;
 namespace clog {
 class ObILogEngine;
 class ObILogFlushCb {
-  public:
+public:
   ObILogFlushCb(){};
   virtual ~ObILogFlushCb()
   {}
@@ -32,11 +32,11 @@ class ObILogFlushCb {
 };
 
 class ObLogFlushTask : public ObDiskBufferTask {
-  public:
+public:
   ObLogFlushTask();
   virtual ~ObLogFlushTask();
 
-  public:
+public:
   int init(const ObLogType log_type, const uint64_t log_id, const common::ObProposalID proposal_id,
       const common::ObPartitionKey& partition_key, storage::ObPartitionService* partition_service,
       const common::ObAddr& leader, const int64_t cluster_id_, ObILogEngine* log_engine, const int64_t submit_timestamp,
@@ -54,7 +54,7 @@ class ObLogFlushTask : public ObDiskBufferTask {
   }
   TO_STRING_KV(N_LOG_TYPE, log_type_, N_LOG_ID, log_id_, "submit_timestamp", submit_timestamp_, N_PARTITION_KEY,
       partition_key_, "leader", leader_, "cluster_id", cluster_id_)
-  private:
+private:
   ObLogType log_type_;
   uint64_t log_id_;
   common::ObPartitionKey partition_key_;
@@ -67,7 +67,7 @@ class ObLogFlushTask : public ObDiskBufferTask {
   int64_t pls_epoch_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogFlushTask);
 };
 }  // namespace clog

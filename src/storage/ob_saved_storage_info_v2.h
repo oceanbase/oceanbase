@@ -27,10 +27,10 @@ namespace storage {
 class ObSavedStorageInfo;
 
 struct ObRecoverPoint {
-  public:
+public:
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int64_t snapshot_version_;
   uint64_t recover_log_id_;
   int64_t checksum_;
@@ -74,10 +74,10 @@ struct ObRecoverPoint {
 };
 
 class ObRecoverVec {
-  public:
+public:
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t OB_RECOVER_ARRAY_COUNT = 16;
   typedef common::ObSEArray<ObRecoverPoint, OB_RECOVER_ARRAY_COUNT> RecoverVec;
   typedef common::ObSEArray<ObRecoverPoint, OB_RECOVER_ARRAY_COUNT>::iterator RecoverIter;
@@ -108,17 +108,17 @@ class ObRecoverVec {
   }
   TO_STRING_KV(K(recover_vec_));
 
-  private:
+private:
   int record_major_recover_point_(const int64_t prev_version, const int64_t version);
   int add_recover_point_(const ObRecoverPoint& point);
 
-  private:
+private:
   common::ObSpinLock lock_;
   RecoverVec recover_vec_;
 };
 
 class ObSavedStorageInfoV2 {
-  public:
+public:
   ObSavedStorageInfoV2()
       : version_(STORAGE_INFO_VERSION_V3), clog_info_(), data_info_(), pg_file_id_(common::OB_INVALID_DATA_FILE_ID)
   {}
@@ -160,14 +160,14 @@ class ObSavedStorageInfoV2 {
   TO_STRING_KV("clog_info", clog_info_, "data_info", data_info_, K_(pg_file_id));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int query_log_info_with_log_id(const common::ObPartitionKey& pkey, const int64_t log_id, const int64_t timeout,
       int64_t& accum_checksum, int64_t& submit_timestamp, int64_t& epoch_id);
   int update_last_replay_log_info_(const common::ObPartitionKey& pkey, const bool replica_with_data,
       const common::ObBaseStorageInfo& old_clog_info, const int64_t timeout, const bool log_info_usable);
   int get_last_replay_log_info_(const common::ObPartitionKey& pkey, const int64_t timeout, ObRecoverPoint& point);
 
-  private:
+private:
   static const int16_t STORAGE_INFO_VERSION_V1 = 1;
   static const int16_t STORAGE_INFO_VERSION_V2 = 2;
   static const int16_t STORAGE_INFO_VERSION_V3 = 3;
@@ -180,7 +180,7 @@ class ObSavedStorageInfoV2 {
   // for ofs mode
   int64_t pg_file_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSavedStorageInfoV2);
 };
 

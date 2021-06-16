@@ -129,7 +129,7 @@ class ObMajorFreeze;
 namespace rootserver {
 class ObSinglePartBalance;
 class ObRsStatus {
-  public:
+public:
   ObRsStatus() : rs_status_(share::status::INIT)
   {}
   virtual ~ObRsStatus()
@@ -146,19 +146,19 @@ class ObRsStatus {
   int revoke_rs();
   int try_set_stopping();
 
-  private:
+private:
   common::SpinRWLock lock_;
   share::status::ObRootServiceStatus rs_status_;
 };
 // Root Service Entry Class
 class ObRootService {
-  public:
+public:
   friend class TestRootServiceCreateTable_check_rs_capacity_Test;
   friend class ObStandbyIneffectSchemaTask;
   friend class ObTenantWrsTask;
 
   class ObStartStopServerTask : public share::ObAsyncTask {
-    public:
+  public:
     ObStartStopServerTask(ObRootService& root_service, const common::ObAddr& server, const bool start)
         : root_service_(root_service), server_(server), start_(start)
     {}
@@ -168,14 +168,14 @@ class ObRootService {
     virtual int64_t get_deep_copy_size() const;
     share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-    private:
+  private:
     ObRootService& root_service_;
     const common::ObAddr server_;
     const bool start_;
   };
 
   class ObOfflineServerTask : public share::ObAsyncTask {
-    public:
+  public:
     ObOfflineServerTask(ObRootService& root_service, const common::ObAddr& server)
         : root_service_(root_service), server_(server)
     {
@@ -187,13 +187,13 @@ class ObRootService {
     virtual int64_t get_deep_copy_size() const;
     share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-    private:
+  private:
     ObRootService& root_service_;
     const common::ObAddr server_;
   };
 
   class ObMergeErrorTask : public share::ObAsyncTask {
-    public:
+  public:
     explicit ObMergeErrorTask(ObRootService& root_service) : root_service_(root_service)
     {}
     virtual ~ObMergeErrorTask()
@@ -202,12 +202,12 @@ class ObRootService {
     virtual int64_t get_deep_copy_size() const;
     share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-    private:
+  private:
     ObRootService& root_service_;
   };
 
   class ObStatisticPrimaryZoneCountTask : public share::ObAsyncTask {
-    public:
+  public:
     explicit ObStatisticPrimaryZoneCountTask(ObRootService& root_service) : root_service_(root_service)
     {}
     virtual ~ObStatisticPrimaryZoneCountTask()
@@ -216,12 +216,12 @@ class ObRootService {
     virtual int64_t get_deep_copy_size() const;
     share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-    private:
+  private:
     ObRootService& root_service_;
   };
 
   class ObCreateHaGtsUtilTask : public share::ObAsyncTask {
-    public:
+  public:
     explicit ObCreateHaGtsUtilTask(ObRootService& root_service) : root_service_(root_service)
     {}
     virtual ~ObCreateHaGtsUtilTask()
@@ -230,12 +230,12 @@ class ObRootService {
     virtual int64_t get_deep_copy_size() const;
     share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-    private:
+  private:
     ObRootService& root_service_;
   };
 
   class ObRefreshServerTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     const static int64_t REFRESH_SERVER_INTERVAL = 1L * 1000 * 1000;  // 1 second
     explicit ObRefreshServerTask(ObRootService& root_service);
     virtual ~ObRefreshServerTask(){};
@@ -247,13 +247,13 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& root_service_;
     DISALLOW_COPY_AND_ASSIGN(ObRefreshServerTask);
   };
 
   class ObStatusChangeCallback : public ObIStatusChangeCallback {
-    public:
+  public:
     explicit ObStatusChangeCallback(ObRootService& root_service);
     virtual ~ObStatusChangeCallback();
 
@@ -264,15 +264,15 @@ class ObRootService {
     virtual int on_stop_server(const common::ObAddr& server) override;
     virtual int on_offline_server(const common::ObAddr& server) override;
 
-    private:
+  private:
     ObRootService& root_service_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObStatusChangeCallback);
   };
 
   class ObServerChangeCallback : public ObIServerChangeCallback {
-    public:
+  public:
     explicit ObServerChangeCallback(ObRootService& root_service) : root_service_(root_service)
     {}
     virtual ~ObServerChangeCallback()
@@ -280,15 +280,15 @@ class ObRootService {
 
     virtual int on_server_change() override;
 
-    private:
+  private:
     ObRootService& root_service_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObServerChangeCallback);
   };
 
   class ObRestartTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     explicit ObRestartTask(ObRootService& root_service);
     virtual ~ObRestartTask();
 
@@ -300,20 +300,20 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& root_service_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObRestartTask);
   };
 
   class ObReportCoreTableReplicaTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     explicit ObReportCoreTableReplicaTask(ObRootService& root_service);
     virtual ~ObReportCoreTableReplicaTask()
     {}
 
-    public:
+  public:
     // interface of AsyncTask
     virtual int process() override;
     virtual int64_t get_deep_copy_size() const override
@@ -322,18 +322,18 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& root_service_;
     DISALLOW_COPY_AND_ASSIGN(ObReportCoreTableReplicaTask);
   };
 
   class ObReloadUnitManagerTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     explicit ObReloadUnitManagerTask(ObRootService& root_service, ObUnitManager& unit_manager);
     virtual ~ObReloadUnitManagerTask()
     {}
 
-    public:
+  public:
     // interface of AsyncTask
     virtual int process() override;
     virtual int64_t get_deep_copy_size() const override
@@ -342,14 +342,14 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& root_service_;
     ObUnitManager& unit_manager_;
     DISALLOW_COPY_AND_ASSIGN(ObReloadUnitManagerTask);
   };
 
   class ObLoadIndexBuildTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     ObLoadIndexBuildTask(ObRootService& root_service, ObGlobalIndexBuilder& global_index_builder);
     virtual ~ObLoadIndexBuildTask() = default;
     virtual int process() override;
@@ -359,18 +359,18 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& root_service_;
     ObGlobalIndexBuilder& global_index_builder_;
   };
 
   class ObUpdateAllServerConfigTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     explicit ObUpdateAllServerConfigTask(ObRootService& root_service);
     virtual ~ObUpdateAllServerConfigTask()
     {}
 
-    public:
+  public:
     // interface of AsyncTask
     virtual int process() override;
     virtual int64_t get_deep_copy_size() const override
@@ -379,13 +379,13 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& root_service_;
     DISALLOW_COPY_AND_ASSIGN(ObUpdateAllServerConfigTask);
   };
 
   class ObSelfCheckTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     explicit ObSelfCheckTask(ObRootService& root_service);
     virtual ~ObSelfCheckTask(){};
     // interface of AsyncTask
@@ -396,16 +396,16 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     void print_error_log();
 
-    private:
+  private:
     ObRootService& root_service_;
     DISALLOW_COPY_AND_ASSIGN(ObSelfCheckTask);
   };
 
   class ObIndexSSTableBuildTask : public share::ObAsyncTask {
-    public:
+  public:
     ObIndexSSTableBuildTask(const sql::ObIndexSSTableBuilder::BuildIndexJob& job,
         sql::ObIndexSSTableBuilder::ReplicaPicker& replica_picker, ObGlobalIndexBuilder& global_index_builder,
         common::ObMySQLProxy& sql_proxy, common::ObOracleSqlProxy& oracle_sql_proxy, const int64_t abs_timeout_us)
@@ -439,7 +439,7 @@ class ObRootService {
   };
 
   class RsListChangeCb : public share::ObIRsListChangeCb {
-    public:
+  public:
     explicit RsListChangeCb(ObRootService& rs) : rs_(rs)
     {}
     virtual ~RsListChangeCb()
@@ -458,13 +458,13 @@ class ObRootService {
       return rs_.report_single_replica(key);
     }
 
-    private:
+  private:
     ObRootService& rs_;
     DISALLOW_COPY_AND_ASSIGN(RsListChangeCb);
   };
 
   class MergeErrorCallback : public share::ObIMergeErrorCb {
-    public:
+  public:
     MergeErrorCallback(ObRootService& rs) : rs_(rs)
     {}
     virtual ~MergeErrorCallback()
@@ -474,14 +474,14 @@ class ObRootService {
       return rs_.submit_merge_error_task();
     }
 
-    private:
+  private:
     // data members
     ObRootService& rs_;
     DISALLOW_COPY_AND_ASSIGN(MergeErrorCallback);
   };
 
   class ObInnerTableMonitorTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     const static int64_t PURGE_INTERVAL = 3600L * 1000L * 1000L;  // 1h
     ObInnerTableMonitorTask(ObRootService& rs);
     virtual ~ObInnerTableMonitorTask()
@@ -495,12 +495,12 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& rs_;
     DISALLOW_COPY_AND_ASSIGN(ObInnerTableMonitorTask);
   };
   class ObSwitchOverToFollowerTask : public share::ObAsyncTask {
-    public:
+  public:
     const static int64_t RETRY_INTERVAL = 1 * 1000L * 1000L;  // 1s
     explicit ObSwitchOverToFollowerTask(ObRootService& rs);
     virtual ~ObSwitchOverToFollowerTask()
@@ -512,13 +512,13 @@ class ObRootService {
     }
     virtual share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-    private:
+  private:
     ObRootService& rs_;
     DISALLOW_COPY_AND_ASSIGN(ObSwitchOverToFollowerTask);
   };
 
   class ObPrimaryClusterInspectionTask : public share::ObAsyncTask {
-    public:
+  public:
     const static int64_t RETRY_INTERVAL = 100 * 1000L * 1000L;  // 100s
     explicit ObPrimaryClusterInspectionTask(ObRootService& rs);
     virtual ~ObPrimaryClusterInspectionTask()
@@ -530,13 +530,13 @@ class ObRootService {
     }
     virtual share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-    private:
+  private:
     ObRootService& rs_;
     DISALLOW_COPY_AND_ASSIGN(ObPrimaryClusterInspectionTask);
   };
 
   class ObGenNextSchemaVersionTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     const static int64_t RETRY_INTERVAL = 2 * 1000L * 1000L;  // 2s
     ObGenNextSchemaVersionTask(ObRootService& rs);
     virtual ~ObGenNextSchemaVersionTask()
@@ -550,13 +550,13 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& rs_;
     DISALLOW_COPY_AND_ASSIGN(ObGenNextSchemaVersionTask);
   };
 
   class ObLostReplicaCheckerTask : public share::ObAsyncTask {
-    public:
+  public:
     const static int64_t RETRY_INTERVAL = 3 * 1000L * 1000L;  // 10s
     ObLostReplicaCheckerTask(ObRootService& rs) : rs_(rs)
     {}
@@ -571,13 +571,13 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& rs_;
     DISALLOW_COPY_AND_ASSIGN(ObLostReplicaCheckerTask);
   };
 
   class ObMinorFreezeTask : public share::ObAsyncTask {
-    public:
+  public:
     explicit ObMinorFreezeTask(const obrpc::ObRootMinorFreezeArg& arg) : arg_(arg)
     {}
     virtual ~ObMinorFreezeTask()
@@ -586,12 +586,12 @@ class ObRootService {
     virtual int64_t get_deep_copy_size() const;
     share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-    private:
+  private:
     obrpc::ObRootMinorFreezeArg arg_;
   };
 
   class ObUpdateClusterInfoTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     const static int64_t REFRESH_SERVER_INTERVAL = 100L * 1000 * 1000;  // 100 second
     explicit ObUpdateClusterInfoTask(ObRootService& root_service);
     virtual ~ObUpdateClusterInfoTask(){};
@@ -603,13 +603,13 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& root_service_;
     DISALLOW_COPY_AND_ASSIGN(ObUpdateClusterInfoTask);
   };
 
   class ObReloadUnitReplicaCounterTask : public common::ObAsyncTimerTask {
-    public:
+  public:
     const static int64_t REFRESH_UNIT_INTERVAL = 60 * 10L * 1000 * 1000;  // 1 second
     explicit ObReloadUnitReplicaCounterTask(ObRootService& root_service);
     virtual ~ObReloadUnitReplicaCounterTask(){};
@@ -620,12 +620,12 @@ class ObRootService {
     }
     virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-    private:
+  private:
     ObRootService& root_service_;
     DISALLOW_COPY_AND_ASSIGN(ObReloadUnitReplicaCounterTask);
   };
 
-  public:
+public:
   ObRootService();
   virtual ~ObRootService();
   void reset_fail_count();
@@ -1224,7 +1224,7 @@ class ObRootService {
   int finish_replay_schema(const obrpc::ObFinishReplayArg& arg);
 
   ////////////////////////////////////////////////////
-  private:
+private:
   int check_parallel_ddl_conflict(share::schema::ObSchemaGetterGuard& schema_guard, const obrpc::ObDDLArg& arg);
   int check_can_start_as_primary();
   int fetch_root_partition_info();
@@ -1285,7 +1285,7 @@ class ObRootService {
   }
   int handle_cancel_delete_backup(const obrpc::ObBackupManageArg& arg);
 
-  private:
+private:
   bool is_sys_tenant(const common::ObString& tenant_name);
   int table_is_split(
       uint64_t tenant_id, const ObString& database_name, const ObString& table_name, const bool is_index = false);
@@ -1298,7 +1298,7 @@ class ObRootService {
   void construct_lease_expire_time(const share::ObLeaseRequest& lease_request, share::ObLeaseResponse& lease_response,
       const share::ObServerStatus& server_status);
 
-  private:
+private:
   int update_all_sys_tenant_schema_version();
   int finish_schema_split_v1(const obrpc::ObFinishSchemaSplitArg& arg);
   int finish_schema_split_v2(const obrpc::ObFinishSchemaSplitArg& arg);
@@ -1306,7 +1306,7 @@ class ObRootService {
   int build_range_part_split_arg(const common::ObPartitionKey& partition_key, const common::ObRowkey& rowkey,
       share::schema::AlterTableSchema& alter_table_schema);
 
-  private:
+private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 10;
   bool inited_;
@@ -1457,7 +1457,7 @@ class ObRootService {
   ObBackupLeaseService backup_lease_service_;
   ObRestorePointService restore_point_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRootService);
 };
 

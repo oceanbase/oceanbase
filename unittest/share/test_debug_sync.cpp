@@ -203,7 +203,7 @@ TEST(common, ObDSSessionActions)
 }
 
 class Timer {
-  public:
+public:
   Timer()
   {
     begin_ = ::oceanbase::common::ObTimeUtility::current_time();
@@ -213,7 +213,7 @@ class Timer {
     return ::oceanbase::common::ObTimeUtility::current_time() - begin_;
   }
 
-  public:
+public:
   int64_t begin_;
 };
 

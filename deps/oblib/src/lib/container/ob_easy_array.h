@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 template <class T>
 class EasyArray {
-  public:
+public:
   EasyArray();
   EasyArray(T element);
 
@@ -35,7 +35,7 @@ class EasyArray {
     return exec_status_;
   }
 
-  private:
+private:
   ObArray<T> array_;
   int exec_status_;
 };

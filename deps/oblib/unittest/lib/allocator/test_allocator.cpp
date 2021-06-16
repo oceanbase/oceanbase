@@ -34,7 +34,7 @@ void has_unfree_callback()
   has_unfree = true;
 }
 class TestAllocator : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     ObMallocAllocator* ma = ObMallocAllocator::get_instance();

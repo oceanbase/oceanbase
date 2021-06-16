@@ -64,11 +64,11 @@ class MockObElectionRpcStub;
 class ObElectionTester {
   friend class ObElectionTesterCluster;
 
-  public:
+public:
   enum InitialState { NORMAL_MODE = 0, RANDOM_MOCK, MOCK };
   enum NetWorkDirection { INVALID = 0, IN, OUT, IN_OUT };
 
-  public:
+public:
   ObElectionTester();
   ~ObElectionTester();
 
@@ -77,7 +77,7 @@ class ObElectionTester {
   void destroy(void);
   void create(void);
 
-  public:
+public:
   ObElectionTester& set_packet_loss_all(NetWorkDirection direction, int64_t start, int64_t end);
   ObElectionTester& set_packet_loss(ObElectionVoteMsgType type, NetWorkDirection direction, int64_t start, int64_t end);
   ObElectionTester& set_random_packet_loss(
@@ -94,7 +94,7 @@ class ObElectionTester {
   ObElectionTester& add_to(ObElectionTesterCluster& cluster);
   const ObServer& get_self() const;
 
-  public:
+public:
   void reset_rpc(void);
   void reset_clock(void);
   void reset_msg_handler(void);
@@ -105,7 +105,7 @@ class ObElectionTester {
   bool is_real_leader() const;
   bool operator==(const ObServer& server) const;
 
-  private:
+private:
   int init(const char* dev_name, const ObList<ObServer, common::ObIAllocator>& voters,
       const ObList<ObServer, common::ObIAllocator>& candidates, const ObList<ObServer, common::ObIAllocator>& watchers);
 
@@ -118,14 +118,14 @@ class ObElectionTester {
   MockObElectionMsgHandler* msg_handler_loss_;
   MockObElectionMsgHandler* msg_handler_random_loss_;
 
-  private:
+private:
   ObElectionServer* server_;          // election server wrapped by this class
   ObElectionTesterCluster* cluster_;  // cluster this tester belongs to
   InitialState skew_stat_;
   InitialState rpc_recv_stat_;
   InitialState rpc_send_stat_;
 
-  private:
+private:
   bool inited_;  // we need two step of init
   int port_;
   ObElectionMemberType server_role_;
@@ -135,7 +135,7 @@ class ObElectionTester {
 class ObElectionTesterCluster {
   friend class ObElectionTester;
 
-  public:
+public:
   ObElectionTesterCluster();
   ObElectionTesterCluster& init();
   ObElectionTesterCluster& init(const char* dev_name);
@@ -147,7 +147,7 @@ class ObElectionTesterCluster {
   ObElectionTester* get_tester(const ObServer& server);
   ObElectionTester* get_one_slave(void) const;
 
-  private:
+private:
   static int port;
   static const char* devname;
   // calc servers and push them into three list according to server role
@@ -155,7 +155,7 @@ class ObElectionTesterCluster {
   int remove(const ObElectionTester* tester);
   bool add(ObElectionTester* tester);
 
-  private:
+private:
   static const int MAX_TESTER = 64;
   ObElectionTester* vtester_[MAX_TESTER];
   ObArrayHelper<ObElectionTester*> array_helper_;

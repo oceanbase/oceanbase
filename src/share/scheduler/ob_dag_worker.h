@@ -23,7 +23,7 @@ class ObITaskNew;
 
 // thread worker
 class ObDagWorkerNew : public lib::ThreadPool, public common::ObDLinkBase<ObDagWorkerNew> {
-  public:
+public:
   enum SwitchFlagType {
     SF_INIT = 0,
     SF_CONTINUE = 1,
@@ -31,7 +31,7 @@ class ObDagWorkerNew : public lib::ThreadPool, public common::ObDLinkBase<ObDagW
     SF_PAUSE = 3,
   };
 
-  public:
+public:
   ObDagWorkerNew();
   virtual ~ObDagWorkerNew();
   int init();
@@ -46,14 +46,14 @@ class ObDagWorkerNew : public lib::ThreadPool, public common::ObDLinkBase<ObDagW
   void set_switch_flag(int64_t switch_flag);
   void notify();
 
-  private:
+private:
   int check_flag();
   int switch_run_permission();
   int pause_task();
 
-  private:
+private:
   static const uint32_t SLEEP_TIME_MS = 100;  // 100ms
-  private:
+private:
   bool is_inited_;
   int64_t switch_flag_;
   common::ObThreadCond cond_;

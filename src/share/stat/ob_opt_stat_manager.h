@@ -26,7 +26,7 @@ class ObOptStatService;
 class ObOptColumnStatHandle;
 
 struct ObOptTableStatVersion final {
-  public:
+public:
   ObOptTableStatVersion() : stat_version_(0)
   {
     key_.reset();
@@ -42,7 +42,7 @@ struct ObOptTableStatVersion final {
 };
 
 class ObOptStatManager {
-  public:
+public:
   ObOptStatManager();
   virtual ~ObOptStatManager()
   {}
@@ -66,7 +66,7 @@ class ObOptStatManager {
     return inited_;
   }
   class ObRefreshStatTask : public common::IObDedupTask {
-    public:
+  public:
     explicit ObRefreshStatTask(ObOptStatManager* manager)
         : common::IObDedupTask(T_REFRESH_OPT_STAT), stat_manager_(manager)
     {}
@@ -96,12 +96,12 @@ class ObOptStatManager {
       return analyze_arg_.assign(analyze_arg);
     }
 
-    protected:
+  protected:
     ObOptStatManager* stat_manager_;
     obrpc::ObUpdateStatCacheArg analyze_arg_;
   };
 
-  protected:
+protected:
   static const int64_t REFRESH_STAT_TASK_NUM = 5;
   bool inited_;
   common::ObDedupQueue refresh_stat_task_queue_;

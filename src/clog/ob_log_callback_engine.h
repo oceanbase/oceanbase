@@ -26,13 +26,13 @@ class ObSimpleThreadPool;
 }
 namespace clog {
 class ObILogCallbackEngine {
-  public:
+public:
   ObILogCallbackEngine()
   {}
   virtual ~ObILogCallbackEngine()
   {}
 
-  public:
+public:
   virtual void destroy() = 0;
   virtual int submit_member_change_success_cb_task(const common::ObPartitionKey& partition_key,
       const clog::ObLogType log_type, const uint64_t ms_log_id, const int64_t mc_timestamp, const int64_t replica_num,
@@ -42,7 +42,7 @@ class ObILogCallbackEngine {
 };
 
 class ObLogCallbackEngine : public ObILogCallbackEngine, public common::ObICallbackHandler {
-  public:
+public:
   ObLogCallbackEngine() : is_inited_(false), clog_tg_id_(-1), sp_tg_id_(-1)
   {}
   virtual ~ObLogCallbackEngine()
@@ -50,7 +50,7 @@ class ObLogCallbackEngine : public ObILogCallbackEngine, public common::ObICallb
     destroy();
   }
 
-  public:
+public:
   virtual int init(int clog_tg_id, int sp_tg_id);
   virtual void destroy();
   virtual int handle_callback(common::ObICallback* callback);
@@ -60,10 +60,10 @@ class ObLogCallbackEngine : public ObILogCallbackEngine, public common::ObICallb
       const common::ObProposalID& ms_proposal_id);
   virtual int submit_pop_task(const common::ObPartitionKey& partition_key);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogCallbackEngine);
 
-  private:
+private:
   bool is_inited_;
   int clog_tg_id_;
   int sp_tg_id_;

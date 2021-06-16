@@ -26,23 +26,23 @@ namespace sql {
 class ObPlanCache;
 
 class ObPlanCacheManager {
-  public:
+public:
   typedef common::hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   typedef common::hash::ObHashMap<uint64_t, ObPsCache*> PsPlanCacheMap;
 
   class ObPlanCacheEliminationTask : public common::ObTimerTask {
-    public:
+  public:
     ObPlanCacheEliminationTask() : plan_cache_manager_(NULL), run_task_counter_(0)
     {}
     // main routine
     void runTimerTask(void);
 
-    private:
+  private:
     void run_plan_cache_task();
     void run_ps_cache_task();
     void run_free_cache_obj_task();
 
-    public:
+  public:
     ObPlanCacheManager* plan_cache_manager_;
     int64_t run_task_counter_;
   };
@@ -67,7 +67,7 @@ class ObPlanCacheManager {
     common::ObIArray<uint64_t>* key_array_;
   };
 
-  public:
+public:
   ObPlanCacheManager()
       : partition_location_cache_(NULL), tg_id_(-1), inited_(false), destroyed_(false), plan_cache_id_(0){};
   virtual ~ObPlanCacheManager()
@@ -109,14 +109,14 @@ class ObPlanCacheManager {
   ObPlanCache* get_plan_cache(uint64_t tenant_id);
   ObPsCache* get_ps_cache(const uint64_t tenant_id);
 
-  private:
+private:
   enum PlanCacheGCStrategy { INVALID = -1, OFF = 0, REPORT = 1, AUTO = 2 };
 
   static int get_plan_cache_gc_strategy();
   friend void ::test::test_plan_cache_manager();
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheManager);
 
-  private:
+private:
   share::ObIPartitionLocationCache* partition_location_cache_;
   common::ObAddr self_addr_;
   PlanCacheMap pcm_;
@@ -129,10 +129,10 @@ class ObPlanCacheManager {
 };  // end of class ObPlanCaeManager
 
 class ObPlanCacheManagerAtomic {
-  public:
+public:
   typedef common::hash::HashMapPair<uint64_t, ObPlanCache*> MapKV;
 
-  public:
+public:
   ObPlanCacheManagerAtomic() : plan_cache_(NULL){};
   virtual ~ObPlanCacheManagerAtomic(){};
 
@@ -154,15 +154,15 @@ class ObPlanCacheManagerAtomic {
     return plan_cache_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheManagerAtomic);
 
-  private:
+private:
   ObPlanCache* plan_cache_;
 };  // end of class ObPlanCacheManagerAtomic
 
 class ObPsCacheManagerAtomic {
-  public:
+public:
   typedef common::hash::HashMapPair<uint64_t, ObPsCache*> MapKV;
   ObPsCacheManagerAtomic() : ps_cache_(NULL){};
   virtual ~ObPsCacheManagerAtomic()
@@ -185,7 +185,7 @@ class ObPsCacheManagerAtomic {
     return ps_cache_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPsCacheManagerAtomic);
   ObPsCache* ps_cache_;
 };

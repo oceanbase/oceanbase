@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace obrpc {
 
 class ObIRpcExtraPayload {
-  public:
+public:
   virtual ~ObIRpcExtraPayload()
   {}
 
@@ -37,12 +37,12 @@ class ObIRpcExtraPayload {
     instance_pointer() = &extra_payload;
   }
 
-  private:
+private:
   static inline ObIRpcExtraPayload*& instance_pointer();
 };
 
 class ObEmptyExtraPayload : public ObIRpcExtraPayload {
-  public:
+public:
   virtual int64_t get_serialize_size() const override
   {
     return 0;

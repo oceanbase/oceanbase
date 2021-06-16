@@ -35,11 +35,11 @@ class ObWinbufPieceMsg : public ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_WINBUF_P
 {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   using PieceMsgListener = ObWinbufPieceMsgListener;
   using PieceMsgCtx = ObWinbufPieceMsgCtx;
 
-  public:
+public:
   ObWinbufPieceMsg()
       : is_end_(false),
         is_datum_(false),
@@ -55,7 +55,7 @@ class ObWinbufPieceMsg : public ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_WINBUF_P
   {}
   INHERIT_TO_STRING_KV("meta", ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_WINBUF_PIECE_MSG>, K_(op_id));
 
-  public:
+public:
   /* functions */
   /* variables */
 
@@ -73,10 +73,10 @@ class ObWinbufPieceMsg : public ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_WINBUF_P
 class ObWinbufWholeMsg : public ObDatahubWholeMsg<dtl::ObDtlMsgType::DH_WINBUF_WHOLE_MSG> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   using WholeMsgProvider = ObWholeMsgProvider<ObWinbufWholeMsg>;
 
-  public:
+public:
   ObWinbufWholeMsg()
       : ready_state_(0), is_empty_(true), is_datum_(false), row_store_(), datum_store_(), assign_allocator_()
   {}
@@ -100,7 +100,7 @@ class ObWinbufWholeMsg : public ObDatahubWholeMsg<dtl::ObDtlMsgType::DH_WINBUF_W
 };
 
 class ObWinbufPieceMsgCtx : public ObPieceMsgCtx {
-  public:
+public:
   ObWinbufPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts, int64_t tenant_id)
       : ObPieceMsgCtx(op_id, task_cnt, timeout_ts), received_(0), tenant_id_(tenant_id), whole_msg_()
   {}
@@ -112,17 +112,17 @@ class ObWinbufPieceMsgCtx : public ObPieceMsgCtx {
   int64_t tenant_id_;
   ObWinbufWholeMsg whole_msg_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObWinbufPieceMsgCtx);
 };
 
 class ObWinbufPieceMsgListener {
-  public:
+public:
   ObWinbufPieceMsgListener() = default;
   ~ObWinbufPieceMsgListener() = default;
   static int on_message(ObWinbufPieceMsgCtx& ctx, common::ObIArray<ObPxSqcMeta*>& sqcs, const ObWinbufPieceMsg& pkt);
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObWinbufPieceMsgListener);

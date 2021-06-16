@@ -22,12 +22,12 @@ namespace oceanbase {
 namespace sql {
 class ObCreateSynonymStmt;
 class ObCreateSynonymResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObCreateSynonymResolver(ObResolverParams& params);
   virtual ~ObCreateSynonymResolver();
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int check_valid(const ObCreateSynonymStmt* synonym_stmt);
   DISALLOW_COPY_AND_ASSIGN(ObCreateSynonymResolver);
 };

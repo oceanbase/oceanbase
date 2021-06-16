@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 using namespace oceanbase::common;
 class ObExprNvl2Oracle : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprNvl2Oracle(ObIAllocator& alloc);
   virtual ~ObExprNvl2Oracle();
 
@@ -32,7 +32,7 @@ class ObExprNvl2Oracle : public ObFuncExprOperator {
 
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprNvl2Oracle);
 };
 }  // namespace sql

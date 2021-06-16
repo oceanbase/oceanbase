@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace clog {
 class ObLogWriterWrapper;
 class ObBatchBuffer : public ObIBufferConsumer {
-  public:
+public:
   ObBatchBuffer();
   virtual ~ObBatchBuffer();
 
@@ -31,9 +31,9 @@ class ObBatchBuffer : public ObIBufferConsumer {
   void update_next_flush_block_id(const int64_t block_id);
   bool is_all_consumed() const;
 
-  private:
+private:
   class IncPos {
-    public:
+  public:
     IncPos() : seq_(0), offset_(0), entry_cnt_(0)
     {}
     ~IncPos()
@@ -54,12 +54,12 @@ class ObBatchBuffer : public ObIBufferConsumer {
   } __attribute__((__aligned__(16)));
   class Block;
 
-  private:
+private:
   int wait_block(const int64_t block_id);
   Block* get_block(const int64_t block_id);
   int fill_buffer(const IncPos cur_pos, ObIBufferTask* task);
 
-  private:
+private:
   bool is_inited_;
   ObIBatchBufferConsumer* handler_;
   Block* block_array_;

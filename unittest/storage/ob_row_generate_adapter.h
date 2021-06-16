@@ -29,7 +29,7 @@ using namespace blocksstable;
 namespace common {
 
 class ObMockIterWithLimit : public ObNewRowIterator {
-  public:
+public:
   ObMockIterWithLimit() : need_row_count_(0), got_row_count_(0){};
   ~ObMockIterWithLimit(){};
 
@@ -48,7 +48,7 @@ class ObMockIterWithLimit : public ObNewRowIterator {
     return need_row_count_ == got_row_count_;
   }
 
-  protected:
+protected:
   void advance_iter()
   {
     ++got_row_count_;
@@ -60,7 +60,7 @@ class ObMockIterWithLimit : public ObNewRowIterator {
 
 class ObRowGenerateAdapter : public ObMockIterWithLimit {
 
-  public:
+public:
   ObRowGenerateAdapter(){};
   ~ObRowGenerateAdapter(){};
 
@@ -89,7 +89,7 @@ class ObRowGenerateAdapter : public ObMockIterWithLimit {
     generate_.reset();
   }
 
-  private:
+private:
   ObRowGenerate generate_;
   ObStoreRow new_row_;
 };

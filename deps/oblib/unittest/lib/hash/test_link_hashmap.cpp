@@ -24,7 +24,7 @@ using namespace common;
 using namespace hash;
 
 class HashKey {
-  public:
+public:
   HashKey() : v_(0)
   {}
   HashKey(uint64_t v) : v_(v)
@@ -49,7 +49,7 @@ class HashKey {
 };
 
 class HashValue : public LinkHashValue<HashKey> {
-  public:
+public:
   HashValue() : v_(0)
   {}
   HashValue(uint64_t v) : v_(v)
@@ -69,7 +69,7 @@ ObMemAttr attr(1001, ObNewModIds::OB_MEMSTORE);
 class TestAllocHandle {
   typedef LinkHashNode<HashKey> Node;
 
-  public:
+public:
   HashValue* alloc_value()
   {
     ATOMIC_INC(&value_alloc);
@@ -100,7 +100,7 @@ class TestAllocHandle {
 };
 
 class AtomicGetFunctor {
-  public:
+public:
   explicit AtomicGetFunctor() : ret_val_(0)
   {}
   void operator()(const HashKey& key, HashValue* value)

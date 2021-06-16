@@ -22,7 +22,7 @@ namespace sql {
 class ObMonitoringDumpSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMonitoringDumpSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(flags), K_(dst_op_id));
@@ -32,7 +32,7 @@ class ObMonitoringDumpSpec : public ObOpSpec {
 };
 
 class ObMonitoringDumpOp : public ObOperator {
-  public:
+public:
   ObMonitoringDumpOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;
@@ -44,7 +44,7 @@ class ObMonitoringDumpOp : public ObOperator {
     ObOperator::destroy();
   }
 
-  private:
+private:
   common::ObDatum op_name_;
   common::ObDatum tracefile_identifier_;
   uint64_t open_time_;

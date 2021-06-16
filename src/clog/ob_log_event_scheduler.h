@@ -19,11 +19,11 @@ namespace oceanbase {
 namespace clog {
 class ObLogStateEventTaskV2;
 class ObLogEventScheduler {
-  public:
+public:
   ObLogEventScheduler();
   ~ObLogEventScheduler();
 
-  public:
+public:
   virtual int init();
   virtual void destroy();
   virtual int start();
@@ -32,17 +32,17 @@ class ObLogEventScheduler {
   virtual int add_state_change_event(ObLogStateEventTaskV2* task);
   virtual int add_state_change_delay_event(ObLogStateEventTaskV2* task);
 
-  private:
+private:
   int schedule_task_(ObLogStateEventTaskV2* task, const int64_t delay);
   int64_t get_time_wheel_thread_num_() const;
 
-  private:
+private:
   static const int64_t CLOG_EVENT_TIME_WHEEL_PRECISION = 1000;  // 1ms
-  private:
+private:
   common::ObTimeWheel time_wheel_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogEventScheduler);
 };  // class ObLogEventScheduler
 }  // namespace clog

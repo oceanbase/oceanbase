@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprConnectByRoot : public ObExprOperator {
-  public:
+public:
   explicit ObExprConnectByRoot(common::ObIAllocator& alloc);
   virtual ~ObExprConnectByRoot()
   {}
@@ -30,7 +30,7 @@ class ObExprConnectByRoot : public ObExprOperator {
 
   static int eval_connect_by_root(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprConnectByRoot) const;
 };
 }  // namespace sql

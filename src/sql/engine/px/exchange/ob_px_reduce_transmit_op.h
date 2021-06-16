@@ -19,10 +19,10 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxReduceTransmitOpInput : public ObPxTransmitOpInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxReduceTransmitOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxTransmitOpInput(ctx, spec)
   {}
   virtual ~ObPxReduceTransmitOpInput()
@@ -32,7 +32,7 @@ class ObPxReduceTransmitOpInput : public ObPxTransmitOpInput {
 class ObPxReduceTransmitSpec : public ObPxTransmitSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxReduceTransmitSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObPxTransmitSpec(alloc, type)
   {}
   ~ObPxReduceTransmitSpec()
@@ -40,14 +40,14 @@ class ObPxReduceTransmitSpec : public ObPxTransmitSpec {
 };
 
 class ObPxReduceTransmitOp : public ObPxTransmitOp {
-  public:
+public:
   ObPxReduceTransmitOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObPxTransmitOp(exec_ctx, spec, input)
   {}
   virtual ~ObPxReduceTransmitOp()
   {}
 
-  public:
+public:
   virtual int inner_open() override;
   virtual int rescan() override
   {

@@ -16,7 +16,7 @@
 
 using namespace oceanbase::common;
 class TestTraceID : public ::testing::Test {
-  public:
+public:
   TestTraceID()
   {}
   virtual ~TestTraceID()
@@ -26,13 +26,13 @@ class TestTraceID : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestTraceID);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 

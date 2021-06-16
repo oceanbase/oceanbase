@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObSingleMerge : public ObMultipleMerge {
-  public:
+public:
   ObSingleMerge();
   virtual ~ObSingleMerge();
   int open(const common::ObExtStoreRowkey& rowkey);
@@ -29,22 +29,22 @@ class ObSingleMerge : public ObMultipleMerge {
   static int estimate_row_count(const common::ObQueryFlag query_flag, const uint64_t table_id,
       const common::ObExtStoreRowkey& rowkey, const common::ObIArray<ObITable*>& stores, ObPartitionEst& part_estimate);
 
-  protected:
+protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
   virtual int is_range_valid() const override;
   virtual int inner_get_next_row(ObStoreRow& row);
   virtual void collect_merge_stat(ObTableStoreStat& stat) const override;
 
-  private:
+private:
   virtual int get_table_row(const int64_t table_idx, const ObIArray<ObITable*>& tables, const ObStoreRow*& prow,
       ObStoreRow& fuse_row, bool& final_result, int64_t& sstable_end_log_ts, bool& stop_reading);
 
-  private:
+private:
   const common::ObExtStoreRowkey* rowkey_;
   blocksstable::ObFuseRowValueHandle handle_;
 
-  private:
+private:
   static const int64_t SINGLE_GET_FUSE_ROW_CACHE_PUT_COUNT_THRESHOLD = 50;
   ObFuseRowCacheFetcher fuse_row_cache_fetcher_;
   // disallow copy

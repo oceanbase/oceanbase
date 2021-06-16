@@ -32,19 +32,19 @@ static const uint32_t TEST_COLUMN_COUNT = ObExtendType - 1;
 static const uint32_t TEST_MACRO_BLOCK_SIZE = 2 * 1024 * 1024;
 
 class TestInspectBadBlock : public TestDataFilePrepare {
-  public:
+public:
   TestInspectBadBlock();
   virtual ~TestInspectBadBlock();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   void prepare_schema();
   void prepare_data(const int64_t row_cnt, ObSSTable& sstable);
   void get_macro_block(const int32_t macro_idx, ObMacroBlockHandle& macro_block_handle, ObFullMacroBlockMeta& meta);
   void check_macro_block();
 
-  protected:
+protected:
   ObSSTable sstable_;
   ObTableSchema table_schema_;
   ObITable::TableKey table_key_;
@@ -289,7 +289,7 @@ void TestInspectBadBlock::check_macro_block()
 }
 
 class TestMacroBlock_LZ4 : public TestInspectBadBlock {
-  public:
+public:
   TestMacroBlock_LZ4()
   {
     compressor_name_ = "lz4_1.0";
@@ -297,7 +297,7 @@ class TestMacroBlock_LZ4 : public TestInspectBadBlock {
 };
 
 class TestMacroBlock_Snappy : public TestInspectBadBlock {
-  public:
+public:
   TestMacroBlock_Snappy()
   {
     compressor_name_ = "snappy_1.0";
@@ -305,7 +305,7 @@ class TestMacroBlock_Snappy : public TestInspectBadBlock {
 };
 
 class TestMacroBlock_Zlib : public TestInspectBadBlock {
-  public:
+public:
   TestMacroBlock_Zlib()
   {
     compressor_name_ = "zlib_1.0";
@@ -313,7 +313,7 @@ class TestMacroBlock_Zlib : public TestInspectBadBlock {
 };
 
 class TestMacroBlock_Zstd : public TestInspectBadBlock {
-  public:
+public:
   TestMacroBlock_Zstd()
   {
     compressor_name_ = "zstd_1.0";
@@ -321,7 +321,7 @@ class TestMacroBlock_Zstd : public TestInspectBadBlock {
 };
 
 class TestMacroBlock_Zstd_1_3_8 : public TestInspectBadBlock {
-  public:
+public:
   TestMacroBlock_Zstd_1_3_8()
   {
     compressor_name_ = "zstd_1.3.8";
@@ -389,7 +389,7 @@ TEST(TestIOManager, callback_size)
 }
 
 class TestPhysicalChecksum : public TestInspectBadBlock {
-  public:
+public:
   TestPhysicalChecksum()
   {
     need_calc_physical_checksum_ = true;

@@ -106,7 +106,7 @@ namespace oceanbase {
 namespace common {
 
 class ObTscBase {
-  public:
+public:
   ObTscBase() : start_us_(0), tsc_count_(0)
   {}
   ~ObTscBase()
@@ -124,7 +124,7 @@ class ObTscBase {
 };
 
 class ObTscTimestamp {
-  public:
+public:
   ObTscTimestamp() : is_init_(false), start_us_(0), tsc_count_(0), scale_(0)
   {}
   ~ObTscTimestamp()
@@ -139,7 +139,7 @@ class ObTscTimestamp {
     return instance;
   }
 
-  private:
+private:
   static const int64_t MAX_CPU_COUNT = 1024;
 #if defined(__x86_64__)
   uint64_t get_cpufreq_khz_();
@@ -162,7 +162,7 @@ class ObTscTimestamp {
     return false;
   }
 #endif
-  private:
+private:
   bool is_init_;
   int64_t start_us_;
   uint64_t tsc_count_;

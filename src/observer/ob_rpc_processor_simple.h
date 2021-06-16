@@ -24,44 +24,44 @@
 #define OB_DEFINE_PROCESSOR_S(cls, pcode, pname)              \
   OB_DEFINE_PROCESSOR(cls, obrpc::pcode, pname)               \
   {                                                           \
-    public:                                                   \
+  public:                                                     \
     explicit pname(const ObGlobalContext& gctx) : gctx_(gctx) \
     {}                                                        \
                                                               \
-    protected:                                                \
+  protected:                                                  \
     int process();                                            \
                                                               \
-    private:                                                  \
+  private:                                                    \
     const ObGlobalContext& gctx_;                             \
   }
 
 #define OB_DEFINE_PROCESSOR_SM(cls, pcode, pname)             \
   OB_DEFINE_PROCESSOR(cls, obrpc::pcode, pname)               \
   {                                                           \
-    public:                                                   \
+  public:                                                     \
     explicit pname(const ObGlobalContext& gctx) : gctx_(gctx) \
     {}                                                        \
                                                               \
-    protected:                                                \
+  protected:                                                  \
     int process();                                            \
     int after_process();                                      \
                                                               \
-    private:                                                  \
+  private:                                                    \
     const ObGlobalContext& gctx_;                             \
   }
 
 #define RPC_PROCESSOR_X(pcode, pname)           \
   OB_DEFINE_PROCESSOR(Srv, obrpc::pcode, pname) \
   {                                             \
-    public:                                     \
+  public:                                       \
     explicit pname(int ret) : ret_(ret)         \
     {}                                          \
                                                 \
-    protected:                                  \
+  protected:                                    \
     int process();                              \
     int deserialize();                          \
                                                 \
-    private:                                    \
+  private:                                      \
     int ret_;                                   \
   }
 
@@ -70,16 +70,16 @@ namespace observer {
 
 OB_DEFINE_PROCESSOR(Srv, obrpc::OB_GET_DIAGNOSE_ARGS, ObGetDiagnoseArgsP)
 {
-  public:
+public:
   ObGetDiagnoseArgsP() : pwbuf_(), passwd_(), argsbuf_()
   {
     passwd_.assign_buffer(pwbuf_, sizeof(pwbuf_));
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   char pwbuf_[64];
   common::ObString passwd_;
   char argsbuf_[1024];

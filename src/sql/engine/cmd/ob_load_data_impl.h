@@ -81,7 +81,7 @@ struct ObLoadTableColumnDesc {
 };
 
 class ObInsertValueGenerator {
-  public:
+public:
   int gen_values(const common::ObIArray<common::ObString>& file_col_values,
       common::ObIArray<common::ObString>& table_column_values, ObExecContext& exec_ctx,
       ObLoadFileBuffer& data_buf) const;
@@ -102,13 +102,13 @@ class ObInsertValueGenerator {
   bool find_table_column_value_desc_by_column_id(const uint64_t column_id, int64_t& idx);
   int gen_insert_columns_names_buff(ObExecContext& ctx, const ObLoadArgument& load_args, common::ObString& data_buff);
 
-  private:
+private:
   common::ObSEArray<ObLoadTableColumnDesc, 16> table_column_value_desc_;
   common::ObSEArray<ObLoadDataReplacedExprInfo, 8> exprs_ref_file_col_;
 };
 
 class ObPartIdCalculator {
-  public:
+public:
   int init(ObExecContext& ctx, const common::ObString& q_name, const uint64_t& table_id,
       ObInsertValueGenerator& generator, ObLoadFileBuffer& data_buf, common::ObIArray<common::ObString>& insert_values,
       common::ObIArray<common::ObString>& file_col_values);
@@ -119,7 +119,7 @@ class ObPartIdCalculator {
     return table_location_.get_table_id();
   }
 
-  private:
+private:
   common::ObSEArray<int64_t, 1> param_to_file_col_idx_;
   ObTableLocation table_location_;
 };
@@ -159,7 +159,7 @@ struct ObDataFrag : common::ObLink {
 };
 
 class ObPartDataFragMgr {
-  public:
+public:
   ObPartDataFragMgr(ObDataFragMgr& data_frag_mgr, int64_t part_id)
       : data_frag_mgr_(data_frag_mgr), part_id_(part_id), total_row_consumed_(0), total_row_proceduced_(0)
   {}
@@ -209,7 +209,7 @@ class ObPartDataFragMgr {
   volatile int64_t total_row_proceduced_;
   common::ObSpLinkQueue queue_;
 
-  public:
+public:
   // for batch task
   struct InsertTaskSplitPoint {
     InsertTaskSplitPoint()
@@ -232,7 +232,7 @@ class ObPartDataFragMgr {
   int free_frags();
   TO_STRING_KV(K(frag_free_list_), K(queue_top_begin_point_));
 
-  private:
+private:
   /**
    * @brief return the pos of row_num in frag
    */
@@ -262,7 +262,7 @@ struct ObPartDataFragHash {
 };
 
 class ObDataFragMgr {
-  public:
+public:
   int init(ObExecContext& ctx, uint64_t table_id);
   int get_part_datafrag(int64_t part_id, ObPartDataFragMgr*& part_datafrag_mgr);
   int64_t get_total_part_cnt()
@@ -291,7 +291,7 @@ class ObDataFragMgr {
   }
   TO_STRING_KV(K_(total_part_cnt), "total_alloc_cnt", get_total_allocated_frag_count(), K_(total_free_cnt));
 
-  private:
+private:
   common::ObMemAttr attr_;
   int64_t total_part_cnt_;
   volatile int64_t total_alloc_cnt_;
@@ -305,7 +305,7 @@ class ObDataFragMgr {
 
 // one buffer info for one partition
 class ObPartitionBufferCtrl {
-  public:
+public:
   explicit ObPartitionBufferCtrl(int64_t partition_id) : part_id_(partition_id), buffer_(NULL)
   {}
   ~ObPartitionBufferCtrl()
@@ -326,9 +326,9 @@ class ObPartitionBufferCtrl {
 
   TO_STRING_KV(K_(part_id), KP_(buffer));
 
-  public:
+public:
   int64_t part_id_;  // hash key
-  private:
+private:
   void* buffer_;
 } CACHE_ALIGNED;
 
@@ -352,7 +352,7 @@ struct ObPartBufMgrHashInfo {
 
 //========================
 class ObAllocatorSwitch : public common::ObIAllocator {
-  public:
+public:
   ObAllocatorSwitch() : cur_alloc_(&permanent_alloc_)
   {}
   void switch_permanent()
@@ -415,17 +415,17 @@ class ObAllocatorSwitch : public common::ObIAllocator {
 
   TO_STRING_KV("cur_alloc_", (cur_alloc_ == &permanent_alloc_) ? "permanent" : "temporary");
 
-  private:
+private:
   common::ObIAllocator* cur_alloc_;
   ObArenaAllocator permanent_alloc_;
   ObArenaAllocator temporary_alloc_;
 };
 
 class ObLoadFileBuffer {
-  public:
+public:
   static const int64_t MAX_BUFFER_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
 
-  public:
+public:
   ObLoadFileBuffer() = delete;
   ObLoadFileBuffer(int64_t buffer_size) : pos_(0), buffer_size_(buffer_size)
   {}
@@ -462,7 +462,7 @@ class ObLoadFileBuffer {
     pos_ = 0;
   }
 
-  private:
+private:
   int64_t pos_;
   int64_t buffer_size_;
   char buffer_[];
@@ -492,7 +492,7 @@ struct ObCSVFormats {
 };
 
 class ObLoadFileDataTrimer {
-  public:
+public:
   ObLoadFileDataTrimer() : incomplate_data_(NULL), incomplate_data_len_(0), lines_cnt_(0)
   {}
   int init(common::ObIAllocator& allocator, const ObCSVFormats& formats);
@@ -517,7 +517,7 @@ class ObLoadFileDataTrimer {
     lines_cnt_ += line_cnt;
   }
 
-  private:
+private:
   ObCSVFormats formats_;  // TODO [load data] change to ObInverseParser(formats)
   char* incomplate_data_;
   int64_t incomplate_data_len_;
@@ -525,10 +525,10 @@ class ObLoadFileDataTrimer {
 };
 
 class ObCSVParser {
-  public:
+public:
   static const char* ZERO_STRING;
 
-  public:
+public:
   ObCSVParser() : is_fast_parse_(false), total_field_nums_(0)
   {
     reuse();
@@ -574,7 +574,7 @@ class ObCSVParser {
     is_fast_parse_ = true;
   }
 
-  private:
+private:
   bool is_terminate_char(char cur_char, char*& cur_pos, bool& is_line_term);
   bool is_enclosed_field_start(char* cur_pos, char& cur_char);
   void handle_one_field(char* field_end_pos);
@@ -583,7 +583,7 @@ class ObCSVParser {
   int deal_with_irregular_line();
   void remove_enclosed_char(char*& cur_field_end_pos);
 
-  private:
+private:
   // parsing style
   bool is_fast_parse_;
   ObCSVFormats formats_;
@@ -710,7 +710,7 @@ private:
 };
 */
 class ObLoadDataBase {
-  public:
+public:
   ObLoadDataBase()
   {}
   virtual ~ObLoadDataBase()
@@ -792,7 +792,7 @@ struct ObLoadServerInfo {
  * @brief load data shuffle parallel implementation
  */
 class ObLoadDataSPImpl : public ObLoadDataBase {
-  public:
+public:
   enum class TaskType {
     InvalidTask = -1,
     ShuffleTask = 0,
@@ -872,7 +872,7 @@ class ObLoadDataSPImpl : public ObLoadDataBase {
     common::ObSEArray<ObAllocatorSwitch*, 64> ctx_allocators;
   };
 
-  public:
+public:
   ObLoadDataSPImpl()
   {}
   ~ObLoadDataSPImpl()
@@ -896,7 +896,7 @@ class ObLoadDataSPImpl : public ObLoadDataBase {
   static int exec_shuffle(int64_t task_id, ObShuffleTaskHandle* handle);
   static int exec_insert(ObInsertTask& task, ObInsertResult& result);
 
-  private:
+private:
   static int build_insert_values_generator(
       ObExecContext& ctx, ObLoadDataStmt& load_stmt, ObInsertValueGenerator& generator);
   static int recursively_replace_variables(
@@ -907,7 +907,7 @@ class ObLoadDataSPImpl : public ObLoadDataBase {
 };
 
 class ObLoadDataImpl : public ObLoadDataBase {
-  public:
+public:
   enum ParseStep { FIND_LINE_START = 0, FIND_LINE_TERM };
 
   static const int64_t FILE_READ_BUFFER_SIZE = 2 * 1024 * 1024;
@@ -1030,11 +1030,11 @@ class ObLoadDataImpl : public ObLoadDataBase {
 
   int execute(ObExecContext& ctx, ObLoadDataStmt& load_stmt);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataImpl);
   // function members
-  private:
+private:
   // arguments
   ObLoadArgument load_args_;
   ObDataInFileStruct data_struct_in_file_;

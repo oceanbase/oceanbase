@@ -30,7 +30,7 @@ class ObLogPlanFactory;
 enum PXParallelRule { USE_PX_DEFAULT, MANUAL_HINT, SESSION_FORCE_PARALLEL, MANUAL_TABLE_DOP, MAX_OPTION };
 class ObOptimizerContext {
 
-  public:
+public:
   ObOptimizerContext(ObSQLSessionInfo* session_info, ObExecContext* exec_ctx, ObSqlSchemaGuard* sql_schema_guard,
       common::ObStatManager* stat_manager, common::ObOptStatManager* opt_stat_manager,
       storage::ObPartitionService* partition_service, common::ObIAllocator& allocator,
@@ -294,7 +294,7 @@ class ObOptimizerContext {
     return parallel_ > 1;
   }
 
-  private:
+private:
   ObSQLSessionInfo* session_info_;
   ObExecContext* exec_ctx_;
   ObSqlSchemaGuard* sql_schema_guard_;

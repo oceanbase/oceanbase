@@ -43,7 +43,7 @@ class ObTableScanOpInput : public ObOpInput {
   OB_UNIS_VERSION_V(1);
   friend ObTableScanOp;
 
-  public:
+public:
   ObTableScanOpInput(ObExecContext& ctx, const ObOpSpec& spec);
   virtual ~ObTableScanOpInput();
 
@@ -66,7 +66,7 @@ class ObTableScanOpInput : public ObOpInput {
   int translate_pid_to_ldx(
       int64_t partition_id, int64_t table_location_key, int64_t ref_table_id, int64_t& location_idx);
 
-  protected:
+protected:
   int64_t location_idx_;
   common::ObSEArray<common::ObNewRange, 3> key_ranges_;
   common::ObPosArray range_array_pos_;
@@ -79,7 +79,7 @@ class ObTableScanOpInput : public ObOpInput {
 class ObTableScanSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableScanSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   uint64_t get_location_table_id() const
@@ -136,7 +136,7 @@ class ObTableScanSpec : public ObOpSpec {
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  public:
+public:
   /*
    * ref_table_id_  is the physical id of main table of table scan, such as 1101710651081732
    * index_id_ is the physical id of global/local index of the table scan, such as 1101710651081734
@@ -237,7 +237,7 @@ class ObTableScanSpec : public ObOpSpec {
 };
 
 class ObTableScanOp : public ObOperator {
-  public:
+public:
   static constexpr int64_t CHECK_STATUS_ROWS_INTERVAL = 1 << 13;
 
   ObTableScanOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
@@ -284,7 +284,7 @@ class ObTableScanOp : public ObOperator {
 
   int init_converter();
 
-  protected:
+protected:
   int init_pushdown_storage_filter();
   int calc_expr_int_value(const ObExpr& expr, int64_t& retval, bool& is_null_value);
   virtual int do_table_scan(bool is_rescan, bool need_prepare = true);
@@ -320,10 +320,10 @@ class ObTableScanOp : public ObOperator {
   void fill_table_scan_stat(const ObTableScanStatistic& statistic, ObTableScanStat& scan_stat) const;
   void set_cache_stat(const ObPlanStat& plan_stat, storage::ObTableScanParam& param);
 
-  private:
+private:
   int get_next_row_with_mode();
 
-  protected:
+protected:
   common::ObNewRowIterator* result_;
   // result iterator of array binding
   common::ObNewIterIterator* ab_iters_;

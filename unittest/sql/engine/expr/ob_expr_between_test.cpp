@@ -17,18 +17,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObExprBetweenTest : public ::testing::Test {
-  public:
+public:
   ObExprBetweenTest();
   virtual ~ObExprBetweenTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprBetweenTest(const ObExprBetweenTest& other);
   ObExprBetweenTest& operator=(const ObExprBetweenTest& other);
 
-  protected:
+protected:
   // data members
 };
 

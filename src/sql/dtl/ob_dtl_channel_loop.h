@@ -29,14 +29,14 @@ namespace sql {
 namespace dtl {
 
 class ObDtlChannelLoop : public ObDtlChannelWatcher {
-  private:
+private:
   static constexpr auto MAX_PROCS = (int64_t)(ObDtlMsgType::MAX);
   using Proc = ObDtlPacketProcBase;
   using InterruptProc = ObDtlInterruptProc;
   using PredFunc = std::function<bool(int64_t, ObDtlChannel*)>;
 
   class ObDtlChannelLoopProc : public ObIDtlChannelProc {
-    public:
+  public:
     ObDtlChannelLoopProc(uint16_t& last_msg_type, Proc** proc_map) : last_msg_type_(last_msg_type), proc_map_(proc_map)
     {}
     virtual int process(const ObDtlLinkedBuffer&, dtl::ObDtlMsgIterator*);
@@ -47,7 +47,7 @@ class ObDtlChannelLoop : public ObDtlChannelWatcher {
 
   typedef ObDtlLocalChannel ObDtlMockChannel;
 
-  public:
+public:
   ObDtlChannelLoop();
   virtual ~ObDtlChannelLoop() = default;
 
@@ -102,12 +102,12 @@ class ObDtlChannelLoop : public ObDtlChannelWatcher {
     proxy_first_buffer_cache_ = proxy_first_buffer_cache;
   }
 
-  private:
+private:
   int process_channels(ObIDltChannelLoopPred* pred, int64_t& nth_channel);
   int process_channel(int64_t& nth_channel);
   int process_base(ObIDltChannelLoopPred* pred, int64_t& hinted_channel, int64_t timeout);
 
-  public:
+public:
   int unblock_channels(int64_t data_channel_idx);
   void add_last_data_list(ObDtlChannel* ch);
   virtual void remove_data_list(ObDtlChannel* ch, bool force) override;
@@ -122,7 +122,7 @@ class ObDtlChannelLoop : public ObDtlChannelWatcher {
     use_interm_result_ = flag;
   }
 
-  private:
+private:
   static const int64_t INTERRUPT_CHECK_TIMES = 16;
   Proc* proc_map_[MAX_PROCS];
   InterruptProc* interrupt_proc_;
@@ -147,7 +147,7 @@ class ObDtlChannelLoop : public ObDtlChannelWatcher {
   int64_t loop_times_;
   bool use_interm_result_;
 
-  public:
+public:
   int64_t time_recorder_;
 };
 

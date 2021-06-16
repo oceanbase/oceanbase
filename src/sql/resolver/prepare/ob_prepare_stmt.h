@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObPrepareStmt : public ObCMDStmt {
-  public:
+public:
   ObPrepareStmt() : ObCMDStmt(stmt::T_PREPARE), prepare_name_(), prepare_sql_(NULL)
   {}
   virtual ~ObPrepareStmt()
@@ -45,7 +45,7 @@ class ObPrepareStmt : public ObCMDStmt {
 
   TO_STRING_KV(N_STMT_NAME, prepare_name_, N_PREPARE_SQL, prepare_sql_);
 
-  private:
+private:
   common::ObString prepare_name_;
   ObRawExpr* prepare_sql_;
   DISALLOW_COPY_AND_ASSIGN(ObPrepareStmt);

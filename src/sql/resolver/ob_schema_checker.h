@@ -51,7 +51,7 @@ namespace sql {
 
 class ObSqlSchemaGuard;
 class ObSchemaChecker {
-  public:
+public:
   ObSchemaChecker();
   virtual ~ObSchemaChecker();
   int init(share::schema::ObSchemaGetterGuard& schema_mgr, uint64_t session_id = common::OB_INVALID_ID);
@@ -220,14 +220,14 @@ class ObSchemaChecker {
   int get_dblink_user(const uint64_t tenant_id, const common::ObString& dblink_name, common::ObString& dblink_user,
       common::ObIAllocator& allocator);
 
-  private:
+private:
   int get_table_schema_inner(uint64_t table_id, const share::schema::ObTableSchema*& table_schema) const;
   int get_column_schema_inner(uint64_t table_id, const common::ObString& column_name,
       const share::schema::ObColumnSchemaV2*& column_schema) const;
   int get_column_schema_inner(
       uint64_t table_id, const uint64_t column_id, const share::schema::ObColumnSchemaV2*& column_schema) const;
 
-  private:
+private:
   bool is_inited_;
   share::schema::ObSchemaGetterGuard* schema_mgr_;
   ObSqlSchemaGuard* sql_schema_mgr_;

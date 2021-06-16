@@ -29,7 +29,7 @@ enum ObKeyPartType { T_NORMAL_KEY = 0, T_LIKE_KEY };
 class ObKeyPartId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObKeyPartId(uint64_t data_table_id = common::OB_INVALID_ID, uint64_t column_id = common::OB_INVALID_ID)
       : table_id_(data_table_id), column_id_(column_id)
   {}
@@ -60,7 +60,7 @@ class ObKeyPartId {
 class ObKeyPartPos {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObKeyPartPos(common::ObIAllocator& alloc, int64_t offset = -1)
       : offset_(offset), column_type_(alloc), enum_set_values_()
   {}
@@ -122,7 +122,7 @@ struct ObLikeKeyPart {
 class ObKeyPart : public common::ObDLinkBase<ObKeyPart> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObKeyPart(common::ObIAllocator& allocator, uint64_t data_table_id = common::OB_INVALID_ID,
       uint64_t column_id = common::OB_INVALID_ID, int32_t offset = -1)
       : allocator_(allocator),
@@ -300,10 +300,10 @@ class ObKeyPart : public common::ObDLinkBase<ObKeyPart> {
   ObKeyPart* cut_general_or_next();
   DECLARE_TO_STRING;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObKeyPart);
 
-  public:
+public:
   common::ObIAllocator& allocator_;
   ObKeyPartId id_;
   ObKeyPartPos pos_;

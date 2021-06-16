@@ -19,14 +19,14 @@ namespace oceanbase {
 namespace storage {
 
 class ObISampleIterator : public ObQueryRowIterator {
-  public:
+public:
   explicit ObISampleIterator(const common::SampleInfo& sample_info);
   virtual ~ObISampleIterator();
 
-  protected:
+protected:
   bool return_this_sample(const int64_t num) const;
 
-  protected:
+protected:
   const common::SampleInfo* sample_info_;
 };
 

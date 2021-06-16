@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace common {
 class ObDataBuffer : public ObIAllocator {
-  public:
+public:
   ObDataBuffer() : data_(NULL), capacity_(0), position_(0), limit_(0)
   {}
 
@@ -138,7 +138,7 @@ class ObDataBuffer : public ObIAllocator {
 
   OB_UNIS_VERSION(1);
 
-  protected:
+protected:
   char* data_;
   int64_t capacity_;
   int64_t position_;

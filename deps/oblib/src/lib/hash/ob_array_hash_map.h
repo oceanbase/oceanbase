@@ -20,11 +20,11 @@ namespace oceanbase {
 namespace common {
 template <typename key_t, typename val_t>
 class ObArrayHashMap {
-  public:
+public:
   typedef ObSpinLock Lock;
   typedef ObSpinLockGuard LockGuard;
   class Item {
-    public:
+  public:
     Item() : is_valid_(false), key_(), val_()
     {}
     Item(key_t& key, val_t& val) : is_valid_(true), key_(key), val_(val)
@@ -54,7 +54,7 @@ class ObArrayHashMap {
       return val_;
     }
 
-    private:
+  private:
     bool is_valid_;
     key_t key_;
     val_t val_;
@@ -246,7 +246,7 @@ class ObArrayHashMap {
     return ret;
   }
 
-  private:
+private:
   bool is_inited() const
   {
     return capacity_ > 0 && NULL != items_;
@@ -257,7 +257,7 @@ class ObArrayHashMap {
     return NULL != buf && buf_len > 0 && pos >= 0 && pos <= buf_len;
   }
 
-  private:
+private:
   Lock lock_;
   int64_t size_;
   int64_t capacity_;

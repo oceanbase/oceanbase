@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 }
 
 class TestChunkMgr : public ::testing::Test, public AChunkMgr {
-  public:
+public:
   virtual void SetUp()
   {}
 

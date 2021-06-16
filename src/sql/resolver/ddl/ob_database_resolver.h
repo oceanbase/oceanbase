@@ -23,15 +23,15 @@ namespace oceanbase {
 namespace sql {
 template <class T>
 class ObDatabaseResolver {
-  public:
+public:
   ObDatabaseResolver() : alter_option_bitset_(), collation_already_set_(false)
   {}
   ~ObDatabaseResolver(){};
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDatabaseResolver);
 
-  public:
+public:
   static int resolve_primary_zone(T* stmt, ParseNode* node);
   int resolve_database_options(T* stmt, ParseNode* node);
   const common::ObBitSet<>& get_alter_option_bitset() const
@@ -39,11 +39,11 @@ class ObDatabaseResolver {
     return alter_option_bitset_;
   };
 
-  private:
+private:
   int resolve_database_option(T* stmt, ParseNode* node);
   int resolve_zone_list(T* stmt, ParseNode* node) const;
 
-  private:
+private:
   common::ObBitSet<> alter_option_bitset_;
   bool collation_already_set_;
 };

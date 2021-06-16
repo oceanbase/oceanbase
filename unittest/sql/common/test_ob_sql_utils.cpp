@@ -19,7 +19,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 namespace test {
 class ObSQLUtilsTest : public ::testing::Test {
-  public:
+public:
   ObSQLUtilsTest()
   {}
   virtual ~ObSQLUtilsTest()
@@ -29,12 +29,12 @@ class ObSQLUtilsTest : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   // disallow copy
   ObSQLUtilsTest(const ObSQLUtilsTest& other);
   ObSQLUtilsTest& operator=(const ObSQLUtilsTest& other);
 
-  private:
+private:
   // data members
 };
 TEST_F(ObSQLUtilsTest, make_field_name)

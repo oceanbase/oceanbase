@@ -25,7 +25,7 @@ class ObMySQLProxy;
 class ObConfigManager {
   friend class UpdateTask;
 
-  public:
+public:
   static const int64_t DEFAULT_VERSION = 1;
 
   ObConfigManager(ObServerConfig& server_config, ObReloadConfig& reload_config);
@@ -59,9 +59,9 @@ class ObConfigManager {
   int update_local(int64_t expected_version);
   virtual int got_version(int64_t version, const bool remove_repeat = false);
 
-  private:
+private:
   class UpdateTask : public ObTimerTask {
-    public:
+  public:
     UpdateTask() : config_mgr_(NULL), update_local_(false), version_(0), scheduled_time_(0)
     {}
     virtual ~UpdateTask()
@@ -73,7 +73,7 @@ class ObConfigManager {
     volatile int64_t version_;
     volatile int64_t scheduled_time_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(UpdateTask);
   };
 

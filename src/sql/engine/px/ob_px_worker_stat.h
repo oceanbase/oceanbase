@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxWorkerStat : public common::ObDLinkBase<ObPxWorkerStat> {
-  public:
+public:
   ObPxWorkerStat();
   ~ObPxWorkerStat();
   int init(uint64_t session_id, uint64_t tenant_id, const uint64_t* trace_id, uint64_t qc_id, int64_t sqc_id,
@@ -95,7 +95,7 @@ class ObPxWorkerStat : public common::ObDLinkBase<ObPxWorkerStat> {
     return thread_id_;
   }
 
-  private:
+private:
   uint64_t session_id_;
   uint64_t tenant_id_;
   const uint64_t* trace_id_;
@@ -108,18 +108,18 @@ class ObPxWorkerStat : public common::ObDLinkBase<ObPxWorkerStat> {
 };
 
 class ObPxWorkerStatList {
-  public:
+public:
   static ObPxWorkerStatList& instance();
   int push(ObPxWorkerStat& stat_value);
   int remove(ObPxWorkerStat& stat_value);
   int list_to_array(common::ObArray<ObPxWorkerStat>& stat_array);
 
-  private:
+private:
   common::ObDList<ObPxWorkerStat> worker_stat_list_;
   common::ObArenaAllocator allocator_;
   mutable common::ObSpinLock lock_;
 
-  private:
+private:
   ObPxWorkerStatList();
   ~ObPxWorkerStatList();
   DISALLOW_COPY_AND_ASSIGN(ObPxWorkerStatList);

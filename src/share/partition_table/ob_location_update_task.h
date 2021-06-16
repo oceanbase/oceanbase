@@ -21,7 +21,7 @@ namespace share {
 class ObPartitionLocationCache;
 
 struct TSILocationCacheStatistics {
-  public:
+public:
   TSILocationCacheStatistics()
       : suc_cnt_(0), fail_cnt_(0), sql_suc_cnt_(0), sql_fail_cnt_(0), total_wait_us_(0), total_exec_us_(0)
   {}
@@ -31,7 +31,7 @@ struct TSILocationCacheStatistics {
   void calc(ObLocationCacheQueueSet::Type type, int ret, bool sql_renew, int64_t wait_us, int64_t exec_us);
   void dump();
 
-  public:
+public:
   int64_t suc_cnt_;
   int64_t fail_cnt_;
   int64_t sql_suc_cnt_;
@@ -42,7 +42,7 @@ struct TSILocationCacheStatistics {
 };
 // partition location update task
 class ObLocationUpdateTask : public common::IObDedupTask {
-  public:
+public:
   static const int64_t WAIT_PROCESS_WARN_TIME = 3 * 1000 * 1000;  // 3s
   ObLocationUpdateTask(ObPartitionLocationCache& loc_cache, const volatile bool& is_stopped, const uint64_t table_id,
       const int64_t partition_id, const int64_t add_timestamp, const int64_t cluster_id);
@@ -83,7 +83,7 @@ class ObLocationUpdateTask : public common::IObDedupTask {
 
   TO_STRING_KV(KT_(table_id), K_(partition_id), K_(add_timestamp), K_(cluster_id), K_(force_sql_renew));
 
-  private:
+private:
   ObPartitionLocationCache& loc_cache_;
   const volatile bool& is_stopped_;
 

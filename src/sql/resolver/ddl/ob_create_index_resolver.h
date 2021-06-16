@@ -21,14 +21,14 @@ class ObCreateIndexArg;
 namespace sql {
 class ObCreateIndexStmt;
 class ObCreateIndexResolver : public ObDDLResolver {
-  public:
+public:
   static const int64_t CREATE_INDEX_CHILD_NUM = 7;
   explicit ObCreateIndexResolver(ObResolverParams& params);
   virtual ~ObCreateIndexResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  protected:
+protected:
   int resolve_index_name_node(ParseNode* index_name_node, ObCreateIndexStmt* crt_idx_stmt);
   int resolve_index_table_name_node(ParseNode* index_table_name_node, ObCreateIndexStmt* crt_idx_stmt);
   int resolve_index_column_node(ParseNode* index_column_node, const bool is_fulltext_index,
@@ -41,7 +41,7 @@ class ObCreateIndexResolver : public ObDDLResolver {
   int set_table_option_to_stmt();
   int add_new_indexkey_for_oracle_temp_table();
 
-  private:
+private:
   bool is_oracle_temp_table_;
   bool is_spec_block_size;
   DISALLOW_COPY_AND_ASSIGN(ObCreateIndexResolver);

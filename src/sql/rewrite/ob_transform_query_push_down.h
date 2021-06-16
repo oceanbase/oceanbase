@@ -25,7 +25,7 @@ class ObIAllocator;
 namespace sql {
 class ObRawExpr;
 class ObTransformQueryPushDown : public ObTransformRule {
-  public:
+public:
   explicit ObTransformQueryPushDown(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
   virtual ~ObTransformQueryPushDown()
@@ -34,7 +34,7 @@ class ObTransformQueryPushDown : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   int check_transform_validity(ObSelectStmt* select_stmt, ObSelectStmt* view_stmt, bool& can_transform,
       bool& need_distinct, bool& transform_having, common::ObIArray<int64_t>& select_offset,
       common::ObIArray<SelectItem>& const_select_items);

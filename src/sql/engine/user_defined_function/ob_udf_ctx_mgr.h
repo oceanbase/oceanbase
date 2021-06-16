@@ -21,10 +21,10 @@ namespace sql {
 class ObExprDllUdf;
 
 class ObUdfCtxMgr {
-  private:
+private:
   static const int64_t BUKET_NUM = 100;
 
-  public:
+public:
   ObUdfCtxMgr() : allocator_(common::ObModIds::OB_SQL_UDF), ctxs_()
   {}
   ~ObUdfCtxMgr();
@@ -37,11 +37,11 @@ class ObUdfCtxMgr {
   }
   int reset();
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   common::hash::ObHashMap<uint64_t, ObNormalUdfExeUnit*, common::hash::NoPthreadDefendMode> ctxs_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUdfCtxMgr);
 };

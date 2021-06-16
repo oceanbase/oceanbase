@@ -38,7 +38,7 @@ namespace observer {
 class ObVTIterCreator;
 
 class ObInnerSQLConnectionPool : public common::sqlclient::ObISQLConnectionPool {
-  public:
+public:
   friend class ObInnerSQLConnection;
   static constexpr int64_t RP_MAX_FREE_LIST_NUM = 1024;
   class LinkNode : public common::ObDLinkBase<LinkNode> {};
@@ -77,7 +77,7 @@ class ObInnerSQLConnectionPool : public common::sqlclient::ObISQLConnectionPool 
 
   void dump_used_conn_list();
 
-  private:
+private:
   // alloc connection from %free_conn_list_
   int alloc_conn(ObInnerSQLConnection*& conn);
   // revert connection to %free_conn_list_
@@ -86,7 +86,7 @@ class ObInnerSQLConnectionPool : public common::sqlclient::ObISQLConnectionPool 
   // revert connection, called by ObInnerSQLConnection::unref()
   int revert(ObInnerSQLConnection* conn);
 
-  private:
+private:
   // Dozens of connections may acquired by one worker in oracle mode, because all sys tables
   // implemented by agent virtual table which need inner connection. Too many connections
   // warning may be triggered by parallel execution complicate sys table queries.
@@ -95,7 +95,7 @@ class ObInnerSQLConnectionPool : public common::sqlclient::ObISQLConnectionPool 
   const static int64_t WARNNING_CONNECTION_CNT = 100000;
   const static int64_t MAX_DUMP_SIZE = 20;
 
-  private:
+private:
   bool inited_;
   volatile bool stop_;
   common::ObThreadCond cond_;

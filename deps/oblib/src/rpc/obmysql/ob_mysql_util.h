@@ -39,7 +39,7 @@ enum MYSQL_PROTOCOL_TYPE {
 };
 
 class ObMySQLUtil {
-  public:
+public:
   /**
    * update null bitmap for binary protocol
    * please review http://dev.mysql.com/doc/internals/en/prepared-statements.html#null-bitmap for detail
@@ -228,10 +228,10 @@ class ObMySQLUtil {
   static int urowid_cell_str(char* buf, const int64_t len, const common::ObURowIDData& urowid_data, int64_t& pos);
   static int lob_locator_cell_str(char* buf, const int64_t len, const common::ObLobLocator& lob_locator, int64_t& pos);
 
-  public:
+public:
   static const uint64_t NULL_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLUtil);
 };  // class ObMySQLUtil
 

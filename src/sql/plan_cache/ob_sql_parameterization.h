@@ -72,7 +72,7 @@ class TransformTreeCtx;
 struct SelectItemTraverseCtx;
 
 class ObSqlParameterization {
-  public:
+public:
   static const int64_t SQL_PARAMETERIZATION_BUCKET_NUM = 1L << 20;
   static const int64_t NO_VALUES = -1;
   static const int64_t VALUE_LIST_LEVEL = 0;
@@ -103,7 +103,7 @@ class ObSqlParameterization {
   static int insert_neg_sign(common::ObIAllocator& alloc_buf, ParseNode* node);
   static bool is_tree_not_param(const ParseNode* tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlParameterization);
   static int is_fast_parse_const(TransformTreeCtx& ctx);
 

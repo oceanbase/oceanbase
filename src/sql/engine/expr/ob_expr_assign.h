@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprAssign : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprAssign(common::ObIAllocator& alloc);
   virtual ~ObExprAssign();
   virtual int calc_result_type2(
@@ -29,7 +29,7 @@ class ObExprAssign : public ObFuncExprOperator {
   static int calc(common::ObObj& result, const common::ObObj& key, const common::ObObj& value,
       sql::ObSQLSessionInfo* my_session_, common::ObCastCtx& cast_ctx);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprAssign);
 };

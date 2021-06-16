@@ -24,7 +24,7 @@ template <dtl::ObDtlMsgType T>
 class ObDatahubPieceMsg : public dtl::ObDtlMsgTemp<T> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDatahubPieceMsg() : op_id_(common::OB_INVALID_ID), dfo_id_(common::OB_INVALID_ID), thread_id_(0)
   {}
   virtual ~ObDatahubPieceMsg() = default;
@@ -38,7 +38,7 @@ template <dtl::ObDtlMsgType T>
 class ObDatahubWholeMsg : public dtl::ObDtlMsgTemp<T> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDatahubWholeMsg() : op_id_(common::OB_INVALID_ID)
   {}
   virtual ~ObDatahubWholeMsg() = default;

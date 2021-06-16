@@ -18,7 +18,7 @@
 
 namespace test {
 class MockPartitionStorage : public oceanbase::storage::ObPartitionStorage {
-  public:
+public:
   MockPartitionStorage() : is_default_stat_(false)
   {}
   virtual ~MockPartitionStorage()
@@ -45,7 +45,7 @@ class MockPartitionStorage : public oceanbase::storage::ObPartitionStorage {
     is_default_stat_ = is_default_stat;
   }
 
-  private:
+private:
   bool is_default_stat_;
 };
 }  // namespace test

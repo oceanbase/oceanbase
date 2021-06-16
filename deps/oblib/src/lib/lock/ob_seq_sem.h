@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 class ObSeqSem {
-  public:
+public:
   enum { MAX_SEM_COUNT = 4096 };
 
   static int64_t get_us()
@@ -137,7 +137,7 @@ class ObSeqSem {
     return (int64_t)(push - pop);
   }
 
-  private:
+private:
   uint64_t idx(int64_t x)
   {
     return x & (MAX_SEM_COUNT - 1);
@@ -153,7 +153,7 @@ class ObSeqSem {
     }
   }
 
-  private:
+private:
   uint64_t push_ CACHE_ALIGNED;
   uint64_t pop_ CACHE_ALIGNED;
   Sem sems_[MAX_SEM_COUNT];

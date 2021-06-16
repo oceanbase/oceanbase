@@ -50,13 +50,13 @@ struct ObMtStat {
 };
 
 class ObMTKVBuilder {
-  public:
+public:
   ObMTKVBuilder()
   {}
   virtual ~ObMTKVBuilder()
   {}
 
-  public:
+public:
   int dup_key(ObStoreRowkey*& new_key, common::ObIAllocator& alloc, const ObStoreRowkey* key)
   {
     int ret = OB_SUCCESS;
@@ -114,12 +114,12 @@ class ObMTKVBuilder {
     return ret;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMTKVBuilder);
 };
 
 class ObMemtableState {
-  public:
+public:
   static const int64_t INVALID = -1;
   static const int64_t ACTIVE = 0;
   static const int64_t MAJOR_FROZEN = 1;
@@ -127,7 +127,7 @@ class ObMemtableState {
   static const int64_t MAJOR_MERGING = 3;
   static const int64_t MINOR_MERGING = 4;
 
-  public:
+public:
   bool is_valid(const int64_t state)
   {
     return state >= ACTIVE && state <= MINOR_MERGING;
@@ -135,133 +135,79 @@ class ObMemtableState {
 };
 
 class ObMemtable : public ObIMemtable {
-  public:
+public:
   typedef common::ObGMemstoreAllocator::AllocHandle ObMemstoreAllocator;
   ObMemtable();
   virtual ~ObMemtable();
+
 public:
-  virtual int init(const ObITable::TableKey &table_key);
+  virtual int init(const ObITable::TableKey& table_key);
   virtual void destroy() override;
-  int fake(const ObIMemtable &mt) override;
+  int fake(const ObIMemtable& mt) override;
+
 public:
-  int dump2text(const char *fname);
-  virtual int set(
-      const storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const int64_t rowkey_len,
-      const common::ObIArray<share::schema::ObColDesc> &columns,
-      storage::ObStoreRowIterator &row_iter) override;
-  virtual int set(
-      const storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const int64_t rowkey_len,
-      const common::ObIArray<share::schema::ObColDesc> &columns,
-      const storage::ObStoreRow &row) override;
-  virtual int set(
-      const storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const int64_t rowkey_len,
-      const common::ObIArray<share::schema::ObColDesc> &columns,
-      const ObIArray<int64_t> &update_idx,
-      const storage::ObStoreRow &old_row,
-      const storage::ObStoreRow &new_row);
-  virtual int lock(
-      const storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const common::ObIArray<share::schema::ObColDesc> &columns,
-      common::ObNewRowIterator &row_iter) override;
-  virtual int lock(
-      const storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const common::ObIArray<share::schema::ObColDesc> &columns,
-      const common::ObNewRow &row) override;
-  virtual int lock(
-      const storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const common::ObIArray<share::schema::ObColDesc> &columns,
-      const common::ObStoreRowkey &rowkey) override;
+  int dump2text(const char* fname);
+  virtual int set(const storage::ObStoreCtx& ctx, const uint64_t table_id, const int64_t rowkey_len,
+      const common::ObIArray<share::schema::ObColDesc>& columns, storage::ObStoreRowIterator& row_iter) override;
+  virtual int set(const storage::ObStoreCtx& ctx, const uint64_t table_id, const int64_t rowkey_len,
+      const common::ObIArray<share::schema::ObColDesc>& columns, const storage::ObStoreRow& row) override;
+  virtual int set(const storage::ObStoreCtx& ctx, const uint64_t table_id, const int64_t rowkey_len,
+      const common::ObIArray<share::schema::ObColDesc>& columns, const ObIArray<int64_t>& update_idx,
+      const storage::ObStoreRow& old_row, const storage::ObStoreRow& new_row);
+  virtual int lock(const storage::ObStoreCtx& ctx, const uint64_t table_id,
+      const common::ObIArray<share::schema::ObColDesc>& columns, common::ObNewRowIterator& row_iter) override;
+  virtual int lock(const storage::ObStoreCtx& ctx, const uint64_t table_id,
+      const common::ObIArray<share::schema::ObColDesc>& columns, const common::ObNewRow& row) override;
+  virtual int lock(const storage::ObStoreCtx& ctx, const uint64_t table_id,
+      const common::ObIArray<share::schema::ObColDesc>& columns, const common::ObStoreRowkey& rowkey) override;
   virtual int64_t get_upper_trans_version() const override;
-  int check_row_locked_by_myself(
-      const storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const common::ObIArray<share::schema::ObColDesc> &columns,
-      const common::ObStoreRowkey &rowkey,
-      bool &locked);
+  int check_row_locked_by_myself(const storage::ObStoreCtx& ctx, const uint64_t table_id,
+      const common::ObIArray<share::schema::ObColDesc>& columns, const common::ObStoreRowkey& rowkey, bool& locked);
+
 public:
-  int estimate_phy_size(const uint64_t table_id, const common::ObStoreRowkey* start_key, const common::ObStoreRowkey* end_key, int64_t& total_bytes, int64_t& total_rows);
-  int get_split_ranges(const uint64_t table_id, const common::ObStoreRowkey* start_key, const common::ObStoreRowkey* end_key, const int64_t part_cnt, common::ObIArray<common::ObStoreRange> &range_array);
-  virtual int exist(
-      const storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const common::ObStoreRowkey &rowkey,
-      const common::ObIArray<share::schema::ObColDesc> &column_ids,
-      bool &is_exist,
-      bool &has_found) override;
-  virtual int prefix_exist(
-      storage::ObRowsInfo &rows_info,
-      bool &may_exist) override;
-  virtual int exist(
-      storage::ObRowsInfo &rows_info,
-      bool &is_exist,
-      bool &all_rows_found) override;
-  virtual int get(
-      const storage::ObTableIterParam &param,
-      storage::ObTableAccessContext &context,
-      const common::ObExtStoreRowkey &rowkey,
-      storage::ObStoreRow &row) override;
-  virtual int get(
-      const storage::ObTableIterParam &param,
-      storage::ObTableAccessContext &context,
-      const common::ObExtStoreRowkey &rowkey,
-      storage::ObStoreRowIterator *&row_iter) override;
-  virtual int scan(
-      const storage::ObTableIterParam &param,
-      storage::ObTableAccessContext &context,
-      const common::ObExtStoreRange &range,
-      storage::ObStoreRowIterator *&row_iter) override;
-  virtual int multi_get(
-      const storage::ObTableIterParam &param,
-      storage::ObTableAccessContext &context,
-      const common::ObIArray<common::ObExtStoreRowkey> &rowkeys,
-      storage::ObStoreRowIterator *&row_iter) override;
-  virtual int multi_scan(
-      const storage::ObTableIterParam &param,
-      storage::ObTableAccessContext &context,
-      const common::ObIArray<common::ObExtStoreRange> &ranges,
-      storage::ObStoreRowIterator *&row_iter) override;
-  virtual int get_row_header(
-      const storage::ObStoreCtx &ctx,
-      const uint64_t table_id,
-      const common::ObStoreRowkey &rowkey,
-      const common::ObIArray<share::schema::ObColDesc> &column_ids,
-      uint32_t &modify_count,
-      uint32_t &acc_checksum);
-  virtual int replay(
-      const storage::ObStoreCtx &ctx,
-      const char *data,
-      const int64_t data_len);
-  virtual int replay_schema_version_change_log(
-      const int64_t schema_version);
+  int estimate_phy_size(const uint64_t table_id, const common::ObStoreRowkey* start_key,
+      const common::ObStoreRowkey* end_key, int64_t& total_bytes, int64_t& total_rows);
+  int get_split_ranges(const uint64_t table_id, const common::ObStoreRowkey* start_key,
+      const common::ObStoreRowkey* end_key, const int64_t part_cnt,
+      common::ObIArray<common::ObStoreRange>& range_array);
+  virtual int exist(const storage::ObStoreCtx& ctx, const uint64_t table_id, const common::ObStoreRowkey& rowkey,
+      const common::ObIArray<share::schema::ObColDesc>& column_ids, bool& is_exist, bool& has_found) override;
+  virtual int prefix_exist(storage::ObRowsInfo& rows_info, bool& may_exist) override;
+  virtual int exist(storage::ObRowsInfo& rows_info, bool& is_exist, bool& all_rows_found) override;
+  virtual int get(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
+      const common::ObExtStoreRowkey& rowkey, storage::ObStoreRow& row) override;
+  virtual int get(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
+      const common::ObExtStoreRowkey& rowkey, storage::ObStoreRowIterator*& row_iter) override;
+  virtual int scan(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
+      const common::ObExtStoreRange& range, storage::ObStoreRowIterator*& row_iter) override;
+  virtual int multi_get(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
+      const common::ObIArray<common::ObExtStoreRowkey>& rowkeys, storage::ObStoreRowIterator*& row_iter) override;
+  virtual int multi_scan(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
+      const common::ObIArray<common::ObExtStoreRange>& ranges, storage::ObStoreRowIterator*& row_iter) override;
+  virtual int get_row_header(const storage::ObStoreCtx& ctx, const uint64_t table_id,
+      const common::ObStoreRowkey& rowkey, const common::ObIArray<share::schema::ObColDesc>& column_ids,
+      uint32_t& modify_count, uint32_t& acc_checksum);
+  virtual int replay(const storage::ObStoreCtx& ctx, const char* data, const int64_t data_len);
+  virtual int replay_schema_version_change_log(const int64_t schema_version);
 
-  ObQueryEngine &get_query_engine() { return query_engine_; }
-  ObMvccEngine &get_mvcc_engine() { return mvcc_engine_; }
+  ObQueryEngine& get_query_engine()
+  {
+    return query_engine_;
+  }
+  ObMvccEngine& get_mvcc_engine()
+  {
+    return mvcc_engine_;
+  }
 
-  virtual int estimate_get_row_count(const common::ObQueryFlag query_flag,
-                                const uint64_t table_id,
-                                const common::ObIArray<common::ObExtStoreRowkey> &rowkeys,
-                                storage::ObPartitionEst &part_est) override;
+  virtual int estimate_get_row_count(const common::ObQueryFlag query_flag, const uint64_t table_id,
+      const common::ObIArray<common::ObExtStoreRowkey>& rowkeys, storage::ObPartitionEst& part_est) override;
 
-  virtual int estimate_scan_row_count(const common::ObQueryFlag query_flag,
-                                 const uint64_t table_id,
-                                 const common::ObExtStoreRange &key_range,
-                                 storage::ObPartitionEst &part_est) override;
-  virtual int estimate_multi_scan_row_count(
-      const common::ObQueryFlag query_flag,
-      const uint64_t table_id,
-      const common::ObIArray<common::ObExtStoreRange> &ranges,
-      storage::ObPartitionEst &part_est) override;
-  virtual int save_base_storage_info(const storage::ObSavedStorageInfoV2 &info);
-  virtual int get_base_storage_info(storage::ObSavedStorageInfoV2 &info);
+  virtual int estimate_scan_row_count(const common::ObQueryFlag query_flag, const uint64_t table_id,
+      const common::ObExtStoreRange& key_range, storage::ObPartitionEst& part_est) override;
+  virtual int estimate_multi_scan_row_count(const common::ObQueryFlag query_flag, const uint64_t table_id,
+      const common::ObIArray<common::ObExtStoreRange>& ranges, storage::ObPartitionEst& part_est) override;
+  virtual int save_base_storage_info(const storage::ObSavedStorageInfoV2& info);
+  virtual int get_base_storage_info(storage::ObSavedStorageInfoV2& info);
   int set_emergency(const bool emergency);
   virtual int minor_freeze(const bool emergency = false);
   ObMtStat& get_mt_stat()
@@ -310,7 +256,10 @@ public:
   virtual int get_frozen_schema_version(int64_t& schema_version) const override;
   virtual bool is_frozen_memtable() const override;
   virtual bool is_active_memtable() const override;
-  virtual bool is_inner_table() const { return common::is_inner_table(key_.table_id_); }
+  virtual bool is_inner_table() const
+  {
+    return common::is_inner_table(key_.table_id_);
+  }
   int set_snapshot_version(const int64_t snapshot_version);
   int set_base_version(const int64_t base_version);
   int set_start_log_ts(const int64_t start_ts);
@@ -406,7 +355,7 @@ public:
   }
   int get_active_table_ids(common::ObIArray<uint64_t>& table_ids);
 
-  public:
+public:
   // Print stat data in log.
   // For memtable debug.
   int print_stat() const;
@@ -415,7 +364,7 @@ public:
       K_(frozen_log_applied), K_(mark_finish), K_(pending_cb_cnt), K_(pending_lob_cnt), K_(pending_batch_commit_cnt),
       K_(pending_elr_cnt));
 
-  private:
+private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20;  // 10MB
   int set_(const storage::ObStoreCtx& ctx, const uint64_t table_id, const int64_t rowkey_len,
       const common::ObIArray<share::schema::ObColDesc>& columns, const storage::ObStoreRow& new_row,
@@ -460,7 +409,7 @@ public:
   int check_standby_cluster_schema_condition_(
       const storage::ObStoreCtx& ctx, const int64_t table_id, const int64_t table_version);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
   bool is_inited_;
   ObMemstoreAllocator local_allocator_;
@@ -504,26 +453,26 @@ typedef ObMemtable ObMemStore;
  * For debug use.
  */
 class ObMemtableStat {
-  public:
+public:
   ObMemtableStat();
   virtual ~ObMemtableStat();
   static ObMemtableStat& get_instance();
 
-  public:
+public:
   int register_memtable(ObMemtable* memtable);
   int unregister_memtable(ObMemtable* memtable);
 
-  public:
+public:
   int print_stat();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableStat);
   ObSpinLock lock_;
   ObArray<ObMemtable*> memtables_;
 };
 
 class RowHeaderGetter {
-  public:
+public:
   RowHeaderGetter()
       : ctx_(NULL), table_id_(common::OB_INVALID_ID), rowkey_(NULL), columns_(NULL), modify_count_(0), acc_checksum_(0)
   {}
@@ -539,13 +488,13 @@ class RowHeaderGetter {
   }
   int get();
 
-  private:
+private:
   storage::ObStoreCtx* ctx_;
   uint64_t table_id_;
   common::ObStoreRowkey* rowkey_;
   common::ObIArray<share::schema::ObColDesc>* columns_;
 
-  private:
+private:
   uint32_t modify_count_;
   uint32_t acc_checksum_;
 };

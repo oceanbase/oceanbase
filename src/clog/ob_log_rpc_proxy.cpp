@@ -61,7 +61,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObLogRpcProxy::Buffer)
 }
 
 class CallBack : public ObLogRpcProxy::AsyncCB<OB_CLOG> {
-  public:
+public:
   CallBack()
   {}
   virtual ~CallBack()
@@ -110,7 +110,7 @@ class CallBack : public ObLogRpcProxy::AsyncCB<OB_CLOG> {
     }
   }
 
-  private:
+private:
   static const int64_t LOG_INTERVAL = 1 * 1000 * 1000;  // 1S
 };
 

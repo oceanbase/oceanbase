@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObLogUpdate;
 class ObUpdateLogPlan : public ObLogPlan {
-  public:
+public:
   ObUpdateLogPlan(ObOptimizerContext& ctx, const ObUpdateStmt* update_stmt) : ObLogPlan(ctx, update_stmt)
   {}
   virtual ~ObUpdateLogPlan(){};
@@ -31,7 +31,7 @@ class ObUpdateLogPlan : public ObLogPlan {
    */
   int generate_plan();
 
-  private:
+private:
   int allocate_update_as_top(ObLogicalOperator*& top);
 
   int allocate_pdml_update_as_top(ObLogicalOperator*& top);
@@ -47,7 +47,7 @@ class ObUpdateLogPlan : public ObLogPlan {
 
   DISALLOW_COPY_AND_ASSIGN(ObUpdateLogPlan);
 
-  private:
+private:
 };
 }  // namespace sql
 }  // namespace oceanbase

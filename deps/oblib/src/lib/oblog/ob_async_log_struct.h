@@ -37,7 +37,7 @@ enum ObPLogFDType {
 
 // program log
 class ObPLogItem : public ObIBaseLogItem {
-  public:
+public:
   ObPLogItem();
   virtual ~ObPLogItem()
   {}
@@ -141,7 +141,7 @@ class ObPLogItem : public ObIBaseLogItem {
   }
   void deep_copy_header_only(const ObPLogItem& other);
 
-  private:
+private:
   ObPLogFDType fd_type_;
   int32_t log_level_;
   int32_t tl_type_;
@@ -153,12 +153,12 @@ class ObPLogItem : public ObIBaseLogItem {
   int64_t pos_;
   char buf_[0];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPLogItem);
 };
 
 class ObPLogFileStruct {
-  public:
+public:
   ObPLogFileStruct();
   virtual ~ObPLogFileStruct()
   {
@@ -177,7 +177,7 @@ class ObPLogFileStruct {
     return write_size_;
   }
 
-  public:
+public:
   static const int32_t MAX_LOG_FILE_NAME_SIZE = 256;
   static const mode_t LOG_FILE_MODE = 0644;
 

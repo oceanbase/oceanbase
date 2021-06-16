@@ -27,7 +27,7 @@ namespace common {
 // print the item obj or derefer the obj ptr and print
 template <typename T>
 class PrintElementFunctor {
-  public:
+public:
   PrintElementFunctor()
   {}
   int operator()(const T& t) const
@@ -39,7 +39,7 @@ class PrintElementFunctor {
 
 template <typename T>
 class PrintElementFunctor<T*> {
-  public:
+public:
   PrintElementFunctor()
   {}
   int operator()(const T* t) const
@@ -55,7 +55,7 @@ class PrintElementFunctor<T*> {
 // Support binary search
 template <typename SegPtr, int64_t SIZE>
 class ObFixedRingDeque {
-  public:
+public:
   ObFixedRingDeque() : is_inited_(false), head_(0), tail_(0)
   {}
   ~ObFixedRingDeque()
@@ -104,7 +104,7 @@ class ObFixedRingDeque {
 
   void debug_print() const;
 
-  private:
+private:
   inline void advance_(int64_t& v) const
   {
     v = (v + 1) % SIZE;
@@ -126,7 +126,7 @@ class ObFixedRingDeque {
   int binary_search_on_range_(const int64_t small, const int64_t large, const SegPtr& target, SegPtr& prev,
       SegPtr& next, const LessThanEqualtoFunctor& le_functor);
 
-  private:
+private:
   bool is_inited_;
   SegPtr arr_[SIZE];
   int64_t head_;
@@ -367,7 +367,7 @@ enum SegCreationType {
 // Order of segments is defined as the order of their first items
 template <typename T, int64_t SIZE>
 class Seg {
-  public:
+public:
   explicit Seg(const SegCreationType type);
   explicit Seg(const T& item);
   ~Seg()
@@ -414,7 +414,7 @@ class Seg {
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   T arr_[SIZE];
   int64_t start_idx_;  // push_front will place item at (start_idx_ - 1)
   int64_t end_idx_;    // push_back will place item at end_idx_
@@ -602,13 +602,13 @@ int Seg<T, SIZE>::reverse_for_each(Functor& fn) const
 
 template <typename T>
 class ObISegArray {
-  public:
+public:
   ObISegArray()
   {}
   virtual ~ObISegArray()
   {}
 
-  public:
+public:
   virtual int init(ObSmallAllocator* allocator) = 0;
   virtual void destroy() = 0;
   virtual int clear() = 0;
@@ -634,16 +634,16 @@ class ObISegArray {
   // 4. other
   virtual int search_boundary(const T& item, T& prev_item, T& next_item) = 0;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObISegArray);
 };
 
 // ----------------------------------------------------------------------
 template <typename T, int64_t SEG_STEP = 100, int64_t SEG_COUNT = 200>
 class ObSegArray : public ObISegArray<T> {
-  private:
+private:
   class DestroySegFunctor {
-    public:
+  public:
     explicit DestroySegFunctor(ObSmallAllocator* allocator) : allocator_(allocator)
     {}
     int operator()(const Seg<T, SEG_STEP>* seg)
@@ -660,13 +660,13 @@ class ObSegArray : public ObISegArray<T> {
       return ret;
     }
 
-    private:
+  private:
     ObSmallAllocator* allocator_;
   };
 
   // Seg order functor, less than or equal to.
   class SegLEFunctor {
-    public:
+  public:
     SegLEFunctor()
     {}
     bool operator()(const Seg<T, SEG_STEP>* x, const Seg<T, SEG_STEP>* y) const
@@ -683,7 +683,7 @@ class ObSegArray : public ObISegArray<T> {
 
   template <typename Functor>
   class ReverseForEachFunctor {
-    public:
+  public:
     explicit ReverseForEachFunctor(Functor& fn) : fn_(fn)
     {}
     int operator()(const Seg<T, SEG_STEP>* seg)
@@ -698,11 +698,11 @@ class ObSegArray : public ObISegArray<T> {
       return ret;
     }
 
-    private:
+  private:
     Functor& fn_;
   };
 
-  public:
+public:
   ObSegArray() : is_inited_(false), rwlock_(), dir_(), allocator_(NULL), total_count_(0)
   {}
   virtual int init(ObSmallAllocator* allocator) override;
@@ -751,14 +751,14 @@ class ObSegArray : public ObISegArray<T> {
   template <typename Functor>
   int reverse_for_each(Functor& fn) const;
 
-  private:
+private:
   inline int alloc_seg(Seg<T, SEG_STEP>*& seg, const SegCreationType type);
   void free_seg(Seg<T, SEG_STEP>* seg);
   int top_front_(T& top_item, const bool pop_it);
   int top_back_(T& top_item, const bool pop_it);
   int search_boundary_internal_(const T& item, T*& prev_item, T*& next_item);
 
-  private:
+private:
   bool is_inited_;
   mutable SpinRWLock rwlock_;
   ObFixedRingDeque<Seg<T, SEG_STEP>*, SEG_COUNT> dir_;

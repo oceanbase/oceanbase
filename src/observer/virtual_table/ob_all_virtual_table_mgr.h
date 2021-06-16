@@ -51,12 +51,12 @@ class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator {
     CONTAIN_UNCOMMITTED_ROW
   };
 
-  public:
+public:
   ObAllVirtualTableMgr();
   virtual ~ObAllVirtualTableMgr();
   int init();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
   inline void set_addr(common::ObAddr& addr)
@@ -64,10 +64,10 @@ class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator {
     addr_ = addr;
   }
 
-  private:
+private:
   int get_next_table(storage::ObITable*& table);
 
-  private:
+private:
   common::ObAddr addr_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   storage::ObIPartitionGroupIterator* pg_iter_;
@@ -77,7 +77,7 @@ class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator {
   int64_t table_idx_;
   int64_t memtable_idx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTableMgr);
 };
 

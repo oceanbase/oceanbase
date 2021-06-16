@@ -27,7 +27,7 @@ class ObSchemaGetterGuard;
 }  // namespace share
 namespace rootserver {
 class ObVritualCoreInnerTable : public common::ObVirtualTableProjector {
-  public:
+public:
   ObVritualCoreInnerTable();
   virtual ~ObVritualCoreInnerTable();
 
@@ -36,7 +36,7 @@ class ObVritualCoreInnerTable : public common::ObVirtualTableProjector {
 
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int get_full_row(const share::schema::ObTableSchema* table, const share::ObCoreTableProxy& core_table,
       common::ObIArray<Column>& columns);
 
@@ -46,7 +46,7 @@ class ObVritualCoreInnerTable : public common::ObVirtualTableProjector {
   uint64_t table_id_;
   share::schema::ObSchemaGetterGuard* schema_guard_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObVritualCoreInnerTable);
 };
 

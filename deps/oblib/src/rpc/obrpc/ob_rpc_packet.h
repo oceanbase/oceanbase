@@ -53,7 +53,7 @@ enum ObRpcPacketCode {
 };
 
 class ObRpcPacketCodeChecker {
-  public:
+public:
   ObRpcPacketCodeChecker()
   {}
   ~ObRpcPacketCodeChecker()
@@ -82,7 +82,7 @@ class ObRpcPacketSet {
 #undef PCODE_DEF
   }
 
-  public:
+public:
   int64_t idx_of_pcode(ObRpcPacketCode code) const
   {
     int64_t index = 0;
@@ -115,10 +115,10 @@ class ObRpcPacketSet {
     return instance_;
   }
 
-  public:
+public:
   static const int64_t THE_PCODE_COUNT = PCODE_COUNT;
 
-  private:
+private:
   static ObRpcPacketSet instance_;
 
   const char* names_[PCODE_COUNT];
@@ -127,7 +127,7 @@ class ObRpcPacketSet {
 };
 
 class ObRpcPacketHeader {
-  public:
+public:
   static const uint8_t HEADER_SIZE = 112;  // you should never change this.
   static const uint16_t RESP_FLAG = 1 << 15;
   static const uint16_t STREAM_FLAG = 1 << 14;
@@ -179,10 +179,10 @@ class ObRpcPacketHeader {
 class ObRpcPacket : public rpc::ObPacket {
   friend class ObPacketQueue;
 
-  public:
+public:
   static uint32_t global_chid;
 
-  public:
+public:
   ObRpcPacket();
   virtual ~ObRpcPacket();
 
@@ -315,20 +315,20 @@ class ObRpcPacket : public rpc::ObPacket {
 
   TO_STRING_KV(K(hdr_), K(chid_), K(clen_), K_(assemble), K_(msg_count), K_(payload));
 
-  private:
+private:
   ObRpcPacketHeader hdr_;
   const char* cdata_;
   uint32_t clen_;
   uint32_t chid_;       // channel id
   int64_t receive_ts_;  // do not serialize it
-  public:
+public:
   // for assemble
   bool assemble_;
   int32_t msg_count_;
   int64_t payload_;
   easy_list_t list_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcPacket);
 };
 

@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace common {
 class ObErasureCodeIsa {
-  public:
+public:
   static int encode(const int64_t data_count, const int64_t parity_count, const int64_t block_size,
       unsigned char** data_blocks, unsigned char** parity_blocks);
 
@@ -36,7 +36,7 @@ class ObErasureCodeIsa {
   static int append_encode(const int64_t data_count, const int64_t parity_count, const int64_t block_size,
       const int64_t block_index, unsigned char* data_block, unsigned char** parity_blocks);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObErasureCodeIsa);
 };
 

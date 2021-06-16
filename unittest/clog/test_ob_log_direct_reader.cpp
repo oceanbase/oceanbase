@@ -26,13 +26,13 @@ using namespace clog;
 namespace unittest {
 
 class TestObLogDirectReader : public ::testing::Test {
-  public:
+public:
   TestObLogDirectReader();
   virtual ~TestObLogDirectReader();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   int fd_;
   char log_path_[1024];
   char shm_path_[1024];

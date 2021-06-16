@@ -1359,7 +1359,7 @@ struct ObFifoReceive::MergeRowComparer {
     return ret;
   }
 
-  private:
+private:
   const ObIArray<ObSortColumn>& sort_columns_;
   int* err_;
 };

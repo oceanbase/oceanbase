@@ -22,7 +22,7 @@ using namespace share::schema;
 namespace unittest {
 
 class TestMultiVersionSSTableSingleScan : public ObMultiVersionSSTableTest {
-  public:
+public:
   TestMultiVersionSSTableSingleScan() : ObMultiVersionSSTableTest("testmultiversionsingescan")
   {}
   virtual ~TestMultiVersionSSTableSingleScan()

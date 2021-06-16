@@ -29,11 +29,11 @@ class ObMySQLProxy;
 }
 namespace gts {
 class ObHaGtsManager {
-  public:
+public:
   ObHaGtsManager();
   ~ObHaGtsManager();
 
-  public:
+public:
   int init(obrpc::ObSrvRpcProxy* rpc_proxy, common::ObMySQLProxy* sql_proxy, const common::ObAddr& self_addr);
   void reset();
   void destroy();
@@ -41,7 +41,7 @@ class ObHaGtsManager {
   void stop();
   void wait();
 
-  public:
+public:
   int handle_ping_request(const obrpc::ObHaGtsPingRequest& request, obrpc::ObHaGtsPingResponse& response);
   int handle_ping_response(const obrpc::ObHaGtsPingResponse& response);
   int handle_get_request(const obrpc::ObHaGtsGetRequest& request);
@@ -56,75 +56,75 @@ class ObHaGtsManager {
   int execute_auto_change_member(const uint64_t gts_id, const bool miss_replica, const common::ObAddr& offline_replica,
       const int64_t epoch_id, const common::ObMemberList& member_list);
 
-  private:
+private:
   class RemoveStaleReqTask : public common::ObTimerTask {
-    public:
+  public:
     RemoveStaleReqTask() : ha_gts_mgr_(NULL)
     {}
     ~RemoveStaleReqTask()
     {}
 
-    public:
+  public:
     int init(ObHaGtsManager* ha_gts_mgr);
     virtual void runTimerTask();
 
-    private:
+  private:
     ObHaGtsManager* ha_gts_mgr_;
   };
 
   class LoadAllGtsTask : public common::ObTimerTask {
-    public:
+  public:
     LoadAllGtsTask() : ha_gts_mgr_(NULL)
     {}
     ~LoadAllGtsTask()
     {}
 
-    public:
+  public:
     int init(ObHaGtsManager* ha_gts_mgr);
     virtual void runTimerTask();
 
-    private:
+  private:
     ObHaGtsManager* ha_gts_mgr_;
   };
 
   class HeartbeatTask : public common::ObTimerTask {
-    public:
+  public:
     HeartbeatTask() : ha_gts_mgr_(NULL)
     {}
     ~HeartbeatTask()
     {}
 
-    public:
+  public:
     int init(ObHaGtsManager* ha_gts_mgr);
     virtual void runTimerTask();
 
-    private:
+  private:
     ObHaGtsManager* ha_gts_mgr_;
   };
 
   class CheckMemberStatusTask : public common::ObTimerTask {
-    public:
+  public:
     CheckMemberStatusTask() : ha_gts_mgr_(NULL)
     {}
     ~CheckMemberStatusTask()
     {}
 
-    public:
+  public:
     int init(ObHaGtsManager* ha_gts_mgr);
     virtual void runTimerTask();
 
-    private:
+  private:
     ObHaGtsManager* ha_gts_mgr_;
   };
 
   class RemoveStaleReqFunctor {
-    public:
+  public:
     RemoveStaleReqFunctor()
     {}
     ~RemoveStaleReqFunctor()
     {}
 
-    public:
+  public:
     bool operator()(const ObGtsID& gts_id, ObHaGts*& ha_gts)
     {
       UNUSED(gts_id);
@@ -141,7 +141,7 @@ class ObHaGtsManager {
   const static int64_t LOAD_ALL_GTS_TASK_INTERVAL = 1 * 1000 * 1000;      // 1s
   const static int64_t HEARTBEAT_INTERVAL = 10 * 1000;                    // 10ms
   const static int64_t CHECK_MEMBER_STATUS_INTERVAL = 100 * 1000;         // 100ms
-  private:
+private:
   int create_gts_(const uint64_t gts_id, const int64_t epoch_id, const common::ObMemberList& member_list,
       const int64_t min_start_timestamp);
   int remove_gts_(const uint64_t gts_id);
@@ -161,7 +161,7 @@ class ObHaGtsManager {
   int send_update_meta_msg_(const uint64_t gts_id, const int64_t epoch_id, const common::ObMemberList& member_list,
       const int64_t local_ts, const common::ObAddr& server, int64_t& replica_local_ts);
 
-  private:
+private:
   bool is_inited_;
   obrpc::ObSrvRpcProxy* rpc_proxy_;
   share::ObGtsTableOperator gts_table_operator_;
@@ -172,7 +172,7 @@ class ObHaGtsManager {
   CheckMemberStatusTask check_member_status_task_;
   HeartbeatTask heartbeat_task_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHaGtsManager);
 };
 }  // namespace gts

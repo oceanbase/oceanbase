@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObBlockSampleIterator : public ObISampleIterator {
-  public:
+public:
   explicit ObBlockSampleIterator(const common::SampleInfo& sample_info);
   virtual ~ObBlockSampleIterator();
   int open(ObMultipleScanMerge& scan_merge, ObTableAccessContext& access_ctx, const common::ObExtStoreRange& range,
@@ -32,10 +32,10 @@ class ObBlockSampleIterator : public ObISampleIterator {
   virtual int get_next_row(ObStoreRow*& row) override;
   virtual void reset() override;
 
-  private:
+private:
   int open_range(common::ObExtStoreRange& range);
 
-  private:
+private:
   static const int64_t ROW_CNT_LIMIT_PER_BLOCK = 5000;
   common::ObArenaAllocator allocator_;
   ObAllMicroBlockRangeIterator micro_block_iterator_;

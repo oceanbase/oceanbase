@@ -44,7 +44,7 @@ int64_t& PID = FakePartPropertyGetter::PID();
 
 ObServerConfig& config = ObServerConfig::get_instance();
 class TestRpcPartitionTable : public ::testing::Test {
-  public:
+public:
   TestRpcPartitionTable();
   virtual ~TestRpcPartitionTable()
   {}
@@ -53,7 +53,7 @@ class TestRpcPartitionTable : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   int get_wrapper(ObPartitionInfo& part_info, const ObRpcOpts& opts);
   int report_wrapper(const ObPartitionReplica& replica, const ObRpcOpts& opts);
   int remove_wrapper(const ObAddr& server, const ObRpcOpts& opts);

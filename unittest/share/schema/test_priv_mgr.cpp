@@ -26,12 +26,12 @@ using namespace common;
 namespace share {
 namespace schema {
 class TestPrivMgr : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   ObPrivMgr priv_mgr_;
 };
 

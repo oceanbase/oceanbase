@@ -20,12 +20,12 @@
 namespace oceanbase {
 namespace sql {
 class ObAlterUserProfileResolver : public ObDCLResolver {
-  public:
+public:
   explicit ObAlterUserProfileResolver(ObResolverParams& params);
   virtual ~ObAlterUserProfileResolver();
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int resolve_set_role(const ParseNode& parse_tree);
   int resolve_default_role(const ParseNode& parse_tree);
   int resolve_default_role_clause(const ParseNode* parse_tree, obrpc::ObAlterUserProfileArg& arg,

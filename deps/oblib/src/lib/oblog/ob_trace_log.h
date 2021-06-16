@@ -88,7 +88,7 @@ namespace common {
 class ObTraceLogConfig {
   static const char* const LOG_LEVEL_ENV_KEY;
 
-  public:
+public:
   static int32_t set_log_level(const char* log_level_str);
   static int32_t set_log_level(const char* log_level_str, volatile int& log_level_);
   inline static int32_t get_log_level()
@@ -103,7 +103,7 @@ class ObTraceLogConfig {
   static int32_t up_log_level();
   static int32_t down_log_level();
 
-  private:
+private:
   static const char* const level_strs_[];
   static volatile int log_level_;
   static bool got_env_;

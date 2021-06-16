@@ -29,7 +29,7 @@ namespace share {
 namespace schema {
 
 class MockObSchemaService : public ObMultiVersionSchemaService {
-  public:
+public:
   MockObSchemaService() : schema_guard_(NULL)
   {}
   ~MockObSchemaService()
@@ -40,11 +40,11 @@ class MockObSchemaService : public ObMultiVersionSchemaService {
   // virtual int release_schema(const ObSchemaManager *schema);
   // virtual int64_t get_latest_local_version(const bool core_schema_version = false) const;
   // virtual int64_t get_received_broadcast_version(const bool core_schema_version = false) const;
-  private:
+private:
   // virtual const ObSchemaManager *get_user_schema_manager(const int64_t version);
   virtual const ObSchemaGetterGuard* get_schema_guard(const int64_t version);
 
-  private:
+private:
   ObRestoreSchema restore_schema_;
   // ObSchemaManager *manager_;
   ObSchemaGetterGuard* schema_guard_;

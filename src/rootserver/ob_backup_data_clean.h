@@ -46,14 +46,14 @@ class ObSchemaGetterGuard;
 namespace rootserver {
 
 class ObBackupDataCleanIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObBackupDataCleanIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual int64_t get_idle_interval_us();
 };
 
 class ObBackupDataClean : public ObRsReentrantThread {
-  public:
+public:
   ObBackupDataClean();
   virtual ~ObBackupDataClean();
   int init(share::schema::ObMultiVersionSchemaService& schema_service, ObMySQLProxy& sql_proxy,
@@ -79,7 +79,7 @@ class ObBackupDataClean : public ObRsReentrantThread {
     return backup_lease_service_;
   }
 
-  private:
+private:
   int get_need_clean_tenants(common::ObIArray<ObBackupDataCleanTenant>& clean_tenants);
   int get_server_clean_tenants(common::ObIArray<ObBackupDataCleanTenant>& clean_tenants);
   int get_extern_clean_tenants(hash::ObHashMap<uint64_t, ObSimpleBackupDataCleanTenant>& clean_tenants_map);
@@ -257,7 +257,7 @@ class ObBackupDataClean : public ObRsReentrantThread {
   void set_inner_error(const int32_t result);
   bool is_result_need_retry(const int32_t result);
 
-  private:
+private:
   struct CompareLogArchiveBackupInfo {
     bool operator()(const share::ObLogArchiveBackupInfo& lhs, const share::ObLogArchiveBackupInfo& rhs) const
     {
@@ -277,7 +277,7 @@ class ObBackupDataClean : public ObRsReentrantThread {
     }
   };
 
-  private:
+private:
   static const int64_t MAX_BUCKET_NUM = 1024;
   bool is_inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
@@ -288,7 +288,7 @@ class ObBackupDataClean : public ObRsReentrantThread {
   bool is_working_;
   share::ObIBackupLeaseService* backup_lease_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataClean);
 };
 

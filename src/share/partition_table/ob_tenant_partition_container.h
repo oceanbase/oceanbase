@@ -24,9 +24,9 @@ class ObMultiVersionSchemaService;
 }  // namespace schema
 
 class ObTenantPartitionContainer {
-  public:
+public:
   struct Partition {
-    public:
+  public:
     Partition() : partition_info_(), tablegroup_id_(common::OB_INVALID_ID)
     {}
     void reset()
@@ -37,7 +37,7 @@ class ObTenantPartitionContainer {
     int assign(const Partition& other);
     TO_STRING_KV(K_(partition_info), K_(tablegroup_id));
 
-    public:
+  public:
     ObPartitionInfo partition_info_;
     int64_t tablegroup_id_;
   };
@@ -47,14 +47,14 @@ class ObTenantPartitionContainer {
     {}
     bool operator()(const Partition* left, const Partition* right);
 
-    private:
+  private:
     template <typename T>
     int compare(const T& left, const T& right)
     {
       return left < right ? -1 : (left == right ? 0 : 1);
     }
 
-    private:
+  private:
     int& ret_;
   };
 
@@ -64,7 +64,7 @@ class ObTenantPartitionContainer {
   int fetch_partition(ObTenantPartitionIterator& iter);
   int get_sorted_partition(common::ObIArray<Partition*>*& sorted_partition);
 
-  private:
+private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   common::ObArray<Partition> all_partition_;

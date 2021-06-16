@@ -38,18 +38,18 @@ using namespace oceanbase::json;
 
 namespace test {
 class ObLogPlanTest : public ::testing::Test {
-  public:
+public:
   ObLogPlanTest();
   virtual ~ObLogPlanTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObLogPlanTest(const ObLogPlanTest& other);
   ObLogPlanTest& operator=(const ObLogPlanTest& other);
 
-  private:
+private:
   // data members
 };
 

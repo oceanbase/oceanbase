@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogMaterial : public ObLogicalOperator {
-  public:
+public:
   ObLogMaterial(ObLogPlan& plan) : ObLogicalOperator(plan)
   {}
   virtual ~ObLogMaterial()
@@ -36,7 +36,7 @@ class ObLogMaterial : public ObLogicalOperator {
     return true;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogMaterial);
 };
 }  // namespace sql

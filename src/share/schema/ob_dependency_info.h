@@ -37,7 +37,7 @@ extern const char* ob_object_type_str(const ObObjectType object_type);
 class ObDependencyInfo : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDependencyInfo();
   ObDependencyInfo(const ObDependencyInfo& src_schema);
   explicit ObDependencyInfo(common::ObIAllocator* allocator);
@@ -120,14 +120,14 @@ class ObDependencyInfo : public ObSchema {
   TO_STRING_KV(K_(tenant_id), K_(dep_obj_id), K_(dep_obj_type), K_(order), K_(dep_timestamp), K_(ref_obj_id),
       K_(ref_obj_type), K_(ref_timestamp), K_(dep_obj_owner_id), K_(property), K_(dep_attrs), K_(dep_reason),
       K_(ref_obj_name), K_(schema_version))
-  private:
+private:
   int gen_dependency_dml(const uint64_t exec_tenant_id, oceanbase::share::ObDMLSqlSplicer& dml);
   // uint64_t extract_tenant_id() const;
   uint64_t extract_ref_obj_id() const;
   // static uint64_t extract_tenant_id(uint64_t tenant_id);
   static uint64_t extract_obj_id(uint64_t exec_tenant_id, uint64_t id);
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t dep_obj_id_;
   ObObjectType dep_obj_type_;

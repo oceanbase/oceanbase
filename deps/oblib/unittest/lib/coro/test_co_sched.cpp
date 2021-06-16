@@ -25,7 +25,7 @@ class MyCoRoutine;
 static MyCoRoutine* wait_routine = nullptr;
 
 class MyCoSched : public CoSched {
-  public:
+public:
   void on_runnable(MyCoRoutine& routine)
   {
     runnables_.add_last(&routine);
@@ -40,17 +40,17 @@ class MyCoSched : public CoSched {
     waitings_.remove(&routine);
   }
 
-  private:
+private:
   void alloc_routine(string name);
   void run() override;
 
-  protected:
+protected:
   ObDList<MyCoRoutine> runnables_;
   ObDList<MyCoRoutine> waitings_;
 };
 
 class MyCoRoutine : public CoRoutine, public ObDLinkBase<MyCoRoutine> {
-  public:
+public:
   MyCoRoutine(string name, CoRoutine& succ, MyCoSched& sched) : CoRoutine(succ), name_(name), sched_(sched)
   {}
 
@@ -64,7 +64,7 @@ class MyCoRoutine : public CoRoutine, public ObDLinkBase<MyCoRoutine> {
   void sleep_until(int64_t) override
   {}
 
-  private:
+private:
   void run() override
   {
     CO_YIELD();

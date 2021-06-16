@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObClearBalanceTaskStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObClearBalanceTaskStmt() : ObSystemCmdStmt(stmt::T_CLEAR_BALANCE_TASK), arg_()
   {}
   explicit ObClearBalanceTaskStmt(common::ObIAllocator* name_pool)
@@ -44,7 +44,7 @@ class ObClearBalanceTaskStmt : public ObSystemCmdStmt {
     return arg_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObClearBalanceTaskStmt);
   obrpc::ObAdminClearBalanceTaskArg arg_;
 };

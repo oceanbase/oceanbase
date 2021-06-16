@@ -44,7 +44,7 @@
 namespace oceanbase {
 namespace clog {
 class ObLogFileTrailer {
-  public:
+public:
   ObLogFileTrailer();
   ~ObLogFileTrailer();
 
@@ -68,7 +68,7 @@ class ObLogFileTrailer {
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
   int64_t get_serialize_size(void) const;
 
-  private:
+private:
   static const int16_t CLOG_FILE_VERSION = 1;
 
   ObLogBlockMetaV2 block_meta_;
@@ -80,11 +80,11 @@ class ObLogFileTrailer {
 };
 
 class ObIlogFileTrailerV2 {
-  public:
+public:
   ObIlogFileTrailerV2();
   ~ObIlogFileTrailerV2();
 
-  public:
+public:
   int init(const offset_t info_block_start_offset, const int32_t info_block_size,
       const offset_t memberlist_block_start_offset, const int32_t memberlist_block_size,
       const int64_t file_content_checksum);
@@ -102,7 +102,7 @@ class ObIlogFileTrailerV2 {
   TO_STRING_KV(K(magic_number_), K(info_block_start_offset_), K(info_block_size_), K(file_content_checksum_),
       K(trailer_checksum_));
 
-  private:
+private:
   void update_trailer_checksum_();
   int16_t magic_number_;
   int16_t padding1_;
@@ -114,7 +114,7 @@ class ObIlogFileTrailerV2 {
   int64_t file_content_checksum_;
   int64_t trailer_checksum_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIlogFileTrailerV2);
 };
 }  // end namespace clog

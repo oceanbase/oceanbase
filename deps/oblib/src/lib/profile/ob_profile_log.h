@@ -52,7 +52,7 @@ inline uint32_t& get_chid()
 
 // Print ip, port, seq, chid, default
 class ObProfileLogger {
-  public:
+public:
   enum LogLevel { INFO = 0, DEBUG };
   ~ObProfileLogger();
   int printlog(LogLevel level, const char* file, int line, const char* function, pthread_t tid, const char* fmt, ...);
@@ -68,7 +68,7 @@ class ObProfileLogger {
   void setFileName(const char* log_filename);
   int init();
 
-  private:
+private:
   static const char* const errmsg_[2];
   static LogLevel log_levels_[2];
   static ObProfileLogger* logger_;
@@ -77,7 +77,7 @@ class ObProfileLogger {
   LogLevel log_level_;
   int log_fd_;
 
-  private:
+private:
   ObProfileLogger();
   DISALLOW_COPY_AND_ASSIGN(ObProfileLogger);
 };

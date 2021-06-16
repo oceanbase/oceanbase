@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace unittest {
 class MockObTransService : public transaction::ObTransService {
-  public:
+public:
   int set_clog_adapter(transaction::ObIClogAdapter* clog_adapter)
   {
     int ret = OB_SUCCESS;
@@ -51,7 +51,7 @@ class MockObTransService : public transaction::ObTransService {
     return addr_;
   }
 
-  public:
+public:
   ObAddr addr_;
   int64_t idx_;
 };

@@ -22,7 +22,7 @@ class ObExecContext;
 class ObTaskInfo;
 
 class ParamaterWrapper {
-  public:
+public:
   ParamaterWrapper() : paramater_list_()
   {}
 
@@ -63,7 +63,7 @@ class ParamaterWrapper {
 class ObBLKNestedLoopJoin : public ObBasicNestedLoopJoin {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   enum ObJoinState {
     JS_JOIN_BEGIN = 0,
     JS_JOIN_LEFT_JOIN,
@@ -78,7 +78,7 @@ class ObBLKNestedLoopJoin : public ObBasicNestedLoopJoin {
   class ObBLKNestedLoopJoinCtx : public ObBasicNestedLoopJoinCtx {
     friend class ObBLKNestedLoopJoin;
 
-    public:
+  public:
     ObBLKNestedLoopJoinCtx(ObExecContext& ctx)
         : ObBasicNestedLoopJoinCtx(ctx),
           state_(JS_JOIN_BEGIN),
@@ -128,7 +128,7 @@ class ObBLKNestedLoopJoin : public ObBasicNestedLoopJoin {
       ObBasicNestedLoopJoinCtx::destroy();
     }
 
-    private:
+  private:
     ObJoinState state_;
     common::ObNewRow left_cache_row_buf_;
     common::ObRowStore::StoredRow* stored_row_;
@@ -144,14 +144,14 @@ class ObBLKNestedLoopJoin : public ObBasicNestedLoopJoin {
   typedef int (ObBLKNestedLoopJoin::*state_function_func_type)(
       ObBLKNestedLoopJoinCtx& join_ctx, const common::ObNewRow*& row) const;
 
-  public:
+public:
   ObBLKNestedLoopJoin(common::ObIAllocator& alloc);
   virtual ~ObBLKNestedLoopJoin();
   virtual void reset();
   virtual void resuse();
   virtual int rescan(ObExecContext& exec_ctx) const;
 
-  private:
+private:
   virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
   virtual int inner_open(ObExecContext& exec_ctx) const;
   virtual int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const;
@@ -176,7 +176,7 @@ class ObBLKNestedLoopJoin : public ObBasicNestedLoopJoin {
   int init_right_child(ObBLKNestedLoopJoinCtx& join_ctx) const;
   int make_paramater_warpper(ObBLKNestedLoopJoinCtx& join_ctx, ParamaterWrapper& params) const;
 
-  private:
+private:
   state_operation_func_type state_operation_func_[JS_STATE_COUNT];
   state_function_func_type state_function_func_[JS_STATE_COUNT][FT_TYPE_COUNT];
 };

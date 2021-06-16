@@ -20,10 +20,10 @@ namespace sql {
 class ObExprAbs : public ObExprOperator {
   typedef int (*abs_func)(common::ObObj& res, const common::ObObj& param, common::ObExprCtx& expr_ctx);
 
-  public:
+public:
   virtual int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
 
-  public:
+public:
   explicit ObExprAbs(common::ObIAllocator& alloc);
   ~ObExprAbs(){};
 
@@ -37,7 +37,7 @@ class ObExprAbs : public ObExprOperator {
 
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   int set_func_mysql(common::ObObjType param_type);
   int set_func_oracle(common::ObObjType param_type);
   // tinyint, mediumint, smallint, int32
@@ -77,10 +77,10 @@ class ObExprAbs : public ObExprOperator {
 
   static common::ObObjType calc_param_type(const common::ObObjType orig_param_type, const bool is_oracle_mode);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprAbs);
 
-  private:
+private:
   abs_func func_;
 };
 

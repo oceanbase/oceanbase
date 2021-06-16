@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class JoinDataGenerator : public ObPhyOperator {
-  public:
+public:
   const static int64_t CELL_CNT = 4;
 
   const static int64_t ROW_ID_CELL = 0;
@@ -31,7 +31,7 @@ class JoinDataGenerator : public ObPhyOperator {
   const static int64_t INT_VARCHAR_BUF_SIZE = 10;
 
   class Ctx : public ObPhyOperatorCtx {
-    public:
+  public:
     Ctx(ObExecContext& c) : ObPhyOperatorCtx(c)
     {}
     virtual void destroy()
@@ -169,7 +169,7 @@ class JoinDataGenerator : public ObPhyOperator {
     cells_[STR_CELL].set_varchar(str_, string_size_);
   }
 
-  public:
+public:
   bool gen_varchar_cell_ = false;
   int64_t row_cnt_ = 1;
   bool reverse_ = false;
@@ -181,7 +181,7 @@ class JoinDataGenerator : public ObPhyOperator {
   IdValFunc idx_val_ = [](const int64_t v) { return v; };
   int iter_end_ret_ = OB_ITER_END;
 
-  private:
+private:
   mutable common::ObNewRow row_;
   mutable common::ObObj cells_[CELL_CNT];
   mutable int64_t row_id_ = 0;

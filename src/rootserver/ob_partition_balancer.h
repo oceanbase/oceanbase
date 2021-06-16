@@ -37,14 +37,14 @@ class ObZoneManager;
 // The algorithm to balance the replicas in units of one tenant.
 
 class ObPartitionUnitProvider : public balancer::IUnitProvider {
-  public:
+public:
   ObPartitionUnitProvider(const ZoneUnit& zone_unit, balancer::ITenantStatFinder& stat_finder)
       : zone_unit_(zone_unit), stat_finder_(stat_finder)
   {}
   virtual ~ObPartitionUnitProvider()
   {}
 
-  public:
+public:
   virtual int find_unit(int64_t all_tg_idx, int64_t part_idx, uint64_t& unit_id) const;
   virtual int64_t count() const;
   virtual uint64_t get_unit_id(int64_t unit_idx) const;
@@ -52,13 +52,13 @@ class ObPartitionUnitProvider : public balancer::IUnitProvider {
   virtual int get_unit_by_id(const uint64_t unit_id, UnitStat*& unit_stat) const;
   virtual int get_avg_load(double& avg_load) const;
 
-  private:
+private:
   const ZoneUnit& zone_unit_;
   balancer::ITenantStatFinder& stat_finder_;
 };
 
 class ObPartitionBalancer {
-  public:
+public:
   ObPartitionBalancer();
   virtual ~ObPartitionBalancer()
   {}
@@ -70,7 +70,7 @@ class ObPartitionBalancer {
   // as possible, only considering the number of replicas
   int partition_balance(int64_t& task_cnt, const balancer::HashIndexCollection& hash_index_collection);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObPartitionBalancer);
   // function members
@@ -83,7 +83,7 @@ class ObPartitionBalancer {
     return check_stop_provider_->check_stop();
   }
 
-  private:
+private:
   // data members
   bool inited_;
   common::ObServerConfig* config_;

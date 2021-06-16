@@ -42,9 +42,9 @@ class ObZoneManager;
 class ObDDLService;
 
 class ObIndexBuildStatus {
-  public:
+public:
   class PartitionIndexStatus {
-    public:
+  public:
     PartitionIndexStatus();
     ~PartitionIndexStatus()
     {}
@@ -67,14 +67,14 @@ class ObIndexBuildStatus {
   };
 
   class PartitionIndexStatusOrder {
-    public:
+  public:
     explicit PartitionIndexStatusOrder(int& ret) : ret_(ret)
     {}
     ~PartitionIndexStatusOrder()
     {}
     bool operator()(const PartitionIndexStatus& left, const PartitionIndexStatus& right) const;
 
-    private:
+  private:
     int& ret_;
   };
 
@@ -86,18 +86,18 @@ class ObIndexBuildStatus {
   int find(const int64_t partition_id, const common::ObAddr& server, PartitionIndexStatus& status) const;
   TO_STRING_KV(K_(loaded), K_(all_status));
 
-  private:
+private:
   bool loaded_;
   common::ObArray<PartitionIndexStatus> all_status_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexBuildStatus);
 };
 
 class ObIndexWaitTransStatus {
-  public:
+public:
   class PartitionWaitTransStatus {
-    public:
+  public:
     PartitionWaitTransStatus();
     virtual ~PartitionWaitTransStatus();
     bool operator<(const PartitionWaitTransStatus& other) const;
@@ -113,14 +113,14 @@ class ObIndexWaitTransStatus {
   };
 
   class PartitionWaitTransStatusComparator {
-    public:
+  public:
     explicit PartitionWaitTransStatusComparator(int& ret) : ret_(ret)
     {}
     virtual ~PartitionWaitTransStatusComparator()
     {}
     bool operator()(const PartitionWaitTransStatus& lhs, const PartitionWaitTransStatus& rhs) const;
 
-    private:
+  private:
     int& ret_;
   };
   ObIndexWaitTransStatus();
@@ -129,14 +129,14 @@ class ObIndexWaitTransStatus {
   int get_wait_trans_status(const uint64_t index_id, ObMySQLProxy& sql_proxy);
   int find_status(const int64_t partition_id, PartitionWaitTransStatus& status) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexWaitTransStatus);
   bool loaded_;
   common::ObArray<PartitionWaitTransStatus> all_wait_trans_status_;
 };
 
 class ObRSBuildIndexTask : public share::ObIDDLTask {
-  public:
+public:
   enum TaskState {
     WAIT_TRANS_END = 0,
     WAIT_BUILD_INDEX_END,
@@ -166,7 +166,7 @@ class ObRSBuildIndexTask : public share::ObIDDLTask {
     return data_table_id_;
   }
 
-  private:
+private:
   int wait_trans_end(bool& is_end);
   int wait_build_index_end(bool& is_end);
   bool need_print_log();
@@ -175,7 +175,7 @@ class ObRSBuildIndexTask : public share::ObIDDLTask {
   int release_snapshot();
   int remove_index_build_stat_record();
 
-  private:
+private:
   static const int64_t PRINT_LOG_INTERVAL = 600 * 1000000;
   static const int64_t INDEX_SNAPSHOT_VERSION_DIFF = 100 * 1000;  // 100ms
   TaskState state_;
@@ -187,22 +187,22 @@ class ObRSBuildIndexTask : public share::ObIDDLTask {
 };
 
 class ObRSBuildIndexScheduler {
-  public:
+public:
   static const int64_t DEFAULT_THREAD_CNT = 1;
 
-  public:
+public:
   int init(ObDDLService* ddl_service);
   static ObRSBuildIndexScheduler& get_instance();
   int push_task(ObRSBuildIndexTask& task);
   void destroy();
 
-  private:
+private:
   ObRSBuildIndexScheduler();
   virtual ~ObRSBuildIndexScheduler();
   void stop();
   void wait();
 
-  private:
+private:
   static const int64_t DEFAULT_BUCKET_NUM = 10000;
   bool is_inited_;
   share::ObDDLTaskExecutor task_executor_;
@@ -211,7 +211,7 @@ class ObRSBuildIndexScheduler {
 };
 
 class ObIndexBuilder {
-  public:
+public:
   explicit ObIndexBuilder(ObDDLService& ddl_service);
   virtual ~ObIndexBuilder();
 
@@ -232,10 +232,10 @@ class ObIndexBuilder {
   int submit_build_global_index_task(const share::schema::ObTableSchema& index_schema);
   int submit_build_local_index_task(const share::schema::ObTableSchema& index_schema);
 
-  private:
+private:
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;
   class FulltextColumnOrder {
-    public:
+  public:
     FulltextColumnOrder()
     {}
     ~FulltextColumnOrder()
@@ -259,10 +259,10 @@ class ObIndexBuilder {
 
   int update_local_index_status(const volatile bool& stop, const int64_t merged_version, const uint64_t index_table_id);
 
-  private:
+private:
   ObDDLService& ddl_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexBuilder);
 };
 }  // end namespace rootserver

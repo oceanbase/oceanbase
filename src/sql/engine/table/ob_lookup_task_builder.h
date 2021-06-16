@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace sql {
 class ObPartitionScanRanges;
 class ObLookupTaskBuilder {
-  public:
+public:
   explicit ObLookupTaskBuilder(common::ObIAllocator& allocator)
       : allocator_(allocator),
         exec_ctx_(NULL),
@@ -62,7 +62,7 @@ class ObLookupTaskBuilder {
     return lookup_taskinfo_list_;
   }
 
-  private:
+private:
   int get_partition_server(int64_t partition_id, ObAddr& run_server);
   int add_range_to_taskinfo(int64_t partition_id, ObIArray<common::ObNewRange>& ranges, const ObAddr& run_server);
   int create_op_input(ObExecContext& ctx, const ObPhyOperator& root_op);
@@ -77,7 +77,7 @@ class ObLookupTaskBuilder {
       int64_t& succ_range_count, common::ObIArray<ObMiniTask>& retry_task_list,
       common::ObIArray<ObTaskInfo*>& retry_task_info_list);
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   ObExecContext* exec_ctx_;
   const ObPhysicalPlan* my_plan_;
@@ -91,7 +91,7 @@ class ObLookupTaskBuilder {
   uint64_t new_task_id_;
   bool weak_read_;
 
-  private:
+private:
   static const int64_t LOCAL_TASK_POS = 0;
 };
 

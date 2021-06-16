@@ -31,7 +31,7 @@ namespace sql {
 // Return same address if alloc size less than reserved size.
 // Prepare is needed for every allocation.
 class ObInplaceAllocator : public common::ObIAllocator {
-  public:
+public:
   ObInplaceAllocator() : alloc_(NULL), mem_(NULL), len_(0)
   {}
 
@@ -42,18 +42,18 @@ class ObInplaceAllocator : public common::ObIAllocator {
 
   virtual void* alloc(const int64_t size) override;
 
-  private:
+private:
   common::ObIAllocator* alloc_;
   void* mem_;
   int64_t len_;
 };
 
 class ObExprRegexContext : public ObExprOperatorCtx {
-  public:
+public:
   ObExprRegexContext();
   virtual ~ObExprRegexContext();
 
-  public:
+public:
   inline bool is_inited() const
   {
     return inited_;
@@ -91,14 +91,14 @@ class ObExprRegexContext : public ObExprOperatorCtx {
       common::ObIArray<common::ObString>& subexpr_array) const;
   TO_STRING_KV(K_(inited));
 
-  private:
+private:
   void reset_reg();
   int getwc(const common::ObString& text, wchar_t*& wc, int64_t& wc_length, common::ObExprStringBuf& string_buf) const;
   int w2c(
       const wchar_t* wc, int64_t length, char*& chr, int64_t& chr_length, common::ObExprStringBuf& string_buf) const;
   int convert_reg_err_code_to_ob_err_code(int reg_err) const;
 
-  private:
+private:
   bool inited_;
   ob_regex_t reg_;
 

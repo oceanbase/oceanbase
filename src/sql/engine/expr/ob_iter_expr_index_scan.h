@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObIndexScanIterExpr : public ObIterExprOperator {
-  public:
+public:
   ObIndexScanIterExpr() : ObIterExprOperator(), iter_idx_(common::OB_INVALID_INDEX)
   {}
   inline void set_iter_idx(int64_t iter_idx)
@@ -25,7 +25,7 @@ class ObIndexScanIterExpr : public ObIterExprOperator {
   }
   int get_next_row(ObIterExprCtx& expr_ctx, const common::ObNewRow*& result) const;
 
-  private:
+private:
   int64_t iter_idx_;
 };
 }  // namespace sql

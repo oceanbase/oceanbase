@@ -40,13 +40,13 @@ class ObAggFunRawExpr;
 class SelectItem;
 
 class ObTransformAggregate : public ObTransformRule {
-  public:
+public:
   explicit ObTransformAggregate(ObTransformerCtx* ctx);
   virtual ~ObTransformAggregate();
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   const static char* SUBQUERY_COL_ALIAS;
 
   int is_valid_column_aggregate(ObSelectStmt* stmt, ObAggFunRawExpr*& aggr_expr, bool& is_valid);
@@ -92,7 +92,7 @@ class ObTransformAggregate : public ObTransformRule {
   int is_min_max_const(ObSelectStmt* stmt, ObRawExpr* expr, bool& is_with_const);
   int is_not_const(ObSelectStmt* stmt, ObRawExpr* expr, bool& is_current_level);
 
-  private:
+private:
   int is_valid_select_list(const ObSelectStmt& stmt, const ObRawExpr*& aggr_expr, bool& is_valid);
   int64_t idx_aggr_column_;
   bool is_column_aggregate_;

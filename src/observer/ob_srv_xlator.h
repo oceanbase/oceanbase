@@ -79,7 +79,7 @@ void init_srv_xlator_for_migrator(ObSrvRpcXlator* xlator);
 void init_srv_xlator_for_others(ObSrvRpcXlator* xlator);
 
 class ObSrvRpcXlator : public ObRpcTranslator {
-  public:
+public:
   explicit ObSrvRpcXlator(const ObGlobalContext& gctx) : gctx_(gctx)
   {
     memset(funcs_, 0, sizeof(funcs_));
@@ -99,26 +99,26 @@ class ObSrvRpcXlator : public ObRpcTranslator {
 
   int translate(rpc::ObRequest& req, ObReqProcessor*& processor);
 
-  protected:
+protected:
   ObReqProcessor* get_processor(rpc::ObRequest&)
   {
     return NULL;
   }
 
-  private:
+private:
   const ObGlobalContext& gctx_;
   DISALLOW_COPY_AND_ASSIGN(ObSrvRpcXlator);
   RPCProcessFunc funcs_[MAX_PCODE];
 };  // end of class ObSrvRpcXlator
 
 class ObSrvMySQLXlator : public ObMySQLTranslator {
-  public:
+public:
   explicit ObSrvMySQLXlator(const ObGlobalContext& gctx) : gctx_(gctx)
   {}
 
   int translate(rpc::ObRequest& req, ObReqProcessor*& processor);
 
-  protected:
+protected:
   ObReqProcessor* get_processor(rpc::ObRequest&)
   {
     return NULL;
@@ -127,13 +127,13 @@ class ObSrvMySQLXlator : public ObMySQLTranslator {
   // mpconnect use high memory, more limit than common
   int get_mp_connect_processor(ObReqProcessor*& ret_proc);
 
-  private:
+private:
   const ObGlobalContext& gctx_;
   DISALLOW_COPY_AND_ASSIGN(ObSrvMySQLXlator);
 };  // end of class ObSrvMySQLXlator
 
 class ObSrvXlator : public rpc::frame::ObReqTranslator {
-  public:
+public:
   explicit ObSrvXlator(const ObGlobalContext& gctx) : rpc_xlator_(gctx), mysql_xlator_(gctx), session_handler_()
   {}
 
@@ -145,15 +145,15 @@ class ObSrvXlator : public rpc::frame::ObReqTranslator {
 
   inline ObRpcSessionHandler& get_session_handler();
 
-  protected:
+protected:
   ObReqProcessor* get_processor(rpc::ObRequest&);
 
-  private:
+private:
   // This method must return non-null processor
   ObReqProcessor* get_error_rpc_processor(const int ret);
   ObReqProcessor* get_error_mysql_processor(const int ret);
 
-  private:
+private:
   ObSrvRpcXlator rpc_xlator_;
   ObSrvMySQLXlator mysql_xlator_;
   ObRpcSessionHandler session_handler_;

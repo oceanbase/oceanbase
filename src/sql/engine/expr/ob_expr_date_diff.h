@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprDateDiff : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprDateDiff(common::ObIAllocator& alloc);
   virtual ~ObExprDateDiff();
   virtual int calc_result_type2(
@@ -33,7 +33,7 @@ class ObExprDateDiff : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_date_diff(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDateDiff);
 };
@@ -54,7 +54,7 @@ inline int ObExprDateDiff::calc_result_type2(
 }
 
 class ObExprMonthsBetween : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprMonthsBetween(common::ObIAllocator& alloc);
   virtual ~ObExprMonthsBetween();
   virtual int calc_result_type2(
@@ -64,7 +64,7 @@ class ObExprMonthsBetween : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_months_between(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprMonthsBetween);
 };

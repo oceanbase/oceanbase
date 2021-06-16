@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprInstrb : public ObLocationExprOperator {
-  public:
+public:
   ObExprInstrb();
   explicit ObExprInstrb(common::ObIAllocator& alloc);
   virtual ~ObExprInstrb();
@@ -30,7 +30,7 @@ class ObExprInstrb : public ObLocationExprOperator {
   static int search(
       const common::ObString& haystack, const common::ObString& needle, int64_t start, int64_t occ, int64_t& ret_idx);
 
-  private:
+private:
   int calc(common::ObObj& result, const common::ObObj& heystack, const common::ObObj& needle,
       const common::ObObj& position, const common::ObObj& occurrence, common::ObExprCtx& expr_ctx) const;
   virtual int calc_result_type2(

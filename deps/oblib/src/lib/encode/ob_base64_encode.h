@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 class ObBase64Encoder {
-  private:
+private:
   template <int N>
   friend class InitBase64Values;
   static char BASE64_CHARS[];
@@ -31,7 +31,7 @@ class ObBase64Encoder {
     return std::isalnum(c) || c == '+' || c == '/';
   }
 
-  public:
+public:
   static int64_t needed_encoded_length(const int64_t buf_size)
   {
     return (buf_size / 3) * 4 + (buf_size % 3 == 0 ? 0 : 4);

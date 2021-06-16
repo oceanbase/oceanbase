@@ -15,18 +15,18 @@
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 class TestIteratableHashMap : public ::testing::Test {
-  public:
+public:
   TestIteratableHashMap();
   virtual ~TestIteratableHashMap();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   TestIteratableHashMap(const TestIteratableHashMap& other);
   TestIteratableHashMap& operator=(const TestIteratableHashMap& other);
 
-  protected:
+protected:
   // data members
 };
 

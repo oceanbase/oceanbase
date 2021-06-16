@@ -25,7 +25,7 @@ namespace sql {
 class ObHashDistinctSpec : public ObDistinctSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObHashDistinctSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   ObSortCollations sort_collations_;
@@ -33,7 +33,7 @@ class ObHashDistinctSpec : public ObDistinctSpec {
 };
 
 class ObHashDistinctOp : public ObOperator {
-  public:
+public:
   ObHashDistinctOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObHashDistinctOp()
   {}
@@ -44,14 +44,14 @@ class ObHashDistinctOp : public ObOperator {
   virtual int inner_get_next_row() override;
   virtual void destroy() override;
 
-  private:
+private:
   void reset();
   int do_unblock_distinct();
   int do_block_distinct();
   int init_hash_partition_infras();
   int build_distinct_data(bool is_block);
 
-  private:
+private:
   typedef int (ObHashDistinctOp::*GetNextRowFunc)();
   static const int64_t MIN_BUCKET_COUNT = 1L << 14;  // 16384;
   static const int64_t MAX_BUCKET_COUNT = 1L << 19;  // 524288;

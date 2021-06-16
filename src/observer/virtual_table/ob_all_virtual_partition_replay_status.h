@@ -26,11 +26,11 @@ class ObIPartitionGroupIterator;
 }  // namespace storage
 namespace observer {
 class ObAllVirtualPartitionReplayStatus : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualPartitionReplayStatus();
   virtual ~ObAllVirtualPartitionReplayStatus();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   void reset();
   inline void set_partition_service(storage::ObPartitionService* partition_service)
@@ -43,11 +43,11 @@ class ObAllVirtualPartitionReplayStatus : public common::ObVirtualTableScannerIt
     addr_ = addr;
   }
 
-  private:
+private:
   int get_last_replay_log_type(int64_t last_replay_log_type, char* buf, int64_t buf_len);
   int get_post_barrier_status(int64_t post_barrier_status, char* buf, int64_t buf_len);
 
-  private:
+private:
   storage::ObPartitionService* ps_;
   common::ObAddr addr_;
   storage::ObIPartitionGroupIterator* ptt_iter_;
@@ -55,7 +55,7 @@ class ObAllVirtualPartitionReplayStatus : public common::ObVirtualTableScannerIt
   char post_barrier_status_[common::MAX_FREEZE_SUBMIT_STATUS_LENGTH];
   char last_replay_log_type_[common::MAX_REPLAY_LOG_TYPE_LENGTH];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualPartitionReplayStatus);
 };
 

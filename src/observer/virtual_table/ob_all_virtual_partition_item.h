@@ -54,14 +54,14 @@ class ObAllVirtualPartitionItem : public common::ObVirtualTableScannerIterator {
   static const int32_t COLUMN_COUNT = 20;
   static const int64_t BOUND_BUF_LENGTH = 100;
 
-  public:
+public:
   ObAllVirtualPartitionItem();
   virtual ~ObAllVirtualPartitionItem();
 
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualPartitionItem);
   int fill_row_cells(const share::schema::ObSimpleTableSchemaV2& table_schema, share::schema::ObPartitionItem& item,
       const char* tenant_name);

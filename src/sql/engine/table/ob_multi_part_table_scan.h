@@ -22,7 +22,7 @@ namespace sql {
 class ObMultiPartTableScanInput : public ObTableScanInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMultiPartTableScanInput() : allocator_(common::ObModIds::OB_SQL_TABLE_LOOKUP), partitions_ranges_()
   {}
   virtual ~ObMultiPartTableScanInput();
@@ -39,12 +39,12 @@ class ObMultiPartTableScanInput : public ObTableScanInput {
 };
 
 class ObMultiPartTableScan : public ObTableScan {
-  private:
+private:
   enum MultiPartScanState { DO_PARTITION_SCAN, OUTPUT_ROWS, EXECUTION_FINISHED };
   class ObMultiPartTableScanCtx : public ObTableScanCtx {
     friend class ObMultiPartTableScan;
 
-    public:
+  public:
     explicit ObMultiPartTableScanCtx(ObExecContext& ctx)
         : ObTableScanCtx(ctx), input_part_offset_(NOT_INIT), multi_part_scan_state_(DO_PARTITION_SCAN), scan_times_(0)
     {}
@@ -65,7 +65,7 @@ class ObMultiPartTableScan : public ObTableScan {
     int64_t scan_times_;
   };
 
-  public:
+public:
   explicit ObMultiPartTableScan(common::ObIAllocator& allocator);
   virtual ~ObMultiPartTableScan();
   virtual int rescan(ObExecContext& ctx) const;
@@ -81,10 +81,10 @@ class ObMultiPartTableScan : public ObTableScan {
   virtual int init_op_ctx(ObExecContext& ctx) const override final;
   void get_used_range_count(ObExecContext& ctx, int64_t& range_count) const;
 
-  private:
+private:
   int do_next_partition_scan(ObExecContext& ctx) const;
 
-  private:
+private:
   static const int64_t NOT_INIT = 0;
 };
 }  // namespace sql

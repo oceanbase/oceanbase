@@ -35,7 +35,7 @@ class ObAllocator : public ObIAllocator {
   friend class lib::MemoryContext;
   friend class ObParallelAllocator;
 
-  public:
+public:
   ObAllocator(MemoryContext* mem_context, const ObMemAttr& attr = default_memattr, const bool use_pm = false,
       const uint32_t ablock_size = lib::INTACT_NORMAL_AOBJECT_SIZE);
   void* alloc(const int64_t size) override
@@ -55,7 +55,7 @@ class ObAllocator : public ObIAllocator {
     return pm_;
   }
 
-  private:
+private:
   int init();
   void lock()
   {
@@ -70,7 +70,7 @@ class ObAllocator : public ObIAllocator {
     return locker_->trylock();
   }
 
-  private:
+private:
   MemoryContext* mem_context_;
   ObMemAttr attr_;
   const bool use_pm_;
@@ -140,7 +140,7 @@ class ObParallelAllocator : public ObIAllocator {
   // Maximum concurrency
   static const int N = 8;
 
-  public:
+public:
   ObParallelAllocator(ObAllocator& root_allocator, MemoryContext* mem_context, const ObMemAttr& attr = default_memattr,
       const int parallel = 4, const uint32_t ablock_size = lib::INTACT_NORMAL_AOBJECT_SIZE);
   virtual ~ObParallelAllocator();
@@ -157,10 +157,10 @@ class ObParallelAllocator : public ObIAllocator {
   }
   int64_t used() const override;
 
-  private:
+private:
   int init();
 
-  private:
+private:
   ObAllocator& root_allocator_;
   MemoryContext* mem_context_;
   ObMemAttr attr_;

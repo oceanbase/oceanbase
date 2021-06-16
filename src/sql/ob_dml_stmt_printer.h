@@ -48,7 +48,7 @@ namespace sql {
   } while (0)
 
 class ObDMLStmtPrinter {
-  public:
+public:
   ObDMLStmtPrinter();
   ObDMLStmtPrinter(
       char* buf, int64_t buf_len, int64_t* pos, const ObDMLStmt* stmt, common::ObObjPrintParams print_params);
@@ -84,13 +84,13 @@ class ObDMLStmtPrinter {
     print_params_ = obj_print_params;
   }
 
-  private:
+private:
   int print_parens_for_leading_hint(
       int64_t cur_idx, const ObIArray<std::pair<uint8_t, uint8_t>>* join_order_pairs, bool is_left_parent);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObDMLStmtPrinter);
 
-  protected:
+protected:
   // data members
   char* buf_;
   int64_t buf_len_;

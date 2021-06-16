@@ -82,26 +82,26 @@ struct SSStoreVersionInfo {
 };
 
 class ObPartitionSstableImageInfoTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObPartitionSstableImageInfoTable();
   virtual ~ObPartitionSstableImageInfoTable();
   int init(storage::ObPartitionService& partition_service, share::schema::ObMultiVersionSchemaService& schema_service,
       common::ObAddr& addr);
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int64_t find(ObVersion& version, ObArray<SSStoreVersionInfo>& ss_store_version_info_list) const;
   int get_ss_store_version_info(ObArray<SSStoreVersionInfo>& ss_store_version_info_list);
   int fill_scaner();
   int get_table_store_cnt(int64_t& table_cnt);
 
-  private:
+private:
   bool inited_;
   common::ObAddr* addr_;
   storage::ObPartitionService* partition_service_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionSstableImageInfoTable);
 };
 }  // namespace observer

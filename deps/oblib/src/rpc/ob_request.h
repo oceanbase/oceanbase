@@ -32,10 +32,10 @@ using common::ObAddr;
 typedef common::ObCurTraceId::TraceId TraceId;
 
 class ObRequest : public common::ObLink {
-  public:
+public:
   enum Type { OB_RPC, OB_MYSQL, OB_TASK, OB_GTS_TASK, OB_SQL_TASK };
 
-  public:
+public:
   explicit ObRequest(Type type)
       : ez_req_(NULL),
         type_(type),
@@ -164,9 +164,9 @@ class ObRequest : public common::ObLink {
 
   ObLockWaitNode lock_wait_node_;
 
-  public:
+public:
   easy_request_t* ez_req_;  // set in ObRequest new
-  protected:
+protected:
   Type type_;
   int32_t group_id_;
   const ObPacket* pkt_;  // set in rpc handler
@@ -186,7 +186,7 @@ class ObRequest : public common::ObLink {
   bool large_retry_flag_;
   int32_t retry_times_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRequest);
 };  // end of class ObRequest
 

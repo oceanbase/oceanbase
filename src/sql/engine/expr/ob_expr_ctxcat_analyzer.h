@@ -20,13 +20,13 @@ namespace oceanbase {
 namespace sql {
 class ObExprOperatorFactory;
 class ObExprCtxCatAnalyzer {
-  public:
+public:
   ObExprCtxCatAnalyzer(ObExprOperatorFactory& expr_factory) : expr_factory_(expr_factory)
   {}
   int parse_search_keywords(common::ObObj& keyword_text, ObMatchAgainstMode mode_flag, ObIterExprOperator*& search_tree,
       common::ObIArray<common::ObObj>& keywords);
 
-  private:
+private:
   int create_set_op_tree(
       common::ObIArray<ObIndexScanIterExpr*>& set_keys, ObItemType set_op_type, ObIterExprOperator*& search_tree);
   int ft_get_simple_words(
@@ -34,7 +34,7 @@ class ObExprCtxCatAnalyzer {
   int ft_get_boolean_words(
       common::ObObj& keyword_text, ObIterExprOperator*& search_tree, common::ObIArray<common::ObObj>& keywords);
 
-  private:
+private:
   ObExprOperatorFactory& expr_factory_;
 };
 }  // namespace sql

@@ -24,9 +24,9 @@ namespace sql {
 class ObLinkScan : public ObNoChildrenPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class ObLinkScanCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     typedef ObPhysicalPlanCtx::ParamStore ObParamStore;
     explicit ObLinkScanCtx(ObExecContext& ctx);
     virtual ~ObLinkScanCtx()
@@ -51,7 +51,7 @@ class ObLinkScan : public ObNoChildrenPhyOperator {
     int get_next(const ObNewRow*& row);
     int rescan();
 
-    private:
+  private:
     int combine_link_stmt(const common::ObString& link_stmt_fmt, const common::ObIArray<ObParamPosIdx>& param_infos,
         const ObParamStore& param_store);
     int extend_stmt_buf(int64_t need_size = 0);
@@ -59,7 +59,7 @@ class ObLinkScan : public ObNoChildrenPhyOperator {
     void reset_stmt();
     void reset_result();
 
-    private:
+  private:
     uint64_t dblink_id_;
     common::ObDbLinkProxy* dblink_proxy_;
     common::sqlclient::ObMySQLConnection* dblink_conn_;
@@ -72,7 +72,7 @@ class ObLinkScan : public ObNoChildrenPhyOperator {
     static const int64_t STMT_BUF_BLOCK;
   };
 
-  public:
+public:
   explicit ObLinkScan(common::ObIAllocator& allocator);
   virtual ~ObLinkScan();
   virtual void reset();
@@ -86,7 +86,7 @@ class ObLinkScan : public ObNoChildrenPhyOperator {
     dblink_id_ = dblink_id;
   }
 
-  protected:
+protected:
   virtual int init_op_ctx(ObExecContext& ctx) const;
   virtual int inner_open(ObExecContext& ctx) const;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
@@ -94,7 +94,7 @@ class ObLinkScan : public ObNoChildrenPhyOperator {
   virtual int rescan(ObExecContext& ctx) const;
   void reset_inner();
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   common::ObFixedArray<ObParamPosIdx, common::ObIAllocator> param_infos_;
   common::ObString stmt_fmt_;

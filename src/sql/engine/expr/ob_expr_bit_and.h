@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprBitAnd : public ObBitwiseExprOperator {
-  public:
+public:
   explicit ObExprBitAnd(common::ObIAllocator& alloc);
   ObExprBitAnd(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension);
@@ -27,15 +27,15 @@ class ObExprBitAnd : public ObBitwiseExprOperator {
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBitAnd);
 };
 
 class ObExprBitAndOra : public ObExprBitAnd {
-  public:
+public:
   explicit ObExprBitAndOra(common::ObIAllocator& alloc);
   // use cg_expr in ObExprBitAnd
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBitAndOra);
 };
 }  // namespace sql

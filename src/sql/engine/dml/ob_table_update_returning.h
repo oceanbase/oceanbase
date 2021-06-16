@@ -20,7 +20,7 @@ namespace sql {
 class ObTableUpdateReturningInput : public ObTableModifyInput {
   friend class ObTableUpdateReturning;
 
-  public:
+public:
   ObTableUpdateReturningInput() : ObTableModifyInput()
   {}
   virtual ~ObTableUpdateReturningInput()
@@ -30,7 +30,7 @@ class ObTableUpdateReturningInput : public ObTableModifyInput {
     return PHY_UPDATE_RETURNING;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableUpdateReturningInput);
 };
 
@@ -38,7 +38,7 @@ class ObTableUpdateReturning : public ObTableUpdate {
   class ObTableUpdateReturningCtx;
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObTableUpdateReturning(common::ObIAllocator& alloc)
       : ObTableUpdate(alloc), updated_projector_(NULL), updated_projector_size_(0)
   {}
@@ -54,11 +54,11 @@ class ObTableUpdateReturning : public ObTableUpdate {
   void reset();
   void reuse();
 
-  private:
+private:
   int init_op_ctx(ObExecContext& ctx) const;
   DISALLOW_COPY_AND_ASSIGN(ObTableUpdateReturning);
 
-  private:
+private:
   int32_t* updated_projector_;
   int64_t updated_projector_size_;
 };

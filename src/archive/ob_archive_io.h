@@ -24,12 +24,12 @@ using namespace oceanbase::common;
 class ObArchiveIO {
   static const int64_t MAX_PATH_LENGTH = OB_MAX_ARCHIVE_PATH_LENGTH;
 
-  public:
+public:
   ObArchiveIO(const common::ObString& storage_info);
   ~ObArchiveIO()
   {}
 
-  public:
+public:
   int push_log(const char* path, const int64_t data_len, char* data, const bool new_file, const bool compatible,
       const bool is_data_file, const int64_t epoch);
 
@@ -46,13 +46,13 @@ class ObArchiveIO {
   int get_max_archived_index_info(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
       const uint64_t min_index_file_id, const uint64_t max_index_file_id, MaxArchivedIndexInfo& info);
 
-  private:
+private:
   int get_file_range_(const ObPGKey& pg_key, const LogArchiveFileType file_type, const int64_t incarnation,
       const int64_t round, uint64_t& min_file_id, uint64_t& max_file_id);
 
   int get_append_param_(const bool is_data_file, const int64_t epoch, ObStorageAppender::AppenderParam& param);
 
-  private:
+private:
   common::ObString storage_info_;
 };
 

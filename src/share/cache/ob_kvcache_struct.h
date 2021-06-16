@@ -32,7 +32,7 @@ static const int32_t MAX_CACHE_NAME_LENGTH = 127;
 static const double CACHE_SCORE_DECAY_FACTOR = 0.9;
 
 class ObIKVCacheKey {
-  public:
+public:
   ObIKVCacheKey()
   {}
   virtual ~ObIKVCacheKey()
@@ -45,7 +45,7 @@ class ObIKVCacheKey {
 };
 
 class ObIKVCacheValue {
-  public:
+public:
   ObIKVCacheValue()
   {}
   virtual ~ObIKVCacheValue()
@@ -67,7 +67,7 @@ struct ObKVCachePair {
 enum ObKVCachePolicy { LRU = 0, LFU = 1, MAX_POLICY = 2 };
 
 class ObKVStoreMemBlock {
-  public:
+public:
   ObKVStoreMemBlock(char* buffer, const int64_t size);
   virtual ~ObKVStoreMemBlock();
   void reuse();
@@ -93,7 +93,7 @@ class ObKVStoreMemBlock {
     return atomic_pos_.pairs;
   }
 
-  private:
+private:
   static const int64_t ALIGN_SIZE = sizeof(size_t);
   AtomicInt64 atomic_pos_;
   int64_t payload_size_;
@@ -179,7 +179,7 @@ struct ObKVCacheInstKey {
 };
 
 struct ObKVCacheConfig {
-  public:
+public:
   ObKVCacheConfig();
   void reset();
   bool is_valid_;
@@ -188,7 +188,7 @@ struct ObKVCacheConfig {
 };
 
 struct ObKVCacheStatus {
-  public:
+public:
   ObKVCacheStatus();
   void refresh(const int64_t period_us);
   double get_hit_ratio() const;
@@ -228,7 +228,7 @@ struct ObKVCacheInfo {
 };
 
 class ObIMBHandleAllocator {
-  public:
+public:
   virtual int alloc_mbhandle(ObKVCacheInst& inst, const int64_t block_size, ObKVMemBlockHandle*& mb_handle) = 0;
   virtual int alloc_mbhandle(ObKVCacheInst& inst, ObKVMemBlockHandle*& mb_handle) = 0;
   virtual int alloc_mbhandle(const ObKVCacheInstKey& inst_key, ObKVMemBlockHandle*& mb_handle) = 0;

@@ -22,83 +22,83 @@ namespace sql {
 class ObExecContext;
 class ObXaStartStmt;
 class ObXaStartExecutor {
-  public:
+public:
   ObXaStartExecutor()
   {}
   ~ObXaStartExecutor()
   {}
   int execute(ObExecContext& ctx, ObXaStartStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXaStartExecutor);
 };
 
 class ObPlXaStartExecutor {
-  public:
+public:
   ObPlXaStartExecutor()
   {}
   ~ObPlXaStartExecutor()
   {}
   int execute(ObExecContext& ctx, ObXaStartStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPlXaStartExecutor);
 };
 
 class ObXaEndStmt;
 class ObXaEndExecutor {
-  public:
+public:
   ObXaEndExecutor()
   {}
   ~ObXaEndExecutor()
   {}
   int execute(ObExecContext& ctx, ObXaEndStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXaEndExecutor);
 };
 
 class ObPlXaEndExecutor {
-  public:
+public:
   ObPlXaEndExecutor()
   {}
   ~ObPlXaEndExecutor()
   {}
   int execute(ObExecContext& ctx, ObXaEndStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPlXaEndExecutor);
 };
 
 class ObXaPrepareStmt;
 class ObXaPrepareExecutor {
-  public:
+public:
   ObXaPrepareExecutor()
   {}
   ~ObXaPrepareExecutor()
   {}
   int execute(ObExecContext& ctx, ObXaPrepareStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXaPrepareExecutor);
 };
 
 class ObPlXaPrepareExecutor {
-  public:
+public:
   ObPlXaPrepareExecutor()
   {}
   ~ObPlXaPrepareExecutor()
   {}
   int execute(ObExecContext& ctx, ObXaPrepareStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPlXaPrepareExecutor);
 };
 
 class ObXaCommitStmt;
 class ObXaRollBackStmt;
 class ObXaEndTransExecutor {
-  public:
+public:
   ObXaEndTransExecutor()
   {}
   ~ObXaEndTransExecutor()
@@ -112,13 +112,13 @@ class ObXaEndTransExecutor {
     return execute_(stmt.get_xa_string(), true, ctx);
   }
 
-  private:
+private:
   int execute_(const common::ObString& xid, const bool is_rollback, ObExecContext& ctx);
   DISALLOW_COPY_AND_ASSIGN(ObXaEndTransExecutor);
 };
 
 class ObPlXaEndTransExecutor {
-  public:
+public:
   ObPlXaEndTransExecutor()
   {}
   ~ObPlXaEndTransExecutor()
@@ -134,7 +134,7 @@ class ObPlXaEndTransExecutor {
         stmt.get_gtrid_string(), stmt.get_bqual_string(), stmt.get_format_id(), true, stmt.get_flags(), ctx);
   }
 
-  private:
+private:
   int execute_(const common::ObString& gtrid_str, const common::ObString& bqual_str, const int64_t format_id,
       const bool is_rollback, const int64_t flags, ObExecContext& ctx);
   DISALLOW_COPY_AND_ASSIGN(ObPlXaEndTransExecutor);

@@ -31,14 +31,14 @@ class ObDMLStmt;
 class ObOptimizerContext;
 
 class ObAlterBaselineExecutor {
-  public:
+public:
   ObAlterBaselineExecutor()
   {}
   virtual ~ObAlterBaselineExecutor()
   {}
   int execute(ObExecContext& ctx, ObAlterBaselineStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterBaselineExecutor);
 };
 

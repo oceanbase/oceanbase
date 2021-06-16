@@ -32,7 +32,7 @@ class ObMicroBlockIndexTransformer;
 namespace compaction {
 // Load macro block buf from disk and offer interfaces of raw data.
 class ObMacroBlockLoader {
-  public:
+public:
   ObMacroBlockLoader();
   virtual ~ObMacroBlockLoader();
   int init(const char* macro_block_buf, const int64_t macro_block_buf_size,
@@ -62,11 +62,11 @@ class ObMacroBlockLoader {
     return cur_micro_cursor_;
   }
 
-  private:
+private:
   int transform_block_header(
       const blocksstable::ObSSTableMacroBlockHeader*& block_header, const common::ObObjMeta*& column_types);
 
-  private:
+private:
   bool is_inited_;
   const char* macro_buf_;
   int64_t macro_buf_size_;
@@ -78,7 +78,7 @@ class ObMacroBlockLoader {
 };
 
 class ObMicroBlockIterator {
-  public:
+public:
   ObMicroBlockIterator();
   virtual ~ObMicroBlockIterator();
 
@@ -106,7 +106,7 @@ class ObMicroBlockIterator {
     return loader_.is_right_border();
   }
 
-  private:
+private:
   bool inited_;
   uint64_t table_id_;
   const common::ObIArray<share::schema::ObColDesc>* columns_;

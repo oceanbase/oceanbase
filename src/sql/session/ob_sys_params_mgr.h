@@ -29,7 +29,7 @@ static const int64_t MIN_GROUP_MEM_SIZE_LIMIT = 10000;  // 10M
 // 2. MAX value, -1 means no limit
 
 class ObSysParamsMgr {
-  public:
+public:
   ObSysParamsMgr();
   virtual ~ObSysParamsMgr();
 
@@ -41,7 +41,7 @@ class ObSysParamsMgr {
   int64_t get_sort_mem_size_limit() const;
   int64_t get_group_mem_size_limit() const;
 
-  private:
+private:
   int64_t sort_mem_size_limit_;
   int64_t group_mem_size_limit_;
   DISALLOW_COPY_AND_ASSIGN(ObSysParamsMgr);

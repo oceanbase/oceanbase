@@ -17,18 +17,18 @@
 using namespace oceanbase::common;
 
 class Ob2DArrayTest : public ::testing::Test {
-  public:
+public:
   Ob2DArrayTest();
   virtual ~Ob2DArrayTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   Ob2DArrayTest(const Ob2DArrayTest& other);
   Ob2DArrayTest& operator=(const Ob2DArrayTest& other);
 
-  protected:
+protected:
   // data members
 };
 

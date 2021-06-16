@@ -54,7 +54,7 @@ void init_pcv()
 }
 
 class TestPlanCacheValue : public ::testing::Test {
-  public:
+public:
   TestPlanCacheValue()
   {}
   virtual ~TestPlanCacheValue()
@@ -64,7 +64,7 @@ class TestPlanCacheValue : public ::testing::Test {
   void TearDown()
   {}
 
-  private:
+private:
   // disallow copy
   TestPlanCacheValue(const TestPlanCacheValue& other);
   TestPlanCacheValue& operator=(const TestPlanCacheValue& other);

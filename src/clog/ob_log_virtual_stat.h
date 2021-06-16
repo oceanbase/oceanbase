@@ -22,11 +22,11 @@ namespace oceanbase {
 namespace clog {
 class ObIPartitionLogService;
 class ObClogVirtualStat {
-  public:
+public:
   ObClogVirtualStat();
   virtual ~ObClogVirtualStat();
 
-  public:
+public:
   int init(common::ObAddr self, common::ObPartitionKey& partition_key, ObLogStateMgr* state_mgr, ObLogSlidingWindow* sw,
       ObLogMembershipMgr* mm, ObLogCascadingMgr* cm, ObIPartitionLogService* pls);
   int get_server_ip(char* buffer, uint32_t size);
@@ -54,7 +54,7 @@ class ObClogVirtualStat {
   bool is_need_rebuild() const;
   uint64_t get_next_replay_ts_delta() const;
 
-  private:
+private:
   bool is_inited_;
   common::ObAddr self_;
   common::ObPartitionKey partition_key_;

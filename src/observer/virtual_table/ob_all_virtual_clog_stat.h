@@ -24,23 +24,23 @@ class ObIPartitionGroupIterator;
 }  // namespace storage
 namespace observer {
 class ObAllVirtualClogStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   explicit ObAllVirtualClogStat(storage::ObPartitionService* partition_service);
   virtual ~ObAllVirtualClogStat();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   void destroy();
 
-  private:
+private:
   int prepare_get_clog_stat_();
   int finish_get_clog_stat_();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   storage::ObIPartitionGroupIterator* partition_iter_;
 
-  private:
+private:
   char server_ip_buff_[common::OB_IP_PORT_STR_BUFF];
   char leader_buff_[common::OB_IP_PORT_STR_BUFF];
   char freeze_version_buff_[common::MAX_VERSION_LENGTH];

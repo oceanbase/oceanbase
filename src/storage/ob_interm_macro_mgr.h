@@ -26,7 +26,7 @@ class ObIntermMacroMgr;
 struct ObIntermMacroKey {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObIntermMacroKey();
   virtual ~ObIntermMacroKey();
   inline int64_t hash() const;
@@ -37,7 +37,7 @@ struct ObIntermMacroKey {
 };
 
 class ObIntermMacroValue {
-  public:
+public:
   ObIntermMacroValue();
   virtual ~ObIntermMacroValue();
   int set_macro_block(blocksstable::ObMacroBlocksWriteCtx& macro_block_ctx);
@@ -54,24 +54,24 @@ class ObIntermMacroValue {
   int deep_copy(char* buf, const int64_t buf_len, ObIntermMacroValue*& value);
   TO_STRING_KV(K_(macro_block_write_ctx));
 
-  private:
+private:
   blocksstable::ObMacroBlocksWriteCtx macro_block_write_ctx_;
 };
 
 class ObIntermMacroHandle : public ObResourceHandle<ObIntermMacroValue> {
   friend class ObIntermMacroMgr;
 
-  public:
+public:
   ObIntermMacroHandle();
   virtual ~ObIntermMacroHandle();
   void reset();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIntermMacroHandle);
 };
 
 class ObIntermMacroMgr {
-  public:
+public:
   static ObIntermMacroMgr& get_instance();
   int init();
   int put(const ObIntermMacroKey& key, blocksstable::ObMacroBlocksWriteCtx& macro_block_ctx);
@@ -80,11 +80,11 @@ class ObIntermMacroMgr {
   void destroy();
   int dec_handle_ref(ObIntermMacroHandle& handle);
 
-  private:
+private:
   ObIntermMacroMgr();
   virtual ~ObIntermMacroMgr();
 
-  private:
+private:
   static const int64_t DEFAULT_BUCKET_NUM = 1543L;
   static const int64_t TOTAL_LIMIT = 1 * 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;

@@ -98,7 +98,7 @@ static int64_t calc_nop_log_len(int64_t pos, int64_t min_log_size)
 
 char ObLogGenerator::eof_flag_buf_[LOG_FILE_ALIGN_SIZE] __attribute__((aligned(DIO_ALIGN_SIZE)));
 static class EOF_FLAG_BUF_CONSTRUCTOR {
-  public:
+public:
   EOF_FLAG_BUF_CONSTRUCTOR()
   {
     const char* mark_str = "end_of_log_file";

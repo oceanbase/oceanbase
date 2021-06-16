@@ -28,7 +28,7 @@ EXTERN_C_END
 // Represent basic numeric co-routine local variable.
 template <class T>
 class CoVarBase {
-  public:
+public:
   CoVarBase()
   {
     eoffset_ = CVC.apply<bool>();
@@ -72,7 +72,7 @@ class CoVarBase {
     return default_value;
   }
 
-  protected:
+protected:
   // co-routine variable can't have initial value.
   CoVarBase(const T& v) = delete;
 
@@ -106,7 +106,7 @@ class CoVarBase {
     return *reinterpret_cast<bool*>(buffer + eoffset_);
   }
 
-  private:
+private:
   char* get_default_crls() const
   {
     // @FIXME: free buffer after thread exiting.
@@ -124,7 +124,7 @@ class CoVarBase {
     return DEFAULT_CRLS;
   }
 
-  private:
+private:
   int64_t eoffset_;
   int64_t voffset_;
 };
@@ -139,7 +139,7 @@ class CoVar {
 // Pointer type of variable
 template <class T>
 class CoVar<T*> : public CoVarBase<T*> {
-  public:
+public:
   using CoVarBase<T*>::operator=;
   T* operator->() const
   {
@@ -167,7 +167,7 @@ class CoVar<T[N]> : public CoVarBase<T[N]> {
 #define DEF_NUM_CO_VAR(T)                \
   template <>                            \
   class CoVar<T> : public CoVarBase<T> { \
-    public:                              \
+  public:                                \
     using CoVarBase<T>::operator=;       \
   }
 DEF_NUM_CO_VAR(bool);
@@ -188,7 +188,7 @@ using CRV = CoVar<T>;
 // CoObj is a special CoVar class which support init and deinit hooks.
 template <class T>
 class CoObj : protected CoVarBase<T>, public CoVarHook {
-  public:
+public:
   CoObj(CoVarHook::Func init, CoVarHook::Func deinit) : CoVarHook(init, deinit)
   {}
   T& get()

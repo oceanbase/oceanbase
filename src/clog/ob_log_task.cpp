@@ -753,7 +753,7 @@ int ObLogTask::log_deep_copy_to_(const ObLogEntry& log_entry, const bool need_co
       CLOG_LOG(WARN, "failed to get_next_replay_ts_for_rg", K(ret), "header", log_entry.get_header());
     } else {
       log_type_ = static_cast<uint8_t>(log_entry.get_header().get_log_type());
-      const ObLogEntryHeader &log_header = log_entry.get_header();
+      const ObLogEntryHeader& log_header = log_entry.get_header();
       if (log_header.is_trans_log()) {
         state_map_.set_map(IS_TRANS_LOG);
       }

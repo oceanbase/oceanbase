@@ -46,7 +46,7 @@ class ObIPartitionGroup;
 namespace transaction {
 
 class ObIClogAdapter {
-  public:
+public:
   ObIClogAdapter()
   {}
   virtual ~ObIClogAdapter(){};
@@ -91,7 +91,7 @@ class ObIClogAdapter {
 };
 
 class ObClogAdapter : public ObIClogAdapter, public lib::TGTaskHandler {
-  public:
+public:
   ObClogAdapter();
   ~ObClogAdapter()
   {
@@ -136,13 +136,13 @@ class ObClogAdapter : public ObIClogAdapter, public lib::TGTaskHandler {
   int submit_backfill_nop_log_task(const common::ObPartitionKey& partition, const clog::ObLogMeta& log_meta);
   int get_last_submit_timestamp(const common::ObPartitionKey& partition, int64_t& timestamp);
 
-  public:
+public:
   static bool need_retry(const int ret)
   {
     return OB_ALLOCATE_MEMORY_FAILED == ret || OB_EAGAIN == ret;
   }
 
-  private:
+private:
   void reset_statistics();
   void statistics();
   int submit_log_(const common::ObPartitionKey& partition, const common::ObVersion& version, const char* buf,
@@ -157,15 +157,15 @@ class ObClogAdapter : public ObIClogAdapter, public lib::TGTaskHandler {
       int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows);
   bool is_cluster_allow_submit_log_(const common::ObPartitionArray& partition_array) const;
 
-  private:
+private:
   // apply for a queue with TOTAL_TASK length, at most (TOTAL_TASK - RESERVE_TASK)
   // outside tasks is allowed, RESERVE_TASK reserved for inner tasks.
   static const int64_t RESERVE_TASK = 10000;
   // the upper limit of participants on a single observer is 500k, plus 10000 for reserved ctx
-  public:
+public:
   static const int64_t TOTAL_TASK = MAX_PART_CTX_COUNT + RESERVE_TASK;
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   storage::ObPartitionService* partition_service_;
@@ -178,7 +178,7 @@ class ObClogAdapter : public ObIClogAdapter, public lib::TGTaskHandler {
 };
 
 class AllocLogIdTask : public ObTransTask {
-  public:
+public:
   AllocLogIdTask() : ObTransTask(), log_type_(storage::ObStorageLogType::OB_LOG_UNKNOWN), ctx_(NULL)
   {}
   virtual ~AllocLogIdTask()
@@ -200,14 +200,14 @@ class AllocLogIdTask : public ObTransTask {
     return ctx_;
   }
 
-  private:
+private:
   int64_t log_type_;
   ObTransCtx* ctx_;
   DISALLOW_COPY_AND_ASSIGN(AllocLogIdTask);
 };
 
 class SubmitLogTask : public ObTransTask {
-  public:
+public:
   SubmitLogTask() : ObTransTask(), with_need_update_version_(false), clog_buf_(NULL), cb_(NULL), allocator_(NULL)
   {
     reset();
@@ -222,7 +222,7 @@ class SubmitLogTask : public ObTransTask {
       const int64_t size, const bool with_need_update_version, const int64_t local_trans_version,
       const bool with_base_ts, const int64_t base_ts, ObITransSubmitLogCb* cb, ObConcurrentFIFOAllocator* allocator);
 
-  public:
+public:
   const common::ObPartitionKey& get_partition() const
   {
     return partition_;
@@ -268,12 +268,12 @@ class SubmitLogTask : public ObTransTask {
     process_begin_ts_ = ObTimeUtility::current_time();
   }
 
-  public:
+public:
   TO_STRING_KV(KP(this), K_(partition), K_(version), K_(with_need_update_version), K_(local_trans_version),
       K_(with_base_ts), K_(base_ts), K_(submit_task_ts), K_(process_begin_ts), "cb",
       *(static_cast<ObTransSubmitLogCb*>(cb_)));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   common::ObVersion version_;
   bool with_need_update_version_;
@@ -290,7 +290,7 @@ class SubmitLogTask : public ObTransTask {
 };
 
 class BackfillNopLogTask : public ObTransTask {
-  public:
+public:
   BackfillNopLogTask() : ObTransTask()
   {
     reset();
@@ -315,16 +315,16 @@ class BackfillNopLogTask : public ObTransTask {
   }
   bool is_valid() const;
 
-  public:
+public:
   TO_STRING_KV(KP(this), K_(partition), K_(log_meta));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   clog::ObLogMeta log_meta_;
 };
 
 class AggreLogTask : public ObTransTask {
-  public:
+public:
   AggreLogTask() : ObTransTask()
   {
     reset();
@@ -356,10 +356,10 @@ class AggreLogTask : public ObTransTask {
     return in_queue_;
   }
 
-  public:
+public:
   TO_STRING_KV(KP(this), K_(partition));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   ObTransLogBufferAggreContainer* container_;
   bool in_queue_;

@@ -32,7 +32,7 @@ namespace oceanbase {
 namespace storage {
 
 class MockObIPartitionService : public ObPartitionService {
-  public:
+public:
   MOCK_METHOD1(on_leader_revoke, int(const common::ObPartitionKey& pkey));
   MOCK_METHOD1(on_leader_takeover, int(const common::ObPartitionKey& pkey));
   MOCK_METHOD1(on_leader_active, int(const common::ObPartitionKey& pkey));
@@ -208,7 +208,7 @@ class MockObIPartitionService : public ObPartitionService {
 };
 
 class MockObIPartitionArrayGuard : public ObIPartitionArrayGuard {
-  public:
+public:
   MOCK_METHOD1(push_back, int(ObIPartitionGroup* partition));
   MOCK_METHOD1(at, ObIPartitionGroup*(int64_t i));
   MOCK_METHOD0(count, int64_t);
@@ -222,7 +222,7 @@ namespace oceanbase {
 namespace storage {
 
 class MockObIPartitionArrayGuard : public ObIPartitionArrayGuard {
-  public:
+public:
 };
 
 }  // namespace storage

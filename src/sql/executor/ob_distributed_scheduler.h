@@ -39,7 +39,7 @@ class ObDistributedSchedulerManager;
 class ObDistributedSchedulerCtx;
 class ObDistributedExecContext;
 class ObDistributedScheduler : public ObSqlScheduler {
-  public:
+public:
   friend class ObSignalFinishQueue;
   friend class ObDistributedSchedulerManager;
 
@@ -100,7 +100,7 @@ class ObDistributedScheduler : public ObSqlScheduler {
 
   int atomic_push_err_rpc_addr(const common::ObAddr& addr);
 
-  private:
+private:
   static const int64_t OB_MAX_SKIPPED_TASK_EVENTS_QUEUE_CAPACITY = 1024L * 16L;
   typedef int (ObDistributedScheduler::*ObCheckStatus)();
 
@@ -125,7 +125,7 @@ class ObDistributedScheduler : public ObSqlScheduler {
 
   uint64_t next_scheduler_id();
 
-  private:
+private:
   static const int64_t MAX_FINISH_QUEUE_CAPACITY = 4096;
   static const int64_t NOP_EVENT = INT64_MIN + 1;
   static const int64_t SCHE_ITER_END = INT64_MIN + 2;
@@ -166,7 +166,7 @@ class ObSchedulerThreadPool : public lib::TGTaskHandler {
 };
 
 class ObDistributedSchedulerManager {
-  public:
+public:
   // private static variable
   static const int64_t DEFAULT_ID_MAP_SIZE = (1 << 20);
   static const int64_t MINI_MODE_ID_MAP_SIZE = (128 << 10);
@@ -174,14 +174,14 @@ class ObDistributedSchedulerManager {
   static const int64_t MINI_MODE_SCHEDULER_THREAD_NUM = 4;
   static const int64_t SCHEDULER_THREAD_QUEUE = 256;
 
-  private:
+private:
   // private static variable
   static ObDistributedSchedulerManager* instance_;
   typedef ObSqlExecutionIDMap ExecutionIDMap;
 
-  public:
+public:
   class ObDistributedSchedulerHolder {
-    public:
+  public:
     ObDistributedSchedulerHolder();
     virtual ~ObDistributedSchedulerHolder();
 
@@ -189,18 +189,18 @@ class ObDistributedSchedulerManager {
     int init(ObDistributedScheduler* scheduler, uint64_t execution_id, ExecutionIDMap& execution_id_map);
     int get_scheduler(ObDistributedScheduler*& scheduler);
 
-    private:
+  private:
     bool inited_;
     uint64_t execution_id_;
     ObDistributedScheduler* scheduler_;
     ExecutionIDMap* execution_id_map_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObDistributedSchedulerHolder);
   };
 
   class ObDistributedSchedulerKiller {
-    public:
+  public:
     ObDistributedSchedulerKiller()
     {}
     virtual ~ObDistributedSchedulerKiller()
@@ -210,11 +210,11 @@ class ObDistributedSchedulerManager {
     {}
     void operator()(const uint64_t execution_id);
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObDistributedSchedulerKiller);
   };
 
-  public:
+public:
   friend class ObDistributedSchedulerKiller;
 
   static int build_instance();
@@ -238,11 +238,11 @@ class ObDistributedSchedulerManager {
   int set_task_status(const ObTaskID& task_id, ObTaskStatus status);
   int stop();
 
-  private:
+private:
   // private function
   int init();
 
-  private:
+private:
   // private common variable
   bool inited_;
   ExecutionIDMap execution_id_map_;
@@ -270,14 +270,14 @@ inline int ObDistributedScheduler::init_trans_result(ObSQLSessionInfo& session, 
 }
 
 class ObDistributedSchedulerCtx {
-  public:
+public:
   const uint64_t* trace_id_;
   uint64_t execution_id_;
   ObExecContext* exec_ctx_;
   char* exec_ctx_buf_;
   int64_t buf_len_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistributedSchedulerCtx);
 };
 

@@ -22,7 +22,7 @@ namespace sql {
 class ObMultiTableReplaceSpec : public ObTableReplaceSpec, public ObMultiDMLInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMultiTableReplaceSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableReplaceSpec(alloc, type), ObMultiDMLInfo(alloc)
   {}
@@ -38,17 +38,17 @@ class ObMultiTableReplaceSpec : public ObTableReplaceSpec, public ObMultiDMLInfo
     return true;
   }
 
-  public:
+public:
   ObDuplicatedKeyChecker duplicate_key_checker_;
 };
 
 class ObMultiTableReplaceOp : public ObTableReplaceOp, public ObMultiDMLCtx {
-  public:
+public:
   static const int64_t DELETE_OP = 0;
   static const int64_t INSERT_OP = 1;
   static const int64_t DML_OP_CNT = 2;
 
-  public:
+public:
   ObMultiTableReplaceOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableReplaceOp(ctx, spec, input),
         ObMultiDMLCtx(ctx.get_allocator()),
@@ -73,7 +73,7 @@ class ObMultiTableReplaceOp : public ObTableReplaceOp, public ObMultiDMLCtx {
     replace_row_store_.reset();
   }
 
-  private:
+private:
   ObChunkDatumStore replace_row_store_;
   ObDupKeyCheckerCtx dupkey_checker_ctx_;
 };

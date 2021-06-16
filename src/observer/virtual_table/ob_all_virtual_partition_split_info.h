@@ -25,14 +25,14 @@ class ObTenantManager;
 namespace observer {
 
 class ObAllVirtualPartitionSplitInfo : public common::ObVirtualTableIterator {
-  public:
+public:
   ObAllVirtualPartitionSplitInfo();
   virtual ~ObAllVirtualPartitionSplitInfo();
   virtual int init(share::schema::ObMultiVersionSchemaService& schema_service);
   virtual void reset();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   enum CACHE_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,

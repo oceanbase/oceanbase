@@ -28,7 +28,7 @@ using namespace common;
 namespace unittest {
 const int TEST_ALL_TENANT_NUM = 10;
 class MockSchemaCache : public ObFreezeInfoSnapshotMgr::SchemaCache {
-  public:
+public:
   MockSchemaCache() : SchemaCache(schema_query_set_), schema_query_set_(*this)
   {}
   virtual int fetch_freeze_schema(const uint64_t, const int64_t, int64_t& schema_version) override
@@ -63,12 +63,12 @@ class MockSchemaCache : public ObFreezeInfoSnapshotMgr::SchemaCache {
     return ret;
   }
 
-  private:
+private:
   ObFreezeInfoSnapshotMgr::SchemaQuerySet schema_query_set_;
 };
 
 class TestFreezeInfoSnapshotMgr : public ::testing::Test {
-  public:
+public:
   ObFreezeInfoSnapshotMgr mgr;
   const int TEST_TENANT_NUM = 10;
   const int TEST_NUM = 10;

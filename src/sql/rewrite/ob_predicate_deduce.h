@@ -21,7 +21,7 @@ class ObPredicateDeduce {
 
   enum Type { GT = 1 << 0, GE = 1 << 1, EQ = 1 << 2 };
 
-  public:
+public:
   ObPredicateDeduce(ObDMLStmt& stmt) : stmt_(stmt)
   {}
 
@@ -53,7 +53,7 @@ class ObPredicateDeduce {
            expr.has_flag(CNT_SEQ_EXPR) || expr.has_flag(CNT_STATE_FUNC) || expr.has_flag(CNT_USER_VARIABLE);
   }
 
-  private:
+private:
   int init();
 
   int deduce(ObIArray<uint8_t>& graph);
@@ -187,7 +187,7 @@ class ObPredicateDeduce {
 
   int check_index_part_cond(ObTransformerCtx& ctx, ObRawExpr* left_expr, ObRawExpr* right_expr, bool& is_valid);
 
-  private:
+private:
   /// the compare meta used by all exprs in the graph
   ObObjMeta cmp_type_;
 

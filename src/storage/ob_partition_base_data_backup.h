@@ -73,7 +73,7 @@ struct ObBackupMacroBlockArg final {
 
 class ObPartitionMetaBackupReader {
 
-  public:
+public:
   ObPartitionMetaBackupReader();
   virtual ~ObPartitionMetaBackupReader()
   {}
@@ -98,7 +98,7 @@ class ObPartitionMetaBackupReader {
     return is_inited_;
   }
 
-  private:
+private:
   int read_partition_meta_info(const ObPartitionKey& pkey, const int64_t backup_snapshot_version);
 
   int read_table_info(const ObPartitionKey& pkey, const uint64_t table_id, const int64_t multi_version_start,
@@ -109,7 +109,7 @@ class ObPartitionMetaBackupReader {
       const ObPGPartitionStoreMeta& partition_store_meta, const ObTablesHandle& handle);
   int build_backup_sstable_info(const ObSSTable* sstable, ObBackupSSTableInfo& sstable_info);
 
-  private:
+private:
   bool is_inited_;
   int64_t data_size_;
   ObPGPartitionMetaInfo meta_info_;
@@ -123,7 +123,7 @@ class ObPartitionMetaBackupReader {
 };
 
 class ObMacroBlockBackupSyncReader final {
-  public:
+public:
   ObMacroBlockBackupSyncReader();
   virtual ~ObMacroBlockBackupSyncReader();
 
@@ -138,12 +138,12 @@ class ObMacroBlockBackupSyncReader final {
   TO_STRING_KV(K_(is_inited), K_(args), K_(data_size), K_(result_code), K_(is_data_ready), K_(macro_arg),
       K_(backup_index_tid), K_(full_meta), K_(data));
 
-  private:
+private:
   int process();
   int get_macro_read_info(const obrpc::ObFetchMacroBlockArg& arg, blocksstable::ObMacroBlockCtx& macro_block_ctx,
       blocksstable::ObMacroBlockReadInfo& read_info);
 
-  private:
+private:
   bool is_inited_;
   const share::ObPhysicalBackupArg* args_;
   common::ObArenaAllocator allocator_;
@@ -163,7 +163,7 @@ class ObMacroBlockBackupSyncReader final {
 };
 
 class ObPartitionBaseDataMetaBackupReader {
-  public:
+public:
   ObPartitionBaseDataMetaBackupReader();
   virtual ~ObPartitionBaseDataMetaBackupReader();
   int init(
@@ -180,10 +180,10 @@ class ObPartitionBaseDataMetaBackupReader {
   TO_STRING_KV(K_(pkey), KP(backup_arg_), K_(last_read_size), K_(partition_store_meta), K_(snapshot_version),
       K_(schema_version), K_(data_version));
 
-  private:
+private:
   int prepare(const common::ObPartitionKey& pkey, const ObDataStorageInfo& data_info);
 
-  private:
+private:
   bool is_inited_;
   common::ObPartitionKey pkey_;
   const ObPhysicalBackupArg* backup_arg_;
@@ -199,7 +199,7 @@ class ObPartitionBaseDataMetaBackupReader {
 
 class ObPartitionGroupMetaBackupReader;
 class ObPhysicalBaseMetaBackupReader : public ObIPhysicalBaseMetaReader {
-  public:
+public:
   ObPhysicalBaseMetaBackupReader();
   virtual ~ObPhysicalBaseMetaBackupReader()
   {}
@@ -212,7 +212,7 @@ class ObPhysicalBaseMetaBackupReader : public ObIPhysicalBaseMetaReader {
     return BASE_DATA_META_BACKUP_READER;
   }
 
-  private:
+private:
   bool is_inited_;
   ObRestoreInfo* restore_info_;
   ObPartitionGroupMetaBackupReader* reader_;
@@ -223,7 +223,7 @@ class ObPhysicalBaseMetaBackupReader : public ObIPhysicalBaseMetaReader {
 };
 
 class ObPartitionMacroBlockBackupReader : public ObIPartitionMacroBlockReader {
-  public:
+public:
   ObPartitionMacroBlockBackupReader();
   virtual ~ObPartitionMacroBlockBackupReader();
   int init(const ObPhysicalBackupArg& backup_arg, const ObIArray<ObBackupMacroBlockArg>& list);
@@ -246,11 +246,11 @@ class ObPartitionMacroBlockBackupReader : public ObIPartitionMacroBlockReader {
     return is_inited_;
   }
 
-  private:
+private:
   int schedule_macro_block_task(const ObPhysicalBackupArg& backup_arg, const obrpc::ObFetchMacroBlockArg& arg,
       const ObITable::TableKey& table_key, ObMacroBlockBackupSyncReader& reader);
 
-  private:
+private:
   bool is_inited_;
   common::ObArray<obrpc::ObFetchMacroBlockArg> macro_list_;
   int64_t macro_idx_;
@@ -261,7 +261,7 @@ class ObPartitionMacroBlockBackupReader : public ObIPartitionMacroBlockReader {
 };
 
 class ObPartitionGroupMetaBackupReader {
-  public:
+public:
   ObPartitionGroupMetaBackupReader();
   virtual ~ObPartitionGroupMetaBackupReader();
   int init(const ObPartitionGroupMeta& pg_meta, const ObPhysicalBackupArg& backup_arg);
@@ -272,10 +272,10 @@ class ObPartitionGroupMetaBackupReader {
   int fetch_sstable_pair_list(
       const uint64_t index_id, const ObPartitionKey& pkey, common::ObIArray<blocksstable::ObSSTablePair>& pair_list);
 
-  private:
+private:
   int prepare(const ObPartitionGroupMeta& pg_meta, const ObPhysicalBackupArg& backup_arg);
 
-  private:
+private:
   bool is_inited_;
   common::ObPGKey pg_key_;
   const ObPhysicalBackupArg* backup_arg_;
@@ -286,7 +286,7 @@ class ObPartitionGroupMetaBackupReader {
 };
 
 class ObPGPartitionBaseDataMetaBackupReader : public ObIPGPartitionBaseDataMetaObReader {
-  public:
+public:
   ObPGPartitionBaseDataMetaBackupReader();
   virtual ~ObPGPartitionBaseDataMetaBackupReader();
 
@@ -297,7 +297,7 @@ class ObPGPartitionBaseDataMetaBackupReader : public ObIPGPartitionBaseDataMetaO
     return BASE_DATA_META_OB_BACKUP_READER;
   }
 
-  private:
+private:
   bool is_inited_;
   int64_t reader_index_;
   common::ObArray<ObPartitionBaseDataMetaBackupReader*> partition_reader_array_;
@@ -305,7 +305,7 @@ class ObPGPartitionBaseDataMetaBackupReader : public ObIPGPartitionBaseDataMetaO
 };
 
 class ObBackupFileAppender final {
-  public:
+public:
   ObBackupFileAppender();
   virtual ~ObBackupFileAppender();
   int open(common::ObInOutBandwidthThrottle& bandwidth_throttle, const share::ObPhysicalBackupArg& backup_arg,
@@ -335,7 +335,7 @@ class ObBackupFileAppender final {
 
   TO_STRING_KV(K_(is_opened), K_(file_offset), K_(max_buf_size), KP(backup_arg_));
 
-  private:
+private:
   int get_data_version(const ObBackupFileType data_type, uint16& data_version);
   int is_exist(const common::ObString& uri, bool& exist);
   template <class T>
@@ -343,7 +343,7 @@ class ObBackupFileAppender final {
   int write_tail();
   int open(const common::ObString path);
 
-  private:
+private:
   const static int64_t MAX_DATA_BUF_LENGTH = 1LL << 22;       // 4M
   const static int64_t MAX_INDEX_BUF_LENGTH = 1LL << 18;      // 256KB
   const static int64_t MAX_IDLE_TIME = 10 * 1000LL * 1000LL;  // 10s
@@ -361,7 +361,7 @@ class ObBackupFileAppender final {
 };
 
 class ObBackupMetaWriter final {
-  public:
+public:
   ObBackupMetaWriter();
   virtual ~ObBackupMetaWriter();
   int open(common::ObInOutBandwidthThrottle& bandwidth_throttle, ObIArray<ObPartMigrationTask>& task_list);
@@ -369,7 +369,7 @@ class ObBackupMetaWriter final {
   int close();
   TO_STRING_KV(K_(is_inited), K_(task_id), KP_(cp_fty), K_(meta_appender), K_(index_appender));
 
-  private:
+private:
   int prepare_appender(common::ObInOutBandwidthThrottle& bandwidth_throttle, const share::ObPhysicalBackupArg& arg);
   int check_task(const ObIArray<ObPartMigrationTask>& task_list) const;
   int get_min_snapshot_version(const common::ObIArray<ObITable::TableKey>& table_key_array, int64_t& snapshot_version);
@@ -385,7 +385,7 @@ class ObBackupMetaWriter final {
       ObBackupPartitionStoreMetaInfo& partition_store_meta_info);
   int write_backup_pg_meta_info(const ObBackupPGMetaInfo& pg_meta_info);
 
-  private:
+private:
   bool is_inited_;
   int64_t task_id_;
   ObIArray<ObPartMigrationTask>* task_list_;
@@ -407,9 +407,9 @@ struct ObBackupMacroBlockInfo final {
 };
 
 class ObBackupPhysicalPGCtx {
-  public:
+public:
   class SubTask final {
-    public:
+  public:
     SubTask();
     virtual ~SubTask();
     void reset();
@@ -438,7 +438,7 @@ class ObBackupPhysicalPGCtx {
     int64_t last_idx_;
   };
 
-  public:
+public:
   const static uint64_t DEFAULT_WAIT_TIME = 10 * 1000 * 1000;  // 10s
   const static uint64_t MAX_MACRO_BLOCK_COUNT_PER_TASK = 512;  // 1GB per backup data file
   ObBackupPhysicalPGCtx();
@@ -480,7 +480,7 @@ class ObBackupPhysicalPGCtx {
   int64_t base_task_id_;
   int64_t retry_cnt_;
 
-  private:
+private:
   int fetch_available_sub_task(SubTask*& sub_task);
   int init_macro_index_appender();
   int init_already_backup_data();  // for retry
@@ -490,7 +490,7 @@ class ObBackupPhysicalPGCtx {
   int get_macro_block_index_path(
       const ObBackupBaseDataPathInfo& path_info, const int64_t retry_cnt, ObBackupPath& path);
 
-  private:
+private:
   common::ObThreadCond cond_;
   volatile int64_t task_turn_;
   MacroIndexMergePoint index_merge_point_;
@@ -507,7 +507,7 @@ class ObBackupPhysicalPGCtx {
 };
 
 class ObBackupCopyPhysicalTask : public share::ObITask {
-  public:
+public:
   ObBackupCopyPhysicalTask();
   virtual ~ObBackupCopyPhysicalTask();
   virtual int generate_next_task(ObITask*& next_task) override;
@@ -515,7 +515,7 @@ class ObBackupCopyPhysicalTask : public share::ObITask {
   int init(const int64_t task_idx, const ObITable::TableKey& already_backup_table_key, ObMigrateCtx& ctx);
   virtual int process() override;
 
-  private:
+private:
   int get_macro_block_backup_reader(const ObIArray<ObBackupMacroBlockArg>& list, const ObPhysicalBackupArg& backup_arg,
       ObPartitionMacroBlockBackupReader*& reader);
   int fetch_backup_macro_block_arg(const share::ObPhysicalBackupArg& backup_arg, const ObITable::TableKey& table_key,
@@ -534,7 +534,7 @@ class ObBackupCopyPhysicalTask : public share::ObITask {
       int64_t& reuse_count);
   int calc_migrate_data_statics(const int64_t copy_count, const int64_t reuse_count);
 
-  private:
+private:
   static const int64_t OB_FETCH_MAJOR_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000L;  // 1s
   bool is_inited_;
   ObMigrateCtx* ctx_;
@@ -553,13 +553,13 @@ class ObBackupCopyPhysicalTask : public share::ObITask {
 };
 
 class ObBackupFinishTask : public share::ObITask {
-  public:
+public:
   ObBackupFinishTask();
   virtual ~ObBackupFinishTask();
   int init(ObMigrateCtx& migrate_ctx);
   virtual int process() override;
 
-  private:
+private:
   bool is_inited_;
   ObMigrateCtx* ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupFinishTask);
@@ -569,11 +569,11 @@ struct ObBackupMacroData final {
   static const int64_t BACKUP_MARCO_DATA_VERSION = 1;
   OB_UNIS_VERSION(BACKUP_MARCO_DATA_VERSION);
 
-  public:
+public:
   ObBackupMacroData(blocksstable::ObBufferHolder& meta, blocksstable::ObBufferReader& data);
   TO_STRING_KV(K_(data), K_(meta));
 
-  private:
+private:
   blocksstable::ObBufferHolder& meta_;
   blocksstable::ObBufferReader& data_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupMacroData);

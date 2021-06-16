@@ -28,7 +28,7 @@ enum MICRO_BLOCK_MERGE_VERIFY_LEVEL {
 
 // Some common interface of ObMicroBlockWriter and ObMicroBlockEncoder, not all features.
 class ObIMicroBlockWriter {
-  public:
+public:
   ObIMicroBlockWriter()
       : row_count_delta_(0),
         micro_block_checksum_(0),
@@ -102,7 +102,7 @@ class ObIMicroBlockWriter {
   VIRTUAL_TO_STRING_KV(
       K_(row_count_delta), K_(micro_block_checksum), K_(contain_uncommitted_row), K_(max_merged_trans_version));
 
-  protected:
+protected:
   OB_INLINE void cal_delta(const storage::ObStoreRow& row)
   {
     if (row.row_type_flag_.is_first_multi_version_row()) {
@@ -122,7 +122,7 @@ class ObIMicroBlockWriter {
     micro_block_merge_verify_level_ = GCONF.micro_block_merge_verify_level;
   }
 
-  protected:
+protected:
   // row count delta of the current micro block
   int32_t row_count_delta_;
   int64_t micro_block_checksum_;

@@ -37,7 +37,7 @@ namespace oceanbase {
 namespace memtable {
 
 class ObIMemtableIterator : public storage::ObStoreRowIterator {
-  public:
+public:
   ObIMemtableIterator()
   {}
   virtual ~ObIMemtableIterator()
@@ -51,12 +51,12 @@ class ObIMemtableIterator : public storage::ObStoreRowIterator {
     return ret;
   }
 
-  protected:
+protected:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row) = 0;
 };
 
 class ObIMemtableScanIterator : public ObIMemtableIterator {
-  public:
+public:
   ObIMemtableScanIterator()
   {}
   virtual ~ObIMemtableScanIterator()
@@ -75,7 +75,7 @@ class ObIMemtableScanIterator : public ObIMemtableIterator {
     return ret;
   }
 
-  protected:
+protected:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row) = 0;
 };
 
@@ -87,7 +87,7 @@ struct ObIteratorAllocator {
 };
 
 class ObMemtableGetIterator : public ObIMemtableIterator {
-  public:
+public:
   ObMemtableGetIterator();
   virtual ~ObMemtableGetIterator();
   int init(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context, ObIMemtable& memtable);
@@ -101,12 +101,12 @@ class ObMemtableGetIterator : public ObIMemtableIterator {
     reset();
   }
 
-  private:
+private:
   // means GETITER
   static const uint64_t VALID_MAGIC_NUM = 0x5245544954454700;
   DISALLOW_COPY_AND_ASSIGN(ObMemtableGetIterator);
 
-  private:
+private:
   const uint64_t MAGIC_;
   bool is_inited_;
   int32_t rowkey_iter_;
@@ -118,17 +118,17 @@ class ObMemtableGetIterator : public ObIMemtableIterator {
 };
 
 class ObMemtableScanIterator : public ObIMemtableScanIterator {
-  public:
+public:
   ObMemtableScanIterator();
   virtual ~ObMemtableScanIterator();
 
-  public:
+public:
   int init(ObIMemtable* memtable, const storage::ObTableIterParam& param, storage::ObTableAccessContext& context);
   int set_range(const common::ObExtStoreRange& range);
   virtual int init(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
       storage::ObITable* table, const void* query_range) override;
 
-  public:
+public:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row);
   virtual void reset();
   virtual void reuse() override
@@ -165,20 +165,20 @@ class ObMemtableScanIterator : public ObIMemtableScanIterator {
     return iter_flag_;
   }
 
-  protected:
+protected:
   int get_real_range(const common::ObStoreRange& range, common::ObStoreRange& real_range);
   int prepare_scan();
 
-  public:
+public:
   static const int64_t ROW_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t CELL_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
 
-  private:
+private:
   // means SCANITER
   static const uint64_t VALID_MAGIC_NUM = 0x524554494e414353;
   DISALLOW_COPY_AND_ASSIGN(ObMemtableScanIterator);
 
-  protected:
+protected:
   const uint64_t MAGIC_;
   common::ActiveResource active_resource_;
   bool is_inited_;
@@ -201,15 +201,15 @@ class ObMemtableScanIterator : public ObIMemtableScanIterator {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class ObMemtableMGetIterator : public ObIMemtableIterator {
-  public:
+public:
   ObMemtableMGetIterator();
   virtual ~ObMemtableMGetIterator();
 
-  public:
+public:
   virtual int init(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
       storage::ObITable* table, const void* query_range) override;
 
-  public:
+public:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row);
   virtual void reset();
   virtual void reuse() override
@@ -217,15 +217,15 @@ class ObMemtableMGetIterator : public ObIMemtableIterator {
     reset();
   }
 
-  public:
+public:
   static const int64_t ROW_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
 
-  private:
+private:
   // means MGETITER
   static const uint64_t VALID_MAGIC_NUM = 0x524554495445474d;
   DISALLOW_COPY_AND_ASSIGN(ObMemtableMGetIterator);
 
-  private:
+private:
   const uint64_t MAGIC_;
   bool is_inited_;
   const storage::ObTableIterParam* param_;
@@ -239,13 +239,13 @@ class ObMemtableMGetIterator : public ObIMemtableIterator {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 class ObMemtableMScanIterator : public ObMemtableScanIterator {
-  public:
+public:
   static const int64_t ROW_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t CELL_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   ObMemtableMScanIterator();
   virtual ~ObMemtableMScanIterator();
 
-  public:
+public:
   int init(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context, storage::ObITable* table,
       const void* query_range) override;
   virtual int inner_get_next_row(const storage::ObStoreRow*& row);
@@ -265,7 +265,7 @@ class ObMemtableMScanIterator : public ObMemtableScanIterator {
     return ret;
   }
 
-  private:
+private:
   int next_range();
   int is_range_scan(bool& range_scan);
   virtual int prepare_scan_range();
@@ -273,7 +273,7 @@ class ObMemtableMScanIterator : public ObMemtableScanIterator {
   virtual int get_next_row_for_scan(const storage::ObStoreRow*& row);
   virtual int inner_get_next_row_for_scan(const storage::ObStoreRow*& row);
 
-  private:
+private:
   static const uint64_t VALID_MAGIC_NUM = 0x524554494e414353;
   static const int64_t LOCAL_ARRAY_SIZE = 16;
   const common::ObIArray<common::ObExtStoreRange>* ranges_;
@@ -284,15 +284,15 @@ class ObMemtableMScanIterator : public ObMemtableScanIterator {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class ObMemtableMultiVersionScanIterator : public ObIMemtableScanIterator {
-  public:
+public:
   ObMemtableMultiVersionScanIterator();
   virtual ~ObMemtableMultiVersionScanIterator();
 
-  public:
+public:
   virtual int init(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
       storage::ObITable* table, const void* query_range) override;
 
-  public:
+public:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row);
   virtual void reset();
   virtual void reuse() override
@@ -305,7 +305,7 @@ class ObMemtableMultiVersionScanIterator : public ObIMemtableScanIterator {
   enum ObIterStage { IS_ITER_COMPLEMENT, IS_ITER_MINI };
   TO_STRING_KV(KPC_(context), K_(row), KPC_(key), KPC_(value_iter), K_(scan_state), K_(iter_mode));
 
-  protected:
+protected:
   virtual void row_reset();
   int get_compacted_multi_version_row(const storage::ObStoreRow*& row);
   int get_multi_version_row(const storage::ObStoreRow*& row);
@@ -317,7 +317,7 @@ class ObMemtableMultiVersionScanIterator : public ObIMemtableScanIterator {
   virtual int init_row_cells(ObIAllocator* allocator);
   int get_next_row();
 
-  protected:
+protected:
   // iterate row
   virtual int iterate_compacted_row(const common::ObStoreRowkey& key, storage::ObStoreRow& row);
   virtual int iterate_uncommitted_row(const ObStoreRowkey& key, storage::ObStoreRow& row);
@@ -329,7 +329,7 @@ class ObMemtableMultiVersionScanIterator : public ObIMemtableScanIterator {
   int iterate_uncommitted_row_value_(storage::ObStoreRow& row);
   int iterate_multi_version_row_value_(storage::ObStoreRow& row);
 
-  protected:
+protected:
   struct ObOuputRowValidateChecker {
     ObOuputRowValidateChecker();
     ~ObOuputRowValidateChecker();
@@ -344,7 +344,7 @@ class ObMemtableMultiVersionScanIterator : public ObIMemtableScanIterator {
   static const uint64_t VALID_MAGIC_NUM = 0x524554494e414353;
   DISALLOW_COPY_AND_ASSIGN(ObMemtableMultiVersionScanIterator);
 
-  protected:
+protected:
   const uint64_t MAGIC_;
   common::ActiveResource active_resource_;
   bool is_inited_;
@@ -372,7 +372,7 @@ class ObMemtableMultiVersionScanIterator : public ObIMemtableScanIterator {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 class ObReadRow {
   DEFINE_ALLOCATOR_WRAPPER
-  public:
+public:
   static int iterate_row(const share::schema::ColumnMap& column_index, const storage::ObColDescIArray& columns,
       const common::ObStoreRowkey& key, ObIMvccValueIterator* value_iter, storage::ObStoreRow& row, ObNopBitMap& bitmap,
       bool& has_null, bool& key_has_null, int64_t& row_scn);
@@ -380,15 +380,15 @@ class ObReadRow {
   static int get_row_header(ObMvccValueIterator& value_iter, uint32_t& modify_count, uint32_t& acc_checksum);
   static int iterate_row_key(bool& key_has_null, const common::ObStoreRowkey& rowkey, storage::ObStoreRow& row);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObReadRow);
 
-  private:
+private:
   static int iterate_row_value_(const share::schema::ColumnMap& column_index, const storage::ObColDescIArray& columns,
       ObIMvccValueIterator* value_iter, storage::ObStoreRow& row, ObNopBitMap& bitmap, bool& has_null,
       int64_t& row_scn);
 
-  private:
+private:
   /*static int iterate_trans_node_(
       bool& row_empty,
       const common::ObIArray<share::schema::ObColDesc> &columns,

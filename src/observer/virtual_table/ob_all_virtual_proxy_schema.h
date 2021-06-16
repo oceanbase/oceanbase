@@ -73,7 +73,7 @@ class ObAllVirtualProxySchema : public common::ObVirtualTableIterator {
     MAX_CT_TYPE
   };
 
-  public:
+public:
   ObAllVirtualProxySchema();
   virtual ~ObAllVirtualProxySchema();
 
@@ -100,7 +100,7 @@ class ObAllVirtualProxySchema : public common::ObVirtualTableIterator {
     force_sql_refresh_ = force_sql_refresh;
   }
   class ObTenantServer {
-    public:
+  public:
     ObTenantServer() : location_(), virtual_partition_id_(0){};
     ~ObTenantServer(){};
 
@@ -115,7 +115,7 @@ class ObAllVirtualProxySchema : public common::ObVirtualTableIterator {
     int64_t virtual_partition_id_;
   };
 
-  private:
+private:
   int inner_get_next_row();
   int get_tenant_db_name(
       const uint64_t tenant_id, const uint64_t database_id, common::ObString& tenant_name, common::ObString& db_name);
@@ -143,7 +143,7 @@ class ObAllVirtualProxySchema : public common::ObVirtualTableIterator {
   int get_actual_partition_idx(const share::schema::ObTableSchema& table_schema, int64_t& partition_idx);
   int transfer_table_schema(const share::schema::ObTableSchema*& table_schema);
 
-  private:
+private:
   share::ObPartitionLocationCache* pl_cache_;
   common::ObMySQLProxy* sql_proxy_;
   uint64_t tenant_id_;

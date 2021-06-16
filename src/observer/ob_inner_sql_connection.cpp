@@ -49,7 +49,7 @@ namespace observer {
 constexpr const char ObInnerSQLConnection::LABEL[];
 
 class ObInnerSQLConnection::ObSqlQueryExecutor : public sqlclient::ObIExecutor {
-  public:
+public:
   explicit ObSqlQueryExecutor(const ObString& sql) : sql_(sql)
   {}
   explicit ObSqlQueryExecutor(const char* sql) : sql_(ObString::make_string(sql))
@@ -73,7 +73,7 @@ class ObInnerSQLConnection::ObSqlQueryExecutor : public sqlclient::ObIExecutor {
 
   INHERIT_TO_STRING_KV("ObIExecutor", ObIExecutor, K_(sql));
 
-  private:
+private:
   ObString sql_;
 };
 
@@ -479,7 +479,7 @@ int ObInnerSQLConnection::process_retry(
 }
 
 class ObInnerSQLTimeRecord : public ObITimeRecord {
-  public:
+public:
   ObInnerSQLTimeRecord(sql::ObSQLSessionInfo& session)
       : session_(session), execute_start_timestamp_(0), execute_end_timestamp_(0)
   {}
@@ -526,7 +526,7 @@ class ObInnerSQLTimeRecord : public ObITimeRecord {
     execute_end_timestamp_ = v;
   }
 
-  private:
+private:
   sql::ObSQLSessionInfo& session_;
   int64_t execute_start_timestamp_;
   int64_t execute_end_timestamp_;

@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace common {
 class ObThreadCond {
-  public:
+public:
   ObThreadCond();
   virtual ~ObThreadCond();
   int init(const int32_t event_no);
@@ -33,7 +33,7 @@ class ObThreadCond {
   int signal();
   int broadcast();
 
-  private:
+private:
   pthread_mutex_t mutex_;
   pthread_cond_t cond_;
   int32_t event_no_;
@@ -41,7 +41,7 @@ class ObThreadCond {
   bool mutex_inited_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObThreadCond);
 };
 

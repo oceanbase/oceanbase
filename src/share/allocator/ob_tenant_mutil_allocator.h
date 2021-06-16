@@ -35,13 +35,13 @@ namespace oceanbase {
 namespace common {
 // Interface for Clog module
 class ObILogAllocator {
-  public:
+public:
   ObILogAllocator()
   {}
   virtual ~ObILogAllocator()
   {}
 
-  public:
+public:
   virtual void* alloc_log_task_buf() = 0;
   virtual void free_log_task_buf(void* ptr) = 0;
   virtual void* ge_alloc(const int64_t size) = 0;
@@ -65,13 +65,13 @@ class ObILogAllocator {
 
 // Interface for ReplayEngine module
 class ObIReplayTaskAllocator {
-  public:
+public:
   ObIReplayTaskAllocator()
   {}
   virtual ~ObIReplayTaskAllocator()
   {}
 
-  public:
+public:
   virtual void* alloc_replay_task_buf(const bool is_inner_table, const int64_t size) = 0;
   virtual void free_replay_task(const bool is_inner_table, void* ptr) = 0;
   virtual bool can_alloc_replay_task(const bool is_inner_table, int64_t size) const = 0;
@@ -81,7 +81,7 @@ class ObIReplayTaskAllocator {
 };
 
 class ObTenantMutilAllocator : public ObILogAllocator, public ObIReplayTaskAllocator, public common::ObLink {
-  public:
+public:
   const int LOG_TASK_SIZE = sizeof(clog::ObLogTask);
   const int LOG_FLUSH_TASK_SIZE = sizeof(clog::ObLogFlushTask);
   const int LOG_FETCH_TASK_SIZE = sizeof(clog::ObFetchLogTask);
@@ -102,7 +102,7 @@ class ObTenantMutilAllocator : public ObILogAllocator, public ObIReplayTaskAlloc
   const int64_t INNER_TABLE_REPLAY_MEM_PERCENT = 20;
   static int choose_blk_size(int obj_size);
 
-  public:
+public:
   explicit ObTenantMutilAllocator(uint64_t tenant_id)
       : tenant_id_(tenant_id),
         total_limit_(INT64_MAX),
@@ -200,7 +200,7 @@ class ObTenantMutilAllocator : public ObILogAllocator, public ObIReplayTaskAlloc
   void dec_pending_replay_mutator_size(int64_t size);
   int64_t get_pending_replay_mutator_size() const;
 
-  private:
+private:
   uint64_t tenant_id_ CACHE_ALIGNED;
   int64_t total_limit_;
   int64_t log_task_alloc_count_;

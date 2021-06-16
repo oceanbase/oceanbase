@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace share {
 class ObIndexBuildStatOperator {
-  public:
+public:
   static int get_snapshot_version(const uint64_t data_table_id, const uint64_t index_table_id,
       common::ObMySQLProxy& proxy, int64_t& snapshot_version);
 };

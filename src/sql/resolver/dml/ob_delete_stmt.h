@@ -40,7 +40,7 @@ namespace sql {
  *   [WHERE where_condition]
  */
 class ObDeleteStmt : public ObDelUpdStmt {
-  public:
+public:
   ObDeleteStmt();
   virtual ~ObDeleteStmt();
   int deep_copy_stmt_struct(
@@ -48,7 +48,7 @@ class ObDeleteStmt : public ObDelUpdStmt {
   int assign(const ObDeleteStmt& other);
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   /**
    * @note These fields are added for the compatiblity of MySQL syntax and are not
    * supported at the moment.

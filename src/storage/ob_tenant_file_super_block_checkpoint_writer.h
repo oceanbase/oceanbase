@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace storage {
 struct ObTenantFileSuperBlockCheckpointEntry final {
-  public:
+public:
   static const int64_t TENANT_FILE_ENTRY_VERSION = 1;
   explicit ObTenantFileSuperBlockCheckpointEntry(ObTenantFileInfo& file_info) : file_info_(file_info)
   {}
@@ -31,7 +31,7 @@ struct ObTenantFileSuperBlockCheckpointEntry final {
 };
 
 class ObTenantFileSuperBlockItem : public ObIPGMetaItem {
-  public:
+public:
   ObTenantFileSuperBlockItem();
   virtual ~ObTenantFileSuperBlockItem();
   void set_tenant_file_entry(ObTenantFileSuperBlockCheckpointEntry& entry);
@@ -42,10 +42,10 @@ class ObTenantFileSuperBlockItem : public ObIPGMetaItem {
   }
   TO_STRING_KV(KP_(buf), K_(buf_size), KP_(entry));
 
-  private:
+private:
   int extend_buf(const int64_t request_size);
 
-  public:
+public:
   common::ObArenaAllocator allocator_;
   char* buf_;
   int64_t buf_size_;
@@ -53,7 +53,7 @@ class ObTenantFileSuperBlockItem : public ObIPGMetaItem {
 };
 
 class ObTenantFileSuperBlockCheckpointWriter final {
-  public:
+public:
   ObTenantFileSuperBlockCheckpointWriter();
   ~ObTenantFileSuperBlockCheckpointWriter() = default;
   int write_checkpoint(blocksstable::ObStorageFileHandle& server_root_handle, ObBaseFileMgr& file_mgr,
@@ -62,7 +62,7 @@ class ObTenantFileSuperBlockCheckpointWriter final {
   ObIArray<blocksstable::MacroBlockId>& get_meta_block_list();
   void reset();
 
-  private:
+private:
   ObPGMetaItemWriter writer_;
 };
 

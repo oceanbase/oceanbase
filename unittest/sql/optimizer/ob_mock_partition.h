@@ -24,7 +24,7 @@
 namespace test {
 
 class MockObPGPartition : public oceanbase::storage::ObPGPartition {
-  public:
+public:
   MockObPGPartition()
   {}
   ~MockObPGPartition()
@@ -34,12 +34,12 @@ class MockObPGPartition : public oceanbase::storage::ObPGPartition {
     return &storage_;
   }
 
-  private:
+private:
   MockPartitionStorage storage_;
 };
 
 class MockPartition : public oceanbase::storage::ObPartitionGroup {
-  public:
+public:
   virtual oceanbase::storage::ObPartitionStorage* get_storage()
   {
     return NULL;
@@ -61,7 +61,7 @@ class MockPartition : public oceanbase::storage::ObPartitionGroup {
     return pg_partition_.storage_;
   }
 
-  private:
+private:
   MockObPGPartition pg_partition_;
 };
 }  // namespace test

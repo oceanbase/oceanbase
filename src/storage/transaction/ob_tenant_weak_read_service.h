@@ -54,15 +54,15 @@ class ObTenantWeakReadService : public lib::TGRunnable {
   // force refresh location cache interval
   static const int64_t REFRESH_LOCATION_CACHE_INTERVAL = 500 * 1000L;
 
-  public:
+public:
   ObTenantWeakReadService();
   ~ObTenantWeakReadService();
 
-  public:
+public:
   // TENANT WORK THREAD
   void run1();
 
-  public:
+public:
   int init(const uint64_t tenant_id, storage::ObPartitionService& ps, common::ObMySQLProxy& mysql_proxy,
       ObIWrsRpc& wrs_rpc, share::ObIPartitionLocationCache& location_cache, const common::ObAddr& self);
   void destroy();
@@ -104,15 +104,15 @@ class ObTenantWeakReadService : public lib::TGRunnable {
   // get weak read info stat
   void get_weak_read_stat(ObTenantWeakReadStat& wrs_stat) const;
 
-  public:
+public:
   // tenant level variables init and destroy function
   static int mtl_init(ObTenantWeakReadService*& twrs);
   static void mtl_destroy(ObTenantWeakReadService*& twrs);
 
-  public:
+public:
   TO_STRING_KV(K_(inited), K_(tenant_id), K_(self), K_(svr_version_mgr));
 
-  private:
+private:
   /// internal get cluster version function
   ///
   /// @retval OB_SUCCESS          success
@@ -139,7 +139,7 @@ class ObTenantWeakReadService : public lib::TGRunnable {
   void set_force_self_check_(bool need_stop_service);
   void set_cluster_service_master_(const common::ObAddr& addr);
 
-  private:
+private:
   struct ModuleInfo {
     ModuleInfo(ObTenantWeakReadService& twrs, const char* mod);
     ~ModuleInfo();
@@ -151,7 +151,7 @@ class ObTenantWeakReadService : public lib::TGRunnable {
   };
   typedef common::ObTimeGuard TimeGuard;
 
-  private:
+private:
   bool inited_;
   uint64_t tenant_id_;
   ObIWrsRpc* wrs_rpc_;
@@ -186,7 +186,7 @@ class ObTenantWeakReadService : public lib::TGRunnable {
   bool force_self_check_;
   int tg_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantWeakReadService);
 };
 

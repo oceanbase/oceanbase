@@ -102,7 +102,7 @@ int alloc_key(BtreeKey*& ret_key, int64_t key)
 }
 
 class FakeAllocator : public ObIAllocator {
-  public:
+public:
   void* alloc(int64_t size)
   {
     return ob_malloc(size, attr);

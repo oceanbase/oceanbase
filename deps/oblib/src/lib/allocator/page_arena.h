@@ -90,7 +90,7 @@ struct DefaultPageAllocator : public ObIAllocator {
     return ob_malloc(sz, malloc_attr);
   }
 
-  private:
+private:
   lib::ObLabel label_;
   uint64_t tenant_id_;
   int64_t ctx_id_;
@@ -155,7 +155,7 @@ struct ModulePageAllocator : public ObIAllocator {
     return *this;
   }
 
-  protected:
+protected:
   ObIAllocator* allocator_;
   lib::ObLabel label_;
   uint64_t tenant_id_;
@@ -169,7 +169,7 @@ struct ModulePageAllocator : public ObIAllocator {
  */
 template <typename CharT = char, class PageAllocatorT = DefaultPageAllocator>
 class PageArena {
-  private:  // types
+private:  // types
   typedef PageArena<CharT, PageAllocatorT> Self;
 
   struct Page {
@@ -293,11 +293,11 @@ class PageArena {
     int64_t total_;
   };
 
-  public:
+public:
   static const int64_t DEFAULT_PAGE_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE - sizeof(Page);  // default 8KB
   static const int64_t DEFAULT_BIG_PAGE_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;                // default 2M
 
-  private:  // data
+private:  // data
   Page* cur_page_;
   Page* header_;
   Page* tailer_;
@@ -309,7 +309,7 @@ class PageArena {
   PageAllocatorT page_allocator_;
   TracerContext* tc_;
 
-  private:  // helpers
+private:  // helpers
   Page* insert_head(Page* page)
   {
     if (OB_ISNULL(page)) {
@@ -488,7 +488,7 @@ class PageArena {
     return *this;
   }
 
-  public:  // API
+public:  // API
   /** constructor */
   PageArena(const int64_t page_size = DEFAULT_PAGE_SIZE, const PageAllocatorT& alloc = PageAllocatorT())
       : cur_page_(NULL),
@@ -972,7 +972,7 @@ class PageArena {
     return total_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(PageArena);
 };
 
@@ -980,41 +980,88 @@ typedef PageArena<> CharArena;
 typedef PageArena<unsigned char> ByteArena;
 typedef PageArena<char, ModulePageAllocator> ModuleArena;
 
-class ObArenaAllocator final : public ObIAllocator
-{
+class ObArenaAllocator final : public ObIAllocator {
 public:
-  ObArenaAllocator(const lib::ObLabel &label = ObModIds::OB_MODULE_PAGE_ALLOCATOR,
-                   const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
-                   int64_t tenant_id = OB_SERVER_TENANT_ID,
-                   int64_t ctx_id = 0)
-      : arena_(page_size, ModulePageAllocator(label, tenant_id, ctx_id)) {};
-  ObArenaAllocator(ObIAllocator &allocator, const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE)
-      : arena_(page_size, ModulePageAllocator(allocator)) {};
-  virtual ~ObArenaAllocator() {};
+  ObArenaAllocator(const lib::ObLabel& label = ObModIds::OB_MODULE_PAGE_ALLOCATOR,
+      const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE, int64_t tenant_id = OB_SERVER_TENANT_ID,
+      int64_t ctx_id = 0)
+      : arena_(page_size, ModulePageAllocator(label, tenant_id, ctx_id)){};
+  ObArenaAllocator(ObIAllocator& allocator, const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE)
+      : arena_(page_size, ModulePageAllocator(allocator)){};
+  virtual ~ObArenaAllocator(){};
+
 public:
-  virtual void *alloc(const int64_t sz) override{ return arena_.alloc_aligned(sz); }
-  void *alloc(const int64_t size, const ObMemAttr &attr) override
+  virtual void* alloc(const int64_t sz) override
+  {
+    return arena_.alloc_aligned(sz);
+  }
+  void* alloc(const int64_t size, const ObMemAttr& attr) override
   {
     UNUSED(attr);
     return alloc(size);
   }
-  virtual void *alloc_aligned(const int64_t sz, const int64_t align)
-  { return arena_.alloc_aligned(sz, align); }
-  virtual void *realloc(void *ptr, const int64_t oldsz, const int64_t newsz) override { return arena_.realloc(reinterpret_cast<char*>(ptr), oldsz, newsz); }
-  virtual void free(void *ptr) override { arena_.free(reinterpret_cast<char *>(ptr)); ptr = NULL; }
-  virtual void clear() { arena_.free(); }
-  int64_t used() const override { return arena_.used(); }
-  int64_t total() const override { return arena_.total(); }
-  void reset() override { arena_.free(); }
-  void reset_remain_one_page() { arena_.free_remain_one_page(); }
-  void reuse() override { arena_.reuse(); }
-  virtual void set_label(const lib::ObLabel &label) { arena_.set_label(label); }
-  virtual lib::ObLabel get_label() const { return arena_.get_label(); }
-  virtual void set_tenant_id(uint64_t tenant_id) { arena_.set_tenant_id(tenant_id); }
-  bool set_tracer() { return arena_.set_tracer(); }
-  bool revert_tracer() { return arena_.revert_tracer(); }
-  void set_ctx_id(int64_t ctx_id) { arena_.set_ctx_id(ctx_id); }
-  void set_attr(const ObMemAttr &attr) override
+  virtual void* alloc_aligned(const int64_t sz, const int64_t align)
+  {
+    return arena_.alloc_aligned(sz, align);
+  }
+  virtual void* realloc(void* ptr, const int64_t oldsz, const int64_t newsz) override
+  {
+    return arena_.realloc(reinterpret_cast<char*>(ptr), oldsz, newsz);
+  }
+  virtual void free(void* ptr) override
+  {
+    arena_.free(reinterpret_cast<char*>(ptr));
+    ptr = NULL;
+  }
+  virtual void clear()
+  {
+    arena_.free();
+  }
+  int64_t used() const override
+  {
+    return arena_.used();
+  }
+  int64_t total() const override
+  {
+    return arena_.total();
+  }
+  void reset() override
+  {
+    arena_.free();
+  }
+  void reset_remain_one_page()
+  {
+    arena_.free_remain_one_page();
+  }
+  void reuse() override
+  {
+    arena_.reuse();
+  }
+  virtual void set_label(const lib::ObLabel& label)
+  {
+    arena_.set_label(label);
+  }
+  virtual lib::ObLabel get_label() const
+  {
+    return arena_.get_label();
+  }
+  virtual void set_tenant_id(uint64_t tenant_id)
+  {
+    arena_.set_tenant_id(tenant_id);
+  }
+  bool set_tracer()
+  {
+    return arena_.set_tracer();
+  }
+  bool revert_tracer()
+  {
+    return arena_.revert_tracer();
+  }
+  void set_ctx_id(int64_t ctx_id)
+  {
+    arena_.set_ctx_id(ctx_id);
+  }
+  void set_attr(const ObMemAttr& attr) override
   {
     arena_.set_tenant_id(attr.tenant_id_);
     arena_.set_ctx_id(attr.ctx_id_);
@@ -1035,18 +1082,18 @@ public:
     return arena_.mprotect_page_arena(prot);
   }
 
-  private:
+private:
   ModuleArena arena_;
 };
 
 class ObSafeArenaAllocator : public ObIAllocator {
-  public:
+public:
   ObSafeArenaAllocator(ObArenaAllocator& arena) : arena_(arena), lock_()
   {}
   virtual ~ObSafeArenaAllocator()
   {}
 
-  public:
+public:
   void* alloc(const int64_t sz) override
   {
     return alloc(sz, default_memattr);
@@ -1080,7 +1127,7 @@ class ObSafeArenaAllocator : public ObIAllocator {
     return arena_.used();
   }
 
-  private:
+private:
   ObArenaAllocator& arena_;
   ObSpinLock lock_;
 };

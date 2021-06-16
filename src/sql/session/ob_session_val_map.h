@@ -34,13 +34,13 @@ class ObSessionValMap {
       common::ObWrapperAllocator>
       VarNameValMapAllocer;
 
-  public:
+public:
   typedef common::hash::ObHashMap<common::ObString, ObSessionVariable, common::hash::NoPthreadDefendMode,
       common::hash::hash_func<common::ObString>, common::hash::equal_to<common::ObString>, VarNameValMapAllocer,
       common::hash::NormalPointer, common::ObWrapperAllocator>
       VarNameValMap;
 
-  public:
+public:
   ObSessionValMap();
   ObSessionValMap(const int64_t block_size, const common::ObWrapperAllocator& block_allocator);
   virtual ~ObSessionValMap();
@@ -68,10 +68,10 @@ class ObSessionValMap {
   }
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   int free_mem();
 
-  private:
+private:
   static const int64_t SMALL_BLOCK_SIZE = 4 * 1024LL;
   common::ObSmallBlockAllocator<> block_allocator_;
   VarNameValMapAllocer var_name_val_map_allocer_;

@@ -24,7 +24,7 @@ using namespace common;
 using namespace share;
 namespace sql {
 class ObExprValuesWithChild::ObExprValuesWithChildCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObExprValuesWithChildCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx), node_idx_(0)
   {}
   ~ObExprValuesWithChildCtx()
@@ -34,7 +34,7 @@ class ObExprValuesWithChild::ObExprValuesWithChildCtx : public ObPhyOperatorCtx 
     ObPhyOperatorCtx::destroy_base();
   }
 
-  private:
+private:
   int64_t node_idx_;
   friend class ObExprValuesWithChild;
 };

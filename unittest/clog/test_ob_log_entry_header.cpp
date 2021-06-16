@@ -19,7 +19,7 @@ namespace oceanbase {
 using namespace clog;
 namespace unittest {
 class TestObLogEntryHeader : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

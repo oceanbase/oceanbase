@@ -17,13 +17,13 @@
 namespace oceanbase {
 namespace sql {
 class ObDCLResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObDCLResolver(ObResolverParams& params) : ObStmtResolver(params)
   {}
   virtual ~ObDCLResolver()
   {}
 
-  protected:
+protected:
   int check_and_convert_name(common::ObString& db, common::ObString& table);
   int check_password_strength(common::ObString& password, common::ObString& user_name);
   int check_number_count(common::ObString& password, const int64_t& number_count);
@@ -36,7 +36,7 @@ class ObDCLResolver : public ObStmtResolver {
   enum ObPasswordPolicy { LOW = 0, MEDIUM };
   static const char password_mask_ = '*';
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDCLResolver);
 };
 }  // namespace sql

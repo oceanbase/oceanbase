@@ -24,11 +24,11 @@ using namespace oceanbase::sql::test;
 using namespace oceanbase::common;
 
 class ObNestedLoopJoinTest : public ::testing::Test {
-  public:
+public:
   ObNestedLoopJoinTest();
   virtual ~ObNestedLoopJoinTest();
 
-  protected:
+protected:
   void join_test(int64_t case_id, ObJoinType join_type);
   void serialize_test();
   void join_exception_test(int expect_ret);
@@ -37,12 +37,12 @@ class ObNestedLoopJoinTest : public ::testing::Test {
   ObNestedLoopJoinTest(const ObNestedLoopJoinTest& other);
   ObNestedLoopJoinTest& operator=(const ObNestedLoopJoinTest& other);
 
-  private:
+private:
   // data members
 };
 
 class ObNestedLoopJoinPlan {
-  public:
+public:
   static ObNestedLoopJoin& get_instance()
   {
     return nested_loop_join_;
@@ -88,7 +88,7 @@ class ObNestedLoopJoinPlan {
     allocator_.reuse();
   }
 
-  private:
+private:
   static void set_id()
   {
     nested_loop_join_.set_id(0);
@@ -152,10 +152,10 @@ class ObNestedLoopJoinPlan {
     return ret;
   }
 
-  private:
+private:
   ObNestedLoopJoinPlan();
 
-  private:
+private:
   static ObPhysicalPlan phy_plan_;
   static ObSqlExpression equal_expr_[2];
   static ObSqlExpression other_expr_[2];

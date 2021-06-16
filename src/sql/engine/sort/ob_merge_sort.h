@@ -32,7 +32,7 @@ class ObMergeSort : public ObIMergeSort, public common::ObOuterRowIterator {
   static const int64_t MEM_LIMIT_SIZE = 128 * 1024 * 1024;  // 128M
   static const int64_t FILE_BUF_SIZE = 2 * 1024 * 1024;     // 2M
   static const int64_t EXPIRE_TIMESTAMP = 0;                // no time limit
-  public:
+public:
   ObMergeSort(common::ObIAllocator& allocator);
   virtual ~ObMergeSort();
   virtual void reset();
@@ -60,7 +60,7 @@ class ObMergeSort : public ObIMergeSort, public common::ObOuterRowIterator {
   virtual int build_cur_fragment();
   int attach_row(const common::ObNewRow& src, common::ObNewRow& dst);
 
-  private:
+private:
   // types and constants
   struct RowRun {
     RowRun() : id_(0), row_(NULL)
@@ -82,12 +82,12 @@ class ObMergeSort : public ObIMergeSort, public common::ObOuterRowIterator {
       sort_columns_ = sort_columns;
     }
 
-    private:
+  private:
     const common::ObIArray<ObSortColumn>* sort_columns_;
     int& ret_;
   };
 
-  private:
+private:
   // data members
   ObSortRun sort_run_[2];
   ObSortRun* cur_round_;

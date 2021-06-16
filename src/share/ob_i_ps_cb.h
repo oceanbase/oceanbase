@@ -26,7 +26,7 @@ class ObProposalID;
 }  // namespace common
 namespace share {
 class ObIPSCb {
-  public:
+public:
   virtual int on_leader_revoke(const common::ObPartitionKey& pkey, const common::ObRole& role) = 0;
   virtual int on_leader_takeover(
       const common::ObPartitionKey& pkey, const common::ObRole& role, const bool is_elected_by_changing_leader) = 0;

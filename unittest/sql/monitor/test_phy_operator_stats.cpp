@@ -23,7 +23,7 @@ using namespace oceanbase::sql;
 namespace oceanbase {
 namespace sql {
 class TestPhyOperatorStats : public ::testing::Test {
-  public:
+public:
   TestPhyOperatorStats()
   {}
   ~TestPhyOperatorStats()

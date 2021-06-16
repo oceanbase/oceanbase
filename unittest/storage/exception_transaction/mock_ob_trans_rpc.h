@@ -23,7 +23,7 @@ using namespace transaction;
 using namespace common;
 namespace unittest {
 class MockObTransRpc : public ObITransRpc, public common::ObSimpleThreadPool {
-  public:
+public:
   MockObTransRpc() : is_inited_(false), trans_service_(NULL)
   {}
   ~MockObTransRpc()
@@ -82,7 +82,7 @@ class MockObTransRpc : public ObITransRpc, public common::ObSimpleThreadPool {
   int init(ObTransService* trans_service, const ObAddr& self);
   void handle(void* task);
 
-  private:
+private:
   bool is_inited_;
   ObTransService* trans_service_;
 };

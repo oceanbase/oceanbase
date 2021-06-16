@@ -17,19 +17,19 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 class TestExprFactory : public ::testing::Test {
-  public:
+public:
   TestExprFactory();
   virtual ~TestExprFactory();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestExprFactory);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 

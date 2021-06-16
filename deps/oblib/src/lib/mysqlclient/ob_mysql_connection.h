@@ -29,7 +29,7 @@ class ObMySQLPreparedStatement;
 class ObMySQLConnection : public ObISQLConnection {
   friend class ObServerConnectionPool;
 
-  public:
+public:
   enum {
     OB_MYSQL_CONNECTION_ERROR = 1,
     // OB_MYSQL_CONNECTION_WARN = 2,
@@ -37,7 +37,7 @@ class ObMySQLConnection : public ObISQLConnection {
   };
   enum Mode { DEBUG_MODE = 0, MYSQL_MODE = 1, OCEANBASE_MODE = 2 };
 
-  public:
+public:
   ObMySQLConnection();
   ~ObMySQLConnection();
   int connect(const char* user, const char* pass, const char* db);
@@ -103,11 +103,11 @@ class ObMySQLConnection : public ObISQLConnection {
   // dblink.
   int connect_dblink();
 
-  private:
+private:
   int switch_tenant(const uint64_t tenant_id);
   int reset_read_consistency();
 
-  private:
+private:
   ObServerConnectionPool* root_;  // each connection belongs to ONE pool
   MYSQL mysql_;
   int last_error_code_;

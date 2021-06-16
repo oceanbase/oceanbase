@@ -24,7 +24,7 @@ class ObPartitionService;
 }
 namespace clog {
 class ObFetchLogTask {
-  public:
+public:
   ObFetchLogTask() : is_inited_(false)
   {
     reset();
@@ -39,7 +39,7 @@ class ObFetchLogTask {
     reset();
   }
 
-  public:
+public:
   int init(const common::ObPartitionKey& partition_key, const common::ObAddr& server, const int64_t cluster_id,
       const uint64_t start_log_id, const uint64_t end_log_id, const ObFetchLogType fetch_type,
       const common::ObProposalID& proposal_id, const int64_t network_limit);
@@ -83,10 +83,10 @@ class ObFetchLogTask {
   TO_STRING_KV(K_(timestamp), K_(partition_key), K_(server), K_(cluster_id), K_(start_log_id), K_(end_log_id),
       K_(fetch_type), K_(proposal_id), K_(network_limit));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFetchLogTask);
 
-  private:
+private:
   bool is_inited_;
   int64_t timestamp_;
   common::ObPartitionKey partition_key_;
@@ -100,35 +100,35 @@ class ObFetchLogTask {
 };
 
 class ObIFetchLogEngine {
-  public:
+public:
   ObIFetchLogEngine()
   {}
   virtual ~ObIFetchLogEngine()
   {}
 
-  public:
+public:
   virtual int submit_fetch_log_task(ObFetchLogTask* fetch_log_task) = 0;
 };
 
 class ObFetchLogEngine : public ObIFetchLogEngine, public lib::TGTaskHandler {
-  public:
+public:
   ObFetchLogEngine() : is_inited_(false), partition_service_(NULL)
   {}
   virtual ~ObFetchLogEngine()
   {}
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service);
   int destroy();
   virtual int submit_fetch_log_task(ObFetchLogTask* fetch_log_task);
 
-  public:
+public:
   virtual void handle(void* task);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFetchLogEngine);
 
-  private:
+private:
   bool is_inited_;
   bool is_task_queue_timeout_(ObFetchLogTask* fetch_log_task) const;
   storage::ObPartitionService* partition_service_;

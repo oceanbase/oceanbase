@@ -24,10 +24,10 @@ namespace lib {
 
 using FContext = boost::context::detail::fcontext_t;
 class CoCtx {
-  private:
+private:
   static constexpr uint64_t MAX_CO_LOCAL_STORE_SIZE = 512;
 
-  public:
+public:
   // Create a new co-routine context
   //
   // @param ss_size stack size of created context
@@ -42,7 +42,7 @@ class CoCtx {
   //
   static void destroy(CoCtx* cc);
 
-  public:
+public:
   int init(const uint64_t tenant_id, const size_t ss_size);
   FContext& get_ctx();
   const FContext& get_ctx() const;
@@ -56,7 +56,7 @@ class CoCtx {
   CoCtx() : ctx_(), ss_sp_(nullptr), ss_size_(0)
   {}
 
-  private:
+private:
   FContext ctx_;
   char* ss_sp_;
   size_t ss_size_;

@@ -21,7 +21,7 @@ namespace blocksstable {
 
 // used for STORE_FILE_SYSTEM_LOCAL or STORE_FILE_SYSTEM_RAID
 class ObMetaBlockReader {
-  public:
+public:
   ObMetaBlockReader();
   virtual ~ObMetaBlockReader();
   int read(const ObSuperBlockV2::MetaEntry& meta_entry);
@@ -34,15 +34,15 @@ class ObMetaBlockReader {
     return macro_blocks_;
   }
 
-  protected:
+protected:
   virtual int parse(const ObMacroBlockCommonHeader& common_header, const ObLinkedMacroBlockHeader& linked_header,
       const char* buf, const int64_t buf_len) = 0;
 
-  private:
+private:
   int get_meta_blocks(const int64_t entry_block);
   int init(const int64_t file_id, const int64_t file_size);
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   common::ObIODesc io_desc_;
   const char* buf_;

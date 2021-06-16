@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace common {
 class QClock {
-  public:
+public:
   enum { MAX_QCLOCK_SLOT_NUM = OB_MAX_CPU_NUM * 32 };
   struct ClockSlot {
     ClockSlot() : clock_(UINT64_MAX)
@@ -90,14 +90,14 @@ class QClock {
     return ret;
   }
 
-  private:
+private:
   bool is_quiescent(uint64_t clock)
   {
     uint64_t cur_clock = get_clock();
     return clock < cur_clock && (clock < get_qclock() || clock < update_qclock(calc_quiescent_clock(cur_clock)));
   }
 
-  private:
+private:
   uint64_t get_slot_id()
   {
     return get_itid();
@@ -135,7 +135,7 @@ class QClock {
     return qclock;
   }
 
-  private:
+private:
   uint64_t clock_ CACHE_ALIGNED;
   uint64_t qclock_ CACHE_ALIGNED;
   ClockSlot clock_array_[MAX_QCLOCK_SLOT_NUM] CACHE_ALIGNED;
@@ -148,14 +148,14 @@ inline QClock& get_global_qclock()
 }
 
 class HazardList {
-  public:
+public:
   typedef ObLink Link;
   HazardList() : size_(0), head_(NULL), tail_(NULL)
   {}
   virtual ~HazardList()
   {}
 
-  public:
+public:
   int64_t size()
   {
     return size_;
@@ -196,7 +196,7 @@ class HazardList {
     }
   }
 
-  private:
+private:
   Link* get_head()
   {
     return head_;
@@ -225,14 +225,14 @@ class HazardList {
     tail_ = NULL;
   }
 
-  private:
+private:
   int64_t size_;
   Link* head_;
   Link* tail_;
 };
 
 class RetireStation {
-  public:
+public:
   typedef HazardList List;
   enum { MAX_RETIRE_SLOT_NUM = OB_MAX_CPU_NUM * 32 };
 
@@ -301,20 +301,20 @@ class RetireStation {
     }
   }
 
-  private:
+private:
   RetireList& get_retire_list()
   {
     return retire_list_[get_itid() % MAX_RETIRE_SLOT_NUM];
   }
 
-  private:
+private:
   int64_t retire_limit_;
   QClock& qclock_;
   RetireList retire_list_[MAX_RETIRE_SLOT_NUM];
 };
 
 class QClockGuard {
-  public:
+public:
   explicit QClockGuard(QClock& qclock = get_global_qclock()) : qclock_(qclock), slot_id_(qclock_.enter_critical())
   {}
   ~QClockGuard()
@@ -322,7 +322,7 @@ class QClockGuard {
     qclock_.leave_critical(slot_id_);
   }
 
-  private:
+private:
   QClock& qclock_;
   uint64_t slot_id_;
 };

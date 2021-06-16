@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace clog {
 class FakeTask : public ObISubmitLogCb {
-  public:
+public:
   FakeTask(int64_t& finished_cnt, CountReporter& counter)
       : submit_time_(ObTimeUtility::current_time()), finished_cnt_(finished_cnt), counter_(counter)
   {}
@@ -43,14 +43,14 @@ class FakeTask : public ObISubmitLogCb {
     submit_time_ = ObTimeUtility::current_time();
   }
 
-  private:
+private:
   int64_t submit_time_;
   int64_t& finished_cnt_;
   CountReporter& counter_;
 };
 
 class ObLogStressRunnable : public share::ObThreadPool {
-  public:
+public:
   enum { SIG_START_STRESS = 57 };
   ObLogStressRunnable() : submit_cnt_(0), finished_cnt_(0), counter_("submit", 1000000)
   {}
@@ -99,7 +99,7 @@ class ObLogStressRunnable : public share::ObThreadPool {
     }
   }
 
-  private:
+private:
   void start_stress()
   {
     set_thread_count(32);
@@ -200,7 +200,7 @@ class ObLogStressRunnable : public share::ObThreadPool {
     (new (std::nothrow) ObLogStressRunnable())->start_stress();
   }
 
-  private:
+private:
   int64_t submit_cnt_ CACHE_ALIGNED;
   int64_t finished_cnt_ CACHE_ALIGNED;
   CountReporter counter_;

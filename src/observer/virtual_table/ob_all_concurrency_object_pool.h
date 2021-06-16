@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace observer {
 class ObAllConcurrencyObjectPool : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllConcurrencyObjectPool();
   virtual ~ObAllConcurrencyObjectPool();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -31,7 +31,7 @@ class ObAllConcurrencyObjectPool : public common::ObVirtualTableScannerIterator 
     addr_ = &addr;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllConcurrencyObjectPool);
   common::ObAddr* addr_;
   common::ObVector<common::ObObjFreeList*> flls_;

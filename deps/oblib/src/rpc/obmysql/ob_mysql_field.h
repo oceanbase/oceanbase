@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace obmysql {
 class ObMySQLField {
-  public:
+public:
   ObMySQLField();
   /**
    * serialize data to the format recognized by MySQL
@@ -59,7 +59,7 @@ class ObMySQLField {
     return ret;
   }
 
-  private:
+private:
   /**
    * serialize data to the format recognized by MySQL(version 4.1)
    *
@@ -71,11 +71,11 @@ class ObMySQLField {
    */
   int serialize_pro41(char* buf, const int64_t len, int64_t& pos) const;
 
-  private:
+private:
   const char* catalog_; /* Catalog for table */
   // void *extension;
 
-  public:
+public:
   common::ObString dname_;
   common::ObString tname_;      // table name for display
   common::ObString org_tname_;  // original table name

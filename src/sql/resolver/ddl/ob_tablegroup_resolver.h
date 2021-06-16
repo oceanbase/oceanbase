@@ -37,7 +37,7 @@ class ObTableGroupResolver : public ObDDLResolver {
   enum RangeElementsNode { PARTITION_NAME_NODE = 0, PARTITION_ELEMENT_NODE = 1, PART_ID_NODE = 2 };
   enum HashOrKeyNode { HASH_FUN_EXPR_NODE = 0, HASH_PARTITION_NUM_NODE = 1, HASH_SUBPARTITIOPPN_NODE = 2 };
 
-  public:
+public:
   ObTableGroupResolver(ObResolverParams& params) : ObDDLResolver(params), alter_option_bitset_()
   {}
   ~ObTableGroupResolver()
@@ -51,7 +51,7 @@ class ObTableGroupResolver : public ObDDLResolver {
     return alter_option_bitset_;
   }
 
-  private:
+private:
   int resolve_partition_hash_or_key(ObTablegroupStmt* stmt, ParseNode* node, const bool is_subpartition,
       share::schema::ObTablegroupSchema& tablegroup_schema);
   int resolve_partition_range(ObTablegroupStmt* tablegroup_stmt, ParseNode* node, const bool is_subpartition,
@@ -63,7 +63,7 @@ class ObTableGroupResolver : public ObDDLResolver {
   int resolve_partition_list(ObTablegroupStmt* tablegroup_stmt, ParseNode* node, const bool is_subpartition,
       share::schema::ObTablegroupSchema& tablegroup_schema, PartitionInfo& part_info);
 
-  private:
+private:
   common::ObBitSet<> alter_option_bitset_;
 };
 

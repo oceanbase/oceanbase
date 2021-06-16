@@ -136,7 +136,7 @@ struct GetTableKey<ObTablegroupSchemaHashWrapper, ObTablegroupSchema*> {
 };
 
 class ObSchemaManager {
-  public:
+public:
   friend class oceanbase::storagetest::ObDataManager;
   static const int64_t SCHEMA_MEM_EXPIRE_TIME = 3600 * 1000 * 1000L;  // one hour
   typedef common::ObSortedVector<ObTableSchema*>::iterator table_iterator;
@@ -153,7 +153,7 @@ class ObSchemaManager {
   int init(const bool is_init_sys_tenant = true);
   void reset();
 
-  public:
+public:
   //---------memory related functions-----
   common::ObMemfragRecycleAllocator& get_allocator();
   int copy_schema_infos(const ObSchemaManager& schema_manager);
@@ -388,7 +388,7 @@ class ObSchemaManager {
       uint64_t tenant_id, common::ObMySQLProxy* sql_proxy, char* buf, const int64_t& buf_len, int64_t& pos) const;
   int deep_copy_obj(const common::ObObj& src, common::ObObj& dest) const;
 
-  private:
+private:
   ObSchemaManager& operator=(const ObSchemaManager& schema);
 
   template <class T>
@@ -443,7 +443,7 @@ class ObSchemaManager {
   int verify_db_read_only(const uint64_t tenant_id, const ObNeedPriv& need_priv) const;
   int verify_table_read_only(const uint64_t tenant_id, const ObNeedPriv& need_priv) const;
 
-  public:
+public:
   // TODO(XX) I need it, please not delete. 20150413
   int get_database_id(uint64_t tenant_id, const common::ObString& database_name, uint64_t& database_id) const;
   int get_database_name(const uint64_t tenant_id, const uint64_t database_id, common::ObString& database_name) const;
@@ -458,7 +458,7 @@ class ObSchemaManager {
     return global_alloc_size_;
   }
 
-  private:
+private:
   // how to be compatible
   static const int64_t OB_SCHEMA_MAGIC_NUMBER = 0x43532313;  // SC
 

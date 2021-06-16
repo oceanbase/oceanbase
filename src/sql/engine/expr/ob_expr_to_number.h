@@ -21,19 +21,19 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprToNumberBase : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprToNumberBase(common::ObIAllocator& alloc, const ObExprOperatorType type, const char* name);
   virtual ~ObExprToNumberBase();
 
   virtual int calc_result_typeN(
       ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToNumberBase);
 };
 
 class ObExprToNumber : public ObExprToNumberBase {
-  public:
+public:
   explicit ObExprToNumber(common::ObIAllocator& alloc);
   virtual ~ObExprToNumber();
 
@@ -44,12 +44,12 @@ class ObExprToNumber : public ObExprToNumberBase {
   // for engine 3.0
   static int calc_tonumber_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToNumber);
 };
 
 class ObExprToBinaryFloat : public ObExprToNumberBase {
-  public:
+public:
   explicit ObExprToBinaryFloat(common::ObIAllocator& alloc);
   virtual ~ObExprToBinaryFloat();
 
@@ -61,12 +61,12 @@ class ObExprToBinaryFloat : public ObExprToNumberBase {
   static int calc_(const ObString& in_str, const ObString& in_fmt_str, ObIAllocator& alloc, number::ObNumber& res_nmb);
   static int calc_to_binaryfloat_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToBinaryFloat);
 };
 
 class ObExprToBinaryDouble : public ObExprToNumberBase {
-  public:
+public:
   explicit ObExprToBinaryDouble(common::ObIAllocator& alloc);
   virtual ~ObExprToBinaryDouble();
 
@@ -77,7 +77,7 @@ class ObExprToBinaryDouble : public ObExprToNumberBase {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_binarydouble_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToBinaryDouble);
 };
 

@@ -52,7 +52,7 @@ class ObColDesc;
 namespace compaction {
 
 struct ObMergeIndexInfo {
-  public:
+public:
   ObMergeIndexInfo() : index_id_(OB_INVALID_ID), table_exist_(false)
   {}
   ObMergeIndexInfo(const uint64_t index_id, const bool table_exist) : index_id_(index_id), table_exist_(table_exist)
@@ -63,7 +63,7 @@ struct ObMergeIndexInfo {
 };
 
 struct ObBuildIndexParam {
-  public:
+public:
   static const int64_t DEFAULT_INDEX_SORT_MEMORY_LIMIT = 128L * 1024L * 1024L;
   ObBuildIndexParam()
       : table_schema_(NULL),
@@ -104,7 +104,7 @@ struct ObBuildIndexParam {
   TO_STRING_KV(KP_(table_schema), KP_(index_schema), KP_(dep_table_schema), K_(schema_version), K_(schema_cnt),
       K_(version), K_(concurrent_cnt), K_(row_store_type), K_(snapshot_version), KP_(report), K_(checksum_method));
 
-  public:
+public:
   const share::schema::ObTableSchema* table_schema_;
   const share::schema::ObTableSchema* index_schema_;
   const share::schema::ObTableSchema* dep_table_schema_;
@@ -121,7 +121,7 @@ struct ObBuildIndexParam {
 };
 
 struct ObBuildIndexContext {
-  public:
+public:
   typedef storage::ObExternalSort<storage::ObStoreRow, storage::ObStoreRowComparer> ExternalSort;
   ObBuildIndexContext()
       : is_report_succ_(false),
@@ -168,7 +168,7 @@ struct ObBuildIndexContext {
 };
 
 class ObMacroRowIterator {
-  public:
+public:
   struct Param {
     Param();
     bool is_valid() const;
@@ -332,18 +332,18 @@ class ObMacroRowIterator {
       K_(merge_range), K_(advice_merge_level), K_(curr_merge_level), K_(micro_block_count), K_(reuse_micro_block_count),
       K_(iter_row_count), K_(magic_row_count), K_(purged_count), K_(need_rewrite_dirty_macro_block));
 
-  public:
+public:
   // represent cannot compare with other ObMacroRowIterator and this ObMacroRowIterator is a range iterator
   static const int64_t CANNOT_COMPARE_LEFT_IS_RANGE = -2;
   // represent cannot compare with other ObMacroRowIterator and other ObMacroRowIterator is a range iterator
   static const int64_t CANNOT_COMPARE_RIGHT_IS_RANGE = 2;
   static const int64_t CANNOT_COMPARE_BOTH_ARE_RANGE = 3;
 
-  protected:
+protected:
   int64_t compare(const common::ObStoreRowkey& rowkey, const common::ObStoreRange& range);
   void get_border_key(const common::ObStoreRowkey& border_key, const bool is_start_key, common::ObStoreRowkey& rowkey);
 
-  protected:
+protected:
   int next_range();
   void choose_merge_level();
   int init_macro_iter(const Param& param, const ObPartitionKey& pg_key);
@@ -406,7 +406,7 @@ class ObMacroRowIterator {
 };
 
 class ObMinorMergeMacroRowIterator : public ObMacroRowIterator {
-  public:
+public:
   ObMinorMergeMacroRowIterator();
   virtual ~ObMinorMergeMacroRowIterator();
   virtual int next() override;
@@ -414,27 +414,27 @@ class ObMinorMergeMacroRowIterator : public ObMacroRowIterator {
   virtual int multi_version_compare(const ObMacroRowIterator& other, int64_t& cmp_ret) override;
   void reset();
 
-  protected:
+protected:
   int compact_row(const storage::ObStoreRow& former, const int64_t row_compact_info_index, storage::ObStoreRow& dest);
   int next_row_with_open_macro_block();
   virtual int inner_init() override;
 
-  private:
+private:
   int make_first_row_compacted();
   int compact_last_row();
 
-  private:
+private:
   enum RowCompactInfoIndex {
     RNPI_FIRST_ROW = 0,
     RNPI_LAST_ROW = 1,
     RNPI_MAX,
   };
 
-  protected:
+protected:
   common::ObArenaAllocator obj_copy_allocator_;
   storage::ObObjDeepCopy obj_copy_;
 
-  private:
+private:
   storage::ObNopPos* nop_pos_[RNPI_MAX];
   ObFixedBitSet<OB_ALL_MAX_COLUMN_ID>* bit_set_[RNPI_MAX];
 
@@ -472,7 +472,7 @@ struct ObRowFuseInfo {
 // filter rows with from_base_ flag
 template <typename T>
 class ObDeltaSSStoreRowIterator : public T {
-  public:
+public:
   virtual int get_next_row(storage::ObStoreRow*& row) override
   {
     int ret = common::OB_SUCCESS;
@@ -485,7 +485,7 @@ class ObDeltaSSStoreRowIterator : public T {
 
 // TODO(): remove static
 class ObPartitionMergeUtil {
-  public:
+public:
   ObPartitionMergeUtil();
   virtual ~ObPartitionMergeUtil();
 
@@ -498,7 +498,7 @@ class ObPartitionMergeUtil {
 
   static bool could_merge_start();
 
-  private:
+private:
   static bool need_open(int64_t cmp_ret);
   static bool need_open_left(int64_t cmp_ret);
   static bool need_open_right(int64_t cmp_ret);
@@ -549,7 +549,7 @@ class ObPartitionMergeUtil {
 };
 
 class ObTableDumper {
-  public:
+public:
   static void print_error_info(
       int err_no, storage::ObSSTableMergeCtx& ctx, ObIPartitionMergeFuser::MERGE_ITER_ARRAY& macro_row_iters);
   static int generate_dump_table_name(const char* dir_name, const storage::ObITable* table, char* file_name);
@@ -562,7 +562,7 @@ class ObTableDumper {
   static int64_t free_space;
   static lib::ObMutex lock;
 
-  private:
+private:
   static bool need_dump_table(int err_no);
 };
 

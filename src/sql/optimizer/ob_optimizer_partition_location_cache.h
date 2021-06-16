@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObOptimizerPartitionLocationCache : public share::ObIPartitionLocationCache {
-  public:
+public:
   static const int64_t LOCATION_CACHE_BUCKET_NUM = 32;
   ObOptimizerPartitionLocationCache(common::ObIAllocator& allocator, share::ObIPartitionLocationCache* location_cache);
   virtual ~ObOptimizerPartitionLocationCache();
@@ -75,10 +75,10 @@ class ObOptimizerPartitionLocationCache : public share::ObIPartitionLocationCach
     return location_cache_;
   }
 
-  private:
+private:
   int insert_or_replace_optimizer_cache(share::ObLocationCacheKey& key, share::ObPartitionLocation* location);
 
-  private:
+private:
   typedef common::hash::ObHashMap<share::ObLocationCacheKey, share::ObPartitionLocation*,
       common::hash::NoPthreadDefendMode>
       PartitionLocationMap;
@@ -86,7 +86,7 @@ class ObOptimizerPartitionLocationCache : public share::ObIPartitionLocationCach
   share::ObIPartitionLocationCache* location_cache_;
   PartitionLocationMap optimizer_cache_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOptimizerPartitionLocationCache);
 };
 

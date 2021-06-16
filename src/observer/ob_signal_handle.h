@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace observer {
 class ObSignalHandle : public share::ObThreadPool {
-  public:
+public:
   ObSignalHandle()
   {}
   ~ObSignalHandle()

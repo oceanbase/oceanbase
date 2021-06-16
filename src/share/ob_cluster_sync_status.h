@@ -48,7 +48,7 @@ enum ObClusterSyncStatus {
 };
 
 class ObClusterSyncStatusHelp {
-  public:
+public:
   static const char* cluster_sync_status_strs[];
   static const char* cluster_sync_status_to_str(const share::ObClusterSyncStatus sync_status, const int64_t last_hb_ts);
   static bool cluster_sync_status_is_valid(const int64_t last_ts);

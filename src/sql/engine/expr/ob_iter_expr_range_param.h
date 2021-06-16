@@ -18,7 +18,7 @@ namespace sql {
 class ObIterExprRangeParam : public ObIterExprOperator {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObIterExprRangeParam()
       : ObIterExprOperator(), start_index_(common::OB_INVALID_INDEX), end_index_(common::OB_INVALID_INDEX)
   {}
@@ -33,7 +33,7 @@ class ObIterExprRangeParam : public ObIterExprOperator {
   virtual int get_next_row(ObIterExprCtx& expr_ctx, const common::ObNewRow*& result) const override;
   TO_STRING_KV(K_(expr_id), K_(expr_type), K_(start_index), K_(end_index));
 
-  private:
+private:
   int64_t start_index_;
   int64_t end_index_;
 };

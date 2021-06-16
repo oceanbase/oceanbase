@@ -29,13 +29,13 @@ class ObIPartitionGroup;
 }  // namespace storage
 namespace replayengine {
 class ObILogReplayEngine {
-  public:
+public:
   ObILogReplayEngine()
   {}
   virtual ~ObILogReplayEngine()
   {}
 
-  public:
+public:
   struct ObLogReplayEngineConfig {
     int64_t total_limit_;
     int64_t hold_limit_;
@@ -47,7 +47,7 @@ class ObILogReplayEngine {
     TO_STRING_KV(K(total_limit_), K(hold_limit_), K(page_size_));
   };
 
-  public:
+public:
   virtual int init(transaction::ObTransService* trans_replay_service, storage::ObPartitionService* partition_service,
       const ObLogReplayEngineConfig& config) = 0;
   virtual void destroy() = 0;

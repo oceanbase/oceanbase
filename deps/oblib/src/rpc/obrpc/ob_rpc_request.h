@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace obrpc {
 
 class ObRpcRequest : public rpc::ObRequest {
-  public:
+public:
   ObRpcRequest(Type type) : ObRequest(type)
   {}
 
@@ -31,7 +31,7 @@ class ObRpcRequest : public rpc::ObRequest {
 
   inline int response_fail(common::ObDataBuffer* buffer, const ObRpcResultCode& res_code, const int64_t& sessid);
 
-  protected:
+protected:
   template <class T>
   int do_serilize_result(common::ObDataBuffer* buffer, const T& result, const ObRpcResultCode& res_code);
 
@@ -39,7 +39,7 @@ class ObRpcRequest : public rpc::ObRequest {
 
   inline int do_serilize_fail(common::ObDataBuffer* buffer, const ObRpcResultCode& res_code);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRequest);
 };
 

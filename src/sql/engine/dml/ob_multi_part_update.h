@@ -18,12 +18,12 @@ namespace sql {
 class ObMultiPartUpdate : public ObTableModify, public ObMultiDMLInfo {
   class ObMultiPartUpdateCtx;
 
-  public:
+public:
   static const int64_t DELETE_OP = 0;
   static const int64_t INSERT_OP = 1;
   static const int64_t UPDATE_OP = 2;
   static const int64_t DML_OP_CNT = 3;  // 3 dml type for multi table update
-  public:
+public:
   explicit ObMultiPartUpdate(common::ObIAllocator& allocator);
   virtual ~ObMultiPartUpdate();
 
@@ -41,7 +41,7 @@ class ObMultiPartUpdate : public ObTableModify, public ObMultiDMLInfo {
     return true;
   }
 
-  private:
+private:
   /**
    * @brief open operator, not including children operators.
    * called by open.

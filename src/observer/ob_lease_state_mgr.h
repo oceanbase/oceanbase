@@ -32,7 +32,7 @@ class ObLeaseStateMgr;
 class ObService;
 
 class IHeartBeatProcess {
-  public:
+public:
   virtual ~IHeartBeatProcess()
   {}
   virtual int init_lease_request(share::ObLeaseRequest& lease_request) = 0;
@@ -40,7 +40,7 @@ class IHeartBeatProcess {
 };
 
 class ObRefreshSchemaStatusTimerTask : public common::ObTimerTask {
-  public:
+public:
   ObRefreshSchemaStatusTimerTask();  // no repeat, no retry
   virtual ~ObRefreshSchemaStatusTimerTask()
   {}
@@ -51,7 +51,7 @@ class ObRefreshSchemaStatusTimerTask : public common::ObTimerTask {
 // heartbeat or lease management
 // root servers list maintenance
 class ObLeaseStateMgr {
-  public:
+public:
   friend class HeartBeat;
   friend class AvgCalculator;
   ObLeaseStateMgr();
@@ -78,21 +78,21 @@ class ObLeaseStateMgr {
   inline int64_t get_lease_expire_time();
   inline int set_lease_response(const share::ObLeaseResponse& lease_response);
 
-  private:
+private:
   int try_report_all_core_table_partition();
   class HeartBeat : public common::ObTimerTask {
-    public:
+  public:
     HeartBeat();
     ~HeartBeat();
 
     int init(ObLeaseStateMgr* lease_state_mgr);
     virtual void runTimerTask();
 
-    private:
+  private:
     bool inited_;
     ObLeaseStateMgr* lease_state_mgr_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(HeartBeat);
   };
 
@@ -103,7 +103,7 @@ class ObLeaseStateMgr {
 
   // maintain fixed-length buffer and calculate avarage value
   class AvgCalculator {
-    public:
+  public:
     AvgCalculator();
     ~AvgCalculator();
 
@@ -111,22 +111,22 @@ class ObLeaseStateMgr {
     int calc_avg(int64_t num);
     int get_avg(double& avg);
 
-    private:
+  private:
     common::ObSEArray<int64_t, STORE_RTT_NUM> calc_buffer_;
     bool inited_;
     int64_t limit_num_;
     int64_t head_;
     double avg_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(AvgCalculator);
   };
 
-  private:
+private:
   int start_heartbeat();
   int do_renew_lease();
 
-  private:
+private:
   bool inited_;
   bool stopped_;
   share::ObLeaseResponse lease_response_;
@@ -143,7 +143,7 @@ class ObLeaseStateMgr {
   int64_t baseline_schema_version_;
   volatile int64_t heartbeat_expire_time_ CACHE_ALIGNED;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLeaseStateMgr);
 };
 

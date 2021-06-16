@@ -22,7 +22,7 @@ class ObValues : public ObNoChildrenPhyOperator {
   OB_UNIS_VERSION(1);
   class ObValuesCtx;
 
-  public:
+public:
   explicit ObValues(common::ObIAllocator& alloc) : ObNoChildrenPhyOperator(alloc), row_store_(alloc)
   {}
   ~ObValues()
@@ -35,7 +35,7 @@ class ObValues : public ObNoChildrenPhyOperator {
   int rescan(ObExecContext& ctx) const;
   int set_row_store(const common::ObRowStore& row_store);
 
-  private:
+private:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -62,7 +62,7 @@ class ObValues : public ObNoChildrenPhyOperator {
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
   DISALLOW_COPY_AND_ASSIGN(ObValues);
 
-  private:
+private:
   common::ObRowStore row_store_;
 };
 }  // namespace sql

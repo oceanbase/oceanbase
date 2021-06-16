@@ -26,7 +26,7 @@ class ObBasicSessionInfo;
 
 namespace share {
 class ObSpecialSysVarValues {
-  public:
+public:
   // OB_SV_VERSION_COMMENT
   const static int64_t VERSION_COMMENT_MAX_LEN = 256;
   static char version_comment_[VERSION_COMMENT_MAX_LEN];
@@ -46,12 +46,12 @@ class ObSpecialSysVarValues {
   static const int64_t COLL_INT_STR_MAX_LEN = 64;
   static char default_coll_int_str_[COLL_INT_STR_MAX_LEN];
 
-  public:
+public:
   ObSpecialSysVarValues();
 };
 
 class ObSetVar {
-  public:
+public:
   enum SetScopeType {
     /*
      * most system variables can be set with:
@@ -95,12 +95,12 @@ class ObSetVar {
 
   TO_STRING_KV(K_(var_name), K_(set_scope), K_(is_set_default), K_(actual_tenant_id));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSetVar);
 };
 
 class ObSysVarTypeLib {
-  public:
+public:
   // ObSysVarTypeLib() : count_(0), type_names_(NULL) {}
   ObSysVarTypeLib(const char** type_names)  // last elem must be 0
       : count_(0), type_names_(NULL)
@@ -124,14 +124,14 @@ class ObSysVarTypeLib {
   int64_t count_;
   const char** type_names_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSysVarTypeLib);
 };
 
 class ObBasicSysVar {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   static const char* EMPTY_STRING;
   typedef int (*OnCheckAndConvertFunc)(sql::ObExecContext& ctx, const ObSetVar& set_var, const ObBasicSysVar& sys_var,
       const common::ObObj& in_val, common::ObObj& out_val);
@@ -147,7 +147,7 @@ class ObBasicSysVar {
     return (flag & ObSysVarFlag::NULLABLE) && (value == common::ObString::make_string(ObBasicSysVar::EMPTY_STRING));
   }
 
-  public:
+public:
   ObBasicSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL,
       bool is_enum_type = false)
@@ -261,7 +261,7 @@ class ObBasicSysVar {
       common::ObString& coll_var_name, common::ObString& coll_val, common::ObCollationType& coll_type);
   DECLARE_TO_STRING;
 
-  protected:
+protected:
   // Currently there is a simple principle for the setting operation of base_value and inc_value:
   // 1. Only base_value and min_value/max_value will be set together, and there is no need to judge whether base_value
   // is valid. Currently there is only the init interface.
@@ -275,12 +275,12 @@ class ObBasicSysVar {
   common::ObObjType type_;
   int64_t flags_;
 
-  protected:
+protected:
   int log_err_wrong_value_for_var(int error_no, const common::ObObj& val) const;
   int check_and_convert_int_tc_value(const common::ObObj& value, int64_t invalid_value, int64_t& result_value) const;
   int check_and_convert_uint_tc_value(const common::ObObj& value, uint64_t invalid_value, uint64_t& result_value) const;
 
-  private:
+private:
   virtual int do_check_and_convert(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val, common::ObObj& out_val);
   OnCheckAndConvertFunc on_check_and_convert_;
@@ -290,12 +290,12 @@ class ObBasicSysVar {
   GetMetaTypeFunc get_meta_type_;
   bool is_enum_type_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBasicSysVar);
 };
 
 class ObTypeLibSysVar : public ObBasicSysVar {
-  public:
+public:
   ObTypeLibSysVar(const char** type_names, OnCheckAndConvertFunc on_check_and_convert = NULL,
       OnUpdateFunc on_update = NULL, ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL,
       GetMetaTypeFunc get_meta_type = NULL, bool is_enum_type = false)
@@ -311,19 +311,19 @@ class ObTypeLibSysVar : public ObBasicSysVar {
       common::ObIAllocator& allocator, const sql::ObBasicSessionInfo& session, common::ObString& show_str) const;
   int find_type(const common::ObString& type, int64_t& type_index) const;
 
-  protected:
+protected:
   ObSysVarTypeLib type_lib_;
 
-  private:
+private:
   virtual int do_check_and_convert(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val, common::ObObj& out_val);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTypeLibSysVar);
 };
 
 class ObEnumSysVar : public ObTypeLibSysVar {
-  public:
+public:
   ObEnumSysVar(const char** type_names, OnCheckAndConvertFunc on_check_and_convert = NULL,
       OnUpdateFunc on_update = NULL, ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL,
       GetMetaTypeFunc get_meta_type = NULL)
@@ -336,15 +336,15 @@ class ObEnumSysVar : public ObTypeLibSysVar {
   virtual int inner_to_select_obj(
       common::ObIAllocator& allocator, const sql::ObBasicSessionInfo& session, common::ObObj& select_obj) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObEnumSysVar);
 };
 
 class ObBoolSysVar : public ObTypeLibSysVar {
-  public:
+public:
   const static char* BOOL_TYPE_NAMES[];
 
-  public:
+public:
   ObBoolSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObTypeLibSysVar(
@@ -353,7 +353,7 @@ class ObBoolSysVar : public ObTypeLibSysVar {
   virtual ~ObBoolSysVar()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBoolSysVar);
 };
 
@@ -361,7 +361,7 @@ class ObBoolSysVar : public ObTypeLibSysVar {
 class ObSetSysVar : public ObTypeLibSysVar {
   static const int64_t MAX_STR_BUF_LEN = 512;
 
-  public:
+public:
   ObSetSysVar(const char** type_names, OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObTypeLibSysVar(type_names, on_check_and_convert, on_update, to_select_obj, to_show_str, get_meta_type)
@@ -370,16 +370,16 @@ class ObSetSysVar : public ObTypeLibSysVar {
   {}
   int find_set(const common::ObString& value);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSetSysVar);
 };
 
 //////////////////////////////
 class ObSqlModeVar : public ObSetSysVar {
-  public:
+public:
   const static char* SQL_MODE_NAMES[];
 
-  public:
+public:
   ObSqlModeVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObSetSysVar(
@@ -388,18 +388,18 @@ class ObSqlModeVar : public ObSetSysVar {
   virtual ~ObSqlModeVar()
   {}
 
-  private:
+private:
   virtual int do_check_and_convert(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val, common::ObObj& out_val);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlModeVar);
 };
 
 //////////////////////////////
 
 class ObSysVarAccessMode : public ObBoolSysVar {
-  public:
+public:
   ObSysVarAccessMode(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObBoolSysVar(on_check_and_convert, on_update, to_select_obj, to_show_str, get_meta_type)
@@ -407,13 +407,13 @@ class ObSysVarAccessMode : public ObBoolSysVar {
   virtual ~ObSysVarAccessMode()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSysVarAccessMode);
 };
 
 /////////////////////////////
 class ObCharsetSysVar : public ObBasicSysVar {
-  public:
+public:
   ObCharsetSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObBasicSysVar(on_check_and_convert, on_update, to_select_obj, to_show_str, get_meta_type)
@@ -422,17 +422,17 @@ class ObCharsetSysVar : public ObBasicSysVar {
   {}
   virtual int check_update_type(const ObSetVar& set_var, const common::ObObj& val);
 
-  private:
+private:
   virtual int do_check_and_convert(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val, common::ObObj& out_val);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCharsetSysVar);
 };
 
 /////////////////////////////
 class ObTinyintSysVar : public ObBasicSysVar {
-  public:
+public:
   ObTinyintSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObBasicSysVar(on_check_and_convert, on_update, to_select_obj, to_show_str, get_meta_type)
@@ -441,16 +441,16 @@ class ObTinyintSysVar : public ObBasicSysVar {
   {}
   virtual int check_update_type(const ObSetVar& set_var, const common::ObObj& val);
 
-  private:
+private:
   virtual int do_check_and_convert(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val, common::ObObj& out_val);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTinyintSysVar);
 };
 
 class ObIntSysVar : public ObBasicSysVar {
-  public:
+public:
   ObIntSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObBasicSysVar(on_check_and_convert, on_update, to_select_obj, to_show_str, get_meta_type)
@@ -459,18 +459,18 @@ class ObIntSysVar : public ObBasicSysVar {
   {}
   virtual int check_update_type(const ObSetVar& set_var, const common::ObObj& val);
 
-  private:
+private:
   virtual int do_check_and_convert(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val, common::ObObj& out_val);
   virtual int do_convert(
       sql::ObExecContext& ctx, const common::ObObj& in_val, common::ObObj& out_val, bool& is_converted);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIntSysVar);
 };
 
 class ObStrictRangeIntSysVar : public ObIntSysVar {
-  public:
+public:
   ObStrictRangeIntSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObIntSysVar(on_check_and_convert, on_update, to_select_obj, to_show_str, get_meta_type)
@@ -478,16 +478,16 @@ class ObStrictRangeIntSysVar : public ObIntSysVar {
   virtual ~ObStrictRangeIntSysVar()
   {}
 
-  private:
+private:
   virtual int do_check_and_convert(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val, common::ObObj& out_val);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStrictRangeIntSysVar);
 };
 
 class ObNumericSysVar : public ObBasicSysVar {
-  public:
+public:
   ObNumericSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObBasicSysVar(on_check_and_convert, on_update, to_select_obj, to_show_str, get_meta_type)
@@ -496,18 +496,18 @@ class ObNumericSysVar : public ObBasicSysVar {
   {}
   virtual int check_update_type(const ObSetVar& set_var, const common::ObObj& val);
 
-  private:
+private:
   virtual int do_check_and_convert(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val, common::ObObj& out_val);
   virtual int do_convert(
       sql::ObExecContext& ctx, const common::ObObj& in_val, common::ObObj& out_val, bool& is_converted);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNumericSysVar);
 };
 
 class ObVarcharSysVar : public ObBasicSysVar {
-  public:
+public:
   ObVarcharSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObBasicSysVar(on_check_and_convert, on_update, to_select_obj, to_show_str, get_meta_type)
@@ -516,16 +516,16 @@ class ObVarcharSysVar : public ObBasicSysVar {
   {}
   virtual int check_update_type(const ObSetVar& set_var, const common::ObObj& val);
 
-  private:
+private:
   virtual int do_check_and_convert(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val, common::ObObj& out_val);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObVarcharSysVar);
 };
 
 class ObTimeZoneSysVar : public ObBasicSysVar {
-  public:
+public:
   ObTimeZoneSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       ToObjFunc to_select_obj = NULL, ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
       : ObBasicSysVar(on_check_and_convert, on_update, to_select_obj, to_show_str, get_meta_type)
@@ -534,20 +534,20 @@ class ObTimeZoneSysVar : public ObBasicSysVar {
   {}
   virtual int check_update_type(const ObSetVar& set_var, const common::ObObj& val);
 
-  private:
+private:
   virtual int do_check_and_convert(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val, common::ObObj& out_val);
   int find_pos_time_zone(sql::ObExecContext& ctx, const common::ObString& str_val, const bool is_oracle_compatible);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTimeZoneSysVar);
 };
 
 class ObSessionSpecialIntSysVar : public ObIntSysVar {
-  public:
+public:
   typedef int (*SessionSpecialUpdateFunc)(sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& val);
 
-  public:
+public:
   ObSessionSpecialIntSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL,
       SessionSpecialUpdateFunc session_special_update = NULL, ToObjFunc to_select_obj = NULL,
       ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
@@ -569,18 +569,18 @@ class ObSessionSpecialIntSysVar : public ObIntSysVar {
     return ret;
   }
 
-  private:
+private:
   SessionSpecialUpdateFunc session_special_update_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSessionSpecialIntSysVar);
 };
 
 class ObSessionSpecialVarcharSysVar : public ObVarcharSysVar {
-  public:
+public:
   typedef int (*SessionSpecialUpdateFunc)(sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& val);
 
-  public:
+public:
   ObSessionSpecialVarcharSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       SessionSpecialUpdateFunc session_special_update = NULL, ToObjFunc to_select_obj = NULL,
       ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
@@ -602,18 +602,18 @@ class ObSessionSpecialVarcharSysVar : public ObVarcharSysVar {
     return ret;
   }
 
-  private:
+private:
   SessionSpecialUpdateFunc session_special_update_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSessionSpecialVarcharSysVar);
 };
 
 class ObSessionSpecialBoolSysVar : public ObBoolSysVar {
-  public:
+public:
   typedef int (*SessionSpecialUpdateFunc)(sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& val);
 
-  public:
+public:
   ObSessionSpecialBoolSysVar(OnCheckAndConvertFunc on_check_and_convert = NULL, OnUpdateFunc on_update = NULL,
       SessionSpecialUpdateFunc session_special_update = NULL, ToObjFunc to_select_obj = NULL,
       ToStrFunc to_show_str = NULL, GetMetaTypeFunc get_meta_type = NULL)
@@ -635,21 +635,21 @@ class ObSessionSpecialBoolSysVar : public ObBoolSysVar {
     return ret;
   }
 
-  private:
+private:
   SessionSpecialUpdateFunc session_special_update_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSessionSpecialBoolSysVar);
 };
 
 class ObSysVarOnCheckFuncs {
-  public:
+public:
   ObSysVarOnCheckFuncs()
   {}
   virtual ~ObSysVarOnCheckFuncs()
   {}
 
-  public:
+public:
   static int check_and_convert_timestamp_service(sql::ObExecContext& ctx, const ObSetVar& set_var,
       const ObBasicSysVar& sys_var, const common::ObObj& in_val, common::ObObj& out_val);
   static int check_and_convert_max_allowed_packet(sql::ObExecContext& ctx, const ObSetVar& set_var,
@@ -681,24 +681,24 @@ class ObSysVarOnCheckFuncs {
   static int check_and_convert_sql_throttle_queue_time(sql::ObExecContext& ctx, const ObSetVar& set_var,
       const ObBasicSysVar& sys_var, const common::ObObj& in_val, common::ObObj& out_val);
 
-  private:
+private:
   static int check_session_readonly(sql::ObExecContext& ctx, const ObSetVar& set_var, const ObBasicSysVar& sys_var,
       const common::ObObj& in_val, common::ObObj& out_val);
   static bool can_set_trans_var(ObSetVar::SetScopeType scope, sql::ObBasicSessionInfo& session);
   static int get_string(const common::ObObj& val, common::ObString& str);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSysVarOnCheckFuncs);
 };
 
 class ObSysVarOnUpdateFuncs {
-  public:
+public:
   ObSysVarOnUpdateFuncs()
   {}
   virtual ~ObSysVarOnUpdateFuncs()
   {}
 
-  public:
+public:
   static int update_tx_isolation(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const ObBasicSysVar& sys_var, const common::ObObj& val);
   static int update_tx_read_only_no_scope(
@@ -708,7 +708,7 @@ class ObSysVarOnUpdateFuncs {
   static int update_safe_weak_read_snapshot(
       sql::ObExecContext& ctx, const ObSetVar& set_var, const ObBasicSysVar& sys_var, const common::ObObj& val);
 
-  private:
+private:
   static int restart_trans(
       sql::ObExecContext& ctx, sql::ObBasicSessionInfo& session, bool read_only, int32_t isolation);
   static int start_trans(sql::ObExecContext& ctx);
@@ -717,13 +717,13 @@ class ObSysVarOnUpdateFuncs {
 };
 
 class ObSysVarToObjFuncs {
-  public:
+public:
   ObSysVarToObjFuncs()
   {}
   virtual ~ObSysVarToObjFuncs()
   {}
 
-  public:
+public:
   static int to_obj_charset(common::ObIAllocator& allocator, const sql::ObBasicSessionInfo& session,
       const ObBasicSysVar& sys_var, common::ObObj& result_obj);
   static int to_obj_collation(common::ObIAllocator& allocator, const sql::ObBasicSessionInfo& session,
@@ -731,18 +731,18 @@ class ObSysVarToObjFuncs {
   static int to_obj_sql_mode(common::ObIAllocator& allocator, const sql::ObBasicSessionInfo& session,
       const ObBasicSysVar& sys_var, common::ObObj& result_obj);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSysVarToObjFuncs);
 };
 
 class ObSysVarToStrFuncs {
-  public:
+public:
   ObSysVarToStrFuncs()
   {}
   virtual ~ObSysVarToStrFuncs()
   {}
 
-  public:
+public:
   static int to_str_charset(common::ObIAllocator& allocator, const sql::ObBasicSessionInfo& session,
       const ObBasicSysVar& sys_var, common::ObString& result_str);
   static int to_str_collation(common::ObIAllocator& allocator, const sql::ObBasicSessionInfo& session,
@@ -750,35 +750,35 @@ class ObSysVarToStrFuncs {
   static int to_str_sql_mode(common::ObIAllocator& allocator, const sql::ObBasicSessionInfo& session,
       const ObBasicSysVar& sys_var, common::ObString& result_str);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSysVarToStrFuncs);
 };
 
 class ObSysVarGetMetaTypeFuncs {
-  public:
+public:
   ObSysVarGetMetaTypeFuncs()
   {}
   virtual ~ObSysVarGetMetaTypeFuncs()
   {}
 
-  public:
+public:
   static common::ObObjType get_meta_type_varchar()
   {
     return common::ObVarcharType;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSysVarGetMetaTypeFuncs);
 };
 
 class ObSysVarSessionSpecialUpdateFuncs {
-  public:
+public:
   ObSysVarSessionSpecialUpdateFuncs()
   {}
   virtual ~ObSysVarSessionSpecialUpdateFuncs()
   {}
 
-  public:
+public:
   // @@identiy alias to @@last_insert_id
   static int update_identity(sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& val);
   static int update_last_insert_id(sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& val);
@@ -787,12 +787,12 @@ class ObSysVarSessionSpecialUpdateFuncs {
   // @@tx_read_only alias to @@transaction_read_only
   static int update_tx_read_only(sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& val);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSysVarSessionSpecialUpdateFuncs);
 };
 
 class ObCharsetSysVarPair {
-  public:
+public:
   static const int64_t SYS_CHARSET_SYS_VAR_PAIR_COUNT = 3;
   static ObCharsetSysVarPair CHARSET_SYS_VAR_PAIRS[SYS_CHARSET_SYS_VAR_PAIR_COUNT];
 
@@ -808,16 +808,16 @@ class ObCharsetSysVarPair {
   static int get_charset_var_by_collation_var(const common::ObString& coll_var_name, common::ObString& cs_var_name);
   static int get_collation_var_by_charset_var(const common::ObString& cs_var_name, common::ObString& coll_var_name);
 
-  private:
+private:
   common::ObString cs_var_name_;
   common::ObString coll_var_name_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCharsetSysVarPair);
 };
 
 class ObBinlogRowImage {
-  public:
+public:
   enum ImageType {
     MINIMAL = 0,
     NOBLOB = 1,
@@ -828,32 +828,32 @@ class ObBinlogRowImage {
   virtual ~ObBinlogRowImage()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBinlogRowImage);
 };
 
 class ObPreProcessSysVars {
-  public:
+public:
   ObPreProcessSysVars()
   {}
   virtual ~ObPreProcessSysVars()
   {}
 
-  public:
+public:
   static int init_sys_var();
 
-  private:
+private:
   static int change_initial_value();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPreProcessSysVars);
 };
 
 class ObSysVarUtils {
-  public:
+public:
   static int log_bounds_error_or_warning(sql::ObExecContext& ctx, const ObSetVar& set_var, const common::ObObj& in_val);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSysVarUtils);
 };
 

@@ -43,7 +43,7 @@ class ObBackupPhysicalPGCtx;
 class ObPartGroupTask;
 
 class ObMacroBlockReuseMgr final {
-  public:
+public:
   ObMacroBlockReuseMgr();
   ~ObMacroBlockReuseMgr();
   int build_reuse_macro_map(ObMigrateCtx& ctx, const ObITable::TableKey& table_key,
@@ -52,15 +52,15 @@ class ObMacroBlockReuseMgr final {
       const blocksstable::ObMajorMacroBlockKey& block_key, blocksstable::ObMacroBlockInfoPair& info);
   void reset();
 
-  private:
+private:
   class RemoveFunctor {
-    public:
+  public:
     RemoveFunctor() = default;
     ~RemoveFunctor() = default;
     bool operator()(const blocksstable::ObMajorMacroBlockKey& block_key, blocksstable::ObMacroBlockInfoPair& info);
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlockReuseMgr);
   typedef common::ObLinearHashMap<blocksstable::ObMajorMacroBlockKey, blocksstable::ObMacroBlockInfoPair> MacroMetaMap;
   MacroMetaMap full_map_;
@@ -84,7 +84,7 @@ struct ObPartitionGroupInfoResult {
 
 class ObBaseMigrateDag;
 struct ObMigrateCtx {
-  public:
+public:
   static const int64_t MIN_CHECK_REPLAY_TS = 100 * 1000;  // 100ms
   static const int64_t MAX_CONTINUES_FAIL_COUNT = 10;
   // Only in the SCHEDULE_AND_COPY_BASE_DATA state, there will be multiple tasks holding migrate ctx, other times are
@@ -204,19 +204,19 @@ struct ObMigrateCtx {
   int64_t fetch_pg_info_compat_version_;
   ObBackupPhysicalPGCtx physical_backup_ctx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrateCtx);
 };
 
 class ObMigrateCtxGuard {
-  public:
+public:
   explicit ObMigrateCtxGuard(const bool is_write_lock, ObMigrateCtx& ctx);
   virtual ~ObMigrateCtxGuard();
 
-  private:
+private:
   ObMigrateCtx& ctx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrateCtxGuard);
 };
 
@@ -238,7 +238,7 @@ struct ObPartitionMigrateCtx final {
 
   TO_STRING_KV(KP_(ctx), K_(copy_info), K_(is_partition_exist), K_(handle), K_(need_reuse_local_minor));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionMigrateCtx);
 };
 
@@ -294,7 +294,7 @@ struct ObReportPartMigrationTask : ObIPartMigrationTask {
 };
 
 class ObPartitionMigrator {
-  public:
+public:
   const static int64_t OB_MIGRATE_SCHEDULE_SLEEP_INTERVAL_S = 100 * 1000;  // 100ms
 
   ObPartitionMigrator();
@@ -354,7 +354,7 @@ class ObPartitionMigrator {
   }
   static int fill_comment(const ObMigrateCtx& ctx, char* buf, const int64_t buf_len);
 
-  private:
+private:
   bool is_inited_;
   bool is_stop_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
@@ -370,13 +370,13 @@ class ObPartitionMigrator {
 };
 
 class ObPartGroupTask {
-  public:
+public:
   enum Type {
     PART_GROUP_MIGATION_TASK,
     PART_GROUP_BACKUP_TASK,
   };
 
-  public:
+public:
   ObPartGroupTask();
   virtual ~ObPartGroupTask();
 
@@ -414,7 +414,7 @@ class ObPartGroupTask {
   TO_STRING_KV(K_(task_id), K_(is_inited), K_(is_finished), K_(is_batch_mode), KP_(partition_service),
       K_(first_error_code), K_(type), "sub_task_count", task_list_.count(), K_(task_list));
 
-  protected:
+protected:
   int build_migrate_ctx(const ObReplicaOpArg& arg, ObMigrateCtx& migrate_ctx);
   void dump_task_status();
   int check_is_task_cancel();
@@ -427,7 +427,7 @@ class ObPartGroupTask {
   int set_report_list_result(
       ObIArray<ObReportPartMigrationTask>& report_list, const ObPartitionKey& pkey, const int32_t result);
 
-  protected:
+protected:
   bool is_inited_;
   bool is_batch_mode_;  // Used to be compatible with the old version of rs, when it is false, all rpc related to rs
                         // will use the old interface
@@ -448,7 +448,7 @@ class ObPartGroupTask {
 };
 
 class ObPartGroupMigrationTask : public ObPartGroupTask {
-  public:
+public:
   // Only need to retry if the migration exceeds 2 hours
   static const int64_t LARGE_MIGRATION_NEED_RETRY_COST_TIME = 2 * 3600 * 1000 * 1000LL;
   static const int64_t PART_GROUP_TASK_IDLE_TIME_MS = 10 * 1000LL;  // 10s
@@ -483,7 +483,7 @@ class ObPartGroupMigrationTask : public ObPartGroupTask {
       K_(start_change_member_ts), KP_(partition_service), K_(first_error_code), K_(type), "sub_task_count",
       task_list_.count(), K_(task_list), K_(restore_version));
 
-  private:
+private:
   int check_partition_validation();  // Called only before starting execution, do not consider concurrency
   int check_disk_space();            // Called only before starting execution, do not consider concurrency
   static int get_partition_required_size(const common::ObPartitionKey& pkey, int64_t& required_size);
@@ -529,7 +529,7 @@ class ObPartGroupMigrationTask : public ObPartGroupTask {
   int set_migrate_task_flags_(const ObMigrateStatus& status, const bool is_restore, ObPartMigrationTask& task);
   int check_before_backup();
 
-  private:
+private:
   static const int64_t RETRY_JOB_MAX_WAIT_TIMEOUT = 600 * 1000 * 1000;  // 10m
   int64_t schedule_ts_;                     // Only the scheduling thread will change and use
   int64_t start_change_member_ts_;          // Only the scheduling thread will change and use
@@ -541,7 +541,7 @@ class ObPartGroupMigrationTask : public ObPartGroupTask {
 };
 
 class ObPartGroupMigrator {
-  public:
+public:
   ObPartGroupMigrator();
   virtual ~ObPartGroupMigrator();
   void destroy();
@@ -561,7 +561,7 @@ class ObPartGroupMigrator {
   int remove_finish_task(ObPartGroupTask* group_task);
   void wakeup();
 
-  private:
+private:
   int inner_schedule(const common::ObIArray<ObReplicaOpArg>& arg_list, const bool is_batch_mode,
       const share::ObTaskId& task_id, const bool is_normal_migrate, ObPartGroupTask*& group_task);
   int check_copy_limit_(const ObIArray<ObReplicaOpArg>& arg_list);
@@ -574,7 +574,7 @@ class ObPartGroupMigrator {
   int get_group_task(const ObIArray<ObReplicaOpArg>& arg_list, const bool is_batch_mode,
       const share::ObTaskId& in_task_id, ObPartGroupTask*& group_task);
 
-  private:
+private:
   bool is_inited_;
   common::SpinRWLock update_task_list_lock_;  // protect new_task_list_ and count of task_list_
   ObArray<ObPartGroupTask*> task_list_;
@@ -585,11 +585,11 @@ class ObPartGroupMigrator {
 };
 
 class ObFastMigrateDag : public share::ObIDag {
-  public:
+public:
   enum TaskType { INVALID = 0, SUSPEND_SRC = 1, HANDOVER_PG = 2, CLEAN_UP = 3, REPORT_META_TABLE = 4, MAX_TYPE };
   static bool is_valid_task_type(TaskType type);
 
-  public:
+public:
   ObFastMigrateDag();
   virtual ~ObFastMigrateDag();
   virtual bool operator==(const ObIDag& other) const override;
@@ -599,13 +599,13 @@ class ObFastMigrateDag : public share::ObIDag {
   virtual int64_t get_compat_mode() const override;
   int init(ObPartGroupMigrationTask* group_task, TaskType sub_type);
 
-  public:
+public:
   ObPartGroupMigrationTask* group_task_;
   TaskType sub_type_;
 };
 
 class ObBaseMigrateDag : public share::ObIDag {
-  public:
+public:
   ObBaseMigrateDag(const ObIDagType type, const ObIDagPriority priority);
   virtual ~ObBaseMigrateDag();
   virtual bool operator==(const ObIDag& other) const override;
@@ -627,7 +627,7 @@ class ObBaseMigrateDag : public share::ObIDag {
 
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, KP(this), K(*ctx_));
 
-  protected:
+protected:
   bool is_inited_;
   ObMigrateCtx* ctx_;
   int64_t tenant_id_;
@@ -636,23 +636,23 @@ class ObBaseMigrateDag : public share::ObIDag {
 };
 
 class ObMigrateDag : public ObBaseMigrateDag {
-  public:
+public:
   ObMigrateDag();
   virtual ~ObMigrateDag();
   int init(ObMigrateCtx& migrate_ctx);
 
-  protected:
+protected:
   int init_for_restore_(ObMigrateCtx& ctx);
   int update_partition_meta_for_restore();
   int online_for_rebuild();
   int online_for_restore();
 
-  protected:
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObMigrateDag);
 };
 
 class ObBackupDag : public ObBaseMigrateDag {
-  public:
+public:
   ObBackupDag();
   virtual ~ObBackupDag();
   int init(const share::ObBackupDataType& backup_type, ObMigrateCtx& migrate_ctx);
@@ -661,27 +661,27 @@ class ObBackupDag : public ObBaseMigrateDag {
     return backup_data_type_;
   }
 
-  private:
+private:
   share::ObBackupDataType backup_data_type_;
 
-  protected:
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDag);
 };
 
 class ObValidateDag : public ObBaseMigrateDag {
-  public:
+public:
   ObValidateDag();
   virtual ~ObValidateDag();
   virtual bool operator==(const ObIDag& other) const override;
   virtual int64_t hash() const override;
   int init(ObMigrateCtx& migrate_ctx);
 
-  protected:
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObValidateDag);
 };
 
 class ObMigrateUtil {
-  public:
+public:
   static const int64_t RETRY_TASK_SLEEP_INTERVAL_S = 1000 * 1000L;  // 1s
   static const int64_t OB_MIGRATE_ONLINE_RETRY_COUNT = 3;
   static int enable_replay_with_old_partition(ObMigrateCtx& ctx);
@@ -691,14 +691,14 @@ class ObMigrateUtil {
   static int enable_replay_with_new_partition(ObMigrateCtx& ctx);
   static int create_empty_trans_sstable_for_compat(ObMigrateCtx& ctx);
 
-  private:
+private:
   static int wait_trans_table_merge_finish(ObMigrateCtx& ctx);
   static int add_trans_sstable_to_part_ctx(
       const ObPartitionKey& trans_table_pkey, ObSSTable& sstable, ObMigrateCtx& ctx);
 };
 
 class ObMigratePrepareTask : public share::ObITask {
-  public:
+public:
   static const int64_t MAX_LOGIC_TASK_COUNT_PER_SSTABLE = 64;
   static const int64_t MAX_MACRO_BLOCK_COUNT_PER_TASK = 128;
   static const int64_t OB_GET_SNAPSHOT_SCHEMA_VERSION_TIMEOUT = 30 * 1000 * 1000;  // 30s
@@ -712,7 +712,7 @@ class ObMigratePrepareTask : public share::ObITask {
   int init();
   virtual int process() override;
 
-  protected:
+protected:
   int add_migrate_status(ObMigrateCtx* ctx);
   int add_partition_migration_status(const ObMigrateCtx& ctx);
 
@@ -901,7 +901,7 @@ class ObMigratePrepareTask : public share::ObITask {
   int generate_migrate_prepare_task();
   int generate_restore_cut_prepare_task();
 
-  protected:
+protected:
   static const int64_t SRC_SET_BUCKET_NUM = 128;
   bool is_inited_;
   ObMigrateCtx* ctx_;
@@ -914,7 +914,7 @@ class ObMigratePrepareTask : public share::ObITask {
   ObIPartitionGroupMetaRestoreReader* restore_meta_reader_;
   ObPartitionGroupMetaBackupReader* backup_meta_reader_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMigratePrepareTask);
 };
 
@@ -946,19 +946,19 @@ struct ObMigrateLogicSSTableCtx {
   int get_dest_table_key(ObITable::TableKey& dest_table_key);
   TO_STRING_KV(K_(meta), K_(task_count));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrateLogicSSTableCtx);
 };
 
 class ObMigrateCopyLogicTask : public share::ObITask {
-  public:
+public:
   ObMigrateCopyLogicTask();
   virtual ~ObMigrateCopyLogicTask();
   int init(const int64_t task_idx, ObMigrateLogicSSTableCtx& sstable_ctx, ObMigrateCtx& ctx);
   int generate_next_task(ObITask*& next_task) override;
   virtual int process() override;
 
-  private:
+private:
   bool is_inited_;
   ObMigrateCtx* ctx_;
   int64_t task_idx_;
@@ -968,7 +968,7 @@ class ObMigrateCopyLogicTask : public share::ObITask {
 };
 
 class ObMigrateFinishLogicTask : public share::ObITask {
-  public:
+public:
   ObMigrateFinishLogicTask();
   virtual ~ObMigrateFinishLogicTask();
   int init(ObPartitionMigrateCtx& part_migrate_ctx);
@@ -978,7 +978,7 @@ class ObMigrateFinishLogicTask : public share::ObITask {
     return sstable_ctx_;
   }
 
-  private:
+private:
   bool is_inited_;
   ObPartitionMigrateCtx* part_migrate_ctx_;
   ObMigrateLogicSSTableCtx sstable_ctx_;
@@ -1012,19 +1012,19 @@ struct ObMigratePhysicalSSTableCtx {
   int get_dest_table_key(ObITable::TableKey& dest_table_key);
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMigratePhysicalSSTableCtx);
 };
 
 class ObMigrateCopyPhysicalTask : public share::ObITask {
-  public:
+public:
   ObMigrateCopyPhysicalTask();
   virtual ~ObMigrateCopyPhysicalTask();
   int generate_next_task(ObITask*& next_task);
   int init(const int64_t task_idx, ObMigratePhysicalSSTableCtx& sstable_ctx, ObMigrateCtx& ctx);
   virtual int process() override;
 
-  private:
+private:
   int get_macro_block_reader(obrpc::ObPartitionServiceRpcProxy* srv_rpc_proxy,
       common::ObInOutBandwidthThrottle* bandwidth_throttle, const ObMigrateSrcInfo& src_info,
       common::ObIArray<ObMigrateArgMacroBlockInfo>& list, ObITable::TableKey& table_key,
@@ -1050,7 +1050,7 @@ class ObMigrateCopyPhysicalTask : public share::ObITask {
   int alloc_migrate_writer(ObIPartitionMacroBlockReader* reader, ObIMigrateMacroBlockWriter*& writer);
   void free_migrate_writer(ObIMigrateMacroBlockWriter*& writer);
 
-  private:
+private:
   static const int64_t MAX_RETRY_TIMES = 3;
   static const int64_t OB_FETCH_MAJOR_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000L;  // 1s
   bool is_inited_;
@@ -1063,7 +1063,7 @@ class ObMigrateCopyPhysicalTask : public share::ObITask {
 };
 
 class ObMigrateFinishPhysicalTask : public share::ObITask {
-  public:
+public:
   ObMigrateFinishPhysicalTask();
   virtual ~ObMigrateFinishPhysicalTask();
   int init(ObPartitionMigrateCtx& part_finish_ctx);
@@ -1073,12 +1073,12 @@ class ObMigrateFinishPhysicalTask : public share::ObITask {
     return sstable_ctx_;
   }
 
-  private:
+private:
   int check_sstable_meta(
       const blocksstable::ObSSTableBaseMeta& src_meta, const blocksstable::ObSSTableBaseMeta& write_meta);
   int acquire_sstable(const ObITable::TableKey& dest_table_key, ObTableHandle& handle);
 
-  private:
+private:
   bool is_inited_;
   ObPartitionMigrateCtx* part_migrate_ctx_;
   ObMigratePhysicalSSTableCtx sstable_ctx_;
@@ -1086,7 +1086,7 @@ class ObMigrateFinishPhysicalTask : public share::ObITask {
 };
 
 class ObMigrateFinishTask : public share::ObITask {
-  public:
+public:
   static const int64_t OB_CHECK_LOG_SYNC_INTERVAL = 200 * 1000;                 // 200ms
   static const int64_t OB_WAIT_LOG_SYNC_TIMEOUT = 30 * 1000 * 1000;             // 30 s
   static const int64_t OB_CHECK_MINOR_MERGE_FINISH_INTERVAL = 100 * 1000;       // 100ms
@@ -1097,7 +1097,7 @@ class ObMigrateFinishTask : public share::ObITask {
   int init(ObMigrateCtx& ctx);
   virtual int process() override;
 
-  private:
+private:
   int check_pg_available_index_all_exist();
   int check_available_index_all_exist(const ObPartitionKey& pkey, ObPartitionStorage* storage);
   int wait_log_sync(uint64_t max_clog_id = OB_INVALID_TIMESTAMP);
@@ -1114,14 +1114,14 @@ class ObMigrateFinishTask : public share::ObITask {
       const int64_t epoch_number);
   int enable_replay();
 
-  private:
+private:
   bool is_inited_;
   ObMigrateCtx* ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObMigrateFinishTask);
 };
 
 class ObGroupMigrateDag : public share::ObIDag {
-  public:
+public:
   ObGroupMigrateDag();
   virtual ~ObGroupMigrateDag();
   virtual bool operator==(const ObIDag& other) const override;
@@ -1140,12 +1140,12 @@ class ObGroupMigrateDag : public share::ObIDag {
 
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, KP(this), K(group_task_));
 
-  private:
+private:
   int report_result(const bool is_batch_mode, const ObIArray<ObReportPartMigrationTask>& report_list);
   int single_report_result(const ObIArray<ObReportPartMigrationTask>& report_list);
   int batch_report_result(const ObIArray<ObReportPartMigrationTask>& report_list);
 
-  private:
+private:
   bool is_inited_;
   ObPartGroupTask* group_task_;
   int64_t tenant_id_;
@@ -1154,32 +1154,32 @@ class ObGroupMigrateDag : public share::ObIDag {
 };
 
 class ObGroupMigrateExecuteTask : public share::ObITask {
-  public:
+public:
   ObGroupMigrateExecuteTask();
   virtual ~ObGroupMigrateExecuteTask();
   int init(ObPartGroupTask* group_task);
   virtual int process() override;
 
-  private:
+private:
   bool is_inited_;
   ObPartGroupTask* group_task_;
   DISALLOW_COPY_AND_ASSIGN(ObGroupMigrateExecuteTask);
 };
 
 class ObMigrateGetLeaderUtil {
-  public:
+public:
   static int get_leader(
       const common::ObPartitionKey& pkey, ObMigrateSrcInfo& leader_info, const bool force_renew = false);
   static int get_clog_parent(clog::ObIPartitionLogService& log_service, ObMigrateSrcInfo& parent_info);
 };
 
 class ObMigratePostPrepareTask : public ObMigratePrepareTask {
-  public:
+public:
   ObMigratePostPrepareTask();
   virtual ~ObMigratePostPrepareTask();
   virtual int process() override;
 
-  private:
+private:
   int schedule_migrate_tasks();
   int enable_replay_with_new_partition();
   int deal_with_rebuild_partition();
@@ -1189,7 +1189,7 @@ class ObMigratePostPrepareTask : public ObMigratePrepareTask {
   int deal_with_standby_restore_partition();
   int generate_restore_tailored_task(share::ObITask* last_task);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMigratePostPrepareTask);
 };
 
@@ -1200,46 +1200,46 @@ OB_INLINE bool ObMigrateCtx::is_migrate_compat_version() const
 
 class ObRestoreTailoredFinishTask;
 class ObRestoreTailoredPrepareTask : public share::ObITask {
-  public:
+public:
   ObRestoreTailoredPrepareTask();
   virtual ~ObRestoreTailoredPrepareTask();
   int init();
   virtual int process() override;
 
-  private:
+private:
   int schedule_restore_tailored_task(ObRestoreTailoredFinishTask& finish_task);
   int schedule_restore_tailored_finish_task();
   int filter_tailored_tables(common::ObIArray<uint64_t>& index_ids, ObRecoveryPointSchemaFilter& schema_filter);
   int update_restore_flag_cut_data();
   int check_need_generate_task(bool& need_generate);
 
-  private:
+private:
   int schedule_restore_table_tailored_task_(const common::ObIArray<uint64_t>& index_ids,
       const ObPartitionKey& partition_key, ObPartitionStorage& storage, ObRestoreTailoredFinishTask& finish_task);
 
-  private:
+private:
   bool is_inited_;
   ObMigrateCtx* ctx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRestoreTailoredPrepareTask);
 };
 
 class ObRestoreTailoredTask : public share::ObITask {
-  public:
+public:
   ObRestoreTailoredTask();
   virtual ~ObRestoreTailoredTask();
   int init(const uint64_t index_id, const ObTablesHandle& minor_tables_handle, const ObTableHandle& major_table_handle,
       const ObPGKey& pg_key, const ObPartitionKey& partition_key, ObRestoreTailoredFinishTask& finish_task);
   virtual int process() override;
 
-  private:
+private:
   int get_tailored_table_key(ObITable::TableKey& table_key);
   int generate_new_minor_sstable(const ObITable::TableKey& table_key,
       blocksstable::ObMacroBlocksWriteCtx& block_write_ctx, blocksstable::ObMacroBlocksWriteCtx& lob_block_write_ctx);
   int generate_major_sstable();
 
-  private:
+private:
   bool is_inited_;
   ObMigrateCtx* ctx_;
   uint64_t index_id_;
@@ -1249,12 +1249,12 @@ class ObRestoreTailoredTask : public share::ObITask {
   ObPartitionKey partition_key_;
   ObRestoreTailoredFinishTask* finish_task_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRestoreTailoredTask);
 };
 
 class ObRestoreTailoredFinishTask : public share::ObITask {
-  public:
+public:
   ObRestoreTailoredFinishTask();
   virtual ~ObRestoreTailoredFinishTask();
   int init();
@@ -1262,7 +1262,7 @@ class ObRestoreTailoredFinishTask : public share::ObITask {
   int add_sstable_handle(const ObPartitionKey& pkey, ObTableHandle& handle);
   int set_schema_version(const int64_t schema_version);
 
-  private:
+private:
   bool is_inited_;
   ObMigrateCtx* ctx_;
   common::SpinRWLock lock_;

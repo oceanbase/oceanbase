@@ -25,7 +25,7 @@ class ObCacheObjectFactory {
   friend class ObCacheObject;
   friend class ObPlanCacheManager;
 
-  public:
+public:
   static int alloc(ObCacheObject*& cache_obj, const CacheRefHandleID ref_handle, ObCacheObjType co_type,
       uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
   static int alloc(
@@ -45,7 +45,7 @@ class ObCacheObjectFactory {
 
   DEF_FREE_CACHE_FUNC(ObPhysicalPlan)
   DEF_FREE_CACHE_FUNC(ObCacheObject)
-  private:
+private:
   static void inner_free(ObCacheObject* cache_obj);
   static ObPlanCache* get_plan_cache(const uint64_t tenant_id);
 

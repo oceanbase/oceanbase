@@ -148,7 +148,7 @@ class ObSQLSessionInfo;
 class ObSelectStmt;
 
 class ObMultiStmtItem {
-  public:
+public:
   ObMultiStmtItem() : is_part_of_multi_stmt_(false), seq_num_(0), sql_(), batched_queries_(NULL)
   {}
   ObMultiStmtItem(bool is_part_of_multi, int64_t seq_num, const common::ObString& sql)
@@ -196,7 +196,7 @@ class ObMultiStmtItem {
 
   TO_STRING_KV(K_(is_part_of_multi_stmt), K_(seq_num), K_(sql));
 
-  private:
+private:
   bool is_part_of_multi_stmt_;
   int64_t seq_num_;  // Indicates which item is in the multi stmt
   common::ObString sql_;
@@ -205,7 +205,7 @@ class ObMultiStmtItem {
 };
 
 class ObQueryRetryInfo {
-  public:
+public:
   ObQueryRetryInfo()
       : inited_(false), is_rpc_timeout_(false), invalid_servers_(), last_query_retry_err_(common::OB_SUCCESS)
   {}
@@ -240,7 +240,7 @@ class ObQueryRetryInfo {
 
   TO_STRING_KV(K_(inited), K_(is_rpc_timeout), K_(invalid_servers), K_(last_query_retry_err));
 
-  private:
+private:
   bool inited_;  // This variable is used to write some defensive code, basically useless
   // Used to mark whether it is the timeout error code returned by rpc (including the local timeout and the timeout
   // error code in the response packet)
@@ -254,12 +254,12 @@ class ObQueryRetryInfo {
   // overwritten by type 1 or 2 error codes.
   int last_query_retry_err_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRetryInfo);
 };
 
 class ObSqlSchemaGuard {
-  public:
+public:
   ObSqlSchemaGuard()
   {
     reset();
@@ -285,14 +285,14 @@ class ObSqlSchemaGuard {
   int get_can_read_index_array(uint64_t table_id, uint64_t* index_tid_array, int64_t& size, bool with_mv,
       bool with_global_index = true, bool with_domain_index = true);
 
-  private:
+private:
   int get_link_table_schema(uint64_t table_id, const share::schema::ObTableSchema*& table_schema) const;
   int get_link_column_schema(uint64_t table_id, const common::ObString& column_name,
       const share::schema::ObColumnSchemaV2*& column_schema) const;
   int get_link_column_schema(
       uint64_t table_id, uint64_t column_id, const share::schema::ObColumnSchemaV2*& column_schema) const;
 
-  private:
+private:
   share::schema::ObSchemaGetterGuard* schema_guard_;
   common::ModulePageAllocator allocator_;
   common::ObSEArray<const share::schema::ObTableSchema*, 8> table_schemas_;
@@ -300,7 +300,7 @@ class ObSqlSchemaGuard {
 };
 
 struct ObSqlCtx {
-  public:
+public:
   ObSqlCtx();
   ~ObSqlCtx()
   {
@@ -322,7 +322,7 @@ struct ObSqlCtx {
   // release dynamic allocated memory
   void clear();
 
-  public:
+public:
   ObMultiStmtItem multi_stmt_item_;
   ObSQLSessionInfo* session_info_;
   ObSqlSchemaGuard sql_schema_guard_;
@@ -395,7 +395,7 @@ struct ObSqlCtx {
 };
 
 struct ObQueryCtx {
-  public:
+public:
   struct IdNamePair final {
     IdNamePair() : id_(common::OB_INVALID_STMT_ID), name_(), origin_name_(), stmt_type_(stmt::T_NONE)
     {}
@@ -524,11 +524,11 @@ struct ObQueryCtx {
   int add_temp_table(ObSqlTempTableInfo* temp_table_info);
   int get_temp_table_plan(const uint64_t temp_table_id, ObLogicalOperator*& temp_table_insert);
 
-  public:
+public:
   static const int64_t CALCULABLE_EXPR_NUM = 16;
   typedef common::ObSEArray<ObHiddenColumnItem, CALCULABLE_EXPR_NUM, common::ModulePageAllocator, true> CalculableItems;
 
-  public:
+public:
   int64_t question_marks_count_;
   CalculableItems calculable_items_;
   common::ObSEArray<ObTablePartitionInfo*, 8, common::ModulePageAllocator, true> table_partition_infos_;

@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 class ObRowUtil {
-  public:
+public:
   static int convert(const common::ObString& compact_row, ObNewRow& row);
   static int convert(const char* compact_row, int64_t buf_len, ObNewRow& row);
   static int compare_row(const ObNewRow& lrow, const ObNewRow& rrow, int& cmp);

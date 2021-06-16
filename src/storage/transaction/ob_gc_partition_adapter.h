@@ -41,7 +41,7 @@ typedef common::LinkHashNode<common::ObPartitionKey> GCInfoNode;
 typedef common::LinkHashValue<common::ObPartitionKey> GCInfoValue;
 
 class GCInfo : public GCInfoValue {
-  public:
+public:
   GCInfo() : access_ts_(common::ObTimeUtility::current_time()), update_ts_(0), status_(GC_STATUS_UNKNOWN)
   {}
   ~GCInfo()
@@ -68,14 +68,14 @@ class GCInfo : public GCInfoValue {
     (void)ATOMIC_STORE(&access_ts_, common::ObTimeUtility::current_time());
   }
 
-  private:
+private:
   int64_t access_ts_;
   int64_t update_ts_;
   int status_;
 };
 
 class GCInfoAlloc {
-  public:
+public:
   static GCInfo* alloc_value()
   {
     return NULL;
@@ -104,13 +104,13 @@ class GCInfoAlloc {
 typedef common::ObLinkHashMap<common::ObPartitionKey, GCInfo, GCInfoAlloc> GCMap;
 
 class ObGCPartitionAdapter : public share::ObThreadPool {
-  public:
+public:
   ObGCPartitionAdapter() : is_inited_(false), is_running_(false), sql_proxy_(NULL)
   {}
   ~ObGCPartitionAdapter()
   {}
 
-  public:
+public:
   int init(common::ObMySQLProxy* sql_proxy);
   int start();
   void stop();
@@ -118,16 +118,16 @@ class ObGCPartitionAdapter : public share::ObThreadPool {
   void destroy();
   void run1();
 
-  public:
+public:
   int check_partition_exist(const common::ObPartitionKey& pkey, bool& exist);
 
-  public:
+public:
   static ObGCPartitionAdapter& get_instance();
 
-  private:
+private:
   static const int64_t BATCH_GC_PARTITION_QUERY = 64;
 
-  private:
+private:
   int refresh_all_partition_status_();
   int refresh_partition_status_(const common::ObIArray<common::ObPartitionKey>& pkey_array);
   int clear_obsolete_partition_();
@@ -137,7 +137,7 @@ class ObGCPartitionAdapter : public share::ObThreadPool {
   int update_partition_status_(
       const common::ObIArray<common::ObPartitionKey>& pkey_array, const common::ObIArray<int>& status_array);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   common::ObMySQLProxy* sql_proxy_;
@@ -147,29 +147,29 @@ class ObGCPartitionAdapter : public share::ObThreadPool {
 #define GC_PARTITION_ADAPTER (oceanbase::transaction::ObGCPartitionAdapter::get_instance())
 
 class GetUnknownPartition {
-  public:
+public:
   explicit GetUnknownPartition(common::ObIArray<common::ObPartitionKey>& array) : array_(array)
   {}
   ~GetUnknownPartition()
   {}
   bool operator()(const common::ObPartitionKey& pkey, GCInfo* info);
 
-  private:
+private:
   static const int64_t MAX_STATUS_REFRESH_INTERVAL = 1 * 1000 * 1000;
 
-  private:
+private:
   common::ObIArray<common::ObPartitionKey>& array_;
 };
 
 class RemoveObsoletePartition {
-  public:
+public:
   RemoveObsoletePartition()
   {}
   ~RemoveObsoletePartition()
   {}
   bool operator()(const common::ObPartitionKey& pkey, GCInfo* info);
 
-  private:
+private:
   static const int64_t STATUS_OBSOLETE_TIME = 600 * 1000 * 1000;
 };
 

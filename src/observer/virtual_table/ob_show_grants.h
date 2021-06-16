@@ -24,7 +24,7 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObShowGrants : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObShowGrants();
   virtual ~ObShowGrants();
 
@@ -53,7 +53,7 @@ class ObShowGrants : public common::ObVirtualTableScannerIterator {
   static int print_obj_privs_to_buff_ora(
       char* buf, const int64_t buf_len, int64_t& pos, const share::ObPackedObjPriv obj_privs);
 
-  private:
+private:
   // @brief get string 'grant priv on priv_level to user'
   int get_grants_string(char* buf, const int64_t buf_len, int64_t& pos, share::schema::ObNeedPriv& have_priv,
       common::ObString& user_name, common::ObString& host_name);
@@ -74,12 +74,12 @@ class ObShowGrants : public common::ObVirtualTableScannerIterator {
   int priv_obj_info_ora(
       char* buf, const int64_t buf_len, int64_t& pos, ObString& db_name, ObString& obj_name, ObString& col_name);
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t user_id_;
   share::schema::ObSessionPrivInfo session_priv_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObShowGrants);
 };
 }  // namespace observer

@@ -26,7 +26,7 @@ class ObOldTableSchemaParam {
   typedef common::ObFixedArray<ObColumnParam*, common::ObIAllocator> Columns;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObOldTableSchemaParam(common::ObIAllocator& allocator);
   virtual ~ObOldTableSchemaParam();
   void reset();

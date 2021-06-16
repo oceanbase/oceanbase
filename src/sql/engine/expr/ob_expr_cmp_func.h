@@ -25,7 +25,7 @@ class ObDatum;
 namespace sql {
 typedef int (*DatumCmpFunc)(const common::ObDatum& datum1, const common::ObDatum& datum2);
 class ObExprCmpFuncsHelper {
-  public:
+public:
   static sql::ObExpr::EvalFunc get_eval_expr_cmp_func(const common::ObObjType type1, const common::ObObjType type2,
       const common::ObCmpOp cmp_op, const bool is_oracle_mode, const common::ObCollationType cs_type);
 

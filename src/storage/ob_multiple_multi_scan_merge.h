@@ -17,11 +17,11 @@
 namespace oceanbase {
 namespace storage {
 class ObMultipleMultiScanMerge : public ObMultipleScanMergeImpl {
-  public:
+public:
   ObMultipleMultiScanMerge();
   virtual ~ObMultipleMultiScanMerge();
 
-  public:
+public:
   int open(const common::ObIArray<common::ObExtStoreRange>& ranges);
   virtual void reset();
   virtual void reuse() override;
@@ -29,7 +29,7 @@ class ObMultipleMultiScanMerge : public ObMultipleScanMergeImpl {
       const common::ObIArray<common::ObExtStoreRange>& ranges, const common::ObIArray<ObITable*>& tables,
       ObPartitionEst& part_estimate, common::ObIArray<common::ObEstRowCountRecord>& est_records);
 
-  protected:
+protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
   virtual int inner_get_next_row(ObStoreRow& row);
@@ -38,7 +38,7 @@ class ObMultipleMultiScanMerge : public ObMultipleScanMergeImpl {
   virtual void collect_merge_stat(ObTableStoreStat& stat) const override;
   virtual int skip_to_range(const int64_t range_idx) override;
 
-  private:
+private:
   int is_get_data_ready(bool& is_ready);
   int is_scan_data_ready(bool& is_ready);
   int inner_get_next_row_for_get(ObStoreRow& row, bool& need_retry);
@@ -47,13 +47,13 @@ class ObMultipleMultiScanMerge : public ObMultipleScanMergeImpl {
   static int to_collation_free_range_on_demand(
       const common::ObIArray<common::ObExtStoreRange>& ranges, common::ObIAllocator& allocator);
 
-  private:
+private:
   const ObStoreRow* get_items_[common::MAX_TABLE_CNT_IN_STORAGE];
   int64_t get_num_;
   const ObIArray<ObExtStoreRange>* ranges_;
   ScanRangeArray cow_ranges_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMultipleMultiScanMerge);
 };

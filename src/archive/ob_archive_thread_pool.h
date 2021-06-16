@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace archive {
 class ObArchiveTaskStatus;
 class ObArchiveThreadPool : public share::ObThreadPool {
-  public:
+public:
   ObArchiveThreadPool();
   ~ObArchiveThreadPool();
 
@@ -31,16 +31,16 @@ class ObArchiveThreadPool : public share::ObThreadPool {
   int push_task_status(ObArchiveTaskStatus* task_status);
   void destroy();
 
-  public:
+public:
   virtual int64_t cal_work_thread_num() = 0;
   virtual void set_thread_name_str(char* str) = 0;
   virtual int handle_task_list(ObArchiveTaskStatus* status) = 0;
 
-  private:
+private:
   void run1();
   void do_thread_task_();
 
-  protected:
+protected:
   bool inited_;
   bool round_stop_flag_;
   int64_t total_task_count_;

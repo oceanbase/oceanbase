@@ -25,7 +25,7 @@ namespace transaction {
 class ObTransResultInfoFactory;
 
 class ObTransResultInfoLinkNode {
-  public:
+public:
   ObTransResultInfoLinkNode()
   {
     reset();
@@ -51,13 +51,13 @@ class ObTransResultInfoLinkNode {
     next_ = next;
   }
 
-  protected:
+protected:
   ObTransResultInfoLinkNode* next_;
   ObTransResultInfoLinkNode* prev_;
 };
 
 class ObTransResultInfo : public ObTransResultInfoLinkNode {
-  public:
+public:
   ObTransResultInfo()
   {
     reset();
@@ -118,10 +118,10 @@ class ObTransResultInfo : public ObTransResultInfoLinkNode {
   }
   TO_STRING_KV(K_(state), K_(commit_version), K_(min_log_id), K_(trans_id));
 
-  public:
+public:
   static const int64_t TOTAL_NUM = 1024;
 
-  private:
+private:
   int state_;
   int64_t commit_version_;
   uint64_t min_log_id_;
@@ -130,7 +130,7 @@ class ObTransResultInfo : public ObTransResultInfoLinkNode {
 };
 
 class ObGetMinLogIdFunction {
-  public:
+public:
   ObGetMinLogIdFunction() : min_log_id_(UINT64_MAX), min_log_ts_(INT64_MAX)
   {}
   ~ObGetMinLogIdFunction()
@@ -152,13 +152,13 @@ class ObGetMinLogIdFunction {
     return min_log_ts_;
   }
 
-  private:
+private:
   uint64_t min_log_id_;
   int64_t min_log_ts_;
 };
 
 class ObITransResultInfoMgr {
-  public:
+public:
   ObITransResultInfoMgr()
   {}
   virtual ~ObITransResultInfoMgr()
@@ -197,7 +197,7 @@ struct ObTransResultInfoBucketHeader {
 } CACHE_ALIGNED;
 
 class ObTransResultInfoMgr : public ObITransResultInfoMgr {
-  public:
+public:
   ObTransResultInfoMgr()
   {
     reset();
@@ -245,7 +245,7 @@ class ObTransResultInfoMgr : public ObITransResultInfoMgr {
     return ret;
   }
 
-  private:
+private:
   int gc_by_checkpoint_(const int64_t checkpoint, ObTransResultInfo* info, ObTransResultInfo*& release_point);
   int release_trans_result_info_(ObTransResultInfo* info);
   int get_partition_checkpoint_version_(int64_t& checkpoint);
@@ -271,12 +271,12 @@ class ObTransResultInfoMgr : public ObITransResultInfoMgr {
     return bool_ret;
   }
 
-  private:
+private:
   // TODO: dynamic scale by transaction concurrency grade
   static const int64_t TRANS_RESULT_INFO_BUCKET_COUNT = 512;
   static const int64_t TRANS_RESULT_INFO_GC_INTERVAL_US = 1000 * 1000;
 
-  private:
+private:
   bool is_inited_;
   ObTransResultInfoBucketHeader bucket_header_[TRANS_RESULT_INFO_BUCKET_COUNT];
   storage::ObPartitionService* partition_service_;

@@ -36,7 +36,7 @@ template <enum TGType type>
 class ObTG;
 
 class MyObThreadPool : public share::ObThreadPool {
-  public:
+public:
   void run1() override
   {
     runnable_->set_thread_idx(get_thread_idx());
@@ -47,12 +47,18 @@ class MyObThreadPool : public share::ObThreadPool {
 
 template <>
 class ObTG<TGType::OB_THREAD_POOL> : public ITG {
-  public:
+public:
   ObTG(lib::ThreadCountPair pair) : thread_cnt_(pair.get_thread_cnt())
   {}
-  ~ObTG() { destroy(); }
-  int64_t thread_cnt() override { return thread_cnt_; }
-  int set_runnable(lib::TGRunnable &runnable) override
+  ~ObTG()
+  {
+    destroy();
+  }
+  int64_t thread_cnt() override
+  {
+    return thread_cnt_;
+  }
+  int set_runnable(lib::TGRunnable& runnable) override
   {
     int ret = common::OB_SUCCESS;
     if (th_ != nullptr) {
@@ -100,7 +106,7 @@ class ObTG<TGType::OB_THREAD_POOL> : public ITG {
     }
   }
 
-  private:
+private:
   char buf_[sizeof(MyObThreadPool)];
   MyObThreadPool* th_ = nullptr;
   int thread_cnt_;

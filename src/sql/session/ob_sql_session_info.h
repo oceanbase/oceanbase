@@ -57,7 +57,7 @@ class ObStmt;
 class ObSQLSessionInfo;
 
 class SessionInfoKey {
-  public:
+public:
   SessionInfoKey() : version_(0), sessid_(0), proxy_sessid_(0)
   {}
   SessionInfoKey(uint32_t version, uint32_t sessid, uint64_t proxy_sessid = 0)
@@ -89,7 +89,7 @@ class SessionInfoKey {
     return cmp;
   }
 
-  public:
+public:
   uint32_t version_;
   uint32_t sessid_;
   uint64_t proxy_sessid_;
@@ -123,7 +123,7 @@ struct ObSessionStat final {
 };
 
 class ObTenantCachedSchemaGuardInfo {
-  public:
+public:
   ObTenantCachedSchemaGuardInfo()
   {
     reset();
@@ -142,7 +142,7 @@ class ObTenantCachedSchemaGuardInfo {
 
   void try_revert_schema_guard();
 
-  private:
+private:
   share::schema::ObSchemaGetterGuard schema_guard_;
   int64_t ref_ts_;
   uint64_t tenant_id_;
@@ -150,7 +150,7 @@ class ObTenantCachedSchemaGuardInfo {
 };
 
 class ObIExtraStatusCheck : public common::ObDLinkBase<ObIExtraStatusCheck> {
-  public:
+public:
   virtual ~ObIExtraStatusCheck()
   {}
 
@@ -158,11 +158,11 @@ class ObIExtraStatusCheck : public common::ObDLinkBase<ObIExtraStatusCheck> {
   virtual int check() const = 0;
 
   class Guard {
-    public:
+  public:
     Guard(ObSQLSessionInfo& session, ObIExtraStatusCheck& checker);
     ~Guard();
 
-    private:
+  private:
     ObSQLSessionInfo& session_;
     ObIExtraStatusCheck& checker_;
   };
@@ -175,11 +175,11 @@ typedef common::LinkHashValue<SessionInfoKey> SessionInfoHashValue;
 class ObSQLSessionInfo : public common::ObVersionProvider, public ObBasicSessionInfo, public SessionInfoHashValue {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum SessionType { INVALID_TYPE, USER_SESSION, INNER_SESSION };
   // for switch stmt.
   class StmtSavedValue : public ObBasicSessionInfo::StmtSavedValue {
-    public:
+  public:
     StmtSavedValue() : ObBasicSessionInfo::StmtSavedValue()
     {
       reset();
@@ -194,7 +194,7 @@ class ObSQLSessionInfo : public common::ObVersionProvider, public ObBasicSession
       is_ignore_stmt_ = false;
     }
 
-    public:
+  public:
     ObAuditRecordData audit_record_;
     SessionType session_type_;
     bool inner_flag_;
@@ -202,7 +202,7 @@ class ObSQLSessionInfo : public common::ObVersionProvider, public ObBasicSession
     bool is_ignore_stmt_;
   };
 
-  public:
+public:
   ObSQLSessionInfo();
   virtual ~ObSQLSessionInfo();
 
@@ -639,13 +639,13 @@ class ObSQLSessionInfo : public common::ObVersionProvider, public ObBasicSession
     return is_ignore_stmt_;
   }
 
-  private:
+private:
   int close_all_ps_stmt();
 
   static const int64_t MAX_STORED_PLANS_COUNT = 10240;
   static const int64_t MAX_IPADDR_LENGTH = 64;
 
-  private:
+private:
   bool is_inited_;
   // store the warning message from the most recent statement in the current session
   common::ObWarningBuffer warnings_buf_;

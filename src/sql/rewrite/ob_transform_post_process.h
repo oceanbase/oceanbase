@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTransformPostProcess : public ObTransformRule {
-  public:
+public:
   ObTransformPostProcess(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
 
@@ -29,7 +29,7 @@ class ObTransformPostProcess : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   int extract_calculable_expr(ObDMLStmt*& stmt, bool& trans_happened);
 
   int transform_for_hierarchical_query(ObDMLStmt* stmt, bool& trans_happened);

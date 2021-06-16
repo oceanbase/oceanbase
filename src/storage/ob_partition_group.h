@@ -55,7 +55,7 @@ enum ObMigrateRetryFlag {
 };
 
 class ObPartitionGroup : public ObIPartitionGroup {
-  public:
+public:
   ObPartitionGroup();
   virtual ~ObPartitionGroup();
 
@@ -432,7 +432,7 @@ class ObPartitionGroup : public ObIPartitionGroup {
   virtual int check_physical_split(bool& finished);
   TO_STRING_KV(K_(pkey), K_(replay_status), K_(partition_state));
 
-  private:
+private:
   // this structure is introduced by major freeze refactoring
   // to break the circular dependency of waiting schema in the process
   // of leader takeover.
@@ -443,23 +443,23 @@ class ObPartitionGroup : public ObIPartitionGroup {
   // In addition, schema version check is only limit to user tables, and
   // system or dummy tables will be skipped directly.
   class SchemaVersionContainer {
-    public:
+  public:
     SchemaVersionContainer() : schema_version_checked_(true), base_schema_version_(0)
     {}
     virtual ~SchemaVersionContainer()
     {}
 
-    public:
+  public:
     // This function is used to update schema_version. It will be called in the process
     // of leader_takeover
     int update_and_leader_takeover(int64_t base_schema_version);
     int check_base_schema_version(
         share::schema::ObMultiVersionSchemaService* schema_version, common::ObPartitionKey& pkey);
 
-    private:
+  private:
     static const int64_t INVALID_SCHEMA_RETRY_CNT = 10;
 
-    private:
+  private:
     // Used to identify whether the schema_version check has been completed.
     // It is set to false after leader takeover and set to true at the first
     // start_participants.
@@ -470,7 +470,7 @@ class ObPartitionGroup : public ObIPartitionGroup {
     int64_t base_schema_version_;
   };
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObPartitionGroup);
   static const int64_t FREEZE_WAIT_TIME = 10L * 1000L;  // 10ms
@@ -485,7 +485,7 @@ class ObPartitionGroup : public ObIPartitionGroup {
   static const int64_t WAIT_FREEZE_LOG_ELAPSE_CNT_LIMIT = 20L;               // 20
   static const int64_t WAIT_FREEZE_LOG_ELAPSE_SLEEP_TS = 50L * 1000L;        // 50ms
 
-  private:
+private:
   int check_init_(void* cp, const char* cp_name) const;
   // for clog history info
   int get_clog_service_range_for_clog_history_info_(
@@ -584,7 +584,7 @@ class ObPartitionGroup : public ObIPartitionGroup {
       ObSSTable& sstable);
   int get_base_storage_info_(common::ObBaseStorageInfo& base_storage_info);
 
-  protected:
+protected:
   bool is_inited_;
   common::ObPartitionKey pkey_;
 

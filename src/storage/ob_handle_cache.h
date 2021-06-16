@@ -26,7 +26,7 @@ constexpr int64_t next_pow2(const int64_t x)
 
 template <typename Key, typename Handle>
 class ObHandleCacheNode : public common::ObDLinkBase<ObHandleCacheNode<Key, Handle>> {
-  public:
+public:
   ObHandleCacheNode() : bucket_idx_(-1)
   {}
   virtual ~ObHandleCacheNode()
@@ -50,7 +50,7 @@ class ObHandleCache {
   typedef ObHandleCacheNode<Key, Handle> CacheNode;
   typedef common::ObDList<CacheNode> LRUList;
 
-  public:
+public:
   ObHandleCache()
   {
     STATIC_ASSERT(N <= 8192, "number of bucket is larger than 8192");
@@ -124,7 +124,7 @@ class ObHandleCache {
     return ret;
   }
 
-  private:
+private:
   static const uint64_t BUCKET_SIZE = next_pow2(N * 2);
   static const uint64_t MASK = BUCKET_SIZE - 1;
   CacheNode nodes_[N];

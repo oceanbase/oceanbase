@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprCardinality : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprCardinality(common::ObIAllocator& alloc);
   virtual ~ObExprCardinality();
   int assign(const ObExprOperator& other);
@@ -26,7 +26,7 @@ class ObExprCardinality : public ObFuncExprOperator {
 
   virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCardinality);
 };
 }  // namespace sql

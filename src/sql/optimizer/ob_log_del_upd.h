@@ -43,7 +43,7 @@ namespace sql {
   }
 
 class ObLogDelUpd : public ObLogicalOperator {
-  public:
+public:
   ObLogDelUpd(ObLogPlan& plan);
   virtual ~ObLogDelUpd() = default;
   inline const common::ObIArray<TableColumns>* get_all_table_columns()
@@ -240,7 +240,7 @@ class ObLogDelUpd : public ObLogicalOperator {
     return table_phy_location_type_;
   }
 
-  protected:
+protected:
   int generate_table_sharding_info(uint64_t loc_table_id, uint64_t ref_table_id, const ObPartHint* part_hint,
       ObTablePartitionInfo& table_partition_info, ObShardingInfo& sharding_info);
   int calculate_table_location(uint64_t loc_table_id, uint64_t ref_table_id, const ObPartHint* part_hint,
@@ -252,14 +252,14 @@ class ObLogDelUpd : public ObLogicalOperator {
       ObShardingInfo& sharding_info, const ObPhyTableLocationInfo* phy_table_locaion_info, bool& is_needed);
   int add_all_table_assignments_to_ctx(const ObTablesAssignments* tables_assignments, ObAllocExprContext& ctx);
 
-  private:
+private:
   int get_modify_table_id(uint64_t& table_id) const;
   int allocate_exchange_post_non_pdml(AllocExchContext* ctx);
   int allocate_exchange_post_pdml(AllocExchContext* ctx);
   int check_pdml_need_exchange(AllocExchContext* ctx, ObShardingInfo& target_sharding_info, bool& need_exchange);
   int do_reordering_project_columns(ObLogicalOperator& child);
 
-  protected:
+protected:
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
   virtual int add_exprs_to_ctx_for_pdml(
       ObAllocExprContext& ctx, const ObIArray<ObRawExpr*>& input_exprs, uint64_t producer_id);
@@ -267,7 +267,7 @@ class ObLogDelUpd : public ObLogicalOperator {
   int check_multi_table_dml_for_nested_execution(bool& is_needed);
   int set_hash_dist_column_exprs(ObExchangeInfo& exch_info, uint64_t index_id) const;
 
-  protected:
+protected:
   const common::ObIArray<TableColumns>* all_table_columns_;
   const common::ObIArray<ObRawExpr*>* check_constraint_exprs_;
   const common::ObIArray<ObColumnRefRawExpr*>* table_columns_;
@@ -287,11 +287,11 @@ class ObLogDelUpd : public ObLogicalOperator {
   ObTableLocationType table_phy_location_type_;
   bool table_location_uncertain_;
 
-  private:
+private:
   ObRawExpr* pdml_partition_id_expr_;
   bool pdml_is_returning_;
 
-  protected:
+protected:
   bool need_alloc_part_id_expr_;
 };
 }  // namespace sql

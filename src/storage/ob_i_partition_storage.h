@@ -121,7 +121,7 @@ struct PartitionSSStoreInfo {
 };
 
 class ObIPartitionStorage {
-  public:
+public:
   ObIPartitionStorage()
   {}
   virtual ~ObIPartitionStorage()

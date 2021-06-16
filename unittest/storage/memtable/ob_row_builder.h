@@ -26,7 +26,7 @@ namespace unittest {
 #include "strutils.h"
 typedef ObSEArray<share::schema::ObColDesc, 64> ColDescArray;
 class ColDescBuilder {
-  public:
+public:
   const ColDescArray& get_columns() const
   {
     return columns_;
@@ -40,12 +40,12 @@ class ColDescBuilder {
     columns_.push_back(col_desc);
   }
 
-  private:
+private:
   ColDescArray columns_;
 };
 
 class RowIterBuilder {
-  public:
+public:
   enum { MAX_ROWKEY_OBJ = 64 };
   RowIterBuilder(const ColDescArray& cols) : cols_(cols)
   {}
@@ -70,7 +70,7 @@ class RowIterBuilder {
     return obj_array_;
   }
 
-  private:
+private:
   static int parse_obj(ObObj& obj, const char* val)
   {
     int err = OB_SUCCESS;
@@ -78,7 +78,7 @@ class RowIterBuilder {
     return err;
   }
 
-  private:
+private:
   const ColDescArray& cols_;
   ObObj obj_array_[MAX_ROWKEY_OBJ];
   ObMtRowIterator iter_;

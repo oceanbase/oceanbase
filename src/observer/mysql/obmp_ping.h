@@ -19,16 +19,16 @@ namespace oceanbase {
 namespace observer {
 
 class ObMPPing : public ObMPBase {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_PING;
   explicit ObMPPing(const ObGlobalContext& gctx);
   virtual ~ObMPPing();
 
-  protected:
+protected:
   int process();
   int deserialize();
 
-  private:
+private:
   common::ObString sql_;
   DISALLOW_COPY_AND_ASSIGN(ObMPPing);
 };  // end of class ObMPPing

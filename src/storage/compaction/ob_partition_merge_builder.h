@@ -49,7 +49,7 @@ struct ObCompactRowType {
 };
 
 class ObIStoreRowProcessor {
-  public:
+public:
   ObIStoreRowProcessor()
   {}
   virtual ~ObIStoreRowProcessor()
@@ -68,7 +68,7 @@ class ObIStoreRowProcessor {
 };
 
 class ObMacroBlockBuilder : public ObIStoreRowProcessor {
-  public:
+public:
   ObMacroBlockBuilder();
   virtual ~ObMacroBlockBuilder();
   virtual int open(storage::ObSSTableMergeCtx& ctx, const int64_t idx, const bool iter_complement,
@@ -87,7 +87,7 @@ class ObMacroBlockBuilder : public ObIStoreRowProcessor {
   virtual void set_purged_count(const int64_t count);
   TO_STRING_KV(K_(desc), K_(sstable_merge_info), K_(writer));
 
-  protected:
+protected:
   void est_row(const ObCompactRowType::ObCompactRowTypeEnum& type, const bool is_output);
   int check_row_columns(const storage::ObStoreRow& row);
   int check_sparse_row_columns(const storage::ObStoreRow& row);
@@ -96,7 +96,7 @@ class ObMacroBlockBuilder : public ObIStoreRowProcessor {
   OB_INLINE int check_sparse_row_column(const common::ObObj& obj, const int64_t idx);
   int append_bloom_filter(const storage::ObStoreRow& row);
 
-  private:
+private:
   storage::ObMergeType merge_type_;
   blocksstable::ObMacroBlockWriter* writer_;
   blocksstable::ObDataStoreDesc desc_;
@@ -112,7 +112,7 @@ class ObMacroBlockBuilder : public ObIStoreRowProcessor {
 };
 
 class ObMacroBlockEstimator : public ObIStoreRowProcessor {
-  public:
+public:
   ObMacroBlockEstimator();
   virtual ~ObMacroBlockEstimator();
   virtual int open(storage::ObSSTableMergeCtx& ctx, const int64_t idx, const bool iter_complement,
@@ -134,7 +134,7 @@ class ObMacroBlockEstimator : public ObIStoreRowProcessor {
   virtual void set_purged_count(const int64_t count);
   TO_STRING_KV(KP(component_));
 
-  private:
+private:
   int update_estimator(const storage::ObStoreRow& row);
   ObIStoreRowProcessor* component_;
   bool is_opened_;

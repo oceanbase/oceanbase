@@ -47,14 +47,14 @@ ObGlobalMaxDecidedTransVersionMgr::~ObGlobalMaxDecidedTransVersionMgr()
 }
 
 class ObGlobalMaxDecidedTransVersionMgr::InsertPartitionFunctor {
-  public:
+public:
   explicit InsertPartitionFunctor(const common::ObPartitionKey& partition_key)
       : partition_key_(partition_key), ret_value_(common::OB_SUCCESS)
   {}
   ~InsertPartitionFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObAddr& leader, common::ObPartitionArray& partition_array)
   {
     if (OB_SUCCESS != (ret_value_ = partition_array.push_back(partition_key_))) {
@@ -67,16 +67,16 @@ class ObGlobalMaxDecidedTransVersionMgr::InsertPartitionFunctor {
     return ret_value_;
   }
 
-  private:
+private:
   common::ObPartitionKey partition_key_;
   int ret_value_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(InsertPartitionFunctor);
 };
 
 class ObGlobalMaxDecidedTransVersionMgr::QueryPartitionFunctor {
-  public:
+public:
   QueryPartitionFunctor(obrpc::ObSrvRpcProxy* rpc_proxy, const int64_t version)
       : saved_value_array_(),
         ret_value_(common::OB_SUCCESS),
@@ -86,7 +86,7 @@ class ObGlobalMaxDecidedTransVersionMgr::QueryPartitionFunctor {
   ~QueryPartitionFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObAddr& leader, common::ObPartitionArray& partition_array)
   {
     if (OB_SUCCESS != (ret_value_ = handle_partition_array_(leader, partition_array))) {
@@ -104,9 +104,9 @@ class ObGlobalMaxDecidedTransVersionMgr::QueryPartitionFunctor {
   }
   int get_min(common::ObPartitionKey& pkey, int64_t& value) const;
 
-  private:
+private:
   class PartitionValue {
-    public:
+  public:
     PartitionValue(const common::ObPartitionKey& pkey, const int64_t value) : pkey_(pkey), value_(value)
     {}
     PartitionValue() : pkey_(), value_(0)
@@ -115,19 +115,19 @@ class ObGlobalMaxDecidedTransVersionMgr::QueryPartitionFunctor {
     {}
     TO_STRING_KV(K_(pkey), K_(value));
 
-    public:
+  public:
     common::ObPartitionKey pkey_;
     int64_t value_;
   };
 
-  private:
+private:
   int handle_partition_array_(const common::ObAddr& leader, const common::ObPartitionArray& partition_array);
   common::ObSEArray<PartitionValue, 16> saved_value_array_;
   int ret_value_;
   obrpc::ObSrvRpcProxy* rpc_proxy_;
   int64_t last_max_decided_trans_version_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(QueryPartitionFunctor);
 };
 

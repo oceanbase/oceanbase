@@ -21,9 +21,9 @@
 namespace oceanbase {
 namespace clog {
 class ObLogWriterWrapper : public ObIBatchBufferConsumer {
-  public:
+public:
   class CallbackTask : public common::ObICallback {
-    public:
+  public:
     CallbackTask()
     {
       reset();
@@ -33,7 +33,7 @@ class ObLogWriterWrapper : public ObIBatchBufferConsumer {
     void reset();
     int callback();
 
-    public:
+  public:
     ObLogCursor cursor_;
     int error_code_;
     int64_t before_push_cb_ts_;
@@ -41,11 +41,11 @@ class ObLogWriterWrapper : public ObIBatchBufferConsumer {
     ObIBufferTask* header_task_;
     int64_t task_num_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(CallbackTask);
   };
 
-  public:
+public:
   ObLogWriterWrapper() : log_writer_(NULL), callback_handler_(NULL), batch_buffer_(NULL), is_inited_(false)
   {}
   virtual ~ObLogWriterWrapper()
@@ -58,7 +58,7 @@ class ObLogWriterWrapper : public ObIBatchBufferConsumer {
   int after_consume(common::ObICallback& task);
   void add_group_size(const int64_t task_num, const ObLogWritePoolType type);
 
-  private:
+private:
   ObCLogWriter* log_writer_;
   common::ObICallbackHandler* callback_handler_;
   ObBatchBuffer* batch_buffer_;
@@ -71,7 +71,7 @@ class ObLogWriterWrapper : public ObIBatchBufferConsumer {
 };
 
 class ObCLogItem : public ObICLogItem {
-  public:
+public:
   ObCLogItem();
   virtual ~ObCLogItem();
   int init(ObLogWriterWrapper* host, ObIBatchBufferTask* buffer_task, ObBatchBuffer* batch_buffer);
@@ -84,24 +84,24 @@ class ObCLogItem : public ObICLogItem {
       const file_id_t file_id, const offset_t offset, const int error_code, const ObLogWritePoolType type);
   TO_STRING_KV(KP_(host), KP_(buffer_task), KP_(batch_buffer));
 
-  private:
+private:
   static const int64_t MAX_TASK_NUM_PER_CB = 20;
   ObLogWriterWrapper* host_;
   ObIBatchBufferTask* buffer_task_;
   ObBatchBuffer* batch_buffer_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCLogItem);
 };
 
 class ObDiskLogBuffer : public ObIDiskLogBuffer {
-  public:
+public:
   ObDiskLogBuffer() : log_buffer_cnt_(0)
   {}
   virtual ~ObDiskLogBuffer()
   {}
 
-  public:
+public:
   int init(const int64_t buffer_size, const int64_t buffer_cnt, ObCLogWriter* log_writer,
       common::ObICallbackHandler* callback_handler);
   int submit(ObIBufferTask* task);
@@ -114,13 +114,13 @@ class ObDiskLogBuffer : public ObIDiskLogBuffer {
     return log_buffer_cnt_;
   }
 
-  private:
+private:
   int64_t log_buffer_cnt_;
   ObLogWriterWrapper log_writer_;
   ObBufferArena buffer_arena_;
   ObBatchBuffer batch_buffer_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDiskLogBuffer);
 };
 };  // namespace clog

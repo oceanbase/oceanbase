@@ -23,14 +23,14 @@ namespace sql {
 class ObExecContext;
 
 class ObLMSRowCompare : public ObRowComparer {
-  public:
+public:
   bool operator()(int64_t row_idx1, int64_t row_idx2);
 };
 
 class ObLocalMergeSort : public ObBaseSort {
-  private:
+private:
   class InputReader {
-    public:
+  public:
     InputReader(int64_t start_pos, int64_t end_pos) : start_pos_(start_pos), end_pos_(end_pos), cur_pos_(start_pos)
     {}
     ~InputReader()
@@ -39,13 +39,13 @@ class ObLocalMergeSort : public ObBaseSort {
 
     TO_STRING_KV(K_(start_pos), K_(end_pos));
 
-    private:
+  private:
     int64_t start_pos_;
     int64_t end_pos_;
     int64_t cur_pos_;
   };
 
-  public:
+public:
   ObLocalMergeSort();
   virtual ~ObLocalMergeSort();
 
@@ -64,7 +64,7 @@ class ObLocalMergeSort : public ObBaseSort {
     cur_input_ = nth_input;
   }
 
-  private:
+private:
   virtual int cleanup();
   virtual int save_last_row();
   virtual int inner_add_row(const common::ObNewRow& row);
@@ -79,7 +79,7 @@ class ObLocalMergeSort : public ObBaseSort {
   }
   virtual int alloc_reader(int64_t& start_pos, int64_t end_pos);
 
-  private:
+private:
   bool is_finish_;
   bool is_heap_get_row_;
   int64_t cur_input_;

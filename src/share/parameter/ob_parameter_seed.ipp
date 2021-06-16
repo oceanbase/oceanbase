@@ -1430,7 +1430,7 @@ DEF_TIME(ilog_index_expire_time, OB_CLUSTER_PARAMETER, "7d", "[0s, 60d]",
     "specifies the expire time of ilog_index, can use this parameter to limit the"
     "memory usage of file_id_cache",
     ObParameterAttr(Section::CLOG, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-//auto drop restoring tenant if physical restore fails
+// auto drop restoring tenant if physical restore fails
 DEF_BOOL(_auto_drop_tenant_if_restore_failed, OB_CLUSTER_PARAMETER, "True",
-         "auto drop restoring tenant if physical restore fails",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+    "auto drop restoring tenant if physical restore fails",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

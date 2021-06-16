@@ -28,7 +28,7 @@ class ObRawExpr;
  */
 
 class ObSkylineDim {
-  public:
+public:
   enum Dimension {
     INDEX_BACK = 0,
     INTERESTING_ORDER,
@@ -58,12 +58,12 @@ class ObSkylineDim {
   ;
   TO_STRING_KV(K(dim_type_));
 
-  private:
+private:
   const Dimension dim_type_;
 };
 
 class ObIndexBackDim : public ObSkylineDim {
-  public:
+public:
   ObIndexBackDim()
       : ObSkylineDim(INDEX_BACK),
         need_index_back_(false),
@@ -98,7 +98,7 @@ class ObIndexBackDim : public ObSkylineDim {
   TO_STRING_KV(K_(need_index_back), K_(has_interesting_order), K_(can_extract_range), K_(index_column_cnt),
       "restrcit_ids", common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
 
-  private:
+private:
   bool need_index_back_;
   bool has_interesting_order_;
   bool can_extract_range_;
@@ -117,7 +117,7 @@ class ObIndexBackDim : public ObSkylineDim {
  * we save the column_ids that can be use
  */
 class ObInterestOrderDim : public ObSkylineDim {
-  public:
+public:
   ObInterestOrderDim()
       : ObSkylineDim(INTERESTING_ORDER),
         is_interesting_order_(false),
@@ -152,7 +152,7 @@ class ObInterestOrderDim : public ObSkylineDim {
       K_(filter_column_cnt), "filter column_ids",
       common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
 
-  private:
+private:
   bool is_interesting_order_;
   int64_t column_cnt_;
   uint64_t column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
@@ -172,7 +172,7 @@ class ObInterestOrderDim : public ObSkylineDim {
  * id in ascending order, for quick compare
  */
 class ObQueryRangeDim : public ObSkylineDim {
-  public:
+public:
   ObQueryRangeDim() : ObSkylineDim(QUERY_RANGE), column_cnt_(0)
   {
     MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
@@ -183,7 +183,7 @@ class ObQueryRangeDim : public ObSkylineDim {
   int add_rowkey_ids(const common::ObIArray<uint64_t>& column_ids);
   TO_STRING_KV(K_(column_cnt), "rowkey_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_));
 
-  private:
+private:
   int64_t column_cnt_;
   uint64_t column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
 };
@@ -198,14 +198,14 @@ struct KeyPrefixComp {
     return status_;
   }
 
-  private:
+private:
   static int do_compare(const uint64_t* left, const int64_t left_cnt, const uint64_t* right, const bool* right_const,
       const int64_t right_cnt, ObSkylineDim::CompareStat& status);
   ObSkylineDim::CompareStat status_;
 };
 
 struct RangeSubsetComp {
-  public:
+public:
   RangeSubsetComp() : status_(ObSkylineDim::UNCOMPARABLE)
   {}
   int operator()(const uint64_t* left, const int64_t left_cnt, const uint64_t* right, const int64_t right_cnt);
@@ -214,7 +214,7 @@ struct RangeSubsetComp {
     return status_;
   }
 
-  private:
+private:
   static int do_compare(const uint64_t* left, const int64_t left_cnt, const uint64_t* right, const int64_t right_cnt,
       ObSkylineDim::CompareStat& status);
   ObSkylineDim::CompareStat status_;
@@ -222,7 +222,7 @@ struct RangeSubsetComp {
 
 // dimension for each index
 class ObIndexSkylineDim {
-  public:
+public:
   ObIndexSkylineDim() : index_id_(common::OB_INVALID_ID), dim_count_(ObSkylineDim::DIM_COUNT), can_prunning_(true)
   {
     MEMSET(skyline_dims_, 0, sizeof(const ObSkylineDim*) * ObSkylineDim::DIM_COUNT);
@@ -256,7 +256,7 @@ class ObIndexSkylineDim {
   TO_STRING_KV(
       K_(index_id), K_(dim_count), "dims", common::ObArrayWrap<const ObSkylineDim*>(skyline_dims_, dim_count_));
 
-  private:
+private:
   uint64_t index_id_;
   const int64_t dim_count_;
   bool can_prunning_;  // whether this index can prunning other index or not
@@ -264,7 +264,7 @@ class ObIndexSkylineDim {
 };
 
 class ObSkylineDimRecorder {
-  public:
+public:
   ObSkylineDimRecorder()
   {}
   virtual ~ObSkylineDimRecorder()
@@ -279,17 +279,17 @@ class ObSkylineDimRecorder {
   static int extract_column_ids(
       const common::ObIArray<ObRawExpr*>& keys, const int64_t prefix_count, common::ObIArray<uint64_t>& column_ids);
 
-  private:
+private:
   common::ObArray<const ObIndexSkylineDim*> index_dims_;
 };
 
 class ObSkylineDimFactory {
-  public:
+public:
   static ObSkylineDimFactory& get_instance();
   template <typename SkylineDimType>
   int create_skyline_dim(common::ObIAllocator& allocator, SkylineDimType*& skyline_dim);
 
-  private:
+private:
   ObSkylineDimFactory()
   {}
   DISALLOW_COPY_AND_ASSIGN(ObSkylineDimFactory);

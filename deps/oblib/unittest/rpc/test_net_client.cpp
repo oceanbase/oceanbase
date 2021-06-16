@@ -17,7 +17,7 @@ using namespace oceanbase::obrpc;
 using namespace oceanbase::common;
 
 class TestNetClient : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     client_.init();
@@ -28,7 +28,7 @@ class TestNetClient : public ::testing::Test {
     client_.destroy();
   }
 
-  protected:
+protected:
   ObNetClient client_;
 };
 

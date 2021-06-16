@@ -32,7 +32,7 @@ using namespace share::schema;
 
 namespace unittest {
 class TestPGMacroMetaCheckpoint : public ObSSTableTest {
-  public:
+public:
   TestPGMacroMetaCheckpoint();
 
   virtual ~TestPGMacroMetaCheckpoint() = default;
@@ -41,10 +41,10 @@ class TestPGMacroMetaCheckpoint : public ObSSTableTest {
 
   void test_pg_macro_meta_checkpoint(const int64_t sstable_cnt, const int64_t row_cnt);
 
-  protected:
+protected:
   int check_macro_meta(ObPGMacroMetaCheckpointReader& reader, const common::ObIArray<MacroBlockId>& block_ids);
 
-  protected:
+protected:
   static const int64_t MACRO_BLOCK_SIZE = 128 * 1024;
   static const int64_t MACRO_BLOCK_CNT = 500;
   common::ObPGKey pg_key_;

@@ -21,28 +21,28 @@ namespace sql {
 
 // constant
 class ObGroupBySpec : public ObOpSpec {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObGroupBySpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObOpSpec(alloc, type), aggr_infos_(alloc)
   {}
   DECLARE_VIRTUAL_TO_STRING;
 
   //  int add_udf_meta(ObAggUDFDatumMeta &meta) { return agg_udf_meta_.push_back(meta); }
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObGroupBySpec);
 
-  public:
+public:
   AggrInfoFixedArray aggr_infos_;  // aggr column + non-aggr column
   //  common::ObSEArray<ObAggUdfMeta, 16> agg_udf_meta_;
 };
 
 // modifiable
 class ObGroupByOp : public ObOperator {
-  public:
+public:
   ObGroupByOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input),
         aggr_processor_(eval_ctx_, (static_cast<ObGroupBySpec&>(const_cast<ObOpSpec&>(spec))).aggr_infos_)
@@ -59,12 +59,12 @@ class ObGroupByOp : public ObOperator {
   virtual int inner_close() override;
   virtual void destroy() override;
 
-  private:
+private:
   void reset_default();
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObGroupByOp);
 
-  protected:
+protected:
   ObAggregateProcessor aggr_processor_;
 };
 

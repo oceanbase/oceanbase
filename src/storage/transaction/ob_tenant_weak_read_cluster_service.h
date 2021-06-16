@@ -47,11 +47,11 @@ class ObTenantWeakReadClusterService {
   // before counting the version number to ensure that all servers are counted
   static const int64_t FORCE_UPDATE_VERSION_TIME_AFTER_START_SERVICE = 2 * 1000 * 1000L;
 
-  public:
+public:
   ObTenantWeakReadClusterService();
   virtual ~ObTenantWeakReadClusterService();
 
-  public:
+public:
   const common::ObPartitionKey& get_cluster_service_pkey() const
   {
     return wrs_pkey_;
@@ -125,7 +125,7 @@ class ObTenantWeakReadClusterService {
   int update_server_version(const common::ObAddr& addr, const int64_t version, const int64_t valid_part_count,
       const int64_t total_part_count, const int64_t generate_timestamp);
 
-  private:
+private:
   int check_leader_info_(int64_t& leader_epoch) const;
   void update_valid_server_count_();
   int query_cluster_version_range_(int64_t& cur_min_version, int64_t& cur_max_version, bool& record_exist);
@@ -148,14 +148,14 @@ class ObTenantWeakReadClusterService {
       const common::ObAddr& self, const common::ObMemberList& member_list, common::ObAddr& candidate) const;
   void reset_change_leader_info_();
 
-  private:
+private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
 
   typedef ObTenantWeakReadClusterVersionMgr ClusterVersionMgr;
 
-  private:
+private:
   bool inited_;
   common::ObPartitionKey wrs_pkey_;
   storage::ObPartitionService* ps_;

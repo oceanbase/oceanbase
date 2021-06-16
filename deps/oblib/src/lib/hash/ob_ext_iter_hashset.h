@@ -25,13 +25,13 @@ class ObExtIterHashSet;
 ///////////////////////////////////// ObExtIterHashSet Iterator /////////////////////////////////////
 template <class HashSet>
 class ObExtIterHashSetConstIterator {
-  public:
+public:
   typedef typename HashSet::const_key_ref_t const_key_ref_t;
   typedef ObExtIterHashSetConstIterator<HashSet> SelfType;
   typedef typename HashSet::HashSetBucket BucketType;
   typedef typename HashSet::InnerHashSetIter InnerIter;
 
-  public:
+public:
   ObExtIterHashSetConstIterator(const HashSet* set, const BucketType* bucket, const InnerIter& iter)
       : hash_set_(set), bucket_(bucket), iter_(iter)
   {}
@@ -43,7 +43,7 @@ class ObExtIterHashSetConstIterator {
   ~ObExtIterHashSetConstIterator()
   {}
 
-  public:
+public:
   ObExtIterHashSetConstIterator& operator=(const SelfType& other)
   {
     if (this != &other) {
@@ -94,7 +94,7 @@ class ObExtIterHashSetConstIterator {
     return *iter_;
   }
 
-  private:
+private:
   const HashSet* hash_set_;
   const BucketType* bucket_;
   InnerIter iter_;
@@ -104,7 +104,7 @@ class ObExtIterHashSetConstIterator {
 
 template <class K, uint64_t N = 1031, class Allocator = ObIAllocator>
 class ObExtIterHashSet {
-  public:
+public:
   typedef const K& const_key_ref_t;
   typedef ObIteratableHashSet<K, N> BaseHashSet;
   typedef ObExtIterHashSet<K, N, Allocator> SelfType;
@@ -126,11 +126,11 @@ class ObExtIterHashSet {
     }
   };
 
-  public:
+public:
   explicit ObExtIterHashSet(Allocator& allocator);
   virtual ~ObExtIterHashSet();
 
-  public:
+public:
   /**
    * @retval OB_SUCCESS       insert successfully
    * @retval OB_HASH_EXIST    key exists
@@ -167,10 +167,10 @@ class ObExtIterHashSet {
     return count_;
   }
 
-  public:
+public:
   DECLARE_TO_STRING;
 
-  private:
+private:
   bool is_exist_(const K& key) const;
   bool is_full_() const
   {
@@ -178,18 +178,18 @@ class ObExtIterHashSet {
   }
   int add_bucket_();
 
-  private:
+private:
   int64_t count_;                // count of object
   int64_t bucket_num_;           // count of bucket
   Allocator& allocator_;         // allocator
   HashSetBucket buckets_;        // bucket lists
   HashSetBucket* buckets_tail_;  // bucket lists tail
 
-  private:
+private:
   template <class HashSet>
   friend class ObExtIterHashSetConstIterator;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExtIterHashSet);
 };
 

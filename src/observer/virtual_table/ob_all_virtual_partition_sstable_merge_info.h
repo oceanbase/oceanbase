@@ -24,7 +24,7 @@ class ObSSTable;
 namespace observer {
 
 class ObAllVirtualPartitionSSTableMergeInfo : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   enum COLUMN_ID_LIST {
     VERSION = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
@@ -69,10 +69,10 @@ class ObAllVirtualPartitionSSTableMergeInfo : public common::ObVirtualTableScann
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  protected:
+protected:
   int fill_cells(storage::ObSSTableMergeInfo* merge_info);
 
-  private:
+private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   char version_buf_[common::OB_SYS_TASK_TYPE_LENGTH];
   storage::ObSSTableMergeInfo merge_info_;

@@ -22,7 +22,7 @@ namespace common {
 
 template <int PRIOS>
 class ObPriorityQueue {
-  public:
+public:
   enum { PRIO_CNT = PRIOS };
 
   ObPriorityQueue() : sem_(), queue_(), size_(0), limit_(INT64_MAX)
@@ -99,7 +99,7 @@ class ObPriorityQueue {
     return ret;
   }
 
-  private:
+private:
   ObSeqSem sem_;
   ObLinkQueue queue_[PRIO_CNT];
   int64_t size_ CACHE_ALIGNED;
@@ -109,7 +109,7 @@ class ObPriorityQueue {
 
 template <int HIGH_PRIOS, int LOW_PRIOS>
 class ObPriorityQueue2 {
-  public:
+public:
   enum { PRIO_CNT = HIGH_PRIOS + LOW_PRIOS };
 
   ObPriorityQueue2() : queue_(), size_(0), limit_(INT64_MAX)
@@ -195,7 +195,7 @@ class ObPriorityQueue2 {
     return do_pop(data, HIGH_PRIOS, timeout_us);
   }
 
-  private:
+private:
   SCond cond_;
   ObLinkQueue queue_[PRIO_CNT];
   int64_t size_ CACHE_ALIGNED;

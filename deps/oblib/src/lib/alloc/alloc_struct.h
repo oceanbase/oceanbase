@@ -385,7 +385,7 @@ ObLabel AObject::label() const
 class Label {
   constexpr static int MAX_LEN = AOBJECT_LABEL_SIZE;
 
-  public:
+public:
   Label() : label_(nullptr)
   {}
   Label(const char* str) : label_(str)
@@ -403,11 +403,11 @@ class Label {
   }
   const char* label_;
 
-  private:
+private:
   static void fmt(char* buf, int64_t buf_len, int64_t& pos, const char* str);
   static void fmt(char* buf, int64_t buf_len, int64_t& pos, int64_t digit);
 
-  private:
+private:
   char buf_[MAX_LEN + 1];
 };
 

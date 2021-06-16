@@ -25,7 +25,7 @@ class ObIReplayTaskAllocator;
 class ObTenantMutilAllocator;
 
 class ObTenantMutilAllocatorMgr {
-  public:
+public:
   typedef ObTenantMutilAllocator TMA;
   ObTenantMutilAllocatorMgr()
       : is_inited_(false),
@@ -56,24 +56,24 @@ class ObTenantMutilAllocatorMgr {
   void free_log_task_buf(void* ptr);
   int update_tenant_mem_limit(const share::TenantUnits& all_tenant_units);
 
-  public:
+public:
   static ObTenantMutilAllocatorMgr& get_instance();
 
-  private:
+private:
   int construct_allocator_(const uint64_t tenant_id, TMA*& out_allocator);
   int create_tenant_mutil_allocator_(const uint64_t tenant_id, TMA*& out_allocator);
 
-  private:
+private:
   static const uint64_t PRESERVED_TENANT_COUNT = 10000;
 
-  private:
+private:
   bool is_inited_;
   obsys::CRWLock locks_[PRESERVED_TENANT_COUNT];
   ObTenantMutilAllocator* tma_array_[PRESERVED_TENANT_COUNT];
   ObBlockAllocMgr clog_body_blk_alloc_;
   ObVSliceAlloc clog_entry_alloc_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantMutilAllocatorMgr);
 };  // end of class ObTenantMutilAllocatorMgr
 

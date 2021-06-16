@@ -28,7 +28,7 @@ namespace oceanbase {
 using namespace oceanbase::common;
 namespace archive {
 class ObArchivePGMgr::CheckArchiveRoundStartFunctor {
-  public:
+public:
   CheckArchiveRoundStartFunctor(const int64_t archive_round, const int64_t incarnation)
       : start_flag_(true), archive_round_(archive_round), incarnation_(incarnation)
   {}
@@ -57,14 +57,14 @@ class ObArchivePGMgr::CheckArchiveRoundStartFunctor {
     return start_flag_;
   }
 
-  private:
+private:
   bool start_flag_;
   int64_t archive_round_;
   int64_t incarnation_;
 };
 
 class ObArchivePGMgr::CheckDeletePGFunctor {
-  public:
+public:
   CheckDeletePGFunctor(ObArchivePGMgr* pg_mgr) : pg_mgr_(pg_mgr)
   {}
 
@@ -102,7 +102,7 @@ class ObArchivePGMgr::CheckDeletePGFunctor {
     return true;
   }
 
-  private:
+private:
   ObArchivePGMgr* pg_mgr_;
 };
 

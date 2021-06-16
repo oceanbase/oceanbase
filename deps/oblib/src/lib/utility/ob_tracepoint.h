@@ -87,7 +87,7 @@ using GetSwitchFunc = bool&();
 
 template <GetSwitchFunc fn>
 class ObSwitchGuard {
-  public:
+public:
   ObSwitchGuard(bool newval)
   {
     oldval_ = fn();
@@ -98,7 +98,7 @@ class ObSwitchGuard {
     fn() = oldval_;
   }
 
-  private:
+private:
   bool oldval_;
 };
 }  // namespace lib
@@ -163,7 +163,7 @@ int tp_const_error()
 }
 
 class TPSymbolTable {
-  public:
+public:
   TPSymbolTable()
   {}
   ~TPSymbolTable()
@@ -173,7 +173,7 @@ class TPSymbolTable {
     return (NULL != name) ? do_get(name) : NULL;
   }
 
-  private:
+private:
   static uint64_t BKDRHash(const char* str);
   enum { SYMBOL_SIZE_LIMIT = 128, SYMBOL_COUNT_LIMIT = 64 * 1024 };
 
@@ -248,7 +248,7 @@ struct NamedEventItem : public ObDLinkBase<NamedEventItem> {
 
 class EventTable {
   static const int SIZE_OF_EVENT_TABLE = 100000;  // max number of tracepoints supported
-  public:
+public:
   EventTable()
   {
     for (int64_t i = 0; i < SIZE_OF_EVENT_TABLE; ++i) {
@@ -518,7 +518,7 @@ class EventTable {
     return et;
   }
 
-  private:
+private:
   /*
      Array of error codes for all tracepoints.
      For normal error code generation, the value should be the error code itself.

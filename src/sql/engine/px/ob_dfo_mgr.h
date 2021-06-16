@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObDfoMgr {
-  public:
+public:
   explicit ObDfoMgr(common::ObIAllocator& allocator) : allocator_(allocator), inited_(false), root_dfo_(NULL)
   {}
   virtual ~ObDfoMgr() = default;
@@ -54,7 +54,7 @@ class ObDfoMgr {
 
   DECLARE_TO_STRING;
 
-  private:
+private:
   int do_split(ObExecContext& exec_ctx, common::ObIAllocator& allocator, const ObPhyOperator* phy_op,
       ObDfo*& parent_dfo, const ObDfoInterruptIdGen& dfo_id_gen) const;
   int create_dfo(common::ObIAllocator& allocator, const ObPhyOperator* dfo_root_op, ObDfo*& dfo) const;
@@ -62,33 +62,33 @@ class ObDfoMgr {
       const ObDfoInterruptIdGen& dfo_id_gen) const;
   int create_dfo(common::ObIAllocator& allocator, const ObOpSpec* dfo_root_op, ObDfo*& dfo) const;
 
-  protected:
+protected:
   common::ObIAllocator& allocator_;
   bool inited_;
   ObDfo* root_dfo_;
   common::ObSEArray<ObDfo*, 2> edges_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDfoMgr);
 };
 
 class ObDfoTreeNormalizer {
-  public:
+public:
   // Rotate the leaf node to the right, making sure that the middle node is on the left.
   // at the same time check the bushy tree situation, report an error and exit
   static int normalize(ObDfo& root);
 };
 
 class ObDfoSchedOrderGenerator {
-  public:
+public:
   static int generate_sched_order(ObDfoMgr& dfo_mgr);
 
-  private:
+private:
   static int do_generate_sched_order(ObDfoMgr& dfo_mgr, ObDfo& root);
 };
 
 class ObDfoWorkerAssignment {
-  public:
+public:
   static int assign_worker(ObDfoMgr& dfo_mgr, int64_t expected_worker_count, int64_t allocated_worker_count);
 };
 

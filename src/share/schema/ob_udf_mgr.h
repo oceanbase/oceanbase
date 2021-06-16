@@ -24,7 +24,7 @@ namespace share {
 namespace schema {
 
 class ObSimpleUDFSchema : public ObSchema {
-  public:
+public:
   ObSimpleUDFSchema();
   explicit ObSimpleUDFSchema(common::ObIAllocator* allocator);
   ObSimpleUDFSchema(const ObSimpleUDFSchema& src_schema);
@@ -132,7 +132,7 @@ class ObSimpleUDFSchema : public ObSchema {
     return udf_name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t udf_id_;
   common::ObString udf_name_;
@@ -152,7 +152,7 @@ struct ObGetUDFKey {
 };
 
 class ObUDFHashWrapper {
-  public:
+public:
   ObUDFHashWrapper() : tenant_id_(common::OB_INVALID_ID), udf_name_()
   {}
   ObUDFHashWrapper(uint64_t tenant_id, const common::ObString& udf_name) : tenant_id_(tenant_id), udf_name_(udf_name)
@@ -188,7 +188,7 @@ class ObUDFHashWrapper {
   }
   TO_STRING_KV(K_(tenant_id), K_(udf_name));
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObString udf_name_;
 };
@@ -207,7 +207,7 @@ struct ObGetUDFKey<ObUDFHashWrapper, ObSimpleUDFSchema*> {
 };
 
 class ObUDFMgr {
-  public:
+public:
   typedef common::ObSortedVector<ObSimpleUDFSchema*> UDFInfos;
   typedef common::hash::ObPointerHashMap<ObUDFHashWrapper, ObSimpleUDFSchema*, ObGetUDFKey> ObUDFMap;
   typedef UDFInfos::iterator UDFIter;
@@ -244,11 +244,11 @@ class ObUDFMgr {
   }
   static int rebuild_udf_hashmap(const UDFInfos& udf_infos, ObUDFMap& udf_map);
 
-  private:
+private:
   inline static bool compare_with_tenant_udf_id(const ObSimpleUDFSchema* lhs, const ObTenantUDFId& tenant_outline_id);
   inline static bool equal_to_tenant_udf_id(const ObSimpleUDFSchema* lhs, const ObTenantUDFId& tenant_outline_id);
 
-  private:
+private:
   bool is_inited_;
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator& allocator_;

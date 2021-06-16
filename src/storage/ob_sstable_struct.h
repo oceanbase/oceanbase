@@ -26,7 +26,7 @@ const int64_t MACRO_BLOCK_CNT_PER_THREAD = 128;
 enum ObSSTableMergeInfoStatus { MERGE_START = 0, MERGE_RUNNING = 1, MERGE_FINISH = 2, MERGE_STATUS_MAX };
 
 struct ObMultiVersionSSTableMergeInfo final {
-  public:
+public:
   ObMultiVersionSSTableMergeInfo();
   ~ObMultiVersionSSTableMergeInfo() = default;
   int add(const ObMultiVersionSSTableMergeInfo& info);
@@ -34,7 +34,7 @@ struct ObMultiVersionSSTableMergeInfo final {
   TO_STRING_KV(K_(delete_logic_row_count), K_(update_logic_row_count), K_(insert_logic_row_count),
       K_(empty_delete_logic_row_count));
 
-  public:
+public:
   uint64_t delete_logic_row_count_;
   uint64_t update_logic_row_count_;
   uint64_t insert_logic_row_count_;
@@ -42,7 +42,7 @@ struct ObMultiVersionSSTableMergeInfo final {
 };
 
 struct ObSSTableMergeInfo final {
-  public:
+public:
   ObSSTableMergeInfo();
   ~ObSSTableMergeInfo() = default;
   int add(const ObSSTableMergeInfo& other);
@@ -61,7 +61,7 @@ struct ObSSTableMergeInfo final {
       K_(total_child_task), K_(finish_child_task), K_(is_complement), K_(merge_type), K_(step_merge_start_version),
       K_(step_merge_end_version), K_(macro_bloomfilter_count));
 
-  public:
+public:
   uint64_t table_id_;
   int64_t partition_id_;
   common::ObVersion version_;
@@ -101,7 +101,7 @@ struct ObSSTableMergeInfo final {
 };
 
 struct ObMergeChecksumInfo final {
-  public:
+public:
   ObMergeChecksumInfo();
   ~ObMergeChecksumInfo() = default;
   int64_t* column_checksums_;
@@ -111,7 +111,7 @@ struct ObMergeChecksumInfo final {
 };
 
 struct ObCreateSSTableParam {
-  public:
+public:
   ObCreateSSTableParam()
       : table_key_(),
         schema_version_(-1),
@@ -161,7 +161,7 @@ struct ObCreateSSTableParam {
 };
 
 struct ObCreateSSTableParamWithTable final : public ObCreateSSTableParam {
-  public:
+public:
   ObCreateSSTableParamWithTable() : ObCreateSSTableParam(), schema_(NULL)
   {}
   ~ObCreateSSTableParamWithTable() = default;
@@ -173,12 +173,12 @@ struct ObCreateSSTableParamWithTable final : public ObCreateSSTableParam {
       K_(progressive_merge_end_version), K_(create_snapshot_version), K_(checksum_method), K_(progressive_merge_round),
       K_(progressive_merge_step), K_(logical_data_version));
 
-  public:
+public:
   const share::schema::ObTableSchema* schema_;
 };
 
 struct ObCreateSSTableParamWithPartition final : public ObCreateSSTableParam {
-  public:
+public:
   ObCreateSSTableParamWithPartition() : ObCreateSSTableParam(), schema_(NULL), is_inited_(false)
   {}
   ~ObCreateSSTableParamWithPartition() = default;
@@ -195,10 +195,10 @@ struct ObCreateSSTableParamWithPartition final : public ObCreateSSTableParam {
       K_(progressive_merge_end_version), K_(create_snapshot_version), K_(checksum_method), K_(progressive_merge_round),
       K_(progressive_merge_step), K_(logical_data_version));
 
-  public:
+public:
   const ObCreatePartitionMeta* schema_;
 
-  private:
+private:
   bool is_inited_;
 };
 

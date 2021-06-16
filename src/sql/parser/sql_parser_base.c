@@ -216,9 +216,8 @@ int parse_sql_stmt(ParseResult* parse_result)
   return ret;
 }
 
-void setup_token_pos_info(ParseNode *node __attribute__((unused)), 
-                          int off __attribute__((unused)), 
-                          int len __attribute__((unused)))
+void setup_token_pos_info(
+    ParseNode* node __attribute__((unused)), int off __attribute__((unused)), int len __attribute__((unused)))
 {
 #ifdef SQL_PARSER_COMPILATION
   node->token_off_ = off;
@@ -228,10 +227,8 @@ void setup_token_pos_info(ParseNode *node __attribute__((unused)),
 #endif
 }
 
-int setup_token_pos_info_and_dup_string(ParseNode *node __attribute__((unused)),
-                                        ParseResult *result __attribute__((unused)),
-                                        int start __attribute__((unused)),
-                                        int end __attribute__((unused)))
+int setup_token_pos_info_and_dup_string(ParseNode* node __attribute__((unused)),
+    ParseResult* result __attribute__((unused)), int start __attribute__((unused)), int end __attribute__((unused)))
 {
   int ret = OB_PARSER_SUCCESS;
 #ifdef SQL_PARSER_COMPILATION

@@ -26,7 +26,7 @@ namespace sql {
 using namespace common;
 
 class ObUKRowTransform::ObUKRowTransformCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObUKRowTransformCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
   {}
   virtual void destroy() override

@@ -129,7 +129,7 @@ struct ObParallelBlockRangeTaskParams {
 };
 
 class ObGranuleUtil {
-  public:
+public:
   /**
    *
    * params             IN    we got total task count by rules; the rule needs these params
@@ -187,7 +187,7 @@ class ObGranuleUtil {
   static int remove_false_range(const common::ObIArray<common::ObNewRange>& in_ranges,
       common::ObIArray<common::ObNewRange>& ranges, bool& only_false_range);
 
-  public:
+public:
   /**
    * split tasks by block granule method
    * allocator                   IN  memory allocator
@@ -210,7 +210,7 @@ class ObGranuleUtil {
       common::ObIArray<common::ObNewRange>& tasks_ranges, common::ObIArray<int64_t>& tasks_offsets,
       common::ObIArray<int64_t>& tasks_partition_offsets);
 
-  private:
+private:
   /**
    * get the total task count for all partitions
    * params                     IN the parameters for splitting

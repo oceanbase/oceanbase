@@ -29,10 +29,10 @@ namespace common {
  *  4. HANDLING -> IDLE:                      thread succ to revoke lease
  **/
 class ObThreadLease {
-  public:
+public:
   typedef enum { IDLE = 0, READY = 1, HANDLING = 2 } StatusType;
 
-  public:
+public:
   ObThreadLease() : status_(IDLE)
   {}
   ~ObThreadLease()
@@ -51,7 +51,7 @@ class ObThreadLease {
     status_ = IDLE;
   }
 
-  public:
+public:
   bool acquire()
   {
     bool bool_ret = false;
@@ -117,7 +117,7 @@ class ObThreadLease {
     return bool_ret;
   }
 
-  private:
+private:
   StatusType status_;
 };
 

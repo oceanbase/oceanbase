@@ -40,7 +40,7 @@ class ObPartitionService;
 
 namespace archive {
 class ObPGArchiveRestoreTask : public common::ObLink {
-  public:
+public:
   ObPGArchiveRestoreTask()
   {
     reset();
@@ -55,7 +55,7 @@ class ObPGArchiveRestoreTask : public common::ObLink {
   void reset();
   void switch_file();
 
-  public:
+public:
   int locate_file_range();
   bool is_finished() const;
   bool is_expired() const
@@ -156,7 +156,7 @@ class ObPGArchiveRestoreTask : public common::ObLink {
   };
   int reconfirm_fetch_log_result();
 
-  public:
+public:
   TO_STRING_KV(K(restore_pg_key_), K(archive_pg_key_), K(is_expired_), K(has_located_file_range_), K(start_log_id_),
       K(start_log_ts_), K(end_snapshot_version_), K(leader_takeover_ts_), K(last_fetched_log_id_),
       K(last_checkpoint_ts_), K(last_fetched_log_submit_ts_), K(cur_offset_), K(cur_log_file_id_), K(end_log_file_id_),
@@ -164,10 +164,10 @@ class ObPGArchiveRestoreTask : public common::ObLink {
       K(io_fail_cnt_),  // Number of consecutive IO failures
       K(fetch_log_result_));
 
-  private:
+private:
   int locate_start_file_id_(uint64_t& start_file_id);
 
-  private:
+private:
   common::ObPGKey restore_pg_key_;  // restore partition pkey
   common::ObPGKey archive_pg_key_;  // archive partition pkey, pure key same as restore partition and tenant_id is
                                     // different
@@ -190,7 +190,7 @@ class ObPGArchiveRestoreTask : public common::ObLink {
 };
 
 class ObArchiveRestoreEngine : public common::ObSimpleThreadPool {
-  public:
+public:
   ObArchiveRestoreEngine()
       : is_inited_(false),
         is_stopped_(true),
@@ -208,23 +208,23 @@ class ObArchiveRestoreEngine : public common::ObSimpleThreadPool {
   }
   virtual int init(storage::ObPartitionService* partition_service);
 
-  public:
+public:
   virtual void stop();
   virtual void wait();
   virtual void destroy();
   virtual void handle(void* task);
 
-  public:
+public:
   int submit_restore_task(
       common::ObPartitionKey& pg_key, uint64_t start_log_id, int64_t start_log_ts, int64_t leader_takeover_ts);
   int try_advance_restoring_clog();
 
-  public:
+public:
   typedef common::ObIntWarp ObTenantID;
   typedef common::LinkHashNode<ObTenantID> RestoreMetaNode;
   typedef common::LinkHashValue<ObTenantID> RestoreMetaValue;
   class TenantRestoreMeta : public RestoreMetaValue {
-    public:
+  public:
     TenantRestoreMeta()
         : is_inited_(false),
           cur_restore_concurrency_(0),
@@ -276,10 +276,10 @@ class ObArchiveRestoreEngine : public common::ObSimpleThreadPool {
     }
     TO_STRING_KV(K_(restore_info), K_(file_store), K(cur_restore_concurrency_), K(restore_concurrency_threshold_));
 
-    public:
+  public:
     static const int64_t DEFAULT_RESTORE_CONCURRENCY_THRESHOLD = 4;
 
-    private:
+  private:
     bool is_inited_;
     int64_t cur_restore_concurrency_;        // concurrency of pg restore tasks
     int64_t restore_concurrency_threshold_;  // the upper limit of the concurrency of pg restore tasks
@@ -316,7 +316,7 @@ class ObArchiveRestoreEngine : public common::ObSimpleThreadPool {
   }
 
   struct ObPhysicalRestoreCLogStat {
-    public:
+  public:
     ObPhysicalRestoreCLogStat()
     {
       reset();
@@ -327,7 +327,7 @@ class ObArchiveRestoreEngine : public common::ObSimpleThreadPool {
     }
     void reset();
 
-    public:
+  public:
     int64_t retry_sleep_interval_;   // sleep time before retry
     int64_t fetch_log_entry_count_;  // fetch log entry count
     int64_t fetch_log_entry_cost_;   // fetch log entry time cost
@@ -337,7 +337,7 @@ class ObArchiveRestoreEngine : public common::ObSimpleThreadPool {
     int64_t total_cost_;             // total time cost
   };
 
-  private:
+private:
   bool need_retry_ret_code_(const int ret);
   bool is_io_fail_ret_code_(const int ret);
   int get_tenant_restore_meta_(const uint64_t tenant_id, TenantRestoreMeta*& restore_meta);
@@ -354,7 +354,7 @@ class ObArchiveRestoreEngine : public common::ObSimpleThreadPool {
   void revert_tenant_restore_meta_(TenantRestoreMeta*& restore_meta);
   void statistic_(const ObPhysicalRestoreCLogStat& inc_stat);
 
-  private:
+private:
   typedef common::ObLinkHashMap<ObTenantID, TenantRestoreMeta, ObArchiveRestoreEngine&> TenantRestoreMetaMap;
   const int64_t MAX_FETCH_LOG_IO_FAIL_CNT = 5;
   const int64_t TASK_NUM_LIMIT = 1000000;

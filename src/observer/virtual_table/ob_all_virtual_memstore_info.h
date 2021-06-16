@@ -28,11 +28,11 @@ class ObMemtable;
 }
 namespace observer {
 class ObAllVirtualMemstoreInfo : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualMemstoreInfo();
   virtual ~ObAllVirtualMemstoreInfo();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
   inline void set_partition_service(storage::ObPartitionService* partition_service)
@@ -44,11 +44,11 @@ class ObAllVirtualMemstoreInfo : public common::ObVirtualTableScannerIterator {
     addr_ = addr;
   }
 
-  private:
+private:
   int make_this_ready_to_read();
   int get_next_memtable(memtable::ObMemtable*& mt);
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   common::ObAddr addr_;
   common::ObPartitionKey pkey_;
@@ -59,7 +59,7 @@ class ObAllVirtualMemstoreInfo : public common::ObVirtualTableScannerIterator {
   common::ObArray<memtable::ObMemtable*> memtables_;
   int64_t memtable_array_pos_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualMemstoreInfo);
 };
 

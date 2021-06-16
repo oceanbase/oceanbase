@@ -307,7 +307,7 @@ namespace test {
 // };
 
 class MockOptStatService : public oceanbase::common::ObOptStatService {
-  public:
+public:
   static MockOptStatService& get_instance()
   {
     static MockOptStatService instance_;
@@ -375,14 +375,14 @@ class MockOptStatService : public oceanbase::common::ObOptStatService {
     tstat_ = oceanbase::common::ObOptStatManager::get_default_table_stat();
   }
 
-  private:
+private:
   ObOptTableStat tstat_;
   ObOptColumnStat cstat_;
   ObHistogram hist_;
 };
 
 class MockOptStatManager : public oceanbase::common::ObOptStatManager {
-  public:
+public:
   static MockOptStatManager& get_instance()
   {
     static MockOptStatManager instance_;

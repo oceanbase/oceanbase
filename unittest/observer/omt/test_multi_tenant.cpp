@@ -40,7 +40,7 @@ using namespace oceanbase::observer;
 #define OMT_UNITTEST
 
 class MockObPxPools : public ObPxPools {
-  public:
+public:
   MockObPxPools() : ObPxPools()
   {
     this_seq_ = MockObPxPools::seq_++;
@@ -69,7 +69,7 @@ class MockObPxPools : public ObPxPools {
     return this_seq_;
   }
 
-  private:
+private:
   static int64_t seq_;
   int64_t this_seq_;
 };
@@ -78,7 +78,7 @@ int64_t MockObPxPools::seq_ = 0;
 class MockOMT : public ObMultiTenant {
   static constexpr auto TIMES_OF_WORKERS = 10;
 
-  public:
+public:
   MockOMT() : ObMultiTenant(procor_)
   {}
   int add_tenant(uint64_t tenant_id)
@@ -86,11 +86,11 @@ class MockOMT : public ObMultiTenant {
     return ObMultiTenant::add_tenant(tenant_id, 1, 1);
   }
 
-  private:
+private:
   ObFakeWorkerProcessor procor_;
 };
 class TestMultiTenant : public ::testing::Test {
-  public:
+public:
   TestMultiTenant()
   {
     all_mock_init();
@@ -137,7 +137,7 @@ class TestMultiTenant : public ::testing::Test {
 
   // void clear() { omt_.clear(); }
 
-  protected:
+protected:
   MockOMT omt_;
 };
 
@@ -216,7 +216,7 @@ TEST_F(TestMultiTenant, get_tenant_context)
 }
 
 class CtxMemConfigGetter : public ObICtxMemConfigGetter {
-  public:
+public:
   virtual int get(common::ObIArray<ObCtxMemConfig>& configs)
   {
     int ret = OB_SUCCESS;

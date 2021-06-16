@@ -48,7 +48,7 @@ struct value_t {
 class allocer_t {
   const static uint32_t BLOCK_SIZE = 1024 * 1024;
 
-  public:
+public:
   allocer_t()
   {
     cur_buffer_pos_ = 0;
@@ -81,13 +81,13 @@ class allocer_t {
   void inc_ref(){};
   void dec_ref(){};
 
-  private:
+private:
   uint32_t cur_buffer_pos_;
   char* cur_buffer_;
 };
 
 class hashfunc_t {
-  public:
+public:
   uint64_t operator()(uint64_t key)
   {
     return key;
@@ -95,7 +95,7 @@ class hashfunc_t {
 };
 
 class getkey_t {
-  public:
+public:
   uint64_t operator()(const value_t& v)
   {
     return v.key;
@@ -103,7 +103,7 @@ class getkey_t {
 };
 
 class equal_t {
-  public:
+public:
   bool operator()(uint64_t k1, uint64_t k2)
   {
     return (k1 == k2);

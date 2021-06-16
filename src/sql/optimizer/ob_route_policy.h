@@ -52,7 +52,7 @@ struct ObRoutePolicyCtx {
 };
 
 class ObRoutePolicy {
-  public:
+public:
   enum PositionType {
     SAME_SERVER = 0,
     SAME_IDC = 1,
@@ -66,7 +66,7 @@ class ObRoutePolicy {
     MERGE_STATUS_MAX,
   };
   class ReplicaAttribute {
-    public:
+  public:
     ReplicaAttribute()
         : pos_type_(POSITION_TYPE_MAX),
           merge_status_(MERGE_STATUS_MAX),
@@ -113,7 +113,7 @@ class ObRoutePolicy {
     share::ObServerStatus::DisplayStatus server_status_;
   };
   class CandidateReplica final : public share::ObReplicaLocation {
-    public:
+  public:
     CandidateReplica() : ObReplicaLocation(), attr_(), is_filter_(false), replica_idx_(common::OB_INVALID_INDEX)
     {}
     CandidateReplica(const share::ObReplicaLocation& replica_location)
@@ -143,14 +143,14 @@ class ObRoutePolicy {
       return ret;
     }
 
-    public:
+  public:
     TO_STRING_KV(K(server_), K(role_), K(sql_port_), K(replica_type_), K(attr_), K(is_filter_), K(replica_idx_));
     ReplicaAttribute attr_;
     bool is_filter_;
     int64_t replica_idx_;  // invalid
   };
 
-  public:
+public:
   ObRoutePolicy(const common::ObAddr& addr, storage::ObPartitionService& part_service)
       : local_addr_(addr),
         local_locality_(),
@@ -185,7 +185,7 @@ class ObRoutePolicy {
   static bool is_same_idc(const share::ObServerLocality& locality1, const share::ObServerLocality& locality2);
   static bool is_same_region(const share::ObServerLocality& locality1, const share::ObServerLocality& locality2);
 
-  protected:
+protected:
   int init_candidate_replica(
       const common::ObIArray<share::ObServerLocality>& server_locality_array, CandidateReplica& candi_replica);
   int calc_position_type(const share::ObServerLocality& candi_locality, CandidateReplica& candi_replica);
@@ -213,7 +213,7 @@ class ObRoutePolicy {
     return type;
   }
 
-  protected:
+protected:
   common::ObAddr local_addr_;
   share::ObServerLocality local_locality_;
   common::ObSEArray<share::ObServerLocality, 32> server_locality_array_;

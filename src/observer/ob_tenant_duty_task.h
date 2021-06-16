@@ -24,15 +24,15 @@ namespace observer {
 class ObTenantDutyTask : private common::ObTimerTask {
   static constexpr int64_t SCHEDULE_PERIOD = 10 * 1000L * 1000L;
 
-  public:
+public:
   int schedule(int tg_id);
   ObTenantDutyTask();
 
-  private:
+private:
   void runTimerTask() override;
   void update_all_tenants();
 
-  private:
+private:
   int read_obj(uint64_t tenant_id, share::ObSysVarClassType sys_var, common::ObObj& obj);
   int read_int64(uint64_t tenant_id, share::ObSysVarClassType sys_var, int64_t& val);
   // There's no system variable with double type, so here the function
@@ -49,18 +49,18 @@ class ObTenantDutyTask : private common::ObTimerTask {
   // Read tenant work area memory settings from tenant system variables.
   int read_tenant_wa_percentage(uint64_t tenant_id, int64_t& pctg);
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
 };
 
 class ObTenantSqlMemoryTimerTask : private common::ObTimerTask {
-  public:
+public:
   int schedule(int tg_id);
 
-  private:
+private:
   void runTimerTask() override;
 
-  private:
+private:
   static constexpr int64_t SCHEDULE_PERIOD = 3 * 1000L * 1000L;
 };
 

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprInsert : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprInsert(common::ObIAllocator& alloc);
   virtual ~ObExprInsert();
   virtual int calc_result(common::ObObj& result, const common::ObObj& text, const common::ObObj& start_pos,
@@ -36,7 +36,7 @@ class ObExprInsert : public ObStringExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_expr_insert(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprInsert);
 };

@@ -30,7 +30,7 @@ class ObTempTableInsertInput : public ObIPhyOperatorInput {
   friend class ObTempTableInsert;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTempTableInsertInput();
   virtual ~ObTempTableInsertInput();
   virtual void reset() override;
@@ -39,11 +39,11 @@ class ObTempTableInsertInput : public ObIPhyOperatorInput {
   virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
   int assign_ids(common::ObIArray<uint64_t>& interm_res_ids);
 
-  protected:
+protected:
   common::ObIAllocator* deserialize_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTempTableInsertInput);
 
-  public:
+public:
   uint64_t unfinished_count_ptr_;
   common::ObSEArray<uint64_t, 8> interm_result_ids_;
 };
@@ -51,11 +51,11 @@ class ObTempTableInsertInput : public ObIPhyOperatorInput {
 class ObTempTableInsert : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class ObTempTableInsertCtx : public ObPhyOperatorCtx {
     friend class ObTempTableInsert;
 
-    public:
+  public:
     explicit ObTempTableInsertCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx), interm_result_id_(0)
     {}
     virtual ~ObTempTableInsertCtx()
@@ -69,11 +69,11 @@ class ObTempTableInsert : public ObSingleChildPhyOperator {
       interm_result_id_ = id;
     }
 
-    public:
+  public:
     uint64_t interm_result_id_;
   };
 
-  public:
+public:
   ObTempTableInsert(common::ObIAllocator& alloc)
       : ObSingleChildPhyOperator(alloc), temp_table_id_(0), is_distributed_(false)
   {}
@@ -110,7 +110,7 @@ class ObTempTableInsert : public ObSingleChildPhyOperator {
 
   DISALLOW_COPY_AND_ASSIGN(ObTempTableInsert);
 
-  private:
+private:
   uint64_t temp_table_id_;
   bool is_distributed_;
 };

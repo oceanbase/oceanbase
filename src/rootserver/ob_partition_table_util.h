@@ -33,7 +33,7 @@ class ObZoneManager;
 class ObServerManager;
 
 class ObPartitionTableUtil {
-  public:
+public:
   struct ObZoneLeaderInfo {
     ObZoneLeaderInfo() : zone_(), leader_count_(0)
     {}
@@ -99,12 +99,12 @@ class ObPartitionTableUtil {
   //    const bool flag,
   //    ObLeaderInfoArray *leader_info_array);
 
-  private:
+private:
   template <typename SCHEMA>
   int get_associated_replica_num(share::schema::ObSchemaGetterGuard& schema_guard, const SCHEMA& schema,
       int64_t& paxos_replica_num, int64_t& full_replica_num, int64_t& all_replica_num, int64_t& majority);
 
-  private:
+private:
   bool inited_;
   ObZoneManager* zone_mgr_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

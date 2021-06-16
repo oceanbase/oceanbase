@@ -24,7 +24,7 @@ namespace share {
 namespace schema {
 
 class ObSimpleOutlineSchema : public ObSchema {
-  public:
+public:
   ObSimpleOutlineSchema();
   explicit ObSimpleOutlineSchema(common::ObIAllocator* allocator);
   ObSimpleOutlineSchema(const ObSimpleOutlineSchema& src_schema);
@@ -108,7 +108,7 @@ class ObSimpleOutlineSchema : public ObSchema {
     return ObTenantOutlineId(tenant_id_, outline_id_);
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t outline_id_;
   int64_t schema_version_;
@@ -188,7 +188,7 @@ class ObOutlineMgr {
   typedef OutlineInfos::iterator OutlineIter;
   typedef OutlineInfos::const_iterator ConstOutlineIter;
 
-  public:
+public:
   ObOutlineMgr();
   explicit ObOutlineMgr(common::ObIAllocator& allocator);
   virtual ~ObOutlineMgr();
@@ -218,7 +218,7 @@ class ObOutlineMgr {
   int get_outline_schema_count(int64_t& outline_schema_count) const;
   int get_schema_statistics(ObSchemaStatisticsInfo& schema_info) const;
 
-  private:
+private:
   inline bool check_inner_stat() const;
   inline static bool compare_outline(const ObSimpleOutlineSchema* lhs, const ObSimpleOutlineSchema* rhs);
   inline static bool equal_outline(const ObSimpleOutlineSchema* lhs, const ObSimpleOutlineSchema* rhs);
@@ -228,7 +228,7 @@ class ObOutlineMgr {
       const ObSimpleOutlineSchema* lhs, const ObTenantOutlineId& tenant_outline_id);
   int rebuild_outline_hashmap();
 
-  private:
+private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator& allocator_;
   OutlineInfos outline_infos_;

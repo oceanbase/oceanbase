@@ -31,7 +31,7 @@ struct ObSortChunk : public common::ObDLinkBase<ObSortChunk> {
   ObChunkRowStore::Iterator iter_;
   const ObChunkRowStore::StoredRow* row_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSortChunk);
 };
 
@@ -70,7 +70,7 @@ struct ObSortChunk : public common::ObDLinkBase<ObSortChunk> {
 //  ems/EMS: external merge sort
 //
 class ObSortImpl {
-  public:
+public:
   static const int64_t EXTEND_MULTIPLE = 2;
   static const int64_t MAX_MERGE_WAYS = 256;
   static const int64_t INMEMORY_MERGE_SORT_WARN_WAYS = 10000;
@@ -145,9 +145,9 @@ class ObSortImpl {
   void unregister_profile();
   int get_sort_columns(common::ObIArray<ObSortColumn>& sort_columns);
 
-  protected:
+protected:
   class MemEntifyFreeGuard {
-    public:
+  public:
     explicit MemEntifyFreeGuard(lib::MemoryContext*& entify) : entify_(entify)
     {}
     ~MemEntifyFreeGuard()
@@ -160,7 +160,7 @@ class ObSortImpl {
     lib::MemoryContext*& entify_;
   };
   class Compare {
-    public:
+  public:
     Compare();
     int init(common::ObArenaAllocator& alloc, const common::ObNewRow& row, const SortColumns* sort_columns,
         const SortExtraInfos* extra_infos);
@@ -189,7 +189,7 @@ class ObSortImpl {
       new (this) Compare();
     }
 
-    public:
+  public:
     int ret_;
     const SortColumns* sort_columns_;
     int32_t* indexes_;
@@ -197,12 +197,12 @@ class ObSortImpl {
     obj_cmp_func_nullsafe* cmp_funcs_;
     ObCompareCtx cmp_ctx_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(Compare);
   };
 
   class CopyableComparer {
-    public:
+  public:
     CopyableComparer(Compare& compare) : compare_(compare)
     {}
     bool operator()(const ObChunkRowStore::StoredRow* l, const ObChunkRowStore::StoredRow* r)
@@ -259,7 +259,7 @@ class ObSortImpl {
 
   DISALLOW_COPY_AND_ASSIGN(ObSortImpl);
 
-  protected:
+protected:
   typedef common::ObBinaryHeap<ObChunkRowStore::StoredRow**, Compare, 16> IMMSHeap;
   typedef common::ObBinaryHeap<ObSortChunk*, Compare, MAX_MERGE_WAYS> EMSHeap;
   static const int64_t MAX_ROW_CNT = 268435456;  // (2G / 8)
@@ -300,7 +300,7 @@ class ObSortImpl {
 // NOTE:
 //  Can not be accessed by base class pointer, since methods are not virtual.
 class ObUniqueSort : public ObSortImpl {
-  public:
+public:
   ObUniqueSort() : prev_row_(NULL), prev_buf_size_(0)
   {}
 
@@ -331,11 +331,11 @@ class ObUniqueSort : public ObSortImpl {
     return ObSortImpl::rewind();
   }
 
-  private:
+private:
   int save_prev_row(const ObChunkRowStore::StoredRow& sr);
   void free_prev_row();
 
-  private:
+private:
   ObChunkRowStore::StoredRow* prev_row_;
   int64_t prev_buf_size_;
 };

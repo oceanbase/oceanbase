@@ -21,7 +21,7 @@ namespace sql {
 class ObUpdateStmt;
 
 class ObTransformAggrSubquery : public ObTransformRule {
-  public:
+public:
   ObTransformAggrSubquery(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
   virtual ~ObTransformAggrSubquery()
@@ -29,7 +29,7 @@ class ObTransformAggrSubquery : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   enum PullupFlag { USE_OUTER_JOIN = 1, ADD_CASE_WHEN_EXPR = 2, JOIN_FIRST = 4, AGGR_FIRST = 8 };
 
   /**
@@ -160,7 +160,7 @@ class ObTransformAggrSubquery : public ObTransformRule {
   int extract_no_rewrite_select_exprs(ObDMLStmt*& stmt);
   int extract_no_rewrite_expr(ObRawExpr* expr);
 
-  private:
+private:
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> no_rewrite_exprs_;
 };
 

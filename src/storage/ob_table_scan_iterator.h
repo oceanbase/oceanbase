@@ -38,7 +38,7 @@ class ObTableScanParam;
 class ObPartitionStore;
 class ObIStoreRowFilter;
 class ObTableScanStoreRowIterator {
-  public:
+public:
   ObTableScanStoreRowIterator();
   virtual ~ObTableScanStoreRowIterator();
   int init(transaction::ObTransService& trans_service, const ObStoreCtx& ctx, ObTableScanParam& scan_param,
@@ -48,7 +48,7 @@ class ObTableScanStoreRowIterator {
   int rescan(const ObRangeArray& key_ranges, const ObPosArray& range_array_pos);
   int switch_iterator(const int64_t range_array_idx);
 
-  private:
+private:
   static const int64_t LOOP_RESCAN_BUFFER_SIZE = 8 * 1024;  // 8K
   int prepare_table_param();
   int prepare_table_context(const ObIStoreRowFilter* row_filter);
@@ -83,12 +83,12 @@ class ObTableScanStoreRowIterator {
   bool is_iter_opened_;
   bool use_fuse_row_cache_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableScanStoreRowIterator);
 };
 
 class ObTableScanRangeArrayRowIterator : public common::ObNewRowIterator {
-  public:
+public:
   ObTableScanRangeArrayRowIterator();
   virtual ~ObTableScanRangeArrayRowIterator();
   int init(const bool is_reverse_scan, ObTableScanStoreRowIterator& iter);
@@ -101,7 +101,7 @@ class ObTableScanRangeArrayRowIterator : public common::ObNewRowIterator {
   virtual void reset();
   int set_range_array_idx(const int64_t range_array_idx);
 
-  private:
+private:
   bool is_inited_;
   ObTableScanStoreRowIterator* row_iter_;
   ObStoreRow* cur_row_;
@@ -110,11 +110,11 @@ class ObTableScanRangeArrayRowIterator : public common::ObNewRowIterator {
 };
 
 class ObTableScanIterIterator : public common::ObNewIterIterator {
-  public:
+public:
   static constexpr int64_t RP_MAX_FREE_LIST_NUM = 1024;
   static constexpr const char LABEL[] = "RPTblScanIterIter";
 
-  public:
+public:
   ObTableScanIterIterator();
   virtual ~ObTableScanIterIterator();
   virtual int get_next_iter(common::ObNewRowIterator*& iter);
@@ -123,10 +123,10 @@ class ObTableScanIterIterator : public common::ObNewIterIterator {
   int rescan(ObTableScanParam& scan_param);
   virtual void reset();
 
-  private:
+private:
   int get_next_range();
 
-  private:
+private:
   ObTableScanStoreRowIterator store_row_iter_;
   ObTableScanRangeArrayRowIterator range_row_iter_;
   int64_t range_array_cursor_;
@@ -135,11 +135,11 @@ class ObTableScanIterIterator : public common::ObNewIterIterator {
 };
 
 class ObTableScanIterator : public common::ObNewRowIterator {
-  public:
+public:
   static constexpr int64_t RP_MAX_FREE_LIST_NUM = 1024;
   static constexpr const char LABEL[] = "RPTableScanIter";
 
-  public:
+public:
   ObTableScanIterator();
   virtual ~ObTableScanIterator();
   virtual int get_next_row(common::ObNewRow*& row) override;
@@ -153,18 +153,18 @@ class ObTableScanIterator : public common::ObNewRowIterator {
   int rescan(ObTableScanParam& scan_param);
   virtual void reset() override;
 
-  private:
+private:
   ObTableScanIterIterator iter_;
   ObNewRowIterator* row_iter_;
 };
 
 class ObTableScanNewRowIterator {
-  public:
+public:
   explicit ObTableScanNewRowIterator(ObNewIterIterator& iter);
   virtual ~ObTableScanNewRowIterator();
   int get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   ObNewIterIterator& iter_;
   ObNewRowIterator* row_iter_;
 };

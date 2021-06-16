@@ -20,11 +20,11 @@ class ObTableLocation;
 class ObMultiPartInsert : public ObTableInsert, public ObMultiDMLInfo {
   class ObMultiPartInsertCtx;
 
-  public:
+public:
   static const int64_t INSERT_OP = 0;
   static const int64_t DML_OP_CNT = 1;
 
-  public:
+public:
   explicit ObMultiPartInsert(common::ObIAllocator& alloc);
   virtual ~ObMultiPartInsert();
 
@@ -45,7 +45,7 @@ class ObMultiPartInsert : public ObTableInsert, public ObMultiDMLInfo {
     return true;
   }
 
-  protected:
+protected:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -62,7 +62,7 @@ class ObMultiPartInsert : public ObTableInsert, public ObMultiDMLInfo {
   virtual int inner_close(ObExecContext& ctx) const;
   int shuffle_insert_row(ObExecContext& ctx, bool& got_row) const;
 
-  protected:
+protected:
   // exprs for calculating the inserted row
   common::ObDList<ObSqlExpression> insert_row_exprs_;
   // projector for building the inserted row

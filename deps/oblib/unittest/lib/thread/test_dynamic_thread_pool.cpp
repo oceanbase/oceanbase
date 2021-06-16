@@ -18,7 +18,7 @@
 
 using namespace oceanbase::common;
 class TestObDynamicThreadPool : public ::testing::Test {
-  public:
+public:
   TestObDynamicThreadPool()
   {}
   virtual ~TestObDynamicThreadPool()
@@ -34,17 +34,17 @@ class TestObDynamicThreadPool : public ::testing::Test {
   static void TearDownTestCase()
   {}
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestObDynamicThreadPool);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
 };
 
 class SimpleTask : public ObDynamicThreadTask {
-  public:
+public:
   int process(const bool& is_stop)
   {
     UNUSED(is_stop);

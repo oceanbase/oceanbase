@@ -21,11 +21,11 @@ using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
 class MyCoRoutine : public CoRoutine {
-  public:
+public:
   MyCoRoutine(string name, CoRoutine& main_routine) : CoRoutine(main_routine), name_(name)
   {}
 
-  private:
+private:
   void run() override
   {
     cout << name_ << ", begin run" << endl;
@@ -45,8 +45,8 @@ class MyCoRoutine : public CoRoutine {
 };
 
 class MyCoThread : public CoThread {
-  public:
-  private:
+public:
+private:
   CoRoutine* alloc_routine(string name)
   {
     return new MyCoRoutine(name, *this);

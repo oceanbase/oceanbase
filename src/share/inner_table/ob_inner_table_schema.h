@@ -264,7 +264,7 @@ struct ALL_VIRTUAL_TENANT_PARAMETER_STAT_ORA_CDE {
 
 class ObInnerTableSchema {
 
-  public:
+public:
   static int all_core_table_schema(share::schema::ObTableSchema& table_schema);
   static int all_root_table_schema(share::schema::ObTableSchema& table_schema);
   static int all_table_schema(share::schema::ObTableSchema& table_schema);
@@ -1275,7 +1275,7 @@ class ObInnerTableSchema {
   static int all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_monitor_i1_schema(
       share::schema::ObTableSchema& table_schema);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObInnerTableSchema);
 };
 

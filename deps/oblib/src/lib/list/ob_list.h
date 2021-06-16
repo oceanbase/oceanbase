@@ -39,20 +39,20 @@ template <class List>
 class ConstIterator {
   typedef ConstIterator<List> self_t;
 
-  public:
+public:
   typedef std::bidirectional_iterator_tag iterator_category;
   typedef typename List::value_type value_type;
   typedef typename List::const_pointer pointer;
   typedef typename List::const_reference reference;
 
-  private:
+private:
   typedef typename List::iterator iterator;
   typedef Node<value_type> node_t;
   typedef typename node_t::ptr_t node_ptr_t;
   typedef typename node_t::const_ptr_t node_const_ptr_t;
   friend class ObList<value_type, typename List::allocator_t>;
 
-  public:
+public:
   ConstIterator() : node_(NULL){};
   ConstIterator(const self_t& other)
   {
@@ -81,7 +81,7 @@ class ConstIterator {
     node_ = const_cast<node_ptr_t>(node);
   };
 
-  public:
+public:
   reference operator*() const
   {
     // the access of end is undefined
@@ -125,7 +125,7 @@ class ConstIterator {
   };
   TO_STRING_KV(K_(node));
 
-  private:
+private:
   node_ptr_t node_;
 };
 
@@ -133,13 +133,13 @@ template <class List>
 class Iterator {
   typedef Iterator<List> self_t;
 
-  public:
+public:
   typedef std::bidirectional_iterator_tag iterator_category;
   typedef typename List::value_type value_type;
   typedef typename List::pointer pointer;
   typedef typename List::reference reference;
 
-  private:
+private:
   typedef typename List::const_iterator const_iterator;
   typedef Node<value_type> node_t;
   typedef typename node_t::ptr_t node_ptr_t;
@@ -147,7 +147,7 @@ class Iterator {
   friend class ConstIterator<List>;
   friend class ObList<value_type, typename List::allocator_t>;
 
-  public:
+public:
   Iterator() : node_(NULL){};
   Iterator(const self_t& other)
   {
@@ -167,7 +167,7 @@ class Iterator {
     node_ = const_cast<node_ptr_t>(node);
   };
 
-  public:
+public:
   reference operator*() const
   {
     // the access of end is undefined
@@ -211,7 +211,7 @@ class Iterator {
   };
   TO_STRING_KV(K_(node));
 
-  private:
+private:
   node_ptr_t node_;
 };
 }  // namespace list
@@ -225,7 +225,7 @@ template <class T, class Allocator = ObMalloc>
 class ObList {
   typedef ObList<T, Allocator> self_t;
 
-  public:
+public:
   typedef T value_type;
   typedef value_type* pointer;
   typedef value_type& reference;
@@ -235,7 +235,7 @@ class ObList {
   typedef list::ConstIterator<self_t> const_iterator;
   typedef Allocator allocator_t;
 
-  private:
+private:
   typedef list::Node<value_type> node_t;
   typedef typename node_t::ptr_t node_ptr_t;
   typedef typename node_t::const_ptr_t node_const_ptr_t;
@@ -252,11 +252,11 @@ class ObList {
     };
   } node_holder_t;
 
-  private:
+private:
   ObList(const self_t& other);
   self_t& operator=(const self_t& other);
 
-  public:
+public:
   ObList(Allocator& allocator) : size_(0), allocator_(allocator)
   {
     root_.next = root_;
@@ -267,7 +267,7 @@ class ObList {
     reset();
   };
 
-  public:
+public:
   int push_back(const value_type& value)
   {
     int ret = OB_SUCCESS;
@@ -548,7 +548,7 @@ class ObList {
     return ret;
   }
 
-  private:
+private:
   node_holder_t root_;
   int64_t size_;
   Allocator& allocator_;

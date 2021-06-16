@@ -67,7 +67,7 @@ struct ObBatch final {
 };
 
 class ObRangeIterator final {
-  public:
+public:
   ObRangeIterator()
       : scan_param_(NULL),
         cur_idx_(0),
@@ -88,13 +88,13 @@ class ObRangeIterator final {
   int set_scan_param(ObTableScanParam& scan_param);
   int get_org_range_array_idx(const int64_t range_idx, int64_t& org_range_array_idx);
 
-  private:
+private:
   int convert_key_ranges(const int64_t range_begin_pos, const int64_t range_end_pos, const int64_t range_array_idx,
       ObIAllocator& allocator, common::ObIArray<common::ObExtStoreRange>& store_ranges);
   template <typename T>
   void set_range_array_idx(const int64_t range_array_idx, T& range);
 
-  private:
+private:
   ObTableScanParam* scan_param_;
   int64_t cur_idx_;
   ScanRangeArray order_ranges_;
