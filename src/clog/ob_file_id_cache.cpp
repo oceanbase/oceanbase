@@ -789,6 +789,8 @@ int ObFileIdList::prepare_container_()
         container_ptr_->destroy();
         log2file_list_allocator_->free(container_ptr_);
         container_ptr_ = tmp_container_ptr;
+        use_seg_array_ = true;
+        CSR_LOG(INFO, "use seg array in prepare_container_ function");
       }
     }
   } else {
