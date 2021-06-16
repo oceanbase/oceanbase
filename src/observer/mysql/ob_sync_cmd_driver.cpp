@@ -256,7 +256,7 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet& result)
           ctx_.schema_guard_,
           tmp_session->get_effective_tenant_id()));
       if (OB_FAIL(sender_.response_packet(rp))) {
-        LOG_WARN("response packet fail", K(ret), K(*row));
+        LOG_WARN("response packet fail", K(ret), KP(row));
       }
     }
   }
