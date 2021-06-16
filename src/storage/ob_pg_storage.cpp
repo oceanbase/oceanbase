@@ -7525,8 +7525,12 @@ int ObPGStorage::get_freeze_info_(const common::ObVersion& version, ObFreezeInfo
   int ret = OB_SUCCESS;
   freeze_info.reset();
   if (OB_FAIL(ObFreezeInfoMgrWrapper::get_instance().get_freeze_info_by_major_version(
-          pkey_.get_table_id(), version.major_, freeze_info))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
+          pkey_.get_table_id(),
+          version.major_,
+          freeze_info))) {
+    if (OB_ENTRY_NOT_EXIST == ret
+        || (OB_EAGAIN == ret && OB_ALL_CORE_TABLE_TID == extract_pure_id(pkey_.get_table_id()))) {
+      LOG_WARN("failed to get freeze info", K(ret), K(pkey_));
       ObFreezeInfoSnapshotMgr::FreezeInfoLite freeze_info_lite;
       if (OB_FAIL(ObFreezeInfoMgrWrapper::get_instance().get_freeze_info_by_major_version(
               version.major_, freeze_info_lite))) {
