@@ -256,6 +256,7 @@ class ObMemtable : public ObIMemtable {
   virtual int get_frozen_schema_version(int64_t& schema_version) const override;
   virtual bool is_frozen_memtable() const override;
   virtual bool is_active_memtable() const override;
+  virtual bool is_inner_table() const { return common::is_inner_table(key_.table_id_); }
   int set_snapshot_version(const int64_t snapshot_version);
   int set_base_version(const int64_t base_version);
   int set_start_log_ts(const int64_t start_ts);
