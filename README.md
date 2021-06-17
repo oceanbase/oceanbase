@@ -36,20 +36,52 @@ Refer to the [Get Started guide](https://open.oceanbase.com/quickStart) (Simplif
 
 OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPubL-2.0/index.html) license. You can freely copy and use the source code. When you modify or distribute the source code, please obey the MulanPubL - 2.0 license.
 
+## OS compatibility list
+
+| OS | Ver. | Arch | Compilable | Package Deployable | Compiled Binary Deployable | Mysqltest Passed |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| CentOS | 7.2,8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Debian | 9.8,10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Fedora | 33 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| MacOS | any | x86_64 | ❌ | ❌ | ❌ | ❌ |
+| openSUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| OpenAnolis | 8.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| SUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Ubuntu | 16.04,18.04,20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+
 ## How to build
 
-### debug mode
+### Preparation
+
+Before building, you need to confirm that your device has installed the necessary software.
+
+#### Fedora based (, including CentOS, Fedora, OpenAnolis, RedHat, etc.)
 ```sh
+yum install git wget rpm* cpio make glibc-devel glibc-headers binutils
+```
+
+#### Debian based (, including Debian, Ubuntu, etc.)
+```sh
+apt-get install git wget rpm rpm2cpio cpio make build-essential binutils
+```
+
+#### SUSE based (, including SUSE, openSUSE, etc.)
+```sh
+zypper install git wget rpm cpio make glibc-devel binutils
+```
+
+### debug mode
+```bash
 bash build.sh debug --init --make
 ```
 
 ### release mode
-```sh
+```bash
 bash build.sh release --init --make
 ```
 
 ### rpm packages
-```sh
+```bash
 bash build.sh rpm --init && cd build_rpm && make -j16 rpm
 ```
 

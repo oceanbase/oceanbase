@@ -86,7 +86,7 @@ function prepare_build_dir
 # dep_create
 function do_init
 {
-    (cd $TOPDIR/deps/3rd && sh dep_create.sh)
+    (cd $TOPDIR/deps/3rd && bash dep_create.sh)
 }
 
 # make build directory && cmake && make (if need)
