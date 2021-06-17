@@ -55,17 +55,17 @@ OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPu
 
 在构建前您需要确认您的机器已经安装必要的软件
 
-#### fedora 类 （CentOS/Fedora/OpenAnolis/RedHat 等）
+#### Fedora 系列 （包括 CentOS，Fedora，OpenAnolis，RedHat 等）
 ```sh
 yum install git wget rpm* cpio make glibc-devel glibc-headers binutils
 ```
 
-#### debian 类 （Debian/ubuntu 等）
+#### Debian 系列 （包括 Debian，ubuntu 等）
 ```sh
 apt-get install git wget rpm rpm2cpio cpio make build-essential binutils
 ```
 
-#### suse 类 （SUSE/openSUSE 等）
+#### SUSE 系列 （包括 SUSE，openSUSE 等）
 ```sh
 zypper install git wget rpm cpio make glibc-devel binutils
 ```

@@ -36,7 +36,7 @@ Refer to the [Get Started guide](https://open.oceanbase.com/quickStart) (Simplif
 
 OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPubL-2.0/index.html) license. You can freely copy and use the source code. When you modify or distribute the source code, please obey the MulanPubL - 2.0 license.
 
-## Opreating System Compatibility List
+## OS compatibility list
 
 | OS | Ver. | Arch | Compilable | Package Deployable | Compiled Binary Deployable | Mysqltest Passed |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
@@ -55,17 +55,17 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 
 Before building, you need to confirm that your device has installed the necessary software.
 
-#### Fedora like (such as CentOS, Fedora, OpenAnolis, RedHat, etc.)
+#### Fedora based (, including CentOS, Fedora, OpenAnolis, RedHat, etc.)
 ```sh
 yum install git wget rpm* cpio make glibc-devel glibc-headers binutils
 ```
 
-#### Debian like (such as Debian, Ubuntu, etc.)
+#### Debian based (, including Debian, Ubuntu, etc.)
 ```sh
 apt-get install git wget rpm rpm2cpio cpio make build-essential binutils
 ```
 
-#### SUSE like (such as SUSE, openSUSE, etc.)
+#### SUSE based (, including SUSE, openSUSE, etc.)
 ```sh
 zypper install git wget rpm cpio make glibc-devel binutils
 ```
