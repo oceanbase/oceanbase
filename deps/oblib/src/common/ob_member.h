@@ -112,7 +112,7 @@ class ObReplicaMember : public ObMember {
   virtual bool is_valid() const;
   virtual bool is_readonly_replica() const;
   ObReplicaMember& operator=(const ObReplicaMember& rhs);
-  //TO_STRING_KV(K_(server), K_(timestamp), K_(flag), K_(replica_type), K_(region), K_(memstore_percent));
+
   int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 

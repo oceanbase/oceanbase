@@ -50,7 +50,7 @@ class ObTimeoutCtx {
   // return previous timeout context or an initialized one if no previous context.
   static const ObTimeoutCtx& get_ctx();
 
-  //TO_STRING_KV(K_(abs_timeout_us));
+
   int64_t to_string(char* buf, const int64_t buf_len) const;
   
   private:

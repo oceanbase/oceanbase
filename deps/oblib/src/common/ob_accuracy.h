@@ -189,7 +189,7 @@ class ObAccuracy {
   static const ObAccuracy MAX_ACCURACY_OLD[ObMaxType];
 
   public:
-  //TO_STRING_KV(N_LENGTH, length_, N_PRECISION, precision_, N_SCALE, scale_);
+
   int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 

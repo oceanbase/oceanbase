@@ -145,7 +145,7 @@ struct ObUnitInfo {
     return unit_.is_valid() && config_.is_valid() && pool_.is_valid();
   }
   int assign(const ObUnitInfo& other);
-  //TO_STRING_KV(K_(unit), K_(config), K_(pool));
+
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObUnit unit_;
