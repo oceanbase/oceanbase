@@ -55,6 +55,22 @@ namespace oceanbase {
 using namespace common;
 using namespace share::schema;
 namespace sql {
+int64_t ObQueryRange::ArrayParamInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(param_index));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryRange::ObRangeKeyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TYPE, static_cast<int32_t>(key_type_));
+  J_OBJ_END();
+  return pos;
+}
 ObQueryRange::ObQueryRange()
     : state_(NEED_INIT),
       column_count_(0),

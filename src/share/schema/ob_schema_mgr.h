@@ -46,9 +46,7 @@ class ObSimpleTenantSchema : public ObSchema {
   virtual ~ObSimpleTenantSchema();
   ObSimpleTenantSchema& operator=(const ObSimpleTenantSchema& other);
   bool operator==(const ObSimpleTenantSchema& other) const;
-  TO_STRING_KV(K_(tenant_id), K_(schema_version), K_(tenant_name), K_(name_case_mode), K_(read_only), K_(primary_zone),
-      K_(locality), K_(previous_locality), K_(compatibility_mode), K_(gmt_modified), K_(drop_tenant_time), K_(status),
-      K_(in_recyclebin));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual void reset();
   inline bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -212,7 +210,7 @@ class ObSimpleUserSchema : public ObSchema {
   virtual ~ObSimpleUserSchema();
   ObSimpleUserSchema& operator=(const ObSimpleUserSchema& other);
   bool operator==(const ObSimpleUserSchema& other) const;
-  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(schema_version), K_(user_name), K_(host_name), K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual void reset();
   inline bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -298,8 +296,7 @@ class ObSimpleDatabaseSchema : public ObSchema {
   virtual ~ObSimpleDatabaseSchema();
   ObSimpleDatabaseSchema& operator=(const ObSimpleDatabaseSchema& other);
   bool operator==(const ObSimpleDatabaseSchema& other) const;
-  TO_STRING_KV(K_(tenant_id), K_(database_id), K_(schema_version), K_(database_name), K_(name_case_mode),
-      K_(drop_schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual void reset();
   inline bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -390,8 +387,7 @@ class ObSimpleTablegroupSchema : public ObSchema {
   virtual ~ObSimpleTablegroupSchema();
   ObSimpleTablegroupSchema& operator=(const ObSimpleTablegroupSchema& other);
   bool operator==(const ObSimpleTablegroupSchema& other) const;
-  TO_STRING_KV(K_(tenant_id), K_(tablegroup_id), K_(schema_version), K_(tablegroup_name), K_(primary_zone),
-      K_(locality), K_(previous_locality), K_(partition_status), K_(binding), K_(partition_schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual void reset();
   inline bool is_valid() const;
   inline int64_t get_convert_size() const;

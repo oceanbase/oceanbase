@@ -27,7 +27,14 @@ class ObMemtableDataHeader {
   {}
   ~ObMemtableDataHeader()
   {}
-  TO_STRING_KV(K_(dml_type), K_(buf_len));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(dml_type), K_(buf_len));
+    J_OBJ_END();
+    return pos;
+  }
   inline int64_t dup_size() const
   {
     return (sizeof(ObMemtableDataHeader) + buf_len_);
@@ -75,7 +82,14 @@ class ObMemtableData {
   {}
   ~ObMemtableData()
   {}
-  TO_STRING_KV(K_(dml_type), K_(buf_len));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(dml_type), K_(buf_len));
+    J_OBJ_END();
+    return pos;
+  }
   void set(storage::ObRowDml dml_type, const int64_t data_len, char* buf)
   {
     dml_type_ = dml_type;

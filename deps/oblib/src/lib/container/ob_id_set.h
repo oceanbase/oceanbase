@@ -74,7 +74,7 @@ class ObIdSet {
   {
     return id_set_.count();
   };
-  TO_STRING_KV(N_ID_SET, id_set_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   private:

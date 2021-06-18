@@ -3985,3 +3985,107 @@ bool ObReplicaTask::is_valid()
   return (OB_INVALID_TENANT_ID != tenant_id_ && OB_INVALID_ID != table_id_ &&
           OB_INVALID_PARTITION_ID != partition_id_ && ObRebalanceTaskType::MAX_TYPE != cmd_type_ && NULL != comment_);
 }
+int64_t ReadonlyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(zone), K_(readonly_at_all));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ServerReplicaCountMgr::ServerReplicaCount::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(replica_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ZoneUnit::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(active_unit_cnt), K_(load_avg), K_(load_imbalance), K_(tg_pg_cnt), K_(resource_weight),K_(ru_total), K_(ru_capacity), K_(all_unit));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ZonePaxosInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(full_replica_num), K_(logonly_replica_num));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TableGroup::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(tablegroup_id), K_(begin), K_(end));
+  J_OBJ_END();
+  return pos;
+}
+int64_t PartitionGroup::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(table_id), KT_(tablegroup_id), K_(partition_idx), K_(load_factor), K_(begin), K_(end), K_(all_tg_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t Partition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(table_id), KT_(tablegroup_id), K_(partition_id), K_(partition_idx), K_(schema_partition_cnt),K_(schema_replica_cnt), K_(schema_full_replica_cnt), K_(valid_member_cnt), K_(begin), K_(end),K_(can_rereplicate), K_(primary), K_(quorum), K_(has_leader), K_(can_balance), K_(filter_logonly_count),K_(all_pg_idx), K_(has_flag_replica));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplicaTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(tenant_id), KT_(table_id), K_(partition_id), K_(src), K_(replica_type), K_(memstore_percent),K_(zone), K_(region), K_(dst), K_(dst_replica_type), K_(dst_memstore_percent), K_(cmd_type), "comment",NULL == comment_ ? "" : comment_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t Replica::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(region), K_(zone), K_(member_time_us), K_(role), K_(in_member_list), K_(rebuild), K_(data_version),K_(replica_type), K_(memstore_percent), K_(readonly_at_all), K_(modify_time_us), "replica_status",share::ob_replica_status_str(replica_status_), "server", (NULL != server_ ? server_->server_ : common::ObAddr()),"unit_id", (NULL != unit_ ? unit_->get_key() : -1), K_(quorum), K_(failmsg_start_pos), K_(failmsg_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t UnitStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(in_pool), K_(load_factor), K_(capacity), K_(tg_pg_cnt), K_(outside_replica_cnt), K_(info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ServerStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(online), K_(permanent_offline), K_(active), K_(blocked), K_(stopped),K_(in_member_replica_cnt), K_(resource_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t LoadFactor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(disk_used), K_(sstable_read_rate), K_(sstable_read_bytes_rate), K_(sstable_write_rate),K_(sstable_write_bytes_rate), K_(log_write_rate), K_(log_write_bytes_rate), K_(memtable_bytes),K_(cpu_utime_rate), K_(cpu_stime_rate), K_(net_in_rate), K_(net_in_bytes_rate), K_(net_out_rate),K_(net_out_bytes_rate));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObResourceWeight::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cpu_weight), K_(disk_weight), K_(iops_weight), K_(memory_weight));
+  J_OBJ_END();
+  return pos;
+}

@@ -82,7 +82,7 @@ struct ObThreadCache {
   ~ObThreadCache()
   {}
 
-  TO_STRING_KV(K_(f), K_(nr_total), K_(nr_malloc), K_(nr_free), K_(nr_chunks), K_(clock));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // the address must be aligned with 16 bytes if it uses cas 128
   //
@@ -161,10 +161,7 @@ class ObObjFreeList {
   }
   int destroy_cur_thread_cache();
 
-  TO_STRING_KV(K_(name), K_(is_inited), K_(only_global), K_(label), K_(thread_cache_idx), K_(type_size),
-      K_(type_size_base), K_(alignment), K_(obj_count_base), K_(obj_count_per_chunk), K_(chunk_byte_size),
-      K_(chunk_count_high_mark), K_(chunk_count_low_mark), K_(used), K_(allocated), K_(allocated_base), K_(used_base),
-      K_(nr_thread_cache), K_(nr_orphaned_thread_cache), K_(clock));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   SLINK(ObObjFreeList, link_);
 

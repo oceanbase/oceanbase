@@ -37,7 +37,7 @@ struct ObIOWorkload {
   {
     return io_size_ > 0 && mode_ >= ObIOMode::IO_MODE_READ && mode_ < ObIOMode::IO_MODE_MAX;
   }
-  TO_STRING_KV(K_(mode), K_(io_size), K_(is_seq_io));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObIOBenchResult {
@@ -60,7 +60,7 @@ struct ObIOBenchResult {
   ObIOWorkload workload_;
   double iops_;  // average io times per second
   double rt_;    // response time, unit us
-  TO_STRING_KV(K_(workload), K_(iops), K_(rt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObIOBenchResultSet {

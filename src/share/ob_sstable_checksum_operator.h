@@ -30,8 +30,7 @@ struct ObSSTableDataChecksumItem {
   bool is_key_valid() const;
   bool is_valid() const;
   bool is_same_table(const ObSSTableDataChecksumItem& other) const;
-  TO_STRING_KV(K_(tenant_id), K_(data_table_id), K_(sstable_id), K_(partition_id), K_(sstable_type), K_(server),
-      K_(row_checksum), K_(data_checksum), K_(row_count), K_(snapshot_version), K_(replica_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
   uint64_t data_table_id_;
   uint64_t sstable_id_;
@@ -98,8 +97,7 @@ struct ObSSTableColumnChecksumItem {
            server_.is_valid() && snapshot_version_ >= 0 && checksum_method_ >= 0 && replica_type_ >= 0 &&
            major_version_ >= 0;
   }
-  TO_STRING_KV(K_(tenant_id), K_(data_table_id), K_(index_id), K_(partition_id), K_(sstable_type), K_(column_id),
-      K_(server), K_(column_checksum), K_(snapshot_version), K_(replica_type), K_(major_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
   uint64_t data_table_id_;
   uint64_t index_id_;
@@ -150,7 +148,7 @@ struct ObSSTableChecksumItem {
     reset();
   }
   void reset();
-  TO_STRING_KV(K_(data_checksum), K_(column_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObSSTableDataChecksumItem data_checksum_;
   common::ObArray<ObSSTableColumnChecksumItem> column_checksum_;
 };

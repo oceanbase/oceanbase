@@ -53,8 +53,9 @@ struct ObRecordHeader {
   int64_t data_checksum_;  // record checksum
   ObRecordHeader();
 
-  TO_STRING_KV(K_(magic), K_(header_length), K_(version), K_(header_checksum), K_(timestamp), K_(data_length),
-      K_(data_zlength), K_(data_checksum));
+  /*TO_STRING_KV(K_(magic), K_(header_length), K_(version), K_(header_checksum), K_(timestamp), K_(data_length),
+      K_(data_zlength), K_(data_checksum));*/
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   /**
    * sert magic number of record header

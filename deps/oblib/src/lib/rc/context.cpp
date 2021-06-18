@@ -19,6 +19,38 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace lib {
+int64_t TreeNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(parent_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t StaticInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(filename_), K(line_), K(function_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t DynamicInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tid_), K(cid_), K(create_time_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t MemoryContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), "static_id", static_id_, "static_info", StaticInfos::get_instance().get(static_id_),"dynamic info", di_, K(properties_), K(attr_));
+  J_OBJ_END();
+  return pos;
+}
 RLOCAL(bool, ContextTLOptGuard::enable_tl_opt);
 
 MemoryContext& MemoryContext::root()

@@ -39,10 +39,7 @@ struct ObMacroBlockDesc {
   int64_t progressive_merge_round_;
   bool contain_uncommitted_row_;
   ObMacroBlockDesc();
-  TO_STRING_KV(K_(data_version), K_(block_idx), K_(block_cnt), K_(macro_block_ctx), K_(full_meta), K_(range),
-      K_(row_store_type), K_(schema_version), K_(data_seq), K_(row_count), K_(occupy_size), K_(micro_block_count),
-      K_(data_checksum), K_(snapshot_version), K_(row_count_delta), K_(progressive_merge_round),
-      K_(contain_uncommitted_row));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObMacroBlockRowComparor {
@@ -102,7 +99,7 @@ class ObMacroBlockIterator {
   {
     return begin_;
   }
-  TO_STRING_KV(K_(sstable), K_(is_reverse_scan), K_(step), K_(cur_idx), K_(begin), K_(end), K_(check_lob));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_end_macro_block()
   {
     return (cur_idx_ < begin_ || cur_idx_ > end_);

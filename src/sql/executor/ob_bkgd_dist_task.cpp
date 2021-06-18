@@ -24,6 +24,14 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ObSchedBKGDDistTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(abs_timeout_us), K_(pkey), K_(dest), K(serialized_task_.length()));
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace common;
 using namespace share;

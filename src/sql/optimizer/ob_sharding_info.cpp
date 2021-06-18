@@ -547,3 +547,11 @@ int ObShardingInfo::get_total_part_cnt(int64_t& total_part_cnt) const
   }
   return ret;
 }
+int64_t ObShardingInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_sharding()), K(is_local()), K(is_remote_or_distribute()), K(is_match_all()), K_(part_level),K_(part_func_type), K_(subpart_func_type), K_(part_num), K_(subpart_num), K_(location_type),K_(can_reselect_replica), K_(phy_table_location_info));
+  J_OBJ_END();
+  return pos;
+}

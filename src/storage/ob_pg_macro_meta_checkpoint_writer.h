@@ -31,7 +31,7 @@ struct ObPGMacroBlockMetaCheckpointEntry final {
       : disk_no_(disk_no), macro_block_id_(macro_block_id), table_key_(table_key), meta_(meta)
   {}
   ~ObPGMacroBlockMetaCheckpointEntry() = default;
-  TO_STRING_KV(K_(table_key), K_(macro_block_id), K_(table_key), K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(PG_MACRO_META_ENTRY_VERSION);
 
   public:

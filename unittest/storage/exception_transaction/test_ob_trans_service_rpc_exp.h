@@ -60,8 +60,14 @@ class ObTransMsgException {
   }
   void check_rpc_exp(const int64_t msg_type, const int64_t cur_ts, bool& abort);
 
-  TO_STRING_KV(K_(request_abort), K_(start_request_abort_time), K_(end_request_abort_time), K_(response_abort),
-      K_(start_response_abort_time), K_(end_response_abort_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(request_abort), K_(start_request_abort_time), K_(end_request_abort_time), K_(response_abort),K_(start_response_abort_time), K_(end_response_abort_time));
+    J_OBJ_END();
+    return pos;
+  }
 
   public:
   bool inited_;

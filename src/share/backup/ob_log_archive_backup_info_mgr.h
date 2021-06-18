@@ -45,7 +45,7 @@ class ObExternLogArchiveBackupInfo final {
   int mark_log_archive_deleted(const int64_t max_clog_delete_snapshot);
   int delete_marked_log_archive_info();
 
-  TO_STRING_KV(K_(status_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObSArray<ObTenantLogArchiveStatus> status_array_;

@@ -1138,3 +1138,27 @@ void ObSSTableChecksumItem::reset()
 {
   column_checksum_.reset();
 }
+int64_t ObSSTableChecksumItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_checksum), K_(column_checksum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableColumnChecksumItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(data_table_id), K_(index_id), K_(partition_id), K_(sstable_type), K_(column_id),K_(server), K_(column_checksum), K_(snapshot_version), K_(replica_type), K_(major_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableDataChecksumItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(data_table_id), K_(sstable_id), K_(partition_id), K_(sstable_type), K_(server),K_(row_checksum), K_(data_checksum), K_(row_count), K_(snapshot_version), K_(replica_type));
+  J_OBJ_END();
+  return pos;
+}

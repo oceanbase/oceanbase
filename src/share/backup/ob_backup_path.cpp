@@ -948,3 +948,11 @@ int ObBackupPathUtil::get_clog_archive_key_prefix(
   }
   return ret;
 }
+int64_t ObBackupPath::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cur_pos), K_(path));
+  J_OBJ_END();
+  return pos;
+}

@@ -340,7 +340,7 @@ class ObPartitionSplitSourceLog : public ObNonTransLog {
     return spp_;
   }
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
-  TO_STRING_KV(K_(schema_version), K_(slave_read_ts), K_(spp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t schema_version_;
@@ -382,7 +382,7 @@ class ObPartitionSplitDestLog : public ObNonTransLog {
     return spp_;
   }
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
-  TO_STRING_KV(K_(split_version), K_(schema_version), K_(source_log_id), K_(source_log_ts), K_(spp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t split_version_;
@@ -415,7 +415,7 @@ class ObPartitionSplitState {
   {
     return to_persistent_state(state_);
   }
-  TO_STRING_KV(K_(pkey), "state", to_state_str(state_), "save_state", to_state_str(save_state_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObPartitionSplitStateEnum state_;
@@ -434,7 +434,7 @@ class ObSplitLogCb : public clog::ObISubmitLogCb {
   int on_success(const common::ObPartitionKey& pkey, const clog::ObLogType log_type, const uint64_t log_id,
       const int64_t version, const bool batch_committed, const bool batch_last_succeed);
   int on_finished(const common::ObPartitionKey& pkey, const uint64_t log_id);
-  TO_STRING_KV(KP(this), KP_(partition_service), K_(log_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObPartitionService* partition_service_;
@@ -515,8 +515,7 @@ class ObPartitionSplitInfo {
   {
     return partition_pair_;
   }
-  TO_STRING_KV(K_(split_version), K_(schema_version), K_(source_log_id), K_(source_log_ts), K_(partition_pair),
-      K_(split_type), K_(receive_split_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   static const int64_t UNKNWON_SPLIT_TYPE = -1;
@@ -551,7 +550,14 @@ class ObSplitProgressTemplate {
   public:
   Type obj_;
   int progress_;
-  TO_STRING_KV(K_(obj), K_(progress));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(obj), K_(progress));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 typedef ObSplitProgressTemplate<common::ObAddr> ObReplicaSplitProgress;
@@ -696,7 +702,14 @@ class ObSplitProgressArray {
   }
 
   public:
-  TO_STRING_KV(K_(is_inited), K_(progress_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(is_inited), K_(progress_array));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   bool is_inited_;

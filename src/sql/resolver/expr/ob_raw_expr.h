@@ -851,7 +851,7 @@ class ObObjAccessIdent {
   int extract_params(int64_t level, common::ObIArray<ObRawExpr*>& params) const;
   int replace_params(ObRawExpr* from, ObRawExpr* to);
 
-  TO_STRING_KV(K_(access_name), K_(access_index), K_(type), K_(params));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   AccessNameType type_;
   common::ObString access_name_;
@@ -912,8 +912,7 @@ class ObQualifiedName {
 
   int replace_access_ident_params(ObRawExpr* from, ObRawExpr* to);
 
-  TO_STRING_KV(N_DATABASE_NAME, database_name_, N_TABLE_NAME, tbl_name_, N_COLUMN, col_name_, K_(is_star), K_(ref_expr),
-      K_(parents_expr_info), K_(parent_aggr_level), K_(access_idents), K_(is_access_root));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObString database_name_;
@@ -1025,7 +1024,7 @@ struct OrderItem {
     return name;
   }
 
-  TO_STRING_KV(N_EXPR, expr_, N_ASCENDING, order_type2name(order_type_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObRawExpr* expr_;
   ObOrderDirection order_type_;
@@ -1047,7 +1046,7 @@ struct ObExprEqualCheckContext {
     {}
     ParamExprPair() : param_idx_(-1), expr_(NULL)
     {}
-    TO_STRING_KV(K_(param_idx), K_(expr));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t param_idx_;
     const ObRawExpr* expr_;
   };
@@ -1115,7 +1114,7 @@ struct ObVarInfo final {
   {
     return (type_ == other.type_ && name_ == other.name_);
   }
-  TO_STRING_KV(K_(type), K_(name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObVarType type_;
   common::ObString name_;
 };
@@ -1127,7 +1126,7 @@ struct ObSubQueryInfo {
     sub_query_ = NULL;
     ref_expr_ = NULL;
   }
-  TO_STRING_KV(K_(ref_expr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   const ParseNode* sub_query_;
   ObQueryRefRawExpr* ref_expr_;
@@ -3602,7 +3601,7 @@ struct Bound {
   ;
 
   ObRawExpr* exprs_[BOUND_EXPR_MAX];
-  TO_STRING_KV(K_(type), K_(is_preceding), K_(is_nmb_literal), KP_(interval_expr), K_(date_unit_expr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 ////////////////////////////////////////////////////////////////
@@ -4023,7 +4022,7 @@ class ObRawExprFactory {
   {
     return allocator_;
   }
-  TO_STRING_KV("", "");
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObIAllocator& allocator_;
@@ -4041,7 +4040,7 @@ class ObRawExprPointer {
   int get(ObRawExpr*& expr);
   int set(ObRawExpr* expr);
   int add_ref(ObRawExpr** expr);
-  TO_STRING_KV("", "");
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObSEArray<ObRawExpr**, 1> expr_group_;

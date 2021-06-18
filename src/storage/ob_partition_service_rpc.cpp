@@ -41,6 +41,294 @@ using namespace memtable;
 using namespace share::schema;
 
 namespace obrpc {
+int64_t ObMCLogRpcInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(log_id), K_(timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMemberChangeArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(member), K_(no_used), K_(quorum), K_(reserved_modify_quorum_type), K_(task_id), K_(orig_quorum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMemberChangeBatchResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(return_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMemberChangeBatchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObModifyQuorumBatchResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(return_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObModifyQuorumArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(quorum), K_(orig_quorum), K_(member_list), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObModifyQuorumBatchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoveReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(replica_member));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoveReplicaArgs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchMacroBlockArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_block_index), K_(data_version), K_(data_seq));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchMacroBlockListArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_key), "arg_count", arg_list_.count());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchPartitionInfoArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(replica_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchPartitionInfoResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta), K_(table_id_list), K_(major_version), K_(is_log_sync));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchTableInfoArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(table_id), K_(snapshot_version), K_(is_only_major_sstable));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogicMigrateRpcHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_size), K_(occupy_size), K_(data_offset), K_(object_count), K_(data_size), K_(connect_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogicDataChecksumProtocol::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_checksum), K_(is_rowkey_valid), K_(rowkey));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchTableInfoResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(multi_version_start), K_(is_ready_for_read), K_(table_keys), K_(gc_table_keys));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSplitDestPartitionResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), K_(progress), K_(schema_version), K_(src_pkey), K_(dest_pkey));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchLogicBaseMetaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_key), K_(task_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchPhysicalBaseMetaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchLogicRowArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_key), K_(key_range), K_(schema_version), K_(data_checksum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSplitDestPartitionRequestArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(dest_pkey), K_(split_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplicaSplitProgressRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version), K_(pkey), K_(addr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplicaSplitProgressResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(addr), K_(progress));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchPGInfoArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(replica_type), K_(use_slave_safe_read_ts), K_(compat_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchPGPartitionInfoArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(snapshot_version), K_(is_only_major_sstable), K_(log_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGPartitionMetaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta), K_(table_id_list), K_(table_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchPGInfoResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_meta), K_(major_version), K_(is_log_sync), K_(pg_file_id), K_(compat_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchReplicaInfoArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(local_publish_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchReplicaInfoRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(remote_minor_snapshot_version), K_(remote_replica_type),K_(remote_major_snapshot_version), K_(remote_last_replay_log_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchFetchReplicaInfoArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(replica_info_arg));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchFetchReplicaInfoRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(replica_info_res));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSuspendPartitionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pg_key_), K(mig_dest_server_), K(need_force_change_owner_), K(is_batch_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSuspendPartitionRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pg_key_), K(max_clog_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHandoverPartitionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(type_), K(pg_key_), K(src_file_id_), K(candidate_server_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchLogicRowInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(total_row_count), K_(not_exist_row_count), K_(exist_row_count), K_(del_row_count),K_(sparse_row_count), "dml_count", common::ObArrayWrap<int64_t>(dml_count_, storage::T_DML_MAX),"first_dml_count", common::ObArrayWrap<int64_t>(first_dml_count_, storage::T_DML_MAX));
+  J_OBJ_END();
+  return pos;
+}
 
 void ObMCLogRpcInfo::reset()
 {

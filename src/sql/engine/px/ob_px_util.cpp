@@ -3028,3 +3028,19 @@ int ObDtlChannelUtil::link_ch_set(
   }
   return ret;
 }
+int64_t ObPxAffinityByRandom::PartitionHashValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_id), K_(partition_idx), K_(hash_value), K_(worker_id), K_(partition_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPXServerAddrUtil::ObPxSqcTaskCountMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_count), K_(thread_count), K_(time), K_(idx), K_(finish));
+  J_OBJ_END();
+  return pos;
+}

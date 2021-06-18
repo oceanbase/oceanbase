@@ -81,7 +81,7 @@ class ObLocationUpdateTask : public common::IObDedupTask {
   virtual int process();
   bool need_discard() const;
 
-  TO_STRING_KV(KT_(table_id), K_(partition_id), K_(add_timestamp), K_(cluster_id), K_(force_sql_renew));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObPartitionLocationCache& loc_cache_;

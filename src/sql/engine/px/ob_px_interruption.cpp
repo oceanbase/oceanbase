@@ -204,3 +204,11 @@ void ObDfoInterruptIdGen::inc_seqnum(common::ObInterruptibleTaskID& px_interrupt
   uint64_t last = px_interrupt_id.last_;
   px_interrupt_id.last_ = (last & (0xffffffff << 12)) | (((last & 0xfff) + 1) & 0xfff);
 }
+int64_t ObPxInterruptID::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(query_interrupt_id), K_(px_interrupt_id));
+  J_OBJ_END();
+  return pos;
+}

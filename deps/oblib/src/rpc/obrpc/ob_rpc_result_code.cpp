@@ -13,3 +13,11 @@
 #include "rpc/obrpc/ob_rpc_result_code.h"
 
 OB_SERIALIZE_MEMBER(oceanbase::obrpc::ObRpcResultCode, rcode_, msg_, warnings_)
+int64_t ObRpcResultCode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("code", rcode_, "msg", msg_, K_(warnings));
+  J_OBJ_END();
+  return pos;
+}

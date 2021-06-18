@@ -44,7 +44,7 @@ class ObRowCacheKey : public common::ObIKVCacheKey {
     return data_version_;
   }
   bool is_valid() const;
-  TO_STRING_KV(K_(table_id), K_(file_id), K_(rowkey_size), K_(data_version), K_(table_type), K_(rowkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t table_id_;
@@ -118,7 +118,7 @@ class ObRowCacheValue : public common::ObIKVCacheValue {
   {
     return column_ids_;
   }
-  TO_STRING_KV(KP_(obj_array), K_(size), K_(block_id), KP_(column_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObObj* obj_array_;
@@ -147,7 +147,7 @@ struct ObRowValueHandle {
     row_value_ = NULL;
     handle_.reset();
   }
-  TO_STRING_KV(KP(row_value_), K(handle_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObRowCache : public common::ObKVCache<ObRowCacheKey, ObRowCacheValue> {

@@ -29,7 +29,7 @@ struct ObMicroBlockIndexHandle {
   int search_blocks(const common::ObStoreRowkey& rowkey, blocksstable::ObMicroBlockInfo& info,
       const common::ObIArray<ObRowkeyObjComparer*>* cmp_funcs = nullptr);
   int get_block_index_mgr(const blocksstable::ObMicroBlockIndexMgr*& block_idx_mgr);
-  TO_STRING_KV(K_(table_id), K_(block_ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t table_id_;
   blocksstable::ObMacroBlockCtx block_ctx_;
   const blocksstable::ObMicroBlockIndexMgr* block_index_mgr_;

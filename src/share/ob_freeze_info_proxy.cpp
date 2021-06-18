@@ -32,6 +32,22 @@ using namespace common::sqlclient;
 using namespace storage;
 using namespace share;
 namespace share {
+int64_t ObSimpleFrozenStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_FROZEN_VERSION, frozen_version_, K_(frozen_timestamp), K_(cluster_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TenantIdAndSchemaVersion::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
 const char* ObFreezeInfoProxy::OB_ALL_FREEZE_INFO_TNAME = "__all_freeze_info";
 const char* ObFreezeInfoProxy::FROZEN_VERSION_CNAME = "frozen_version";
 const char* ObFreezeInfoProxy::FROZEN_TIMESTAMP_CNAME = "frozen_timestamp";

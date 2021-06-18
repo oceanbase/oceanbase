@@ -20,6 +20,62 @@ using namespace share::schema;
 using namespace share;
 using namespace blocksstable;
 namespace storage {
+int64_t ObMacroEndkey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(obj_ptr), K_(obj_cnt), K_(iter_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroEndkeyComparor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ret));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableRangePara::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC_(sstable), K_(start), K_(end));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroEndkeyIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(range_para), K_(cur_idx), K_(skip_cnt), K_(iter_idx), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionParallelRanger::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC(store_range_), K_(endkey_iters), KP_(last_macro_endkey), K_(total_endkey_cnt), K_(sample_cnt),K_(parallel_target_count), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRangeSplitInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(store_range), K_(range_paras), K_(total_row_count), K_(total_size), K_(parallel_target_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionRangeSpliter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(parallel_ranger));
+  J_OBJ_END();
+  return pos;
+}
 
 ObMacroEndkeyIterator::ObMacroEndkeyIterator()
     : range_para_(), cur_idx_(0), skip_cnt_(0), iter_idx_(0), is_inited_(false)

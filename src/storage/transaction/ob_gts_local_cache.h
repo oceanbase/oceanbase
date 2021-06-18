@@ -61,7 +61,7 @@ class ObGTSLocalCache {
   int update_latest_srr(const MonotonicTs latest_srr);
   int update_base_ts(const int64_t base_ts);
 
-  TO_STRING_KV(K_(srr), K_(gts), K_(local_trans_version), K_(barrier_ts), K_(latest_srr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // send rpc request timestamp

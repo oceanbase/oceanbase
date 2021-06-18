@@ -19,6 +19,14 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObFetchLogTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(timestamp), K_(partition_key), K_(server), K_(cluster_id), K_(start_log_id), K_(end_log_id),K_(fetch_type), K_(proposal_id), K_(network_limit));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObFetchLogTask::init(const common::ObPartitionKey& partition_key, const common::ObAddr& server,
     const int64_t cluster_id, const uint64_t start_log_id, const uint64_t end_log_id, const ObFetchLogType fetch_type,

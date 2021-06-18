@@ -17,6 +17,22 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObDFMParseCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("parsed len", static_cast<int64_t>(cur_ch_ - fmt_str_), "remain chars", ObString(remain_len_, cur_ch_),K_(expected_elem_flag), K_(is_matching_by_expected_len));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDFMElem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("elem_flag", get_elem_name(), K_(offset), K_(is_single_dot_before), K_(upper_case_mode));
+  J_OBJ_END();
+  return pos;
+}
 
 // do not define duplicate pattern
 const ObTimeConstStr ObDFMFlag::PATTERN[ObDFMFlag::MAX_FLAG_NUMBER] = {

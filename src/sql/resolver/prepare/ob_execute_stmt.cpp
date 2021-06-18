@@ -18,4 +18,12 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 namespace oceanbase {
 namespace sql {}  // namespace sql
+int64_t ObExecuteStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_SQL_ID, prepare_id_, N_STMT_TYPE, prepare_type_, N_PARAM, params_);
+  J_OBJ_END();
+  return pos;
+}
 }  // namespace oceanbase

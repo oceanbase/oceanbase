@@ -75,7 +75,7 @@ class ObSSTableChecksumUpdateTask : public common::ObDLinkBase<ObSSTableChecksum
   {
     return add_timestamp_;
   }
-  TO_STRING_KV(K_(pkey), K_(sstable_id), K_(sstable_type), K_(is_remove));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey pkey_;

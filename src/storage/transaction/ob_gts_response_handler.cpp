@@ -117,3 +117,11 @@ void ObGtsResponseTaskFactory::free(ObGtsResponseTask* task)
     (void)ATOMIC_FAA(&free_count_, 1);
   }
 }
+int64_t ObGtsResponseTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(queue_index), K_(ts_type));
+  J_OBJ_END();
+  return pos;
+}

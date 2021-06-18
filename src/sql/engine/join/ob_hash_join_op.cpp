@@ -25,6 +25,22 @@ namespace oceanbase {
 using namespace omt;
 using namespace common;
 namespace sql {
+int64_t ObHashJoinOp::HashTableCell::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stored_row), K(static_cast<void*>(next_tuple_)));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHashJoinOp::HistItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(hash_value), K(static_cast<void*>(store_row_)));
+  J_OBJ_END();
+  return pos;
+}
 
 ObHashJoinSpec::ObHashJoinSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
     : ObJoinSpec(alloc, type),

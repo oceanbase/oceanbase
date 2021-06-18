@@ -18,6 +18,14 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObLogConflictRowFetcher::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(index_tid), K_(only_data_table), K_(conflict_exprs), K_(access_exprs));
+  J_OBJ_END();
+  return pos;
+}
 int ObLogConflictRowFetcher::allocate_exchange_post(AllocExchContext* ctx)
 {
   int ret = OB_SUCCESS;

@@ -24,6 +24,22 @@ using namespace oceanbase::common;
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObPxWorkNotifier::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start_worker_count), K_(finish_worker_count), K_(expect_worker_count), K_(tid_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxSqcHandler::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(reserved_px_thread_count), KP_(notifier), K_(exec_ctx), K_(des_phy_plan),K_(sqc_init_args), KP_(sub_coord));
+  J_OBJ_END();
+  return pos;
+}
 
 REGISTER_CREATOR(ObPxSqcHandlerFactory, ObPxSqcHandler, ObPxSqcHandler, 0);
 

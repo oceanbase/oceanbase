@@ -22,6 +22,22 @@ namespace oceanbase {
 using namespace common;
 
 namespace sql {
+int64_t ObHashDistinct::ObHashDistinctCtx::HashRow::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stored_row), K(static_cast<void*>(next_tuple_)));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHashDistinct::ObHashDistinctCtx::HashTable::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(nbuckets), K_(buf_cnt), K_(cur));
+  J_OBJ_END();
+  return pos;
+}
 
 ObHashDistinct::ObHashDistinctCtx::ObHashDistinctCtx(ObExecContext& exec_ctx)
     : ObPhyOperatorCtx(exec_ctx),

@@ -49,7 +49,7 @@ class ObRunFile {
     int64_t curr_run_size_;
     RunTrailer() : magic_number_(MAGIC_NUMBER), bucket_idx_(-1), prev_run_trailer_pos_(-1), curr_run_size_(0)
     {}
-    TO_STRING_KV(K_(bucket_idx), K_(curr_run_size));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   struct RunBlock : public common::ObFileBuffer {
     static const int64_t BLOCK_SIZE = 2 * 1024 * 1024LL;
@@ -63,7 +63,7 @@ class ObRunFile {
     void free_buffer();
     bool need_read_next_block() const;
     bool is_end_of_run() const;
-    TO_STRING_KV(K_(run_end_offset), K_(block_offset), K_(block_data_size), K_(next_row_pos));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   private:

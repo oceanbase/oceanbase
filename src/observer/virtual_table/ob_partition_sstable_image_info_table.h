@@ -45,9 +45,7 @@ struct SSStoreVersionInfo {
         rewrite_macro_old_micro_block_count_(0),
         rewrite_macro_total_micro_block_count_(0)
   {}
-  TO_STRING_KV(K_(version), K_(ss_store_count), K_(macro_block_count), K_(use_old_macro_block_count),
-      K_(merged_ss_store_count), K_(modified_ss_store_count), K_(rewrite_macro_old_micro_block_count),
-      K_(rewrite_macro_total_micro_block_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   inline int compare(const SSStoreVersionInfo& rhs) const
   {

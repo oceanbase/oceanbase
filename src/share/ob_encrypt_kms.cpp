@@ -36,3 +36,11 @@ bool ObKmsClient::is_sm_scene()
   bool ret = false;
   return ret;
 }
+int64_t ObKmsResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key_version), K_(key_expired_time));
+  J_OBJ_END();
+  return pos;
+}

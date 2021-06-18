@@ -70,7 +70,7 @@ class RowLeaderBalanceStat {
   {
     return map_.map_ + (1 + row_idx_) * map_.col_size_;
   }
-  TO_STRING_KV(K_(row_idx), K_(row_unit));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   struct UnitCounter {
@@ -82,7 +82,7 @@ class RowLeaderBalanceStat {
     uint64_t unit_id_;
     int64_t accumulated_count_;
     int64_t current_count_;
-    TO_STRING_KV(K_(unit_id), K_(accumulated_count), K_(current_count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   const common::ObIArray<UnitCounter>& get_unit() const
   {

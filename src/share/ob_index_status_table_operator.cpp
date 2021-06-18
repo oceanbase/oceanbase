@@ -186,3 +186,11 @@ int ObIndexStatusTableOperator::report_build_index_status(const uint64_t index_t
   }
   return ret;
 }
+int64_t ObIndexStatusTableOperator::ObBuildIndexStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_status), K_(ret_code), K_(role));
+  J_OBJ_END();
+  return pos;
+}

@@ -29,7 +29,14 @@ struct ObDtlMsgHeader {
   {
     return type_ == (uint16_t)ObDtlMsgType::DRAIN_DATA_FLOW;
   }
-  TO_STRING_KV(K_(hlen), K_(type), K_(nbody), K_(checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(hlen), K_(type), K_(nbody), K_(checksum));
+    J_OBJ_END();
+    return pos;
+  }
   NEED_SERIALIZE_AND_DESERIALIZE;
   uint16_t hlen_;
   uint16_t type_;

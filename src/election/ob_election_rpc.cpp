@@ -22,6 +22,14 @@ using namespace obrpc;
 using namespace election;
 
 namespace obrpc {
+int64_t ObElectionRpcResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), K_(send_timestamp));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObElectionRpcResult, status_, send_timestamp_);
 

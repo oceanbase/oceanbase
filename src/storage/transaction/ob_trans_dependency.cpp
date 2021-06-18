@@ -17,6 +17,14 @@
 namespace oceanbase {
 
 namespace transaction {
+int64_t ObPartTransCtxDependencyWrap::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(prev_trans_arr), K_(next_trans_arr), K_(prev_trans_commit_count));
+  J_OBJ_END();
+  return pos;
+}
 int ObPartTransCtxDependencyWrap::init(ObPartTransCtx* ctx)
 {
   int ret = OB_SUCCESS;

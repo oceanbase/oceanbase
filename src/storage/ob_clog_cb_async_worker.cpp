@@ -18,6 +18,14 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace storage {
+int64_t ObCLogCallbackAsyncTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pg_key_), K(partition_key_), K(log_type_), K(log_id_), K(is_physical_drop_));
+  J_OBJ_END();
+  return pos;
+}
 int ObCLogCallbackAsyncWorker::init(ObPartitionService* ptt_svr)
 {
   int ret = OB_SUCCESS;

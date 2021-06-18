@@ -62,8 +62,7 @@ class ObBatchSubmitCtx : public BatchSubmitCtxHashValue {
   int try_split();
   int flush_cb(const ObLogCursor& base_log_cursor);
   int ack_log(const common::ObAddr& server, const ObBatchAckArray& batch_ack_array);
-  TO_STRING_KV(K(trans_id_), K(partition_array_), K(log_info_array_), K(log_persist_size_array_), K(member_list_),
-      K(replica_num_), K(leader_), K(self_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int make_cursor_array_(const ObLogCursor& base_log_cursor);

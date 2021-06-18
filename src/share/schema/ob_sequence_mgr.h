@@ -61,7 +61,7 @@ class ObSequenceHashWrapper {
   {
     return sequence_name_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(database_id), K_(sequence_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t tenant_id_;

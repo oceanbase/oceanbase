@@ -24,6 +24,14 @@ using namespace common;
 using rpc::frame::ObReqTransport;
 using rpc::frame::SPAlloc;
 namespace obrpc {
+int64_t ObLogRpcProxyBuffer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_PCODE, pcode_, N_DATA_LEN, len_, N_BUF, ((uint64_t)data_));
+  J_OBJ_END();
+  return pos;
+}
 DEFINE_SERIALIZE(ObLogRpcProxy::Buffer)
 {
   int ret = OK_;

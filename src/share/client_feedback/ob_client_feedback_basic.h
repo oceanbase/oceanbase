@@ -235,7 +235,14 @@ class ObAbstractFeedbackObject {
     return type_;
   }
 
-  TO_STRING_KV("type", get_feedback_element_type_str(type_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV("type", get_feedback_element_type_str(type_));
+    J_OBJ_END();
+    return pos;
+  }
 
   protected:
   // when MIN_FB_ELE == type_ means this class just a common obj without ObFeedbackElementType

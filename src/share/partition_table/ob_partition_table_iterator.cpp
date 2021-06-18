@@ -27,6 +27,38 @@
 
 namespace oceanbase {
 namespace share {
+int64_t ObPTPartPartitionIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(pt_table_id), K_(pt_partition_id), K_(prefetch_partitions), K_(prefetch_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionTableIdIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(tenant_iter), K_(pt_tables), K_(pt_table_id), K_(pt_partition_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFullPartitionTableIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(part_iter), K_(pt_part_iter));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFullMetaTableIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(part_iter), K_(tenant_iter), K_(pt_table));
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace common;
 using namespace schema;

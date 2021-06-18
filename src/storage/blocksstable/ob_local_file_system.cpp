@@ -22,6 +22,14 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace blocksstable {
+int64_t ObLocalFileSystem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("type", "LOCAL");
+  J_OBJ_END();
+  return pos;
+}
 
 //------------------ Implementation of ObLocalStorageFile -----------------------//
 ObLocalStorageFile::ObLocalStorageFile() : ObStorageFile(), file_system_(nullptr)

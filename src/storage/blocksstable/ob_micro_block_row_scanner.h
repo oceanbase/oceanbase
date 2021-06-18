@@ -253,8 +253,7 @@ class ObMultiVersionMicroBlockMinorMergeRowScanner : public ObIMicroBlockRowScan
   {
     reset();
   }
-  TO_STRING_KV(K_(macro_id), K_(is_last_multi_version_row), K_(is_row_queue_ready), "row_queue_count",
-      row_queue_.count(), K_(start), K_(current), K_(last));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row) override;

@@ -650,3 +650,19 @@ void ObTableProtector::release(ObITable& table)
     LOG_ERROR("failed to release table", K(tmp_ret), K(table));
   }
 }
+int64_t ObTableHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(table_), K(table_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObITable::TableKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_type), K_(pkey), K_(table_id), K_(trans_version_range), K_(log_ts_range), K_(version));
+  J_OBJ_END();
+  return pos;
+}

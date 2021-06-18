@@ -59,7 +59,7 @@ struct AutoincKey {
     return hash_val;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(column_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -94,15 +94,7 @@ struct AutoincParam {
         auto_increment_cache_size_(DEFAULT_INCREMENT_CACHE_SIZE)
   {}
 
-  TO_STRING_KV("tenant_id", tenant_id_, "autoinc_table_id", autoinc_table_id_, "autoinc_first_part_num",
-      autoinc_first_part_num_, "autoinc_table_part_num", autoinc_table_part_num_, "autoinc_col_id", autoinc_col_id_,
-      "autoinc_col_index", autoinc_col_index_, "autoinc_update_col_index", autoinc_update_col_index_,
-      "autoinc_col_type", autoinc_col_type_, "total_value_count_", total_value_count_, "autoinc_desired_count",
-      autoinc_desired_count_, "autoinc_old_value_index", autoinc_old_value_index_, "autoinc_increment",
-      autoinc_increment_, "autoinc_offset", autoinc_offset_, "curr_value_count", curr_value_count_,
-      "global_value_to_sync", global_value_to_sync_, "value_to_sync", value_to_sync_, "sync_flag", sync_flag_,
-      "is_ignore", is_ignore_, "autoinc_intervals_count", autoinc_intervals_count_, "part_level", part_level_,
-      "paritition key", pkey_, "auto_increment_cache_size", auto_increment_cache_size_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // pay attention to schema changes
   uint64_t tenant_id_;

@@ -4143,3 +4143,123 @@ int ObDMLStmt::check_pseudo_column_exist(ObItemType type, ObPseudoColumnRawExpr*
   }
   return ret;
 }
+int64_t ObDMLStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_STMT_TYPE, ((int)stmt_type_), N_TABLE, table_items_, N_TABLE, CTE_table_items_, N_PARTITION_EXPR,part_expr_items_, N_COLUMN, column_items_, N_COLUMN, nextval_sequence_ids_, N_COLUMN, currval_sequence_ids_,N_WHERE, condition_exprs_, N_ORDER_BY, order_items_, N_LIMIT, limit_count_expr_, N_OFFSET, limit_offset_expr_,N_QUERY_HINT, stmt_hint_, N_SUBQUERY_EXPRS, subquery_exprs_, N_USER_VARS, user_var_exprs_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDMLStmt::PartExprItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(index_tid), KPC_(part_expr), KPC_(subpart_expr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDMLStmt::PartExprArray::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(index_tid));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableAssignment::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), N_ASSIGN, assignments_, K_(is_update_part_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMaterializedViewContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(base_table_id), K_(depend_table_id), K_(select_cols), K_(base_select_cols), K_(depend_select_cols),K_(base_join_cols), K_(depend_join_cols), K_(order_cols));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAssignment::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_COLUMN, column_expr_, N_EXPR, expr_, K_(base_table_id), K_(base_column_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SemiInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(join_type), K_(semi_id), K_(left_table_ids), K_(right_table_id), K_(semi_conditions));
+  J_OBJ_END();
+  return pos;
+}
+int64_t JoinedTable::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TID, table_id_, N_TABLE_TYPE, static_cast<int32_t>(type_), N_JOIN_TYPE, ob_join_type_str(joined_type_),N_LEFT_TABLE, left_table_, N_RIGHT_TABLE, right_table_, "join_condition", join_conditions_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t FromItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TID, table_id_, N_IS_JOIN, is_joined_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ColumnItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_CID, column_id_, N_TID, table_id_, N_COLUMN, column_name_, K_(auto_filled_timestamp), N_DEFAULT_VALUE,default_value_, K_(base_tid), K_(base_cid), N_EXPR, expr_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUnpivotInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_include_null), K_(old_column_count), K_(unpivot_column_count), K_(for_column_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TransposeItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(old_column_count), K_(is_unpivot), K_(is_incude_null), K_(aggr_pairs), K_(for_columns), K_(in_pairs),K_(unpivot_columns), K_(alias_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TransposeItem::InPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(exprs), K_(pivot_expr_alias), K_(column_names));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TransposeItem::ForPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(column_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TransposeItem::AggrPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC_(expr), K_(alias_name));
+  J_OBJ_END();
+  return pos;
+}

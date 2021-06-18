@@ -17,6 +17,14 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObCLogItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(host), KP_(buffer_task), KP_(batch_buffer));
+  J_OBJ_END();
+  return pos;
+}
 
 ObCLogItem::ObCLogItem() : host_(NULL), buffer_task_(NULL), batch_buffer_(NULL)
 {}

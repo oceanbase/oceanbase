@@ -15,6 +15,22 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObDynamicThreadInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tid), K_(idx), KP_(pool), K_(is_stop), K_(is_alive), K_(error_thread));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDynamicThreadPool::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(is_stop), K_(thread_num), K_(need_idle), K_(start_thread_num), K_(stop_thread_num),"left_task", task_queue_.get_total());
+  J_OBJ_END();
+  return pos;
+}
 
 ObDynamicThreadInfo::ObDynamicThreadInfo()
     : tid_(-1), idx_(-1), pool_(NULL), is_stop_(false), is_alive_(false), error_thread_(false)

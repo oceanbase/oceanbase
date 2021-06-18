@@ -25,6 +25,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObSqlExpression::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(infix_expr), K_(post_expr), K_(gen_infix_expr));
+  J_OBJ_END();
+  return pos;
+}
 ObSqlExpression::ObSqlExpression(common::ObIAllocator& allocator, int64_t item_count)
     : inner_alloc_(allocator),
       post_expr_(allocator, item_count),

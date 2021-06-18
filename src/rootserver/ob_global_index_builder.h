@@ -100,7 +100,7 @@ struct PartitionUniqueStat {
     pkey_.reset();
     unique_check_stat_ = UCS_INVALID;
   }
-  TO_STRING_KV(K_(pkey), K_(unique_check_stat));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObPartitionKey pkey_;
   UniqueCheckStat unique_check_stat_;
 };
@@ -122,7 +122,7 @@ struct PartitionColChecksumStat {
     col_checksum_stat_ = CCS_INVALID;
     snapshot_ = -1;
   }
-  TO_STRING_KV(K_(pkey), K_(pgkey), K_(col_checksum_stat), K_(snapshot));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObPartitionKey pkey_;
   ObPartitionKey pgkey_;
   ColChecksumStat col_checksum_stat_;
@@ -146,7 +146,7 @@ enum AllReplicaSSTableStat {
 struct PartitionSSTableBuildStat {
   PartitionSSTableBuildStat() : pkey_(), copy_multi_replica_stat_(CMRS_INVALID)
   {}
-  TO_STRING_KV(K(pkey_), K(copy_multi_replica_stat_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey pkey_;
   CopyMultiReplicaStat copy_multi_replica_stat_;
 };
@@ -171,8 +171,7 @@ struct ObGlobalIndexTask {
   int get_partition_col_checksum_stat(
       const common::ObPartitionKey& pkey, PartitionColChecksumStat*& partition_col_checksum_stat);
 
-  TO_STRING_KV(K(tenant_id_), K(data_table_id_), K(index_table_id_), K(status_), K(snapshot_),
-      K(major_sstable_exist_reply_ts_), K(checksum_snapshot_), K(schema_version_), K_(retry_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t MAX_RETRY_CNT = 3;
 
   uint64_t tenant_id_;
@@ -252,7 +251,7 @@ class ObGlobalIndexBuilder : public ObRsReentrantThread, public sql::ObIndexSSTa
       pkey_.reset();
       server_.reset();
     }
-    TO_STRING_KV(K(pkey_), K(server_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int set_server(const common::ObAddr& server)
     {
       int ret = common::OB_SUCCESS;

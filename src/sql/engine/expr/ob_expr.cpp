@@ -23,6 +23,38 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObDatumMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(cs_type), K_(scale), K_(precision));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExpr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("type", get_type_name(type_), K_(datum_meta), K_(obj_meta), K_(obj_datum_map), KP_(eval_func),KP_(inner_functions), K_(inner_func_cnt), K_(arg_cnt), K_(parent_cnt), K_(frame_idx), K_(datum_off),K_(res_buf_off), K_(res_buf_len), K_(expr_ctx_id), K_(extra), KP(this));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDatumObj::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDatumObjParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(accuracy), K_(res_flags), K_(datum), K_(meta));
+  J_OBJ_END();
+  return pos;
+}
 
 // ObPrecision and ObLengthSemantics are union field in ObDatumMeta,
 // need to be same size to make sure serialization works.

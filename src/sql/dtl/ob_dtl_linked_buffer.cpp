@@ -18,6 +18,22 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 namespace dtl {
+int64_t ObDtlDfoKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server_id), K_(px_sequence_id), K_(qc_id), K_(dfo_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlLinkedBuffer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(size), K_(pos), K_(is_data_msg), K_(seq_no), K_(tenant_id), K_(allocated_chid), K_(is_eof),K_(timeout_ts), K(msg_type_), K_(flags), K(is_bcast()));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObDtlDfoKey, server_id_, px_sequence_id_, qc_id_, dfo_id_);
 

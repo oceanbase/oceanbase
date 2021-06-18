@@ -21,6 +21,38 @@ using namespace oceanbase::share;
 using namespace oceanbase::storage;
 namespace oceanbase {
 namespace sql {
+int64_t ObRoutePolicyCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(policy_type_), K(consistency_level_), K(is_proxy_priority_hit_support_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRoutePolicy::ReplicaAttribute::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pos_type_), K(merge_status_), K(zone_type_), K(zone_status_), K(start_service_time_),K(server_stop_time_), K(server_status_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRoutePolicy::CandidateReplica::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server_), K(role_), K(sql_port_), K(replica_type_), K(attr_), K(is_filter_), K(replica_idx_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRoutePolicy::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(local_addr_), K(local_locality_), K(server_locality_array_), K(has_refresh_locality_),K(has_readonly_zone_), K(is_inited_));
+  J_OBJ_END();
+  return pos;
+}
 int ObRoutePolicy::weak_sort_replicas(ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx& ctx)
 {
   int ret = OB_SUCCESS;

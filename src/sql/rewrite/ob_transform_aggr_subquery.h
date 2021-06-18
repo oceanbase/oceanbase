@@ -51,8 +51,7 @@ class ObTransformAggrSubquery : public ObTransformRule {
     int64_t pullup_flag_;                         // the methods uesd when pulling up the ja query
     ObRawExpr* not_null_expr_;                    //  not null expr of subquery if corelated join happened
 
-    TO_STRING_KV(
-        K_(ja_query_ref), K_(query_refs), K_(nested_conditions), K_(is_null_prop), K_(pullup_flag), K_(not_null_expr));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   int transform_with_aggregation_first(ObDMLStmt*& stmt, bool& trans_happened);

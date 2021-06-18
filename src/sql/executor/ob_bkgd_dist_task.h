@@ -112,7 +112,7 @@ class ObSchedBKGDDistTask {
            pkey_.is_valid() && dest_.is_valid() && !serialized_task_.empty();
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(abs_timeout_us), K_(pkey), K_(dest), K(serialized_task_.length()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t get_tenant_id() const
   {

@@ -35,7 +35,7 @@ class ObTenantPartitionContainer {
       tablegroup_id_ = common::OB_INVALID_ID;
     }
     int assign(const Partition& other);
-    TO_STRING_KV(K_(partition_info), K_(tablegroup_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     ObPartitionInfo partition_info_;

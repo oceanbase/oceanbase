@@ -22,6 +22,22 @@ using namespace common;
 using namespace lib;
 using namespace clog;
 namespace archive {
+int64_t LogBufPackage::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(cur_), K(end_), K(rbuf_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObArchiveEntryIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_inited_), K(need_limit_bandwidth_), KP(file_store_), K(pg_key_), K(real_tenant_id_), K(file_id_),K(cur_offset_), K(cur_block_start_offset_), K(cur_block_end_offset_), KP(buf_cur_), KP(buf_end_), KP(block_end_),K(rbuf_), K(dd_buf_), K(origin_buf_), K(timeout_), K(io_cost_), K(io_count_), K(limit_bandwidth_cost_),K(has_load_entire_file_));
+  J_OBJ_END();
+  return pos;
+}
 LogBufPackage::LogBufPackage() : cur_(NULL), end_(NULL), rbuf_()
 {}
 

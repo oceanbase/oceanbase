@@ -17,6 +17,22 @@
 
 namespace oceanbase {
 namespace transaction {
+int64_t WaitTransEndTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(trans_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t CallbackTransTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(trans_id), K_(prev_trans_id), K_(status));
+  J_OBJ_END();
+  return pos;
+}
 
 void WaitTransEndTask::reset()
 {

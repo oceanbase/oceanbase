@@ -145,7 +145,7 @@ class ObPrimaryZoneUtil {
       zone_score_ = INT64_MAX;
       region_score_ = INT64_MAX;
     }
-    TO_STRING_KV(K(zone_region_), K(zone_score_), K(region_score_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     schema::ObZoneRegion zone_region_;
     int64_t zone_score_;
@@ -289,7 +289,7 @@ class ObRawPrimaryZoneUtil {
     {
       return zone_ == that.zone_ && zone_score_ == that.zone_score_;
     }
-    TO_STRING_KV(K(zone_), K(zone_score_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObZone zone_;
     // a smaller value means a higher priority
     int64_t zone_score_;
@@ -319,7 +319,7 @@ class ObRawPrimaryZoneUtil {
     {
       return region_ == that.region_ && region_score_ == that.region_score_;
     }
-    TO_STRING_KV(K(region_), K(region_score_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObRegion region_;
     // a smaller value means a higher priority
     int64_t region_score_;

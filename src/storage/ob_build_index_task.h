@@ -205,8 +205,7 @@ class ObUniqueIndexChecker {
       return NULL != data_table_schema_ && NULL != index_schema_ && snapshot_version_ > 0 && NULL != col_ids_ &&
              NULL != output_projector_ && NULL != tables_handle_;
     }
-    TO_STRING_KV(KP_(data_table_schema), KP_(index_schema), K_(snapshot_version), KP_(col_ids), KP_(output_projector),
-        KP_(tables_handle));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     const share::schema::ObTableSchema* data_table_schema_;
     const share::schema::ObTableSchema* index_schema_;
     int64_t snapshot_version_;

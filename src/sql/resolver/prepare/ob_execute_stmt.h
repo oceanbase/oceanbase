@@ -56,7 +56,7 @@ class ObExecuteStmt : public ObCMDStmt {
     return params_.push_back(param);
   }
 
-  TO_STRING_KV(N_SQL_ID, prepare_id_, N_STMT_TYPE, prepare_type_, N_PARAM, params_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObPsStmtId prepare_id_;

@@ -39,7 +39,7 @@ class ObAggregateDistinctItem {
   {
     return !operator==(other);
   }
-  TO_STRING_KV(K_(group_id), K_(col_idx), KP_(cells), K_(cs_type_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t group_id_;
   int64_t col_idx_;
   common::ObCollationType cs_type_;
@@ -173,7 +173,7 @@ class ObAggregateFunction {
     common::ObRowStore::StoredRow* row_;
     ObAggCellCtx** ctx_;
 
-    TO_STRING_KV(K(row_), KP(ctx_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ExprCtxIdx {
@@ -182,7 +182,7 @@ class ObAggregateFunction {
     const ObAggregateExpression* expr_;
     int64_t ctx_idx_;
 
-    TO_STRING_KV(K(expr_), K(ctx_idx_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   public:

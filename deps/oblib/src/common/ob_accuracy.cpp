@@ -404,7 +404,13 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY_OLD[ObMaxType] = {
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH_OLD),                      // long_text, todo
     ObAccuracy(64, 0)                                            // bit
 };
-
+int64_t ObAccuracy::to_string(char* buf, const int64_t buf_len) const{
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(N_LENGTH, length_, N_PRECISION, precision_, N_SCALE, scale_);
+    J_OBJ_END();
+    return pos;
+}
 OB_SERIALIZE_MEMBER_SIMPLE(ObAccuracy, accuracy_);
 
 }  // namespace common

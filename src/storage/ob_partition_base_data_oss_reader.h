@@ -90,8 +90,7 @@ class ObMacroBlockStorageReader : public ObDynamicThreadTask {
     is_scheduled_ = true;
   }
   void reset();
-  TO_STRING_KV(K_(is_inited), K_(args), K_(data_size), K_(result_code), K_(is_data_ready), K_(backup_pair),
-      K_(backup_index_tid), KP_(meta), K_(data), K_(init_ts), K_(finish_ts), "limit time", finish_ts_ - init_ts_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int wait_finish();

@@ -85,7 +85,7 @@ class ObGranuleTaskInfo {
   {}
   virtual ~ObGranuleTaskInfo()
   {}
-  TO_STRING_KV(K_(ranges), K_(partition_id), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObSEArray<common::ObNewRange, 16> ranges_;
@@ -148,8 +148,7 @@ class ObTaskInfo {
     {
       return partition_key_.is_valid() && common::OB_INVALID_TIMESTAMP != renew_time_;
     }
-    TO_STRING_KV(K_(partition_key), K_(depend_table_keys), K_(scan_ranges), K_(part_key_ref_id), K_(value_ref_id),
-        K_(renew_time), KPC_(row_store));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObPartitionKey partition_key_;
     common::ObSEArray<ObPartitionKey, 1> depend_table_keys_;
     common::ObSEArray<common::ObNewRange, 1> scan_ranges_;  // scan query ranges
@@ -186,7 +185,7 @@ class ObTaskInfo {
       return bool_ret;
     }
     int assign(const ObRangeLocation& location);
-    TO_STRING_KV(K_(part_locs), K_(server));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ModulePageAllocator inner_alloc_;
     common::ObFixedArray<ObTaskInfo::ObPartLoc, common::ObIAllocator> part_locs_;
     common::ObAddr server_;
@@ -359,8 +358,7 @@ class ObTaskInfo {
     retry_times_++;
   }
 
-  TO_STRING_KV(N_TASK_LOC, task_location_, K_(range_location), K_(location_idx), K_(location_idx_list), K_(state),
-      K_(child_task_results), K_(slice_count_pos), K_(background), K_(retry_times), K_(location_idx_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // disallow copy

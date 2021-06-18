@@ -48,7 +48,7 @@ struct ObCLogCallbackAsyncTask {
     }
   }
 
-  TO_STRING_KV(K(pg_key_), K(partition_key_), K(log_type_), K(log_id_), K(is_physical_drop_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObPGKey pg_key_;

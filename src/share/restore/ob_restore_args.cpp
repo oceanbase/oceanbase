@@ -189,3 +189,27 @@ int ObRestoreArgs::trans_from_backup_schema_id(const uint64_t backup_schema_id, 
   }
   return ret;
 }
+int64_t ObRestoreArgs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id_), K_(locality), K_(primary_zone), K_(pool_list), K_(tcp_invited_nodes),K_(base_data_version), K_(curr_data_version), K_(tenant_id), K_(restore_timeu), K_(backup_schema_id),K_(partition_id), K_(schema_id_list), K_(sql_info), K_(schema_version), K_(uri_header), K_(cluster_name),K_(storage_info), K_(schema_id_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreArgs::OrignalSQLInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(backup_table_id), K_(backup_index_id), K_(backup_tablegroup_id), K_(backup_table_name),K_(backup_index_name), K_(backup_database_name), K_(backup_tablegroup_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSchemaIdPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_id), K_(backup_schema_id));
+  J_OBJ_END();
+  return pos;
+}

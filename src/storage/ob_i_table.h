@@ -133,7 +133,7 @@ class ObITable {
     bool is_table_log_ts_comparable() const;
     uint64_t hash() const;
     void reset();
-    TO_STRING_KV(K_(table_type), K_(pkey), K_(table_id), K_(trans_version_range), K_(log_ts_range), K_(version));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     ObITable::TableType table_type_;
     common::ObPartitionKey pkey_;
@@ -427,7 +427,7 @@ class ObTableHandle final {
   bool is_valid() const;
   void reset();
   int get_sstable_schema_version(int64_t& schema_version) const;
-  TO_STRING_KV(KP(table_), K(table_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   storage::ObITable* table_;

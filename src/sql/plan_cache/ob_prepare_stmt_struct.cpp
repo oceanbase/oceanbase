@@ -19,6 +19,38 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObPsSqlKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(db_id), K_(ps_sql));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPsStmtItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_count), K_(db_id), K_(ps_sql), K_(stmt_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TypeInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(relation_name), K_(package_name), K_(type_name), K_(elem_type), K_(is_elem_type), K_(is_basic_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPsSessionInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_id), K_(stmt_type), K_(num_of_params), K_(ref_cnt), K_(ps_stmt_checksum), K_(inner_stmt_id));
+  J_OBJ_END();
+  return pos;
+}
 int ObPsSqlKey::deep_copy(const ObPsSqlKey& other)
 {
   int ret = OB_SUCCESS;

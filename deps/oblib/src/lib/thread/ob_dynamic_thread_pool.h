@@ -31,7 +31,7 @@ struct ObDynamicThreadInfo {
   bool is_alive_;
   bool error_thread_;  // only record error during start thread
 
-  TO_STRING_KV(K_(tid), K_(idx), KP_(pool), K_(is_stop), K_(is_alive), K_(error_thread));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObDynamicThreadTask {
@@ -61,8 +61,7 @@ class ObDynamicThreadPool : public lib::ThreadPool {
   {
     return task_queue_.get_total();
   }
-  TO_STRING_KV(K_(is_inited), K_(is_stop), K_(thread_num), K_(need_idle), K_(start_thread_num), K_(stop_thread_num),
-      "left_task", task_queue_.get_total());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int check_thread_status();

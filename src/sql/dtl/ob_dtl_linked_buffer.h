@@ -66,7 +66,7 @@ class ObDtlDfoKey {
     return px_sequence_id_;
   }
 
-  TO_STRING_KV(K_(server_id), K_(px_sequence_id), K_(qc_id), K_(dfo_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   static const uint64_t PX_SEQ_MASK = 0x8000000000000000;
@@ -111,8 +111,7 @@ class ObDtlLinkedBuffer : public common::ObLink {
         use_interm_result_(false)
   {}
 
-  TO_STRING_KV(K_(size), K_(pos), K_(is_data_msg), K_(seq_no), K_(tenant_id), K_(allocated_chid), K_(is_eof),
-      K_(timeout_ts), K(msg_type_), K_(flags), K(is_bcast()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObDtlLinkedBuffer* next() const
   {

@@ -41,7 +41,7 @@ struct ObRowkeyColumn {
   {
     return type_;
   }
-  TO_STRING_KV(K_(length), K_(column_id), K_(type), K_(order), K_(fulltext_flag));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t length_;
   uint64_t column_id_;
@@ -101,7 +101,7 @@ class ObRowkeyInfo {
   int reserve(const int64_t capacity);
   bool is_valid() const;
   int64_t get_convert_size() const;
-  TO_STRING_KV("columns", common::ObArrayWrap<ObRowkeyColumn>(columns_, size_), K_(capacity));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int get_column_orders(ObIArray<ObOrderType>& column_orders) const;
   int get_column_ids(ObIArray<uint64_t>& column_ids) const;
   int get_column_ids(ObBitSet<>& column_ids) const;

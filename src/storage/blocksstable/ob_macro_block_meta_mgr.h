@@ -64,7 +64,7 @@ struct ObMajorMacroBlockKey {
   uint64_t hash() const;
   void reset();
   bool operator==(const ObMajorMacroBlockKey& key) const;
-  TO_STRING_KV(K_(table_id), K_(partition_id), K_(data_version), K_(data_seq));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t table_id_;
   int64_t partition_id_;
@@ -84,7 +84,7 @@ class ObMacroBlockMetaHandle {
   {
     return NULL == meta_ctrl_ ? NULL : meta_ctrl_->meta_;
   }
-  TO_STRING_KV(KP_(meta_ctrl));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   friend class ObMacroBlockMetaMgr;

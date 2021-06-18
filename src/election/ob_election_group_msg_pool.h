@@ -168,7 +168,7 @@ class ObEGVoteMsgPool {
   {
     return eg_vote_array_;
   }
-  TO_STRING_KV(K_(eg_prepare_array), K_(eg_vote_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int get_eg_centralized_majority_(common::ObAddr& cur_leader, common::ObAddr& new_leader,

@@ -132,7 +132,14 @@ class MyDTask : public common::IObDedupTask {
     handle_count_++;
     return OB_SUCCESS;
   }
-  TO_STRING_KV(K(""));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(""));
+    J_OBJ_END();
+    return pos;
+  }
   static int64_t handle_count_;
 };
 int64_t MyDTask::handle_count_ = 0;

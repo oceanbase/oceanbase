@@ -31,7 +31,14 @@ struct Key {
   {
     return key_ == other.key_;
   }
-  TO_STRING_KV(K_(key));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(key));
+    J_OBJ_END();
+    return pos;
+  }
   int64_t key_;
 };
 
@@ -50,7 +57,14 @@ struct MacroKey {
   {
     return key_ == other.key_;
   }
-  TO_STRING_KV(K_(key));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(key));
+    J_OBJ_END();
+    return pos;
+  }
   int64_t key_;
 };
 
@@ -68,7 +82,14 @@ struct BadKey {
   {
     return key_ == other.key_;
   }
-  TO_STRING_KV(K_(key));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(key));
+    J_OBJ_END();
+    return pos;
+  }
   int64_t key_;
 };
 
@@ -86,7 +107,14 @@ struct ModKey {
   {
     return key_ == other.key_;
   }
-  TO_STRING_KV(K_(key));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(key));
+    J_OBJ_END();
+    return pos;
+  }
   int64_t key_;
 };
 
@@ -104,7 +132,14 @@ struct Value {
   {
     return !operator==(other);
   }
-  TO_STRING_KV(K_(value));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(value));
+    J_OBJ_END();
+    return pos;
+  }
   int64_t value_;
 };
 

@@ -82,7 +82,7 @@ struct ObRedoTransportOption {
   bool operator==(const ObRedoTransportOption& other) const;
   int append_redo_transport_options_change(const common::ObString& redo_transport_options_str);
   int get_redo_transport_options_str(common::ObSqlString& str) const;
-  TO_STRING_KV(K_(net_timeout), K_(reopen), K_(max_failure), K_(is_sync));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   RedoOptionProfile str_to_redo_transport_options(const char* str);
@@ -99,7 +99,7 @@ struct ObClusterRsAddr {
   void reset();
   bool is_valid() const;
   int assign(const ObClusterRsAddr& other);
-  TO_STRING_KV(K_(cluster_id), K_(addr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int64_t cluster_id_;
@@ -149,9 +149,7 @@ struct ObClusterAddr {
     return common::CLUSTER_VALID == cluster_status_ || common::CLUSTER_DISABLED == cluster_status_;
   }
   bool operator==(const ObClusterAddr& other) const;
-  TO_STRING_KV(K_(cluster_id), K_(cluster_type), K_(cluster_status), K_(timestamp), K_(cluster_name), K_(addr_list),
-      K_(readonly_addr_list), K_(cluster_idx), K_(current_scn), K_(redo_transport_options), K_(protection_level),
-      K_(sync_status), K_(last_hb_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObIArray<ObClusterAddr> ObClusterIAddrList;

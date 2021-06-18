@@ -23,6 +23,22 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObLogLineCache::BlockKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("file_id", v_.file_id_, "ref_cnt", v_.ref_cnt_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogLineCache::Block::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), KP_(lines), K_(token_id), K_(read_size), K_(last_access_timestamp));
+  J_OBJ_END();
+  return pos;
+}
 
 ObLogLineCache::ObLogLineCache()
     : inited_(false),
@@ -414,7 +430,14 @@ struct LRUBlock {
       : block_id_(block_id), last_access_timestamp_(last_access_tstamp)
   {}
 
-  TO_STRING_KV(K_(block_id), K_(last_access_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(block_id), K_(last_access_timestamp));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 struct LRUBlockComp {

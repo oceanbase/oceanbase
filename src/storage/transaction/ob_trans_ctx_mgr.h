@@ -91,8 +91,7 @@ struct ObELRStatSummary {
     end_trans_by_self_count_ = 0;
   }
 
-  TO_STRING_KV(K_(with_dependency_trx_count), K_(without_dependency_trx_count), K_(end_trans_by_prev_count),
-      K_(end_trans_by_checkpoint_count), K_(end_trans_by_self_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t with_dependency_trx_count_;
   uint64_t without_dependency_trx_count_;
@@ -362,9 +361,7 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
     return State::STOPPED == ATOMIC_LOAD(&state_);
   }
 
-  TO_STRING_KV(KP(this), K_(partition), K_(state), K_(ctx_type), K_(read_only_count), K_(active_read_write_count),
-      K_(total_ctx_count), K_(restore_snapshot_version), K_(last_restore_log_id), "uref",
-      ((ObTransCtxType::SCHEDULER == ctx_type_ || !is_inited_) ? -1 : get_uref()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_participant_() const

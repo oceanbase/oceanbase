@@ -177,3 +177,11 @@ void ObMacroMetaReplayMap::destroy()
     is_inited_ = false;
   }
 }
+int64_t ObMacroBlockKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_key), K_(macro_block_id));
+  J_OBJ_END();
+  return pos;
+}

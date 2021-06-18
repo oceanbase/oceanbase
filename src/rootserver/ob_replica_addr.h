@@ -48,7 +48,14 @@ struct ObReplicaAddr {
   {
     return replica_property_.set_memstore_percent(mp);
   }
-  TO_STRING_KV(K_(unit_id), K_(initial_leader), K_(addr), K_(zone), K_(replica_type), K_(replica_property));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(unit_id), K_(initial_leader), K_(addr), K_(zone), K_(replica_type), K_(replica_property));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 // this struct is used to find initial leader for partitions when create table
@@ -69,7 +76,14 @@ struct ObPrimaryZoneReplicaCandidate {
     random_score_ = INT64_MAX;
   }
 
-  TO_STRING_KV(K_(is_full_replica), K_(zone), K_(zone_score), K_(random_score));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(is_full_replica), K_(zone), K_(zone_score), K_(random_score));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 struct ObPrimaryZoneReplicaCmp {

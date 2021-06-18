@@ -26,7 +26,7 @@ class InsertTableInfo {
   {
     reset();
   }
-  TO_STRING_KV(K_(when_conds_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int add_virtual_column_expr(ObColumnExpression* expr)
   {
     return ObSqlExpressionUtil::add_expr_to_list(virtual_column_exprs_, expr);

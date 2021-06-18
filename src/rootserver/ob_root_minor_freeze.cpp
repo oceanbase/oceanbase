@@ -26,6 +26,22 @@ using namespace common;
 using namespace obrpc;
 
 namespace rootserver {
+int64_t ObRootMinorFreeze::MinorFreezeParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server), K(arg));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRootMinorFreeze::ParamsContainer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(params));
+  J_OBJ_END();
+  return pos;
+}
 ObRootMinorFreeze::ObRootMinorFreeze()
     : inited_(false), stopped_(false), rpc_proxy_(NULL), server_manager_(NULL), unit_manager_(NULL), pt_operator_(NULL)
 {}

@@ -107,7 +107,7 @@ class ObSliceID final {
     slice_id_ = common::OB_INVALID_ID;
   }
 
-  TO_STRING_KV(N_OB_TASK_ID, ob_task_id_, N_SLICE_ID, slice_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   /* variables */

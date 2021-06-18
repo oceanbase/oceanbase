@@ -122,8 +122,7 @@ class QueryRangeInfo {
     contain_always_false_ = contain_always_false;
   }
 
-  TO_STRING_KV(K_(is_valid), K_(contain_always_false), K_(range_columns), K_(equal_prefix_count),
-      K_(equal_prefix_null_count), K_(range_prefix_count), K_(index_column_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_valid_;
@@ -167,7 +166,7 @@ class OrderingInfo {
   {
     scan_direction_ = direction;
   }
-  TO_STRING_KV(K_(scan_direction), K_(index_keys));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObOrderDirection scan_direction_;
@@ -260,8 +259,7 @@ class IndexInfoEntry {
   {
     is_index_global_ = is_index_global;
   }
-  TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global), K_(range_info),
-      K_(ordering_info), K_(interesting_order_info), K_(interesting_order_prefix_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t index_id_;
@@ -299,7 +297,7 @@ class ObIndexInfoCache {
     return table_id_;
   }
   int add_index_info_entry(IndexInfoEntry*);
-  TO_STRING_KV(K_(table_id), K_(base_table_id), K_(entry_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t table_id_;

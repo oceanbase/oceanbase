@@ -70,7 +70,7 @@ struct ObRecoverPoint {
     return snapshot_version_ < other.snapshot_version_;
   }
 
-  TO_STRING_KV(K(snapshot_version_), K(recover_log_id_), K(checksum_), K_(epoch_id), K_(submit_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObRecoverVec {
@@ -106,7 +106,7 @@ class ObRecoverVec {
     common::ObSpinLockGuard guard(lock_);
     return recover_vec_.count();
   }
-  TO_STRING_KV(K(recover_vec_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int record_major_recover_point_(const int64_t prev_version, const int64_t version);
@@ -157,7 +157,7 @@ class ObSavedStorageInfoV2 {
   // these points to be used by backup& restore process.
   int clear_recover_points_for_physical_flashback(const int64_t version, const ObRecoverPoint& point);
 
-  TO_STRING_KV("clog_info", clog_info_, "data_info", data_info_, K_(pg_file_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:

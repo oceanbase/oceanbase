@@ -30,6 +30,38 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t WinFuncInfo::ExtBound::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_preceding), K_(is_unbounded), K_(is_nmb_literal), KPC_(between_value_expr), KPC_(range_bound_expr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t WinFuncInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(win_type), K_(func_type), K_(is_ignore_null), K_(is_from_first), KPC_(expr), K_(aggr_info), K_(upper),K_(lower), K_(param_exprs), K_(partition_exprs), K_(sort_exprs), K_(sort_collations), K_(sort_cmp_funcs));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWindowFunctionOp::Frame::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(head_), K(tail_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWindowFunctionOp::RowsStore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(begin_idx), K_(row_cnt), K_(rows_buf));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(
     WinFuncInfo::ExtBound, is_preceding_, is_unbounded_, is_nmb_literal_, between_value_expr_, range_bound_expr_);

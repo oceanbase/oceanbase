@@ -17,6 +17,86 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObIlogPerFileCacheNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("node_status", ATOMIC_LOAD(&node_status_), KP_(cache_wrapper), KP(wrapper_allocator_), K_(seq));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogCacheConfig::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(hold_file_count_limit_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogCacheStatistic::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(hold_file_count_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t NodeItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(file_id_), K(node_obj_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogCache::NodeReadyMarker::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(err_), K(owner_seq_), K(owner_match_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogCache::GetNodeFunctor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(err_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogCache::EraseNodeFunctor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(err_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogCache::VictimPicker::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(err_), K(count_), K(victim_), K(min_access_ts_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogCache::ExpiredNodesPicker::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(err_), K(expired_file_id_arr_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogCache::AllFileIdGetter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(err_), K(all_file_id_arr_));
+  J_OBJ_END();
+  return pos;
+}
 
 // ---- wrapper ----
 ObIlogPerFileCacheNode::ObIlogPerFileCacheNode()

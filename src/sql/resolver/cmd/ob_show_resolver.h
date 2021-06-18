@@ -164,9 +164,7 @@ class ObShowResolver::ObShowResolverContext {
   ParseNode* condition_node_;
   common::ObString column_name_;  // used for show tables
   common::ObString like_column_;  // used for the show stmt who has like clause
-  TO_STRING_KV(K_(cur_tenant_id), K_(actual_tenant_id), K_(database_name), K_(ref_table_id), K_(show_database_name),
-      K_(show_database_id), K_(show_table_id), K_(stmt_type), K_(global_scope), K_(like_pattern), K_(like_escape),
-      K_(column_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObShowResolverContext);
@@ -180,7 +178,7 @@ class ObShowResolver::ShowColumnInfo {
   {}
   common::ObString display_name_;
   ObQualifiedName qualified_name_;
-  TO_STRING_KV(K_(display_name), K_(qualified_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ShowColumnInfo);

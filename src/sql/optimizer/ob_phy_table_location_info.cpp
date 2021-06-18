@@ -19,6 +19,30 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 namespace oceanbase {
 namespace sql {
+int64_t ObOptPartLoc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(table_id), K_(partition_id), K_(partition_cnt), K_(pg_key), K_(replica_locations), K_(renew_time),K_(is_mark_fail));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhyPartitionLocationInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_location), K_(selected_replica_idx), K_(priority_replica_idxs));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhyTableLocationInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_location_key), K_(ref_table_id), K_(phy_part_loc_info_list), K_(splitted_range_list),K_(duplicate_type));
+  J_OBJ_END();
+  return pos;
+}
 
 ObOptPartLoc::ObOptPartLoc()
     : replica_locations_(ObModIds::OB_SQL_OPTIMIZER_LOCATION_CACHE, OB_MALLOC_NORMAL_BLOCK_SIZE)

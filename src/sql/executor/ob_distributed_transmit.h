@@ -94,7 +94,7 @@ class ObDistributedTransmit : public ObTransmit {
           slice_idx_(OB_INVALID_INDEX_INT64)
     {}
     virtual ~ObSliceInfo() = default;
-    TO_STRING_KV(K(part_offset_), K(subpart_offset_), K(part_idx_), K(subpart_idx_), K(slice_idx_))
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t part_offset_;
     int64_t subpart_offset_;
     int64_t part_idx_;

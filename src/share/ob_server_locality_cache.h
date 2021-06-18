@@ -86,8 +86,7 @@ class ObServerLocality {
   {
     return server_status_;
   }
-  TO_STRING_KV(K_(inited), K_(addr), K_(zone), K_(zone_type), K_(idc), K_(region), K_(is_idle), K_(is_active),
-      K_(start_service_time), K_(server_stop_time), K_(server_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool inited_;
@@ -125,7 +124,7 @@ class ObServerLocalityCache {
   int record_server_cluster_id(const common::ObAddr& server, const int64_t& cluster_id);
   int record_server_region(const common::ObAddr& server, const common::ObRegion& region);
   int record_server_idc(const common::ObAddr& server, const common::ObIDC& idc);
-  TO_STRING_KV(K_(server_locality_array), K_(has_readonly_zone));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int get_server_region_from_map_(const common::ObAddr& server, common::ObRegion& region) const;

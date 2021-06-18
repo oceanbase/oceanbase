@@ -42,7 +42,7 @@ class ObMicroBlockIndexInfo : public common::ObIKVCacheKey {
     return table_id_;
   }
   void set(const MacroBlockId& block_id, const uint64_t table_id, const int64_t file_id);
-  TO_STRING_KV(K_(block_id), K_(table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   MacroBlockId block_id_;
@@ -71,7 +71,7 @@ class ObMicroBlockIndexBufferHandle {
   {
     return handle_.is_valid() && NULL != index_mgr_;
   }
-  TO_STRING_KV(K_(handle), KP_(index_mgr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   friend class ObMicroBlockIndexCache;
@@ -114,7 +114,7 @@ class ObMicroBlockIndexCache : public common::ObKVCache<ObMicroBlockIndexInfo, O
     virtual int inner_process(const bool is_success);
     virtual int inner_deep_copy(char* buf, const int64_t buf_len, ObIOCallback*& callback) const;
     virtual const char* get_data();
-    TO_STRING_KV(K_(key), KP_(buffer), K_(offset), K_(buf_size), KP_(cache), KP_(idx_mgr));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     int put_cache_and_fetch(const ObFullMacroBlockMeta& meta, ObMicroBlockIndexTransformer& transformer);

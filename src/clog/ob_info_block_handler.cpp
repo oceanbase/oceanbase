@@ -22,6 +22,38 @@ using namespace common;
 using namespace share;
 using namespace storage;
 namespace clog {
+int64_t NeedFreezePartition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(partition_key_), K(max_log_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIInfoBlockHandler::InfoEntryV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("max_log_id", max_log_id_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t IndexInfoBlockEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(min_log_id), K_(max_log_id), K_(min_log_timestamp), K_(max_log_timestamp), K(start_offset_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIndexInfoBlockHandler::InfoEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(min_log_id), K_(min_log_timestamp), K_(max_log_timestamp));
+  J_OBJ_END();
+  return pos;
+}
 ObIInfoBlockHandler::ObIInfoBlockHandler()
 {
   freeze_version_ = ObVersion(1, 0);

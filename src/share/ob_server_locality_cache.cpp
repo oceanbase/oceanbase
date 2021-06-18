@@ -16,6 +16,22 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace share {
+int64_t ObServerLocality::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(addr), K_(zone), K_(zone_type), K_(idc), K_(region), K_(is_idle), K_(is_active),K_(start_service_time), K_(server_stop_time), K_(server_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerLocalityCache::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server_locality_array), K_(has_readonly_zone));
+  J_OBJ_END();
+  return pos;
+}
 ObServerLocality::ObServerLocality()
     : inited_(false),
       is_idle_(false),

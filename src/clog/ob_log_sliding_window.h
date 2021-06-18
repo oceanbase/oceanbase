@@ -242,7 +242,7 @@ struct LeaderMaxLogInfo {
   {
     next_log_ts_ = next_log_ts;
   }
-  TO_STRING_KV(K_(switchover_epoch), K_(max_log_id), K_(next_log_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct FakeAckInfo {

@@ -86,7 +86,14 @@ class MyPartitionInfo {
   {
     return partition_id_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(partition_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(tenant_id), K_(table_id), K_(partition_id));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   int64_t tenant_id_;
@@ -115,7 +122,14 @@ class MyResult : public ObMySQLResult {
   {
     index_ = -1;
   }
-  TO_STRING_KV(K_(array), K_(index));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(array), K_(index));
+    J_OBJ_END();
+    return pos;
+  }
 
   public:
   int close()

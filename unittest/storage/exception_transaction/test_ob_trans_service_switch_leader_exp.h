@@ -53,7 +53,14 @@ class ObTransSwitchLeader {
   bool check_switch_leader();
   bool check_switch_leader_partition(const common::ObPartitionKey& partition);
 
-  TO_STRING_KV(K_(need_change), K_(change_back), K_(change_num), K_(partitions));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(need_change), K_(change_back), K_(change_num), K_(partitions));
+    J_OBJ_END();
+    return pos;
+  }
 
   public:
   bool need_change_;

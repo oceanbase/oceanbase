@@ -43,6 +43,14 @@ using namespace share;
 using namespace share::schema;
 using namespace omt;
 namespace sql {
+int64_t ObCreateTableResolver::GenColExpr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(col_id), K_(gen_col_expr));
+  J_OBJ_END();
+  return pos;
+}
 ObCreateTableResolver::ObCreateTableResolver(ObResolverParams& params)
     : ObDDLResolver(params),
       cur_column_id_(OB_APP_MIN_COLUMN_ID - 1),

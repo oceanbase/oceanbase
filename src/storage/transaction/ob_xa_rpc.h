@@ -55,7 +55,7 @@ class ObXAPrepareRPCRequest {
   {
     return stmt_timeout_;
   }
-  TO_STRING_KV(K_(trans_id), K_(xid), K_(stmt_timeout));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   transaction::ObTransID trans_id_;
@@ -97,7 +97,7 @@ class ObXAEndTransRPCRequest {
   {
     return is_terminated_;
   }
-  TO_STRING_KV(K_(trans_id), K_(xid), K_(is_rollback), K_(is_terminated));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   transaction::ObTransID trans_id_;
@@ -157,8 +157,7 @@ class ObXASyncStatusRPCRequest {
   {
     return trans_id_.is_valid();
   }
-  TO_STRING_KV(K_(trans_id), K_(xid), K_(sender), K_(is_new_branch), K_(is_stmt_pull), K_(is_tightly_coupled),
-      K_(pull_trans_desc), K_(timeout_seconds));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   transaction::ObTransID trans_id_;
@@ -193,7 +192,7 @@ class ObXASyncStatusRPCResponse {
   {
     return trans_desc_.is_valid();
   }
-  TO_STRING_KV(K_(trans_desc), K_(is_stmt_pull));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   transaction::ObTransDesc trans_desc_;
@@ -234,7 +233,7 @@ class ObXAMergeStatusRPCRequest {
   {
     return trans_desc_.is_valid() && xid_.is_valid();
   }
-  TO_STRING_KV(K_(trans_desc), K_(is_stmt_push), K_(is_tightly_coupled), K_(xid), K_(seq_no));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   transaction::ObTransDesc trans_desc_;
@@ -269,7 +268,7 @@ class ObXAHbRequest {
   {
     return trans_id_.is_valid() && xid_.is_valid() && sender_.is_valid();
   }
-  TO_STRING_KV(K_(trans_id), K_(xid), K_(sender));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   transaction::ObTransID trans_id_;
@@ -289,7 +288,7 @@ public:
   const transaction::ObTransID &get_trans_id() const { return trans_id_; }
   const transaction::ObXATransID &get_xid() const { return xid_; }
   bool is_valid() const { return trans_id_.is_valid() && xid_.is_valid(); }
-  TO_STRING_KV(K_(trans_id), K_(xid));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   transaction::ObTransID trans_id_;
   transaction::ObXATransID xid_;

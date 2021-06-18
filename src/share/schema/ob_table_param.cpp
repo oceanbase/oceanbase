@@ -22,6 +22,22 @@ namespace oceanbase {
 using namespace common;
 namespace share {
 namespace schema {
+int64_t ColumnMap::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_inited_), K(use_array_), K(shadow_use_array_), K(has_), K(has_shadow_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObColumnParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(column_id), K_(meta_type), K_(order), K_(accuracy), K_(orig_default_value), K_(cur_default_value),K_(is_nullable));
+  J_OBJ_END();
+  return pos;
+}
 int ColumnHashMap::init(const int64_t bucket_num)
 {
   int ret = OB_SUCCESS;

@@ -33,8 +33,7 @@ struct PxOpSizeFactor {
         pk_exchange_(false),
         reserved_(0)
   {}
-  TO_STRING_KV(K_(block_granule_child), K_(block_granule_parent), K_(partition_granule_child),
-      K_(partition_granule_parent), K_(single_partition_table_scan), K_(broadcast_exchange), K_(pk_exchange));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void revert_all()
   {
     factor_ = 0;

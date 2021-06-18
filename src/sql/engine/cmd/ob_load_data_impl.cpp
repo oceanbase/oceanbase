@@ -44,6 +44,102 @@ using namespace oceanbase::storage;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObLoadDataReplacedExprInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC(replaced_expr), K(correspond_file_field_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLoadTableColumnDesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(column_name), K_(column_id), K_(is_set_values), K_(array_ref_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDataFrag::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(shuffle_task_id), K(frag_size), K(frag_pos), K(row_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartDataFragMgr::InsertTaskSplitPoint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(frag_row_pos_), K(frag_data_pos_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartDataFragMgr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(frag_free_list_), K(queue_top_begin_point_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDataFragMgr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(total_part_cnt), "total_alloc_cnt", get_total_allocated_frag_count(), K_(total_free_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionBufferCtrl::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_id), KP_(buffer));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAllocatorSwitch::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("cur_alloc_", (cur_alloc_ == &permanent_alloc_) ? "permanent" : "temporary");
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObParserErrRec::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(row_offset_in_task), K(ret));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObShuffleTaskHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("task_id", result.task_id_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFileReadCursor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(read_counter_), K(file_offset_), K(read_size_), K(is_end_file_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLoadServerInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(addr));
+  J_OBJ_END();
+  return pos;
+}
 
 #ifdef TEST_MODE
 static const int64_t INSERT_TASK_DROP_RATE = 1;

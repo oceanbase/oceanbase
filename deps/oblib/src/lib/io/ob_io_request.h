@@ -38,7 +38,7 @@ struct ObIORequestDesc {
     *this = ObIORequestDesc();
   }
   bool is_valid() const;
-  TO_STRING_KV(K_(desc), K_(fd), K_(io_size), KP_(io_buf), K_(io_offset));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObIODesc desc_;
@@ -69,8 +69,7 @@ class ObIORequest : public ObDLinkBase<ObIORequest> {
     return disk_guard_.get_disk();
   }
   bool can_retry() const;
-  TO_STRING_KV(K_(inited), K_(need_submit), K_(finished), K_(desc), K_(fd), KP_(io_buf), K_(io_offset), K_(io_size),
-      K_(deadline_time), K_(io_time), K_(ret_code), KP_(master), K_(disk_guard), KP_(channel), K_(retry_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   struct TimeLog {
@@ -81,8 +80,7 @@ class ObIORequest : public ObDLinkBase<ObIORequest> {
     {
       *this = TimeLog();
     }
-    TO_STRING_KV(
-        K_(begin_time), K_(enqueue_time), K_(dequeue_time), K_(os_submit_time), K_(os_return_time), K_(end_time));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     int64_t begin_time_;
@@ -140,10 +138,7 @@ class ObIOMaster {
     return trace_id_;
   }
   int send_callback();
-  TO_STRING_KV(K_(inited), K_(need_callback), K_(has_finished), K_(has_estimated), K_(io_info), KP_(callback), KP_(buf),
-      K_(buf_size), K_(aligned_offset), K_(io_ret), K_(finish_count), K_(io_ret), K_(finish_count), K_(time),
-      K_(ref_cnt), K_(out_ref_cnt), KP_(resource_mgr), KP_(io_error_handler), K_(parent_io_master_holder),
-      K_(recover_io_master_holder), K_(callback), K(ObArrayWrap<ObIORequest*>(requests_, MAX_IO_BATCH_NUM)));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int alloc_read_buf(ObIOCallback* callback);
@@ -170,8 +165,7 @@ class ObIOMaster {
     {
       *this = TimeLog();
     }
-    TO_STRING_KV(K_(begin_time), K_(prepare_delay), K_(send_time), K_(recv_time), K_(callback_enqueue_time),
-        K_(callback_dequeue_time), K_(callback_delay), K_(end_time));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     int64_t begin_time_;

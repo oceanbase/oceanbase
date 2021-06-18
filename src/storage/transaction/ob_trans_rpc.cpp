@@ -90,6 +90,14 @@ int handle_trans_msg_callback(ObTransService* trans_service, const ObPartitionKe
 }  // namespace transaction
 
 namespace obrpc {
+int64_t ObTransRpcResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), K_(send_timestamp));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ObTransRpcResult, status_, send_timestamp_);
 
 void ObTransRpcResult::reset()
@@ -161,6 +169,14 @@ int ObTransRespP::process()
 }  // namespace obrpc
 
 namespace transaction {
+int64_t TransRpcTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(trans_id), K_(msg_type), K_(status), K_(msg), K_(task_type), K_(addr), K_(request_id),K_(sql_no), K_(task_timeout));
+  J_OBJ_END();
+  return pos;
+}
 int ObTransRpc::init(
     ObTransRpcProxy* rpc_proxy, ObTransService* trans_service, const ObAddr& self, obrpc::ObBatchRpc* rpc)
 {

@@ -84,7 +84,7 @@ class ObDir {
   }
 
   public:
-  TO_STRING_KV(K_(is_inited), K_(dir_fd), K_(dir_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   static const int OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
@@ -178,7 +178,7 @@ class ObLogDir : public ObILogDir {
   int get_total_size(int64_t& total_size) const;
 
   public:
-  TO_STRING_KV(K_(is_inited), K_(dir));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_inited_;

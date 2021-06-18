@@ -121,7 +121,7 @@ class ObIlogMemstore {
   }
 
   int get_index_entry(const common::ObPartitionKey& partition_key, IndexInfoBlockEntry& index_info_block_entry) const;
-  TO_STRING_KV(K(create_ts_), K(cursor_size_), K(clog_size_), K(partition_meta_info_.count()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   const static int64_t CURSOR_SIZE_TRIGGER = 32 * 1024 * 1024;  // 32M

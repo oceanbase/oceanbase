@@ -42,7 +42,14 @@ class ObDropDatabaseStmt : public ObDDLStmt {
     return drop_database_arg_;
   }
 
-  TO_STRING_KV(K_(drop_database_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(drop_database_arg));
+    J_OBJ_END();
+    return pos;
+  }
   inline obrpc::ObDropDatabaseArg& get_drop_database_arg();
   virtual bool cause_implicit_commit() const
   {

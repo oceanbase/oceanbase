@@ -85,7 +85,7 @@ class ObSQLMockedTables {
       return !(other == *this);
     }
 
-    TO_STRING_KV(K_(org_table_id), K_(mocked_table_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObSEArray<uint64_t, 8> MockTableIDArray;
   typedef common::ObSEArray<ObMockedRowIDIndexInfo, 8> MockRowIDIdxArray;

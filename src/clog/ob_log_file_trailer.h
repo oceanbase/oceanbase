@@ -60,7 +60,7 @@ class ObLogFileTrailer {
     return file_id_;
   }
 
-  TO_STRING_KV(N_BLOCK_META, block_meta_, N_VERSION, version_, N_START_POS, start_pos_, N_FILE_ID, file_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int build_serialized_trailer(
       char* buf, const int64_t buf_len, const offset_t start_pos, const file_id_t file_id, int64_t& pos);
@@ -99,8 +99,7 @@ class ObIlogFileTrailerV2 {
   NEED_SERIALIZE_AND_DESERIALIZE;
   // 0x4c42 == BL means Block, 0x4c43 plus one
   static const int16_t MAGIC_NUMBER = 0x4c43;
-  TO_STRING_KV(K(magic_number_), K(info_block_start_offset_), K(info_block_size_), K(file_content_checksum_),
-      K(trailer_checksum_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   void update_trailer_checksum_();

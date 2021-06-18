@@ -27,6 +27,14 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase {
 namespace observer {
+int64_t ObVirtualProxyServerStat::ObServerStateInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(svr_ip_buf), K_(svr_ip_len), K_(svr_port), K_(zone_name_buf), K_(zone_name_len), K_(status_buf),K_(status_len), K_(start_service_time), K_(stop_time));
+  J_OBJ_END();
+  return pos;
+}
 ObVirtualProxyServerStat::ObVirtualProxyServerStat()
     : is_inited_(false),
       is_queried_(false),

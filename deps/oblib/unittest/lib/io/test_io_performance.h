@@ -27,7 +27,7 @@ struct IOWorkload {
   {
     return category_ < MAX_IO_CATEGORY && size_ > 0 && iops_ > 0 && depth_ > 0;
   }
-  TO_STRING_KV(K_(category), K_(size), K_(iops), K_(depth), K_(is_sequence))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObIOCategory category_;
@@ -50,7 +50,7 @@ class IOInfoGenerator {
     return inited_;
   }
   virtual int get_io_info(const char* buf, ObIOInfo& info) = 0;
-  TO_STRING_KV(K_(inited), K_(mode), K_(io_category), K_(io_size), K_(is_sequence));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   bool inited_;
@@ -64,7 +64,7 @@ struct IORunContext {
   public:
   IORunContext() : thread_cnt_(0), generator_(NULL), succ_cnt_(0), fail_cnt_(0), sum_rt_(0)
   {}
-  TO_STRING_KV(K_(thread_cnt), K_(workload), K_(succ_cnt), K_(fail_cnt), KP_(generator), K_(sum_rt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid() const
   {
     bool bret = thread_cnt_ >= 0 && succ_cnt_ >= 0 && fail_cnt_ >= 0 && sum_rt_ >= 0 && OB_NOT_NULL(generator_) &&
@@ -93,7 +93,7 @@ class IORunner : public lib::ThreadPool {
   {
     return inited_;
   }
-  TO_STRING_KV(K_(inited), K_(duration_ms), K_(read_ctx), K_(write_ctx), K_(begin_time), K_(end_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   void run1() override;

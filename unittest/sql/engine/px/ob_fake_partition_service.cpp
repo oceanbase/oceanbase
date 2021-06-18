@@ -56,6 +56,14 @@ int ObFakeTableScanIterator::get_next_row(common::ObNewRow*& row)
 }  // namespace sql
 
 namespace storage {
+int64_t ObFakePartitionServiceForGI::ObGIResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(macros_count_), K(pkeys_));
+  J_OBJ_END();
+  return pos;
+}
 
 ObFakePartitionServiceForSQL::ObFakePartitionServiceForSQL()
     : scanner_(), col_num_(), rs_rpc_proxy_(nullptr), pts_rpc_(nullptr)

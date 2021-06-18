@@ -279,7 +279,7 @@ class ObTailCursor {
           K(offset));
     }
   }
-  TO_STRING_KV(K_(file_id), K_(offset));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   file_id_t file_id_;
@@ -312,7 +312,7 @@ struct ObLogCursor {
     size_ = log_cursor.size_;
     return ret;
   }
-  TO_STRING_KV(K_(file_id), K_(offset), K_(size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // Intentionally copyable and assigned
@@ -383,8 +383,7 @@ class ObLogCursorExt {
   {
     return acc_cksm_;
   }
-  TO_STRING_KV(K_(file_id), K_(offset), K_(size), "submit_timestamp", get_submit_timestamp(), "is_batch_committed",
-      is_batch_committed(), K_(acc_cksm));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   private:
@@ -418,7 +417,7 @@ struct ObGetCursorResult {
   {
     return NULL != csr_arr_ && arr_len_ > 0;
   }
-  TO_STRING_KV(KP(csr_arr_), K(arr_len_), K(ret_len_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObLogFlushCbArg {
@@ -471,8 +470,7 @@ struct ObLogFlushCbArg {
   int64_t cluster_id_;
   ObLogCursor log_cursor_;
   int64_t after_consume_timestamp_;
-  TO_STRING_KV(K_(log_type), K_(log_id), K_(proposal_id), K_(leader), K_(cluster_id), K_(log_cursor),
-      K_(after_consume_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // Intentionally copyable and assigned
@@ -502,10 +500,7 @@ struct ObPGLogArchiveStatus {
   void reset();
   bool is_valid_for_clog_info();
   bool is_round_start_info_valid();
-  TO_STRING_KV(K_(status), "status_str", share::ObLogArchiveStatus::get_str(status_), K_(round_start_ts),
-      K_(round_start_log_id), K_(round_snapshot_version), K_(round_log_submit_ts), K_(round_clog_epoch_id),
-      K_(round_accum_checksum), K_(archive_incarnation), K_(log_archive_round), K_(last_archived_log_id),
-      K_(last_archived_checkpoint_ts), K_(last_archived_log_submit_ts), K_(clog_epoch_id), K_(accum_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   share::ObLogArchiveStatus::STATUS status_;
@@ -589,8 +584,7 @@ struct ObReadCost {
     return *this;
   }
 
-  TO_STRING_KV(K_(read_disk_count), K_(read_clog_disk_time), K_(fill_clog_cold_cache_time), K_(memcpy_time),
-      K_(valid_data_size), K_(read_disk_size), K_(total_read_clog_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObIlogStorageQueryCost {
@@ -623,7 +617,7 @@ struct ObIlogStorageQueryCost {
     return read_info_block_disk_count_ >= 0 && read_ilog_disk_count_ >= 0 && get_cursor_batch_time_ >= 0;
   }
 
-  TO_STRING_KV(K_(read_ilog_disk_count), K_(read_info_block_disk_count), K_(get_cursor_batch_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 inline bool is_offset_align(const offset_t offset, const int64_t align_size)

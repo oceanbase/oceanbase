@@ -39,7 +39,7 @@ class ObRecoveryHelper {
       pkey_index_ = -1;
       part_valid_ = false;
     }
-    TO_STRING_KV(K_(pkey_index), K_(part_valid));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ObMemberListPkeyInfo {
@@ -51,7 +51,7 @@ class ObRecoveryHelper {
     ~ObMemberListPkeyInfo()
     {}
     void reset();
-    TO_STRING_KV(K_(member_list), K_(pkey_info));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObMemberList member_list_;
     common::ObArray<PkeyInfo> pkey_info_;
   };
@@ -71,7 +71,7 @@ class ObRecoveryHelper {
     bool all_partitions_valid() const;
     int compaction();
 
-    TO_STRING_KV(K_(epoch), K_(pkey_array), K_(ml_pk_array));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     common::ObArray<common::ObPartitionKey> pkey_array_;
@@ -85,7 +85,7 @@ class ObRecoveryHelper {
     ~ObLeaderPkeyList()
     {}
     void reset();
-    TO_STRING_KV(K_(leader), K_(pkey_list));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     ObAddr leader_;
@@ -100,7 +100,7 @@ class ObRecoveryHelper {
     {}
     int add_partition(const share::ObPartitionInfo& partition_info);
     void reset();
-    TO_STRING_KV(K_(inner_leader_pkeys), K_(user_leader_pkeys));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t user_count() const
     {
       return user_leader_pkeys_.count();

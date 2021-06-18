@@ -58,7 +58,7 @@ class ObAdaptiveStrategy {
   }
 
   public:
-  TO_STRING_KV(K_(least_thread_num), K_(estimate_ts), K_(expand_rate), K_(shrink_rate));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t least_thread_num_;

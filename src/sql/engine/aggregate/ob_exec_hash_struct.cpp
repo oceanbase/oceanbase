@@ -16,6 +16,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObHashCols::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row), K_(stored_row), K_(hash_col_idx), K_(next), K_(hash_val));
+  J_OBJ_END();
+  return pos;
+}
 
 // When there's stored_row_ and reserved_cells_, use store_row's reserved_cells_ for calc hash.
 // Other, use row_ for calc hash

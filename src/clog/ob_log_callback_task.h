@@ -48,7 +48,7 @@ class ObLogCallbackTask {
   {
     return partition_key_;
   }
-  TO_STRING_KV(K_(task_type), K_(partition_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObLogCallbackTask);

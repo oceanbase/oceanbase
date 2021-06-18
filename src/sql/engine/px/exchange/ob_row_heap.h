@@ -163,7 +163,14 @@ class ObRowHeap {
     row_arr_.reset();
   }
 
-  TO_STRING_KV(K_(writable_ch_idx), K_(capacity), "count", count());
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(writable_ch_idx), K_(capacity), "count", count());
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   /* functions */

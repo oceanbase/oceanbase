@@ -37,7 +37,7 @@ struct ObMacroEndkey {
     obj_cnt_ = 0;
     iter_idx_ = -1;
   }
-  TO_STRING_KV(K_(obj_ptr), K_(obj_cnt), K_(iter_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObObj* obj_ptr_;
   int64_t obj_cnt_;
   int64_t iter_idx_;
@@ -69,7 +69,7 @@ struct ObMacroEndkeyComparor {
     }
     return bret;
   }
-  TO_STRING_KV(K_(ret));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int ret_;
 };
 
@@ -89,7 +89,7 @@ struct ObSSTableRangePara {
   {
     return end_ - start_;
   }
-  TO_STRING_KV(KPC_(sstable), K_(start), K_(end));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObSSTable* sstable_;
   int64_t start_;
   int64_t end_;
@@ -111,7 +111,7 @@ class ObMacroEndkeyIterator {
   int open(const ObSSTableRangePara& range_para, const int64_t skip_cnt, const int64_t iter_idx);
   int get_endkey_cnt(int64_t& endkey_cnt) const;
   int get_next_macro_block_endkey(ObMacroEndkey& endkey);
-  TO_STRING_KV(K_(range_para), K_(cur_idx), K_(skip_cnt), K_(iter_idx), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObSSTableRangePara range_para_;
   int64_t cur_idx_;
   int64_t skip_cnt_;
@@ -132,8 +132,7 @@ class ObPartitionParallelRanger {
   int construct_single_range(common::ObIAllocator& allocator, const common::ObStoreRowkey& start_key,
       const common::ObStoreRowkey& end_key, const common::ObBorderFlag& border_flag, const bool for_compaction,
       ObStoreRange& range);
-  TO_STRING_KV(KPC(store_range_), K_(endkey_iters), KP_(last_macro_endkey), K_(total_endkey_cnt), K_(sample_cnt),
-      K_(parallel_target_count), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int calc_sample_count(common::ObIArray<ObSSTableRangePara>& range_paras, const int64_t paralell_target_count);
@@ -176,7 +175,7 @@ struct ObRangeSplitInfo {
   {
     return range_paras_.empty();
   }
-  TO_STRING_KV(K_(store_range), K_(range_paras), K_(total_row_count), K_(total_size), K_(parallel_target_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const common::ObStoreRange* store_range_;
   common::ObArray<ObSSTableRangePara> range_paras_;
   int64_t total_row_count_;
@@ -193,7 +192,7 @@ class ObPartitionRangeSpliter {
       common::ObIArray<ObSSTable*>& sstables, const common::ObStoreRange& store_range, ObRangeSplitInfo& range_info);
   int split_ranges(ObRangeSplitInfo& range_info, common::ObIAllocator& allocator, const bool for_compaction,
       common::ObIArray<ObStoreRange>& range_array);
-  TO_STRING_KV(K_(parallel_ranger));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int build_range_paras(common::ObIArray<ObSSTable*>& sstables, const common::ObStoreRange& store_range,

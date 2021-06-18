@@ -117,9 +117,7 @@ class ObDependencyInfo : public ObSchema {
   int get_object_create_time(common::ObISQLClient& sql_client, share::schema::ObObjectType obj_type,
       int64_t& create_time, common::ObString& ref_obj_name);
 
-  TO_STRING_KV(K_(tenant_id), K_(dep_obj_id), K_(dep_obj_type), K_(order), K_(dep_timestamp), K_(ref_obj_id),
-      K_(ref_obj_type), K_(ref_timestamp), K_(dep_obj_owner_id), K_(property), K_(dep_attrs), K_(dep_reason),
-      K_(ref_obj_name), K_(schema_version))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   private:
   int gen_dependency_dml(const uint64_t exec_tenant_id, oceanbase::share::ObDMLSqlSplicer& dml);
   // uint64_t extract_tenant_id() const;

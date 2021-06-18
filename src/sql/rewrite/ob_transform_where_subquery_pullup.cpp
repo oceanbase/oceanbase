@@ -25,6 +25,14 @@ using namespace common;
 using share::schema::ObTableSchema;
 
 namespace sql {
+int64_t ObWhereSubQueryPullup::TransformParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(op), K_(subquery_expr), K_(subquery), K_(left_hand), K_(can_unnest_pullup), K_(can_be_transform),K_(direct_correlated), K_(need_create_spj), K_(need_add_limit_constraint));
+  J_OBJ_END();
+  return pos;
+}
 int ObWhereSubQueryPullup::transform_one_stmt(
     common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened)
 {

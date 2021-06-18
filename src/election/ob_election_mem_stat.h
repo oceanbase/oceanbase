@@ -52,7 +52,7 @@ class ObElectionMemStat {
   }
   ObElectionMemStat& operator=(const ObElectionMemStat& election_mem_stat);
 
-  TO_STRING_KV("type_name", type_name_, K_(alloc_count), K_(release_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   static const int64_t OB_ELECTION_TYPE_NAME_LENGTH = 64;

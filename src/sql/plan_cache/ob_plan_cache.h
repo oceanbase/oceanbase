@@ -303,7 +303,7 @@ class ObPlanCache {
     return attr;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(mem_limit_pct), K_(mem_high_pct), K_(mem_low_pct));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObCacheRefHandleMgr& get_ref_handle_mgr()
   {

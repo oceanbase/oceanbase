@@ -158,7 +158,7 @@ struct SubPlanInfo {
   ObLogPlan* subplan_;
   bool init_plan_;
   common::ObSEArray<std::pair<int64_t, ObRawExpr*>, 16, common::ModulePageAllocator, true> sp_params_;
-  TO_STRING_KV(K_(init_expr), K_(sp_params), K_(subplan), K_(init_plan));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObSEArray<ObJoinOrder*, 4> JoinOrderArray;
@@ -1111,7 +1111,7 @@ class ObLogPlan {
 
   private:
   struct LeadingInfo {
-    TO_STRING_KV(K_(table_set), K_(left_table_set), K_(right_table_set));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     ObRelIds table_set_;
     ObRelIds left_table_set_;

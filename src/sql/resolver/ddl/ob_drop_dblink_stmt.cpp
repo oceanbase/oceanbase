@@ -19,6 +19,14 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObDropDbLinkStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(drop_dblink_arg));
+  J_OBJ_END();
+  return pos;
+}
 ObDropDbLinkStmt::ObDropDbLinkStmt() : ObDDLStmt(stmt::T_DROP_DBLINK), drop_dblink_arg_()
 {}
 

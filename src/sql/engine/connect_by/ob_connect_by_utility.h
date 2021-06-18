@@ -159,7 +159,7 @@ class ObConnectByPump : public ObConnectByPumpBase {
 
     bool operator==(const ObHashColumn& other) const;
 
-    TO_STRING_KV(K_(row), K_(hash_val));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     const common::ObNewRow* row_;
@@ -172,7 +172,7 @@ class ObConnectByPump : public ObConnectByPumpBase {
     const ObChunkRowStore::StoredRow* stored_row_;
     HashTableCell* next_tuple_;
 
-    TO_STRING_KV(K_(stored_row), K(static_cast<void*>(next_tuple_)));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ConnectByHashTable {
@@ -308,7 +308,7 @@ class ObConnectByPump : public ObConnectByPumpBase {
     ~PumpNode()
     {}
 
-    TO_STRING_KV(KPC(pump_row_), KPC(output_row_), K(is_cycle_), K(is_leaf_), K(level_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     // left_row or right shallow row
     const ObNewRow* pump_row_;
     const ObNewRow* output_row_;

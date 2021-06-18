@@ -31,7 +31,14 @@ class TestUncommittedMinorMergeScan : public transaction::ObPartitionTransCtxMgr
     {}
     transaction::ObTransTableStatusType status_;
     int64_t commit_trans_version_;
-    TO_STRING_KV(K_(status), K_(commit_trans_version));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K_(status), K_(commit_trans_version));
+      J_OBJ_END();
+      return pos;
+    }
   };
   const static int64_t ROLLBACK_SQL_SEQUENCE = 38;
   const static int64_t ROLLBACK_SQL_SEQUENCE_2 = 48;

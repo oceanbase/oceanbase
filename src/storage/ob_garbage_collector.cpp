@@ -36,6 +36,22 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 namespace storage {
+int64_t ObGarbageCollector::GCCandidate::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pg_key_), K(gc_reason_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGarbageCollector::PGOfflineIlogFlushedInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(replica_num_), K(offline_ilog_flushed_replica_num_), K(offline_log_id_), K(gc_reason_));
+  J_OBJ_END();
+  return pos;
+}
 class ObGarbageCollector::InsertPGFunctor {
   public:
   explicit InsertPGFunctor(const common::ObPGKey& pg_key) : pg_key_(pg_key), ret_value_(common::OB_SUCCESS)

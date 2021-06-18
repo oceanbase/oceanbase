@@ -128,8 +128,7 @@ struct ObRpcCompressCCtx : public ObRpcCompressCtx {
   int init(ObRpcCompressMode mode, int16_t block_size, char* ring_buffer, int64_t ring_buffer_size);
   int reset_mode(ObRpcCompressMode new_mode);
   int free_ctx_mem();
-  TO_STRING_KV(K(is_inited_), K(compress_mode_), K(block_size_), K(ring_buffer_pos_), K(ring_buffer_size_),
-      KP(ring_buffer_), K(total_data_size_before_compress_), KP(compressor_), KP(cctx_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int64_t total_data_size_before_compress_;
@@ -147,8 +146,7 @@ struct ObRpcCompressDCtx : public ObRpcCompressCtx {
   int free_ctx_mem();
 
   public:
-  TO_STRING_KV(K(is_inited_), K(compress_mode_), K(block_size_), K(ring_buffer_pos_), K(ring_buffer_size_),
-      KP(ring_buffer_), KP(compressor_), KP(dctx_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void* dctx_;
 };
 
@@ -159,7 +157,7 @@ struct ObRpcCompressCtxSet {
   ~ObRpcCompressCtxSet()
   {}
   void free_ctx_memory();
-  TO_STRING_KV(K(compress_ctx_), K(decompress_ctx_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObRpcCompressCCtx compress_ctx_;
@@ -218,8 +216,7 @@ struct ObCompressHeadPacketHeader : public ObCompressPacketHeader {
   int decode(char* buf, int64_t data_len, int64_t& pos);
   int64_t get_encode_size() const;
 
-  TO_STRING_KV(K(magic_), K(full_size_), K(total_data_len_before_compress_), K(total_data_len_after_compress_),
-      K(compressed_size_), K(origin_size_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int32_t total_data_len_before_compress_;  // The size of the entire ObRpcPacket before compression
@@ -239,7 +236,7 @@ struct ObCompressSegmentPacketHeader : public ObCompressPacketHeader {
   int encode(char* buf, int64_t buf_len, int64_t& pos);
   int decode(char* buf, int64_t data_len, int64_t& pos);
   virtual int64_t get_encode_size() const;
-  TO_STRING_KV(K(magic_), K(full_size_), K(origin_size_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int16_t origin_size_;
@@ -279,7 +276,7 @@ struct ObCmdPacketInCompress : public ObCompressPacketHeader {
   public:
   const int16_t CMD_PAY_LOAD = sizeof(cmd_type_) + sizeof(compress_mode_);
   const int8_t MAGIC_NUM = (int8_t)0xff;
-  TO_STRING_KV(K(magic_), K(full_size_), K(payload_), K(cmd_type_), K(compress_mode_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int16_t payload_;  // data length after payload
   int16_t cmd_type_;
   int16_t compress_mode_;
@@ -315,7 +312,7 @@ struct ObCmdPacketInNormal {
     return static_cast<ObRpcCompressMode>(compress_mode_);
   }
   int64_t get_decode_size() const;
-  TO_STRING_KV(K(full_size_), K(payload_), K(compress_mode_), K(block_size_), K(ring_buffer_size_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   // 4 bytes magic_num

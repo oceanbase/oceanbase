@@ -28,7 +28,7 @@ class ObOptimizerContext;
 struct RangeExprs {
   RangeExprs() : table_id_(common::OB_INVALID_ID), column_id_(common::OB_INVALID_ID), range_exprs_()
   {}
-  TO_STRING_KV(K_(table_id), K_(column_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t table_id_;
   uint64_t column_id_;
   common::ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> range_exprs_;

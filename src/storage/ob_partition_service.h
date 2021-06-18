@@ -111,9 +111,7 @@ struct ObPartitionMigrationDataStatics {
   int64_t input_bytes_;
   int64_t output_bytes_;
 
-  TO_STRING_KV(K_(total_macro_block), K_(ready_macro_block), K_(major_count), K_(mini_minor_count),
-      K_(normal_minor_count), K_(buf_minor_count), K_(reuse_count), K_(partition_count), K_(finish_partition_count),
-      K_(input_bytes), K_(output_bytes));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPartMigrationRes {
@@ -138,8 +136,7 @@ struct ObPartMigrationRes {
         quorum_(-1),
         result_(OB_ERROR)
   {}
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(data_src), K_(backup_arg), K_(validate_arg), K_(data_statics), K_(quorum),
-      K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObRestoreInfo {
@@ -161,7 +158,7 @@ class ObRestoreInfo {
   {
     return arg_;
   }
-  TO_STRING_KV(K_(arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_inited_;
@@ -235,9 +232,7 @@ struct ObReplicaOpArg {
   bool is_physical_restore_follower() const;
   bool is_standby_restore() const;
   const char* get_replica_op_type_str() const;
-  TO_STRING_KV(K_(key), K_(dst), K_(src), K_(data_src), K_(quorum), "type", get_replica_op_type_str(), K_(base_version),
-      K_(restore_arg), K_(validate_arg), K_(backup_arg), K_(phy_restore_arg), K_(index_id), K_(priority),
-      K_(cluster_id), K_(restore_version), K_(change_member_option), K_(switch_epoch));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMigrateSrcInfo {
@@ -267,7 +262,7 @@ struct ObMigrateSrcInfo {
     return src_addr_ == src_info.src_addr_ && cluster_id_ == src_info.cluster_id_;
   }
 
-  TO_STRING_KV(K_(src_addr), K_(cluster_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObAddr src_addr_;
   int64_t cluster_id_;
 };
@@ -885,7 +880,7 @@ class ObPartitionService : public share::ObIPSCb,
     bool in_replay_engine_;
     ParitionRegisterStatus() : in_tran_service_(false), in_election_(false), in_replay_engine_(false)
     {}
-    TO_STRING_KV(K_(in_tran_service), K_(in_election), K_(in_replay_engine));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   protected:

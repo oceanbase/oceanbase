@@ -149,7 +149,7 @@ class ObExtReqStatistic {
       scan_file_count_ = 0;
       perf_total_ = 0;
     }
-    TO_STRING_KV(K(req_count_), K(pkey_count_), K(err_count_), K(scan_file_count_), K(perf_total_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ReqByIdStatistic {
@@ -167,7 +167,7 @@ class ObExtReqStatistic {
       scan_file_count_ = 0;
       perf_total_ = 0;
     }
-    TO_STRING_KV(K(req_count_), K(pkey_count_), K(err_count_), K(scan_file_count_), K(perf_total_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ReqFetchStatistic {
@@ -189,8 +189,7 @@ class ObExtReqStatistic {
       offline_pkey_count_ = 0;
       perf_total_ = 0;
     }
-    TO_STRING_KV(
-        K(req_count_), K(pkey_count_), K(err_count_), K(scan_file_count_), K(log_num_), K(offline_pkey_count_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ReqHbStatistic {
@@ -208,7 +207,7 @@ class ObExtReqStatistic {
       disk_pkey_count_ = 0;
       disk_count_ = 0;
     }
-    TO_STRING_KV(K(req_count_), K(pkey_count_), K(err_count_), K(disk_pkey_count_), K(disk_count_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   private:

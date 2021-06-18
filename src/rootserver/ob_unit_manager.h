@@ -66,7 +66,7 @@ class ObUnitManager {
     }
     int assign(const ZoneUnit& other);
 
-    TO_STRING_KV(K_(zone), K_(unit_infos));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     common::ObZone zone_;
@@ -92,7 +92,7 @@ class ObUnitManager {
     {
       return NULL != pool_ && common::OB_SYS_TENANT_ID == pool_->tenant_id_;
     }
-    TO_STRING_KV(KP_(unit), KP_(unit_config), KP_(pool));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     share::ObUnit* unit_;
@@ -139,7 +139,7 @@ class ObUnitManager {
     virtual double get_capacity(ObResourceType resource_type) const override;
     virtual double get_max_assigned(ObResourceType resource_type) const override;
 
-    TO_STRING_KV(K_(sum_load), K_(status), K_(all_normal_unit), K_(mark_delete_indexes));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     share::ObUnitConfig sum_load_;
     share::ObServerStatus status_;
@@ -349,7 +349,7 @@ class ObUnitManager {
     int assign(const ZoneUnitPtr& other);
     int sort_by_unit_id_desc();
 
-    TO_STRING_KV(K_(zone), K_(unit_ptrs));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     common::ObZone zone_;
@@ -507,7 +507,7 @@ class ObUnitManager {
     UnitNum(const int64_t full_unit_num, const int64_t logonly_unit_num)
         : full_unit_num_(full_unit_num), logonly_unit_num_(logonly_unit_num)
     {}
-    TO_STRING_KV(K_(full_unit_num), K_(logonly_unit_num));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     void reset()
     {
       full_unit_num_ = 0;

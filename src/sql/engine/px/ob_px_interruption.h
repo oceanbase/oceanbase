@@ -41,7 +41,7 @@ struct ObPxInterruptID {
   {
     return query_interrupt_id_ == other.query_interrupt_id_ && px_interrupt_id_ == other.px_interrupt_id_;
   }
-  TO_STRING_KV(K_(query_interrupt_id), K_(px_interrupt_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // sqc and task send interrupt to qc with this id, query use this id register interruption too.
   common::ObInterruptibleTaskID query_interrupt_id_;
   // qc send interrupt to sqc and task with this id, sqc and tasks use this id register interruption too.

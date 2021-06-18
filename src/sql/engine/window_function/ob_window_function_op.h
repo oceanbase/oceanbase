@@ -42,8 +42,7 @@ struct WinFuncInfo {
           between_value_expr_(NULL),
           range_bound_expr_(NULL)
     {}
-    TO_STRING_KV(
-        K_(is_preceding), K_(is_unbounded), K_(is_nmb_literal), KPC_(between_value_expr), KPC_(range_bound_expr));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     bool is_preceding_;
     bool is_unbounded_;
@@ -86,8 +85,7 @@ struct WinFuncInfo {
     return ret;
   }
 
-  TO_STRING_KV(K_(win_type), K_(func_type), K_(is_ignore_null), K_(is_from_first), KPC_(expr), K_(aggr_info), K_(upper),
-      K_(lower), K_(param_exprs), K_(partition_exprs), K_(sort_exprs), K_(sort_collations), K_(sort_cmp_funcs));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   WindowType win_type_;
   ObItemType func_type_;
   bool is_ignore_null_;
@@ -138,7 +136,7 @@ class ObWindowFunctionOp : public ObOperator {
     static bool same_frame(const Frame& left, const Frame& right);
     static void prune_frame(const Frame& part_frame, Frame& frame);
     static bool need_restart_aggr(const bool can_inv, const Frame& last_valid_frame, const Frame& new_frame);
-    TO_STRING_KV(K(head_), K(tail_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     int64_t head_;
     int64_t tail_;
@@ -208,7 +206,7 @@ class ObWindowFunctionOp : public ObOperator {
       }
       return ret;
     }
-    TO_STRING_KV(K_(begin_idx), K_(row_cnt), K_(rows_buf));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     ObRADatumStore rows_buf_;

@@ -83,7 +83,7 @@ struct ObSimpleFrozenStatus {
             (this->frozen_version_ == other.frozen_version_ && this->frozen_timestamp_ == other.frozen_timestamp_ &&
                 this->cluster_version_ == other.cluster_version_));
   }
-  TO_STRING_KV(N_FROZEN_VERSION, frozen_version_, K_(frozen_timestamp), K_(cluster_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t frozen_version_;
   int64_t frozen_timestamp_;
@@ -101,7 +101,7 @@ struct TenantIdAndSchemaVersion {
   TenantIdAndSchemaVersion(const int64_t tenant_id, const int64_t schema_version)
       : tenant_id_(tenant_id), schema_version_(schema_version)
   {}
-  TO_STRING_KV(K_(tenant_id), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset()
   {
     tenant_id_ = common::OB_INVALID_TENANT_ID;

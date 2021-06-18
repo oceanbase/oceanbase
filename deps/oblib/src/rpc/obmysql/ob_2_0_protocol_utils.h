@@ -75,8 +75,7 @@ class ObProto20Context {
   {
     return is_proto20_used_;
   }
-  TO_STRING_KV(K_(comp_seq), K_(request_id), K_(proto20_seq), K_(header_len), K_(tailer_len), K_(next_step),
-      K_(is_proto20_used), K_(is_checksum_off), K_(curr_proto20_packet_start_pos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint8_t comp_seq_;
@@ -177,8 +176,7 @@ struct ObProtoEncodeParam {
   {
     reset();
   }
-  TO_STRING_KV(KP_(proto20_context), KP_(ez_buf), KP_(pkt), K_(seri_size), K_(conn_id), K_(encode_ret), K_(need_flush),
-      K_(is_last), K_(is_pkt_encoded), KP_(large_pkt_buf), K_(large_pkt_buf_len), K_(large_pkt_buf_pos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObProtoEncodeParam);

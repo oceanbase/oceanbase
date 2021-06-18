@@ -107,7 +107,7 @@ class ObPXServerAddrUtil {
     double time_;
     int64_t idx_;
     bool finish_;
-    TO_STRING_KV(K_(partition_count), K_(thread_count), K_(time), K_(idx), K_(finish));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   public:
@@ -293,7 +293,7 @@ class ObPxAffinityByRandom {
     uint64_t hash_value_;
     int64_t worker_id_;
     ObPxPartitionInfo partition_info_;
-    TO_STRING_KV(K_(partition_id), K_(partition_idx), K_(hash_value), K_(worker_id), K_(partition_info));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   public:

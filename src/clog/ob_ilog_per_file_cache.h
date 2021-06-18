@@ -33,7 +33,7 @@ struct RawArray {
   {
     return NULL != arr_ && count_ > 0;
   }
-  TO_STRING_KV(KP(arr_), K(count_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObIlogPerFileCache {

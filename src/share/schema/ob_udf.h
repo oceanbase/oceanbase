@@ -159,7 +159,7 @@ class ObUDF : public ObSchema {
     return type_ == AGGREGATE;
   };
 
-  TO_STRING_KV(K_(tenant_id), K_(udf_id), K_(name), K_(ret), K_(dl), K_(type), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t tenant_id_;
@@ -205,7 +205,7 @@ class ObUDFMeta {
     return *this;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(name), K_(ret), K_(dl), K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   common::ObString name_;

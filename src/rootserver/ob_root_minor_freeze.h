@@ -55,7 +55,7 @@ class ObRootMinorFreeze {
     common::ObAddr server;
     obrpc::ObMinorFreezeArg arg;
 
-    TO_STRING_KV(K(server), K(arg));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   } MinorFreezeParam;
 
   class ParamsContainer {
@@ -77,7 +77,7 @@ class ObRootMinorFreeze {
     int add_tenant_server(const uint64_t tenant_id, const common::ObAddr& server);
     int add_partition_server(const common::ObPartitionKey& partition_key, const common::ObAddr& server);
 
-    TO_STRING_KV(K_(params));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     common::ObSEArray<MinorFreezeParam, 256> params_;

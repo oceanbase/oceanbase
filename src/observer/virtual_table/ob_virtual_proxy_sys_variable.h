@@ -45,8 +45,7 @@ class ObVirtualProxySysVariable : public common::ObVirtualTableProjector {
     {}
     bool is_valid() const;
     void reset();
-    TO_STRING_KV(K_(data_type), K_(flags), K_(tenant_id), K_(name_buf), K_(name_len), K_(value_buf), K_(value_len),
-        K_(gmt_modified));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     int64_t data_type_;
     int64_t flags_;

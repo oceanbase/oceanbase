@@ -52,7 +52,7 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
 
     TaskIndex() : loc_idx_(0), part_loc_idx_(0)
     {}
-    TO_STRING_KV(K(loc_idx_), K(part_loc_idx_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct IdRange {
@@ -64,7 +64,7 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
 
     IdRange() : begin_(0), end_(0)
     {}
-    TO_STRING_KV(K(begin_), K(end_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ResultRange {
@@ -74,7 +74,7 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
     IdRange task_range_;
     IdRange slice_range_;
 
-    TO_STRING_KV(K(task_range_), K(slice_range_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   // compare ObNewRange::start_ and ObNewRow

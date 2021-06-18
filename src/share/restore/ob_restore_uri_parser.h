@@ -42,8 +42,7 @@ struct ObAgentBackupInfo {
   {
     return a.timestamp_ < b.timestamp_;
   }
-  TO_STRING_KV(K_(backup_type), K_(base_data_version), K_(curr_data_version), K_(timestamp), K_(backup_result),
-      K_(base_schema_version), K_(cluster_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObRestoreURIParserHelper {

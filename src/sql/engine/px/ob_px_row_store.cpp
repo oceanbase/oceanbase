@@ -352,3 +352,11 @@ void ObPxDatumRowIterator::reset()
   is_inited_ = false;
 }
 //-------- end ObPxDatumRowIterator --------
+int64_t ObPxNewRow::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row_cell_count), K_(des_row_buf_size));
+  J_OBJ_END();
+  return pos;
+}

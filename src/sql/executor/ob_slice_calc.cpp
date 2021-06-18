@@ -992,3 +992,11 @@ int ObSlaveMapPkeyHashIdxCalc::get_sub_part_id_by_one_level_first_ch_map(const i
   }
   return ret;
 }
+int64_t ObBc2HostSliceIdCalc::HostIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(begin_), K(end_), K(idx_));
+  J_OBJ_END();
+  return pos;
+}

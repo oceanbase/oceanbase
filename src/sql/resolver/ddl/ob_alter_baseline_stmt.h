@@ -26,7 +26,14 @@ class ObAlterBaselineStmt : public ObDDLStmt {
   {
     return alter_baseline_arg_;
   }
-  TO_STRING_KV(K_(alter_baseline_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(alter_baseline_arg));
+    J_OBJ_END();
+    return pos;
+  }
 
   public:
   obrpc::ObAlterPlanBaselineArg alter_baseline_arg_;

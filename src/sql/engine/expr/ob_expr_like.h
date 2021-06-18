@@ -72,7 +72,7 @@ class ObExprLike : public ObFuncExprOperator {
     {
       return is_checked_;
     }
-    TO_STRING_KV(K_(instr_mode), K_(instr_length), K_(is_analyzed));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     // data members
     INSTR_MODE instr_mode_;
     const char* instr_start_;

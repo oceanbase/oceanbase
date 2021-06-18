@@ -30,6 +30,38 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t FuncInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(func_type), K_(win_type), K_(is_distinct), K_(is_ignore_null), K_(upper), K_(lower), K_(result_index),K_(partition_cols), K_(sort_cols));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWindowFunction::WinFrame::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(head_), K(tail_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWindowFunction::RowsWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(begin_idx), K_(row_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWindowFunction::FuncCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K(*func_info_), K_(part_first_row), K_(part_iter_end), K_(rw));
+  J_OBJ_END();
+  return pos;
+}
 
 #define ADD_LEN_SQL_EXPRESSION(sql_expr) \
   {                                      \

@@ -1079,3 +1079,11 @@ void ObLogInsert::calc_phy_location_type()
 {
   table_phy_location_type_ = get_sharding_info().get_location_type();
 }
+int64_t ObLogDupKeyChecker::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(unique_index_cnt), KPC_(gui_lookup_root), KPC_(table_scan_root), K_(gui_scan_roots), KPC_(constraint_infos));
+  J_OBJ_END();
+  return pos;
+}

@@ -19,6 +19,30 @@
 namespace oceanbase {
 using namespace common;
 namespace share {
+int64_t ObLogReadFdKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(path_), "len", STRLEN(path_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReadFdCacheItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(key_), K(in_map_), K(fd_), K(ref_cnt_), K(timestamp_), KP(prev_), KP(next_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReadFdHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(fd_item_), K(is_local_));
+  J_OBJ_END();
+  return pos;
+}
 ObLogReadFdKey::ObLogReadFdKey()
 {
   reset();

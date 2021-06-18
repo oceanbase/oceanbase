@@ -31,7 +31,7 @@ class ObIterExprRangeParam : public ObIterExprOperator {
     end_index_ = end_index;
   }
   virtual int get_next_row(ObIterExprCtx& expr_ctx, const common::ObNewRow*& result) const override;
-  TO_STRING_KV(K_(expr_id), K_(expr_type), K_(start_index), K_(end_index));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t start_index_;

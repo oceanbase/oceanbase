@@ -34,6 +34,46 @@ using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 namespace oceanbase {
 namespace sql {
+int64_t ObEstColumnStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(column_id), K_(ndv), K_(origin_ndv));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEstTableStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(ref_id), K_(rel_id), K_(rows), K_(origin_rows), K_(all_used_parts), K_(pk_ids), K_(all_cstat));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEstAllTableStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(all_tstat));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEstSelInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_stats));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOptEstSel::RangeSel::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(var_), K(has_lt_), K(has_gt_), K(lt_sel_), K(gt_sel_));
+  J_OBJ_END();
+  return pos;
+}
 double ObOptEstSel::DEFAULT_COLUMN_DISTINCT_RATIO = EST_DEF_COL_NUM_DISTINCT * 1.0 / OB_EST_DEFAULT_ROW_COUNT;
 
 int ObOptEstSel::calculate_selectivity(const ObEstSelInfo& est_sel_info, const ObIArray<ObRawExpr*>& quals,

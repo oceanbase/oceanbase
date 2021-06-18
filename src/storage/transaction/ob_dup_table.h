@@ -54,7 +54,7 @@ class ObDupTableLeaseInfo : public DupTableLeaseInfoHashValue {
   bool is_lease_expired() const;
   void reset();
   void destroy();
-  TO_STRING_KV(K_(lease_expired_ts), K_(cur_log_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // expire time of lease, -1 means already expired
@@ -81,7 +81,7 @@ class ObDupTableLeaseInfoStat {
   {
     reset();
   }
-  TO_STRING_KV(K_(addr), K_(lease_expired_ts), K_(cur_log_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObAddr addr_;
@@ -304,7 +304,7 @@ class PrintDupTableLeaseHashMapFunctor {
   {
     return lease_list_;
   }
-  TO_STRING_KV(K_(pkey), K_(lease_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey& pkey_;
@@ -512,8 +512,7 @@ class ObDupTableRedoSyncTask : public ObTransTask {
   {
     return ObTimeUtility::current_time() - create_ts_;
   }
-  TO_STRING_KV(K_(trans_id), K_(partition), K_(log_id), K_(task_type), K_(log_type), K_(timestamp),
-      K_(last_generate_mask_set_ts), K_(is_mask_set_ready));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObTransID trans_id_;

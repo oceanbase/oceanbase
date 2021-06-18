@@ -95,7 +95,7 @@ struct ObEnumSetInfo : public ObIExprExtraInfo {
 
   virtual int deep_copy(
       common::ObIAllocator& allocator, const ObExprOperatorType type, ObIExprExtraInfo*& copied_info) const override;
-  TO_STRING_KV(K_(cast_mode), K_(str_values));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t cast_mode_;
   ObStrValues str_values_;

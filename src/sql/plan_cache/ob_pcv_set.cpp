@@ -25,6 +25,22 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObPCVSet::PCColStruct::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(param_idxs), K_(is_last));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPCVSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(ref_count), K_(min_merged_version));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObPCVSet::init(const ObPlanCacheCtx& pc_ctx, const ObCacheObject* cache_obj)
 {

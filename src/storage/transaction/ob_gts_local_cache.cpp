@@ -18,6 +18,14 @@ namespace oceanbase {
 using namespace common;
 
 namespace transaction {
+int64_t ObGTSLocalCache::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(srr), K_(gts), K_(local_trans_version), K_(barrier_ts), K_(latest_srr));
+  J_OBJ_END();
+  return pos;
+}
 
 void ObGTSLocalCache::reset()
 {

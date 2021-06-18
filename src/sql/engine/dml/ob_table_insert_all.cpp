@@ -19,6 +19,14 @@ using namespace share;
 using namespace share::schema;
 using namespace common;
 namespace sql {
+int64_t InsertTableInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(when_conds_idx));
+  J_OBJ_END();
+  return pos;
+}
 class ObMultiTableInsert::ObMultiTableInsertCtx : public ObTableInsert::ObTableInsertCtx, public ObMultiDMLCtx {
   friend class ObMultiTableInsert;
 

@@ -30,6 +30,30 @@ using namespace storage;
 using namespace share::schema;
 using namespace share;
 namespace blocksstable {
+int64_t ObMacroBlockWriter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_write_ctx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockWriter::IndexMicroBlockBuilder::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(writer_.get_row_count()));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockWriter::IndexMicroBlockDesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(writer_.get_row_count()));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ---------------------------------------------------------ObMacroBlockWriter--------------------------------------------------------------
  */

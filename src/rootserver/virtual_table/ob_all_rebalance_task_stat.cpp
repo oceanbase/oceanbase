@@ -23,6 +23,14 @@ using namespace share;
 using namespace share::schema;
 
 namespace rootserver {
+int64_t ObAllRebalanceTaskStat::Display::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id), K_(partition_cnt), K_(src), K_(data_src), K_(dest), K_(offline),K_(task_type), K_(is_replicate), K_(is_scheduled), K_(waiting_time), K_(executing_time), K_(is_manual));
+  J_OBJ_END();
+  return pos;
+}
 void ObAllRebalanceTaskStat::Display::reset()
 {
   tenant_id_ = OB_INVALID_ID;

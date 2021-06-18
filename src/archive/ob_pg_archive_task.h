@@ -120,11 +120,7 @@ class ObPGArchiveTask : public PGArchiveTaskValue {
   void mock_init(const ObPGKey& pg_key, ObArchiveAllocator* allocator);
   int mock_push_task(ObArchiveSendTask& task, ObSpLinkQueue& queue);
   void mock_free_task_status();
-  TO_STRING_KV(K(pg_been_deleted_), K(is_first_record_finish_), K(incarnation_), K(archive_round_), K(epoch_),
-      K(tenant_id_), K(current_ilog_id_), K(max_log_id_), K(round_start_info_), K(start_log_id_), K(archived_log_id_),
-      K(archived_log_timestamp_), K(archived_checkpoint_ts_), K(archived_clog_epoch_id_), K(archived_accum_checksum_),
-      K(fetcher_max_split_log_id_), K(last_split_log_id_), K(last_split_log_submit_ts_), K(last_split_checkpoint_ts_),
-      K(mandatory_), K(archive_destination_), K(pg_key_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   void destroy();
@@ -180,7 +176,7 @@ class ObPGArchiveTaskGuard final {
   void set_pg_archive_task(ObPGArchiveTask* pg_archive_task);
   ObPGArchiveTask* get_pg_archive_task();
 
-  TO_STRING_KV(KPC(pg_archive_task_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   void revert_pg_archive_task_();

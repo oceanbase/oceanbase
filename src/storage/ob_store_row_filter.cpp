@@ -22,6 +22,14 @@ using namespace common;
 using namespace sql;
 
 namespace storage {
+int64_t ObStoreRowFilter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(part_filter), KP_(exec_ctx), KP_(part_mgr), K_(pkey));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObStoreRowFilter::init(
     const ObTableLocation* part_filter, ObExecContext* exec_ctx, ObPartMgr* part_mgr, const ObPartitionKey& pkey)

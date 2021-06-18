@@ -33,7 +33,7 @@ struct ObSSTableMergeInfoKey {
   inline uint64_t hash() const;
   inline bool operator==(const ObSSTableMergeInfoKey& other) const;
   inline bool operator!=(const ObSSTableMergeInfoKey& other) const;
-  TO_STRING_KV(K_(table_id), K_(partition_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t table_id_;
   int64_t partition_id_;
 };
@@ -51,8 +51,7 @@ struct ObSSTableMergeInfoValue {
   virtual ~ObSSTableMergeInfoValue()
   {}
   inline void reset();
-  TO_STRING_KV(K_(major_version), K_(minor_version), K_(snapshot_version), K_(insert_row_count), K_(update_row_count),
-      K_(delete_row_count), K_(ref_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int32_t major_version_;
   int32_t minor_version_;
   int64_t snapshot_version_;
@@ -78,8 +77,7 @@ struct ObTableModificationInfo {
     delete_row_count_ = 0;
     max_snapshot_version_ = 0;
   }
-  TO_STRING_KV(K_(table_id), K_(partition_id), K_(insert_row_count), K_(update_row_count), K_(delete_row_count),
-      K_(max_snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t table_id_;

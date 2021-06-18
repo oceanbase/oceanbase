@@ -42,6 +42,14 @@ using namespace common;
 using namespace share;
 using namespace transaction;
 namespace clog {
+int64_t LeaderMaxLogInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(switchover_epoch), K_(max_log_id), K_(next_log_ts));
+  J_OBJ_END();
+  return pos;
+}
 // Total size of logs to be replayed during restart
 static int64_t pending_scan_confirmed_log_size = 0;
 ObLogSlidingWindow::ObLogSlidingWindow()

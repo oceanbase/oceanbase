@@ -383,3 +383,11 @@ ObIArray<MacroBlockId>& ObPGMetaItemReader::get_meta_block_list()
 {
   return reader_.get_meta_block_list();
 }
+int64_t ObPGMetaItemBuffer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(buf), K_(buf_len), K_(item_type));
+  J_OBJ_END();
+  return pos;
+}

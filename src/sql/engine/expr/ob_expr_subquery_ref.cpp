@@ -20,6 +20,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObExprSubQueryRef::ExtraInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(op_id_), K(iter_idx_), K(is_scalar_));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(
     (ObExprSubQueryRef, ObExprOperator), result_is_scalar_, scalar_result_type_, subquery_idx_, row_desc_);
 

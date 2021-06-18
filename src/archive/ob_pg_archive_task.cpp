@@ -19,6 +19,22 @@
 
 namespace oceanbase {
 namespace archive {
+int64_t ObPGArchiveTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pg_been_deleted_), K(is_first_record_finish_), K(incarnation_), K(archive_round_), K(epoch_),K(tenant_id_), K(current_ilog_id_), K(max_log_id_), K(round_start_info_), K(start_log_id_), K(archived_log_id_),K(archived_log_timestamp_), K(archived_checkpoint_ts_), K(archived_clog_epoch_id_), K(archived_accum_checksum_),K(fetcher_max_split_log_id_), K(last_split_log_id_), K(last_split_log_submit_ts_), K(last_split_checkpoint_ts_),K(mandatory_), K(archive_destination_), K(pg_key_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGArchiveTaskGuard::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC(pg_archive_task_));
+  J_OBJ_END();
+  return pos;
+}
 using namespace oceanbase::common;
 
 ObPGArchiveTask::ObPGArchiveTask()

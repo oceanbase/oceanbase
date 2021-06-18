@@ -27,7 +27,7 @@ struct ObMacroBlockKey final {
   ~ObMacroBlockKey() = default;
   uint64_t hash() const;
   bool operator==(const ObMacroBlockKey& other) const;
-  TO_STRING_KV(K_(table_key), K_(macro_block_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObITable::TableKey table_key_;
   blocksstable::MacroBlockId macro_block_id_;
 };

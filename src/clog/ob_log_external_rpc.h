@@ -112,7 +112,7 @@ class ObLogReqStartLogIdByTsRequest {
     common::ObPartitionKey pkey_;
     int64_t start_tstamp_;
     void reset();
-    TO_STRING_KV(K_(pkey), K_(start_tstamp));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
@@ -129,7 +129,7 @@ class ObLogReqStartLogIdByTsRequest {
   const ParamArray& get_params() const;
   // Backward compatible.
   int64_t rpc_ver() const;
-  TO_STRING_KV(K_(rpc_ver), K_(params));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -151,7 +151,7 @@ class ObLogReqStartLogIdByTsResponse {
     uint64_t start_log_id_;
     bool predict_;  // start_log_id is not written and will be written
     void reset();
-    TO_STRING_KV(K_(err), K_(start_log_id), K_(predict));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Result, 16> ResultArray;
@@ -169,7 +169,7 @@ class ObLogReqStartLogIdByTsResponse {
   const ResultArray& get_results() const;
   int64_t rpc_ver() const;
   void set_rpc_ver(const int64_t ver);
-  TO_STRING_KV(K_(rpc_ver), K_(err), K_(res));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -223,7 +223,7 @@ class ObLogReqStartPosByLogIdRequest {
     uint64_t start_log_id_;
     void reset();
     // Tostring.
-    TO_STRING_KV(K_(pkey), K_(start_log_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     // Rpc serialize & deserialize.
     OB_UNIS_VERSION(1);
   };
@@ -240,7 +240,7 @@ class ObLogReqStartPosByLogIdRequest {
   int append_param(const Param& param);
   const ParamArray& get_params() const;
   int64_t rpc_ver() const;
-  TO_STRING_KV(K_(rpc_ver), K_(params));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -265,7 +265,7 @@ class ObLogReqStartPosByLogIdResponse {
     uint64_t first_log_id_;
     uint64_t last_log_id_;
     void reset();
-    TO_STRING_KV(K_(err), K_(file_id), K_(offset), K_(first_log_id), K_(last_log_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Result, 16> ResultArray;
@@ -283,7 +283,7 @@ class ObLogReqStartPosByLogIdResponse {
   const ResultArray& get_results() const;
   int64_t rpc_ver() const;
   void set_rpc_ver(const int64_t ver);
-  TO_STRING_KV(K_(rpc_ver), K_(err), K_(res));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -331,7 +331,7 @@ class ObLogExternalFetchLogRequest {
     uint64_t last_log_id_;
     void reset();
     // Tostring.
-    TO_STRING_KV(K_(pkey), K_(start_log_id), K_(last_log_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     // Serialize & deserialize.
     OB_UNIS_VERSION(1);
   };
@@ -354,7 +354,7 @@ class ObLogExternalFetchLogRequest {
   int64_t get_offline_timeout() const;
   static bool is_valid_offline_timeout(const int64_t offline_timestamp);
   int64_t rpc_ver() const;
-  TO_STRING_KV(K_(rpc_ver), K_(params), K_(file_id), K_(offset), K_(offline_timeout));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -375,7 +375,7 @@ class ObLogExternalFetchLogResponse {
     common::ObPartitionKey pkey_;
     int64_t sync_ts_;
     void reset();
-    TO_STRING_KV(K_(pkey), K_(sync_ts));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<OfflinePartition, 16> OfflinePartitionArray;
@@ -404,7 +404,7 @@ class ObLogExternalFetchLogResponse {
   const char* get_log_entry_buf() const;
   int64_t rpc_ver() const;
   void set_rpc_ver(const int64_t ver);
-  TO_STRING_KV(K_(rpc_ver), K_(err), K_(offline_partitions), K_(file_id), K_(offset), K_(log_num), K_(pos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -454,7 +454,7 @@ class ObLogReqHeartbeatInfoRequest {
     common::ObPartitionKey pkey_;
     uint64_t log_id_;
     void reset();
-    TO_STRING_KV(K_(pkey), K_(log_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
@@ -470,7 +470,7 @@ class ObLogReqHeartbeatInfoRequest {
   int append_param(const Param& param);
   const ParamArray& get_params() const;
   int64_t rpc_ver() const;
-  TO_STRING_KV(K_(rpc_ver), K_(params));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -486,7 +486,7 @@ class ObLogReqHeartbeatInfoResponse {
     int err_;
     int64_t tstamp_;
     void reset();
-    TO_STRING_KV(K_(err), K_(tstamp));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Result, 16> ResultArray;
@@ -504,7 +504,7 @@ class ObLogReqHeartbeatInfoResponse {
   const ResultArray& get_results() const;
   int64_t rpc_ver() const;
   void set_rpc_ver(const int64_t ver);
-  TO_STRING_KV(K_(rpc_ver), K_(err), K_(res));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -560,7 +560,7 @@ struct BreakInfo {
     break_file_id_ = common::OB_INVALID_FILE_ID;
     min_greater_log_id_ = common::OB_INVALID_ID;
   }
-  TO_STRING_KV(K(break_file_id_), K(min_greater_log_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -585,7 +585,7 @@ class ObLogReqStartLogIdByTsRequestWithBreakpoint {
     {
       return pkey_.is_valid() && (start_tstamp_ > 0);
     }
-    TO_STRING_KV(K_(pkey), K_(start_tstamp), K(break_info_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
@@ -602,7 +602,7 @@ class ObLogReqStartLogIdByTsRequestWithBreakpoint {
   const ParamArray& get_params() const;
   // Backward compatible.
   int64_t rpc_ver() const;
-  TO_STRING_KV(K_(rpc_ver), "param_count", params_.count(), K_(params));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -641,7 +641,7 @@ class ObLogReqStartLogIdByTsResponseWithBreakpoint {
       start_log_ts_ = start_log_ts;
     }
 
-    TO_STRING_KV(K_(err), K_(start_log_id), K_(start_log_ts));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Result, 16> ResultArray;
@@ -659,7 +659,7 @@ class ObLogReqStartLogIdByTsResponseWithBreakpoint {
   const ResultArray& get_results() const;
   int64_t rpc_ver() const;
   void set_rpc_ver(const int64_t ver);
-  TO_STRING_KV(K_(rpc_ver), K_(err), "result_count", res_.count(), "result", res_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -702,7 +702,7 @@ class ObLogReqStartPosByLogIdRequestWithBreakpoint {
     {
       return pkey_.is_valid() && (start_log_id_ > 0);
     }
-    TO_STRING_KV(K(pkey_), K(start_log_id_), K(break_info_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
@@ -718,7 +718,7 @@ class ObLogReqStartPosByLogIdRequestWithBreakpoint {
   int append_param(const Param& param);
   const ParamArray& get_params() const;
   int64_t rpc_ver() const;
-  TO_STRING_KV(K(rpc_ver_), K(params_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -744,7 +744,7 @@ class ObLogReqStartPosByLogIdResponseWithBreakpoint {
     uint64_t last_log_id_;
     BreakInfo break_info_;
     void reset();
-    TO_STRING_KV(K_(err), K_(file_id), K_(offset), K_(first_log_id), K_(last_log_id), K(break_info_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Result, 16> ResultArray;
@@ -762,7 +762,7 @@ class ObLogReqStartPosByLogIdResponseWithBreakpoint {
   const ResultArray& get_results() const;
   int64_t rpc_ver() const;
   void set_rpc_ver(const int64_t ver);
-  TO_STRING_KV(K_(rpc_ver), K_(err), K_(res));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -819,7 +819,7 @@ struct ObStreamSeq {
   {
     return murmurhash(&self_, sizeof(self_), seq_ts_);
   }
-  TO_STRING_KV(K(self_), K(seq_ts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -839,7 +839,7 @@ class ObLogOpenStreamReq {
     {
       return pkey_.is_valid() && (common::OB_INVALID_ID != start_log_id_);
     }
-    TO_STRING_KV(K(pkey_), K(start_log_id_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
@@ -919,8 +919,7 @@ class ObLogOpenStreamReq {
   {
     return rpc_ver_;
   }
-  TO_STRING_KV(
-      K_(rpc_ver), K_(stream_lifetime), K_(liboblog_pid), K_(stale_stream), "param_count", params_.count(), K_(params));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -1019,7 +1018,7 @@ class ObLogOpenStreamResp {
   {
     return seq_;
   }
-  TO_STRING_KV(K(rpc_ver_), K(err_), K(debug_err_), K(seq_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -1165,7 +1164,7 @@ class ObLogStreamFetchLogReq {
     return !(*this == that);
   }
 
-  TO_STRING_KV(K_(rpc_ver), K_(seq), K_(upper_limit_ts), K_(log_cnt_per_part_per_round), K_(enable_feedback));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -1208,9 +1207,7 @@ struct ObFetchStatus {
     svr_queue_time_ = 0;
     ext_process_time_ = 0;
   }
-  TO_STRING_KV(K(touched_pkey_count_), K(need_fetch_pkey_count_), K(reach_max_log_id_pkey_count_),
-      K(reach_upper_limit_ts_pkey_count_), K(scan_round_count_), K(l2s_net_time_), K(svr_queue_time_),
-      K(ext_process_time_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -1243,7 +1240,7 @@ class ObLogStreamFetchLogResp {
     {
       return pkey_.is_valid() && INVALID_FEEDBACK != feedback_type_;
     }
-    TO_STRING_KV(K(pkey_), K(feedback_type_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<FeedbackPartition, 16> FeedBackPartitionArray;
@@ -1262,7 +1259,7 @@ class ObLogStreamFetchLogResp {
       return pkey_.is_valid() && (common::OB_INVALID_ID != next_log_id_) &&
              (common::OB_INVALID_TIMESTAMP != heartbeat_ts_);
     }
-    TO_STRING_KV(K(pkey_), K(next_log_id_), K(heartbeat_ts_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<FetchLogHeartbeatItem, 16> FetchLogHeartbeatArray;
@@ -1403,9 +1400,7 @@ class ObLogStreamFetchLogResp {
     }
     return ret;
   }
-  TO_STRING_KV(K_(rpc_ver), K_(err), K_(debug_err), K_(fetch_status), K_(log_num), K_(pos), "feedback_count",
-      feedback_partition_arr_.count(), "heartbeat_count", fetch_log_heartbeat_arr_.count(), "feedback_array",
-      feedback_partition_arr_, "heartbeat_array", fetch_log_heartbeat_arr_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -1471,7 +1466,7 @@ class ObLogLeaderHeartbeatReq {
       next_log_id_ = next_log_id;
     }
 
-    TO_STRING_KV(K(pkey_), K(next_log_id_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Param, 256> ParamArray;
@@ -1521,7 +1516,7 @@ class ObLogLeaderHeartbeatReq {
   {
     return rpc_ver_;
   }
-  TO_STRING_KV(K_(rpc_ver), "param_count", params_.count(), K_(params));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   public:
@@ -1553,7 +1548,7 @@ class ObLogLeaderHeartbeatResp {
       next_served_log_id_ = common::OB_INVALID_ID;
       next_served_ts_ = common::OB_INVALID_TIMESTAMP;
     }
-    TO_STRING_KV(K(err_), K(next_served_log_id_), K(next_served_ts_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(1);
   };
   typedef common::ObSEArray<Result, 256> ResultArray;
@@ -1610,7 +1605,7 @@ class ObLogLeaderHeartbeatResp {
   {
     rpc_ver_ = ver;
   }
-  TO_STRING_KV(K_(rpc_ver), K_(err), K_(debug_err), "result_count", res_.count(), "result", res_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:

@@ -24,6 +24,62 @@
 namespace oceanbase {
 using namespace common;
 namespace storage {
+int64_t ObReplayTaskInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(log_id_), K(log_type_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplayTask::FailRoundInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(has_encount_fatal_error_), K(table_version_), K(fail_ts_), K(log_id_), K(log_type_), K(ret_code_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplayLogTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("partition_key", pk_, "log_type", log_type_, "log_submit_timestamp", log_submit_timestamp_, "log_id",log_id_, "log_size", log_size_, "batch_committed", batch_committed_, "task_submit_timestamp",task_submit_timestamp_, KP(ref_buf_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplayLogTaskEx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("trans_id", trans_id_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplayErrInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(task_info_), K(err_ts_), K(err_ret_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplayStatus::CheckCanReplayResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(ret_code_), K(is_out_of_memstore_mem_), K(has_barrier_), K(is_pre_barrier_),K(need_wait_schema_refresh_), K(pkey_), K(task_info_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplayStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(ref_cnt_), K(replay_err_info_), K(last_task_info_), K(post_barrier_status_), K(pending_task_count_),K(pending_abort_task_count_), K(pending_task_mutator_size_), K(eagain_count_), K(eagain_start_ts_),K(total_submitted_task_num_), K(total_replayed_task_num_), K(is_enabled_), K(is_pending_), K(can_receive_log_),K(offline_partition_log_id_), K(offline_partition_task_submitted_), K(submit_log_task_));
+  J_OBJ_END();
+  return pos;
+}
 int64_t ObReplayLogTask::get_trans_inc_no() const
 {
   int ret = OB_SUCCESS;

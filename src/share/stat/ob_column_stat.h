@@ -76,7 +76,7 @@ class ObColumnStat : public common::ObIKVCacheValue {
     {
       return table_id_ > 0 && column_id_ > 0;
     }
-    TO_STRING_KV(K(table_id_), K(partition_id_), K(column_id_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   public:
@@ -88,8 +88,7 @@ class ObColumnStat : public common::ObIKVCacheValue {
   virtual int64_t size() const;
   virtual int deep_copy(char* buf, const int64_t buf_len, ObIKVCacheValue*& value) const;
 
-  TO_STRING_KV(K(table_id_), K(partition_id_), K(column_id_), K(version_), K(last_rebuild_version_), K(num_distinct_),
-      K(num_null_), K(min_value_), K(max_value_), K(is_modified_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int add_value(const common::ObObj& value);
   int add(const ObColumnStat& other);

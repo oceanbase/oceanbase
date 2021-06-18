@@ -46,7 +46,7 @@ class ObLtsSource : public ObITsSource {
   int get_publish_version(int64_t& publish_version);
 
   public:
-  TO_STRING_KV("ts_source", "LTS");
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 }  // namespace transaction
 }  // end of namespace oceanbase

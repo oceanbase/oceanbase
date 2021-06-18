@@ -649,3 +649,35 @@ void ObPurgeCompletedMonitorInfoTask::runTimerTask()
     }
   }
 }
+int64_t ObCreateIndexPartitionStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(task_stats), K_(common_value));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCommonOpsStatValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start_time), K_(finish_time), K_(elapsed_time), K_(remaining_time), K_(percentage), K_(last_update_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObILongOpsKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(sid), K_(name), K_(target));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObILongOpsTaskStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_id), K_(cpu_cost), K_(io_cost), K_(state), K_(type));
+  J_OBJ_END();
+  return pos;
+}

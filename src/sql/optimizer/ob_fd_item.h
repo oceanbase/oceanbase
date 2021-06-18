@@ -207,7 +207,7 @@ class ObFdItemFactory {
   {
     return allocator_;
   }
-  TO_STRING_KV("", "");
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObIAllocator& allocator_;

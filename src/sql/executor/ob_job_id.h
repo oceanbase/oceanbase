@@ -109,7 +109,7 @@ class ObJobID final {
     ob_execution_id_.reset();
     job_id_ = common::OB_INVALID_ID;
   }
-  TO_STRING_KV(N_OB_EXECUTION_ID, ob_execution_id_, N_JOB_ID, job_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   DECLARE_TO_YSON_KV;
 
   private:

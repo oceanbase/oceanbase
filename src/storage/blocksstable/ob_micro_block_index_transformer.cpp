@@ -19,6 +19,14 @@ namespace oceanbase {
 using namespace common;
 
 namespace blocksstable {
+int64_t MediumNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(obj), K_(first_block_index), K_(first_child_index), K_(child_num));
+  J_OBJ_END();
+  return pos;
+}
 bool MediumNode::is_valid()
 {
   return obj_.is_valid_type() && first_block_index_ >= 0 && first_child_index_ >= 0 && child_num_ >= 0;

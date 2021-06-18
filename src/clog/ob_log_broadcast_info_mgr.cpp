@@ -18,6 +18,14 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObLogBroadcastInfoMgr::BroadcastInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(replica_type), K_(max_confirmed_log_id), K_(update_ts));
+  J_OBJ_END();
+  return pos;
+}
 ObLogBroadcastInfoMgr::ObLogBroadcastInfoMgr() : is_inited_(false), membership_mgr_(NULL)
 {}
 

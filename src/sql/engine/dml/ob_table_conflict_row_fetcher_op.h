@@ -28,7 +28,7 @@ struct ObPartConflictDatumStore {
   public:
   ObPartConflictDatumStore() : part_key_(), conflict_datum_store_(NULL)
   {}
-  TO_STRING_KV(K_(part_key), KPC_(conflict_datum_store));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey part_key_;
   sql::ObChunkDatumStore* conflict_datum_store_;

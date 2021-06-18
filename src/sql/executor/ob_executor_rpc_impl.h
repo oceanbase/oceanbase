@@ -348,7 +348,7 @@ class ObExecutorRpcCtx {
     return is_plain_select_;
   }
   int check_status() const;
-  TO_STRING_KV(K_(rpc_tenant_id), K_(timeout_timestamp), K_(min_cluster_version), K_(retry_info), K_(is_plain_select));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t rpc_tenant_id_;

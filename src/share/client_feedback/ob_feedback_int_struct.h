@@ -51,7 +51,7 @@ class ObFeedbackIntStruct : public ObAbstractFeedbackObject<ObFeedbackIntStruct>
 
   FB_OBJ_DEFINE_METHOD;
 
-  TO_STRING_KV("type", get_feedback_element_type_str(type_), K_(int_value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   int64_t int_value_;

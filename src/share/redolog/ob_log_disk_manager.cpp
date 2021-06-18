@@ -22,6 +22,38 @@
 namespace oceanbase {
 using namespace clog;
 namespace common {
+int64_t ObLogFdInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(fd), K_(disk_id), K_(file_id), K_(refresh_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogDiskInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(disk_id), K_(dir_path), K_(state), K_(state_modify_timestamp), K_(restore_start_file_id),K_(restore_start_offset), K_(log_dir), K_(file_pool), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogDiskManager::LogRestoreProgress::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(checksum), K_(length), K_(version), K_(catchup_complete), K_(copy_complete), K_(catchup_file_id),K_(catchup_offset), K_(copy_start_file_id), K_(copied_file_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogDiskManager::DirScanResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(disk_id), K_(min_log_id), K_(max_log_id), K_(continuous), K_(has_log), K_(is_restoring));
+  J_OBJ_END();
+  return pos;
+}
 bool ObLogFdInfo::is_valid() const
 {
   return fd_ >= 0 && disk_id_ >= 0 && disk_id_ < ObLogDiskManager::MAX_DISK_COUNT && file_id_ >= 0 &&

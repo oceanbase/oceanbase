@@ -4182,3 +4182,27 @@ int ObTableStore::get_recovery_point_tables(const int64_t snapshot_version, ObTa
   }
   return ret;
 }
+int64_t ObTableCompater::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(compaters));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogTsCompater::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(log_ts_range), K_(is_base));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObVirtualPartitionSplitInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_major_split), K_(table_id), K_(partition_id), K_(merge_version));
+  J_OBJ_END();
+  return pos;
+}

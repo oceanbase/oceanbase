@@ -142,7 +142,7 @@ class CheckPgRecoveryFinishedTask : public common::IObDedupTask {
   }
   virtual int process();
 
-  TO_STRING_KV(K(server_), K(is_stopped_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int do_check_pg_recovery_finished(bool& is_finished);
@@ -189,7 +189,7 @@ class UpdateFileRecoveryStatusTask : public common::IObDedupTask {
   }
   virtual int process();
 
-  TO_STRING_KV(K(server_), K(is_stopped_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   const common::ObAddr server_;
@@ -217,7 +217,7 @@ struct RefugeeInfo {
   virtual ~RefugeeInfo()
   {}
 
-  TO_STRING_KV(K_(server), K_(tenant_id), K_(file_id), K_(dest_unit_id), K_(dest_server), K_(file_recovery_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int assign(const RefugeeInfo& that);
 
   common::ObAddr server_;
@@ -233,8 +233,7 @@ struct ObServerRecoveryTask {
   public:
   ObServerRecoveryTask();
   virtual ~ObServerRecoveryTask();
-  TO_STRING_KV(K(server_), K(rescue_server_), K(progress_), K(refugee_infos_), K(split_server_log_status_),
-      K(recover_file_task_gen_status_), K(check_pg_recovery_finished_status_), K(last_drive_ts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int get_refugee_info(
       const uint64_t tenant_id, const int64_t file_id, const common::ObAddr& dest_server, RefugeeInfo*& refugee_info);
 

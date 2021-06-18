@@ -97,3 +97,19 @@ int ObSequenceOption::assign(const share::ObSequenceOption& from)
   order_ = from.order_;
   return ret;
 }
+int64_t ObSequenceOption::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(increment_by), K_(start_with), K_(maxvalue), K_(minvalue), K_(cache), K_(cycle), K_(order));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSequenceValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("val", val_.format());
+  J_OBJ_END();
+  return pos;
+}

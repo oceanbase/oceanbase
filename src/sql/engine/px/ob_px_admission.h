@@ -91,7 +91,7 @@ class ObPxPoolStat {
   void acquire_max_parallel_servers(int64_t max, int64_t min, int64_t& acquired_cnt);
   void release_max_parallel_servers(int64_t acquired_cnt);
 
-  TO_STRING_KV(K_(target), K_(parallel_servers_target_used), K_(pool_size), K_(max_parallel_servers_used));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // PARALLEL_SERVERS_TARGET

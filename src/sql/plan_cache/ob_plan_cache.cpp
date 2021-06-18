@@ -41,6 +41,14 @@ using namespace oceanbase::lib;
 using namespace oceanbase::observer;
 namespace oceanbase {
 namespace sql {
+int64_t ObPlanCache::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(mem_limit_pct), K_(mem_high_pct), K_(mem_low_pct));
+  J_OBJ_END();
+  return pos;
+}
 struct ObGetPlanIdBySqlIdOp {
   explicit ObGetPlanIdBySqlIdOp(
       common::ObIArray<uint64_t>* key_array, const common::ObString& sql_id, const uint64_t& plan_hash_value)

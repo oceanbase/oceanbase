@@ -37,6 +37,30 @@
 namespace oceanbase {
 namespace share {
 namespace schema {
+int64_t SchemaKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(database_id), K_(tablegroup_id), K_(table_id), K_(outline_id),K_(database_name), K_(table_name), K_(schema_version), K_(synonym_id), K_(sequence_id), K_(sequence_name),K_(udf_id), K_(udf_name), K_(profile_id), K_(grantee_id), K_(grantor_id), K_(col_id), K_(obj_type),K_(dblink_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t VersionHisKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(schema_type_), K(schema_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t VersionHisVal::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(snapshot_version_), K(is_deleted_), "versions", common::ObArrayWrap<int64_t>(versions_, valid_cnt_),K(min_version_));
+  J_OBJ_END();
+  return pos;
+}
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 using namespace oceanbase::common::sqlclient;

@@ -23,6 +23,14 @@ using namespace storage;
 using namespace common;
 
 namespace transaction {
+int64_t ObTransSplitInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(src_pk), K_(dest_pks));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObTransSplitInfo, src_pk_, dest_pks_);
 

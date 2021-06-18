@@ -20,6 +20,22 @@
 namespace oceanbase {
 namespace share {
 namespace schema {
+int64_t ObSimpleSysVariableSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(schema_version), K_(name_case_mode), K_(read_only));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSysVariableHashWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
 using namespace std;
 using namespace common;
 using namespace common::hash;

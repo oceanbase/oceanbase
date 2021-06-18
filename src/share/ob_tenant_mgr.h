@@ -165,7 +165,7 @@ struct ObRetryMajorInfo {
     major_version_.reset();
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(major_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 class ObTenantInfo : public ObDLinkBase<ObTenantInfo> {
   public:

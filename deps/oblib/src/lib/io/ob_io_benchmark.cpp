@@ -38,6 +38,22 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObIOWorkload::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(mode), K_(io_size), K_(is_seq_io));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIOBenchResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(workload), K_(iops), K_(rt));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObIOBenchResult::to_string(char* buf, const int64_t length, int64_t& pos) const
 {

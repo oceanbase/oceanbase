@@ -45,7 +45,7 @@ class ObRoutineMatchInfo {
     ObObjType src_type_;
     ObObjType dest_type_;
 
-    TO_STRING_KV(K_(need_cast), K_(src_type), K_(dest_type));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   bool need_cast()
@@ -83,7 +83,7 @@ class ObRoutineMatchInfo {
   public:
   common::ObSEArray<MatchInfo, 16> match_info_;
 
-  TO_STRING_KV(K_(match_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 struct ObResolverUtils {
   enum RangeElementsNode { PARTITION_NAME_NODE = 0, PARTITION_ELEMENT_NODE = 1 };

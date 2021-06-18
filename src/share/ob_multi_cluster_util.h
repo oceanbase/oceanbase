@@ -102,7 +102,7 @@ struct ObTenantFlashbackSCN {
   {
     return std::min(inner_scn_, user_scn_);
   }
-  TO_STRING_KV(K_(tenant_id), K_(inner_scn), K_(user_scn), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 }  // namespace share
 }  // namespace oceanbase

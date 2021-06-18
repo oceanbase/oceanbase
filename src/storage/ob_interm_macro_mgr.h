@@ -31,7 +31,7 @@ struct ObIntermMacroKey {
   virtual ~ObIntermMacroKey();
   inline int64_t hash() const;
   bool operator==(const ObIntermMacroKey& other) const;
-  TO_STRING_KV(K_(execution_id), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t execution_id_;
   uint64_t task_id_;
 };
@@ -52,7 +52,7 @@ class ObIntermMacroValue {
   }
   // after deep copy, macro_block_ctx_ will be cleared
   int deep_copy(char* buf, const int64_t buf_len, ObIntermMacroValue*& value);
-  TO_STRING_KV(K_(macro_block_write_ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   blocksstable::ObMacroBlocksWriteCtx macro_block_write_ctx_;

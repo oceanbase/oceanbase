@@ -22,6 +22,14 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
+int64_t ObExecutorRpcCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_tenant_id), K_(timeout_timestamp), K_(min_cluster_version), K_(retry_info), K_(is_plain_select));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObExecutorRpcImpl::init(obrpc::ObExecutorRpcProxy* rpc_proxy, obrpc::ObBatchRpc* batch_rpc)
 {

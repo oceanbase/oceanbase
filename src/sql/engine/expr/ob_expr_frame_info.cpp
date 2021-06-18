@@ -20,6 +20,22 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObFrameInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(expr_cnt), K_(frame_idx), K_(frame_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExprFrameInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(const_frame_ptrs), K_(const_frame), K_(dynamic_frame), K_(datum_frame));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObFrameInfo, expr_cnt_, frame_idx_, frame_size_);
 

@@ -971,3 +971,27 @@ int ObConnectByPump::RowFetcher::get_next_row(ObNewRow*& row)
   }
   return ret;
 }
+int64_t ObConnectByPump::PumpNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC(pump_row_), KPC(output_row_), K(is_cycle_), K(is_leaf_), K(level_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObConnectByPump::HashTableCell::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stored_row), K(static_cast<void*>(next_tuple_)));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObConnectByPump::ObHashColumn::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row), K_(hash_val));
+  J_OBJ_END();
+  return pos;
+}

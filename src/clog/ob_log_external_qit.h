@@ -39,7 +39,7 @@ class ObExtRpcQit {
   // check should_hurry_quit when start to perform a time-consuming operation
   int should_hurry_quit(bool& is_hurry_quit) const;
 
-  TO_STRING_KV(K(is_inited_), K(type_), K(deadline_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   inline int64_t cur_ts() const

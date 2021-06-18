@@ -2129,3 +2129,19 @@ int ObTransformGroupByPlacement::wrap_case_when(ObSelectStmt& child_stmt, ObRawE
   }
   return ret;
 }
+int64_t ObTransformGroupByPlacement::PushDownParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_bit_index), K_(group_exprs), K_(aggr_exprs), K_(join_columns), K_(filter_exprs),K_(correlated_joined_tables));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransformGroupByPlacement::PullupHelper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(parent_table), K_(table_id), K_(not_null_column_id), K_(not_null_column_table_id),K_(need_check_null_propagate), K_(need_check_having), K_(need_merge));
+  J_OBJ_END();
+  return pos;
+}

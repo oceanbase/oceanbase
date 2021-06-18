@@ -30,7 +30,7 @@ class ObDtlRpcDataResponse {
   public:
   ObDtlRpcDataResponse() : is_block_(false), recode_(OB_SUCCESS)
   {}
-  TO_STRING_KV(K_(is_block));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   bool is_block_;
@@ -43,7 +43,7 @@ class ObDtlBCRpcDataResponse {
   public:
   ObDtlBCRpcDataResponse() : resps_()
   {}
-  TO_STRING_KV(K_(resps));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObSEArray<ObDtlRpcDataResponse, 16> resps_;
@@ -53,7 +53,7 @@ struct ObDtlRpcChanArgs {
   int64_t chid_;
   common::ObAddr peer_;
 
-  TO_STRING_KV(K_(chid), K_(peer));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -64,7 +64,7 @@ class ObDtlSendArgs {
   {}
   int64_t chid_;
   ObDtlLinkedBuffer buffer_;
-  TO_STRING_KV(K_(chid), KP(&buffer_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   OB_UNIS_VERSION(1);
@@ -76,7 +76,7 @@ class ObDtlBCSendArgs {
   {}
   ObSEArray<ObDtlSendArgs, 16> args_;
   ObDtlLinkedBuffer bc_buffer_;
-  TO_STRING_KV(K(args_.count()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   OB_UNIS_VERSION(1);

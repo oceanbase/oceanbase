@@ -16,6 +16,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObBucketLock::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(bucket_cnt), K_(latch_cnt), K_(latch_id));
+  J_OBJ_END();
+  return pos;
+}
 
 ObBucketLock::ObBucketLock()
     : bucket_cnt_(0), latch_cnt_(0), latches_(NULL), latch_id_(ObLatchIds::DEFAULT_BUCKET_LOCK), is_inited_(false)

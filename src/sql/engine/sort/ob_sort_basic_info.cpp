@@ -16,6 +16,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObSortFieldCollation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(field_idx), K_(cs_type), K_(is_ascending), K_(null_pos));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObSortFieldCollation, field_idx_, cs_type_, is_ascending_, null_pos_);
 

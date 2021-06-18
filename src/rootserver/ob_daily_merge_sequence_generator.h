@@ -54,7 +54,7 @@ class ObDailyMergeSequenceGenerator {
     int64_t leader_cnt_;
     int64_t replica_cnt_;
     common::ObZoneType type_;
-    TO_STRING_KV(K_(zone), K_(region), K_(servers), K_(leader_cnt), K_(type), K_(replica_cnt));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObMergeUnit() : zone_(), region_(), servers_(), leader_cnt_(0), replica_cnt_(0), type_(common::ZONE_TYPE_INVALID)
     {}
     ~ObMergeUnit()
@@ -69,7 +69,7 @@ class ObDailyMergeSequenceGenerator {
     {}
     ~ObConflictPair()
     {}
-    TO_STRING_KV(K(first), K(second), K(same_partition_cnt_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   typedef common::ObSEArray<ObMergeUnit, DEFAULT_MERGE_UNIT_COUNT> ObMergeUnitArray;

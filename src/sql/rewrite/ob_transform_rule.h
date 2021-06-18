@@ -124,7 +124,7 @@ struct ObParentDMLStmt {
   {}
   int64_t pos_;
   ObDMLStmt* stmt_;
-  TO_STRING_KV(K_(pos), K_(stmt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObTransformRule {

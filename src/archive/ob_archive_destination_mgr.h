@@ -61,9 +61,7 @@ class ObArchiveDestination {
   int get_file_offset(const LogArchiveFileType type, int64_t& offset, bool& flag);
   // get the min log info in the archived file, for index file record
   int get_data_file_min_log_info(uint64_t& min_log_id, int64_t& min_log_ts, bool& is_valid);
-  TO_STRING_KV(K(is_inited_), K(compatible_), K(cur_index_file_id_), K(index_file_offset_), K(cur_data_file_id_),
-      K(data_file_offset_), K(data_file_min_log_id_), K(data_file_min_log_ts_), K(force_switch_data_file_),
-      K(force_switch_index_file_), K(is_data_file_valid_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int update_file_meta_info_(const LogArchiveFileType file_type);

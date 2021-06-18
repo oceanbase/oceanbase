@@ -59,7 +59,7 @@ class ObLogEntry {
   {
     return header_.update_proposal_id(new_proposal_id);
   }
-  TO_STRING_KV(N_HEADER, header_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   protected:
@@ -142,9 +142,7 @@ class ObIndexEntry {
   {
     return get_serialize_size();
   }
-  TO_STRING_KV(N_MAGIC, magic_, N_VERSION, version_, N_PARTITION_KEY, partition_key_, N_LOG_ID, log_id_, N_FILE_ID,
-      file_id_, N_OFFSET, offset_, N_SIZE, size_, N_SUBMIT_TIMESTAMP, get_submit_timestamp(), "is_batch_committed",
-      is_batch_committed(), K_(accum_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   static const int16_t INDEX_MAGIC = 0x494E;  // IN means index
@@ -174,7 +172,7 @@ class ObPaddingEntry {
   static uint32_t get_padding_size(const int64_t offset, const uint32_t align_size = CLOG_DIO_ALIGN_SIZE);
   int64_t get_entry_size();
   int set_entry_size(int64_t entry_size);
-  TO_STRING_KV(K(magic_), K(version_), K(entry_size_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   private:
@@ -212,7 +210,7 @@ class ObCompressedLogEntryHeader {
   {
     return (get_serialize_size() + compressed_data_len_);
   }
-  TO_STRING_KV(K(magic_), K(orig_data_len_), K(compressed_data_len_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   public:
@@ -246,7 +244,7 @@ class ObCompressedLogEntry {
   {
     return buf_;
   }
-  TO_STRING_KV(N_HEADER, header_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   private:

@@ -45,8 +45,7 @@ struct ObTrxMsgBase : public obrpc::ObIFill {
   {
     return get_serialize_size();
   }
-  TO_STRING_KV(K_(tenant_id), K_(trans_id), K_(msg_type), K_(trans_time), K_(sender), K_(receiver), K_(trans_param),
-      K_(sender_addr), K_(timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t tenant_id_;
@@ -365,8 +364,7 @@ struct ObTrx2PCPrepareRequest : public ObTrxMsgBase {
   {
     return split_info_.assign(split_info);
   }
-  TO_STRING_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(stc),
-      K_(partition_log_info_arr), K_(batch_same_leader_partitions), K_(app_trace_info), K_(xid), K_(is_xa_prepare));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObAddr scheduler_;
@@ -419,9 +417,7 @@ struct ObTrx2PCPrepareResponse : public ObTrxMsgBase {
   {
     return split_info_.assign(split_info);
   }
-  TO_STRING_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(state),
-      K_(partition_log_info_arr), K_(trans_version), K_(prepare_log_id), K_(prepare_log_timestamp),
-      K_(need_wait_interval_us), K_(app_trace_info), K_(publish_version), K_(xid), K_(is_xa_prepare));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObAddr scheduler_;
@@ -462,8 +458,7 @@ struct ObTrx2PCCommitRequest : public ObTrxMsgBase {
   {
     return get_serialize_size();
   }
-  TO_STRING_KV(
-      K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(batch_same_leader_partitions));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObAddr scheduler_;
@@ -511,8 +506,7 @@ struct ObTrx2PCCommitResponse : public ObTrxMsgBase {
   {
     return get_serialize_size();
   }
-  TO_STRING_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status),
-      K_(batch_same_leader_partitions), K_(commit_log_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObAddr scheduler_;
@@ -545,8 +539,7 @@ struct ObTrx2PCAbortRequest : public ObTrxMsgBase {
   {
     return get_serialize_size();
   }
-  TO_STRING_KV(
-      K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(batch_same_leader_partitions));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObAddr scheduler_;
@@ -579,8 +572,7 @@ struct ObTrx2PCClearRequest : public ObTrxMsgBase {
   {
     return get_serialize_size();
   }
-  TO_STRING_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status),
-      K_(batch_same_leader_partitions), K_(clear_log_base_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObAddr scheduler_;

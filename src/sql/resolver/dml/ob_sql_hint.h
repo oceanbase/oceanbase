@@ -33,7 +33,7 @@ struct ObTableInHint {
       : qb_name_(qb_name), db_name_(db_name), table_name_(table_name)
   {}
 
-  TO_STRING_KV(N_QB_NAME, qb_name_, N_DATABASE_NAME, db_name_, N_TABLE_NAME, table_name_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObString qb_name_;
   common::ObString db_name_;
   common::ObString table_name_;
@@ -45,7 +45,7 @@ struct ObOrgIndexHint {
   ObTableInHint table_;
   common::ObString index_name_;
   bool distributed_;
-  TO_STRING_KV(N_TABLE_NAME, table_, N_INDEX_TABLE, index_name_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObQNameIndexHint {
@@ -57,7 +57,7 @@ struct ObQNameIndexHint {
   common::ObString qb_name_;
   ObOrgIndexHint index_hint_;
   bool distributed_;
-  TO_STRING_KV(N_QB_NAME, qb_name_, N_INDEX_TABLE, index_hint_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObIndexHint {
@@ -75,7 +75,7 @@ struct ObIndexHint {
   common::ObSEArray<common::ObString, 3> index_list_;
   HintType type_;
   common::ObSEArray<uint64_t, 3> valid_index_ids_;
-  TO_STRING_KV(N_TID, table_id_, N_INDEX_TABLE, index_list_, "type", type_, "valid_index_ids", valid_index_ids_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPartHint {
@@ -93,7 +93,7 @@ struct ObPartHint {
   uint64_t table_id_;
   common::ObSEArray<int64_t, 3> part_ids_;
   common::ObSEArray<ObString, 3> part_names_;
-  TO_STRING_KV(K_(table_id), K_(part_ids), K_(part_names));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 enum ObAccessPathMethod { USE_INDEX = 0, USE_SCAN };
@@ -155,8 +155,7 @@ struct ObQueryHint {
 
   void reset();
 
-  TO_STRING_KV(K_(read_consistency), K_(query_timeout), K_(frozen_version), K_(plan_cache_policy), K_(use_jit_policy),
-      K_(force_trace_log), K_(log_level), K_(parallel));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObConsistencyLevel read_consistency_;
   lib::UNFDummy<1> dummy_;
@@ -182,7 +181,7 @@ struct ObMonitorHint {
   ~ObMonitorHint() = default;
   uint64_t id_;
   uint64_t flags_;
-  TO_STRING_KV(K_(id), K_(flags));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObTablesInHint {
@@ -192,14 +191,14 @@ struct ObTablesInHint {
   common::ObSEArray<ObTableInHint, 3> tables_;
   common::ObSEArray<std::pair<uint8_t, uint8_t>, 3> join_order_pairs_;  // record leading hint pairs
   bool distributed_;
-  TO_STRING_KV(K_(qb_name), K_(tables));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObTablesIndex {
   ObTablesIndex()
   {}
   common::ObSEArray<uint64_t, 3> indexes_;
-  TO_STRING_KV(K_(indexes));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPQDistributeHintMethod {
@@ -221,7 +220,7 @@ struct ObOrgPQMapHint {
   {}
   ObTableInHint table_;
   bool use_pq_map_;
-  TO_STRING_KV(N_TABLE_NAME, table_, K_(use_pq_map));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObQBNamePQMapHint : public ObOrgPQMapHint {
@@ -257,12 +256,12 @@ struct ObPQDistributeIndex : public ObPQDistributeHintMethod {
 
 struct ObPQMapHint {
   uint64_t table_id_ = common::OB_INVALID_ID;
-  TO_STRING_KV(K_(table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPQMapIndex {
   ObRelIds rel_ids_;
-  TO_STRING_KV(K_(rel_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObStmtHint {
@@ -594,16 +593,7 @@ struct ObStmtHint {
   {
     return pdml_option_;
   }
-  TO_STRING_KV("read_static", read_static_, "no_rewrite", no_rewrite_, "frozen_version", frozen_version_,
-      "topk_precision", topk_precision_, "sharding_minimum_row_count", sharding_minimum_row_count_, "query_timeout",
-      query_timeout_, "hotspot", hotspot_, N_INDEX, indexes_, "read_consistency", read_consistency_, "join_ordered",
-      join_ordered_, N_JOIN_ORDER, join_order_ids_, "merge_hint_ids", use_merge_ids_, "hash_hint_ids", use_hash_ids_,
-      "no_hash_hint_ids", no_use_hash_ids_, "nl_hint_ids", use_nl_ids_, "part_hints", part_hints_,
-      "use_late_materialization", use_late_mat_, "log_level", log_level_, "max_concurrent", max_concurrent_,
-      "only_concurrent_hint", only_concurrent_hint_, "has_hint_exclude_concurrent", has_hint_exclude_concurrent_,
-      "parallel", parallel_, "use_px", use_px_, "use_expand", use_expand_, "use_view_merge", use_view_merge_,
-      "use_unnest", use_unnest_, "use_place_groupby", use_place_groupby_, "use join filter", px_join_filter_,
-      K_(org_pq_distributes), K_(pq_distributes), K_(pdml_option));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool converted_;
   bool read_static_;

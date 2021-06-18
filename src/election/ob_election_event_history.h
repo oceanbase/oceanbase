@@ -58,7 +58,7 @@ class ObElectionEventHistory {
   }
   const char* get_event_name_cstr() const;
   const char* get_event_info_cstr() const;
-  TO_STRING_KV(K_(partition), K_(addr), K_(current_leader), K_(event_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   enum EventType {

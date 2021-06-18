@@ -22,6 +22,78 @@ using namespace oceanbase::storage;
 
 namespace oceanbase {
 namespace blocksstable {
+int64_t ObTmpPageCacheKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_id), K_(page_id), K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpPageCacheValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpPageValueHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(value), K_(handle));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpPageIOInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(offset), K_(size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpPageCache::ObTmpPageIOCallback::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(data_buf));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpPageCache::ObTmpMultiPageIOCallback::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(data_buf));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpBlockCacheKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_id), K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpBlockCacheValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpBlockValueHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(value), K_(inst_handle), KP_(kvpair), K_(handle));
+  J_OBJ_END();
+  return pos;
+}
 
 ObTmpPageCacheKey::ObTmpPageCacheKey() : block_id_(-1), page_id_(-1), tenant_id_(0)
 {}

@@ -195,10 +195,7 @@ class ObElectionGroupInfo {
     return pre_destroy_state_;
   }
 
-  TO_STRING_KV(K_(is_running), K_(eg_id), K_(eg_version), K_(eg_part_cnt), K_(is_all_part_merged_in),
-      K_(is_priority_allow_reappoint), K_(self), K_(tenant_id), K_(priority), K_(curr_leader), K_(member_list),
-      K_(replica_num), K_(takeover_t1_timestamp), K_(T1_timestamp), K_(leader_lease), K_(role), K_(state),
-      K_(pre_destroy_state));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_running_;

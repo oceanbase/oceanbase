@@ -54,8 +54,7 @@ class ObStorageLogItem : public common::ObIBaseLogItem {
   {
     return is_local_;
   }
-  TO_STRING_KV(K_(start_cursor), K_(end_cursor), K_(is_inited), K_(is_local), K_(buf_size), KP_(buf), K_(len),
-      K_(flush_finish), K_(flush_ret));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObLogCursor start_cursor_;
   common::ObLogCursor end_cursor_;
@@ -124,7 +123,7 @@ class ObStorageLogWriter : public common::ObBaseLogWriter {
     int advance();
     int serialize(char* buf, int64_t limit, int64_t& pos) const;
     int deserialize(const char* buf, int64_t limit, int64_t& pos);
-    TO_STRING_KV(K_(server), K_(ctime), K_(last_ctime));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     common::ObAddr server_;
     int64_t ctime_;
@@ -145,7 +144,7 @@ class ObStorageLogWriter : public common::ObBaseLogWriter {
       next_file_id_ = next_file_id;
     }
     int serialize(char* buf, int64_t limit, int64_t& pos) const;
-    TO_STRING_KV(K_(next_file_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t next_file_id_;
   };
 
@@ -161,7 +160,7 @@ class ObStorageLogWriter : public common::ObBaseLogWriter {
     {
       return len_;
     }
-    TO_STRING_KV(KP_(buf), K_(len));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     char* buf_;
     int64_t len_;
   };

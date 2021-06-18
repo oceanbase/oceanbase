@@ -17,6 +17,46 @@
 namespace oceanbase {
 using namespace lib;
 namespace common {
+int64_t ObIORequestDesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(desc), K_(fd), K_(io_size), KP_(io_buf), K_(io_offset));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIORequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(need_submit), K_(finished), K_(desc), K_(fd), KP_(io_buf), K_(io_offset), K_(io_size),K_(deadline_time), K_(io_time), K_(ret_code), KP_(master), K_(disk_guard), KP_(channel), K_(retry_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIORequest::TimeLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(begin_time), K_(enqueue_time), K_(dequeue_time), K_(os_submit_time), K_(os_return_time), K_(end_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIOMaster::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(need_callback), K_(has_finished), K_(has_estimated), K_(io_info), KP_(callback), KP_(buf),K_(buf_size), K_(aligned_offset), K_(io_ret), K_(finish_count), K_(io_ret), K_(finish_count), K_(time),K_(ref_cnt), K_(out_ref_cnt), KP_(resource_mgr), KP_(io_error_handler), K_(parent_io_master_holder),K_(recover_io_master_holder), K_(callback), K(ObArrayWrap<ObIORequest*>(requests_, MAX_IO_BATCH_NUM)));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIOMaster::TimeLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(begin_time), K_(prepare_delay), K_(send_time), K_(recv_time), K_(callback_enqueue_time),K_(callback_dequeue_time), K_(callback_delay), K_(end_time));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * -----------------------------------------------ObIORequest-------------------------------------
  */

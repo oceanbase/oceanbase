@@ -19,6 +19,22 @@ namespace oceanbase {
 using namespace common;
 using namespace common::sqlclient;
 namespace share {
+int64_t ObUnitInfoGetter::ObTenantConfig::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(has_memstore), K_(unit_stat), K_(config), K_(mode), K_(create_timestamp), K_(is_removed));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUnitInfoGetter::ObServerConfig::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(config));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObUnitInfoGetter::ObTenantConfig, tenant_id_, unit_stat_, config_, mode_, create_timestamp_,
     has_memstore_, is_removed_);

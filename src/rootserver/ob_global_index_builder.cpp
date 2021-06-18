@@ -50,6 +50,46 @@ using namespace share::schema;
 using namespace common::sqlclient;
 using namespace sql;
 namespace rootserver {
+int64_t PartitionUniqueStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(unique_check_stat));
+  J_OBJ_END();
+  return pos;
+}
+int64_t PartitionColChecksumStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(pgkey), K_(col_checksum_stat), K_(snapshot));
+  J_OBJ_END();
+  return pos;
+}
+int64_t PartitionSSTableBuildStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pkey_), K(copy_multi_replica_stat_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGlobalIndexTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id_), K(data_table_id_), K(index_table_id_), K(status_), K(snapshot_),K(major_sstable_exist_reply_ts_), K(checksum_snapshot_), K(schema_version_), K_(retry_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGlobalIndexBuilder::PartitionServer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pkey_), K(server_));
+  J_OBJ_END();
+  return pos;
+}
 ObGlobalIndexTask::ObGlobalIndexTask()
     : tenant_id_(OB_INVALID_ID),
       data_table_id_(OB_INVALID_ID),

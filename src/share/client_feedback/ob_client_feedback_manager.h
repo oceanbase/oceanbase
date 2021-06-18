@@ -54,7 +54,7 @@ struct ObFBPartitionParam {
     original_partition_id_ = common::OB_INVALID_INDEX;
   }
 
-  TO_STRING_KV(K_(schema_version), K_(original_partition_id), K_(pl));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // C/S feedback protocol

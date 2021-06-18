@@ -22,6 +22,14 @@ namespace oceanbase {
 using namespace common;
 using namespace share::schema;
 namespace sql {
+int64_t CalcPartitionIdInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_table_id), K_(part_level), K_(part_type), K_(subpart_type), K_(part_num), K_(subpart_num));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(
     CalcPartitionIdInfo, ref_table_id_, part_level_, part_type_, subpart_type_, part_num_, subpart_num_);

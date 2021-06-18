@@ -3857,3 +3857,51 @@ int ObSQLUtils::handle_audit_record(
   session.reset_audit_record();
   return ret;
 }
+int64_t ObParamPosIdx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_POS, pos_, N_IDX, idx_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObImplicitCursorInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_id), K_(affected_rows), K_(found_rows), K_(matched_rows), K_(duplicated_rows), K_(deleted_rows));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSqlTraits::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_readonly_stmt_), K(is_modify_tenant_stmt_), K(is_cause_implicit_commit_), K(is_commit_stmt_), K(stmt_type_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAcsIndexInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_id), K_(index_name), K_(is_index_back), K_(is_whole_range), K_(prefix_filter_sel), K_(column_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHiddenColumnItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(hidden_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t EstimatedPartition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(addr), K_(row_count));
+  J_OBJ_END();
+  return pos;
+}

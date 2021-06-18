@@ -37,7 +37,7 @@ class ObGtsInfo {
   common::ObAddr standby_;
   int64_t heartbeat_ts_;
 
-  TO_STRING_KV(K(gts_id_), K(gts_name_), K(region_), K(epoch_id_), K(member_list_), K(standby_), K(heartbeat_ts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObGtsTenantInfo {
@@ -53,7 +53,7 @@ class ObGtsTenantInfo {
   uint64_t tenant_id_;
   common::ObMemberList member_list_;
 
-  TO_STRING_KV(K(gts_id_), K(tenant_id_), K(member_list_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 }  // namespace common
 }  // namespace oceanbase

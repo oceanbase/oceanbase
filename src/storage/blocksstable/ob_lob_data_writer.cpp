@@ -1022,3 +1022,11 @@ int ObLobDataWriter::add_macro_block(const ObLobIndex& index, const ObMacroBlock
   }
   return ret;
 }
+int64_t ObLobMicroBlockDesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(buf), K_(byte_size), K_(char_size), K_(old_micro_block), K_(column_id), K_(column_checksum));
+  J_OBJ_END();
+  return pos;
+}

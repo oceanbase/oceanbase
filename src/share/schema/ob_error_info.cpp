@@ -26,6 +26,14 @@ namespace oceanbase {
 using namespace common;
 namespace share {
 namespace schema {
+int64_t ObErrorInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(obj_id), K_(obj_type), K_(obj_seq), K_(line), K_(position), K_(text_length), K_(text),K_(property), K_(error_number), K_(database_id), K_(schema_version), K_(error_status));
+  J_OBJ_END();
+  return pos;
+}
 
 ObErrorInfo::ObErrorInfo()
 {

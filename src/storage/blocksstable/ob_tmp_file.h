@@ -31,7 +31,7 @@ struct ObTmpFileIOInfo {
   virtual ~ObTmpFileIOInfo();
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(fd), K_(dir_id), K_(size), K_(tenant_id), KP_(buf), K_(io_desc));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t fd_;
   int64_t dir_id_;
   int64_t size_;
@@ -48,7 +48,7 @@ class ObTmpFileIOHandle {
     virtual ~ObIOReadHandle();
     ObIOReadHandle(const ObIOReadHandle& other);
     ObIOReadHandle& operator=(const ObIOReadHandle& other);
-    TO_STRING_KV(K_(macro_handle), K_(offset), K_(size), KP_(buf));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObMacroBlockHandle macro_handle_;
     char* buf_;
     int64_t offset_;
@@ -61,7 +61,7 @@ class ObTmpFileIOHandle {
     virtual ~ObPageCacheHandle();
     ObPageCacheHandle(const ObPageCacheHandle& other);
     ObPageCacheHandle& operator=(const ObPageCacheHandle& other);
-    TO_STRING_KV(K_(page_handle), K_(offset), K_(size), KP_(buf));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObTmpPageValueHandle page_handle_;
     char* buf_;
     int64_t offset_;
@@ -74,7 +74,7 @@ class ObTmpFileIOHandle {
     virtual ~ObBlockCacheHandle();
     ObBlockCacheHandle(const ObBlockCacheHandle& other);
     ObBlockCacheHandle& operator=(const ObBlockCacheHandle& other);
-    TO_STRING_KV(K_(block_handle), K_(offset), K_(size), KP_(buf));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObTmpBlockValueHandle block_handle_;
     char* buf_;
     int64_t offset_;
@@ -116,7 +116,7 @@ class ObTmpFileIOHandle {
   {
     return block_cache_handles_;
   }
-  TO_STRING_KV(KP_(buf), K_(size), K_(is_read));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObTmpFile* tmp_file_;
@@ -199,8 +199,7 @@ class ObTmpFileExtent {
   {
     return *owner_;
   }
-  TO_STRING_KV(K_(is_alloced), K_(fd), K_(g_offset_start), K_(g_offset_end), KP_(owner), K_(start_page_id),
-      K_(page_nums), K_(block_id), K_(offset), K_(is_closed));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_alloced_;
@@ -250,7 +249,7 @@ class ObTmpFileMeta {
   {
     return dir_id_;
   }
-  TO_STRING_KV(K_(fd), K_(dir_id), K_(extents));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t fd_;
@@ -283,7 +282,7 @@ class ObTmpFile {
   int sync(const int64_t timeout_ms);
   int deep_copy(char* buf, const int64_t buf_len, ObTmpFile*& value) const;
   inline int64_t get_deep_copy_size() const;
-  TO_STRING_KV(K_(file_meta), K_(is_big), K_(tenant_id), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int write_file_extent(const ObTmpFileIOInfo& io_info, ObTmpFileExtent* file_extent, int64_t& size, char*& buf);

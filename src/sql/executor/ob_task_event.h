@@ -114,8 +114,7 @@ class ObTaskSmallResult {
   {
     return matched_rows_;
   }
-  TO_STRING_KV(K_(has_data), K_(data_len), K_(affected_rows), K_(found_rows), K_(last_insert_id), K_(matched_rows),
-      K_(duplicated_rows));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool has_data_;
@@ -193,7 +192,7 @@ class ObShuffleKeys final {
   void reset();
   int assign(common::ObIAllocator& allocator, const ObShuffleKeys& other);
   int compare(const ObShuffleKeys& other, bool cmp_part, bool cmp_subpart, int& cmp) const;
-  TO_STRING_KV(K_(part_key), K_(subpart_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObShuffleKey part_key_;
@@ -287,7 +286,7 @@ class ObSliceEvent final {
     return small_result_.get_duplicated_rows();
   }
 
-  TO_STRING_KV(K_(ob_slice_id), K_(shuffle_keys), K_(shuffle_partition_key), K_(small_result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObSliceID ob_slice_id_;
@@ -349,7 +348,7 @@ class ObTaskEvent {
   {
     return ts_result_send_begin_;
   }
-  TO_STRING_KV("task_loc", task_loc_, "err_code", err_code_, "inited", inited_, K_(slice_events));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   ObTaskLocation task_loc_;
@@ -439,7 +438,7 @@ class ObTaskResultBuf {
   {
     return slice_events_buf_;
   }
-  TO_STRING_KV(K_(task_location), K_(slice_events_buf));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   ObTaskLocation task_location_;
@@ -507,7 +506,7 @@ class ObMiniTaskResult {
   {
     return extend_result_;
   }
-  TO_STRING_KV(K_(task_result), K_(extend_result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObScanner task_result_;
@@ -552,7 +551,7 @@ class ObMiniTaskEvent {
   {
     return task_id_;
   }
-  TO_STRING_KV(K_(task_addr), K_(task_id), K_(ret_code));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   const ObAddr task_addr_;  // debug purpose when minitask async call fail
@@ -629,8 +628,7 @@ class ObMiniTaskRetryInfo {
   {
     return retry_by_single_range_;
   }
-  TO_STRING_KV(K_(need_retry), K_(failed_task_lists), K_(retry_ret), K_(retry_times), K_(retry_execution),
-      K_(retry_by_single_range));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool need_retry_;
@@ -689,7 +687,7 @@ class ObRemoteResult : public obrpc::ObIFill {
   {
     return result_.get_data_size();
   }
-  TO_STRING_KV(K_(task_id), K_(result), K_(has_more));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObTaskID task_id_;

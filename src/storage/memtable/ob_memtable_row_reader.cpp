@@ -18,6 +18,14 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace memtable {
+int64_t ObMemtableRowReader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(buf), K_(pos));
+  J_OBJ_END();
+  return pos;
+}
 #define READ_NULL()  \
   {                  \
     obj_.set_null(); \

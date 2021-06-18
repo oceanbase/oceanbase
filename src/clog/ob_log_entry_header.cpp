@@ -19,6 +19,14 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObLogEntryHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_MAGIC, magic_, N_VERSION, version_, N_TYPE, get_log_type(), N_PARTITION_KEY, partition_key_, N_LOG_ID,log_id_, N_DATA_LEN, data_len_, N_GENERATION_TIMESTAMP, generation_timestamp_, N_EPOCH_ID, epoch_id_,N_PROPOSAL_ID, proposal_id_, N_SUBMIT_TIMESTAMP, get_submit_timestamp(), "is_batch_committed",is_batch_committed(), "is_trans_log", is_trans_log(), N_DATA_CHECKSUM, data_checksum_, N_ACTIVE_FREEZE_VERSION,freeze_version_, N_HEADER_CHECKSUM, header_checksum_);
+  J_OBJ_END();
+  return pos;
+}
 ObLogEntryHeader::ObLogEntryHeader()
     : magic_(0),
       version_(0),

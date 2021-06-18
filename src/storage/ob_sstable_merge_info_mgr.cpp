@@ -17,6 +17,30 @@
 namespace oceanbase {
 using namespace common;
 namespace storage {
+int64_t ObSSTableMergeInfoKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableMergeInfoValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(major_version), K_(minor_version), K_(snapshot_version), K_(insert_row_count), K_(update_row_count),K_(delete_row_count), K_(ref_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableModificationInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id), K_(insert_row_count), K_(update_row_count), K_(delete_row_count),K_(max_snapshot_version));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ------------------------------------------------------------------ObSSTableMergeInfoIter-------------------------------------------------------------
  */

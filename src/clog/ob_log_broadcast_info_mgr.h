@@ -45,7 +45,7 @@ class ObLogBroadcastInfoMgr {
     {}
     ~BroadcastInfo()
     {}
-    TO_STRING_KV(K_(server), K_(replica_type), K_(max_confirmed_log_id), K_(update_ts));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     common::ObAddr server_;

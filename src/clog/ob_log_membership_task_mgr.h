@@ -67,7 +67,7 @@ struct RenewMsLogTask {
   {
     return log_id_;
   }
-  TO_STRING_KV(K_(log_id), K_(log_task), K_(ack_mlist));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObLogMembershipTaskMgr {

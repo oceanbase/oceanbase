@@ -21,6 +21,38 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObHistogram::Bucket::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(endpoint_value), K_(endpoint_repeat_count), K_(endpoint_num));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHistogram::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(sample_size), K_(bucket_cnt), K_(buckets));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOptColumnStat::Key::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(table_id_), K(partition_id_), K(column_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOptColumnStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id), K_(column_id), K_(object_type), K_(num_distinct), K_(num_null),K_(min_value), K_(max_value));
+  J_OBJ_END();
+  return pos;
+}
 using namespace sql;
 
 int ObHistogram::Bucket::deep_copy(char* buf, const int64_t buf_len, Bucket*& value)

@@ -539,3 +539,11 @@ int ObConnectByOpPump::concat_sys_path(uint64_t sys_connect_by_path_id, const Ob
   }
   return ret;
 }
+int64_t ObConnectByOpPump::PumpNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_cycle_), K(is_leaf_), K(level_));
+  J_OBJ_END();
+  return pos;
+}

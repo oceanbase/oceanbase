@@ -28,7 +28,7 @@ namespace common {
 struct ObIOPointRetCode {
   ObIOPoint io_point_;
   ObIORetCode ret_code_;
-  TO_STRING_KV(K_(io_point), K_(ret_code));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 /*

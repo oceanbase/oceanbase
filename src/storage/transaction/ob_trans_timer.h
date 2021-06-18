@@ -109,8 +109,7 @@ class ObTransTimeoutTask : public ObITimeoutTask {
   uint64_t hash() const;
 
   public:
-  TO_STRING_KV(K_(is_inited), K_(is_registered), K_(is_running), K_(delay), KP_(ctx), K_(bucket_idx), K_(run_ticket),
-      K_(is_scheduled), KP_(prev), KP_(next));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_inited_;
@@ -147,7 +146,7 @@ class ObPrepareChangingLeaderTask : public ObITimeoutTask {
   void runTimerTask();
   uint64_t hash() const;
   int run();
-  TO_STRING_KV(K_(is_inited), K_(expected_ts), KP_(txs), K_(pkey), K_(proposal_leader), K_(round), K_(cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_inited_;

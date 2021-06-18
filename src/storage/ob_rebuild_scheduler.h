@@ -51,10 +51,7 @@ struct ObRebuildReplicaInfo {
   int64_t local_last_replay_log_id_;
   int64_t remote_last_replay_log_id_;
 
-  TO_STRING_KV(K_(pg_key), K_(replica_type), K_(replica_property), K_(parent_addr), K_(parent_replica_type),
-      K_(local_minor_snapshot_version), K_(local_major_snapshot_version), K_(remote_minor_snapshot_version),
-      K_(remote_major_snapshot_version), K_(rebuild_action), K_(is_share_major), K_(local_last_replay_log_id),
-      K_(remote_last_replay_log_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObRebuildReplicaResult {
@@ -69,7 +66,7 @@ struct ObRebuildReplicaResult {
 
   ObArray<int32_t> results_;
   ObArray<ObPGKey> pg_keys_;
-  TO_STRING_KV(K_(results), K_(pg_keys));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObRebuildReplicaService;
@@ -97,7 +94,7 @@ class ObRebuildReplicaTaskProducer : public common::ObTimerTask {
     ObArray<ObRebuildReplicaInfo> replica_info_array_;
     common::ObAddr parent_addr_;
 
-    TO_STRING_KV(K_(replica_info_array), K_(parent_addr));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     DISALLOW_COPY_AND_ASSIGN(ObRebuildReplicaConvergeInfo);
   };
 

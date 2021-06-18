@@ -17,6 +17,14 @@
 
 namespace oceanbase {
 namespace share {
+int64_t ObEventHistoryTableOperator::ObEventTableUpdateTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sql), K_(is_delete));
+  J_OBJ_END();
+  return pos;
+}
 using namespace lib;
 using namespace common;
 

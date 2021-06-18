@@ -74,7 +74,7 @@ struct ObRedoModuleReplayParam final {
   {
     return log_seq_num_ >= 0 && nullptr != buf_ && buf_len_ > 0 && subcmd_ >= 0;
   }
-  TO_STRING_KV(K_(log_seq_num), K_(subcmd), K_(file_id), KP_(buf), K_(buf_len));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t log_seq_num_;
   int64_t subcmd_;
   int64_t file_id_;

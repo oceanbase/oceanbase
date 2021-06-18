@@ -32,6 +32,14 @@ using namespace oceanbase::common;
 namespace oceanbase {
 
 namespace obrpc {
+int64_t ObRpcProcessorBase::Response::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(sessid_), K(is_stream_), K(is_stream_last_), K_(bad_routing));
+  J_OBJ_END();
+  return pos;
+}
 
 void ObRpcProcessorBase::reuse()
 {

@@ -37,6 +37,54 @@ using namespace oceanbase::transaction;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObSessionNLSParams::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(nls_length_semantics_), K(nls_collation_), K(nls_nation_collation_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBasicSessionInfo::TableStmtType::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(table_id_), K(stmt_type_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBasicSessionInfo::SysVarIncInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(all_sys_var_ids_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBasicSessionInfo::ChangedVar::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(id_), K(old_val_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBasicSessionInfo::SysVarsCacheData::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(autocommit_), K(ob_enable_trace_log_), K(ob_enable_sql_audit_), K(nls_length_semantics_),K(ob_org_cluster_id_), K(ob_query_timeout_), K(ob_trx_timeout_), K(collation_connection_), K(sql_mode_),K(nls_formats_[0]), K(nls_formats_[1]), K(nls_formats_[2]), K(ob_trx_idle_timeout_), K(ob_trx_lock_timeout_),K(nls_collation_), K(nls_nation_collation_), K_(sql_throttle_current_priority), K_(ob_last_schema_version),K_(sql_select_limit), K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),K_(is_result_accurate), K_(_ob_use_parallel_execution), K_(character_set_results), K_(ob_pl_block_timeout));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExecEnv::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sql_mode), K_(charset_client), K_(collation_connection), K_(collation_database));
+  J_OBJ_END();
+  return pos;
+}
 
 ObBasicSessionInfo::ObBasicSessionInfo()
     : query_mutex_(),

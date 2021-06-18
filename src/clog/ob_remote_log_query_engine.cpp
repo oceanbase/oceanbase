@@ -28,6 +28,30 @@ using namespace share;
 using namespace share::schema;
 using namespace transaction;
 namespace clog {
+int64_t ObPartitionLogInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(partition_key_), K(log_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoteLogQETask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(partition_key_), K(log_id_), K(curr_member_list_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransIDInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(trans_id_), K(submit_timestamp_), K(ts_));
+  J_OBJ_END();
+  return pos;
+}
 uint64_t ObPartitionLogInfo::hash() const
 {
   uint64_t hash_val = 0;

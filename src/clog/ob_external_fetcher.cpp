@@ -30,6 +30,14 @@ using namespace clog;
 using namespace storage;
 using namespace obrpc;
 namespace logservice {
+int64_t FetchRunTime::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(rpc_id_), K(rpc_start_tstamp_), K(upper_limit_ts_), K(step_per_round_), K(rpc_deadline_),K(feedback_enabled_), K(stop_), K(stop_reason_), K(read_cost_), K(csr_cost_), K(fetch_status_));
+  J_OBJ_END();
+  return pos;
+}
 int ObExtLogFetcher::init(
     ObLogLineCache& line_cache, ObILogEngine* log_engine, ObPartitionService* partition_service, const ObAddr& self)
 {

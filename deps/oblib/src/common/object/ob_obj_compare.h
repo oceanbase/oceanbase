@@ -59,7 +59,7 @@ class ObCompareCtx final {
         tz_off_(INVALID_TZ_OFF),
         null_pos_(default_null_pos())
   {}
-  TO_STRING_KV(K_(cmp_type), K_(cmp_cs_type), K_(is_null_safe), K_(tz_off));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   // data members

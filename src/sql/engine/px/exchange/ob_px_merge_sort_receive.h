@@ -74,7 +74,7 @@ class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
     }
     virtual void clean_row_store(ObPxMergeSortReceiveCtx& recv_ctx) = 0;
 
-    TO_STRING_KV(K_(pos));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     ObRARowStore* get_row_store_;

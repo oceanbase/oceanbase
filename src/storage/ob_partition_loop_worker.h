@@ -81,9 +81,7 @@ class ObPartitionLoopWorker {
     ATOMIC_SET(&force_write_checkpoint_, force);
   }
 
-  TO_STRING_KV(K_(pkey), K_(replay_status), K_(is_migrating_flag), K_(last_checkpoint), K_(replay_pending_checkpoint),
-      K_(last_max_trans_version), K_(next_gene_checkpoint_log_ts), K_(safe_slave_read_timestamp),
-      K_(last_checkpoint_value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionLoopWorker);

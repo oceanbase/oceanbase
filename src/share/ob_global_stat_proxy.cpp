@@ -25,6 +25,14 @@ namespace oceanbase {
 using namespace common;
 using namespace common::sqlclient;
 namespace share {
+int64_t ObGlobalStatItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(name), K_(value));
+  J_OBJ_END();
+  return pos;
+}
 const char* ObGlobalStatProxy::OB_ALL_GC_SCHEMA_VERSION_TNAME = "__all_gc_schema_version";
 const char* ObGlobalStatProxy::TENANT_ID_CNAME = "tenant_id";
 const char* ObGlobalStatProxy::GC_SCHEMA_VERSION_CNAME = "gc_schema_version";

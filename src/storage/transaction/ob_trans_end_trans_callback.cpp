@@ -24,6 +24,22 @@ using namespace common;
 using namespace sql;
 
 namespace transaction {
+int64_t ObEndTransCallbackItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(cb), K_(retcode));
+  J_OBJ_END();
+  return pos;
+}
+int64_t EndTransCallbackTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(param), K_(trans_need_wait_wrap));
+  J_OBJ_END();
+  return pos;
+}
 int ObEndTransCallback::init(const uint64_t tenant_id, sql::ObIEndTransCallback* cb)
 {
   int ret = OB_SUCCESS;

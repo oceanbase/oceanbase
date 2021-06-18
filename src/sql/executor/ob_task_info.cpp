@@ -99,3 +99,35 @@ int ObTaskInfo::get_task_participants(ObPartitionIArray& participants)
   }
   return ret;
 }
+int64_t ObTaskInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TASK_LOC, task_location_, K_(range_location), K_(location_idx), K_(location_idx_list), K_(state),K_(child_task_results), K_(slice_count_pos), K_(background), K_(retry_times), K_(location_idx_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTaskInfo::ObRangeLocation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_locs), K_(server));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTaskInfo::ObPartLoc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key), K_(depend_table_keys), K_(scan_ranges), K_(part_key_ref_id), K_(value_ref_id),K_(renew_time), KPC_(row_store));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGranuleTaskInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ranges), K_(partition_id), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}

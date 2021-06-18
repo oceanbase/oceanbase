@@ -15,6 +15,46 @@
 #include "ob_load_data_stmt.h"
 namespace oceanbase {
 namespace sql {
+int64_t ObLoadArgument::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(load_file_storage), K_(is_default_charset), K_(ignore_rows), K_(dupl_action), K_(charset),K_(file_name), K_(access_info), K_(database_name), K_(table_name), K_(combined_name), K_(tenant_id),K_(database_id), K_(table_id), K_(is_csv_format), K_(full_file_path));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDataInFileStruct::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(line_term_str), K_(line_start_str), K_(field_term_str), K_(field_escaped_str), K_(field_enclosed_str),K_(field_escaped_char), K_(field_enclosed_char), K_(is_opt_field_enclosed));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLoadDataHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("Int Hint Item", common::ObArrayWrap<int64_t>(integer_values_, TOTAL_INT_ITEM), "String Hint Item",common::ObArrayWrap<ObString>(string_values_, TOTAL_STRING_ITEM));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLoadDataStmt::FieldOrVarStruct::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(field_or_var_name), K_(column_id), K_(column_type), K_(is_table_column));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLoadDataStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_STMT_TYPE, ((int)stmt_type_), K_(load_args), K_(data_struct_in_file), K_(field_or_var_list),K_(assignments), K_(hints), K_(is_default_table_columns));
+  J_OBJ_END();
+  return pos;
+}
 
 const char* ObDataInFileStruct::DEFAULT_LINE_TERM_STR = "\n";
 const char* ObDataInFileStruct::DEFAULT_LINE_BEGIN_STR = "";

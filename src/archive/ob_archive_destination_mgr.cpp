@@ -24,6 +24,14 @@ using namespace oceanbase::share;
 using namespace oceanbase::clog;
 namespace oceanbase {
 namespace archive {
+int64_t ObArchiveDestination::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_inited_), K(compatible_), K(cur_index_file_id_), K(index_file_offset_), K(cur_data_file_id_),K(data_file_offset_), K(data_file_min_log_id_), K(data_file_min_log_ts_), K(force_switch_data_file_),K(force_switch_index_file_), K(is_data_file_valid_));
+  J_OBJ_END();
+  return pos;
+}
 
 void ObArchiveDestination::reset()
 {

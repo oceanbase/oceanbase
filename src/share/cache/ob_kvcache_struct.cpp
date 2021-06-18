@@ -14,6 +14,38 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObKVMemBlockHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(mem_block), K_(status), KP_(inst), K_(policy), K_(get_cnt), K_(recent_get_cnt), K_(score), K_(kv_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObKVCacheInstKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cache_id), K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObKVCacheStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(config), K_(kv_cnt), K_(store_size), K_(map_size), K_(lru_mb_cnt), K_(lfu_mb_cnt), K_(base_mb_score),K_(hold_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObKVCacheInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inst_key), K_(status));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ------------------------------------------------------------ObKVCacheConfig---------------------------------------------------------
  */

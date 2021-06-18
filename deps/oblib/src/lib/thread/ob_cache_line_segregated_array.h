@@ -47,7 +47,14 @@ class ObCacheLineSegregatedArray {
   int64_t arena_num_;
 
   public:
-  TO_STRING_KV(KP(this), K_(array), K_(step_len), K_(arena_num));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP(this), K_(array), K_(step_len), K_(arena_num));
+    J_OBJ_END();
+    return pos;
+  }
 
   public:
   int init(void* array, int64_t step_len, int64_t arena_num)
@@ -160,7 +167,14 @@ class ObCacheLineSegregatedArrayBase {
   }
 
   public:
-  TO_STRING_KV(KP(this), K_(chunk), K_(arena_num), K_(arena_size), K_(alloc_pos), K_(mutex));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP(this), K_(chunk), K_(arena_num), K_(arena_size), K_(alloc_pos), K_(mutex));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   ObCacheLineSegregatedArrayBase() : chunk_(0), arena_num_(0), arena_size_(0), alloc_pos_(0)

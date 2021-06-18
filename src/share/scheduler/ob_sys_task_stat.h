@@ -55,7 +55,7 @@ struct ObSysTaskStat {
   char comment_[common::OB_MAX_TASK_COMMENT_LENGTH];
   bool is_cancel_;
 
-  TO_STRING_KV(K_(start_time), K_(task_id), K_(task_type), K_(svr_ip), K_(tenant_id), K_(is_cancel), K_(comment));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObSysTaskStatMgr {

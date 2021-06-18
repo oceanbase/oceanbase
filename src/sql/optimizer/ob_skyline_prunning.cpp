@@ -18,6 +18,46 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObSkylineDim::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(dim_type_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIndexBackDim::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(need_index_back), K_(has_interesting_order), K_(can_extract_range), K_(index_column_cnt),"restrcit_ids", common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObInterestOrderDim::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_interesting_order), K_(column_cnt), "column_ids",common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_), K_(need_index_back), K_(can_extract_range),K_(filter_column_cnt), "filter column_ids",common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryRangeDim::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(column_cnt), "rowkey_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIndexSkylineDim::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_id), K_(dim_count), "dims", common::ObArrayWrap<const ObSkylineDim*>(skyline_dims_, dim_count_));
+  J_OBJ_END();
+  return pos;
+}
 
 // compare index back property
 int ObIndexBackDim::compare(const ObSkylineDim& other, CompareStat& status) const

@@ -63,7 +63,7 @@ class ObVirtualOpenCursorTable : public common::ObVirtualTableScannerIterator {
     {
       return 0 != addr && 0 != id;
     }
-    TO_STRING_KV(K(version), K(id), K(addr), K(user_name), K(sql_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObSEArray<SessionInfo, 8> SessionInfoArray;
   typedef common::hash::ObHashMap<ObString, SessionInfoArray> SidMap;

@@ -210,7 +210,7 @@ class ObGtsReplicaTaskKey {
   uint64_t hash() const;
   int init(const uint64_t gts_id);
   int init(const ObGtsReplicaTaskKey& that);
-  TO_STRING_KV(K_(gts_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t inner_hash() const;
@@ -246,7 +246,7 @@ class ObGtsReplicaTask : public common::ObDLinkBase<ObGtsReplicaTask> {
   {
     return task_key_;
   }
-  TO_STRING_KV(K(task_key_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   ObGtsReplicaTaskKey task_key_;
@@ -359,7 +359,7 @@ class ObRsGtsReplicaTaskGenerator {
     {
       return cnt_ < that.cnt_;
     }
-    TO_STRING_KV(K_(zone), K_(cnt));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObZone zone_;
     int64_t cnt_;
   };
@@ -368,7 +368,7 @@ class ObRsGtsReplicaTaskGenerator {
     {}
     MemberCandStat(const common::ObAddr& server, const common::ObZone& zone) : server_(server), zone_(zone)
     {}
-    TO_STRING_KV(K_(server), K_(zone));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     common::ObAddr server_;
     common::ObZone zone_;

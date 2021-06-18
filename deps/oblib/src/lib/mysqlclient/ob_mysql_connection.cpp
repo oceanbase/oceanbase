@@ -24,6 +24,14 @@
 namespace oceanbase {
 namespace common {
 namespace sqlclient {
+int64_t ObMySQLConnection::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(db_name), K_(busy));
+  J_OBJ_END();
+  return pos;
+}
 ObMySQLConnection::ObMySQLConnection()
     : root_(NULL),
       last_error_code_(OB_SUCCESS),

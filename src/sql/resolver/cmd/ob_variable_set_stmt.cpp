@@ -16,6 +16,22 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObVariableSetStmt::VariableSetNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(variable_name), K_(is_system_variable), K_(set_scope), K_(value_expr), K_(is_set_default));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObVariableSetStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(actual_tenant_id), K_(variable_nodes));
+  J_OBJ_END();
+  return pos;
+}
 int ObVariableSetStmt::get_variable_node(int64_t index, ObVariableSetStmt::VariableSetNode& var_node) const
 {
   int ret = OB_SUCCESS;

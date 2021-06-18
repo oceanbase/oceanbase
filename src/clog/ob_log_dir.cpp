@@ -26,6 +26,22 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObDir::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(dir_fd), K_(dir_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogDir::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(dir));
+  J_OBJ_END();
+  return pos;
+}
 // Judge whether the file name is only composed of numbers
 // 1. The file name is not 0 and does not start with 0
 // 2. The maximum length allowed for the file name definition is 512B, but it is finally converted to int64_t type, and

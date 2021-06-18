@@ -45,7 +45,7 @@ class ObStoreRowFilter : public ObIStoreRowFilter {
   int init(const sql::ObTableLocation* part_filter, sql::ObExecContext* exec_ctx, common::ObPartMgr* part_mgr,
       const common::ObPartitionKey& pkey);
   int check(const ObStoreRow& store_row, bool& is_filtered) const override;
-  TO_STRING_KV(KP_(part_filter), KP_(exec_ctx), KP_(part_mgr), K_(pkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   const sql::ObTableLocation* part_filter_;

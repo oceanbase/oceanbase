@@ -644,3 +644,27 @@ DEFINE_GET_SERIALIZE_SIZE(ObSortColumn)
 }
 
 OB_SERIALIZE_MEMBER(ObSortColumnExtra, obj_type_, order_type_);
+int64_t ObBaseSort::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(topn_cnt), K_(row_count), K_(prefix_keys_pos), K_(row_array_pos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBaseSort::StrongTypeRow::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(objs), K_(row));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSortColumnExtra::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(obj_type), K_(order_type));
+  J_OBJ_END();
+  return pos;
+}

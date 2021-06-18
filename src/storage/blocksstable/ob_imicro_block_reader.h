@@ -127,7 +127,7 @@ struct ObRowIndexIterator {
     return self_t(row_id_--);
   }
 
-  TO_STRING_KV(K_(row_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t row_id_;
 };
@@ -187,7 +187,7 @@ struct ObMicroBlockData {
     *this = ObMicroBlockData();
   }
 
-  TO_STRING_KV(KP_(buf), K_(size), K_(extra_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   const char* buf_;
   int64_t size_;
@@ -305,8 +305,7 @@ class ObMicroBlock {
            common::ObStoreFormat::is_row_store_type_valid(row_store_type_) && meta_.is_valid();
   }
 
-  TO_STRING_KV(K_(range), K_(data), K_(column_map), K_(row_store_type), K_(row_count), K_(column_cnt),
-      KP_(column_checksums), K_(meta), K_(origin_data_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObStoreRange range_;
   ObMicroBlockData data_;

@@ -4720,6 +4720,78 @@ int64_t ObPartitionLocationCache::get_primary_cluster_id() const
   }
   return cluster_id;
 }
-
+int64_t ObReplicaRenewKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id), K_(addr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocationRpcRenewInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), "key_cnt", OB_ISNULL(arg_) ? 0 : arg_->keys_.count(), "idx_cnt",OB_ISNULL(idx_array_) ? 0 : idx_array_->count());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocationAsyncUpdateTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(table_id), K_(partition_id), K_(add_timestamp), K_(cluster_id), K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantStatGuard::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(tenant_stat), K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantSqlRenewStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(start_sql_renew_ts), K_(sql_renew_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocationCacheValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(size), "buffer", reinterpret_cast<int64_t>(buffer_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocationLeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(leader_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t LocationInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(renew_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocationCacheKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(table_id), K_(partition_id), K_(cluster_id));
+  J_OBJ_END();
+  return pos;
+}
 }  // end namespace share
 }  // end namespace oceanbase
+

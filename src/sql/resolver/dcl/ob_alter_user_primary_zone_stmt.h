@@ -42,7 +42,7 @@ class ObAlterUserPrimaryZoneStmt : public ObDDLStmt {
   {
     return arg_.alter_option_bitset_.add_member(obrpc::ObAlterDatabaseArg::PRIMARY_ZONE);
   }
-  TO_STRING_KV(K_(stmt_type), K_(arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   // data members

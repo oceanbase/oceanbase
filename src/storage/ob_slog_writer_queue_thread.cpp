@@ -18,6 +18,14 @@
 namespace oceanbase {
 using namespace common;
 namespace storage {
+int64_t ObMsInfoTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_KEY, pkey_, "server", server_, "cluster_id", cluster_id_, "log_type", log_type_, "ms_log_id",ms_log_id_, "mc_timestamp", mc_timestamp_, "replica_num", replica_num_, "prev_member_list", prev_member_list_,"curr_member_list", curr_member_list_, "ms_proposal_id", ms_proposal_id_);
+  J_OBJ_END();
+  return pos;
+}
 
 ObMsInfoTask& ObMsInfoTask::operator=(const ObMsInfoTask& rv)
 {

@@ -17,6 +17,14 @@
 
 namespace oceanbase {
 namespace share {
+int64_t ObFeedbackIntStruct::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("type", get_feedback_element_type_str(type_), K_(int_value));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 
 int ObFeedbackIntStruct::serialize_struct_content(char* buf, const int64_t len, int64_t& pos) const

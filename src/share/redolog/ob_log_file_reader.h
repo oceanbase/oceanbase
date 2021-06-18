@@ -31,7 +31,7 @@ struct ObLogReadFdKey final {
   uint64_t hash() const;
   bool operator==(const ObLogReadFdKey& other) const;
   bool operator!=(const ObLogReadFdKey& other) const;
-  TO_STRING_KV(K(path_), "len", STRLEN(path_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   char path_[common::MAX_PATH_SIZE];
 };
 
@@ -46,7 +46,7 @@ struct ObLogReadFdCacheItem final {
   void dec_ref();
   int64_t get_ref();
   void reset();
-  TO_STRING_KV(K(key_), K(in_map_), K(fd_), K(ref_cnt_), K(timestamp_), KP(prev_), KP(next_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObLogReadFdKey key_;
@@ -72,7 +72,7 @@ class ObLogReadFdHandle final {
   {
     return nullptr != fd_item_;
   };
-  TO_STRING_KV(KP(fd_item_), K(is_local_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObLogReadFdCacheItem* fd_item_;

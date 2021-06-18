@@ -29,7 +29,14 @@ class TestInMemorySortTest : public ::testing::Test {
   struct ColumnOpt {
     int64_t col;
     ObCollationType cs_type;
-    TO_STRING_KV("col", col);
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV("col", col);
+      J_OBJ_END();
+      return pos;
+    }
   };
   TestInMemorySortTest();
   virtual ~TestInMemorySortTest();

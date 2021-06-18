@@ -26,6 +26,30 @@ namespace oceanbase {
 using namespace common;
 
 namespace share {
+int64_t ObRedoTransportOption::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(net_timeout), K_(reopen), K_(max_failure), K_(is_sync));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClusterRsAddr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cluster_id), K_(addr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClusterAddr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cluster_id), K_(cluster_type), K_(cluster_status), K_(timestamp), K_(cluster_name), K_(addr_list),K_(readonly_addr_list), K_(cluster_idx), K_(current_scn), K_(redo_transport_options), K_(protection_level),K_(sync_status), K_(last_hb_ts));
+  J_OBJ_END();
+  return pos;
+}
 void ObClusterRsAddr::reset()
 {
   cluster_id_ = OB_INVALID_ID;

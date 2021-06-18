@@ -4556,3 +4556,19 @@ int ObPartitionStore::get_restore_point_normal_tables_(const int64_t snapshot_ve
   }
   return ret;
 }
+int64_t ObPartitionStore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(log_seq_num), "meta", *meta_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t TableStoreStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_id), K_(has_dropped_flag));
+  J_OBJ_END();
+  return pos;
+}

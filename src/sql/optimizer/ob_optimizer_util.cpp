@@ -5983,3 +5983,11 @@ int ObOptimizerUtil::check_pushdown_filter_to_base_table(ObLogPlan& plan, const 
   LOG_TRACE("check pushdown filter to tables", K(table_id), K(can_pushdown));
   return ret;
 }
+int64_t MergeKeyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(need_sort), K_(map_array), K_(order_directions), K_(order_exprs), K_(order_items));
+  J_OBJ_END();
+  return pos;
+}

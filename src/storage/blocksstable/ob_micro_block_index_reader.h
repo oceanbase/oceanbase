@@ -108,7 +108,7 @@ struct ObBlockIndexIterator {
     return self_t(block_idx_--);
   }
 
-  TO_STRING_KV(K_(block_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t block_idx_;
 };

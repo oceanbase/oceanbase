@@ -37,7 +37,7 @@ class ObLocalMergeSort : public ObBaseSort {
     {}
     int get_row(const common::ObNewRow*& row, common::ObArray<const ObBaseSort::StrongTypeRow*>& sort_array);
 
-    TO_STRING_KV(K_(start_pos), K_(end_pos));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     int64_t start_pos_;

@@ -35,6 +35,30 @@ using namespace common;
 using namespace common::number;
 using namespace oceanbase::lib;
 namespace sql {
+int64_t ObFuncInputType::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_CALC_META, calc_meta_, N_LENGTH, max_length_, N_FLAG, flag_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIterExprOperator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(expr_id), K_(expr_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSubQueryRelationalExpr::ExtraInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(subquery_key_), K(left_is_iter_), K(right_is_iter_));
+  J_OBJ_END();
+  return pos;
+}
 static const int32_t DAYS_PER_YEAR[2] = {365, 366};
 static const int8_t DAYS_PER_MON[2][12 + 1] = {
     {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}, {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};

@@ -26,6 +26,14 @@ namespace oceanbase {
 using namespace lib;
 
 namespace common {
+int64_t ObMemoryDumpTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(type_), K(dump_all_), KP(p_context_), K(slot_idx_), K(dump_tenant_ctx_), K(tenant_id_), K(ctx_id_),KP(p_chunk_));
+  J_OBJ_END();
+  return pos;
+}
 void __attribute__((weak)) get_tenant_ids(uint64_t* ids, int cap, int& cnt)
 {
   cnt = 0;

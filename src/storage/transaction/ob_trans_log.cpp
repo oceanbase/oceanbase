@@ -25,6 +25,94 @@ using namespace storage;
 using namespace clog;
 
 namespace transaction {
+int64_t ObTransMutator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(mutator_buf), K_(use_mutator_buf), K_(data), K_(position), K_(capacity));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransPrepareLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_type), K_(partition), K_(trans_id), K_(tenant_id), K_(scheduler), K_(coordinator),K_(participants), K_(trans_param), K_(prepare_status), K_(prev_redo_log_ids), K_(cluster_id),K_(active_memstore_version), K_(app_trace_id_str), K_(partition_log_info_arr), K_(checkpoint), K_(prev_trans_arr),K_(can_elr), K_(app_trace_info), K_(xid));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransCommitLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_type), K_(partition), K_(trans_id), K_(partition_log_info_arr), K_(global_trans_version),K_(checksum), K_(cluster_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransPreCommitLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id), K_(publish_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransAbortLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id), K_(partition_log_info_arr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSpTransCommitLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_type), K_(partition), K_(trans_id), K_(tenant_id), K_(log_no), K_(trans_param), K_(cluster_id),K_(active_memstore_version), K_(checksum), K_(prev_redo_log_ids), K_(app_trace_id_str), K_(checkpoint),K_(prev_trans_arr), K_(app_trace_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSpTransAbortLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckpointLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(checkpoint));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransStateLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id), K_(create_ts), K_(tenant_id),K_(trans_expired_time), K_(trans_param), K_(is_readonly), K_(trans_type), K_(session_id), K_(proxy_session_id),K_(commit_task_count), K_(stmt_info), K_(app_trace_id_str), K_(schema_version), K_(prev_trans_arr), K_(can_elr),K_(proposal_leader), K_(cluster_version), K_(snapshot_version), K_(cur_query_start_time), K_(stmt_expired_time),K_(xid));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransMutatorLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id), K_(tenant_id), K_(trans_expired_time),K_(trans_param), K_(log_no), K_(prev_trans_arr), K_(can_elr), K_(cluster_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransMutatorAbortLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ObTransLog, log_type_, partition_, trans_id_, cluster_id_);
 OB_SERIALIZE_MEMBER((ObTransRedoLog, ObTransLog), tenant_id_, log_no_, scheduler_, coordinator_, participants_,
     trans_param_, mutator_, active_memstore_version_, prev_trans_arr_, can_elr_, xid_, is_last_);

@@ -306,8 +306,7 @@ struct FetchRunTime {
     return delay_time > STREAM_FALL_BEHIND_THRESHOLD_TIME;
   }
 
-  TO_STRING_KV(K(rpc_id_), K(rpc_start_tstamp_), K(upper_limit_ts_), K(step_per_round_), K(rpc_deadline_),
-      K(feedback_enabled_), K(stop_), K(stop_reason_), K(read_cost_), K(csr_cost_), K(fetch_status_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 }  // namespace logservice

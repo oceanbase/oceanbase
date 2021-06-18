@@ -18,6 +18,22 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 namespace oceanbase {
 namespace sql {
+int64_t ObSplittedRanges::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ranges), K_(offsets));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhyTableLocation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_location_key), K_(ref_table_id), K_(partition_location_list), K_(splitted_range_list),K_(duplicate_type));
+  J_OBJ_END();
+  return pos;
+}
 
 bool ObPhyTableLocation::compare_phy_part_loc_info_asc(
     const ObPhyPartitionLocationInfo*& left, const ObPhyPartitionLocationInfo*& right)

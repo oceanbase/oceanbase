@@ -20,6 +20,22 @@
 namespace oceanbase {
 namespace share {
 namespace schema {
+int64_t ObSimpleUDFSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(udf_id), K_(schema_version), K_(udf_name), K_(ret), K_(dl), K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUDFHashWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(udf_name));
+  J_OBJ_END();
+  return pos;
+}
 using namespace std;
 using namespace common;
 using namespace common::hash;

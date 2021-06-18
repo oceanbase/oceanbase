@@ -3431,3 +3431,35 @@ int ZoneReplicaDistTask::tmp_compatible_generate(const ReplicaNature replica_nat
   }
   return ret;
 }
+int64_t ObFilterLocalityUtility::ZoneReplicaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(non_readonly_replica_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t FilterResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cmd_type), K_(replica), K_(zone), K_(dest_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SingleReplica::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(replica_type), K_(memstore_percent));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ZoneReplicaDistTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(replica_nature), K_(zone_set), K_(replica_task_set), K_(multi_zone_dist));
+  J_OBJ_END();
+  return pos;
+}

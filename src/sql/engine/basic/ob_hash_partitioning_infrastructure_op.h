@@ -57,7 +57,7 @@ struct ObHashPartCols {
 
   ObHashPartStoredRow* store_row_;
   void* next_;
-  TO_STRING_KV(K_(store_row));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObTempHashPartCols : public ObHashPartCols {
@@ -280,7 +280,14 @@ class ObHashPartInfrastructure {
       nth_way_ = InputSide::RIGHT;
     }
 
-    TO_STRING_KV(K_(nth_way), K_(level), K_(nth_part));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K_(nth_way), K_(level), K_(nth_part));
+      J_OBJ_END();
+      return pos;
+    }
     union {
       int64_t part_key_;
       struct {
@@ -302,7 +309,14 @@ class ObHashPartInfrastructure {
     public:
     int init();
 
-    TO_STRING_KV(K_(part_key));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K_(part_key));
+      J_OBJ_END();
+      return pos;
+    }
 
     public:
     ObIntraPartKey part_key_;

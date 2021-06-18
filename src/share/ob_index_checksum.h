@@ -39,8 +39,7 @@ struct ObIndexChecksumItem {
            common::OB_INVALID_ID != table_id_ && common::OB_INVALID_ID != partition_id_ &&
            common::OB_INVALID_ID != column_id_ && 0 != checksum_method_;
   }
-  TO_STRING_KV(K_(execution_id), K_(tenant_id), K_(table_id), K_(partition_id), K_(column_id), K_(task_id),
-      K_(checksum), K_(checksum_method));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t execution_id_;
   uint64_t tenant_id_;
   uint64_t table_id_;

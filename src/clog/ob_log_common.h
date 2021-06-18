@@ -150,7 +150,7 @@ class ObLogMeta {
   }
 
   public:
-  TO_STRING_KV(K(log_id_), K(submit_timestamp_), K(proposal_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t log_id_;
@@ -238,7 +238,7 @@ class ObLogInfo {
   {
     return need_flushed_;
   }
-  TO_STRING_KV(K(size_), K(log_id_), K(submit_timestamp_), K(proposal_id_), K(need_flushed_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   const char* buff_;

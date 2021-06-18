@@ -123,9 +123,7 @@ class ObClusterInfo {
   {
     version_ = version;
   }
-  TO_STRING_KV(K_(cluster_id), K_(cluster_type), K_(login_name), K_(login_passwd), "switchover_status",
-      persistent_switchover_status_to_str(switchover_status_), K_(cluster_status), K_(switch_timestamp), K_(is_sync),
-      K_(gc_snapshot_ts), K_(protection_mode), K_(version), K_(protection_level));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   static const char* IN_MEMORY_SWITCHOVER_STATUS_ARRAY[];

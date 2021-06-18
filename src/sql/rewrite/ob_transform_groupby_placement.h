@@ -60,8 +60,7 @@ class ObTransformGroupByPlacement : public ObTransformRule {
     bool need_check_having_;
     bool need_merge_;
 
-    TO_STRING_KV(K_(parent_table), K_(table_id), K_(not_null_column_id), K_(not_null_column_table_id),
-        K_(need_check_null_propagate), K_(need_check_having), K_(need_merge));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct PushDownParam {
@@ -72,8 +71,7 @@ class ObTransformGroupByPlacement : public ObTransformRule {
     ObSEArray<ObRawExpr*, 4> filter_exprs_;                /// filter processed 'before' join
     ObSEArray<JoinedTable*, 4> correlated_joined_tables_;  // filter exprs correlated joined tables
 
-    TO_STRING_KV(K_(table_bit_index), K_(group_exprs), K_(aggr_exprs), K_(join_columns), K_(filter_exprs),
-        K_(correlated_joined_tables));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     int merge(PushDownParam& other);
 

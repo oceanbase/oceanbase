@@ -31,6 +31,30 @@ using namespace common;
 using namespace common::sqlclient;
 
 namespace share {
+int64_t ObCoreTableProxy::Cell::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(name), K_(value), K_(is_hex_value));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCoreTableProxy::UpdateCell::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_filter_cell), K_(cell));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCoreTableProxy::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_name), K_(load_for_update), K_(cur_idx), K_(all_row));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObCoreTableProxy::Row::init(const int64_t row_id, ObCoreTableProxy& kv_proxy, const common::ObIArray<Cell>& cells)
 {

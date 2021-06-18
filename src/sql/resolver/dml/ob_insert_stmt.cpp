@@ -20,6 +20,30 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObDupKeyScanInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(index_tid), K_(loc_table_id), K_(table_name), K_(only_data_table), K_(output_exprs),K_(conflict_exprs));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUniqueConstraintInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(index_tid), K_(constraint_name), K_(constraint_columns));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObInsertTableInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(when_conds_idx), K_(check_constraint_exprs), K_(when_conds_expr));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObDupKeyScanInfo::deep_copy(ObRawExprFactory& expr_factory, const ObDupKeyScanInfo& other)
 {

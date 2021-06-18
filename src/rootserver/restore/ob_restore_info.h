@@ -108,8 +108,14 @@ struct RestoreJob {
     return ret;
   }
 
-  TO_STRING_KV(K_(job_id), K_(level), K_(status), K_(start_time), K_(backup_end_time), K_(recycle_end_time),
-      K_(backup_uri), K_(tenant_name), K_(tenant_id), K_(table_id), K_(backup_table_id), K_(partition_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(job_id), K_(level), K_(status), K_(start_time), K_(backup_end_time), K_(recycle_end_time),K_(backup_uri), K_(tenant_name), K_(tenant_id), K_(table_id), K_(backup_table_id), K_(partition_id));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   common::ObArenaAllocator allocator_;
@@ -149,8 +155,14 @@ struct PartitionRestoreTask {
   int64_t job_id_;
   int64_t status_;
   RestoreJob* job_;
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(backup_table_id), K_(schema_id_pairs), K_(partition_id), K_(start_time),
-      K_(job_id), K_(status));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(tenant_id), K_(table_id), K_(backup_table_id), K_(schema_id_pairs), K_(partition_id), K_(start_time),K_(job_id), K_(status));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 // not used

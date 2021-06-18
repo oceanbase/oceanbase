@@ -46,7 +46,7 @@ class ObGroupName {
     common::ObDataBuffer allocator(group_name_buf_, common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH);
     return common::ob_write_string(allocator, other.group_name_, group_name_);
   }
-  TO_STRING_KV(K_(group_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObString group_name_;
@@ -86,8 +86,7 @@ class ObPlanDirective {
     return group_name_.set_group_name(name);
   }
   int assign(const ObPlanDirective& other);
-  TO_STRING_KV(
-      K_(tenant_id), "group_name", group_name_.get_group_name(), K_(mgmt_p1), K_(utilization_limit), K_(level));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t tenant_id_;
@@ -131,7 +130,7 @@ class ObResourceMappingRule {
     ;
   }
   int assign(const ObResourceMappingRule& other);
-  TO_STRING_KV(K_(tenant_id), K_(attr), K_(value), K_(group));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t tenant_id_;
@@ -170,7 +169,7 @@ class ObResourceUserMappingRule {
     return group_name_.set_group_name(name);
   }
   int assign(const ObResourceUserMappingRule& other);
-  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(group_id), "group_name", group_name_.get_group_name());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t tenant_id_;

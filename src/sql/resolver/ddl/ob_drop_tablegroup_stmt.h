@@ -33,7 +33,14 @@ class ObDropTablegroupStmt : public ObDDLStmt {
   {
     drop_tablegroup_arg_.if_exist_ = if_exist;
   }
-  TO_STRING_KV(K_(drop_tablegroup_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(drop_tablegroup_arg));
+    J_OBJ_END();
+    return pos;
+  }
   inline obrpc::ObDropTablegroupArg& get_drop_tablegroup_arg();
   inline void set_tablegroup_name(const common::ObString& tablegroup_name);
   void set_tenant_id(const uint64_t tenant_id)

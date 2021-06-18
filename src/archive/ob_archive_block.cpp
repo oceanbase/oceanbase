@@ -22,6 +22,14 @@ namespace oceanbase {
 
 using namespace common;
 namespace archive {
+int64_t ObArchiveBlockMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(magic_), K(total_len_), K(timestamp_), K(clog_epoch_id_), K(accum_checksum_), K(min_log_id_in_file_),K(min_log_ts_in_file_), K(max_log_id_), K(max_checkpoint_ts_), K(max_log_submit_ts_), K(input_bytes_),K(output_bytes_), K(data_checksum_), K(meta_checksum_));
+  J_OBJ_END();
+  return pos;
+}
 ObArchiveBlockMeta::ObArchiveBlockMeta()
 {
   reset();

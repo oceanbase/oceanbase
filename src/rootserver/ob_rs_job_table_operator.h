@@ -157,10 +157,7 @@ struct ObRsJobInfo {
   int64_t resource_pool_id_;
   //
   int deep_copy_self();
-  TO_STRING_KV(K_(job_id), K_(job_type), K_(job_type_str), K_(job_status), K_(job_status_str), K_(return_code),
-      K_(progress), K_(gmt_create), K_(gmt_modified), K_(tenant_id), K_(tenant_name), K_(database_id),
-      K_(database_name), K_(table_id), K_(table_name), K_(partition_id), K_(svr_addr), K_(unit_id), K_(rs_addr),
-      K_(sql_text), K_(extra_info), K_(resource_pool_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObArenaAllocator allocator_;

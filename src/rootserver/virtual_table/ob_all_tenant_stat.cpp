@@ -28,6 +28,22 @@ using namespace share;
 using namespace share::schema;
 
 namespace rootserver {
+int64_t ObAllTenantStat::PartitionStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id), K_(partition_cnt), K_(occupy_size), K_(row_count), K_(major_version),K_(minor_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAllTenantStat::TenantStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(table_count), K_(row_count), K_(total_size));
+  J_OBJ_END();
+  return pos;
+}
 
 ObAllTenantStat::PartitionStat::PartitionStat()
 {

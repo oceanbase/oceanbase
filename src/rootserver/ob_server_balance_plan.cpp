@@ -21,6 +21,14 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 namespace rootserver {
+int64_t ServerBalancePlanTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(unit_id_), K(zone_), K(resource_pool_id_), K(src_addr_), K(dst_addr_));
+  J_OBJ_END();
+  return pos;
+}
 
 int ServerManager::get_servers_of_zone(const common::ObZone& zone, ObServerArray& server_list) const
 {

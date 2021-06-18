@@ -39,7 +39,7 @@ struct ObRowData {
   }
   int serialize(char* buf, const int64_t buf_len, int64_t& pos);
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
-  TO_STRING_KV(KP_(data), K_(size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const char* data_;
   int32_t size_;
 };

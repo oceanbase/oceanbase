@@ -87,7 +87,14 @@ TEST_F(TestTraceEvent, NG_trace)
 
 struct ClassWithToYson {
   TO_YSON_KV(0, val1_, 1, val2_, 2, val3_, 3, val4_, 4, val5_);
-  TO_STRING_KV("0", val1_, "1", val2_, "2", val3_, "3", val4_, "4", val5_);
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV("0", val1_, "1", val2_, "2", val3_, "3", val4_, "4", val5_);
+    J_OBJ_END();
+    return pos;
+  }
 
   public:
   int64_t val1_;
@@ -102,7 +109,14 @@ struct ClassB {
   ClassWithToYson obj1_;
   ObString val1_;
   TO_YSON_KV(2, ObArrayWrap<int32_t>(arr_, 3), 0, obj1_, 11, val1_);
-  TO_STRING_KV("2", ObArrayWrap<int32_t>(arr_, 3), "0", obj1_, "11", val1_);
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV("2", ObArrayWrap<int32_t>(arr_, 3), "0", obj1_, "11", val1_);
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 TEST_F(TestTraceEvent, overflow)

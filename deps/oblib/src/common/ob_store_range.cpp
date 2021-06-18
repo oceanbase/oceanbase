@@ -505,5 +505,14 @@ int ObVersionStoreRangeConversionHelper::build_multi_version_store_rowkey(const 
   return ret;
 }
 
+int64_t ObExtStoreRange::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(range), K_(ext_start_key), K_(ext_end_key));
+  J_OBJ_END();
+  return pos;
+}
+
 }  // end namespace common
 }  // end namespace oceanbase

@@ -36,9 +36,7 @@ class ObUnitPlacementStrategy {
     virtual double get_capacity(ObResourceType resource_type) const override;
     virtual double get_max_assigned(ObResourceType resource_type) const override;
 
-    TO_STRING_KV(K_(addr), "capacity", common::ObArrayWrap<double>(capacity_, RES_MAX), "assigned",
-        common::ObArrayWrap<double>(assigned_, RES_MAX), "max_assigned",
-        common::ObArrayWrap<double>(max_assigned_, RES_MAX));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   ObUnitPlacementStrategy() = default;

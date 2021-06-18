@@ -43,7 +43,7 @@ class ObLogSimpleBitMap {
   void set_map_unsafe(const int64_t idx);
   bool test_map_unsafe(const int64_t idx) const;
   bool test_and_set(const int64_t idx);
-  TO_STRING_KV(K_(val));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint16_t val_;
@@ -152,9 +152,7 @@ class ObLogTask : public ObILogExtRingBufferData {
   // common::ObTraceProfile *get_trace_profile() {return trace_profile_;}
   // int report_trace();
 
-  TO_STRING_KV(K(log_type_), K(proposal_id_), K(log_buf_len_), K_(generation_timestamp), K(submit_timestamp_),
-      K_(data_checksum), K(epoch_id_), K(accum_checksum_), K_(state_map), K_(ack_list), KP_(submit_cb),
-      K_(majority_cnt), K_(log_cursor));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   virtual void destroy();

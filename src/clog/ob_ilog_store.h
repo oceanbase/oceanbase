@@ -43,7 +43,7 @@ class PinnedMemory {
   void destroy();
   char* get_ptr();
   bool is_valid(const int64_t size) const;
-  TO_STRING_KV(KP(pinned_memory_), K(size_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   char* pinned_memory_;
@@ -224,7 +224,7 @@ class ObIlogStore {
     ObIlogFreezeTriggerType trigger_type_;
     ObIlogMemstore* memstore_;
     int64_t seq_;
-    TO_STRING_KV(K(trigger_type_), K(memstore_), KP(memstore_), K(seq_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   class UpdateMaxFlushedIlogFunctor;

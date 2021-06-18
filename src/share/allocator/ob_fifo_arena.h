@@ -153,7 +153,7 @@ class ObFifoArena {
     {
       ATOMIC_FAA(&allocated_, size);
     }
-    TO_STRING_KV(K_(allocated));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t lock_;
     Ref* ref_[MAX_NWAY];
     int64_t allocated_;
@@ -238,8 +238,7 @@ class ObFifoArena {
     void reset_period_stat_info();
     void record_limit_event(int64_t interval);
     int check_and_calc_decay_factor(int64_t memstore_threshold, int64_t trigger_percentage, int64_t alloc_duration);
-    TO_STRING_KV(K(decay_factor_), K(alloc_duration_), K(trigger_percentage_), K(memstore_threshold_),
-        K(period_throttled_count_), K(period_throttled_time_), K(total_throttled_count_), K(total_throttled_time_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     // control info

@@ -57,7 +57,7 @@ struct ObBaseStorageLogHeader {
   int64_t data_file_id_;
   ObBaseStorageLogHeader();
   virtual ~ObBaseStorageLogHeader();
-  TO_STRING_KV(K_(trans_id), K_(log_seq), K_(subcmd), K_(log_len), K_(tenant_id), K_(data_file_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(BASE_STORAGE_LOG_HEADER_VERSION);
 };
 
@@ -76,7 +76,7 @@ struct ObStorageLogAttribute {
   }
   uint64_t tenant_id_;
   int64_t data_file_id_;
-  TO_STRING_KV(K_(tenant_id), K_(data_file_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObBaseStorageLogBuffer : public ObBufferHolder {
@@ -93,7 +93,7 @@ class ObBaseStorageLogBuffer : public ObBufferHolder {
 
   public:
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(KP_(data), K_(capacity), K_(pos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int append_log_head(const int64_t trans_id, const int64_t log_seq, const int64_t subcmd, const int64_t log_len,
@@ -129,7 +129,7 @@ struct ObStorageLogValidRecordEntry : public ObIBaseStorageLogEntry {
   int add_log_entry(int64_t log_seq);
   int add_savepoint(int64_t log_seq);
   int rollback(const int64_t savepoint);
-  TO_STRING_KV(K_(extent_count), K_(rollback_count), K_(savepoint_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 
@@ -148,7 +148,7 @@ struct ObStorageLogActiveTrans {
       ObIBaseStorageLogEntry& data);
   int assign(char* buf, const int64_t buf_size);
   void reuse();
-  TO_STRING_KV(K_(log_count), K_(start_cursor), K_(valid_record), K_(log_buffer));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 }  // end namespace blocksstable
 }  // end namespace oceanbase

@@ -15,6 +15,14 @@
 namespace oceanbase {
 using namespace common;
 namespace blocksstable {
+int64_t ObBlockIndexIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_idx));
+  J_OBJ_END();
+  return pos;
+}
 
 ObMicroBlockIndexReader::ObMicroBlockIndexReader()
     : row_reader_(nullptr),

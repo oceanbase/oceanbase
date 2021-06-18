@@ -20,6 +20,22 @@ namespace oceanbase {
 using namespace common;
 
 namespace sql {
+int64_t ObKeyPartId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TID, table_id_, N_CID, column_id_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObKeyPartPos::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_OFFSET, offset_, N_COLUMN_TYPE, column_type_, N_ENUM_SET_VALUES, enum_set_values_);
+  J_OBJ_END();
+  return pos;
+}
 void ObKeyPart::reset()
 {
   common::ObDLinkBase<ObKeyPart>::reset();

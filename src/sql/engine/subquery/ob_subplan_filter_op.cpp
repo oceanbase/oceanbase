@@ -19,6 +19,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObSubQueryIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(onetime_plan_), K(init_plan_), K(inited_));
+  J_OBJ_END();
+  return pos;
+}
 
 ObSubQueryIterator::ObSubQueryIterator(ObOperator& op)
     : op_(op), onetime_plan_(false), init_plan_(false), inited_(false), iterated_(false)

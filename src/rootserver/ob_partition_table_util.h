@@ -37,7 +37,7 @@ class ObPartitionTableUtil {
   struct ObZoneLeaderInfo {
     ObZoneLeaderInfo() : zone_(), leader_count_(0)
     {}
-    TO_STRING_KV(K_(zone), K_(leader_count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObZone zone_;
     int64_t leader_count_;
   };
@@ -78,9 +78,7 @@ class ObPartitionTableUtil {
     ~MergeProgress()
     {}
 
-    TO_STRING_KV(K_(zone), K_(unmerged_partition_cnt), K_(unmerged_data_size), K_(merged_partition_cnt),
-        K_(merged_data_size), K_(smallest_data_version), "merged_partition_percentage",
-        get_merged_partition_percentage(), "merged_data_percentage", get_merged_data_percentage());
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   typedef common::ObSEArray<MergeProgress, common::MAX_ZONE_NUM> ObZoneMergeProgress;

@@ -65,7 +65,7 @@ class ObIndexStatusReporter : public common::ObDLinkBase<ObIndexStatusReporter> 
     return false;
   }
 
-  TO_STRING_KV(K_(part_key), K_(self), K_(index_table_id), K_(index_status), K_(ret_code));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int do_process();

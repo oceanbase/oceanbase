@@ -34,7 +34,7 @@ struct ObWrsGetClusterVersionRequest {
     req_server_ = svr;
   }
 
-  TO_STRING_KV(K_(req_server));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(1);
 };
@@ -53,7 +53,7 @@ struct ObWrsGetClusterVersionResponse {
     version_duration_us_ = version_duration_us;
   }
 
-  TO_STRING_KV(K_(err_code), K_(version), K_(version_duration_us));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(1);
 };
@@ -80,7 +80,7 @@ struct ObWrsClusterHeartbeatRequest {
     generate_timestamp_ = generate_timestamp;
   }
 
-  TO_STRING_KV(K_(req_server), K_(version), K_(valid_part_count), K_(total_part_count), K_(generate_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(1);
 };
@@ -93,7 +93,7 @@ struct ObWrsClusterHeartbeatResponse {
     err_code_ = err_code;
   }
 
-  TO_STRING_KV(K_(err_code));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(1);
 };

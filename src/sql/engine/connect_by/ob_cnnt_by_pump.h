@@ -148,7 +148,7 @@ class ObConnectByOpPump : public ObConnectByOpPumpBase {
     ~PumpNode()
     {}
 
-    TO_STRING_KV(K(is_cycle_), K(is_leaf_), K(level_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     // left_row or right shallow row
     const ObChunkDatumStore::StoredRow* pump_row_;
     const ObChunkDatumStore::StoredRow* output_row_;

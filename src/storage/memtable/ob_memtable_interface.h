@@ -138,8 +138,7 @@ struct ObMergePriorityInfo {
     }
     return cmp < 0;
   }
-  TO_STRING_KV(
-      K_(tenant_id), K_(last_freeze_timestamp), K_(handle_id), K_(emergency), K_(protection_clock), KP_(partition));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t tenant_id_;
   int64_t last_freeze_timestamp_;
   int64_t handle_id_;

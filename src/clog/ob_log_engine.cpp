@@ -34,6 +34,14 @@ namespace oceanbase {
 using namespace common;
 using namespace share;
 namespace clog {
+int64_t ObLogEnv::Config::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_dir), K_(index_log_dir), K_(log_shm_path), K_(index_log_shm_path), K_(cache_name),K_(index_cache_name), K_(cache_priority), K_(index_cache_priority), K_(file_size), K_(read_timeout),K_(write_timeout), K_(disk_log_buffer_size), K_(disk_log_buffer_cnt), K_(ethernet_speed));
+  J_OBJ_END();
+  return pos;
+}
 
 bool ObLogEnv::Config::is_valid() const
 {

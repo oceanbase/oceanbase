@@ -212,7 +212,7 @@ class ObPartitionKeyIter {
     {}
     ~Info()
     {}
-    TO_STRING_KV(K_(partition_id), K_(drop_schema_version), K_(tg_partition_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t partition_id_;
     int64_t drop_schema_version_;
     int64_t tg_partition_id_;
@@ -236,7 +236,7 @@ class ObPartitionKeyIter {
   {
     return schema_id_;
   }
-  TO_STRING_KV(K_(schema_id), K_(part_level), KP_(partition_schema), K_(check_dropped_schema));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t schema_id_;
@@ -262,7 +262,7 @@ class ObDroppedPartitionKeyIter {
   {
     return iter_.get_schema_id();
   }
-  TO_STRING_KV(K_(iter));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObPartitionKeyIter iter_;
@@ -379,11 +379,7 @@ struct ObPartitionItem {
     partition_num_ = -1;
   }
 
-  TO_STRING_KV(K(part_idx_), K(part_id_), K(part_num_), KP(part_name_), KP(part_high_bound_),
-
-      K(subpart_idx_), K(subpart_id_), K(subpart_num_), KP(subpart_name_), KP(subpart_high_bound_),
-
-      K(partition_idx_), K(partition_id_), K(partition_num_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObTablePartItemIterator {

@@ -1729,3 +1729,19 @@ void ObBuildIndexScheduler::destroy()
   task_executor_.destroy();
   is_inited_ = false;
 }
+int64_t ObBuildIndexScheduleTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(index_id), K_(schema_version), K_(state));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantDDLCheckSchemaTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(base_version), K_(refreshed_version));
+  J_OBJ_END();
+  return pos;
+}

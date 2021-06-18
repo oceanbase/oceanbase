@@ -318,7 +318,14 @@ class ObCommonKV {
   }
   K key_;
   V value_;
-  TO_STRING_KV(K_(key), K_(value));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(key), K_(value));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 typedef ObCommonKV<common::ObString, common::ObString> ObStringKV;
@@ -336,7 +343,7 @@ class ObMySQLPacketHeader {
     seq_ = 0;
   }
 
-  TO_STRING_KV("length", len_, "sequence", seq_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint32_t len_;  // MySQL packet length not include packet header
@@ -355,8 +362,7 @@ class ObMySQLCompressedPacketHeader {
   ObMySQLCompressedPacketHeader() : comp_len_(0), comp_seq_(0), uncomp_len(0)
   {}
 
-  TO_STRING_KV(
-      "compressed_length", comp_len_, "compressed_sequence", comp_seq_, "length_before_compression", uncomp_len);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint32_t comp_len_;   // length of compressed payload, not include packet header
@@ -483,7 +489,7 @@ class ObMySQLRawPacket : public ObMySQLPacket {
     trace_info_ = other.trace_info_;
   }
 
-  TO_STRING_KV("header", hdr_, "can_reroute", can_reroute_pkt_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   virtual int serialize(char*, const int64_t, int64_t&) const;

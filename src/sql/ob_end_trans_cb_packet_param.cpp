@@ -18,6 +18,14 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
+int64_t ObEndTransCbPacketParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(message), K_(affected_rows), K_(last_insert_id_to_client), K_(is_partition_hit), K_(trace_id), K_(is_valid));
+  J_OBJ_END();
+  return pos;
+}
 ObEndTransCbPacketParam& ObEndTransCbPacketParam::operator=(const ObEndTransCbPacketParam& other)
 {
   MEMCPY(message_, other.message_, MSG_SIZE);

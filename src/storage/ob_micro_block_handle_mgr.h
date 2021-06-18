@@ -32,8 +32,7 @@ struct ObMicroBlockDataHandle {
   void reset();
   int get_block_data(blocksstable::ObMacroBlockReader& block_reader, blocksstable::ObStorageFile* storage_file,
       blocksstable::ObMicroBlockData& block_data);
-  TO_STRING_KV(
-      K_(table_id), K_(block_ctx), K_(micro_info), K_(block_state), K_(block_index), K_(cache_handle), K_(io_handle));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t table_id_;
   blocksstable::ObMacroBlockCtx block_ctx_;
   int32_t block_state_;

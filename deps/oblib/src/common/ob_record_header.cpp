@@ -259,5 +259,15 @@ DEFINE_GET_SERIALIZE_SIZE(ObRecordHeader)
           serialization::encoded_length_i32(data_zlength_) + serialization::encoded_length_i64(data_checksum_));
 }
 
+int64_t ObRecordHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(magic), K_(header_length), K_(version), K_(header_checksum), K_(timestamp), K_(data_length),
+      K_(data_zlength), K_(data_checksum));
+  J_OBJ_END();
+  return pos;
+}
+
 }  // end namespace common
 }  // end namespace oceanbase

@@ -28,6 +28,38 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObIDataSource::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(cur_scanner));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFifoReceive::MergeSortHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("merge id", merge_id_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFifoReceive::ObSortRow::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("pos", pos_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFifoReceive::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_ORDER_BY, sort_columns_);
+  J_OBJ_END();
+  return pos;
+}
 
 ObTaskResultIter::ObTaskResultIter(IterType iter_type) : iter_type_(iter_type)
 {}

@@ -7640,3 +7640,107 @@ bool ObServerBalancer::UnitLoadDiskCmp::operator()(
   }
   return bool_ret;
 }
+int64_t ObServerBalancer::ZoneServerDiskStatistic::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(zone_), K(server_disk_statistic_array_), K(over_disk_waterlevel_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::ServerDiskStatistic::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server_), K(disk_in_use_), K(disk_total_), K(wild_server_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::TenantGroupBalanceInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(tenant_id_matrix_), K(unit_migrate_stat_matrix_), K(column_unit_num_array_),K(unitgroup_load_array_), K(server_load_array_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::PoolOccupation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id_), K(resource_pool_id_), K(server_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::ServerLoadSum::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server_), K(load_sum_), K(disk_in_use_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::ServerTotalLoad::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server_), K(load_sum_), K(resource_info_), K(inter_ttg_load_value_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::ServerLoad::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server_), K(unitgroup_loads_), K(alien_ug_loads_), K(resource_info_), K(inter_ttg_load_value_),K(intra_ttg_load_value_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::ServerResourceLoad::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server_), K(inter_ttg_load_value_), K(resource_info_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::ResourceSum::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(resource_sum_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::UnitGroupLoad::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(column_tenant_id_), K(start_column_idx_), K(column_count_), K(server_), KP(server_load_),K(unit_loads_), K(load_sum_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::SimpleUgLoad::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(column_tenant_id_), K(original_server_), K(arranged_server_), K(load_sum_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::LoadSum::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(load_sum_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerBalancer::UnitMigrateStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id_), K(original_pos_), K(arranged_pos_), K(unit_load_));
+  J_OBJ_END();
+  return pos;
+}

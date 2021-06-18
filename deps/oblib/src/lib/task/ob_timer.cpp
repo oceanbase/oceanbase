@@ -19,6 +19,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObTimer::Token::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(scheduled_time), K(delay), KP(task), KPC(task));
+  J_OBJ_END();
+  return pos;
+}
 using namespace tbutil;
 using namespace lib;
 

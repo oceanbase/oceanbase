@@ -18,6 +18,30 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObLogKVCacheKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(addr_), K(seq_), K(file_id_), K(offset_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogKVCacheValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(buf_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogHotCache::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_inited_), KP(byte_arr_), K(base_offset_), K(head_offset_), K(tail_offset_));
+  J_OBJ_END();
+  return pos;
+}
 
 // ---------------- ObLogKVCache ----------------
 bool ObLogKVCacheKey::operator==(const ObIKVCacheKey& other) const

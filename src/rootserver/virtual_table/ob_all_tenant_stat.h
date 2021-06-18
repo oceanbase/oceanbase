@@ -88,8 +88,7 @@ class ObAllTenantStat : public common::ObVirtualTableProjector {
     bool is_valid() const;
     void reset();
 
-    TO_STRING_KV(K_(table_id), K_(partition_id), K_(partition_cnt), K_(occupy_size), K_(row_count), K_(major_version),
-        K_(minor_version));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ComparePartition {
@@ -114,7 +113,7 @@ class ObAllTenantStat : public common::ObVirtualTableProjector {
     void reset();
     int add_partition_stat(const PartitionStat& partition_stat);
 
-    TO_STRING_KV(K_(tenant_id), K_(table_count), K_(row_count), K_(total_size));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   virtual int get_all_tenant_stats(common::ObIArray<TenantStat>& tenant_stats);

@@ -21,6 +21,86 @@ using namespace oceanbase::share;
 
 namespace oceanbase {
 namespace archive {
+int64_t ObArchiveReadBuf::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(data_len_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObArchiveLogCursor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_id), K_(offset), K_(size), K_(is_batch_committed), K_(log_id), K_(log_submit_ts), K_(accum_checksum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObArchiveRoundStartInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(start_ts_), K(start_log_id_), K(snapshot_version_), K(log_submit_ts_), K(clog_epoch_id_), K(accum_checksum_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGArchiveCLogTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(epoch_id), K_(need_update_log_ts), K_(round_start_log_id), K_(round_start_ts), K_(checkpoint_ts),K_(log_submit_ts), K_(clog_epoch_id), K_(accum_checksum), K_(processed_log_count), K_(incarnation),K_(log_archive_round), K_(task_type), K_(compressor_type), K_(pg_key), K_(clog_pos_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObArchiveIndexFileInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(magic_), K(record_len_), K(version_), K(is_valid_), K(data_file_id_), K(input_bytes_),K(output_bytes_), K(clog_epoch_id_), K(accum_checksum_), K(min_log_id_), K(min_log_ts_), K(max_log_id_),K(max_checkpoint_ts_), K(max_log_submit_ts_), K(round_start_ts_), K(round_start_log_id_),K(round_snapshot_version_), K(round_log_submit_ts_), K(round_clog_epoch_id_), K(round_accum_checksum_),K(checksum_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t MaxArchivedIndexInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(data_file_collect_), K(archived_log_collect_), K(round_start_info_collect_),K(max_record_data_file_id_), K(max_record_log_id_), K(max_record_checkpoint_ts_), K(max_record_log_submit_ts_),K(clog_epoch_id_), K(accum_checksum_), K(round_start_info_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObArchiveStartTimestamp::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(archive_round_), K(timestamp_), K(checksum_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObArchiveCompressedChunkHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(magic_), K(version_), K(orig_data_len_), K(compressed_data_len_), K(compressor_type_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObArchiveCompressedChunk::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(header_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObArchiveReadParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pg_key_), K(file_id_), K(offset_), K(read_len_), K(timeout_));
+  J_OBJ_END();
+  return pos;
+}
 
 ////================ start of structs for backup============//
 //=======================start of ObPGArchiveCLogTask========================//

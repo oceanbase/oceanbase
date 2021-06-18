@@ -33,6 +33,22 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 namespace dtl {
+int64_t SendMsgResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(inited), K_(ret));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlBasicChannel::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(id), K_(peer));
+  J_OBJ_END();
+  return pos;
+}
 
 SendMsgResponse::SendMsgResponse()
     : inited_(false), ret_(OB_SUCCESS), in_process_(false), finish_(true), is_block_(false), cond_(), ch_id_(-1)

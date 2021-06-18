@@ -42,8 +42,7 @@ struct ObStmtMapInfo {
     select_item_map_.reset();
     equal_param_map_.reset();
   }
-  TO_STRING_KV(K_(table_map), K_(from_map), K_(cond_map), K_(group_map), K_(having_map), K_(select_item_map),
-      K_(equal_param_map));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // NOTE () remember to de-construct the struct

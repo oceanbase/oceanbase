@@ -19,6 +19,14 @@ using namespace common;
 
 namespace oceanbase {
 namespace blocksstable {
+int64_t ObBufferHolder::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(data), K_(pos), K_(capacity));
+  J_OBJ_END();
+  return pos;
+}
 ObSelfBufferWriter::ObSelfBufferWriter(const int64_t size, const char* label, const bool need_align)
     : ObBufferWriter(NULL, 0, 0), label_(label), is_aligned_(need_align), macro_block_mem_ctx_()
 {

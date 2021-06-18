@@ -837,8 +837,7 @@ class ObConfigLogArchiveOptionsItem : public ObConfigItem {
         encryption_algorithm_ = value.encryption_algorithm_;
       }
     }
-    TO_STRING_KV(K_(valid), K_(is_mandatory), K_(is_compress_enabled), K_(compressor_type), K_(encryption_mode),
-        K_(encryption_algorithm));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int set_default_encryption_algorithm();
     bool is_encryption_meta_valid() const;
 

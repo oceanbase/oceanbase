@@ -33,7 +33,7 @@ struct ObBKGDDistExecuteArg {
   public:
   ObBKGDDistExecuteArg() : tenant_id_(OB_INVALID_ID), scheduler_id_(0)
   {}
-  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(scheduler_id), K_(return_addr), K(serialized_task_.length()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool is_valid() const
   {
@@ -54,7 +54,7 @@ struct ObBKGDTaskCompleteArg {
   public:
   ObBKGDTaskCompleteArg() : scheduler_id_(0), return_code_(common::OB_SUCCESS)
   {}
-  TO_STRING_KV(K_(task_id), K_(scheduler_id), K_(return_code), K_(event));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObTaskID task_id_;
   uint64_t scheduler_id_;
@@ -72,7 +72,7 @@ struct ObFetchIntermResultItemArg {
   ObSliceID slice_id_;
   int64_t index_;
 
-  TO_STRING_KV(K_(slice_id), K_(index));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObFetchIntermResultItemRes {
@@ -85,7 +85,7 @@ struct ObFetchIntermResultItemRes {
   ObIntermResultItem result_item_;
   int64_t total_item_cnt_;
 
-  TO_STRING_KV(K_(result_item), K_(total_item_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 }  // namespace sql

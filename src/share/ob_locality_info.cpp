@@ -16,6 +16,30 @@
 namespace oceanbase {
 using namespace common;
 namespace share {
+int64_t ObLocalityZone::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(region_priority));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocalityRegion::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(region), K_(region_priority), K_(zone_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocalityInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(local_region), K_(local_zone), K_(local_idc), K_(local_zone_type),K_(local_merge_status), K_(local_zone_status), K_(locality_region_array), K_(locality_zone_array));
+  J_OBJ_END();
+  return pos;
+}
 void ObLocalityZone::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;

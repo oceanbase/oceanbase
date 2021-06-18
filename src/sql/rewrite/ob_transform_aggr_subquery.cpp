@@ -1612,3 +1612,11 @@ int ObTransformAggrSubquery::extract_no_rewrite_expr(ObRawExpr* expr)
   }
   return ret;
 }
+int64_t ObTransformAggrSubquery::TransformParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ja_query_ref), K_(query_refs), K_(nested_conditions), K_(is_null_prop), K_(pullup_flag), K_(not_null_expr));
+  J_OBJ_END();
+  return pos;
+}

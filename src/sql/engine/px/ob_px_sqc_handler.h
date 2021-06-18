@@ -42,7 +42,7 @@ class ObPxWorkNotifier {
     return tid_array_;
   }
 
-  TO_STRING_KV(K_(start_worker_count), K_(finish_worker_count), K_(expect_worker_count), K_(tid_array))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   volatile int64_t start_worker_count_;
@@ -174,8 +174,7 @@ class ObPxSqcHandler : public common::ObDLinkBase<ObPxSqcHandler> {
     end_ret_ = ret;
   }
   bool need_rollback();
-  TO_STRING_KV(K_(tenant_id), K_(reserved_px_thread_count), KP_(notifier), K_(exec_ctx), K_(des_phy_plan),
-      K_(sqc_init_args), KP_(sub_coord));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int destroy_sqc();

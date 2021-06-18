@@ -83,7 +83,7 @@ class ObLogTableScan : public ObLogicalOperator {
   const char* get_name() const;
 
   // not used at the moment
-  TO_STRING_KV(K_(table_id), K_(index_table_id), K_(is_fake_cte_table), K_(table_name), K_(index_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   /**
    *  Get table id
    */

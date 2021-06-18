@@ -159,7 +159,7 @@ class ObTransMutator : public common::ObDataBuffer {
   int assign(const ObTransMutator& src);
   int assign(const char* data, const int64_t size);
 
-  TO_STRING_KV(KP_(mutator_buf), K_(use_mutator_buf), K_(data), K_(position), K_(capacity));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObTransMutator);
@@ -509,10 +509,7 @@ class ObTransPrepareLog : public ObTransLog {
   bool is_valid() const;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
 
-  TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(tenant_id), K_(scheduler), K_(coordinator),
-      K_(participants), K_(trans_param), K_(prepare_status), K_(prev_redo_log_ids), K_(cluster_id),
-      K_(active_memstore_version), K_(app_trace_id_str), K_(partition_log_info_arr), K_(checkpoint), K_(prev_trans_arr),
-      K_(can_elr), K_(app_trace_info), K_(xid));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObTransPrepareLog);
@@ -582,8 +579,7 @@ class ObTransCommitLog : public ObTransLog {
   }
   bool is_valid() const;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
-  TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(partition_log_info_arr), K_(global_trans_version),
-      K_(checksum), K_(cluster_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObTransCommitLog);
@@ -613,7 +609,7 @@ class ObTransPreCommitLog : public ObTransLog {
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
 
   public:
-  TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id), K_(publish_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t publish_version_;
@@ -635,7 +631,7 @@ class ObTransAbortLog : public ObTransLog {
   {
     return split_info_;
   }
-  TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id), K_(partition_log_info_arr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObTransAbortLog);
@@ -791,9 +787,7 @@ class ObSpTransCommitLog : public ObSpTransRedoLog {
   }
   bool is_valid() const;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
-  TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(tenant_id), K_(log_no), K_(trans_param), K_(cluster_id),
-      K_(active_memstore_version), K_(checksum), K_(prev_redo_log_ids), K_(app_trace_id_str), K_(checkpoint),
-      K_(prev_trans_arr), K_(app_trace_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObSpTransCommitLog);
@@ -828,7 +822,7 @@ class ObSpTransAbortLog : public ObTransLog {
   public:
   bool is_valid() const;
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
-  TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObSpTransAbortLog);
@@ -850,7 +844,7 @@ class ObCheckpointLog {
     return checkpoint_;
   }
   bool is_valid() const;
-  TO_STRING_KV(K_(checkpoint));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t checkpoint_;
@@ -979,11 +973,7 @@ class ObTransStateLog : public ObTransLog {
     return true;
   }
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
-  TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id), K_(create_ts), K_(tenant_id),
-      K_(trans_expired_time), K_(trans_param), K_(is_readonly), K_(trans_type), K_(session_id), K_(proxy_session_id),
-      K_(commit_task_count), K_(stmt_info), K_(app_trace_id_str), K_(schema_version), K_(prev_trans_arr), K_(can_elr),
-      K_(proposal_leader), K_(cluster_version), K_(snapshot_version), K_(cur_query_start_time), K_(stmt_expired_time),
-      K_(xid));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t create_ts_;
@@ -1075,8 +1065,7 @@ class ObTransMutatorLog : public ObTransLog {
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
 
   public:
-  TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id), K_(tenant_id), K_(trans_expired_time),
-      K_(trans_param), K_(log_no), K_(prev_trans_arr), K_(can_elr), K_(cluster_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t tenant_id_;
@@ -1100,7 +1089,7 @@ class ObTransMutatorAbortLog : public ObTransLog {
   int init(
       const int64_t log_type, const common::ObPartitionKey& pkey, const ObTransID& trans_id, const uint64_t cluster_id);
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
-  TO_STRING_KV(K_(log_type), K_(partition), K_(trans_id), K_(cluster_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // Provide related methods for log analysis

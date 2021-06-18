@@ -765,3 +765,19 @@ int PartitionLeaderCountBalancer::inter_row_balance()
   // and success is returned directly here.
   return ret;
 }
+int64_t RowLeaderBalanceStat::UnitCounter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(unit_id), K_(accumulated_count), K_(current_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t RowLeaderBalanceStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row_idx), K_(row_unit));
+  J_OBJ_END();
+  return pos;
+}

@@ -139,7 +139,7 @@ class ObValidateBackupPGCtx {
   {
     return only_in_clog_;
   }
-  TO_STRING_KV(K_(result), K_(pg_key), K_(sub_task_cnt), K_(path_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int fetch_next_sub_task(SubTask*& sub_task);

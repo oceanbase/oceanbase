@@ -26,6 +26,30 @@ namespace oceanbase {
 using namespace oceanbase;
 using namespace oceanbase::common;
 namespace share {
+int64_t ObPrimaryZoneUtil::ZoneRegionScore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(zone_region_), K(zone_score_), K(region_score_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRawPrimaryZoneUtil::ZoneScore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(zone_), K(zone_score_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRawPrimaryZoneUtil::RegionScore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(region_), K(region_score_));
+  J_OBJ_END();
+  return pos;
+}
 using namespace schema;
 
 // when invoked by DDL, zone_region_list_ shall not be NULL

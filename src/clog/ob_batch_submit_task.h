@@ -46,7 +46,7 @@ class ObBatchSubmitDiskTask : public ObIBufferTask {
   virtual int fill_buffer(char* buf, const offset_t offset);
   virtual int st_after_consume(const int handle_err);
   virtual int after_consume(const int handle_err, const void* arg, const int64_t before_push_cb_ts);
-  TO_STRING_KV(K(partition_array_), K(log_info_array_), K(offset_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_inited_;

@@ -14,6 +14,14 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ObCreateTableLikeStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_type), K_(create_table_like_arg));
+  J_OBJ_END();
+  return pos;
+}
 
 ObCreateTableLikeStmt::ObCreateTableLikeStmt(common::ObIAllocator* name_pool)
     : ObDDLStmt(name_pool, stmt::T_CREATE_TABLE_LIKE)

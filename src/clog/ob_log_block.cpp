@@ -21,6 +21,14 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObLogBlockMetaV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_MAGIC, magic_, N_TYPE, type_, N_TOTAL_LEN, total_len_, N_PADDING_LEN, padding_len_, N_TIMESTAMP,timestamp_, N_DATA_CHECKSUM, data_checksum_, N_META_CHECKSUM, meta_checksum_);
+  J_OBJ_END();
+  return pos;
+}
 ObLogBlockMetaV2::ObLogBlockMetaV2()
     : magic_(0),
       version_(BLOCK_VERSION),

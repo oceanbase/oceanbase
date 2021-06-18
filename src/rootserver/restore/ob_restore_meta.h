@@ -48,7 +48,7 @@ class ObRestoreMeta {
     }
     uint64_t tablegroup_id_;
     uint64_t backup_tablegroup_id_;  // tablegroup_id in backup meta data
-    TO_STRING_KV(K_(tablegroup_id), K_(backup_tablegroup_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct TableIdPair {
@@ -62,7 +62,7 @@ class ObRestoreMeta {
     }
     uint64_t table_id_;
     uint64_t backup_table_id_;  // table_id in backup meta data
-    TO_STRING_KV(K_(table_id), K_(backup_table_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct IndexIdPair {
@@ -79,7 +79,7 @@ class ObRestoreMeta {
     uint64_t table_id_;
     uint64_t index_id_;
     uint64_t backup_index_id_;
-    TO_STRING_KV(K_(table_id), K_(index_id), K_(backup_index_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   public:

@@ -767,3 +767,11 @@ int ObPxMergeSortReceive::try_link_channel(ObExecContext& ctx) const
   }
   return ret;
 }
+int64_t ObPxMergeSortReceive::MergeSortInput::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pos));
+  J_OBJ_END();
+  return pos;
+}

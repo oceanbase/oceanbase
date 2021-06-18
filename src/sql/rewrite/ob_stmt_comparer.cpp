@@ -636,3 +636,11 @@ int ObStmtComparer::compare_basic_table_item(ObDMLStmt* first, const TableItem* 
   }
   return ret;
 }
+int64_t ObStmtMapInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_map), K_(from_map), K_(cond_map), K_(group_map), K_(having_map), K_(select_item_map),K_(equal_param_map));
+  J_OBJ_END();
+  return pos;
+}

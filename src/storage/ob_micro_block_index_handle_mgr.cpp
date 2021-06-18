@@ -18,6 +18,14 @@ using namespace oceanbase::blocksstable;
 
 namespace oceanbase {
 namespace storage {
+int64_t ObMicroBlockIndexHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(block_ctx));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ---------------------------------------------------------ObMicroBlockIndexHandle---------------------------------------------------
  */

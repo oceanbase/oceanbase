@@ -24,6 +24,14 @@ using namespace share;
 using namespace blocksstable;
 
 namespace storage {
+int64_t ObParallelMergeCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(parallel_type), K_(range_array), K_(first_sstable), K_(concurrent_cnt), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
 
 ObParallelMergeCtx::ObParallelMergeCtx()
     : parallel_type_(INVALID_PARALLEL_TYPE),

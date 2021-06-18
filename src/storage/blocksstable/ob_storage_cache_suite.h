@@ -61,7 +61,7 @@ class ObStorageCacheSuite {
   {
     return is_inited_;
   }
-  TO_STRING_KV(K(is_inited_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObStorageCacheSuite();
@@ -90,7 +90,7 @@ struct ObStorageCacheContext {
   void set(ObBlockCacheWorkingSet& block_cache_ws);
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(KP_(block_index_cache), KP_(block_cache), KP_(block_cache_ws), KP_(row_cache), KP_(bf_cache));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 }  // namespace blocksstable
 }  // namespace oceanbase

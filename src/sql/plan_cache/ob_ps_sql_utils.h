@@ -89,7 +89,7 @@ class ObPsSqlParamHelper {
     common::ObBitSet<> question_marks_;
     int64_t question_mark_count_;
     int64_t insert_vector_level_;
-    TO_STRING_KV(K_(is_child_not_param), K_(question_mark_count), K_(insert_vector_level));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   ObPsSqlParamHelper()

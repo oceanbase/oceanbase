@@ -19,6 +19,30 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObLoadTaskStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLoadDataTimer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("secs", get_wait_secs());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLoadDataGID::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(id));
+  J_OBJ_END();
+  return pos;
+}
 
 const char* ObLoadDataUtils::NULL_STRING = "NULL";
 const char ObLoadDataUtils::NULL_VALUE_FLAG = '\xff';

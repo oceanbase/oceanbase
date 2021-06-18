@@ -71,7 +71,7 @@ struct ObPartitionReplica {
     {}
     Member(const common::ObAddr& server, const int64_t timestamp) : server_(server), timestamp_(timestamp)
     {}
-    TO_STRING_KV(K_(server), K_(timestamp));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     operator const common::ObAddr&() const
     {
@@ -100,7 +100,7 @@ struct ObPartitionReplica {
     {
       reset();
     }
-    TO_STRING_KV(K_(dest_server), K_(task_type), "last_fail_time", get_last_fail_time(), K_(count), K_(start_pos));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     static const int64_t MAX_FAILED_TIMES_COUNT = 16;
     void reset();
     void assign(const FailMsg& other);

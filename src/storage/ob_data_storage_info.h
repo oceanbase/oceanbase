@@ -58,8 +58,7 @@ class ObDataStorageInfo {
   int64_t get_last_replay_log_ts() const;
   void set_last_replay_log_ts(const int64_t last_replay_log_ts);
 
-  TO_STRING_KV("last_replay_log_id", last_replay_log_id_, "last_replay_log_ts", last_replay_log_ts_, "publish_version",
-      publish_version_, "schema_version", schema_version_, "created_by_new_minor_freeze", created_by_new_minor_freeze_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:

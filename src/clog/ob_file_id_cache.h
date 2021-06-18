@@ -237,8 +237,7 @@ class Log2File {
     return bool_ret;
   }
 
-  TO_STRING_KV(K_(file_id), K_(start_offset), K_(min_log_id), "max_log_id", get_max_log_id(), K_(min_log_timestamp),
-      "max_log_timestamp", get_max_log_timestamp());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   file_id_t file_id_;
@@ -264,7 +263,7 @@ struct ObLogBasePos {
     file_id_ = common::OB_INVALID_FILE_ID;
     base_offset_ = OB_INVALID_OFFSET;
   }
-  TO_STRING_KV(K(file_id_), K(base_offset_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   file_id_t file_id_;
@@ -292,7 +291,7 @@ class ObFileIdCachePurgeByFileId : public ObIFileIdCachePurgeStrategy {
   bool can_purge(const Log2File& log_2_file, const common::ObPartitionKey& unused_pkey) const final;
   bool is_valid() const final;
   bool need_wait(bool& need_print_error) const final;
-  TO_STRING_KV(K(min_file_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   file_id_t min_file_id_;
@@ -307,7 +306,7 @@ class ObFileIdCachePurgeByTimestamp : public ObIFileIdCachePurgeStrategy {
   bool can_purge(const Log2File& log_2_file, const common::ObPartitionKey& pkey) const final;
   bool is_valid() const final;
   bool need_wait(bool& need_print_error) const final;
-  TO_STRING_KV(K(max_decided_trans_version_), K(min_timestamp_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t max_decided_trans_version_;
@@ -328,7 +327,7 @@ class ObFileIdList {
     {
       return err_;
     }
-    TO_STRING_KV(K(err_), K(file_id_), K(start_offset_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     int err_;
@@ -354,7 +353,7 @@ class ObFileIdList {
       return purge_strategy_.is_valid();
     }
     bool should_purge(const Log2File& log_2_file) const;
-    TO_STRING_KV(K(purge_strategy_), K(partition_key_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     common::ObPartitionKey partition_key_;
@@ -373,7 +372,7 @@ class ObFileIdList {
       return common::OB_INVALID_FILE_ID != broken_file_id_;
     }
     bool should_purge(const Log2File& log_2_file) const;
-    TO_STRING_KV(K(broken_file_id_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     file_id_t broken_file_id_;
@@ -408,7 +407,7 @@ class ObFileIdList {
   }
   int get_max_continuous_log_id(const common::ObPartitionKey& pkey, uint64_t& max_continuous_log_id);
   int get_front_log2file_max_timestamp(int64_t& front_log2file_max_timestamp) const;
-  TO_STRING_KV(K(is_inited_), K(min_continuous_log_id_), K(base_pos_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t SEG_STEP = 256;
   static const int64_t SEG_COUNT = 500;
   static const int64_t NEED_USE_SEG_ARRAY_THRESHOLD = 50;
@@ -476,7 +475,7 @@ class ObFileIdCache {
     {
       return err_;
     }
-    TO_STRING_KV(K(file_id_), K(err_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     int err_;
@@ -493,7 +492,7 @@ class ObFileIdCache {
     {
       return dead_pkeys_;
     }
-    TO_STRING_KV(K(broken_file_id_), K(dead_pkeys_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     file_id_t broken_file_id_;

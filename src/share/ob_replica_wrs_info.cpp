@@ -15,6 +15,14 @@
 namespace oceanbase {
 using namespace common;
 namespace share {
+int64_t ObReplicaWrsInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(weak_read_timestamp), K_(part_state), K_(replica_type), K_(replica_status));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObReplicaWrsInfo, pkey_, weak_read_timestamp_, part_state_, replica_type_, replica_status_);
 

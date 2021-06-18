@@ -46,7 +46,7 @@ class ObCreateDatabaseStmt : public ObDDLStmt {
     return create_database_arg_;
   }
 
-  TO_STRING_KV(K_(create_database_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_charset_specify_;

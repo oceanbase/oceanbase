@@ -17,6 +17,22 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObConfirmedInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_checksum), K_(epoch_id), K_(accum_checksum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogArchiveInnerLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(checkpoint_ts), K_(round_start_ts), K_(round_snapshot_version));
+  J_OBJ_END();
+  return pos;
+}
 int ObConfirmedInfo::init(const int64_t data_checksum, const int64_t epoch_id, const int64_t accum_checksum)
 {
   int ret = OB_SUCCESS;

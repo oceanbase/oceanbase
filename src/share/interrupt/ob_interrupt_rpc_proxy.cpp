@@ -19,6 +19,22 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace obrpc {
+int64_t ObInterruptStackInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("msg", buf1_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObInterruptMessage::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(first), K_(last), K_(code), K_(info));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObInterruptStackInfo, buf1_);
 OB_SERIALIZE_MEMBER(ObInterruptMessage, first_, last_, code_, info_);
@@ -35,3 +51,11 @@ int ObInterruptProcessor::process()
 }
 }  // namespace obrpc
 }  // namespace oceanbase
+int64_t ObInterruptCode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(code), K_(info));
+  J_OBJ_END();
+  return pos;
+}

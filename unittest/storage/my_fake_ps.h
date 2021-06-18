@@ -72,7 +72,14 @@ class MyFakePartition : public storage::MockObIPartition, public blocksstable::O
   ObArenaAllocator arena_;
   ObIPartitionStorage* storage_;
   int64_t unused;
-  TO_STRING_KV(K(unused));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(unused));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 class MyFakePartitionService : public MockObIPartitionService {

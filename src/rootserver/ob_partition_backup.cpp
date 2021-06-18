@@ -838,3 +838,19 @@ int ObPartitionBackupProvider::check_can_become_dest(const ObBackupElement& elem
   }
   return ret;
 }
+int64_t ObReplicaBackupElement::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(replica_element));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupElement::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(replica), K_(region));
+  J_OBJ_END();
+  return pos;
+}

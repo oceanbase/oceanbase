@@ -48,7 +48,7 @@ class ObElectionGroupKey {
     return hash_value_;
   }
   bool is_valid() const;
-  TO_STRING_KV(K(tenant_id_), K(part_leader_), K(replica_num_), K(member_list_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const uint64_t& get_tenant_id() const
   {
     return tenant_id_;

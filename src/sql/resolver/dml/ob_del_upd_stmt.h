@@ -118,9 +118,7 @@ struct IndexDMLInfo {
   common::ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> primary_key_ids_;
   common::ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> part_key_ids_;
 
-  TO_STRING_KV(K_(table_id), K_(index_tid), K_(loc_table_id), K_(index_name), K_(rowkey_cnt), K_(primary_key_ids),
-      K_(part_cnt), K_(part_key_ids), K_(all_part_num), K_(column_exprs), K_(column_convert_exprs), K_(assignments),
-      K_(need_filter_null), K_(distinct_algo), K_(calc_part_id_exprs));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 /**
@@ -136,7 +134,7 @@ class TableColumns {
 
   int deep_copy(ObRawExprFactory& expr_factory, const TableColumns& other);
 
-  TO_STRING_KV(K_(table_name), K_(index_dml_infos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObString table_name_;
   common::ObSEArray<IndexDMLInfo, 4, common::ModulePageAllocator, true> index_dml_infos_;

@@ -27,6 +27,158 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObPlanCacheKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(name), K_(key_id), K_(db_id), K_(sessid), K_(is_ps_mode), K_(sys_vars_str), K_(namespace));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPCKeyValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), KP(pcv_set_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSysVarInPC::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(system_variables));
+  J_OBJ_END();
+  return pos;
+}
+int64_t NotParamInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(idx), K_(raw_text));
+  J_OBJ_END();
+  return pos;
+}
+int64_t PsNotParamInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(idx), K_(ps_param));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPCParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(node), K_(flag));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPCConstParamInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(const_idx), K_(const_params));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPCParamEqualInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(first_param_idx), K_(second_param_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFastParserResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pc_key_), K(raw_params_), K(ps_params_), K(cache_params_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SelectItemParamInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(questions_pos), K_(params_idx), K_(neg_params_idx), K_(name_len), K_(esc_str_flag),K(common::ObString(name_len_, paramed_field_name_)));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPlanCacheCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_ps_mode_), K(raw_sql_), K(need_real_add_), K(add_pre_acs_), K(not_param_info_), K(not_param_var_),K(not_param_index_), K(neg_param_index_), K(param_charset_type_), K(outlined_sql_len_), K(should_add_plan_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPlanCacheStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("access_count", access_count_, "hit_count", hit_count_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOperatorStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(plan_id), K_(operation_id), K_(execute_times), K_(input_rows), K_(rescan_times), K_(output_rows));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAcsIdxSelRange::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_name), K_(low_bound_sel), K_(high_bound_sel));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableScanStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(query_range_row_count), K_(indexback_row_count), K_(output_row_count), K_(bf_filter_cnt),K_(bf_access_cnt), K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(fuse_row_cache_hit_cnt),K_(fuse_row_cache_miss_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableRowCount::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(op_id), K_(row_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPlanStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(plan_id), "sql_text", ObString(stmt_len_, stmt_), K_(raw_sql), K_(gen_time), K_(schema_version),K_(last_active_time), K_(hit_count), K_(mem_used), K_(slow_count), K_(slowest_exec_time), K_(slowest_exec_usec),K_(execute_times), K_(disk_reads), K_(direct_writes), K_(buffer_gets), K_(application_wait_time),K_(concurrency_wait_time), K_(user_io_wait_time), K_(rows_processed), K_(elapsed_time), K_(cpu_time),K_(large_querys), K_(delayed_large_querys), K_(outline_version), K_(outline_id), K_(is_evolution),K_(is_last_open_succ), K_(is_bind_sensitive), K_(is_bind_aware), K_(is_last_open_succ), K_(timeout_count),K_(bl_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SysVarNameVal::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(name), K_(value));
+  J_OBJ_END();
+  return pos;
+}
+int64_t StmtStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(memory_used), K_(last_active_timestamp), K_(execute_average_time), K_(execute_slowest_time),K_(execute_slowest_timestamp), K_(execute_count), K_(execute_slow_count), K_(ps_count), K_(to_delete));
+  J_OBJ_END();
+  return pos;
+}
 
 const char* plan_cache_gc_confs[3] = {"OFF", "REPORT", "AUTO"};
 

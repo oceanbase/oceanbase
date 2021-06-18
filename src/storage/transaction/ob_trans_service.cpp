@@ -52,6 +52,14 @@ using namespace sql;
 using namespace observer;
 
 namespace transaction {
+int64_t KillTransArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(graceful), K_(ignore_ro_trans), K_(need_kill_coord_ctx));
+  J_OBJ_END();
+  return pos;
+}
 ObTransService::ObTransService()
     : is_inited_(false),
       is_running_(false),

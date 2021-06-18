@@ -1267,3 +1267,11 @@ int ObSQLSessionInfo::ps_use_stream_result_set(bool& use_stream)
   }
   return ret;
 }
+int64_t ObSessionStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(total_logical_read), K_(total_physical_read), K_(total_logical_write), K_(total_lock_count),K_(total_cpu_time_us), K_(total_exec_time_us), K_(total_alive_time_us));
+  J_OBJ_END();
+  return pos;
+}

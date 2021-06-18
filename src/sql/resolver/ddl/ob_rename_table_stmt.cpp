@@ -18,6 +18,14 @@ using namespace share::schema;
 using namespace common;
 
 namespace sql {
+int64_t ObRenameTableStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_type), K_(rename_table_arg));
+  J_OBJ_END();
+  return pos;
+}
 
 ObRenameTableStmt::ObRenameTableStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_RENAME_TABLE)
 {}

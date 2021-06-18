@@ -14,6 +14,14 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
+int64_t ObTaskLocation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_SERVER, server_, N_OB_TASK_ID, ob_task_id_);
+  J_OBJ_END();
+  return pos;
+}
 
 ObTaskLocation::ObTaskLocation(const ObAddr& server, const ObTaskID& ob_task_id)
     : server_(server), ob_task_id_(ob_task_id)

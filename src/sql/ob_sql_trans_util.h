@@ -63,7 +63,7 @@ class TransResult {
   }
   int assign(const TransResult& other);
   void clear_stmt_result();
-  TO_STRING_KV(K_(total_partitions), K_(part_epoch_list), K_(response_partitions), K_(max_sql_no));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // collect all partitions for foreign key.

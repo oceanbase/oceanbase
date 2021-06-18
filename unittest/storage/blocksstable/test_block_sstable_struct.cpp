@@ -62,13 +62,14 @@ struct SuperBlock20 {
   int64_t reserved_[SUPER_BLOCK_RESERVED_COUNT];
 
   bool is_valid() const;
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(create_timestamp), K_(modify_timestamp),
-      K_(macro_block_size), K_(total_macro_block_count), K_(reserved_block_count), K_(free_macro_block_count),
-      K_(first_macro_block), K_(first_free_block_index), K_(total_file_size), K_(backup_meta_count),
-      "backup_meta_blocks_", common::ObArrayWrap<int64_t>(backup_meta_blocks_, backup_meta_count_),
-      K_(macro_block_meta_entry_block_index), K_(partition_meta_entry_block_index),
-      K_(table_mgr_meta_entry_block_index), K_(partition_meta_log_seq), K_(table_mgr_meta_log_seq),
-      K_(replay_start_point));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(create_timestamp), K_(modify_timestamp),K_(macro_block_size), K_(total_macro_block_count), K_(reserved_block_count), K_(free_macro_block_count),K_(first_macro_block), K_(first_free_block_index), K_(total_file_size), K_(backup_meta_count),"backup_meta_blocks_", common::ObArrayWrap<int64_t>(backup_meta_blocks_, backup_meta_count_),K_(macro_block_meta_entry_block_index), K_(partition_meta_entry_block_index),K_(table_mgr_meta_entry_block_index), K_(partition_meta_log_seq), K_(table_mgr_meta_log_seq),K_(replay_start_point));
+    J_OBJ_END();
+    return pos;
+  }
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 //================================SuperBlock======================================
@@ -177,11 +178,14 @@ struct SuperBlock14 {
   int64_t reserved_[SUPER_BLOCK_RESERVED_COUNT];
 
   bool is_valid() const;
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(create_timestamp), K_(modify_timestamp),
-      K_(macro_block_size), K_(total_macro_block_count), K_(reserved_block_count), K_(free_macro_block_count),
-      K_(first_macro_block), K_(first_free_block_index), K_(total_file_size), K_(backup_meta_count),
-      "backup_meta_blocks_", common::ObArrayWrap<int64_t>(backup_meta_blocks_, backup_meta_count_),
-      K_(macro_block_meta_entry_block_index), K_(partition_meta_entry_block_index), K_(replay_start_point));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(create_timestamp), K_(modify_timestamp),K_(macro_block_size), K_(total_macro_block_count), K_(reserved_block_count), K_(free_macro_block_count),K_(first_macro_block), K_(first_free_block_index), K_(total_file_size), K_(backup_meta_count),"backup_meta_blocks_", common::ObArrayWrap<int64_t>(backup_meta_blocks_, backup_meta_count_),K_(macro_block_meta_entry_block_index), K_(partition_meta_entry_block_index), K_(replay_start_point));
+    J_OBJ_END();
+    return pos;
+  }
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 

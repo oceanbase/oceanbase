@@ -430,7 +430,7 @@ class ObPartitionGroup : public ObIPartitionGroup {
 
   virtual int register_txs_change_leader(const common::ObAddr& server, ObTsWindows& changing_leader_windows);
   virtual int check_physical_split(bool& finished);
-  TO_STRING_KV(K_(pkey), K_(replay_status), K_(partition_state));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // this structure is introduced by major freeze refactoring

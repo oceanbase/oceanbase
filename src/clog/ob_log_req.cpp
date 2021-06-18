@@ -17,6 +17,110 @@ namespace oceanbase {
 using namespace common;
 using namespace share;
 namespace clog {
+int64_t ObLogReqContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TYPE, type_, N_SERVER, server_, N_PKEY, pkey_, N_REQ_ID, req_id_, N_SIZE, len_, N_CLUSTER_ID, cluster_id_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObConfirmedInfoReq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_id), K_(confirmed_info), K_(batch_committed));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRenewMsLogConfirmedInfoReq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_id), K_(ms_proposal_id), K_(confirmed_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogKeepaliveMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(next_log_id), K_(next_log_ts_lb), K_(deliver_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreAliveMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start_log_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreAliveReq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(send_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreAliveResp::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(send_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreTakeoverMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(send_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObNotifyLogMissingReq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start_log_id), K_(is_in_member_list), K_(msg_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchPushLogReq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(trans_id_), K(partition_array_), K(log_info_array_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchAckLogReq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(trans_id_), K(batch_ack_array_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderMaxLogMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(switchover_epoch), K_(leader_max_log_id), K_(leader_next_log_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSyncLogArchiveProgressMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status));
+  J_OBJ_END();
+  return pos;
+}
 
 void ObPushLogReq::reset()
 {

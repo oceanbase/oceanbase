@@ -135,8 +135,7 @@ class ObTask {
     return partition_keys_;
   }
   static int build_cte_op_pair(ObPhyOperator* root, common::ObIArray<ObPhyOperator*>& cte_pumps);
-  TO_STRING_KV(
-      N_OB_TASK_ID, ob_task_id_, K_(runner_svr), K_(ctrl_svr), K_(partition_keys), K_(ranges), K_(location_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   DECLARE_TO_YSON_KV;
 
   protected:
@@ -214,8 +213,7 @@ class ObMiniTask : public ObTask {
     return extend_root_spec_;
   }
 
-  TO_STRING_KV(K_(ob_task_id), K_(runner_svr), K_(ctrl_svr), K_(partition_keys), K_(ranges), K_(location_idx),
-      KPC_(extend_root), KP_(extend_root_spec));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // For mini tasks, it is allowed to execute an extended plan when the main plan is executed,
@@ -232,7 +230,7 @@ class ObPingSqlTask {
   public:
   ObPingSqlTask();
   virtual ~ObPingSqlTask();
-  TO_STRING_KV(K(trans_id_), K(sql_no_), K(task_id_), K(exec_svr_), K(part_keys_), K(cur_status_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   transaction::ObTransID trans_id_;
@@ -249,7 +247,7 @@ class ObPingSqlTaskResult {
   public:
   ObPingSqlTaskResult();
   virtual ~ObPingSqlTaskResult();
-  TO_STRING_KV(K(err_code_), K(ret_status_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int err_code_;
@@ -342,8 +340,7 @@ class ObRemoteTask : public obrpc::ObIFill {
   {
     return get_serialize_size();
   }
-  TO_STRING_KV(K_(tenant_schema_version), K_(sys_schema_version), K_(runner_svr), K_(ctrl_svr), K_(task_id),
-      KPC_(remote_sql_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   DECLARE_TO_YSON_KV;
 
   private:

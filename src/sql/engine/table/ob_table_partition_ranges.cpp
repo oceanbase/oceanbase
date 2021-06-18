@@ -18,6 +18,14 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ObPartitionScanRanges::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_id), K_(ranges));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 
 OB_DEF_SERIALIZE(ObPartitionScanRanges)

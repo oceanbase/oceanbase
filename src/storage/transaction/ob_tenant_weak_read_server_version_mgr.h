@@ -41,7 +41,7 @@ class ObTenantWeakReadServerVersionMgr {
       const int64_t base_version_when_no_valid_partition, const bool need_print_status);
 
   public:
-  TO_STRING_KV(K_(server_version), K_(server_version_for_stat));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   struct ServerVersion {
@@ -70,7 +70,7 @@ class ObTenantWeakReadServerVersionMgr {
       valid_user_part_count_ = valid_user_part_count;
     }
 
-    TO_STRING_KV(K_(version), K_(total_part_count), K_(valid_inner_part_count), K_(valid_user_part_count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   private:
@@ -101,8 +101,7 @@ class ObTenantWeakReadServerVersionMgr {
     int amend(
         const uint64_t tenant_id, const int64_t new_epoch_tstamp, const int64_t base_version_when_no_valid_partition);
 
-    TO_STRING_KV(
-        K_(version), K_(total_part_count), K_(valid_inner_part_count), K_(valid_user_part_count), K_(epoch_tstamp));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   private:

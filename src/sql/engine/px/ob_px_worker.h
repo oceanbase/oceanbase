@@ -41,7 +41,7 @@ class ObPxRpcWorker : public ObPxWorkerRunnable {
   {
     return resp_.task_co_id_;
   }
-  TO_STRING_KV(K_(resp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   const observer::ObGlobalContext& gctx_;
@@ -61,7 +61,7 @@ class ObPxCoroWorker : public ObPxWorkerRunnable {
   {
     return task_co_id_;
   }
-  TO_STRING_KV(K_(task_co_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int deep_copy_assign(const ObPxRpcInitTaskArgs& src, ObPxRpcInitTaskArgs& dest);
@@ -89,7 +89,7 @@ class ObPxThreadWorker : public ObPxWorkerRunnable {
     return task_co_id_;
   }
 
-  TO_STRING_KV(K_(task_co_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int run_at(ObPxRpcInitTaskArgs& task_arg, omt::ObPxPool& px_pool);

@@ -85,8 +85,7 @@ class ObTenantWeakReadClusterVersionMgr {
         const int64_t generate_tstamp);
     int64_t get_version(bool& need_skip, bool& is_first_skipped) const;
 
-    TO_STRING_KV(
-        K_(addr), K_(version), K_(valid_part_count), K_(total_part_count), K_(generate_tstamp), K_(is_skipped));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   typedef common::ObSEArray<ServerInfo, 16> ServerArray;

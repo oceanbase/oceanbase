@@ -70,7 +70,7 @@ struct ObDiskID final {
   bool is_valid() const;
   void reset();
   bool operator==(const ObDiskID& other) const;
-  TO_STRING_KV(K_(disk_idx), K_(install_seq));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t disk_idx_;
   int64_t install_seq_;
@@ -87,7 +87,7 @@ struct ObDiskFd final {
   bool is_valid() const;
   bool operator==(const ObDiskFd& other) const;
   void reset();
-  TO_STRING_KV(K_(fd), K_(disk_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObIOConfig {
@@ -112,10 +112,7 @@ struct ObIOConfig {
   void set_default_value();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(sys_io_low_percent), K_(sys_io_high_percent), K_(user_iort_up_percent), K_(cpu_high_water_level),
-      K_(write_failure_detect_interval), K_(read_failure_black_list_interval), K_(retry_warn_limit),
-      K_(retry_error_limit), K_(disk_io_thread_count), K_(callback_thread_count), K_(large_query_io_percent),
-      K_(data_storage_io_timeout_ms));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int64_t sys_io_low_percent_;
@@ -149,7 +146,7 @@ struct ObIODesc {
   {
     return mode_ == IO_MODE_WRITE;
   }
-  TO_STRING_KV(K_(category), K_(mode), K_(wait_event_no), K_(req_deadline_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObIOCategory category_;
@@ -176,7 +173,7 @@ struct ObIOPoint {
   {
     return align_size > 0 && 0 == offset_ % align_size && 0 == size_ % align_size;
   }
-  TO_STRING_KV(K_(fd), K_(offset), K_(size), KP_(write_buf));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObDiskFd fd_;
@@ -228,7 +225,7 @@ struct ObIORetCode {
   {}
   virtual ~ObIORetCode()
   {}
-  TO_STRING_KV(K_(io_ret), K_(sys_errno));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int io_ret_;     // ob ret code, for example: OB_SUCCESS, OB_TIME_OUT, OB_IO_ERROR
@@ -246,7 +243,7 @@ struct ObIOStat {
   {
     *this = ObIOStat();
   };
-  TO_STRING_KV(K_(io_cnt), K_(io_bytes), K_(io_rt_us));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t io_cnt_;
@@ -272,7 +269,7 @@ class ObIOStatDiff {
   {
     return average_rt_us_;
   }
-  TO_STRING_KV(K_(average_size), K_(average_rt_us), K_(old_stat), K_(new_stat));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t average_size_;
@@ -292,7 +289,7 @@ class ObCpuStatDiff {
   {
     return avg_usage_;
   }
-  TO_STRING_KV(K_(avg_usage));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   struct rusage old_usage_;
@@ -349,7 +346,7 @@ class ObIOChannel {
   {
     can_submit_request_ = false;
   }
-  TO_STRING_KV(K_(inited), K_(submit_cnt), K_(can_submit_request));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int inner_submit(ObIORequest& req, int& sys_ret);
@@ -379,9 +376,7 @@ struct ObIOInfo final {
   int add_fail_disk(const int64_t disk_id);
   void reset();
   int notice_finish() const;
-  TO_STRING_KV(K_(size), K_(io_desc), K_(batch_count), "io_points",
-      common::ObArrayWrap<ObIOPoint>(io_points_, batch_count_), K_(fail_disk_count), "fail_disk_ids",
-      common::ObArrayWrap<int64_t>(fail_disk_ids_, fail_disk_count_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int32_t size_;
@@ -428,7 +423,14 @@ class ObPointerHolder {
       ptr_ = NULL;
     }
   }
-  TO_STRING_KV(KP_(ptr));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP_(ptr));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   T* ptr_;
@@ -445,7 +447,7 @@ class ObDefaultIOCallback : public ObIOCallback {
   virtual int inner_process(const bool is_success);
   virtual int inner_deep_copy(char* buf, const int64_t buf_len, ObIOCallback*& callback) const;
   virtual const char* get_data();
-  TO_STRING_KV(KP_(data_buf));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_inited_;

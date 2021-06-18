@@ -50,9 +50,7 @@ struct PwjTable {
   int init(const ObShardingInfo& info);
   int init(const share::schema::ObTableSchema& table_schema, const ObPhyTableLocationInfo& phy_tbl_info);
 
-  TO_STRING_KV(K_(ref_table_id), K_(part_level), K_(part_type), K_(subpart_type), K_(is_sub_part_template),
-      K_(part_number), K_(def_subpart_number), K_(is_partition_single), K_(is_subpartition_single),
-      K_(all_partition_indexes), K_(all_subpartition_indexes));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t ref_table_id_;
   const ObPhyTableLocationInfo* phy_table_loc_info_;
@@ -180,7 +178,7 @@ class ObPwjComparer {
     return partition_id_group_;
   }
 
-  TO_STRING_KV(K_(is_strict), K_(pwj_tables), K_(partition_id_group));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_strict_;

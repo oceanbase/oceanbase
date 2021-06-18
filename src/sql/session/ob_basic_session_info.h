@@ -80,7 +80,7 @@ struct ObSessionNLSParams  // oracle nls parameters
   ObCollationType nls_collation_;         // for oracle char and varchar2
   ObCollationType nls_nation_collation_;  // for oracle nchar and nvarchar2
 
-  TO_STRING_KV(K(nls_length_semantics_), K(nls_collation_), K(nls_nation_collation_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 #define TZ_INFO(session) (NULL != (session) ? (session)->get_timezone_info() : NULL)
@@ -165,7 +165,7 @@ class ObBasicSessionInfo {
     {
       return table_id_ == rv.table_id_;
     }
-    TO_STRING_KV(K(table_id_), K(stmt_type_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     uint64_t table_id_;
@@ -999,7 +999,7 @@ class ObBasicSessionInfo {
     const SysVarIds& get_all_sys_var_ids() const;
     int assign(const SysVarIncInfo& other);
     int reset();
-    TO_STRING_KV(K(all_sys_var_ids_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     SysVarIds all_sys_var_ids_;
@@ -1129,7 +1129,7 @@ class ObBasicSessionInfo {
     {}
     share::ObSysVarClassType id_;
     ObObj old_val_;
-    TO_STRING_KV(K(id_), K(old_val_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   void reset_session_changed_info();
   bool is_already_tracked(const share::ObSysVarClassType& sys_var_id, const common::ObIArray<ChangedVar>& array) const;
@@ -1845,12 +1845,7 @@ class ObBasicSessionInfo {
     {
       return ob_trace_info_;
     }
-    TO_STRING_KV(K(autocommit_), K(ob_enable_trace_log_), K(ob_enable_sql_audit_), K(nls_length_semantics_),
-        K(ob_org_cluster_id_), K(ob_query_timeout_), K(ob_trx_timeout_), K(collation_connection_), K(sql_mode_),
-        K(nls_formats_[0]), K(nls_formats_[1]), K(nls_formats_[2]), K(ob_trx_idle_timeout_), K(ob_trx_lock_timeout_),
-        K(nls_collation_), K(nls_nation_collation_), K_(sql_throttle_current_priority), K_(ob_last_schema_version),
-        K_(sql_select_limit), K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),
-        K_(is_result_accurate), K_(_ob_use_parallel_execution), K_(character_set_results), K_(ob_pl_block_timeout));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     static const int64_t MAX_NLS_FORMAT_STR_LEN = 256;
@@ -2374,7 +2369,7 @@ class ObExecEnv {
   virtual ~ObExecEnv()
   {}
 
-  TO_STRING_KV(K_(sql_mode), K_(charset_client), K_(collation_connection), K_(collation_database));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void reset();
 

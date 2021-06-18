@@ -49,7 +49,7 @@ class ObCreateTablegroupStmt : public ObTablegroupStmt {
   {
     return create_tablegroup_arg_.tablegroup_schema_.get_part_option().get_max_used_part_id();
   }
-  TO_STRING_KV(K_(create_tablegroup_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   obrpc::ObCreateTablegroupArg create_tablegroup_arg_;

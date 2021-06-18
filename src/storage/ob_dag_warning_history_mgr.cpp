@@ -17,6 +17,14 @@
 namespace oceanbase {
 using namespace common;
 namespace storage {
+int64_t ObDagWarningInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(task_id), K_(dag_type), K_(dag_ret), K_(dag_status), K_(gmt_create), K_(gmt_modified),K_(warning_info));
+  J_OBJ_END();
+  return pos;
+}
 
 /*
  * ObDagWarningInfo Func

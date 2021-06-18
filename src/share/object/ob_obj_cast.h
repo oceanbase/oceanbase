@@ -171,8 +171,7 @@ struct ObObjCastParams {
     return;
   }
 
-  TO_STRING_KV(K(cur_time_), KP(cast_mode_), K(warning_), K(dest_collation_), K(expect_obj_collation_),
-      K(res_accuracy_), K(format_number_with_limit_), K(is_ignore_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   IAllocator* allocator_;
   ObIAllocator* allocator_v2_;
@@ -236,7 +235,7 @@ class ObExpectType {
     return type_infos_;
   }
 
-  TO_STRING_KV(K(type_), K(cs_type_), KPC(type_infos_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObExpectType);

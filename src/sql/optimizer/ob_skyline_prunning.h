@@ -56,7 +56,7 @@ class ObSkylineDim {
   }
   static const int64_t DIM_COUNT = static_cast<int64_t>(MAX_DIM);
   ;
-  TO_STRING_KV(K(dim_type_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   const Dimension dim_type_;
@@ -95,8 +95,7 @@ class ObIndexBackDim : public ObSkylineDim {
   }
   int add_filter_column_ids(const common::ObIArray<uint64_t>& filter_column_ids);
   virtual int compare(const ObSkylineDim& other, CompareStat& status) const;
-  TO_STRING_KV(K_(need_index_back), K_(has_interesting_order), K_(can_extract_range), K_(index_column_cnt),
-      "restrcit_ids", common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool need_index_back_;
@@ -147,10 +146,7 @@ class ObInterestOrderDim : public ObSkylineDim {
   }
   int add_filter_column_ids(const common::ObIArray<uint64_t>& filter_column_ids);
   virtual int compare(const ObSkylineDim& other, CompareStat& status) const;
-  TO_STRING_KV(K_(is_interesting_order), K_(column_cnt), "column_ids",
-      common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_), K_(need_index_back), K_(can_extract_range),
-      K_(filter_column_cnt), "filter column_ids",
-      common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_interesting_order_;
@@ -181,7 +177,7 @@ class ObQueryRangeDim : public ObSkylineDim {
   {}
   virtual int compare(const ObSkylineDim& other, CompareStat& status) const;
   int add_rowkey_ids(const common::ObIArray<uint64_t>& column_ids);
-  TO_STRING_KV(K_(column_cnt), "rowkey_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t column_cnt_;
@@ -253,8 +249,7 @@ class ObIndexSkylineDim {
   {
     can_prunning_ = can;
   }
-  TO_STRING_KV(
-      K_(index_id), K_(dim_count), "dims", common::ObArrayWrap<const ObSkylineDim*>(skyline_dims_, dim_count_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t index_id_;

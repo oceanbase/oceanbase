@@ -50,7 +50,14 @@ class ObBinaryHeapBase {
   {
     return array_.at(index);
   }
-  TO_STRING_KV(K_(array));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(array));
+    J_OBJ_END();
+    return pos;
+  }
 
   protected:
   virtual int upheap(int64_t index) = 0;

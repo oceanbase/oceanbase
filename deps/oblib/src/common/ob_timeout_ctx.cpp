@@ -147,5 +147,15 @@ int64_t ObTimeoutCtx::get_trx_timeout_us() const
   }
   return timeout;
 }
+
+int64_t ObTimeoutCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(abs_timeout_us));
+  J_OBJ_END();
+  return pos;
+}
+
 }  // end namespace common
 }  // end namespace oceanbase

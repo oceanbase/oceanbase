@@ -53,7 +53,7 @@ class ObSubQueryIterator {
   void reuse();
   void reset(bool reset_onetime_plan = false);
 
-  TO_STRING_KV(K(onetime_plan_), K(init_plan_), K(inited_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObOperator& op_;

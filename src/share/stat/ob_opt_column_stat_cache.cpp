@@ -16,6 +16,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObOptColumnStatHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(stat_));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObOptColumnStatCache::get_row(const ObOptColumnStat::Key& key, ObOptColumnStatHandle& handle)
 {

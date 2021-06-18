@@ -39,7 +39,7 @@ class ObAgentTableBase : public common::ObVirtualTableScannerIterator {
   struct MapItem {
     MapItem() : base_col_name_(), convert_func_(NULL), combine_tenant_id_(false)
     {}
-    TO_STRING_KV(K(base_col_name_), KP(convert_func_), "combine_tenant_id_", combine_tenant_id_ ? "true" : "false");
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     common::ObString base_col_name_;
     convert_func_t convert_func_;

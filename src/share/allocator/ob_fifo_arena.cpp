@@ -21,6 +21,22 @@ using namespace oceanbase::lib;
 using namespace oceanbase::omt;
 namespace oceanbase {
 namespace common {
+int64_t ObFifoArena::Handle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(allocated));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFifoArena::ObWriteThrottleInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(decay_factor_), K(alloc_duration_), K(trigger_percentage_), K(memstore_threshold_),K(period_throttled_count_), K(period_throttled_time_), K(total_throttled_count_), K(total_throttled_time_));
+  J_OBJ_END();
+  return pos;
+}
 #ifndef myassert
 #define myassert(x) \
   if (!x) {         \

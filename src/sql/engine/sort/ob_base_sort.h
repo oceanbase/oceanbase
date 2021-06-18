@@ -41,7 +41,7 @@ struct ObSortColumnExtra {
       : obj_type_(obj_type), order_type_(order_type)
   {}
 
-  TO_STRING_KV(K_(obj_type), K_(order_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObObjType obj_type_;
   ObOrderDirection order_type_;
 };
@@ -197,7 +197,7 @@ class ObBaseSort : public common::ObOuterRowIterator {
       row_ = nullptr;
     }
 
-    TO_STRING_KV(K_(objs), K_(row));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   public:
@@ -258,7 +258,7 @@ class ObBaseSort : public common::ObOuterRowIterator {
   virtual int final_dump(ObIMergeSort& merge_sort);
 
   const common::ObNewRow* get_last_row() const;
-  TO_STRING_KV(K_(topn_cnt), K_(row_count), K_(prefix_keys_pos), K_(row_array_pos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   static int enable_typed_sort(const common::ObIArray<ObSortColumn>& sort_columns, const int64_t prefix_pos,
       const common::ObNewRow& row, bool& is_typed_sort);

@@ -27,6 +27,14 @@ using namespace share;
 using namespace share::schema;
 using namespace common::sqlclient;
 namespace common {
+int64_t ObOptTableStatVersion::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(stat_version));
+  J_OBJ_END();
+  return pos;
+}
 
 ObOptStatManager::ObOptStatManager() : inited_(false), stat_service_(nullptr), last_schema_version_(-1)
 {}

@@ -85,7 +85,7 @@ class ObMacroBlockBuilder : public ObIStoreRowProcessor {
     return &desc_;
   }
   virtual void set_purged_count(const int64_t count);
-  TO_STRING_KV(K_(desc), K_(sstable_merge_info), K_(writer));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   void est_row(const ObCompactRowType::ObCompactRowTypeEnum& type, const bool is_output);
@@ -132,7 +132,7 @@ class ObMacroBlockEstimator : public ObIStoreRowProcessor {
     return is_opened_ ? component_->get_data_store_desc() : NULL;
   }
   virtual void set_purged_count(const int64_t count);
-  TO_STRING_KV(KP(component_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int update_estimator(const storage::ObStoreRow& row);

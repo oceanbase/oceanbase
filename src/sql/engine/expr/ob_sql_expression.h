@@ -126,7 +126,7 @@ class ObSqlExpression : public common::ObISqlExpression, public common::ObDLinkB
   virtual int calc(common::ObExprCtx& expr_ctx, const common::ObNewRow& row, common::ObObj& result) const;
   virtual int calc(common::ObExprCtx& expr_ctx, const common::ObNewRow& row1, const common::ObNewRow& row2,
       common::ObObj& result) const;
-  TO_STRING_KV(K_(infix_expr), K_(post_expr), K_(gen_infix_expr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // check expression type
   int generate_idx_for_regexp_ops(int16_t& cur_regexp_op_count);

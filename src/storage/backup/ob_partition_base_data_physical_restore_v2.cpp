@@ -2057,3 +2057,19 @@ int ObPhyRestoreMacroIndexStoreV2::get_table_key_ptr(
   }
   return ret;
 }
+int64_t ObPartitionBaseDataMetaRestoreReaderV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(restore_info), K_(last_read_size), K_(partition_store_meta), K_(data_version), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhyRestoreMacroIndexStoreV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}

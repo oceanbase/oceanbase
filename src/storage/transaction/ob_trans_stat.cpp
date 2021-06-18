@@ -16,6 +16,38 @@ namespace oceanbase {
 using namespace common;
 
 namespace transaction {
+int64_t ObTransStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), K_(trans_id), K_(tenant_id), K_(is_exiting), K_(is_readonly), K_(has_decided), K_(is_dirty),K_(active_memstore_version), K_(partition), K_(participants), K_(trans_param), K_(ctx_create_time),K_(expired_time), K_(refer), K_(sql_no), K_(state), K_(session_id), K_(proxy_session_id), K_(trans_type),K_(ctx_addr), K_(prev_trans_arr), K_(next_trans_arr), K_(prev_trans_commit_count), K_(ctx_id),K_(pending_log_size), K_(flushed_log_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransLockStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), K_(tenant_id), K_(partition), K_(memtable_key), K_(session_id), K_(proxy_session_id),K_(trans_id), K_(ctx_create_time), K_(expired_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransResultInfoStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(state), K_(commit_version), K_(min_log_id), K_(trans_id), K_(partition), K_(addr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDuplicatePartitionStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), K_(partition), K_(cur_log_id), K_(is_master), K_(lease_list));
+  J_OBJ_END();
+  return pos;
+}
 void ObTransStat::reset()
 {
   is_inited_ = false;

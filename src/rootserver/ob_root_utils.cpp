@@ -3131,3 +3131,27 @@ ObClusterType ObClusterInfoGetter::get_cluster_type()
 {
   return PRIMARY_CLUSTER;
 }
+int64_t ObLocalityCheckHelp::XyIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(x), K_(y));
+  J_OBJ_END();
+  return pos;
+}
+int64_t AlterPaxosLocalityTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_type), K_(zone_set), K_(associated_replica_type_set));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantGroupParser::TenantNameGroup::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row), K(column_), K(tenants_));
+  J_OBJ_END();
+  return pos;
+}

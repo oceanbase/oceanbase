@@ -92,7 +92,7 @@ class ObRpcProcessorBase : public rpc::frame::ObReqProcessor {
 
     ObRpcPacket* pkt_;
 
-    TO_STRING_KV(K(sessid_), K(is_stream_), K(is_stream_last_), K_(bad_routing));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   void reuse();

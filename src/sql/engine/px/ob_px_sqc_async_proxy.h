@@ -104,9 +104,7 @@ class ObSqcAsyncCB : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_ASYNC_INIT
     return timeout_;
   }
   // to string
-  TO_STRING_KV("dst", get_dst(), "timeout", get_timeout(), "ret_code", get_ret_code(), "result", get_result(),
-      "is_visited", is_visited(), "is_timeout", is_timeout(), "is_processed", is_processed(), "is_invalid",
-      is_invalid());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_processed_;

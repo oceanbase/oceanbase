@@ -23,6 +23,14 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 namespace rootserver {
+int64_t ObTableSchemaSpliter::MapItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(base_col_name_), KP(convert_func_));
+  J_OBJ_END();
+  return pos;
+}
 static int filter_tenant_id(const ObObj& src, ObObj& dst, ObIAllocator& allocator)
 {
   int ret = OB_SUCCESS;

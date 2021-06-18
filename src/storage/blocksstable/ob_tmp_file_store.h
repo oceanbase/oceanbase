@@ -41,7 +41,7 @@ struct ObTmpFileArea {
     page_nums_ = 0;
     next_ = NULL;
   }
-  TO_STRING_KV(K_(start_page_id), K_(page_nums));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int32_t start_page_id_;
   int32_t page_nums_;
   ObTmpFileArea* next_;
@@ -97,7 +97,7 @@ struct ObTmpBlockIOInfo {
         buf_(buf),
         io_desc_(io_desc)
   {}
-  TO_STRING_KV(K_(block_id), K_(offset), K_(size), K_(tenant_id), K_(macro_block_id), KP_(buf), K_(io_desc));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t block_id_;
   int64_t offset_;
   int64_t size_;
@@ -202,8 +202,7 @@ class ObTmpMacroBlock {
   int close(bool& is_all_close);
   int give_back_buf_into_cache(bool is_wash = false);
 
-  TO_STRING_KV(K_(block_id), K_(dir_id), K_(tenant_id), K_(free_page_nums), K_(macro_block_handle), KP_(buffer),
-      K_(page_buddy), K_(io_desc), K_(is_disked), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   static const int64_t DEFAULT_PAGE_SIZE;

@@ -14,6 +14,14 @@
 
 namespace oceanbase {
 namespace storage {
+int64_t ObPartitionMigrationStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_id), K_(*migrate_type), K_(pkey), K_(clog_parent), K_(src), K_(dest), K_(result), K_(start_time),K_(action), "replica_state", partition_replica_state_to_str(replica_state_), K_(doing_task_count),K_(total_task_count), K_(rebuild_count), K_(continue_fail_count), K_(comment), K_(finish_time), "cost_ts",finish_time_ - start_time_, K_(data_statics), "migration_status_size", sizeof(*this));
+  J_OBJ_END();
+  return pos;
+}
 
 ObPartitionMigrationStatus::ObPartitionMigrationStatus()
     : task_id_(),

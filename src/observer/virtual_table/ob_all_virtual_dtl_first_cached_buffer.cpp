@@ -334,3 +334,11 @@ int ObAllVirtualDtlFirstCachedBuffer::get_row(ObAllVirtualDtlFirstBufferInfo& bu
   }
   return ret;
 }
+int64_t ObAllVirtualDtlFirstBufferInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id_), K(channel_id_));
+  J_OBJ_END();
+  return pos;
+}

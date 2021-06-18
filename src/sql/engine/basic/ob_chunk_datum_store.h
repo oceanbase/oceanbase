@@ -102,7 +102,7 @@ class ObChunkDatumStore {
     void unswizzling(char* base = NULL);
     void swizzling(char* base = NULL);
 
-    TO_STRING_KV(K_(cnt), K_(row_size), "cells", common::ObArrayWrap<common::ObDatum>(cells(), cnt_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     uint32_t cnt_;
     uint32_t row_size_;
@@ -216,7 +216,14 @@ class ObChunkDatumStore {
       max_size_ = 0;
     }
 
-    TO_STRING_KV(K_(max_size), K_(reuse), KPC_(store_row));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K_(max_size), K_(reuse), KPC_(store_row));
+      J_OBJ_END();
+      return pos;
+    }
     T* store_row_;
     ObIAllocator& alloc_;
     int64_t max_size_;
@@ -301,7 +308,14 @@ class ObChunkDatumStore {
     {
       return store_row_;
     }
-    TO_STRING_KV(KPC_(store_row));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(KPC_(store_row));
+      J_OBJ_END();
+      return pos;
+    }
 
     private:
     common::ObIAllocator* alloc_;
@@ -406,7 +420,7 @@ class ObChunkDatumStore {
       return get_buffer()->remain();
     }
     friend class BlockBuffer;
-    TO_STRING_KV(K_(magic), K_(blk_size), K_(rows));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     union {
       int64_t magic_;  // for dump
       Block* next_;    // for block list in mem
@@ -466,7 +480,7 @@ class ObChunkDatumStore {
       }
       return cur;
     }
-    TO_STRING_KV(K_(size), K_(head), K_(last), K_(*head), K_(last));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     Block* head_;
@@ -545,7 +559,7 @@ class ObChunkDatumStore {
     }
     inline int advance(int64_t size);
 
-    TO_STRING_KV(KP_(data), K_(cur_pos), K_(cap));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     friend ObChunkDatumStore;
     friend Block;
@@ -592,8 +606,7 @@ class ObChunkDatumStore {
       return cur_iter_blk_ != NULL && (cur_iter_blk_->get_next() != NULL || cur_row_in_blk_ < cur_iter_blk_->rows_);
     }
 
-    TO_STRING_KV(KP_(store), K_(*store), K_(cur_iter_blk), K_(cur_row_in_blk), K_(cur_pos_in_blk), K_(n_blocks),
-        K_(cur_nth_block));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     explicit RowIterator(ObChunkDatumStore* row_store);
@@ -671,8 +684,7 @@ class ObChunkDatumStore {
       iter_end_flag_ |= MEM_ITER_END;
     }
 
-    TO_STRING_KV(KP_(store), KP_(cur_iter_blk), KP_(cur_iter_blk_buf), K_(cur_chunk_n_blocks), K_(cur_iter_pos),
-        K_(file_size), K_(chunk_read_size), KP_(chunk_mem));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     void reset_cursor(const int64_t file_size);
@@ -882,7 +894,7 @@ class ObChunkDatumStore {
     io_.dir_id_ = dir_id;
   }
   int alloc_dir_id();
-  TO_STRING_KV(K_(tenant_id), K_(label), K_(ctx_id), K_(mem_limit), K_(row_cnt), K_(file_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int append_datum_store(const ObChunkDatumStore& other_store);
   int assign(const ObChunkDatumStore& other_store);

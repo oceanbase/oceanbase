@@ -30,6 +30,14 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace sql {
+int64_t ObSort::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_ID, id_, N_COLUMN_COUNT, column_count_, N_PROJECTOR,common::ObArrayWrap<int32_t>(projector_, projector_size_), N_FILTER_EXPRS, filter_exprs_, N_CALC_EXPRS,calc_exprs_, N_ORDER_BY, sort_columns_, N_LIMIT, mem_limit_, "minimum_row_count", minimum_row_count_,"topk_precision", topk_precision_);
+  J_OBJ_END();
+  return pos;
+}
 
 ObPrefixSort::ObPrefixSort()
     : prefix_pos_(0), full_sort_columns_(NULL), prev_row_(NULL), cur_row_(NULL), op_(NULL), sort_row_count_(NULL)

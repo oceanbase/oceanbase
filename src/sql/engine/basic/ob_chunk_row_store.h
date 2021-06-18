@@ -66,7 +66,7 @@ class ObChunkRowStore {
     inline void unswizzling(char* base = NULL);
     inline void swizzling();
 
-    TO_STRING_KV(K_(cnt), K_(row_size), K(cells()[0]));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     uint32_t cnt_;
     uint32_t row_size_;
@@ -135,7 +135,7 @@ class ObChunkRowStore {
       return get_buffer()->remain();
     }
     friend class BlockBuffer;
-    TO_STRING_KV(K_(magic), K_(blk_size), K_(rows));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     union {
       int64_t magic_;  // for dump
       Block* next_;    // for block list in mem
@@ -195,7 +195,7 @@ class ObChunkRowStore {
       }
       return cur;
     }
-    TO_STRING_KV(K_(size), K_(head), K_(last), K_(*head), K_(last));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     Block* head_;
@@ -274,7 +274,7 @@ class ObChunkRowStore {
     }
     inline int advance(int64_t size);
 
-    TO_STRING_KV(KP_(data), K_(cur_pos), K_(cap));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     friend ObChunkRowStore;
     friend Block;
@@ -322,8 +322,7 @@ class ObChunkRowStore {
       return cur_iter_blk_ != NULL && (cur_iter_blk_->get_next() != NULL || cur_row_in_blk_ < cur_iter_blk_->rows_);
     }
 
-    TO_STRING_KV(KP_(store), K_(*store), K_(cur_iter_blk), K_(cur_row_in_blk), K_(cur_pos_in_blk), K_(n_blocks),
-        K_(cur_nth_block));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     explicit RowIterator(ObChunkRowStore* row_store);
@@ -402,8 +401,7 @@ class ObChunkRowStore {
       iter_end_flag_ |= MEM_ITER_END;
     }
 
-    TO_STRING_KV(KP_(store), KP_(cur_iter_blk), KP_(cur_iter_blk_buf), K_(cur_chunk_n_blocks), K_(cur_iter_pos),
-        K_(file_size), K_(chunk_read_size), KP_(chunk_mem));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     void reset_cursor(const int64_t file_size);
@@ -611,7 +609,7 @@ class ObChunkRowStore {
     io_.dir_id_ = dir_id;
   }
   int alloc_dir_id();
-  TO_STRING_KV(K_(tenant_id), K_(label), K_(ctx_id), K_(mem_limit), K_(row_cnt), K_(file_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   static int get_timeout(int64_t& timeout_ms);

@@ -18,6 +18,14 @@ namespace oceanbase {
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common;
 namespace sql {
+int64_t ObCreateIndexStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_type), K_(create_index_arg));
+  J_OBJ_END();
+  return pos;
+}
 ObCreateIndexStmt::ObCreateIndexStmt(ObIAllocator* name_pool)
     : ObPartitionedStmt(name_pool, stmt::T_CREATE_INDEX), create_index_arg_(), table_id_(OB_INVALID_ID)
 {}

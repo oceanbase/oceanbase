@@ -382,3 +382,11 @@ int ObPGPartitionMTUpdater::batch_process_tasks(const ObIArray<ObPGPartitionMTUp
   }
   return ret;
 }
+int64_t ObPGPartitionMTUpdateTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(add_timestamp), K_(update_type), K_(version));
+  J_OBJ_END();
+  return pos;
+}

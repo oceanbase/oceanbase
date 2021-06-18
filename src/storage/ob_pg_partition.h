@@ -119,7 +119,7 @@ class ObPGPartition : public ObPGPartitionHashValue {
       const int64_t schema_version, const int64_t schema_refreshed_ts, const uint64_t log_id, const int64_t log_ts);
   int get_refreshed_schema_info(
       int64_t& schema_version, int64_t& refreshed_schema_ts, uint64_t& log_id, int64_t& log_ts);
-  TO_STRING_KV(K_(pkey), KP_(cp_fty), KP_(storage));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_gc_starting_() const;
@@ -329,7 +329,7 @@ class ObPGPartitionGuard {
   {
     return pg_partition_;
   }
-  TO_STRING_KV(KP_(pg_partition), K_(pkey), KP_(map));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObPGPartition* pg_partition_;

@@ -42,7 +42,7 @@ class ObParallelMergeCtx {
   }
   int get_merge_range(
       const int64_t parallel_idx, common::ObExtStoreRange& merge_range, common::ObIAllocator& allocator);
-  TO_STRING_KV(K_(parallel_type), K_(range_array), K_(first_sstable), K_(concurrent_cnt), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   static const int64_t MIN_PARALLEL_MINI_MINOR_MERGE_THREASHOLD = 2;

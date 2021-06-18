@@ -303,7 +303,7 @@ class ObMemtableMultiVersionScanIterator : public ObIMemtableScanIterator {
   // the iteration process is divided into 2 phases:
   // iterating Complement SSTable / iterating Mini SSTable
   enum ObIterStage { IS_ITER_COMPLEMENT, IS_ITER_MINI };
-  TO_STRING_KV(KPC_(context), K_(row), KPC_(key), KPC_(value_iter), K_(scan_state), K_(iter_mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   virtual void row_reset();

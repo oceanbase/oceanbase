@@ -42,6 +42,22 @@ using namespace share;
 using namespace share::schema;
 namespace oceanbase {
 namespace sql {
+int64_t HashKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rowkey));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TablePart::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(ref_table_id), K_(part_id), K_(pg_key));
+  J_OBJ_END();
+  return pos;
+}
 ObPlanSet::~ObPlanSet()
 {
   // Make sure destory planset before destory pre calculable expression.

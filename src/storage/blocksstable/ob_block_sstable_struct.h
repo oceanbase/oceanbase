@@ -100,7 +100,7 @@ struct ObPosition {
   {
     return offset_ >= 0 && length_ >= 0;
   }
-  TO_STRING_KV(K_(offset), K_(length));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMacroDataSeq {
@@ -187,8 +187,7 @@ struct ObMacroDataSeq {
   {
     split_flag_ = IN_SPLIT;
   }
-  TO_STRING_KV(K_(data_seq), K_(parallel_idx), K_(split_flag), K_(block_type), K_(merge_type), K_(reserved), K_(sign),
-      K_(macro_data_seq));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   union {
     int64_t macro_data_seq_;
     struct {
@@ -215,7 +214,7 @@ struct ObCommitLogSpec {
   {
     return NULL != log_dir_ && max_log_size_ > 0 && (log_sync_type_ == 0 || log_sync_type_ == 1);
   }
-  TO_STRING_KV(K_(log_dir), K_(max_log_size), K_(log_sync_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObStorageEnv {
@@ -255,11 +254,7 @@ struct ObStorageEnv {
     memset(this, 0, sizeof(*this));
   }
   bool is_valid() const;
-  TO_STRING_KV(K_(data_dir), K_(default_block_size), K_(disk_avail_space), K_(datafile_disk_percentage),
-      K_(redundancy_level), K_(log_spec), K_(clog_dir), K_(ilog_dir), K_(clog_shm_path), K_(ilog_shm_path),
-      K_(index_cache_priority), K_(user_block_cache_priority), K_(user_row_cache_priority), K_(fuse_row_cache_priority),
-      K_(bf_cache_priority), K_(clog_cache_priority), K_(index_clog_cache_priority), K_(bf_cache_miss_count_threshold),
-      K_(ethernet_speed));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // all structures blow includes two kinds of data:
@@ -282,7 +277,7 @@ struct ObSuperBlockHeader {
   ObSuperBlockHeader();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(super_block_size), K_(version), K_(magic), K_(attr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 
@@ -292,7 +287,7 @@ struct ObSuperBlockHeaderV2 final {
   ~ObSuperBlockHeaderV2() = default;
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(version), K_(magic));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
   static const int32_t HEADER_VERSION = 3;
 
@@ -334,12 +329,7 @@ struct ObSuperBlockV1 {
   int read_super_block_buf(char* buf, const int64_t buf_size, int64_t& pos);
   int write_super_block_buf(char* buf, const int64_t buf_size, int64_t& pos) const;
   int set_super_block(const ObSuperBlockV2& other);
-  TO_STRING_KV(K_(header), K_(create_timestamp), K_(modify_timestamp), K_(macro_block_size),
-      K_(total_macro_block_count), K_(reserved_block_count), K_(free_macro_block_count), K_(first_macro_block),
-      K_(first_free_block_index), K_(total_file_size), K_(backup_meta_count), "backup_meta_blocks_",
-      common::ObArrayWrap<int64_t>(backup_meta_blocks_, backup_meta_count_), K_(macro_block_meta_entry_block_index),
-      K_(partition_meta_entry_block_index), K_(table_mgr_meta_entry_block_index), K_(partition_meta_log_seq),
-      K_(table_mgr_meta_log_seq), K_(replay_start_point));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
@@ -355,7 +345,7 @@ struct ObSuperBlockV2 {
     MetaEntry();
     bool is_valid() const;
     void reset();
-    TO_STRING_KV(K_(block_index), K_(log_seq), K_(file_id), K_(file_size));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(META_ENTRY_VERSION);
   };
 
@@ -379,9 +369,7 @@ struct ObSuperBlockV2 {
     SuperBlockContent();
     bool is_valid() const;
     void reset();
-    TO_STRING_KV(K_(create_timestamp), K_(modify_timestamp), K_(macro_block_size), K_(total_macro_block_count),
-        K_(free_macro_block_count), K_(total_file_size), K_(replay_start_point), K_(macro_block_meta),
-        K_(partition_meta), K_(table_mgr_meta), K_(tenant_config_meta));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(SUPER_BLOCK_CONTENT_VERSION);
   };
 
@@ -416,7 +404,7 @@ struct ObSuperBlockV2 {
     return header_.get_serialize_size() + content_.get_serialize_size();
   }
   int fill_super_block_size();
-  TO_STRING_KV(K_(header), K_(content));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMicroBlockHeader {
@@ -432,8 +420,7 @@ struct ObMicroBlockHeader {
     memset(this, 0, sizeof(*this));
   }
   bool is_valid() const;
-  TO_STRING_KV(
-      K_(header_size), K_(version), K_(magic), K_(attr), K_(column_count), K_(row_index_offset), K_(row_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMicroBlockHeaderV2 {
@@ -459,8 +446,7 @@ struct ObMicroBlockHeaderV2 {
     new (this) ObMicroBlockHeaderV2();
   }
 
-  TO_STRING_KV(K_(header_size), K_(version), K_(row_count), K_(var_column_count), K_(row_data_offset),
-      K_(row_index_byte), K_(extend_value_bit), K_(store_row_header));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 } __attribute__((packed));
 
 OB_INLINE bool ObMicroBlockHeaderV2::is_valid() const
@@ -483,7 +469,7 @@ struct ObBloomFilterMicroBlockHeader {
     return header_size_ == sizeof(ObBloomFilterMicroBlockHeader) && version_ >= BF_MICRO_BLOCK_HEADER_VERSION &&
            BF_MICRO_BLOCK_HEADER_MAGIC == magic_ && rowkey_column_count_ > 0 && row_count_ > 0;
   }
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(rowkey_column_count), K_(row_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int16_t header_size_;
   int16_t version_;
@@ -510,8 +496,7 @@ struct ObLinkedMacroBlockHeader {
     memset(this, 0, sizeof(*this));
   }
   bool is_valid() const;
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(meta_data_offset), K_(meta_data_count),
-      K_(previous_block_index), K_(total_previous_count), K_(user_data1), K_(user_data2));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObLinkedMacroBlockHeaderV2 final {
@@ -540,9 +525,7 @@ struct ObLinkedMacroBlockHeaderV2 final {
     previous_block_third_id_ = 0;
     previous_block_fourth_id_ = 0;
   }
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(item_count), K_(fragment_offset),
-      K_(previous_block_first_id), K_(previous_block_second_id), K_(previous_block_third_id),
-      K_(previous_block_fourth_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int32_t header_size_;
@@ -597,12 +580,7 @@ struct ObSSTableMacroBlockHeader {
   {
     memset(this, 0, sizeof(ObSSTableMacroBlockHeader));
   }
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(table_id), K_(data_version), K_(column_count),
-      K_(rowkey_column_count), K_(column_index_scale), K_(row_store_type), K_(row_count), K_(occupy_size),
-      K_(micro_block_count), K_(micro_block_size), K_(micro_block_data_offset), K_(micro_block_data_size),
-      K_(micro_block_index_offset), K_(micro_block_index_size), K_(micro_block_endkey_offset),
-      K_(micro_block_endkey_size), K_(data_checksum), K_(compressor_name), K_(encrypt_id), K_(master_key_id),
-      K_(encrypt_key), K_(data_seq), K_(partition_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObBloomFilterMacroBlockHeader {
@@ -621,9 +599,7 @@ struct ObBloomFilterMacroBlockHeader {
            occupy_size_ > 0 && micro_block_count_ > 0 && micro_block_data_offset_ > 0 && micro_block_data_size_ > 0 &&
            data_checksum_ >= 0 && partition_id_ >= -1 && ObMacroBlockCommonHeader::BloomFilterData == attr_;
   }
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(table_id), K_(partition_id), K_(data_version),
-      K_(rowkey_column_count), K_(row_count), K_(occupy_size), K_(micro_block_count), K_(micro_block_data_offset),
-      K_(micro_block_data_size), K_(data_checksum), K_(compressor_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int32_t header_size_;
   int32_t version_;
@@ -813,7 +789,7 @@ struct ObSSTableColumnMeta {
   {
     return column_id_ >= 0 && column_default_checksum_ >= 0 && column_checksum_ >= 0;
   }
-  TO_STRING_KV(K_(column_id), K_(column_default_checksum), K_(column_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(SSTABLE_COLUMN_META_VERSION);
 };
 
@@ -821,7 +797,7 @@ struct ObStoreFileInfo {
   static const int64_t STORE_FILE_INFO_VERSION = 1;
   int64_t file_id_;
   int64_t file_size_;
-  TO_STRING_KV(K_(file_id), K_(file_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool operator==(const ObStoreFileInfo& other) const;
   OB_UNIS_VERSION_V(STORE_FILE_INFO_VERSION);
 };
@@ -836,7 +812,7 @@ struct ObStoreFileCtx final {
   int64_t block_count_per_file_;  // only used for STORE_FILE_MACRO_BLOCK type
   common::ObFixedArray<ObStoreFileInfo, common::ObIAllocator> file_list_;
 
-  TO_STRING_KV(K_(file_system_type), K_(file_type), K_(block_count_per_file), K_(file_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   explicit ObStoreFileCtx(common::ObIAllocator& allocator);
   virtual ~ObStoreFileCtx();
   int init(const ObStoreFileSystemType& file_system_type, const ObStoreFileType& file_type,
@@ -859,7 +835,7 @@ struct ObSSTableMacroBlockId {
 
   OB_INLINE bool is_valid() const;
   OB_INLINE void reset();
-  TO_STRING_KV(K_(macro_block_id), K_(macro_block_id_in_files));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMacroBlockCtx final {
@@ -873,7 +849,7 @@ struct ObMacroBlockCtx final {
   OB_INLINE void reset();
 
   OB_INLINE const blocksstable::MacroBlockId& get_macro_block_id() const;
-  TO_STRING_KV(K_(sstable_block_id), KP_(file_ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 enum ObColumnChecksumMethod { CCM_UNKOWN = 0, CCM_TYPE_AND_VALUE = 1, CCM_VALUE_ONLY = 2, CCM_IGNORE = 3, CCM_MAX };
@@ -1072,9 +1048,7 @@ struct ObPartitionMeta {
   {
     return common::extract_tenant_id(table_id_);
   }
-  TO_STRING_KV(K_(table_id), K_(partition_id), K_(partition_cnt), K_(data_version), K_(table_type), K_(migrate_status),
-      K_(replica_status), K_(migrate_timestamp), K_(step_merge_start_version), K_(step_merge_end_version),
-      K_(index_table_count), K(log_info_.length()), K_(store_type), K_(is_restore), K_(partition_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // use allocator allocate memory for log_info_;
   int deserialize(const char* buf, const int64_t buf_len, int64_t& pos, common::ObIAllocator& allocator);
   OB_UNIS_VERSION_V(PARTITION_META_VERSION);
@@ -1168,8 +1142,7 @@ class ObRowHeader {
     RHV_WITH_TRANS_ID = 1,
   };
 
-  TO_STRING_KV(K_(row_flag), K_(column_index_bytes), K_(row_dml), K_(version), K_(row_type_flag), K_(reserved8),
-      K_(column_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int8_t row_flag_;
@@ -1190,7 +1163,7 @@ struct ObSSTableTriple {
   ObSSTableTriple(const blocksstable::MacroBlockId id, const int64_t dv, const int64_t seq)
       : block_id_(id), data_version_(dv), data_seq_(seq)
   {}
-  TO_STRING_KV(K_(block_id), K_(data_version), K_(data_seq));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObSSTablePair {
@@ -1214,7 +1187,7 @@ struct ObSSTablePair {
   {
     return common::combine_id(data_version_, data_seq_);
   }
-  TO_STRING_KV(K_(data_version), K_(data_seq));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -1251,7 +1224,7 @@ struct ObLogicBlockIndex {
   {
     return logic_block_index_ >= INVALID_LOGIC_BLOCK_INDEX;
   }
-  TO_STRING_KV(K_(logic_block_index));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   public:
@@ -1292,7 +1265,7 @@ struct ObMacroBlockItem {
     }
     return *this;
   }
-  TO_STRING_KV(K_(macro_block_id), K_(logic_block_index));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // for compatibility, MacroBlockItem is regarded as valid when logic_block_index == INVALID_LOGIC_BLOCK_INDEX
   bool is_valid() const
@@ -1363,8 +1336,7 @@ struct ObSimpleMacroBlockMetaInfo {
   ObSimpleMacroBlockMetaInfo();
   void reuse();
   void reset();
-  TO_STRING_KV(
-      K_(block_index), K_(attr), K_(table_id), K_(data_version), K_(data_seq), K_(write_seq), K_(create_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMacroBlockMarkerStatus {
@@ -1393,10 +1365,7 @@ struct ObMacroBlockMarkerStatus {
   inline void record_hold_meta(const int64_t now, const int64_t block_index, const ObMacroBlockMeta& meta);
   void fill_comment(char* buf, const int32_t buf_len) const;
 
-  TO_STRING_KV(K_(total_block_count), K_(reserved_block_count), K_(macro_meta_block_count),
-      K_(partition_meta_block_count), K_(data_block_count), K_(lob_data_block_count), K_(second_index_count),
-      K_(lob_second_index_count), K_(bloomfiter_count), K_(hold_count), K_(pending_free_count), K_(free_count),
-      K_(mark_cost_time), K_(sweep_cost_time), K_(hold_alert_time), K_(hold_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObMacroBlockMarkerBitMap {
@@ -1564,9 +1533,7 @@ struct ObRecordHeaderV3 {
   uint16_t column_cnt_;
   int64_t* column_checksums_;
 
-  TO_STRING_KV(K_(magic), K_(header_length), K_(version), K_(header_checksum), K_(reserved16), K_(data_length),
-      K_(data_zlength), K_(data_checksum), K_(data_encoding_length), K_(row_count), K_(column_cnt),
-      KP(column_checksums_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // ObStorageFile's superblock should inherit from this basic one
@@ -1596,7 +1563,7 @@ struct ObSuperBlockMetaEntry {
     macro_block_id_.reset();
     macro_block_id_.set_second_id(-1);
   }
-  TO_STRING_KV(K_(macro_block_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(META_ENTRY_VERSION);
 
   public:
@@ -1620,9 +1587,7 @@ struct ObServerSuperBlock : public blocksstable::ObISuperBlock {
     ServerSuperBlockContent();
     bool is_valid() const;
     void reset();
-    TO_STRING_KV("Type", "ObServerSuperBlock", K_(create_timestamp), K_(modify_timestamp), K_(macro_block_size),
-        K_(total_macro_block_count), K_(total_file_size), K_(replay_start_point), K_(super_block_meta),
-        K_(tenant_config_meta));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     OB_UNIS_VERSION(SUPER_BLOCK_CONTENT_VERSION);
   };
 
@@ -1792,7 +1757,7 @@ struct ObFullMacroBlockMeta final {
     return nullptr != schema_ && nullptr != meta_;
   }
   void reset();
-  TO_STRING_KV(K_(schema), K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const ObMacroBlockSchemaInfo* schema_;
   const ObMacroBlockMetaV2* meta_;
 };
@@ -1814,7 +1779,7 @@ struct ObMacroBlockInfoPair final {
     block_id_.reset();
     meta_.reset();
   }
-  TO_STRING_KV(K_(block_id), K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   blocksstable::MacroBlockId block_id_;
   ObFullMacroBlockMeta meta_;
 };

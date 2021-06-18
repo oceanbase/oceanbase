@@ -113,7 +113,7 @@ class ObHashJoin : public ObJoin {
     join::ObStoredJoinRow* stored_row_;
     HashTableCell* next_tuple_;
 
-    TO_STRING_KV(K_(stored_row), K(static_cast<void*>(next_tuple_)));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct PartHashJoinTable {
@@ -229,7 +229,7 @@ class ObHashJoin : public ObJoin {
       ctype_ = common::CS_TYPE_INVALID;
       obj_hash_ = nullptr;
     }
-    TO_STRING_KV(K_(col1_idx), K_(col2_idx), K_(cmp_type), K_(ctype));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t col1_idx_;
     int64_t col2_idx_;
     DefaultHashFunction default_hash_fun_;

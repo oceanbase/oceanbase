@@ -26,7 +26,7 @@ struct ObKmsResult {
   {}
   ~ObKmsResult()
   {}
-  TO_STRING_KV(K_(key_version), K_(key_expired_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t key_version_;
   int64_t key_expired_time_;

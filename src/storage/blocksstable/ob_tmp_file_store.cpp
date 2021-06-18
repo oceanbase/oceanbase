@@ -15,6 +15,30 @@
 
 namespace oceanbase {
 namespace blocksstable {
+int64_t ObTmpFileArea::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start_page_id), K_(page_nums));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpBlockIOInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_id), K_(offset), K_(size), K_(tenant_id), K_(macro_block_id), KP_(buf), K_(io_desc));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpMacroBlock::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_id), K_(dir_id), K_(tenant_id), K_(free_page_nums), K_(macro_block_handle), KP_(buffer),K_(page_buddy), K_(io_desc), K_(is_disked), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
 
 const int64_t ObTmpMacroBlock::DEFAULT_PAGE_SIZE = 8192L;  // 8kb
 int64_t ObTmpTenantMacroBlockManager::next_blk_id_ = 0;

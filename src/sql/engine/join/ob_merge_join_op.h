@@ -29,7 +29,7 @@ class ObMergeJoinSpec : public ObJoinSpec {
     public:
     EqualConditionInfo() : expr_(NULL), ns_cmp_func_(NULL), is_opposite_(false)
     {}
-    TO_STRING_KV(K(expr_), KP(ns_cmp_func_), K(is_opposite_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     ObExpr* expr_;
     union {

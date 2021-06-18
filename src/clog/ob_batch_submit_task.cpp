@@ -20,6 +20,14 @@
 
 namespace oceanbase {
 namespace clog {
+int64_t ObBatchSubmitDiskTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(partition_array_), K(log_info_array_), K(offset_));
+  J_OBJ_END();
+  return pos;
+}
 void ObBatchSubmitDiskTask::reset()
 {
   is_inited_ = false;

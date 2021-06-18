@@ -50,7 +50,7 @@ class ObQueryRange : public ObQueryRangeProvider {
   struct ArrayParamInfo {
     ArrayParamInfo() : param_index_(OB_INVALID_ID)
     {}
-    TO_STRING_KV(K_(param_index));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t param_index_;
   };
 
@@ -96,7 +96,7 @@ class ObQueryRange : public ObQueryRangeProvider {
 
   struct ObRangeKeyInfo {
     ObRangeKeyType key_type_;
-    TO_STRING_KV(N_TYPE, static_cast<int32_t>(key_type_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ObRangeWrapper {

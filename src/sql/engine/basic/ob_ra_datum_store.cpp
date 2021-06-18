@@ -23,6 +23,54 @@ namespace oceanbase {
 using namespace common;
 
 namespace sql {
+int64_t ObRADatumStore::ShrinkBuffer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(data), K_(head), K_(tail), K_(cap));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRADatumStore::StoredRow::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(readable), K_(cnt), K_(row_size), "cells", common::ObArrayWrap<common::ObDatum>(cells(), cnt_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRADatumStore::Block::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(magic), K_(row_id), K_(rows), K_(idx_off));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRADatumStore::BlockIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_idx_block), K_(on_disk), K_(row_id), K_(offset), K_(length));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRADatumStore::IndexBlock::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(magic), K_(cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRADatumStore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(label), K_(ctx_id), K_(mem_limit), K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObRADatumStore::ShrinkBuffer::init(char* buf, const int64_t buf_size)
 {

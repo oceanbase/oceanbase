@@ -18,6 +18,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObPsSqlParamHelper::TraverseContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_child_not_param), K_(question_mark_count), K_(insert_vector_level));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObPsSqlUtils::deep_copy_str(common::ObIAllocator& allocator, const common::ObString& src, common::ObString& dst)
 {

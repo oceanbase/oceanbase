@@ -35,6 +35,14 @@ using namespace common;
 using namespace share;
 using namespace transaction;
 namespace clog {
+int64_t RenewMsLogTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_id), K_(log_task), K_(ack_mlist));
+  J_OBJ_END();
+  return pos;
+}
 ObLogMembershipTaskMgr::ObLogMembershipTaskMgr()
     : log_engine_(NULL),
       state_mgr_(NULL),

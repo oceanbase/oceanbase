@@ -47,7 +47,7 @@ class ObAlterTablegroupStmt : public ObTablegroupStmt {
   virtual int set_max_used_part_id(int64_t max_used_part_id) override;
   virtual int set_binding(const bool binding) override;
 
-  TO_STRING_KV(K_(alter_tablegroup_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   obrpc::ObAlterTablegroupArg alter_tablegroup_arg_;

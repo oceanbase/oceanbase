@@ -52,7 +52,7 @@ class ObTransSplitInfo {
     return dest_pks_;
   }
   int assign(const ObTransSplitInfo& other);
-  TO_STRING_KV(K_(src_pk), K_(dest_pks));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey src_pk_;

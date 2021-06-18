@@ -19,3 +19,11 @@ using namespace oceanbase::sql;
 
 OB_SERIALIZE_MEMBER(ObOpMetric, enable_audit_, id_, type_, first_in_ts_, first_out_ts_, last_in_ts_, last_out_ts_,
     counter_, exec_time_);
+int64_t ObOpMetric::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(id), K_(type), K_(first_in_ts), K_(first_out_ts), K_(last_in_ts), K_(last_out_ts), K_(counter), K_(exec_time));
+  J_OBJ_END();
+  return pos;
+}

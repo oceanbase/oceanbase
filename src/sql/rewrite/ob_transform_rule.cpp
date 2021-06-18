@@ -31,6 +31,14 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ObParentDMLStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pos), K_(stmt));
+  J_OBJ_END();
+  return pos;
+}
 
 bool ObTransformerCtx::is_valid()
 {

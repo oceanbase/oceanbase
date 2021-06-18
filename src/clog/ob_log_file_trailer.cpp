@@ -17,6 +17,22 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObLogFileTrailer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_BLOCK_META, block_meta_, N_VERSION, version_, N_START_POS, start_pos_, N_FILE_ID, file_id_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogFileTrailerV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(magic_number_), K(info_block_start_offset_), K(info_block_size_), K(file_content_checksum_),K(trailer_checksum_));
+  J_OBJ_END();
+  return pos;
+}
 ObLogFileTrailer::ObLogFileTrailer()
     : block_meta_(), version_(0), start_pos_(OB_INVALID_OFFSET), file_id_(OB_INVALID_FILE_ID)
 {}

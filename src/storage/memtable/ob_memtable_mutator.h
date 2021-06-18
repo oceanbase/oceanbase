@@ -107,8 +107,7 @@ class ObMemtableMutatorRow {
   };
   int try_replace_tenant_id(const uint64_t new_tenant_id);
 
-  TO_STRING_KV(K_(row_size), K_(table_id), K_(rowkey), K_(table_version), K_(dml_type), K_(update_seq), K_(new_row),
-      K_(old_row), K_(acc_checksum), K_(version), K_(sql_no), K_(flag));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   char obj_array_[sizeof(common::ObObj) * common::OB_MAX_ROWKEY_COLUMN_NUMBER];
@@ -189,7 +188,7 @@ class ObMemtableMutatorIterator {
   {
     return big_row_ && need_undo_redo_log_;
   }
-  TO_STRING_KV(K_(meta), K_(big_row), K_(big_row_pos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   void reset_big_row_args_();

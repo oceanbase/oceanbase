@@ -99,8 +99,7 @@ class ObExecutionID final {
     task_type_ = ET_DIST_TASK;
   }
   // print hash value for debug.
-  TO_STRING_KV(
-      N_SERVER, server_, N_EXECUTION_ID, execution_id_, N_TASK_TYPE, task_type_, "hash", static_cast<uint64_t>(hash()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   DECLARE_TO_YSON_KV;
 
   // fake control server address for global execution_id

@@ -67,7 +67,7 @@ class ObBasicNestedLoopJoin : public ObJoin {
     ObPhysicalPlan* my_phy_plan_;
     ObSqlExpression* expr_;  // freed by the physical plan
     int64_t param_idx_;
-    TO_STRING_KV(N_EXPR, expr_, N_INDEX, param_idx_);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   public:
@@ -89,10 +89,7 @@ class ObBasicNestedLoopJoin : public ObJoin {
     is_self_join_ = self_join;
   }
 
-  TO_STRING_KV(N_ID, id_, N_COLUMN_COUNT, column_count_, N_PROJECTOR,
-      common::ObArrayWrap<int32_t>(projector_, projector_size_), N_FILTER_EXPRS, filter_exprs_, N_CALC_EXPRS,
-      calc_exprs_, N_JOIN_TYPE, ob_join_type_str(join_type_), N_JOIN_EQ_COND, rescan_params_, N_JOIN_OTHER_COND,
-      other_join_conds_, N_INNER_GET, is_inner_get_, N_SELF_JOIN, is_self_join_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   int get_next_left_row(ObJoinCtx& join_ctx) const;

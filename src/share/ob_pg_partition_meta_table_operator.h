@@ -48,8 +48,7 @@ struct ObPGPartitionMTUpdateItem {
   common::ObReplicaType replica_type_;
   int data_checksum_;
 
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(partition_id), K_(svr_ip), K_(role), K_(row_count), K_(data_size),
-      K_(data_version), K_(required_size), K_(status), K_(replica_type), K_(data_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObPGPartitionMTUpdateOperator {

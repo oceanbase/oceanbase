@@ -1318,7 +1318,7 @@ class ObFakePartitionServiceForGI : public ObFakePartitionServiceForSQL {
     int macros_count_idx_;
     ObSEArray<common::ObPartitionKey, 32> pkeys_;
     ObSEArray<int, 32> macros_count_;
-    TO_STRING_KV(K(macros_count_), K(pkeys_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   public:

@@ -483,3 +483,19 @@ int ObBreadthFisrtSearchOp::finish_add_row(bool sort)
   search_results_.reuse();
   return ret;
 }
+int64_t ObSearchMethodOp::_TreeNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("is tree level", tree_level_, "is cycle", is_cycle_, "row", stored_row_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSearchMethodOp::_BreadthFirstSearchTreeNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("row ", stored_row_, "child_num_", child_num_);
+  J_OBJ_END();
+  return pos;
+}

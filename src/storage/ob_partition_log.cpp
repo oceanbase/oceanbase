@@ -19,6 +19,166 @@ using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
 namespace storage {
+int64_t ObCreateSSTableLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sstable));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCompleteSSTableLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sstable));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDeleteSSTableLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAddSSTableLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(sstable));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoveSSTableLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(table_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreatePartitionStoreLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObModifyTableStoreLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(kept_multi_version_start), K_(table_store), K_(pg_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDropIndexSSTableLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(index_id), K_(pg_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUpdatePartitionMetaLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSplitPartitionStateLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), "state", to_state_str(static_cast<ObPartitionSplitStateEnum>(state_)));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSplitPartitionInfoLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(split_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUpdateTenantConfigLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(units));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreatePartitionGroupLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUpdatePartitionGroupMetaLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreatePGPartitionStoreLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta), K_(pg_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUpdatePGPartitionMetaLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta), K_(pg_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGMacroBlockMetaLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(table_key), K_(data_file_id), K_(disk_no), K_(macro_block_id), K_(meta));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSetStartLogTsAfterMajorLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(table_key), K_(start_log_ts_after_major));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAddRecoveryPointDataLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(point_type), K_(point_data));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoveRecoveryPointDataLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(point_type), K_(pg_key), K_(snapshot_version));
+  J_OBJ_END();
+  return pos;
+}
 
 ObBeginTransLogEntry::ObBeginTransLogEntry()
 {}

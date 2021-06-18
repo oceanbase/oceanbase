@@ -74,9 +74,7 @@ struct SelectItem {
     need_check_dup_name_ = false;
   }
   int deep_copy(ObRawExprFactory& expr_factory, const SelectItem& other, const uint64_t copy_types);
-  TO_STRING_KV(N_EXPR, expr_, N_IS_ALIAS, is_real_alias_, N_ALIAS_NAME, alias_name_, N_EXPR_NAME, expr_name_, N_DEFAULT,
-      default_value_, K_(paramed_alias_name), K_(questions_pos), K_(params_idx), K_(esc_str_flag),
-      K_(need_check_dup_name), K_(implicit_filled), K_(is_unpivot_mocked_column), K_(is_hidden_rowid));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObRawExpr* expr_;
   bool is_real_alias_;
@@ -125,7 +123,7 @@ struct ObSelectIntoItem {
     is_optional_ = other.is_optional_;
     return user_vars_.assign(other.user_vars_);
   }
-  TO_STRING_KV(K_(into_type), K_(outfile_name), K_(filed_str), K_(line_str), K_(closed_cht), K_(is_optional));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObItemType into_type_;
   common::ObObj outfile_name_;
   common::ObObj filed_str_;                            // filed terminated str
@@ -149,7 +147,7 @@ struct ObGroupbyExpr {
     return groupby_exprs_.assign(other.groupby_exprs_);
   }
 
-  TO_STRING_KV("grouping sets groupby expr", groupby_exprs_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObSEArray<sql::ObRawExpr*, 8, common::ModulePageAllocator, true> groupby_exprs_;
 };
 
@@ -161,7 +159,7 @@ struct ObMultiRollupItem {
     return rollup_list_exprs_.assign(other.rollup_list_exprs_);
   }
   int deep_copy(ObRawExprFactory& expr_factory, const ObMultiRollupItem& other, const uint64_t copy_types);
-  TO_STRING_KV("rollup list exprs", rollup_list_exprs_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObSEArray<ObGroupbyExpr, 8, common::ModulePageAllocator, true> rollup_list_exprs_;
 };
 
@@ -170,7 +168,7 @@ struct ObGroupingSetsItem {
   {}
   int assign(const ObGroupingSetsItem& other);
   int deep_copy(ObRawExprFactory& expr_factory, const ObGroupingSetsItem& other, const uint64_t copy_types);
-  TO_STRING_KV("grouping sets exprs", grouping_sets_exprs_, K_(multi_rollup_items));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObSEArray<ObGroupbyExpr, 8, common::ModulePageAllocator, true> grouping_sets_exprs_;
   common::ObSEArray<ObMultiRollupItem, 8, common::ModulePageAllocator, true> multi_rollup_items_;
 };
@@ -265,8 +263,7 @@ class ObSelectStmt : public ObDMLStmt {
     uint64_t grants_user_id_;  // for show grants
     bool show_seed_;           // for show seed parameter
 
-    TO_STRING_KV(K_(is_from_show_stmt), K_(global_scope), K_(tenant_id), K_(show_database_id), K_(show_table_id),
-        K_(grants_user_id), K_(show_seed));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   ObSelectStmt();

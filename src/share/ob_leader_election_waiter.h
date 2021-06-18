@@ -48,7 +48,7 @@ class ObLeaderElectionWaiter {
       return partition_.is_valid() && exp_leader_.is_valid() && old_leader_.is_valid();
     }
 
-    TO_STRING_KV(K_(partition), K_(exp_leader), K_(old_leader), K_(new_leader));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   ObLeaderElectionWaiter(share::ObPartitionTableOperator& pt_operator, volatile bool& stop);

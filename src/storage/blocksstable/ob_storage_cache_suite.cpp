@@ -16,6 +16,22 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace blocksstable {
+int64_t ObStorageCacheSuite::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_inited_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageCacheContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(block_index_cache), KP_(block_cache), KP_(block_cache_ws), KP_(row_cache), KP_(bf_cache));
+  J_OBJ_END();
+  return pos;
+}
 ObStorageCacheSuite::ObStorageCacheSuite()
     : block_index_cache_(), user_block_cache_(), user_row_cache_(), bf_cache_(), fuse_row_cache_(), is_inited_(false)
 {}

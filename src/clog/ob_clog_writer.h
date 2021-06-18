@@ -46,7 +46,7 @@ struct ObCLogWriterCfg {
     return (CLOG_WRITE_POOL == type_ || ILOG_WRITE_POOL == type_) && NULL != log_file_writer_ && NULL != log_cache_ &&
            NULL != info_getter_ && NULL != tail_ptr_ && base_cfg_.is_valid();
   }
-  TO_STRING_KV(K_(type), KP_(log_file_writer), KP_(log_cache), KP_(info_getter), KP_(tail_ptr), K_(use_cache));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObLogWritePoolType type_;
   ObCLogBaseFileWriter* log_file_writer_;
   ObLogCache* log_cache_;

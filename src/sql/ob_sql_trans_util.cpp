@@ -16,6 +16,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t TransResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(total_partitions), K_(part_epoch_list), K_(response_partitions), K_(max_sql_no));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(TransResult, part_epoch_list_, response_partitions_, total_partitions_, max_sql_no_);
 
 void TransResult::reset()

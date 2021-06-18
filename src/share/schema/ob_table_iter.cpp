@@ -23,6 +23,30 @@
 namespace oceanbase {
 namespace share {
 namespace schema {
+int64_t ObTenantIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(cur_tenant_idx), K_(tenant_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantTableIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(cur_table_idx), K_(table_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantPartitionEntityIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(cur_idx), K_(entity_id_array));
+  J_OBJ_END();
+  return pos;
+}
 using namespace oceanbase::common;
 
 // only used in calculate_startup_progress for get all table_id

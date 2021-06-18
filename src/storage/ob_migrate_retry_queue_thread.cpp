@@ -18,6 +18,14 @@
 namespace oceanbase {
 using namespace common;
 namespace storage {
+int64_t ObMigrateRetryTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_KEY, pkey_, "task_type", task_type_);
+  J_OBJ_END();
+  return pos;
+}
 
 ObMigrateRetryQueueThread::ObMigrateRetryQueueThread()
     : inited_(false), partition_service_(NULL), free_queue_(), tasks_(NULL), tg_id_(-1)

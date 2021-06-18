@@ -148,8 +148,7 @@ class ObSelectResolver : public ObDMLResolver, public ObChildStmtResolver {
       is_set_all_ = cte_ctx.is_set_all_;
       return cte_col_names_.assign(cte_ctx.cte_col_names_);
     }
-    TO_STRING_KV(K_(is_with_clause_resolver), K_(current_cte_table_name), K_(is_recursive_cte), K_(is_cte_subquery),
-        K_(cte_resolve_level), K_(cte_col_names));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     ObSelectStmt* left_select_stmt_;
@@ -228,7 +227,7 @@ class ObSelectResolver : public ObDMLResolver, public ObChildStmtResolver {
     transpose_item_ = transpose_item;
   }
   // function members
-  TO_STRING_KV(K_(has_calc_found_rows), K_(has_top_limit), K_(in_set_query), K_(in_subquery));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   int resolve_set_query(const ParseNode& parse_node);

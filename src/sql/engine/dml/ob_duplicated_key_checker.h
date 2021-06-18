@@ -56,8 +56,7 @@ struct ObUniqueIndexScanInfo {
     index_fetcher_op_ = NULL;
     index_fetcher_spec_ = NULL;
   }
-  TO_STRING_KV(K_(table_id), K_(index_tid), K_(part_cnt), KPC_(index_location), K_(conflict_column_cnt),
-      K_(index_conflict_exprs), KPC_(index_fetcher_op));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t table_id_;
   uint64_t index_tid_;               // for basic table,table_id_ is same with index_tid_
@@ -74,7 +73,7 @@ struct ObUniqueIndexScanInfo {
 };
 
 struct ObPhyUniqueConstraintInfo {
-  TO_STRING_KV(K_(constraint_name), K_(constraint_columns), K_(se_constraint_columns), K_(calc_exprs));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObString constraint_name_;
   common::ObDList<ObSqlExpression> constraint_columns_;
   // Record expressions based on table column
@@ -94,7 +93,7 @@ struct ObConstraintKey {
   int init_constraint_row(ObIAllocator& alloc);
   uint64_t hash() const;
   bool operator==(const ObConstraintKey& other) const;
-  TO_STRING_KV(KP(datums_), KPC_(duplicated_row), KPC_(constraint_info), K_(is_primary_index));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const common::ObNewRow* duplicated_row_;
   // Call init_constraint_row to initialize, and perform other non-set operations on the map
   // No need to initialize this value, when performing equivalent/hash calculation,
@@ -119,7 +118,7 @@ struct ObConstraintValue {
   // During check_duplicate_rowkey, the conflicting rows will be deduplicated (add_var_to_array_no_dup)
   // Need to use this operator
   bool operator==(const ObConstraintValue& other) const;
-  TO_STRING_KV(KPC_(baseline_row), KPC_(current_row), KP(baseline_datum_row_), KP(current_datum_row_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const common::ObNewRow* baseline_row_;
   const common::ObNewRow* current_row_;
   const ObChunkDatumStore::StoredRow* baseline_datum_row_;
@@ -135,7 +134,7 @@ class ObDupKeyCheckerCtx {
   struct PartRowStore {
     PartRowStore() : partition_id_(0), row_store_(NULL), datum_store_(NULL)
     {}
-    TO_STRING_KV(K_(partition_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t partition_id_;
     common::ObRowStore* row_store_;
     ObChunkDatumStore* datum_store_;

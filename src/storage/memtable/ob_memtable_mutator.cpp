@@ -24,6 +24,22 @@ using namespace share;
 using namespace serialization;
 using namespace storage;
 namespace memtable {
+int64_t ObMemtableMutatorRow::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row_size), K_(table_id), K_(rowkey), K_(table_version), K_(dml_type), K_(update_seq), K_(new_row),K_(old_row), K_(acc_checksum), K_(version), K_(sql_no), K_(flag));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMemtableMutatorIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta), K_(big_row), K_(big_row_pos));
+  J_OBJ_END();
+  return pos;
+}
 ObMemtableMutatorMeta::ObMemtableMutatorMeta()
     : magic_(MMB_MAGIC),
       meta_crc_(0),

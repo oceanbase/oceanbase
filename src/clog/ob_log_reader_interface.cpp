@@ -15,6 +15,30 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObReadParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_FILE_ID, file_id_, N_OFFSET, offset_, N_PARTITION_KEY, partition_key_, N_LOG_ID, log_id_, N_READ_LEN,read_len_, N_TIMEOUT, timeout_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReadRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(buf_), K(data_len_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReadBuf::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(buf_), K(buf_len_));
+  J_OBJ_END();
+  return pos;
+}
 // 1. Used to set the parameters of reading files, the purpose is
 // to add parameters in the future without changing the interface
 // 2. The caller sets the parameter information

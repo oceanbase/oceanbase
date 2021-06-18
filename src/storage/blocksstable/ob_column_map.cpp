@@ -16,6 +16,22 @@
 namespace oceanbase {
 using namespace common;
 namespace blocksstable {
+int64_t ObColumnIndexItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(column_id), K_(request_column_type), K_(macro_column_type), K_(store_index), K_(is_column_type_matched));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObColumnMap::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(request_count), K_(store_count), K_(rowkey_store_count), K_(schema_version), KP_(cols_id_map),K_(is_inited), K_(multi_version_rowkey_cnt));
+  J_OBJ_END();
+  return pos;
+}
 ObColumnMap::ObColumnMap()
     : request_count_(0),
       store_count_(0),

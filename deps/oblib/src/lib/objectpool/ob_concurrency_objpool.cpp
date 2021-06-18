@@ -14,6 +14,22 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObThreadCache::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(f), K_(nr_total), K_(nr_malloc), K_(nr_free), K_(nr_chunks), K_(clock));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObObjFreeList::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(name), K_(is_inited), K_(only_global), K_(label), K_(thread_cache_idx), K_(type_size),K_(type_size_base), K_(alignment), K_(obj_count_base), K_(obj_count_per_chunk), K_(chunk_byte_size),K_(chunk_count_high_mark), K_(chunk_count_low_mark), K_(used), K_(allocated), K_(allocated_base), K_(used_base),K_(nr_thread_cache), K_(nr_orphaned_thread_cache), K_(clock));
+  J_OBJ_END();
+  return pos;
+}
 volatile int64_t ObObjFreeListList::once_ = 0;
 volatile ObObjFreeListList* ObObjFreeListList::instance_ = NULL;
 const int64_t ObObjFreeListList::MAX_NUM_FREELIST = 1024;

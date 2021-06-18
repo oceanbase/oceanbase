@@ -89,8 +89,14 @@ class ObColumnRef {
     collation_type_ = collation_type;
   }
 
-  TO_STRING_KV(K(database_name_), K(table_name_), K(column_name_), K(is_star_), N_COLLATION,
-      common::ObCharset::collation_name(collation_type_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(database_name_), K(table_name_), K(column_name_), K(is_star_), N_COLLATION,common::ObCharset::collation_name(collation_type_));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   common::ObString database_name_;

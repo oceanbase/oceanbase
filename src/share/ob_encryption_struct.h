@@ -60,7 +60,14 @@ class ObEncryptKey {
   {
     return str_.ptr();
   }
-  TO_STRING_KV(K_(str));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(str));
+    J_OBJ_END();
+    return pos;
+  }
   OB_UNIS_VERSION(1);
 
   private:
@@ -143,7 +150,14 @@ struct ObEncryptMeta {
   int64_t encrypt_algorithm_;
   ObEncryptMeta() : master_key_version_(-1), encrypt_algorithm_(-1)
   {}
-  TO_STRING_KV(K_(master_key_version), K_(encrypt_algorithm), K_(random), K_(master_key), K_(table_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(master_key_version), K_(encrypt_algorithm), K_(random), K_(master_key), K_(table_key));
+    J_OBJ_END();
+    return pos;
+  }
   int assign(const ObEncryptMeta& other);
   void reset();
   int replace_tenant_id(const uint64_t real_tenant_id);

@@ -19,6 +19,14 @@ namespace oceanbase {
 using namespace common;
 
 namespace transaction {
+int64_t ObTenantWeakReadClusterVersionMgr::ServerInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), K_(version), K_(valid_part_count), K_(total_part_count), K_(generate_tstamp), K_(is_skipped));
+  J_OBJ_END();
+  return pos;
+}
 
 ObTenantWeakReadClusterVersionMgr::ObTenantWeakReadClusterVersionMgr()
     : tenant_id_(OB_INVALID_ID), svr_array_(), rwlock_()

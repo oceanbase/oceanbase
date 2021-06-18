@@ -151,8 +151,7 @@ struct ObBackupCommonHeader {
   bool is_compresssed_data() const;
   int check_data_checksum(const char* buf, const int64_t len) const;
   int assign(const ObBackupCommonHeader& header);
-  TO_STRING_KV(K_(header_version), K_(compressor_type), K_(data_type), K_(data_version), K_(header_length),
-      K_(header_checksum), K_(data_length), K_(data_zlength), K_(data_checksum), K_(align_length));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint16_t data_type_;
   uint16_t header_version_;  // header version
   uint16_t data_version_;
@@ -175,7 +174,7 @@ struct ObBackupMetaHeader {
   int check_data_checksum(const char* buf, const int64_t len) const;
   int16_t calc_header_checksum() const;
   int check_valid() const;
-  TO_STRING_KV(K_(header_version), K_(meta_type), K_(header_checksum), K_(data_length), K_(data_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint16_t header_version_;
   uint16_t meta_type_;  // ObBackupMetaType;
   int16_t header_checksum_;
@@ -192,7 +191,7 @@ struct ObBackupMetaIndex {
   ObBackupMetaIndex();
   void reset();
   int check_valid() const;
-  TO_STRING_KV(K_(meta_type), K_(table_id), K_(partition_id), K_(offset), K_(data_length), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint16_t meta_type_;  // ObBackupMetaType
   uint64_t table_id_;
   int64_t partition_id_;
@@ -209,8 +208,7 @@ struct ObBackupMacroIndex {
   ObBackupMacroIndex();
   void reset();
   int check_valid() const;
-  TO_STRING_KV(K_(table_id), K_(partition_id), K_(index_table_id), K_(sstable_macro_index), K_(data_version),
-      K_(data_seq), K_(backup_set_id), K_(sub_task_id), K_(offset), K_(data_length));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t table_id_;
   int64_t partition_id_;
@@ -232,8 +230,7 @@ struct ObBackupSStableMacroIndex {
   int check_header_checksum() const;
   int16_t calc_header_checksum() const;
   int is_valid() const;
-  TO_STRING_KV(K_(header_version), K_(data_type), K_(header_length), K_(header_checksum), K_(reserved), K_(table_id),
-      K_(partition_id), K_(index_table_id), K_(offset), K_(count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint8_t header_version_;
   uint8_t data_type_;  // ObBackupFileType;
@@ -256,7 +253,7 @@ struct ObMetaIndexKey {
   uint64_t hash() const;
   bool is_valid() const;
 
-  TO_STRING_KV(K_(table_id), K_(partition_id), K_(meta_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t table_id_;
   int64_t partition_id_;
   uint16_t meta_type_;  // ObBackupMetaType;
@@ -285,7 +282,7 @@ struct ObGetTenantLogArchiveStatusArg final {
   }
   ObGetTenantLogArchiveStatusArg() : incarnation_(0), round_(0)
   {}
-  TO_STRING_KV(K_(incarnation), K(round_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObTenantLogArchiveStatus final {
@@ -309,8 +306,7 @@ struct ObTenantLogArchiveStatus final {
   bool is_mark_deleted_;
   bool is_mount_file_created_;  // used to check if backup dest is mount properly
   COMPATIBLE compatible_;
-  TO_STRING_KV(K_(tenant_id), K_(start_ts), K_(checkpoint_ts), K_(status), K_(incarnation), K_(round), "status_str",
-      ObLogArchiveStatus::get_str(status_), K_(is_mark_deleted), K_(is_mount_file_created), K_(compatible));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int update_stop_(const ObTenantLogArchiveStatus& new_status);
@@ -327,7 +323,7 @@ struct ObTenantLogArchiveStatusWrapper final {
   ObTenantLogArchiveStatusWrapper();
   int32_t result_code_;
   common::ObSArray<ObTenantLogArchiveStatus> status_array_;
-  TO_STRING_KV(K_(result_code), K_(status_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObLogArchiveBackupInfo final {
@@ -339,7 +335,7 @@ struct ObLogArchiveBackupInfo final {
   void reset();
   bool is_valid() const;
   bool is_same(const ObLogArchiveBackupInfo& other) const;
-  TO_STRING_KV(K_(status), K_(backup_dest));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObBackupDest final {
@@ -353,7 +349,7 @@ struct ObBackupDest final {
   bool operator==(const ObBackupDest& backup_dest) const;
   uint64_t hash() const;
   // TODO(): delete storage_info from to_string fun later
-  TO_STRING_KV(K_(device_type), K_(root_path), K_(storage_info), "type", get_type_str());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObStorageType device_type_;
   char root_path_[OB_MAX_BACKUP_PATH_LENGTH];
@@ -428,7 +424,7 @@ struct ObBackupInfoStatus final {
   {
     status_ = CANCEL;
   }
-  TO_STRING_KV(K_(status), "status_str", get_status_str(status_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   BackupStatus status_;
 };
 
@@ -462,7 +458,7 @@ struct ObBackupType final {
     return ObBackupType::is_full_backup(type_);
   }
 
-  TO_STRING_KV(K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   BackupType type_;
 };
 
@@ -484,7 +480,7 @@ struct ObBackupDeviceType final {
   }
   const char* get_backup_device_str() const;
   int set_backup_device_type(const char* buf);
-  TO_STRING_KV(K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   BackupDeviceType type_;
 };
@@ -501,9 +497,7 @@ struct ObBaseBackupInfoStruct {
   ObBaseBackupInfoStruct& operator=(const ObBaseBackupInfoStruct& info);
   int check_backup_info_match(const ObBaseBackupInfoStruct& info) const;
 
-  TO_STRING_KV(K_(tenant_id), K_(backup_set_id), K_(incarnation), K_(backup_dest), K_(backup_snapshot_version),
-      K_(backup_schema_version), K_(backup_data_version), K_(detected_backup_region), K_(backup_type),
-      K_(backup_status), K_(backup_task_id), K_(encryption_mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   int64_t backup_set_id_;
@@ -543,12 +537,7 @@ struct ObTenantBackupTaskItem {
   const char* get_backup_task_status_str() const;
   int set_backup_task_status(const char* buf);
 
-  TO_STRING_KV(K_(tenant_id), K_(backup_set_id), K_(incarnation), K_(snapshot_version), K_(prev_full_backup_set_id),
-      K_(prev_inc_backup_set_id), K_(prev_backup_data_version), K_(pg_count), K_(macro_block_count),
-      K_(finish_pg_count), K_(finish_macro_block_count), K_(input_bytes), K_(output_bytes), K_(start_time),
-      K_(end_time), K_(compatible), K_(cluster_version), K_(backup_type), K_(status), K_(device_type), K_(result),
-      K_(cluster_id), K_(backup_dest), K_(backup_data_version), K_(backup_schema_version), K_(partition_count),
-      K_(finish_partition_count), K_(encryption_mode), K_(passwd), K_(is_mark_deleted));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   int64_t backup_set_id_;
@@ -609,10 +598,7 @@ struct ObPGBackupTaskItem {
   int get_trace_id(char* buf, const int64_t buf_size) const;
   static int get_trace_id(const ObTaskId& trace_id, const int64_t buf_size, char* buf);
 
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(partition_id), K_(incarnation), K_(backup_set_id), K_(backup_type),
-      K_(snapshot_version), K_(partition_count), K_(macro_block_count), K_(finish_partition_count),
-      K_(finish_macro_block_count), K_(input_bytes), K_(output_bytes), K_(start_time), K_(end_time), K_(retry_count),
-      K_(role), K_(replica_type), K_(server), K_(status), K_(result), K_(task_id), K_(trace_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
   uint64_t table_id_;
   int64_t partition_id_;
@@ -646,7 +632,7 @@ struct ObBackupValidateTenant {
   void reset();
   bool is_valid() const;
 
-  TO_STRING_KV(K_(tenant_id), K_(is_dropped));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   bool is_dropped_;
@@ -672,8 +658,7 @@ struct ObBackupValidateTaskItem {
   int set_status(const char* status_str);
 
   typedef common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH> TenantName;
-  TO_STRING_KV(
-      K_(job_id), K_(tenant_id), K_(tenant_name), K_(incarnation), K_(backup_set_id), K_(progress_percent), K_(status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t job_id_;
   uint64_t tenant_id_;
@@ -705,9 +690,7 @@ struct ObTenantValidateTaskItem {
   static const char* get_status_str(const ValidateStatus& status);
   int set_status(const char* status_str);
 
-  TO_STRING_KV(K_(job_id), K_(tenant_id), K_(incarnation), K_(backup_set_id), K_(status), K_(start_time), K_(end_time),
-      K_(total_pg_count), K_(finish_pg_count), K_(total_partition_count), K_(finish_partition_count),
-      K_(total_macro_block_count), K_(finish_macro_block_count), K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   typedef common::ObFixedLengthString<common::MAX_TABLE_COMMENT_LENGTH> Comment;
 
@@ -751,10 +734,7 @@ struct ObPGValidateTaskItem {
   static const char* get_status_str(const ValidateStatus& status);
   int set_status(const char* status_str);
 
-  TO_STRING_KV(K_(job_id), K_(task_id), K_(tenant_id), K_(table_id), K_(partition_id), K_(partition_id),
-      K_(incarnation), K_(backup_set_id), K_(archive_round), K_(total_partition_count), K_(finish_partition_count),
-      K_(total_macro_block_count), K_(finish_macro_block_count), K_(server), K_(log_size), K_(result), K_(trace_id),
-      K_(status), K_(comment));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   typedef common::ObFixedLengthString<common::MAX_TABLE_COMMENT_LENGTH> Comment;
 
@@ -787,8 +767,7 @@ struct ObPGValidateTaskRowKey {
   virtual ~ObPGValidateTaskRowKey();
   int set(const ObPGValidateTaskInfo* pg_task);
 
-  TO_STRING_KV(
-      K_(tenant_id), K_(job_id), K_(task_id), K_(incarnation), K_(backup_set_id), K_(table_id), K_(partition_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   int64_t job_id_;
@@ -820,7 +799,7 @@ struct ObBackupBackupsetType final {
   const char* get_type_str() const;
   int set_type(const char* buf);
 
-  TO_STRING_KV(K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   BackupBackupsetType type_;
 };
 
@@ -843,8 +822,7 @@ struct ObBackupBackupsetJobItem {
   int set_status(const char* buf);
   static const char* get_status_str(const JobStatus& status);
 
-  TO_STRING_KV(K_(tenant_id), K_(job_id), K_(incarnation), K_(backup_set_id), K_(copy_id), K_(type), K_(tenant_name),
-      K_(job_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   typedef common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH> TenantName;
 
   uint64_t tenant_id_;
@@ -879,10 +857,7 @@ struct ObTenantBackupBackupsetTaskItem {
   static const char* get_status_str(const TaskStatus& status);
   int convert_to_backup_task_info(ObTenantBackupTaskInfo& info) const;
 
-  TO_STRING_KV(K_(job_id), K_(tenant_id), K_(backup_set_id), K_(task_status), K_(src_backup_dest), K_(dst_backup_dest),
-      K_(start_ts), K_(end_ts), K_(total_pg_count), K_(finish_pg_count), K_(total_partition_count),
-      K_(finish_partition_count), K_(total_macro_block_count), K_(finish_macro_block_count), K_(result),
-      K_(is_mark_deleted));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   int64_t job_id_;
@@ -930,8 +905,7 @@ struct ObPGBackupBackupsetTaskRowKey {
   void reset();
   bool is_valid() const;
 
-  TO_STRING_KV(
-      K_(tenant_id), K_(job_id), K_(incarnation), K_(backup_set_id), K_(copy_id), K_(table_id), K_(partition_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   int64_t job_id_;
@@ -952,8 +926,7 @@ struct ObPGBackupBackupsetTaskStat {
   void reset();
   bool is_valid() const;
 
-  TO_STRING_KV(
-      K_(total_partition_count), K_(total_macro_block_count), K_(finish_partition_count), K_(finish_macro_block_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t total_partition_count_;
   int64_t total_macro_block_count_;
@@ -982,9 +955,7 @@ struct ObPGBackupBackupsetTaskItem {
   int get_trace_id(char* buf, const int64_t buf_size) const;
   static int get_trace_id(const ObTaskId& trace_id, const int64_t buf_size, char* buf);
 
-  TO_STRING_KV(K_(job_id), K_(tenant_id), K_(backup_set_id), K_(backup_set_id), K_(copy_id), K_(table_id),
-      K_(partition_id), K_(status), K_(total_partition_count), K_(finish_partition_count), K_(total_macro_block_count),
-      K_(finish_macro_block_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   int64_t job_id_;
@@ -1040,7 +1011,7 @@ struct ObClusterBackupDest final {
   uint64_t hash() const;
   bool operator==(const ObClusterBackupDest& other) const;
 
-  TO_STRING_KV(K_(dest), K_(cluster_name), K_(cluster_id), K_(incarnation));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObBackupDest dest_;
   char cluster_name_[common::OB_MAX_CLUSTER_NAME_LENGTH];
@@ -1052,7 +1023,7 @@ struct ObBackupBaseDataPathInfo final {
   ObBackupBaseDataPathInfo();
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(dest), K_(tenant_id), K_(full_backup_set_id), K_(inc_backup_set_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObClusterBackupDest dest_;
   int64_t tenant_id_;
   int64_t full_backup_set_id_;
@@ -1079,9 +1050,7 @@ struct ObPhysicalRestoreInfo final {
   ObPhysicalRestoreInfo();
   bool is_valid() const;
   int assign(const ObPhysicalRestoreInfo& other);
-  TO_STRING_KV(K_(backup_dest), K_(cluster_name), K_(cluster_id), K_(incarnation), K_(tenant_id),
-      K_(full_backup_set_id), K_(inc_backup_set_id), K_(log_archive_round), K_(restore_snapshot_version),
-      K_(restore_start_ts), K_(compatible), K_(cluster_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalRestoreInfo);
 };
 
@@ -1099,9 +1068,7 @@ struct ObRestoreBackupInfo final {
 
   ObRestoreBackupInfo();
   bool is_valid() const;
-  TO_STRING_KV(K_(compat_mode), K_(locality), K_(primary_zone), K_(snapshot_version), K_(schema_version),
-      K_(frozen_data_version), K_(frozen_snapshot_version), K_(frozen_schema_version), K_(physical_restore_info),
-      K_(sys_pg_key_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPhysicalRestoreArg final {
@@ -1126,7 +1093,7 @@ struct ObPhysicalRestoreArg final {
   {
     return pg_key_.get_tenant_id();
   }
-  TO_STRING_KV(K_(restore_info), K_(pg_key), K_(restore_data_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObPhysicalRestoreInfo restore_info_;
@@ -1150,11 +1117,7 @@ struct ObPhysicalValidateArg final {
     return pg_key_.get_tenant_id();
   }
   int get_backup_base_data_info(share::ObBackupBaseDataPathInfo& path_info) const;
-  TO_STRING_KV(K_(backup_dest), K_(cluster_name), K_(uri_header), K_(storage_info), K_(job_id), K_(task_id),
-      K_(trace_id), K_(server), K_(cluster_id), K_(pg_key), K_(table_id), K_(partition_id), K_(tenant_id),
-      K_(incarnation), K_(archive_round), K_(backup_set_id), K_(total_partition_count), K_(total_macro_block_count),
-      K_(clog_end_timestamp), K_(start_log_id), K_(end_log_id), K_(log_size), K_(is_dropped_tenant),
-      K_(need_validate_clog), K_(full_backup_set_id), K_(inc_backup_set_id), K_(cluster_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   char backup_dest_[OB_MAX_BACKUP_DEST_LENGTH];
@@ -1196,9 +1159,7 @@ struct ObPhysicalBackupArg final {
   bool is_incremental_backup() const;
   int get_backup_base_data_info(share::ObBackupBaseDataPathInfo& path_info) const;
   int get_prev_base_data_info(share::ObBackupBaseDataPathInfo& path_info) const;
-  TO_STRING_KV(K_(uri_header), K_(storage_info), K_(incarnation), K_(tenant_id), K_(backup_set_id),
-      K_(backup_data_version), K_(backup_schema_version), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id),
-      K_(prev_data_version), K_(task_id), K_(backup_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   char uri_header_[common::OB_MAX_URI_HEADER_LENGTH];
   char storage_info_[common::OB_MAX_URI_LENGTH];
   int64_t incarnation_;
@@ -1224,10 +1185,7 @@ struct ObBackupBackupsetArg final {
   int get_src_backup_base_data_info(share::ObBackupBaseDataPathInfo& path_info) const;
   int get_dst_backup_base_data_info(share::ObBackupBaseDataPathInfo& path_info) const;
 
-  TO_STRING_KV(K_(src_uri_header), K_(src_storage_info), K_(dst_uri_header), K_(dst_storage_info), K_(cluster_name),
-      K_(server), K_(copy_id), K_(job_id), K_(tenant_id), K_(cluster_id), K_(incarnation), K_(pg_key),
-      K_(backup_set_id), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(delete_input), K_(backup_type),
-      K_(cluster_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   char src_uri_header_[common::OB_MAX_URI_HEADER_LENGTH];
   char src_storage_info_[common::OB_MAX_URI_LENGTH];
@@ -1271,10 +1229,7 @@ struct ObExternBackupInfo {
   bool is_equal(const ObExternBackupInfo& extern_backup_info) const;
   bool is_equal_without_status(const ObExternBackupInfo& extern_backup_info) const;
 
-  TO_STRING_KV(K_(full_backup_set_id), K_(inc_backup_set_id), K_(backup_data_version), K_(backup_snapshot_version),
-      K_(backup_schema_version), K_(frozen_snapshot_version), K_(frozen_schema_version), K_(prev_full_backup_set_id),
-      K_(prev_inc_backup_set_id), K_(prev_backup_data_version), K_(compatible), K_(cluster_version), K_(backup_type),
-      K_(status), K_(encryption_mode), K_(passwd), K_(is_mark_deleted));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t full_backup_set_id_;
   int64_t inc_backup_set_id_;
   int64_t backup_data_version_;
@@ -1302,8 +1257,7 @@ struct ObExternBackupSetInfo {
   virtual ~ObExternBackupSetInfo() = default;
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(backup_set_id), K_(backup_snapshot_version), K_(compatible), K_(pg_count), K_(macro_block_count),
-      K_(input_bytes), K_(output_bytes), K_(cluster_version), K_(compress_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t backup_set_id_;
   int64_t backup_snapshot_version_;
@@ -1327,8 +1281,7 @@ struct ObExternTenantInfo {
   void reset();
   bool is_valid() const;
   typedef common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH> TenantName;
-  TO_STRING_KV(K_(tenant_id), K_(create_timestamp), K_(delete_timestamp), K_(compat_mode), K_(tenant_name),
-      K_(backup_snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   int64_t create_timestamp_;
@@ -1350,8 +1303,7 @@ struct ObExternTenantLocalityInfo {
   typedef common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH> TenantName;
   typedef common::ObFixedLengthString<common::MAX_LOCALITY_LENGTH> Locality;
   typedef common::ObFixedLengthString<common::MAX_ZONE_LIST_LENGTH> PrimaryZone;
-  TO_STRING_KV(K_(tenant_id), K_(backup_set_id), K_(backup_snapshot_version), K_(compat_mode), K_(tenant_name),
-      K_(locality), K_(primary_zone));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   int64_t backup_set_id_;
@@ -1371,7 +1323,7 @@ struct ObExternBackupDiagnoseInfo {
   ObExternTenantLocalityInfo tenant_locality_info_;
   ObExternBackupSetInfo backup_set_info_;
   ObExternBackupInfo extern_backup_info_;
-  TO_STRING_KV(K_(tenant_id), K_(tenant_locality_info), K_(backup_set_info), K_(extern_backup_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObBackupCleanInfoStatus final {
@@ -1432,8 +1384,7 @@ struct ObBackupCleanInfo {
 
   typedef common::ObFixedLengthString<common::OB_MAX_ERROR_MSG_LEN> ErrorMsg;
   typedef common::ObFixedLengthString<common::MAX_TABLE_COMMENT_LENGTH> Comment;
-  TO_STRING_KV(K_(tenant_id), K_(job_id), K_(start_time), K_(end_time), K_(incarnation), K_(type), K_(status),
-      K_(expired_time), K_(backup_set_id), K_(error_msg), K_(comment), K_(clog_gc_snapshot), K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   int64_t job_id_;
@@ -1493,7 +1444,7 @@ struct ObBackupDataType final {
     type_ = BACKUP_MINOR;
   }
 
-  TO_STRING_KV(K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   BackupDataType type_;
 };
 

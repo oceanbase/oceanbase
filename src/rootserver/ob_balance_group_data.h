@@ -208,8 +208,7 @@ struct SquareIdMapItem {
     return memstore_percent_;
   }
 
-  TO_STRING_KV(K_(pkey), K_(designated_leader), K_(all_tg_idx), K_(all_pg_idx), K_(part_idx), K_(unit_id),
-      K_(dest_unit_id), K_(tablegroup_id), K_(table_id), K_(replica_type), K_(memstore_percent));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 template <class T>
@@ -385,8 +384,7 @@ class SquareIdMap : public BalanceGroupBox {
   virtual const char* get_comment() const = 0;
   virtual BalanceGroupType get_map_type() const = 0;
 
-  TO_STRING_KV(K_(map_id), K_(ignore_leader_balance), K_(primary_zone), K_(tenant_id), K_(row_size), K_(col_size),
-      "type", get_map_type(), K_(is_valid));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   int get_all_tg_idx(uint64_t tablegroup_id, uint64_t table_id, int64_t& all_tg_idx);
@@ -711,8 +709,7 @@ struct HashIndexMapItem {
     return ret;
   }
 
-  TO_STRING_KV(
-      K_(in_group_index), K_(group_count), K_(group_id), K_(balance_group_id), K_(balance_group_type), K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   /*
    * Recalculate in_group_idx for external use on the basis of in_group_index_

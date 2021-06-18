@@ -37,6 +37,62 @@ using namespace share::schema;
 using common::hash::ObHashSet;
 
 namespace storage {
+int64_t ObFreezeInfoSnapshotMgr::FreezeInfoLite::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(freeze_version), K(freeze_ts), K(cluster_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFreezeInfoSnapshotMgr::FreezeInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(freeze_version), K(freeze_ts), K(schema_version), K(cluster_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFreezeInfoSnapshotMgr::GCSnapshotInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(snapshot_ts), K(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFreezeInfoSnapshotMgr::NeighbourFreezeInfoLite::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(next), K(prev));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFreezeInfoSnapshotMgr::NeighbourFreezeInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(next), K(prev));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFreezeInfoSnapshotMgr::SchemaPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id), K(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFreezeInfoSnapshotMgr::SchemaCache::schema_node::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id), K(freeze_version), K(schema_version));
+  J_OBJ_END();
+  return pos;
+}
 
 ObFreezeInfoSnapshotMgr::ObFreezeInfoSnapshotMgr()
     : inited_(false),

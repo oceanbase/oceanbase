@@ -53,7 +53,7 @@ struct ObBackupPath final {
   bool operator==(const ObBackupPath& path) const;
   ObBackupPath& operator=(const ObBackupPath& path);
   uint64_t hash() const;
-  TO_STRING_KV(K_(cur_pos), K_(path));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t cur_pos_;

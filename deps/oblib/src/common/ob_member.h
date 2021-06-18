@@ -32,13 +32,14 @@ class ObMember {
   int64_t get_timestamp() const;
   virtual void reset();
   virtual bool is_valid() const;
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   friend bool operator==(const ObMember& lhs, const ObMember& rhs);
   friend bool operator<(const ObMember& lhs, const ObMember& rhs);
   ObMember& operator=(const ObMember& rhs);
   int assign(const ObMember& other);
 
-  TO_STRING_KV(K_(server), K_(timestamp), K_(flag));
+  
   TO_YSON_KV(Y_(server), OB_ID(t), timestamp_, Y_(flag));
   OB_UNIS_VERSION(1);
 
@@ -111,8 +112,8 @@ class ObReplicaMember : public ObMember {
   virtual bool is_valid() const;
   virtual bool is_readonly_replica() const;
   ObReplicaMember& operator=(const ObReplicaMember& rhs);
-
-  TO_STRING_KV(K_(server), K_(timestamp), K_(flag), K_(replica_type), K_(region), K_(memstore_percent));
+  //TO_STRING_KV(K_(server), K_(timestamp), K_(flag), K_(replica_type), K_(region), K_(memstore_percent));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:

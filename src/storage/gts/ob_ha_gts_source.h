@@ -99,7 +99,7 @@ class ObHaGtsSource : public share::ObThreadPool {
     uint64_t tenant_id_;
     transaction::MonotonicTs lease_begin_;
     transaction::MonotonicTs lease_end_;
-    TO_STRING_KV(K(tenant_id_), K(lease_begin_), K(lease_end_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObSEArray<ObTenantLease, 16> ObTenantLeaseArray;
 
@@ -148,7 +148,7 @@ class ObHaGtsSource : public share::ObThreadPool {
         STORAGE_LOG(WARN, "tenant_lease_array_ assign failed", K(ret));
       }
     }
-    TO_STRING_KV(K(tenant_lease_array_), K(member_list_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     ObTenantLeaseArray tenant_lease_array_;

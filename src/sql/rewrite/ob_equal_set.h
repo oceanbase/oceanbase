@@ -82,7 +82,14 @@ class ObEqualSet : public common::ObDLinkBase<ObEqualSet<COLUMN_INFO, CONST_INFO
   {
     return constants_;
   }
-  TO_STRING_KV(N_COLUMN, exprs_, N_CONST, constants_);
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(N_COLUMN, exprs_, N_CONST, constants_);
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   // types and constants

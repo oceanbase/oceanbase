@@ -2143,3 +2143,75 @@ double ObOptEstCost::cost_quals(double rows, int64_t num_quals)
 {
   return cost_params_.CMP_DEFAULT_COST * static_cast<double>(num_quals) * rows;
 }
+int64_t ObSubplanFilterCostInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(children), K_(onetime_exprs), K_(initplans));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCostHashJoinInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(left_rows), K_(left_cost), K_(right_rows), K_(right_cost), K_(left_width), K_(right_width),K_(left_ids), K_(right_ids), K_(join_type), K_(equal_join_condition), K_(other_join_condition));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCostMergeJoinInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(left_rows), K_(left_cost), K_(right_rows), K_(right_cost), K_(left_width), K_(right_width),K_(left_ids), K_(right_ids), K_(join_type), K_(left_need_ordering), K_(right_need_ordering),K_(equal_join_condition), K_(other_join_condition));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCostNLJoinInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(left_rows), K_(left_cost), K_(right_rows), K_(right_cost), K_(left_width), K_(right_width),K_(left_ids), K_(right_ids), K_(join_type), K_(anti_or_semi_match_sel), K_(with_nl_param), K_(need_mat),K_(equal_join_condition), K_(other_join_condition));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCostBaseJoinInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(left_rows), K_(left_cost), K_(right_rows), K_(right_cost), K_(left_width), K_(right_width),K_(left_ids), K_(right_ids), K_(join_type), K_(equal_join_condition), K_(other_join_condition));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCostTableScanInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(ref_table_id), K_(index_id), K_(table_meta_info), K_(index_meta_info),K_(is_virtual_table), K_(is_unique), K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),K_(postfix_filter_sel), K_(table_filter_sel));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBasicCostInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rows), K_(cost), K_(width));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIndexMetaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_table_id), K_(index_id), K_(index_micro_block_size), K_(index_part_size), K_(index_column_count),K_(is_index_back), K_(is_unique_index));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableMetaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_table_id), K_(part_count), K_(micro_block_size), K_(part_size), K_(average_row_size),K_(table_column_count), K_(table_rowkey_count), K_(table_row_count), K_(row_count), K_(is_only_memtable_data),K_(cost_est_type), K_(table_est_part));
+  J_OBJ_END();
+  return pos;
+}

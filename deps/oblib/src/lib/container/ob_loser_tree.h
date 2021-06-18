@@ -67,7 +67,14 @@ class ObLoserTree {
     bool is_draw_;
     ReplayType replay_;
 
-    TO_STRING_KV(K(winner_idx_), K(loser_idx_), K(is_draw_), K(replay_));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K(winner_idx_), K(loser_idx_), K(is_draw_), K(replay_));
+      J_OBJ_END();
+      return pos;
+    }
 
     int set_replay_type(const int64_t player);
   };

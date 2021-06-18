@@ -23,6 +23,14 @@ using namespace common;
 using namespace storage;
 
 namespace transaction {
+int64_t ObTransSubmitLogCb::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(ts), K_(partition), K_(trans_id), K_(log_type), K_(submit_timestamp), KP_(ctx), K_(have_prev_trans));
+  J_OBJ_END();
+  return pos;
+}
 int ObTransSubmitLogCb::init(
     ObTransService* ts, const ObPartitionKey& partition, const ObTransID& trans_id, ObTransCtx* ctx)
 {

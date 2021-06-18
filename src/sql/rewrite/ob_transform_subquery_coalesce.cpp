@@ -1039,3 +1039,11 @@ int ObTransformSubqueryCoalesce::make_false(ObIArray<ObRawExpr*>& conds)
   }
   return ret;
 }
+int64_t ObTransformSubqueryCoalesce::TransformParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(exists_expr_), K(not_exists_expr_), K(any_expr_), K(all_expr_), K(map_info_), K(trans_flag_));
+  J_OBJ_END();
+  return pos;
+}

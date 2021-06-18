@@ -128,7 +128,7 @@ class ObTaskID final {
     task_cnt_ = 0;
   }
 
-  TO_STRING_KV(N_OB_JOB_ID, ob_job_id_, N_TASK_ID, task_id_, K_(task_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   TO_YSON_KV(OB_ID(job_id), ob_job_id_, OB_ID(task_id), task_id_);
 
   private:

@@ -81,8 +81,7 @@ class ObArchiveRoundMgr {
   LogArchiveStatus get_log_archive_status();
 
   void set_has_handle_error(bool has_handle);
-  TO_STRING_KV(K(add_pg_finish_), K(total_pg_count_), K(started_pg_count_), K(current_archive_round_), K(start_tstamp_),
-      K(root_path_), K(storage_info_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;

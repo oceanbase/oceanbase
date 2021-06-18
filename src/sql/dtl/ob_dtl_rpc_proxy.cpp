@@ -15,6 +15,46 @@
 namespace oceanbase {
 namespace sql {
 namespace dtl {
+int64_t ObDtlRpcDataResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_block));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlBCRpcDataResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(resps));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlRpcChanArgs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(chid), K_(peer));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlSendArgs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(chid), KP(&buffer_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlBCSendArgs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(args_.count()));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObDtlRpcDataResponse, is_block_, recode_);
 OB_SERIALIZE_MEMBER(ObDtlRpcChanArgs, chid_, peer_);

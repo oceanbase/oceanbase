@@ -68,7 +68,7 @@ struct ObLocationCacheKey : public common::ObIKVCacheKey {
   virtual uint64_t hash_v2() const;
   virtual int64_t size() const;
   virtual int deep_copy(char* buf, const int64_t buf_len, ObIKVCacheKey*& key) const;
-  TO_STRING_KV(KT_(table_id), K_(partition_id), K_(cluster_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct LocationInfo {
@@ -85,7 +85,7 @@ struct LocationInfo {
   {
     return server_.is_valid() && renew_ts_ > 0;
   }
-  TO_STRING_KV(K_(server), K_(renew_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int assign(const LocationInfo& that)
@@ -141,7 +141,7 @@ class ObLocationLeader {
     leader_info_.server_ = that.server_;
     leader_info_.renew_ts_ = that.renew_ts_;
   }
-  TO_STRING_KV(K_(key), K_(leader_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObLocationCacheKey key_;
@@ -156,7 +156,7 @@ struct ObLocationCacheValue : public common::ObIKVCacheValue {
   {}
   virtual int64_t size() const;
   virtual int deep_copy(char* buf, const int64_t buf_len, ObIKVCacheValue*& value) const;
-  TO_STRING_KV(K_(size), "buffer", reinterpret_cast<int64_t>(buffer_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObTenantSqlRenewStat {
@@ -182,7 +182,7 @@ struct ObTenantSqlRenewStat {
   {
     return common::OB_INVALID_TENANT_ID != tenant_id_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(start_sql_renew_ts), K_(sql_renew_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // TODO: () release memory of ObTenantSqlRenewStat when tenant has been dropped.
@@ -211,7 +211,7 @@ class ObTenantStatGuard {
   {
     return tenant_stat_;
   }
-  TO_STRING_KV(KP_(tenant_stat), K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int set_tenant_stat(const uint64_t tenant_id, TenantSqlRenewInfoMap& map,
@@ -272,7 +272,7 @@ class ObLocationAsyncUpdateTask : public common::ObDLinkBase<ObLocationAsyncUpda
     return type_;
   }
   bool need_discard() const;
-  TO_STRING_KV(KT_(table_id), K_(partition_id), K_(add_timestamp), K_(cluster_id), K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObIPartitionLocationCache* loc_cache_;
@@ -425,8 +425,7 @@ struct ObLocationRpcRenewInfo {
   ~ObLocationRpcRenewInfo();
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(addr), "key_cnt", OB_ISNULL(arg_) ? 0 : arg_->keys_.count(), "idx_cnt",
-      OB_ISNULL(idx_array_) ? 0 : idx_array_->count());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObAddr addr_;
@@ -442,7 +441,7 @@ struct ObReplicaRenewKey {
 
   uint64_t hash() const;
   bool operator==(const ObReplicaRenewKey& other) const;
-  TO_STRING_KV(K_(table_id), K_(partition_id), K_(addr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t table_id_;

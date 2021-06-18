@@ -67,7 +67,7 @@ class ObRsReentrantThread : public share::ObReentrantThread {
   int destroy();
   void stop();
   void wait();
-  TO_STRING_KV("name", get_thread_name());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // >0 :last run timestamp;

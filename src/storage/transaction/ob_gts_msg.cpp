@@ -19,6 +19,22 @@ using namespace common;
 using namespace obrpc;
 
 namespace transaction {
+int64_t ObGtsRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(srr), K_(range_size), K_(gts_pkey), K_(sender));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGtsErrResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(srr), K_(status), K_(leader), K_(sender));
+  J_OBJ_END();
+  return pos;
+}
 // ObGtsRequest
 OB_SERIALIZE_MEMBER(ObGtsRequest, tenant_id_, srr_.mts_, range_size_, gts_pkey_, sender_);
 // ObGtsErrResponse

@@ -36,7 +36,7 @@ struct ObSnapshotInfo {
   {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(snapshot_type), K_(snapshot_ts), K_(schema_version), K_(tenant_id), K_(table_id), KP_(comment));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct TenantSnapshot {
@@ -51,7 +51,7 @@ struct TenantSnapshot {
   {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(snapshot_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObSnapshotTableProxy {

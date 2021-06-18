@@ -49,7 +49,7 @@ class ObVirtualChannelInfo {
 
   void get_info(sql::dtl::ObDtlChannel* ch);
 
-  TO_STRING_KV(K(channel_id_), K(op_id_), K(peer_id_), K(tenant_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   bool is_local_;  // 1

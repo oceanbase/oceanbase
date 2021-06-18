@@ -20,6 +20,54 @@ namespace oceanbase {
 using namespace rootserver;
 using namespace common;
 namespace share {
+int64_t ReplicaAttr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(num), K_(memstore_percent));
+  J_OBJ_END();
+  return pos;
+}
+int64_t BaseReplicaAttrSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("full_replica_attr_array", get_full_replica_attr_array(), "logonly_replica_attr_array",get_logonly_replica_attr_array(), "readonly_replica_attr_array", get_readonly_replica_attr_array());
+  J_OBJ_END();
+  return pos;
+}
+int64_t SchemaZoneReplicaAttrSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(replica_attr_set), K_(zone_set), K_(zone));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObZoneReplicaAttrSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(replica_attr_set), K_(zone_set));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplicaNumSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(full_replica_num_), K(logonly_replica_num_), K(readonly_replica_num_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRegionReplicaNumSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(region_), K(replica_num_set_));
+  J_OBJ_END();
+  return pos;
+}
 int64_t BaseReplicaAttrSet::get_full_replica_num() const
 {
   int64_t num = 0;

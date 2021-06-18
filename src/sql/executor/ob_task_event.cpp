@@ -18,6 +18,78 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
+int64_t ObTaskSmallResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(has_data), K_(data_len), K_(affected_rows), K_(found_rows), K_(last_insert_id), K_(matched_rows),K_(duplicated_rows));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObShuffleKeys::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_key), K_(subpart_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSliceEvent::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ob_slice_id), K_(shuffle_keys), K_(shuffle_partition_key), K_(small_result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTaskEvent::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("task_loc", task_loc_, "err_code", err_code_, "inited", inited_, K_(slice_events));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTaskResultBuf::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_location), K_(slice_events_buf));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMiniTaskResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_result), K_(extend_result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMiniTaskEvent::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_addr), K_(task_id), K_(ret_code));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMiniTaskRetryInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(need_retry), K_(failed_task_lists), K_(retry_ret), K_(retry_times), K_(retry_execution),K_(retry_by_single_range));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoteResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_id), K_(result), K_(has_more));
+  J_OBJ_END();
+  return pos;
+}
 
 ObTaskSmallResult::ObTaskSmallResult()
     : has_data_(false),

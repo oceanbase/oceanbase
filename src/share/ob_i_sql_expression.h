@@ -204,8 +204,14 @@ class ObExprTypeCtx {
     return raw_expr_;
   }
 
-  TO_STRING_KV(K_(coll_type), K_(div_precision_increment), K_(ob_max_allowed_packet), KP_(session), KP_(udf_meta),
-      K_(cast_mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(coll_type), K_(div_precision_increment), K_(ob_max_allowed_packet), KP_(session), KP_(udf_meta),K_(cast_mode));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   //  const sql::ObSQLSessionInfo *my_session_;

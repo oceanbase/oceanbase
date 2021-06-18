@@ -19,6 +19,38 @@
 namespace oceanbase {
 using namespace common;
 namespace storage {
+int64_t ObMergeIterStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(call_cnt), K_(output_row_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBlockAccessStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(effect_read_cnt), K_(empty_read_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableStoreStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(row_cache_put_cnt), K_(bf_filter_cnt),K_(bf_empty_read_cnt), K_(bf_access_cnt), K_(block_cache_hit_cnt), K_(block_cache_miss_cnt), K_(access_row_cnt),K_(output_row_cnt), K_(fuse_row_cache_hit_cnt), K_(fuse_row_cache_miss_cnt), K_(fuse_row_cache_put_cnt),K_(single_get_stat), K_(multi_get_stat), K_(index_back_stat), K_(single_scan_stat), K_(multi_scan_stat),K_(exist_row), K_(get_row), K_(scan_row));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableStoreStatKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id));
+  J_OBJ_END();
+  return pos;
+}
 // ------------------ Statistic ------------------ //
 bool ObMergeIterStat::is_valid() const
 {

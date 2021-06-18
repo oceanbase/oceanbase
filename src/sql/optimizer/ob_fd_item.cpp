@@ -456,3 +456,11 @@ int ObFdItemFactory::do_deduce_fd_item_set(const EqualSets& equal_sets, ObIArray
   }
   return ret;
 }
+int64_t ObFdItemFactory::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("", "");
+  J_OBJ_END();
+  return pos;
+}

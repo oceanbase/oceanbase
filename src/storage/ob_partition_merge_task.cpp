@@ -37,6 +37,38 @@
 
 namespace oceanbase {
 namespace storage {
+int64_t ObSSTableMergeContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(concurrent_cnt), K_(finish_count), K_(sstable_merge_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableScheduleMergeParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(merge_type), K_(merge_version), K_(pkey), K_(index_id), K_(schedule_merge_type), K_(pg_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableMergeCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version), K_(base_schema_version),K_(schema_version), K_(dump_memtable_timestamp), KP_(table_schema), K_(is_full_merge), K_(stat_sampling_ratio),K_(merge_level), K_(progressive_merge_num), K_(progressive_merge_start_version), K_(parallel_merge_ctx),K_(checksum_method), K_(result_code), KP_(data_table_schema), KP_(mv_dep_table_schema), K_(index_stats),"tables_handle count", tables_handle_.get_count(), K_(index_stats), K_(is_in_progressive_new_checksum),K_(store_column_checksum_in_micro), K_(progressive_merge_round), K_(progressive_merge_step),K_(use_new_progressive), K_(tables_handle), K_(base_table_handle), K_(create_sstable_for_large_snapshot),K_(logical_data_version), K_(log_ts_range), K_(merge_log_ts), K_(trans_table_end_log_ts),K_(trans_table_timestamp), K_(read_base_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMergeParameter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_full_merge), K_(merge_type), K_(checksum_method), K_(merge_level), KP_(table_schema),KP_(mv_dep_table_schema), K_(version_range), KP_(checksum_calculator), KP_(tables_handle),K_(is_iter_complement));
+  J_OBJ_END();
+  return pos;
+}
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::compaction;

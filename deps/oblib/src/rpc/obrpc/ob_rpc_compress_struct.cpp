@@ -18,6 +18,62 @@ using namespace oceanbase::common;
 using namespace oceanbase::rpc::frame;
 namespace oceanbase {
 namespace obrpc {
+int64_t ObRpcCompressCCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_inited_), K(compress_mode_), K(block_size_), K(ring_buffer_pos_), K(ring_buffer_size_),KP(ring_buffer_), K(total_data_size_before_compress_), KP(compressor_), KP(cctx_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRpcCompressDCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_inited_), K(compress_mode_), K(block_size_), K(ring_buffer_pos_), K(ring_buffer_size_),KP(ring_buffer_), KP(compressor_), KP(dctx_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRpcCompressCtxSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(compress_ctx_), K(decompress_ctx_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCompressHeadPacketHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(magic_), K(full_size_), K(total_data_len_before_compress_), K(total_data_len_after_compress_),K(compressed_size_), K(origin_size_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCompressSegmentPacketHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(magic_), K(full_size_), K(origin_size_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCmdPacketInCompress::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(magic_), K(full_size_), K(payload_), K(cmd_type_), K(compress_mode_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCmdPacketInNormal::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(full_size_), K(payload_), K(compress_mode_), K(block_size_), K(ring_buffer_size_));
+  J_OBJ_END();
+  return pos;
+}
 
 oceanbase::common::ObCompressorType ObRpcCompressCtx::get_compress_type(ObRpcCompressMode mode) const
 {

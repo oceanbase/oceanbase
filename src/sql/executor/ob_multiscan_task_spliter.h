@@ -128,7 +128,7 @@ class ObDistributedTaskSpliter : public ObTaskSpliter {
     {
       return depend_table_keys_.push_back(depend_table_key);
     }
-    TO_STRING_KV(K_(table_loc), K_(depend_table_keys));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     const ObPhyTableLocation* table_loc_;

@@ -833,7 +833,14 @@ class TestMemLeakIOCallback : public ObIOCallback {
   {
     return buf_;
   }
-  TO_STRING_KV(KP_(buf));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP_(buf));
+    J_OBJ_END();
+    return pos;
+  }
 
   public:
   char* buf_;
@@ -967,7 +974,14 @@ class TestIOCallback : public ObIOCallback {
   {
     return buf_;
   }
-  TO_STRING_KV(KP_(buf));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP_(buf));
+    J_OBJ_END();
+    return pos;
+  }
 
   public:
   char* buf_;

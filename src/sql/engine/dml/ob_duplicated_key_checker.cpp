@@ -22,6 +22,46 @@ using namespace share;
 using namespace storage;
 using namespace share::schema;
 namespace sql {
+int64_t ObUniqueIndexScanInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(index_tid), K_(part_cnt), KPC_(index_location), K_(conflict_column_cnt),K_(index_conflict_exprs), KPC_(index_fetcher_op));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhyUniqueConstraintInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(constraint_name), K_(constraint_columns), K_(se_constraint_columns), K_(calc_exprs));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObConstraintKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(datums_), KPC_(duplicated_row), KPC_(constraint_info), K_(is_primary_index));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObConstraintValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC_(baseline_row), KPC_(current_row), KP(baseline_datum_row_), KP(current_datum_row_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDupKeyCheckerCtx::PartRowStore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_id));
+  J_OBJ_END();
+  return pos;
+}
 // for main table: conflict row = rowkey + local unique index column
 // for global unique index: conflict row = unique index rowkey, which saved in index_conflict_exprs_
 int ObDuplicatedKeyChecker::ObUniqueIndexRowkeyIter::init(ObChunkDatumStore* datum_store)

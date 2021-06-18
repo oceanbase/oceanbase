@@ -55,7 +55,7 @@ struct ObDstServerInfo {
     is_clockdiff_error_ = false;
     is_clog_disk_full_ = false;
   }
-  TO_STRING_KV(K_(last_send_timestamp), K_(last_recv_timestamp), K_(is_in_blacklist), K_(is_clockdiff_error));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // Play the role of req_id for asynchronous messages, used to match <req, resp>
   int64_t last_send_timestamp_;
@@ -84,7 +84,7 @@ struct ObBlacklistInfo {
   {
     return dst_info_;
   }
-  TO_STRING_KV(K_(dst_svr), K_(dst_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObAddr dst_svr_;
   ObDstServerInfo dst_info_;

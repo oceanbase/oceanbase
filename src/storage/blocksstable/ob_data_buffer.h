@@ -109,7 +109,7 @@ class ObBufferHolder {
     return ret;
   }
 
-  TO_STRING_KV(KP_(data), K_(pos), K_(capacity));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObBufferHolder() : data_(NULL), pos_(0), capacity_(0)

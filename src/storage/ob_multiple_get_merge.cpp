@@ -17,6 +17,14 @@ namespace oceanbase {
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 namespace storage {
+int64_t ObQueryRowInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row), K_(final_result), K_(final_result), K_(end_iter_idx), K_(sstable_end_log_ts));
+  J_OBJ_END();
+  return pos;
+}
 const int64_t ObMultipleGetMerge::MAX_MULTI_GET_FUSE_ROW_CACHE_PUT_COUNT = 50;
 
 ObMultipleGetMerge::ObMultipleGetMerge()

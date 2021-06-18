@@ -26,6 +26,22 @@ namespace oceanbase {
 using namespace common;
 using namespace share::schema;
 namespace sql {
+int64_t ObOutlineState::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(outline_version_), K(is_plan_fixed_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t DeletedCacheObjInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(obj_id), K_(tenant_id), K_(log_del_time), K_(real_del_time), K_(ref_count), K_(added_to_pc), K_(mem_used));
+  J_OBJ_END();
+  return pos;
+}
 ObCacheObject::ObCacheObject(ObCacheObjType co_type, lib::MemoryContext& mem_context /* = CURRENT_CONTEXT */)
     : mem_context_(mem_context),
       allocator_(mem_context.get_safe_arena_allocator()),

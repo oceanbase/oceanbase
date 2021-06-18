@@ -48,7 +48,7 @@ class ObPGKeyWrap : public ObPGHashValue {
   {
     return pg_key_;
   }
-  TO_STRING_KV(K_(pg_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPGKey pg_key_;

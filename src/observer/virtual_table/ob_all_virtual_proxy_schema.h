@@ -109,7 +109,7 @@ class ObAllVirtualProxySchema : public common::ObVirtualTableIterator {
       location_.reset();
       virtual_partition_id_ = 0;
     }
-    TO_STRING_KV(K_(virtual_partition_id), K_(location));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     share::ObReplicaLocation location_;
     int64_t virtual_partition_id_;

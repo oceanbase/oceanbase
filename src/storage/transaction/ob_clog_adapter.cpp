@@ -26,6 +26,30 @@ using namespace storage;
 using namespace clog;
 
 namespace transaction {
+int64_t SubmitLogTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(partition), K_(version), K_(with_need_update_version), K_(local_trans_version),K_(with_base_ts), K_(base_ts), K_(submit_task_ts), K_(process_begin_ts), "cb",*(static_cast<ObTransSubmitLogCb*>(cb_)));
+  J_OBJ_END();
+  return pos;
+}
+int64_t BackfillNopLogTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(partition), K_(log_meta));
+  J_OBJ_END();
+  return pos;
+}
+int64_t AggreLogTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(partition));
+  J_OBJ_END();
+  return pos;
+}
 ObClogAdapter::ObClogAdapter() : is_inited_(false), is_running_(false), partition_service_(NULL), tg_id_(-1)
 {
   reset_statistics();

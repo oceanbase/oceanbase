@@ -27,6 +27,14 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 namespace dtl {
+int64_t ObDtlChannelManager::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(idx));
+  J_OBJ_END();
+  return pos;
+}
 
 ////////////////////////////////////////////////////////////////////////////
 int ObDtlChannelManager::insert_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel*& chan)

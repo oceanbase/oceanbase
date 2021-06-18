@@ -19,6 +19,14 @@ namespace oceanbase {
 using namespace common;
 
 namespace rootserver {
+int64_t ObRsReentrantThread::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("name", get_thread_name());
+  J_OBJ_END();
+  return pos;
+}
 
 CheckThreadSet ObRsReentrantThread::check_thread_set_;
 

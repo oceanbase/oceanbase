@@ -62,7 +62,7 @@ struct ObSequenceValue {
   {
     return val_;
   }
-  TO_STRING_KV("val", val_.format());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   char buf_[common::number::ObNumber::MAX_BYTE_LEN];
@@ -303,7 +303,7 @@ class ObSequenceOption {
 
   int assign(const share::ObSequenceOption& from);
 
-  TO_STRING_KV(K_(increment_by), K_(start_with), K_(maxvalue), K_(minvalue), K_(cache), K_(cycle), K_(order));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObSequenceValue increment_by_;

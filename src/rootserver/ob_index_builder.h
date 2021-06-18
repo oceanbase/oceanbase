@@ -58,7 +58,7 @@ class ObIndexBuildStatus {
       return !operator==(o);
     }
 
-    TO_STRING_KV(K_(partition_id), K_(server), K_(index_status), K_(ret_code));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     int64_t partition_id_;
     common::ObAddr server_;
@@ -84,7 +84,7 @@ class ObIndexBuildStatus {
   {}
   int load_all(const uint64_t index_table_id, const int64_t partition_id, common::ObMySQLProxy& sql_proxy);
   int find(const int64_t partition_id, const common::ObAddr& server, PartitionIndexStatus& status) const;
-  TO_STRING_KV(K_(loaded), K_(all_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool loaded_;
@@ -105,7 +105,7 @@ class ObIndexWaitTransStatus {
     bool operator!=(const PartitionWaitTransStatus& other) const;
     bool is_valid() const;
     void reset();
-    TO_STRING_KV(K_(partition_id), K_(trans_status), K_(snapshot_version), K_(schema_version));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t partition_id_;
     int trans_status_;
     int64_t snapshot_version_;
@@ -156,7 +156,7 @@ class ObRSBuildIndexTask : public share::ObIDDLTask {
   bool operator==(const ObIDDLTask& other) const;
   int report_index_status(const share::schema::ObIndexStatus index_status);
   int generate_index_build_stat_record();
-  TO_STRING_KV(K_(state), K_(index_id), K_(data_table_id), K_(schema_version), KP_(ddl_service));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t get_tenant_id() const
   {
     return extract_tenant_id(index_id_);

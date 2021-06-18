@@ -15,6 +15,38 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
+int64_t ObBKGDDistExecuteArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(task_id), K_(scheduler_id), K_(return_addr), K(serialized_task_.length()));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBKGDTaskCompleteArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_id), K_(scheduler_id), K_(return_code), K_(event));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchIntermResultItemArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(slice_id), K_(index));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchIntermResultItemRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(result_item), K_(total_item_cnt));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObBKGDDistExecuteArg, return_addr_, tenant_id_, task_id_, scheduler_id_, serialized_task_);
 

@@ -73,8 +73,7 @@ class ObShrinkResourcePoolChecker {
     ObSEArray<const Replica*, 8> in_pool_non_paxos_replicas_;
     ObSEArray<const Replica*, 8> not_in_pool_non_paxos_replicas_;
     int assign(const ZoneReplicas& other);
-    TO_STRING_KV(K_(zone), K_(in_pool_paxos_replicas), K_(not_in_pool_paxos_replicas), K_(in_pool_non_paxos_replicas),
-        K_(not_in_pool_non_paxos_replicas));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     bool is_valid() const
     {
       return !zone_.is_empty();

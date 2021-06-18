@@ -236,3 +236,27 @@ int ObFuseRowCache::put_row(const ObFuseRowCacheKey& key, const ObFuseRowCacheVa
   }
   return ret;
 }
+int64_t ObFuseRowValueHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(value), K_(handle));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFuseRowCacheValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(obj_array), K_(size), K_(column_cnt), K_(schema_version), K_(flag), K_(snapshot_version),K_(partition_id), K_(sstable_end_log_ts), K(fq_ctx_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFuseRowCacheKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(rowkey_size), K_(rowkey));
+  J_OBJ_END();
+  return pos;
+}

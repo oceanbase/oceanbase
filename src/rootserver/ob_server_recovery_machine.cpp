@@ -46,6 +46,38 @@ using namespace share::schema;
 using namespace common::sqlclient;
 using namespace sql;
 namespace rootserver {
+int64_t CheckPgRecoveryFinishedTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server_), K(is_stopped_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t UpdateFileRecoveryStatusTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server_), K(is_stopped_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t RefugeeInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(tenant_id), K_(file_id), K_(dest_unit_id), K_(dest_server), K_(file_recovery_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerRecoveryTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server_), K(rescue_server_), K(progress_), K(refugee_infos_), K(split_server_log_status_),K(recover_file_task_gen_status_), K(check_pg_recovery_finished_status_), K(last_drive_ts_));
+  J_OBJ_END();
+  return pos;
+}
 
 int64_t UpdateFileRecoveryStatusTask::hash() const
 {

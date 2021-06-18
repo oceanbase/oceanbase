@@ -22,6 +22,22 @@
 
 namespace oceanbase {
 namespace share {
+int64_t ObRealUInt64::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(v));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDMLSqlSplicer::Column::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(primary_key), K_(is_null), K_(name), K_(value_end_pos));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 
 const char* const ObDMLSqlSplicer::NULL_VALUE = NULL;

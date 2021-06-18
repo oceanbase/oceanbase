@@ -21,6 +21,14 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace share {
+int64_t ObSSTableDataChecksumInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(replicas));
+  J_OBJ_END();
+  return pos;
+}
 
 const int64_t ObSSTableDataChecksumIterator::BATCH_CNT;
 

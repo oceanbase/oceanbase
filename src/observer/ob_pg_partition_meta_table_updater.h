@@ -57,7 +57,7 @@ class ObPGPartitionMTUpdateTask : public common::ObDLinkBase<ObPGPartitionMTUpda
   {
     return add_timestamp_;
   }
-  TO_STRING_KV(K_(pkey), K_(add_timestamp), K_(update_type), K_(version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey pkey_;

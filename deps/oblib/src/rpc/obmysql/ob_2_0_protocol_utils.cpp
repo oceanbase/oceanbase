@@ -26,6 +26,22 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace obmysql {
+int64_t ObProto20Context::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(comp_seq), K_(request_id), K_(proto20_seq), K_(header_len), K_(tailer_len), K_(next_step),K_(is_proto20_used), K_(is_checksum_off), K_(curr_proto20_packet_start_pos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObProtoEncodeParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(proto20_context), KP_(ez_buf), KP_(pkt), K_(seri_size), K_(conn_id), K_(encode_ret), K_(need_flush),K_(is_last), K_(is_pkt_encoded), KP_(large_pkt_buf), K_(large_pkt_buf_len), K_(large_pkt_buf_pos));
+  J_OBJ_END();
+  return pos;
+}
 const int64_t ObProtoEncodeParam::MAX_PROTO20_PAYLOAD_LEN =
     OB_MYSQL_MAX_PAYLOAD_LENGTH - OB20_PROTOCOL_HEADER_TAILER_LENGTH;
 const int64_t ObProtoEncodeParam::PROTO20_SPLIT_LEN = OB_MYSQL_MAX_PAYLOAD_LENGTH / 2;  // 8MB

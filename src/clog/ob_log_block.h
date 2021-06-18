@@ -132,8 +132,7 @@ class ObLogBlockMetaV2 {
     return META_MAGIC == magic_number;
   }
 
-  TO_STRING_KV(N_MAGIC, magic_, N_TYPE, type_, N_TOTAL_LEN, total_len_, N_PADDING_LEN, padding_len_, N_TIMESTAMP,
-      timestamp_, N_DATA_CHECKSUM, data_checksum_, N_META_CHECKSUM, meta_checksum_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
   static const int16_t META_MAGIC = 0x4C42;  // BL means block
 

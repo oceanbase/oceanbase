@@ -114,7 +114,7 @@ class ObModifyTenantStmt : public ObDDLStmt {
   {
     return modify_tenant_arg_;
   }
-  TO_STRING_KV(K_(modify_tenant_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool for_current_tenant_;

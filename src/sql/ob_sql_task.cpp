@@ -177,3 +177,11 @@ void ObSqlTaskFactory::free_(ObSqlTask* task)
     task = NULL;
   }
 }
+int64_t ObSqlTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(msg_type));
+  J_OBJ_END();
+  return pos;
+}

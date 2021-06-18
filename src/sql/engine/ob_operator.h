@@ -58,7 +58,7 @@ struct ObDynamicParamSetter {
   ObExpr* src_;        // original expr which replaced by param expr
   ObExpr* dst_;        // dynamic param expr
 
-  TO_STRING_KV(K_(param_idx), K_(src), K_(dst));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObOpSpecVisitor;

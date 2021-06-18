@@ -39,7 +39,7 @@ class ObPartIdRowMapManager {
     public:
     MapEntry() : list_()
     {}
-    TO_STRING_KV(K_(list));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int assign(const MapEntry& entry);
 
     public:
@@ -74,7 +74,7 @@ class ObPartIdRowMapManager {
   {
     return part_row_;
   }
-  TO_STRING_KV(K_(manager), K_(part_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObPartRowManager manager_;
@@ -137,7 +137,7 @@ struct ObPartLocCalcNode {
   virtual int deep_copy(common::ObIAllocator& allocator, common::ObIArray<ObPartLocCalcNode*>& calc_nodes,
       ObPartLocCalcNode*& other) const = 0;
 
-  TO_STRING_KV(K_(node_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   NodeType node_type_;
 };
@@ -208,7 +208,7 @@ struct ObPLFuncValueNode : public ObPartLocCalcNode {
     {}
     ParamValuePair() : param_idx_(-1), obj_value_()
     {}
-    TO_STRING_KV(K_(param_idx), K_(obj_value));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t param_idx_;
     common::ObObj obj_value_;
   };
@@ -258,14 +258,14 @@ struct ObListPartMapKey {
 
   int64_t hash() const;
   bool operator==(const ObListPartMapKey& other) const;
-  TO_STRING_KV(K_(row));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObListPartMapValue {
   ObListPartMapKey key_;
   int64_t part_id_;
 
-  TO_STRING_KV(K_(key), K_(part_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 template <class T, class V>
@@ -290,14 +290,14 @@ struct ObHashPartMapKey {
 
   int64_t hash() const;
   bool operator==(const ObHashPartMapKey& other) const;
-  TO_STRING_KV(K_(part_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObHashPartMapValue {
   ObHashPartMapKey key_;
   int64_t part_id_;
 
-  TO_STRING_KV(K_(key), K_(part_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 template <class T, class V>
@@ -332,7 +332,7 @@ struct TableLocationKey {
     return hash_ret;
   }
 
-  TO_STRING_KV(K_(table_id), K_(ref_table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObOptimizerContext;
@@ -384,9 +384,7 @@ class ObTableLocation {
     int calc_part_row(const stmt::StmtType& stmt_type, ObExecContext& ctx, const common::ObNewRow& input_row,
         common::ObNewRow*& part_row) const;
     void project_part_row(share::schema::ObPartitionLevel part_level, common::ObNewRow& part_row) const;
-    TO_STRING_KV(K_(virtual_column_exprs), K_(column_cnt), "part_projector",
-        common::ObArrayWrap<int32_t>(part_projector_, part_projector_size_), "subpart_projector",
-        common::ObArrayWrap<int32_t>(subpart_projector_, subpart_projector_size_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     int init_part_projector(
@@ -838,8 +836,7 @@ class ObTableLocation {
   int calculate_partition_ids_with_rowid(ObExecContext& exec_ctx, share::schema::ObSchemaGetterGuard& schema_guard,
       const ParamStore& params, common::ObIArray<int64_t>& part_ids) const;
 
-  TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(part_num), K_(is_global_index), K_(duplicate_type),
-      K_(part_expr_param_idxs), K_(part_projector), K_(part_expr), K_(gen_col_expr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // get partition columns and generate partition_expr_

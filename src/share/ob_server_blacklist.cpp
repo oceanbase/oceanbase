@@ -24,6 +24,22 @@ using namespace share;
 using rpc::frame::ObReqTransport;
 
 namespace share {
+int64_t ObDstServerInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(last_send_timestamp), K_(last_recv_timestamp), K_(is_in_blacklist), K_(is_clockdiff_error));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBlacklistInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(dst_svr), K_(dst_info));
+  J_OBJ_END();
+  return pos;
+}
 uint64_t ObServerBlacklist::black_svr_cnt_ = 0;
 
 bool ObServerBlacklist::ObMapRemoveFunctor::operator()(const ObCascadMember& member, const ObDstServerInfo& info)

@@ -25,6 +25,46 @@ using namespace clog;
 using namespace rootserver;
 
 namespace storage {
+int64_t ObPartitionSplitSourceLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version), K_(slave_read_ts), K_(spp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionSplitDestLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(split_version), K_(schema_version), K_(source_log_id), K_(source_log_ts), K_(spp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionSplitState::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), "state", to_state_str(state_), "save_state", to_state_str(save_state_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSplitLogCb::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), KP_(partition_service), K_(log_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionSplitInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(split_version), K_(schema_version), K_(source_log_id), K_(source_log_ts), K_(partition_pair),K_(split_type), K_(receive_split_ts));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ObPartitionSplitState, state_);
 OB_SERIALIZE_MEMBER(ObPartitionSplitSourceLog, schema_version_, spp_, slave_read_ts_);
 OB_SERIALIZE_MEMBER(ObPartitionSplitDestLog, split_version_, schema_version_, source_log_id_, source_log_ts_, spp_);

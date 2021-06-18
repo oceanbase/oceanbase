@@ -27,6 +27,14 @@
 namespace oceanbase {
 using namespace oceanbase::common;
 namespace archive {
+int64_t PreArchiveLinkedPGKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pg_key_), K(type_), K(epoch_), K(takeover_ts_), K(create_timestamp_), K(retry_times_));
+  J_OBJ_END();
+  return pos;
+}
 class ObArchivePGMgr::CheckArchiveRoundStartFunctor {
   public:
   CheckArchiveRoundStartFunctor(const int64_t archive_round, const int64_t incarnation)

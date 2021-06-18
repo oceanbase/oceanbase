@@ -25,6 +25,14 @@
 namespace oceanbase {
 using namespace lib;
 namespace common {
+int64_t ObKVCacheHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(mb_handle));
+  J_OBJ_END();
+  return pos;
+}
 ObKVCacheHandle::ObKVCacheHandle() : mb_handle_(NULL)
 {}
 

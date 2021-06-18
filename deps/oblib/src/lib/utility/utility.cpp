@@ -29,6 +29,22 @@
 namespace oceanbase {
 using namespace lib;
 namespace common {
+int64_t ObIntWarp::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(v));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTsWindows::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start), K_(base), K_(end));
+  J_OBJ_END();
+  return pos;
+}
 extern "C" {
 void do_breakpad_init() __attribute__((weak));
 void do_breakpad_init()

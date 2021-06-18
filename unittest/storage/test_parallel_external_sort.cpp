@@ -58,7 +58,14 @@ class TestItem {
     key_ = 0;
     value_.reset();
   }
-  TO_STRING_KV(K(key_), K(value_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(key_), K(value_));
+    J_OBJ_END();
+    return pos;
+  }
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   private:

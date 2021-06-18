@@ -50,7 +50,7 @@ class ObTableSchemaSpliter {
   struct MapItem {
     MapItem() : base_col_name_(), convert_func_(NULL)
     {}
-    TO_STRING_KV(K(base_col_name_), KP(convert_func_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     common::ObString base_col_name_;
     convert_func_t convert_func_;

@@ -23,6 +23,46 @@ using namespace storage;
 using namespace obrpc;
 using namespace clog;
 namespace extlog {
+int64_t SearchByTs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(start_ts_), K(err_), K(start_log_id_), K(start_log_ts_), K(min_greater_log_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SearchById::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(start_log_id_), K(err_), K(res_file_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SearchParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(type_), KP(map_allocator_), KP(info_allocator_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t Progress::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(total_), K(finished_), K(min_file_id_), K(max_file_id_), K(cur_file_id_), K(start_file_id_), K(break_file_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogExternalExecutorWithBreakpoint::Config::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(ilog_dir_), K(read_timeout_));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObLogExternalExecutorWithBreakpoint::init(const ObLogExternalExecutorWithBreakpoint::Config& config,
     ObILogEngine* log_engine, ObPartitionService* partition_service)

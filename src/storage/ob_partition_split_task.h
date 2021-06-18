@@ -31,7 +31,7 @@ class ObMultiVersionRowInfo;
 struct ObSSTableScheduleSplitParam {
   ObSSTableScheduleSplitParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(is_major_split), K_(frozen_version), K_(merge_version), K_(src_pkey), K_(dest_pkey), K_(index_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool is_major_split_;
   common::ObVersion frozen_version_;
@@ -83,9 +83,7 @@ struct ObSSTableSplitCtx {
   int64_t column_cnt_;
   memtable::ObIMemtableCtxFactory* mem_ctx_factory_;
   bool is_range_opt_;
-  TO_STRING_KV(K_(param), K_(tables_handle), K_(base_sstable_version), K_(concurrent_count), K_(checksum_method),
-      K_(schema_version), K_(split_schema_version), KP_(table_schema), KP_(split_table_schema), K_(split_handle),
-      K_(remain_handle), K_(split_cnt), K_(column_cnt), K_(is_range_opt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObSSTableSplitDag : public share::ObIDag {

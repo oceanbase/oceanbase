@@ -33,6 +33,22 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 namespace sql {
+int64_t InsertValueNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t InsertConditionNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_cnt));
+  J_OBJ_END();
+  return pos;
+}
 ObMultiTableInsertResolver::ObMultiTableInsertResolver(ObResolverParams& params) : ObInsertResolver(params)
 {}
 

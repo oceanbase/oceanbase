@@ -54,7 +54,7 @@ class ObTruncateTableStmt : public ObDDLStmt {
   {
     return truncate_table_arg_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(truncate_table_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   obrpc::ObTruncateTableArg truncate_table_arg_;

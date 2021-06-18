@@ -17,6 +17,46 @@
 namespace oceanbase {
 using namespace common;
 namespace blocksstable {
+int64_t ObBloomFilterCacheKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(macro_block_id), K_(file_id), K_(prefix_rowkey_len));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBloomFilterCacheValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(rowkey_column_cnt), K_(row_count), K_(bloom_filter), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEmptyReadCell::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(state), K_(count), K_(hashcode), K_(build_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBloomFilterCache::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(bf_cache_miss_count_threshold), KP_(buckets), K_(bucket_size), K_(bucket_magic));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBloomFilterCacheWriter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(need_build), K_(max_row_count), K_(bf_cache_value));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ----------------------------------------------------ObBloomFilterCacheKey--------------------------------------------------
  */

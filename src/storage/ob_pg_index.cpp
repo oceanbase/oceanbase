@@ -18,6 +18,14 @@ namespace oceanbase {
 using namespace common;
 using namespace share;
 namespace storage {
+int64_t ObPGKeyWrap::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObPGKeyWrap::init(const common::ObPGKey& pg_key)
 {

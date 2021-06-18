@@ -25,6 +25,30 @@ using namespace obrpc;
 using namespace clog;
 using namespace storage;
 namespace logservice {
+int64_t ObExtRpcQit::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(deadline_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SearchStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start_ts), K_(err), K_(start_log_id), K_(start_log_ts), K_(min_greater_log_id),K_(min_greater_log_ts), K_(finished));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SearchParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(map_allocator_));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObExtRpcQit::init(const int64_t deadline)
 {

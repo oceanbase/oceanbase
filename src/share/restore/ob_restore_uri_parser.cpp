@@ -23,6 +23,14 @@ using namespace oceanbase::share;
 using namespace oceanbase::rootserver;
 namespace oceanbase {
 namespace share {
+int64_t ObAgentBackupInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(backup_type), K_(base_data_version), K_(curr_data_version), K_(timestamp), K_(backup_result),K_(base_schema_version), K_(cluster_version));
+  J_OBJ_END();
+  return pos;
+}
 
 ObAgentBackupInfo::ObAgentBackupInfo()
     : backup_type_(-1),

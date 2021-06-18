@@ -124,7 +124,7 @@ struct ObSqlThrottleMetrics {
   ObSqlThrottleMetrics() : priority_(-1), rt_(-1), cpu_(-1), io_(-1), network_(-1), logical_reads_(-1), queue_time_(-1)
   {}
 
-  TO_STRING_KV(K_(priority), K_(rt), K_(cpu), K_(io), K_(network), K_(logical_reads), K_(queue_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // Forward declarations
@@ -426,13 +426,7 @@ class ObTenant : public share::ObTenantBase {
   void calibrate_worker_count();
   int timeup();
 
-  TO_STRING_KV(K_(id), K_(compat_mode), K_(unit_min_cpu), K_(unit_max_cpu), K_(slice), K_(slice_remain), K_(token_cnt),
-      K_(sug_token_cnt), K_(ass_token_cnt), K_(lq_tokens), K_(used_lq_tokens), K_(stopped), K_(idle_us),
-      K_(recv_hp_rpc_cnt), K_(recv_np_rpc_cnt), K_(recv_lp_rpc_cnt), K_(recv_mysql_cnt), K_(recv_task_cnt),
-      K_(recv_large_req_cnt), K_(tt_large_quries), K_(pop_normal_cnt), K_(actives), "workers", workers_.get_size(),
-      "nesting workers", nesting_workers_.get_size(), "lq waiting workers", lq_waiting_workers_.get_size(),
-      K_(req_queue), "large queued", large_req_queue_.size(), K_(multi_level_queue), K_(recv_level_rpc_cnt),
-      K_(group_map))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   public:
   static bool equal(const ObTenant* t1, const ObTenant* t2)
   {

@@ -25,6 +25,22 @@ using namespace storage;
 using namespace common;
 using namespace common::hash;
 namespace clog {
+int64_t PinnedMemory::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(pinned_memory_), K(size_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogStore::FrozenMemstore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(trigger_type_), K(memstore_), KP(memstore_), K(seq_));
+  J_OBJ_END();
+  return pos;
+}
 PinnedMemory::PinnedMemory() : pinned_memory_(NULL), size_(0), is_inited_(false)
 {}
 

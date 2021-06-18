@@ -69,7 +69,7 @@ class ObMsQueue {
   }
   bool next_is_ready(const int64_t queue_index) const;
 
-  TO_STRING_KV(K_(inited), K_(qlen), K_(qcount));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool inited_;

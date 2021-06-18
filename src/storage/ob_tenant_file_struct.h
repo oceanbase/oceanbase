@@ -39,7 +39,7 @@ struct ObTenantFileKey final {
   uint64_t hash() const;
   bool operator==(const ObTenantFileKey& other) const;
   bool operator!=(const ObTenantFileKey& other) const;
-  TO_STRING_KV(K_(tenant_id), K_(file_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
   int64_t file_id_;
   OB_UNIS_VERSION(1);
@@ -68,7 +68,7 @@ struct ObTenantFileSuperBlock final {
   {
     return TENANT_FILE_INIT == status_;
   }
-  TO_STRING_KV(K_(macro_meta_entry), K_(pg_meta_entry), K_(status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(TENANT_FILE_SUPER_BLOCK_VERSION_V1);
 
   public:
@@ -170,7 +170,7 @@ struct ObTenantFileValue final {
     reset();
   }
   void reset();
-  TO_STRING_KV(K_(file_info), K_(storage_file), KP_(info_file), K_(is_owner), K_(from_svr_ckpt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObTenantFileInfo file_info_;
   blocksstable::ObStorageFileWithRef storage_file_;
   blocksstable::ObStorageFile* info_file_;

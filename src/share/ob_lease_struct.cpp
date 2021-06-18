@@ -17,6 +17,54 @@
 namespace oceanbase {
 using namespace common;
 namespace share {
+int64_t ObServerResourceInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cpu), K_(mem_in_use), K_(mem_total), K_(disk_in_use), K_(disk_total), K_(partition_cnt),K_(report_cpu_assigned), K_(report_cpu_max_assigned), K_(report_mem_assigned), K_(report_mem_max_assigned));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaseRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(zone), K_(server), K_(inner_port), K_(build_version), K_(resource_info),K_(start_service_time), K_(current_server_time), K_(round_trip_time), K_(tenant_config_version),K_(request_lease_time), K_(ssl_key_expired_time), K_(timeout_partition));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaseResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(lease_expire_time), K_(lease_info_version), K_(frozen_version), K_(schema_version),K_(server_id), K_(frozen_status), K_(force_frozen_status), K_(rs_server_status),K_(global_max_decided_trans_version), K_(refresh_schema_info), K_(cluster_info), K_(server_service_status),K_(tenant_config_version), K_(baseline_schema_version), K_(heartbeat_expire_time), K_(sync_cluster_ids),K_(redo_options));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObInZoneHbRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObInZoneHbResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(in_zone_hb_expire_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObZoneLeaseInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(privilege_version), K_(config_version), K_(lease_info_version), K_(broadcast_version),K_(last_merged_version), K_(global_last_merged_version), K_(time_zone_info_version), K_(suspend_merging),K_(warm_up_start_time), K_(sys_var_version), K_(proposal_frozen_version));
+  J_OBJ_END();
+  return pos;
+}
 
 const char* server_service_status_to_str(const ServerServiceStatus status)
 {

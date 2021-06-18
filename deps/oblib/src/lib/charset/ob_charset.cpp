@@ -18,6 +18,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObStringScanner::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(str), K_(collation_type));
+  J_OBJ_END();
+  return pos;
+}
 
 // BEGIN displayed length {{{1
 // ref: https://www.cl.cam.ac.uk/~mgk25/ucs/wcwidth.c

@@ -30,7 +30,7 @@ struct ObPGCheckpointInfo final {
   }
   int assign(const ObPGCheckpointInfo& other);
   void reset();
-  TO_STRING_KV(K_(tables_handle), KP_(pg_meta_buf), K_(pg_meta_buf_len));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObTablesHandle tables_handle_;
   const char* pg_meta_buf_;
   int64_t pg_meta_buf_len_;

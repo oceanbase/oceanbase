@@ -140,7 +140,7 @@ class ObHandleList {
     {
       return ATOMIC_LOAD(&freeze_stat_) == ACTIVE;
     }
-    TO_STRING_KV(K_(freeze_stat), K_(id), K_(clock));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   ObHandleList() : id_(0), hazard_(INT64_MAX), total_count_(0)
   {}

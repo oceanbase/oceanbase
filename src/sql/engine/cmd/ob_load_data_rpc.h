@@ -137,7 +137,7 @@ struct ObInsertResult {
   int exec_ret_;
   ErrRowBitset failed_row_offset_;
   common::Ob2DArray<int> row_errors_;
-  TO_STRING_KV(K(exec_ret_), K(flags_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -180,7 +180,7 @@ struct ObInsertTask {
     return task_id_ == OB_INVALID_ID;
   }
 
-  TO_STRING_KV(K(tenant_id_), K(task_id_), K(row_count_), K(column_count_), K(insert_value_data_.count()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // serialized data:
   uint64_t tenant_id_;
@@ -248,7 +248,7 @@ struct ObShuffleTask {
   int64_t task_id_;
   ObRpcPointerArg<ObShuffleTaskHandle> shuffle_task_handle_;
   ObLoadDataGID gid_;
-  TO_STRING_KV(K(task_id_), K(gid_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -500,8 +500,7 @@ class ObLoadbuffer {
   {
     return error_codes_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(insert_column_num), K_(stored_row_cnt), K_(stored_pos), K_(task_id),
-      K_(part_id), K_(task_status), K_(insert_mode), K_(returned_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:
@@ -538,7 +537,7 @@ class ObLoadResult {
   ObLoadResult()
       : task_id_(-1), part_id_(common::OB_INVALID_PARTITION_ID), affected_rows_(0), failed_rows_(0), task_flags_(false)
   {}
-  TO_STRING_KV(K_(task_id), K_(part_id), K_(affected_rows), K_(failed_rows), K_(task_flags));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t task_id_;
   int64_t part_id_;
   int64_t affected_rows_;

@@ -78,8 +78,7 @@ class ObQueryIteratorConsumer {
     }
     consumer_num_ = valid_consume_num;
   }
-  TO_STRING_KV(
-      "consumers", ObArrayWrap<int64_t>(consumer_iters_, consumer_num_), K_(consumer_num), K_(base_sstable_iter_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t consumer_iters_[common::MAX_TABLE_CNT_IN_STORAGE];

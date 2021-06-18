@@ -68,7 +68,14 @@ class ObAlterOutlineStmt : public ObDDLStmt {
   {
     return alter_outline_arg_;
   }
-  TO_STRING_KV(K_(alter_outline_arg), K_(outline_stmt));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(alter_outline_arg), K_(outline_stmt));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   obrpc::ObAlterOutlineArg alter_outline_arg_;

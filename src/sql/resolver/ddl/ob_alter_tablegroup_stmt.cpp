@@ -17,6 +17,14 @@ namespace oceanbase {
 using namespace share::schema;
 
 namespace sql {
+int64_t ObAlterTablegroupStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(alter_tablegroup_arg));
+  J_OBJ_END();
+  return pos;
+}
 
 ObAlterTablegroupStmt::ObAlterTablegroupStmt(common::ObIAllocator* name_pool)
     : ObTablegroupStmt(name_pool, stmt::T_ALTER_TABLEGROUP)

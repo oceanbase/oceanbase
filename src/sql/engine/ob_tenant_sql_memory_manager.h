@@ -263,7 +263,7 @@ class ObSqlWorkAreaProfile : public common::ObDLinkBase<ObSqlWorkAreaProfile> {
     return profiled;
   }
 
-  TO_STRING_KV(K_(random_id), K_(type), K_(op_id), K_(cache_size), K_(one_pass_size), K_(expect_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   static const int64_t MIN_BOUND_SIZE[ObSqlWorkAreaType::MAX_TYPE];
@@ -374,7 +374,7 @@ class ObSqlWorkAreaStat {
       return plan_id_ == other.plan_id_ && operator_id_ == other.operator_id_ &&
              0 == MEMCMP(sql_id_, other.sql_id_, strlen(sql_id_));
     }
-    TO_STRING_KV(K_(sql_id), K_(plan_id), K_(operator_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];  // sql id
@@ -490,7 +490,7 @@ class ObSqlWorkAreaStat {
     ATOMIC_AAF(&multipass_executions_, 1);
   }
 
-  TO_STRING_KV(K_(workarea_key), K_(op_type), K_(seqno));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int64_t seqno_;
@@ -540,7 +540,7 @@ class ObSqlWorkareaProfileInfo {
     }
   }
 
-  TO_STRING_KV(K_(sql_id), K_(plan_id), K_(sql_exec_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   sql::ObSqlWorkAreaProfile profile_;
@@ -734,7 +734,7 @@ class ObWorkareaHistogram {
     ATOMIC_AAF(&total_executions_, 1);
   }
 
-  TO_STRING_KV(K_(low_optimal_size), K_(high_optimal_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t low_optimal_size_;
@@ -766,7 +766,7 @@ class ObSqlMemoryList {
   {
     return lock_;
   }
-  TO_STRING_KV(K_(seqno));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t seqno_;

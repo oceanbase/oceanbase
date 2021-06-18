@@ -58,7 +58,7 @@ class BigTransCallbackTask : public ObTransTask {
     return ctx_;
   }
   bool is_valid() const;
-  TO_STRING_KV(KP(this), K_(partition), K_(log_type), K_(log_id), K_(log_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey partition_;

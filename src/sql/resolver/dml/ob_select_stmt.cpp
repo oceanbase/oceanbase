@@ -1576,3 +1576,51 @@ bool ObSelectStmt::is_expr_in_multi_rollup_items(const ObRawExpr* expr) const
   }
   return is_true;
 }
+int64_t ObSelectStmt::ObShowStmtCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_from_show_stmt), K_(global_scope), K_(tenant_id), K_(show_database_id), K_(show_table_id),K_(grants_user_id), K_(show_seed));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGroupingSetsItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("grouping sets exprs", grouping_sets_exprs_, K_(multi_rollup_items));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMultiRollupItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("rollup list exprs", rollup_list_exprs_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGroupbyExpr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("grouping sets groupby expr", groupby_exprs_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSelectIntoItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(into_type), K_(outfile_name), K_(filed_str), K_(line_str), K_(closed_cht), K_(is_optional));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SelectItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_EXPR, expr_, N_IS_ALIAS, is_real_alias_, N_ALIAS_NAME, alias_name_, N_EXPR_NAME, expr_name_, N_DEFAULT,default_value_, K_(paramed_alias_name), K_(questions_pos), K_(params_idx), K_(esc_str_flag),K_(need_check_dup_name), K_(implicit_filled), K_(is_unpivot_mocked_column), K_(is_hidden_rowid));
+  J_OBJ_END();
+  return pos;
+}

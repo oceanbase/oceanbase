@@ -29,6 +29,14 @@ using namespace oceanbase::share;
 
 namespace oceanbase {
 namespace rootserver {
+int64_t ObPartitionValidate::ObBackupSetPGTaskList::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(backup_set_id));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObBackupValidateLoadBalancer::init(rootserver::ObServerManager& server_mgr, rootserver::ObZoneManager& zone_mgr)
 {

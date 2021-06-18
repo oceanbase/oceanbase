@@ -32,8 +32,7 @@ struct ObReadParam {
   ~ObReadParam();
   void reset();
   void shallow_copy(const ObReadParam& new_param);
-  TO_STRING_KV(N_FILE_ID, file_id_, N_OFFSET, offset_, N_PARTITION_KEY, partition_key_, N_LOG_ID, log_id_, N_READ_LEN,
-      read_len_, N_TIMEOUT, timeout_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   static const int64_t OB_TIMEOUT = 10000000;  // 10s
@@ -46,7 +45,7 @@ struct ObReadRes {
   ObReadRes();
   ~ObReadRes();
   void reset();
-  TO_STRING_KV(KP(buf_), K(data_len_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObReadBuf {
@@ -70,7 +69,7 @@ struct ObReadBuf {
   {
     return !(reinterpret_cast<int64_t>(buf_) & (CLOG_DIO_ALIGN_SIZE - 1));
   }
-  TO_STRING_KV(KP(buf_), K(buf_len_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   char* buf_;

@@ -64,7 +64,7 @@ class ObWarmUpCtx {
   {
     return ATOMIC_SAF(&ref_cnt_, 1);
   }
-  TO_STRING_KV(K_(request_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   const static int64_t MAX_WARM_UP_REQUESTS_SIZE = 32 * 1024;
@@ -96,7 +96,7 @@ class ObSendWarmUpTask : public common::IObDedupTask {
     return 0;
   }
   virtual int process();
-  TO_STRING_KV(K_(warm_ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   const static int64_t TASK_EXPIRE_TIME = 1000 * 1000;  // 1s

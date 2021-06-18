@@ -96,8 +96,7 @@ struct ObTransAuditStmtInfo {
     lock_for_read_retry_count_ = -1;
   }
 
-  TO_STRING_KV(K_(sql_no), K_(phy_plan_type), K_(trace_id), K_(proxy_receive_us), K_(server_receive_us),
-      K_(trans_receive_us), K_(trans_execute_us), K_(lock_for_read_retry_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObSimpleIterator<ObTransAuditStmtInfo, common::ObModIds::OB_TRANS_VIRTUAL_TABLE_TRANS_STAT, 16>

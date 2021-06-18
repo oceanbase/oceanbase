@@ -51,7 +51,7 @@ class ObFreezeInfoSnapshotMgr {
       freeze_ts = -1;
       cluster_version = 0;
     }
-    TO_STRING_KV(K(freeze_version), K(freeze_ts), K(cluster_version));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct FreezeInfo {
@@ -76,7 +76,7 @@ class ObFreezeInfoSnapshotMgr {
       schema_version = -1;
       cluster_version = 0;
     }
-    TO_STRING_KV(K(freeze_version), K(freeze_ts), K(schema_version), K(cluster_version));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct GCSnapshotInfo {
@@ -87,7 +87,7 @@ class ObFreezeInfoSnapshotMgr {
     {}
     GCSnapshotInfo(int64_t ts, int64_t version) : snapshot_ts(ts), schema_version(version)
     {}
-    TO_STRING_KV(K(snapshot_ts), K(schema_version));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct NeighbourFreezeInfoLite {
@@ -99,7 +99,7 @@ class ObFreezeInfoSnapshotMgr {
       next.reset();
       prev.reset();
     }
-    TO_STRING_KV(K(next), K(prev));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct NeighbourFreezeInfo {
@@ -117,7 +117,7 @@ class ObFreezeInfoSnapshotMgr {
       next.reset();
       prev.reset();
     }
-    TO_STRING_KV(K(next), K(prev));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct SchemaPair {
@@ -129,7 +129,7 @@ class ObFreezeInfoSnapshotMgr {
     SchemaPair(uint64_t tenant, int64_t schema) : tenant_id(tenant), schema_version(schema)
     {}
 
-    TO_STRING_KV(K(tenant_id), K(schema_version));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   int init(common::ObISQLClient& sql_proxy, bool is_remote);
@@ -327,7 +327,7 @@ class ObFreezeInfoSnapshotMgr {
         schema_version = schema;
       }
 
-      TO_STRING_KV(K(tenant_id), K(freeze_version), K(schema_version));
+      int64_t to_string(char* buf, const int64_t buf_len) const;
     };
 
     void insert(schema_node* p);

@@ -33,6 +33,22 @@ using namespace memtable;
 using namespace observer;
 
 namespace transaction {
+int64_t ObELRStatSummary::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(with_dependency_trx_count), K_(without_dependency_trx_count), K_(end_trans_by_prev_count),K_(end_trans_by_checkpoint_count), K_(end_trans_by_self_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionTransCtxMgr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(partition), K_(state), K_(ctx_type), K_(read_only_count), K_(active_read_write_count),K_(total_ctx_count), K_(restore_snapshot_version), K_(last_restore_log_id), "uref",((ObTransCtxType::SCHEDULER == ctx_type_ || !is_inited_) ? -1 : get_uref()));
+  J_OBJ_END();
+  return pos;
+}
 int ObPartitionTransCtxMgr::init_trans_result_info_mgr_()
 {
   int ret = OB_SUCCESS;

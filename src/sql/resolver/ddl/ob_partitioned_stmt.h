@@ -46,8 +46,14 @@ class ObPartitionedStmt : public ObDDLStmt {
     return individual_subpart_values_exprs_;
   }
 
-  TO_STRING_KV(K_(part_fun_exprs), K_(part_values_exprs), K_(subpart_fun_exprs), K_(template_subpart_values_exprs),
-      K_(individual_subpart_values_exprs));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(part_fun_exprs), K_(part_values_exprs), K_(subpart_fun_exprs), K_(template_subpart_values_exprs),K_(individual_subpart_values_exprs));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   /**

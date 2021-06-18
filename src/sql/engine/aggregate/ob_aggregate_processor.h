@@ -349,7 +349,7 @@ class ObAggregateProcessor {
       destroy();
     }
 
-    TO_STRING_KV(K_(n_cells));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     inline void destroy()
     {
       for (int64_t i = 0; i < n_cells_; ++i) {
@@ -523,7 +523,7 @@ class ObGroupRowItem {
     return *reinterpret_cast<ObGroupRowItem**>(&next_);
   };
 
-  TO_STRING_KV(K_(group_id), KPC_(group_row), K_(groupby_datums_hash), KP_(group_exprs), KP_(next));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int64_t group_id_;

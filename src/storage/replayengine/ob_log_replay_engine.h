@@ -109,7 +109,7 @@ class ObLogReplayEngine : public ObILogReplayEngine, public lib::TGTaskHandler {
       tenant_id_ = common::OB_INVALID_ID;
       thread_idx_ = common::OB_INVALID_ID;
     }
-    TO_STRING_KV(K_(tenant_id), K_(thread_idx));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     uint64_t tenant_id_;
@@ -129,7 +129,7 @@ class ObLogReplayEngine : public ObILogReplayEngine, public lib::TGTaskHandler {
     {
       end_ts_ = 0;
     }
-    TO_STRING_KV(K(end_ts_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     union {

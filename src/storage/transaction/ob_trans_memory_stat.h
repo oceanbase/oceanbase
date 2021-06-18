@@ -45,7 +45,7 @@ class ObTransMemoryStat {
     return release_count_;
   }
 
-  TO_STRING_KV(K_(addr), "type", type_, K_(alloc_count), K_(release_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   static const int64_t OB_TRANS_MEMORY_MOD_TYPE_SIZE = 64;

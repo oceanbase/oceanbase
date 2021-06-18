@@ -963,3 +963,75 @@ const ObPhysicalPlan* ObDfo::get_plan_by_root()
   }
   return plan;
 }
+int64_t ObPxRpcInitSqcResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rc), K_(reserved_thread_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxRpcInitTaskResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_co_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxRpcInitTaskArgs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(qc_id), K_(dfo_id), K_(sqc_id), K_(task_id), K_(execution_id), K_(sqc_ch_info), K_(task_ch_info),K_(sqc_addr), K_(exec_addr), K_(qc_addr), K_(rc), K_(task_co_id), K_(px_int_id), K_(is_fulltree),K_(affected_rows), K_(dml_row_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxRpcInitSqcArgs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sqc));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(execution_id), K_(dfo_id), K_(is_active), K_(is_scheduled), K_(thread_inited), K_(thread_finish),K_(dop), K_(assigned_worker_cnt), K_(used_worker_cnt), K_(is_single), K_(is_root_dfo), K_(is_fulltree),K_(has_scan), K_(sqcs), KP_(depend_sibling), KP_(parent), "child", get_child_count(), K_(slave_mapping_type),K_(dist_method));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxSqcMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr), K_(qc_ch_info),K_(sqc_ch_info), K_(task_count), K_(max_task_count), K_(min_task_count), K_(thread_inited), K_(thread_finish),K_(px_int_id), K_(is_fulltree), K_(is_rpc_worker), K_(transmit_use_interm_result), K_(recieve_use_interm_result),K(interm_result_ids_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxSqcMeta::PartitionIdValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_id), K_(location_idx), K_(value_begin_idx), K_(value_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxTaskMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(exec_addr), K_(sqc_id), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}

@@ -23,6 +23,38 @@ namespace oceanbase {
 using namespace storage;
 
 namespace transaction {
+int64_t ObDupTableLeaseInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(lease_expired_ts), K_(cur_log_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDupTableLeaseInfoStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), K_(lease_expired_ts), K_(cur_log_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t PrintDupTableLeaseHashMapFunctor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(lease_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDupTableRedoSyncTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_id), K_(partition), K_(log_id), K_(task_type), K_(log_type), K_(timestamp),K_(last_generate_mask_set_ts), K_(is_mask_set_ready));
+  J_OBJ_END();
+  return pos;
+}
 typedef ObRedoLogSyncResponseMsg::ObRedoLogSyncResponseStatus ObRedoLogSyncResponseStatus;
 typedef ObDupTableLeaseResponseMsg::ObDupTableLeaseStatus ObDupTableLeaseStatus;
 

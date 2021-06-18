@@ -66,8 +66,7 @@ struct ObPGCreateSSTableParam final {
   ~ObPGCreateSSTableParam() = default;
   bool is_valid() const;
   int assign(const ObPGCreateSSTableParam& other);
-  TO_STRING_KV(KP_(with_partition_param), KP_(with_table_param), KP_(table_key), KP_(meta), K_(data_blocks),
-      K_(lob_blocks), KP_(bloomfilter_block), KP_(sstable_merge_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObCreateSSTableParamWithPartition* with_partition_param_;
   ObCreateSSTableParamWithTable* with_table_param_;
   ObITable::TableKey* table_key_;
@@ -394,7 +393,7 @@ class ObPGStorage {
   int get_backup_partition_meta_data(const ObPartitionKey& pkey, const int64_t snapshot_version,
       ObPGPartitionStoreMeta& partition_store_meta, ObTablesHandle& handle);
 
-  TO_STRING_KV(KP(this), K_(pkey), KP_(meta), K_(log_seq_num), K_(last_freeze_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   class GetPGPartitionCountFunctor {
@@ -516,7 +515,7 @@ class ObPGStorage {
     {}
     SerializePair() : buf_(nullptr), size_(0)
     {}
-    TO_STRING_KV(KP_(buf), K_(size));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     char* buf_;
     int64_t size_;
   };

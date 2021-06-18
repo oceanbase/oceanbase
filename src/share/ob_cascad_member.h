@@ -51,7 +51,7 @@ class ObCascadMember {
   friend bool operator<(const ObCascadMember& lhs, const ObCascadMember& rhs);
   ObCascadMember& operator=(const ObCascadMember& rhs);
 
-  TO_STRING_KV(K_(server), K_(cluster_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   TO_YSON_KV(Y_(server), OB_ID(cluster_id), cluster_id_);
 
   protected:

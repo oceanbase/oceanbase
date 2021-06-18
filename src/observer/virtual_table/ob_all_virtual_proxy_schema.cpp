@@ -36,6 +36,14 @@ using namespace oceanbase::storage;
 
 namespace oceanbase {
 namespace observer {
+int64_t ObAllVirtualProxySchema::ObTenantServer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(virtual_partition_id), K_(location));
+  J_OBJ_END();
+  return pos;
+}
 
 ObAllVirtualProxySchema::ObAllVirtualProxySchema()
     : ObVirtualTableIterator(),

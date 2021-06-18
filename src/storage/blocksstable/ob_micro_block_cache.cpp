@@ -22,6 +22,54 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace blocksstable {
+int64_t ObMicroBlockCacheKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(block_id), K_(file_id), K_(offset), K_(size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockCacheValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_data));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockBufferHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(handle), KP_(micro_block));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMultiBlockIOCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(micro_block_infos_), KP(hit_cache_bitmap_), K_(block_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIMicroBlockCache::ObMicroBlockIOCallback::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(micro_block));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIMicroBlockCache::ObMultiBlockIOCallback::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(&io_result));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * -----------------------------------------------------ObMicroBlockCacheKey--------------------------------------------------
  */

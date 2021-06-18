@@ -43,7 +43,7 @@ class ObCascadMemberList {
   bool member_addr_equal(const ObCascadMemberList& member_list) const;
   int deep_copy(const common::ObMemberList& member_list, const int64_t dst_cluster_id);
   int deep_copy(const ObCascadMemberList& member_list);
-  TO_STRING_KV(K(member_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   typedef common::ObSEArray<ObCascadMember, 1> ObCascadMemberArray;

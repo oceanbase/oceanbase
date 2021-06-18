@@ -47,6 +47,14 @@ using namespace share;
 using namespace share::schema;
 using namespace obrpc;
 namespace rootserver {
+int64_t ObBalancerTargetSchemaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_schema_versions));
+  J_OBJ_END();
+  return pos;
+}
 using namespace balancer;
 
 int64_t ObRootBalanceIdling::get_idle_interval_us()

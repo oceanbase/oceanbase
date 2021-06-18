@@ -138,7 +138,7 @@ class ObGtsSource : public ObITsSource {
   {
     return refresh_gts_location_();
   }
-  TO_STRING_KV(K_(tenant_id), K_(gts_pkey), K_(gts_local_cache), K_(server));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int generate_gts_pkey_();

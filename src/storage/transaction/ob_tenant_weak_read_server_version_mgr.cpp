@@ -18,6 +18,30 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace transaction {
+int64_t ObTenantWeakReadServerVersionMgr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server_version), K_(server_version_for_stat));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantWeakReadServerVersionMgr::ServerVersion::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(total_part_count), K_(valid_inner_part_count), K_(valid_user_part_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantWeakReadServerVersionMgr::ServerVersionInner::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(total_part_count), K_(valid_inner_part_count), K_(valid_user_part_count), K_(epoch_tstamp));
+  J_OBJ_END();
+  return pos;
+}
 
 ObTenantWeakReadServerVersionMgr::ObTenantWeakReadServerVersionMgr()
     : server_version_(), rwlock_(), server_version_for_stat_()

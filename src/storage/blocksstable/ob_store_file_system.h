@@ -63,7 +63,7 @@ struct ObServerWorkingDir {
     return DirStatus::NORMAL == status_;
   }
 
-  TO_STRING_KV(K(svr_addr_), K(start_ts_), K(status_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObAddr svr_addr_;
@@ -108,7 +108,7 @@ struct ObStorageFileWithRef final {
   void inc_ref();
   void dec_ref();
   int64_t get_ref();
-  TO_STRING_KV(K_(ref_cnt), K_(file));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t ref_cnt_;
   blocksstable::ObStorageFile* file_;
 };
@@ -128,7 +128,7 @@ struct ObStorageFileHandle final {
   {
     return nullptr == file_with_ref_ ? nullptr : file_with_ref_->file_;
   }
-  TO_STRING_KV(KP_(file_with_ref));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObStorageFileWithRef* file_with_ref_;
 };
 
@@ -145,7 +145,7 @@ struct ObStorageFilesHandle final {
   {
     return file_array_.count();
   }
-  TO_STRING_KV(K_(file_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   FileArray file_array_;
@@ -229,7 +229,7 @@ class ObStorageFile {
       ref_cnt_ = 0;
       access_time_ = 0;
     }
-    TO_STRING_KV(K_(ref_cnt), K_(access_time));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   typedef common::ObLinearHashMap<MacroBlockId, BlockInfo> MacroBlockInfo;
@@ -277,8 +277,7 @@ struct ObStoreFileWriteInfo {
   {
     return NULL != reuse_block_ctx_;
   }
-  TO_STRING_KV(
-      K_(block_id), KP_(buf), K_(size), K_(io_desc), KP_(io_callback), K_(ctx), K_(reuse_block_ctx), KP_(store_file));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObStoreFileReadInfo {
@@ -293,7 +292,7 @@ struct ObStoreFileReadInfo {
       : macro_block_ctx_(NULL), offset_(0), size_(0), io_desc_(), io_callback_(NULL), store_file_(nullptr)
   {}
   OB_INLINE bool is_valid() const;
-  TO_STRING_KV(K_(offset), K_(size), K_(io_desc), KP_(io_callback), K_(macro_block_ctx), KP_(store_file));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObDiskStat final {
@@ -306,7 +305,7 @@ struct ObDiskStat final {
   char alias_name_[common::MAX_PATH_SIZE];
 
   ObDiskStat();
-  TO_STRING_KV(K_(disk_idx), K_(install_seq), K_(create_ts), K_(finish_ts), K_(percent), K_(status), K_(alias_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObDiskStats final {
@@ -316,7 +315,7 @@ struct ObDiskStats final {
 
   ObDiskStats();
   void reset();
-  TO_STRING_KV(K_(data_num), K_(parity_num), K_(disk_stats));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObStoreFileSystem {
@@ -438,7 +437,14 @@ class ObStorageFileAllocator final {
   int alloc_file(STORAGE_FILE*& file);
   int free_file(STORAGE_FILE*& file);
 
-  TO_STRING_KV(K(free_file_cnt_), K(used_file_cnt_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(free_file_cnt_), K(used_file_cnt_));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   static const int64_t MAX_FILE_CNT = 30000;

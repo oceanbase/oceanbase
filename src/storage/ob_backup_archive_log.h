@@ -41,7 +41,7 @@ struct ObBackupArchiveLogPGCtx {
   int open(ObMigrateCtx& mig_ctx, const common::ObPGKey& pg_key, common::ObInOutBandwidthThrottle& throttle);
   int close();
 
-  TO_STRING_KV(K_(pg_key), K_(src_backup_dest), K_(src_storage_info), K_(dst_backup_dest), K_(dst_storage_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool is_opened_;
   common::ObPGKey pg_key_;
@@ -73,7 +73,7 @@ class ObBackupArchiveLogPGTask : public share::ObITask {
       min_round_ = OB_INVALID_ID;
       max_round_ = OB_INVALID_ID;
     }
-    TO_STRING_KV(K_(min_round), K_(max_round));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     uint64_t min_round_;
     uint64_t max_round_;
   };
@@ -89,14 +89,14 @@ class ObBackupArchiveLogPGTask : public share::ObITask {
       min_file_id_ = OB_INVALID_ID;
       max_file_id_ = OB_INVALID_ID;
     }
-    TO_STRING_KV(K_(min_file_id), K_(max_file_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     uint64_t min_file_id_;
     uint64_t max_file_id_;
   };
   struct FileInfo {
     FileInfo()
     {}
-    TO_STRING_KV(K_(uri), K_(info));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObString uri_;
     common::ObString info_;
     char dest_path_[share::OB_MAX_BACKUP_PATH_LENGTH];             // under line storage for uri_

@@ -44,7 +44,7 @@ struct ObEstRowCountRecord {
   common::ObVersionRange version_range_;
   int64_t logical_row_count_;
   int64_t physical_row_count_;
-  TO_STRING_KV(K_(table_id), K_(table_type), K_(version_range), K_(logical_row_count), K_(physical_row_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -83,7 +83,7 @@ struct SampleInfo {
   SampleScope scope_;
   double percent_;  // valid value: [0.000001, 100)
   int64_t seed_;    // valid value: [0, 4294967296], -1 stands for random seed
-  TO_STRING_KV(K_(method), K_(percent), K_(seed), K_(table_id), K_(scope));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -96,7 +96,7 @@ struct ObLimitParam {
   }
   ObLimitParam() : offset_(0), limit_(-1)
   {}
-  TO_STRING_KV("offset_", offset_, "limit_", limit_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -155,9 +155,7 @@ struct ObTableScanStatistic {
     block_cache_hit_cnt_ = 0;
     block_cache_miss_cnt_ = 0;
   }
-  TO_STRING_KV(K_(access_row_cnt), K_(out_row_cnt), K_(bf_filter_cnt), K_(bf_access_cnt), K_(empty_read_cnt),
-      K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(fuse_row_cache_hit_cnt), K_(fuse_row_cache_miss_cnt),
-      K_(rowkey_prefix));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 static const int64_t OB_DEFAULT_FILTER_EXPR_COUNT = 4;
@@ -316,12 +314,7 @@ class ObVTableScanParam {
     call_dtor(schema_guard_);
   }
 
-  TO_STRING_KV(N_KEY, pkey_, N_PG_KEY, pg_key_, N_COLUMN_IDS, column_ids_, N_INDEX_ID, index_id_, N_KEY_RANGES,
-      key_ranges_, N_TIMEOUT, timeout_, N_SCAN_FLAG, scan_flag_, N_SQL_MODE, sql_mode_, N_RESERVED_CELL_COUNT,
-      reserved_cell_count_, N_SCHEMA_VERSION, schema_version_, N_QUERY_BEGIN_SCHEMA_VERSION,
-      query_begin_schema_version_, N_FILTER_EXPRS, filters_, N_INDEX_FILTER_EXPRS, filters_before_index_back_,
-      N_LIMIT_OFFSET, limit_param_, N_FOR_UPDATE, for_update_, N_WAIT, for_update_wait_timeout_, N_FROZEN_VERSION,
-      frozen_version_, K_(is_get));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   // New schema, used throughout the life cycle of table_scan

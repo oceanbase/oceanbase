@@ -31,8 +31,7 @@ struct ObMultiVersionSSTableMergeInfo final {
   ~ObMultiVersionSSTableMergeInfo() = default;
   int add(const ObMultiVersionSSTableMergeInfo& info);
   void reset();
-  TO_STRING_KV(K_(delete_logic_row_count), K_(update_logic_row_count), K_(insert_logic_row_count),
-      K_(empty_delete_logic_row_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t delete_logic_row_count_;
@@ -52,14 +51,7 @@ struct ObSSTableMergeInfo final {
   }
   void dump_info(const char* msg);
   void reset();
-  TO_STRING_KV("tenant_id", extract_tenant_id(table_id_), K_(table_id), K_(partition_id), K_(version), K_(table_type),
-      K_(major_table_id), K_(table_count), K_(merge_start_time), K_(merge_finish_time), K_(merge_cost_time),
-      K_(estimate_cost_time), K_(occupy_size), K_(macro_block_count), K_(use_old_macro_block_count),
-      K_(total_row_count), K_(delete_row_count), K_(insert_row_count), K_(update_row_count), K_(base_row_count),
-      K_(use_base_row_count), K_(memtable_row_count), K_(output_row_count), K_(purged_row_count), K_(merge_level),
-      K_(rewrite_macro_old_micro_block_count), K_(rewrite_macro_total_micro_block_count), K_(error_code),
-      K_(total_child_task), K_(finish_child_task), K_(is_complement), K_(merge_type), K_(step_merge_start_version),
-      K_(step_merge_end_version), K_(macro_bloomfilter_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t table_id_;
@@ -142,9 +134,7 @@ struct ObCreateSSTableParam {
                logical_data_version_ >= table_key_.trans_version_range_.snapshot_version_);
   }
   int assign(const ObCreateSSTableParam& other);
-  TO_STRING_KV(K_(table_key), K_(schema_version), K_(progressive_merge_start_version),
-      K_(progressive_merge_end_version), K_(create_snapshot_version), K_(dump_memtable_timestamp), K_(checksum_method),
-      K_(progressive_merge_round), K_(progressive_merge_step), K_(logical_data_version), K_(has_compact_row));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObITable::TableKey table_key_;
   int64_t schema_version_;
   int64_t progressive_merge_start_version_;
@@ -169,9 +159,7 @@ struct ObCreateSSTableParamWithTable final : public ObCreateSSTableParam {
   {
     return ObCreateSSTableParam::is_valid() && NULL != schema_;
   }
-  TO_STRING_KV(K_(table_key), KP_(schema), K_(schema_version), K_(progressive_merge_start_version),
-      K_(progressive_merge_end_version), K_(create_snapshot_version), K_(checksum_method), K_(progressive_merge_round),
-      K_(progressive_merge_step), K_(logical_data_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   const share::schema::ObTableSchema* schema_;
@@ -191,9 +179,7 @@ struct ObCreateSSTableParamWithPartition final : public ObCreateSSTableParam {
   {
     return is_inited_ && ObCreateSSTableParam::is_valid() && NULL != schema_ && schema_->is_valid();
   }
-  TO_STRING_KV(K_(is_inited), K_(table_key), KP(schema_), K_(schema_version), K_(progressive_merge_start_version),
-      K_(progressive_merge_end_version), K_(create_snapshot_version), K_(checksum_method), K_(progressive_merge_round),
-      K_(progressive_merge_step), K_(logical_data_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   const ObCreatePartitionMeta* schema_;

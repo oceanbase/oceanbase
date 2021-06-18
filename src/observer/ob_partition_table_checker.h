@@ -65,7 +65,7 @@ class ObCheckPartitionTableTask : public common::IObDedupTask {
   }
   virtual int process();
 
-  TO_STRING_KV("pt_checker", reinterpret_cast<int64_t>(&pt_checker_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObPartitionTableChecker& pt_checker_;
@@ -89,7 +89,7 @@ class ObCheckDanglingReplicaTask : public common::IObDedupTask {
   }
   virtual int process();
 
-  TO_STRING_KV("pt_checker", reinterpret_cast<int64_t>(&pt_checker_), K_(version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObPartitionTableChecker& pt_checker_;

@@ -38,7 +38,7 @@ class ObLobMergeWriter {
   {
     return block_write_ctx_;
   }
-  TO_STRING_KV(K_(orig_lob_macro_blocks), K_(block_write_ctx), K_(macro_start_seq), K_(use_old_macro_block_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   static const int64_t DEFAULT_MACRO_BLOCK_NUM = 256;

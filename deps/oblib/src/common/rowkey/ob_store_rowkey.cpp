@@ -18,6 +18,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObExtStoreRowkey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(store_rowkey), K_(collation_free_store_rowkey), K_(range_cut_pos), K_(range_check_min), K_(range_array_idx));
+  J_OBJ_END();
+  return pos;
+}
 ObObj ObStoreRowkey::MIN_OBJECT = ObObj::make_min_obj();
 ObObj ObStoreRowkey::MAX_OBJECT = ObObj::make_max_obj();
 

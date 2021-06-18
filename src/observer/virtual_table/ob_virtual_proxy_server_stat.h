@@ -45,8 +45,7 @@ class ObVirtualProxyServerStat : public common::ObVirtualTableProjector {
     {}
     bool is_valid() const;
     void reset();
-    TO_STRING_KV(K_(svr_ip_buf), K_(svr_ip_len), K_(svr_port), K_(zone_name_buf), K_(zone_name_len), K_(status_buf),
-        K_(status_len), K_(start_service_time), K_(stop_time));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     char svr_ip_buf_[common::MAX_IP_ADDR_LENGTH + 1];
     int64_t svr_ip_len_;

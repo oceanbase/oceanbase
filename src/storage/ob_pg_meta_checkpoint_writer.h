@@ -33,7 +33,7 @@ class ObPGMetaItem : public ObIPGMetaItem {
   {
     return nullptr != buf_;
   }
-  TO_STRING_KV(KP_(buf), K_(buf_len));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   const char* buf_;

@@ -44,7 +44,7 @@ struct ObMacroBlockInfo {
   int64_t access_time_;
   ObMacroBlockInfo() : ref_cnt_(0), write_seq_(0), is_free_(false), access_time_(0)
   {}
-  TO_STRING_KV(K_(ref_cnt), K_(write_seq), K_(is_free), K_(access_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMacroBlockWriteInfo {
@@ -62,7 +62,7 @@ struct ObMacroBlockWriteInfo {
   {
     return NULL != reuse_block_ctx_;
   }
-  TO_STRING_KV(KP_(buffer), K_(meta), K_(size), K_(io_desc), K_(block_write_ctx), K_(reuse_block_ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMacroBlockReadInfo {
@@ -74,7 +74,7 @@ struct ObMacroBlockReadInfo {
   ObMacroBlockReadInfo() : macro_block_ctx_(NULL), offset_(), size_(), io_desc_(), io_callback_(NULL)
   {}
   OB_INLINE bool is_valid() const;
-  TO_STRING_KV(K_(offset), K_(size), K_(io_desc), KP_(io_callback), K_(macro_block_ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObMacroBlocksHandle {
@@ -109,8 +109,7 @@ class ObMacroBlocksHandle {
   {
     return file_;
   }
-  TO_STRING_KV(K_(macro_id_list), "tenant_id", nullptr == file_ ? 0 : file_->get_tenant_id(), "file_id",
-      nullptr == file_ ? 0 : file_->get_file_id());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObArray<MacroBlockId> macro_id_list_;
@@ -161,7 +160,7 @@ class ObMacroBlockHandle {
   {
     block_write_ctx_ = block_write_ctx;
   }
-  TO_STRING_KV(K_(macro_id), K_(io_handle), KP_(block_write_ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   MacroBlockId macro_id_;
@@ -203,7 +202,7 @@ class ObMacroBlockHandleV1 {
   {
     return io_handle_;
   }
-  TO_STRING_KV(K_(macro_id), K_(io_handle));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   MacroBlockId macro_id_;
@@ -229,7 +228,7 @@ struct ObBadBlockInfo {
   {
     MEMSET(this, 0, sizeof(*this));
   }
-  TO_STRING_KV(K(disk_id_), K(macro_block_id_), K(error_type_), K(store_file_path_), K(error_msg_), K(check_time_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int64_t disk_id_;

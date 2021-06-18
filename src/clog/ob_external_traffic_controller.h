@@ -105,9 +105,14 @@ class ObExtTrafficController {
   }
 
   // to_string function
-  TO_STRING_KV("last_limit_ts_", ATOMIC_LOAD(&last_limit_ts_), "traffic_size_", ATOMIC_LOAD(&traffic_size_),
-      "read_clog_disk_count_", ATOMIC_LOAD(&read_clog_disk_count_), "read_ilog_disk_count_",
-      ATOMIC_LOAD(&read_ilog_disk_count_), "read_info_block_disk_count_", ATOMIC_LOAD(&read_info_block_disk_count_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV("last_limit_ts_", ATOMIC_LOAD(&last_limit_ts_), "traffic_size_", ATOMIC_LOAD(&traffic_size_),"read_clog_disk_count_", ATOMIC_LOAD(&read_clog_disk_count_), "read_ilog_disk_count_",ATOMIC_LOAD(&read_ilog_disk_count_), "read_info_block_disk_count_", ATOMIC_LOAD(&read_info_block_disk_count_));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   static const int64_t C = 100;                                     // coefficient

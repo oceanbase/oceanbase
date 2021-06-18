@@ -32,7 +32,14 @@ class ObCreateVirtualTableParams {
 
   uint64_t table_id_;
   common::ObSEArray<common::ObNewRange, 16> key_ranges_;
-  TO_STRING_KV(K_(table_id), K_(key_ranges));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(table_id), K_(key_ranges));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 class ObIVirtualTableIteratorFactory {

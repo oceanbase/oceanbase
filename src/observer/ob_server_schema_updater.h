@@ -71,7 +71,7 @@ class ObServerSchemaTask : public common::ObDLinkBase<ObServerSchemaTask> {
   {
     return schema_info_.get_schema_version();
   }
-  TO_STRING_KV(K_(type), K_(did_retry), K_(schema_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   TYPE type_;

@@ -508,3 +508,19 @@ int ObTaskControl::append_finished_slice_events(ObIArray<const ObSliceEvent*>& s
   }
   return ret;
 }
+int64_t ObTaskControl::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("tasks", tasks_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTaskResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_location), K_(slice_events));
+  J_OBJ_END();
+  return pos;
+}

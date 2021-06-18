@@ -47,12 +47,7 @@ class ObSavedStorageInfo : public common::ObBaseStorageInfo {
   int deep_copy(const ObSavedStorageInfo& save_storage_info);
   int deep_copy(const common::ObBaseStorageInfo& base_storage_info);
   bool is_valid() const;
-  TO_STRING_KV("version", version_, "epoch_id", epoch_id_, "proposal_id", proposal_id_, "last_replay_log_id",
-      last_replay_log_id_, "last_submit_timestamp", last_submit_timestamp_, "accumulate_checksum", accumulate_checksum_,
-      "replica_num", replica_num_, "membership_timestamp", membership_timestamp_, "membership_log_id",
-      membership_log_id_, "curr_member_list", curr_member_list_, "memstore_version", memstore_version_,
-      "publish_version", publish_version_, "schema_version", schema_version_, "frozen_version", frozen_version_,
-      "frozen_timestamp", frozen_timestamp_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
   private:

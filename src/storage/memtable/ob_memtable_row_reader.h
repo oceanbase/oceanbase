@@ -33,7 +33,7 @@ class ObMemtableRowReader {
       int64_t& filled_column_count, bool& has_null);
   int get_memtable_sparse_row(const share::schema::ColumnMap& column_index,
       ObFixedBitSet<OB_ALL_MAX_COLUMN_ID>& bit_set, storage::ObStoreRow& row, bool& loop_flag);
-  TO_STRING_KV(K_(buf), K_(pos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableRowReader);

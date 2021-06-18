@@ -52,7 +52,7 @@ struct NeedFetchStatus {
     reach_max_log_id_ = reach_max_log_id;
   }
 
-  TO_STRING_KV(K(need_fetch_), K(reach_upper_limit_), K(reach_max_log_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef int64_t ObLogRpcIDType;
@@ -151,8 +151,7 @@ struct ObStreamItem {
       storage::ObPartitionService& part_service, bool& status_changed, bool& need_fetch, bool& reach_upper_limit,
       bool& reach_max_log_id);
 
-  TO_STRING_KV(K(pkey_), K(next_log_id_), K(fetch_progress_ts_), K(last_slide_log_id_), K(fetch_rpc_id_),
-      K(need_fetch_status_), K(next_cursor_), K(cursor_array_size_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t get_last_slide_log_id_(const ObPartitionKey& pkey, storage::ObPartitionService& part_service);
@@ -266,7 +265,7 @@ class ObStream {
       peer_pid_ = 0;
     }
 
-    TO_STRING_KV(K(addr_), K(peer_pid_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   private:
@@ -305,7 +304,7 @@ static inline common::ObQSync& get_stream_qs()
 struct SeqStreamPair {
   obrpc::ObStreamSeq seq_;
   ObStream* stream_;
-  TO_STRING_KV(K(seq_), KP(stream_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObSEArray<SeqStreamPair, 16> RetiredStreamArray;

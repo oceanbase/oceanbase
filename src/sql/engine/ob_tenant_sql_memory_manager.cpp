@@ -33,6 +33,54 @@ using namespace share::schema;
 using namespace oceanbase::observer;
 
 namespace sql {
+int64_t ObSqlWorkAreaProfile::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(random_id), K_(type), K_(op_id), K_(cache_size), K_(one_pass_size), K_(expect_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSqlWorkAreaStat::WorkareaKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sql_id), K_(plan_id), K_(operator_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSqlWorkAreaStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(workarea_key), K_(op_type), K_(seqno));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSqlWorkareaProfileInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sql_id), K_(plan_id), K_(sql_exec_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWorkareaHistogram::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(low_optimal_size), K_(high_optimal_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSqlMemoryList::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(seqno));
+  J_OBJ_END();
+  return pos;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////
 const int64_t ObSqlWorkAreaProfile::MIN_BOUND_SIZE[ObSqlWorkAreaType::MAX_TYPE] = {

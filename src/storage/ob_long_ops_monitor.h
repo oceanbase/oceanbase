@@ -47,7 +47,7 @@ struct ObILongOpsTaskStat {
     return task_id_ >= 0;
   }
   virtual int assign(const ObILongOpsTaskStat& task_stat);
-  TO_STRING_KV(K_(task_id), K_(cpu_cost), K_(io_cost), K_(state), K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t task_id_;
   double cpu_cost_;
   double io_cost_;
@@ -95,7 +95,7 @@ struct ObILongOpsKey {
   {
     return common::OB_NOT_SUPPORTED;
   }
-  TO_STRING_KV(K_(tenant_id), K_(sid), K_(name), K_(target));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
   uint64_t sid_;
   char name_[common::MAX_LONG_OPS_NAME_LENGTH];
@@ -122,8 +122,7 @@ struct ObCommonOpsStatValue {
   virtual ~ObCommonOpsStatValue() = default;
   ObCommonOpsStatValue& operator=(const ObCommonOpsStatValue& other);
   void reset();
-  TO_STRING_KV(
-      K_(start_time), K_(finish_time), K_(elapsed_time), K_(remaining_time), K_(percentage), K_(last_update_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t start_time_;
   int64_t finish_time_;
   int64_t elapsed_time_;
@@ -183,7 +182,7 @@ struct ObCreateIndexPartitionStat : public ObILongOpsStat {
   {
     return key_;
   }
-  TO_STRING_KV(K_(key), K_(task_stats), K_(common_value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t MAX_LIFE_TIME = 7 * 3600 * 1000;  // 7 days
   ObCreateIndexKey key_;
   common::ObArray<ObILongOpsTaskStat*> task_stats_;

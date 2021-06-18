@@ -54,6 +54,15 @@ int ObMember::assign(const ObMember& other)
   return ret;
 }
 
+int64_t ObMember::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(timestamp), K_(flag));
+  J_OBJ_END();
+  return pos;
+}
+
 bool ObMember::is_valid() const
 {
   // timestamp_ could be OB_INVALID_TIMESTAMP
@@ -79,6 +88,15 @@ bool ObReplicaMember::is_valid() const
 {
   return ObMember::is_valid() && ObReplicaTypeCheck::is_replica_type_valid(replica_type_) && !region_.is_empty() &&
          memstore_percent_ <= 100 && memstore_percent_ >= 0;
+}
+
+int64_t ObReplicaMember::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(timestamp), K_(flag), K_(replica_type), K_(region), K_(memstore_percent));
+  J_OBJ_END();
+  return pos;
 }
 
 common::ObReplicaType ObReplicaMember::get_replica_type() const

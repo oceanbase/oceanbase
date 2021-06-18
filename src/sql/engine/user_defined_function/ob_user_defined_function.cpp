@@ -20,6 +20,22 @@ namespace oceanbase {
 using namespace common;
 
 namespace sql {
+int64_t ObUdfConstArgs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(idx_in_udf_arg));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAggUdfMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(udf_meta), K_(udf_attributes), K_(udf_attributes_types), K_(calculable_results));
+  J_OBJ_END();
+  return pos;
+}
 
 ObUdfFunction::~ObUdfFunction()
 {

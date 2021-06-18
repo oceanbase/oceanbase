@@ -16,6 +16,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObStorageAppender::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(appender_), K_(start_ts), K_(is_opened), K_(uri));
+  J_OBJ_END();
+  return pos;
+}
 
 const char* OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS"};
 

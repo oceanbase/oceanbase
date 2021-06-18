@@ -34,6 +34,30 @@ using namespace obrpc;
 using namespace share;
 using namespace share::schema;
 namespace storage {
+int64_t ObRebuildReplicaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(replica_type), K_(replica_property), K_(parent_addr), K_(parent_replica_type),K_(local_minor_snapshot_version), K_(local_major_snapshot_version), K_(remote_minor_snapshot_version),K_(remote_major_snapshot_version), K_(rebuild_action), K_(is_share_major), K_(local_last_replay_log_id),K_(remote_last_replay_log_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRebuildReplicaResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(results), K_(pg_keys));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRebuildReplicaTaskProducer::ObRebuildReplicaConvergeInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(replica_info_array), K_(parent_addr));
+  J_OBJ_END();
+  return pos;
+}
 
 ObRebuildReplicaInfo::ObRebuildReplicaInfo()
     : pg_key_(),

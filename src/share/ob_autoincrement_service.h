@@ -52,7 +52,7 @@ struct CacheNode {
     cache_end_ = 0;
   }
 
-  TO_STRING_KV(K_(cache_start), K_(cache_end));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // combine two cache node if they are valid and continuous
   // otherwise use new_node if it is valid
@@ -76,7 +76,7 @@ struct CacheHandle {
 
   {}
 
-  TO_STRING_KV(K_(prefetch_start), K_(prefetch_end), K_(next_value), K_(offset), K_(increment), K_(max_value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t prefetch_start_;
   uint64_t prefetch_end_;
@@ -104,8 +104,7 @@ struct TableNode : public common::LinkHashValue<AutoincKey> {
   }
   int init(int64_t autoinc_table_part_num);
 
-  TO_STRING_KV(KT_(table_id), K_(next_value), K_(local_sync), K_(last_refresh_ts), K_(curr_node), K_(prefetch_node),
-      K_(prefetching));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int alloc_handle(common::ObSmallAllocator& allocator, const uint64_t offset, const uint64_t increment,
       const uint64_t desired_count, const uint64_t max_value, CacheHandle*& handle);

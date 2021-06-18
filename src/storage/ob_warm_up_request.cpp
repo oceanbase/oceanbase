@@ -22,6 +22,22 @@ using namespace share::schema;
 using namespace memtable;
 using namespace blocksstable;
 namespace storage {
+int64_t ObIWarmUpRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWarmUpRequestWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(request_list));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ------------------------------------------------------ObIWarmUpRequest------------------------------------------------------
  */
@@ -951,6 +967,14 @@ OB_DEF_SERIALIZE_SIZE(ObWarmUpRequestWrapper)
 }  // namespace storage
 
 namespace obrpc {
+int64_t ObWarmUpRequestArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(wrapper));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ObWarmUpRequestArg, wrapper_);
 }  // namespace obrpc
 }  // namespace oceanbase

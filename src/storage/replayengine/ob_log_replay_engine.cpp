@@ -34,6 +34,22 @@ using namespace transaction;
 using namespace storage;
 using namespace clog;
 namespace replayengine {
+int64_t ObLogReplayEngine::ObTenantThreadKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(thread_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReplayEngine::ObThrottleEndTime::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(end_ts_));
+  J_OBJ_END();
+  return pos;
+}
 ObLogReplayEngine::ObLogReplayEngine()
     : is_inited_(false),
       is_stopped_(true),

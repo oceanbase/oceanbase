@@ -24,6 +24,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObAtomicFilePos::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_id), K_(file_offset));
+  J_OBJ_END();
+  return pos;
+}
 ObBaseLogBufferMgr::ObBaseLogBufferMgr() : log_buf_cnt_(0)
 {}
 

@@ -21,6 +21,14 @@ namespace oceanbase {
 using namespace common;
 using namespace share;
 namespace sql {
+int64_t ObMultiDMLPlanMgr::PartValuesInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_key), KPC_(row_store), K_(part_key_ref_id), K_(value_ref_id));
+  J_OBJ_END();
+  return pos;
+}
 class ObMultiDMLPlanMgr::ServerOpInfo {
   public:
   ServerOpInfo()
@@ -30,7 +38,14 @@ class ObMultiDMLPlanMgr::ServerOpInfo {
     runner_server_.reset();
     part_values_.reset();
   }
-  TO_STRING_KV(K_(runner_server), K_(part_values));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(runner_server), K_(part_values));
+    J_OBJ_END();
+    return pos;
+  }
 
   ObAddr runner_server_;
   ObSEArray<PartValuesInfo, 1> part_values_;

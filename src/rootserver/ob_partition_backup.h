@@ -100,7 +100,7 @@ struct ObBackupElement {
   int assign(const ObBackupElement& element);
   share::ObPartitionReplica replica_;
   common::ObRegion region_;
-  TO_STRING_KV(K_(replica), K_(region));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObReplicaBackupElement {
@@ -110,7 +110,7 @@ struct ObReplicaBackupElement {
   int assign(const ObReplicaBackupElement& element);
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(replica_element));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObSEArray<ObBackupElement, common::MAX_REPLICA_COUNT_TOTAL> replica_element_;
   const ObBackupElement* choose_element_;
   DISALLOW_COPY_AND_ASSIGN(ObReplicaBackupElement);

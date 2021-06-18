@@ -16,6 +16,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObAdaptiveStrategy::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(least_thread_num), K_(estimate_ts), K_(expand_rate), K_(shrink_rate));
+  J_OBJ_END();
+  return pos;
+}
 ObSimpleThreadPool::ObSimpleThreadPool()
     : name_("unknown"), is_inited_(false), total_thread_num_(0), active_thread_num_(0), last_adjust_ts_(0)
 {}

@@ -1947,6 +1947,22 @@ void ObShowResolver::ObSqlStrGenerator::assign_sql_str(ObString& sql_str)
 
 namespace oceanbase {
 namespace sql {
+int64_t ObShowResolver::ObShowResolverContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cur_tenant_id), K_(actual_tenant_id), K_(database_name), K_(ref_table_id), K_(show_database_name),K_(show_database_id), K_(show_table_id), K_(stmt_type), K_(global_scope), K_(like_pattern), K_(like_escape),K_(column_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObShowResolver::ShowColumnInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(display_name), K_(qualified_name));
+  J_OBJ_END();
+  return pos;
+}
 #define DEFINE_SHOW_CLAUSE(clause_type, string) const char* ObShowResolver::ObShowSqlSet::clause_type = string
 
 #define DEFINE_SHOW_CLAUSE_SET(SHOW_STMT_TYPE, select_str, subquery_str, ora_subquery_str, like_str) \

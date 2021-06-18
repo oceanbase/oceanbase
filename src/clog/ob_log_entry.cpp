@@ -19,6 +19,46 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_HEADER, header_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIndexEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_MAGIC, magic_, N_VERSION, version_, N_PARTITION_KEY, partition_key_, N_LOG_ID, log_id_, N_FILE_ID,file_id_, N_OFFSET, offset_, N_SIZE, size_, N_SUBMIT_TIMESTAMP, get_submit_timestamp(), "is_batch_committed",is_batch_committed(), K_(accum_checksum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPaddingEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(magic_), K(version_), K(entry_size_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCompressedLogEntryHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(magic_), K(orig_data_len_), K(compressed_data_len_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCompressedLogEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_HEADER, header_);
+  J_OBJ_END();
+  return pos;
+}
 
 // clog
 ObLogEntry::ObLogEntry() : header_(), buf_(NULL)

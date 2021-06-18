@@ -89,7 +89,7 @@ class ObExprRegexContext : public ObExprOperatorCtx {
   int extract_subpre_string(const wchar_t* wc_text, int64_t wc_length, int64_t start_pos, ob_regmatch_t pmatch[],
       uint64_t pmatch_size, common::ObExprStringBuf& string_buf,
       common::ObIArray<common::ObString>& subexpr_array) const;
-  TO_STRING_KV(K_(inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   void reset_reg();

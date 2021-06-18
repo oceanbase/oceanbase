@@ -38,3 +38,11 @@ int ObLockUserStmt::add_user(const ObString& user_name, const common::ObString& 
   }
   return ret;
 }
+int64_t ObLockUserStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_type), K_(tenant_id), K_(user), K_(locked));
+  J_OBJ_END();
+  return pos;
+}

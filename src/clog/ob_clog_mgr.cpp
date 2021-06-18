@@ -45,6 +45,14 @@ using namespace obrpc;
 using namespace logservice;
 using namespace archive;
 namespace clog {
+int64_t ObCLogMgr::PartitionInfoCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(member_list_), K(quorum_), K(mc_timestamp_), K(sync_num_));
+  J_OBJ_END();
+  return pos;
+}
 
 // The number of threads used for callbacks is set to be the same as the number of cpu cores
 int64_t ObCLogMgr::CLOG_CB_THREAD_COUNT = common::get_cpu_num();

@@ -165,7 +165,7 @@ class TreeNode {
     }
   }
 
-  TO_STRING_KV(KP(parent_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   TreeNode* parent_;
   TreeNode* child_;
@@ -230,7 +230,7 @@ struct StaticInfo {
   const char* filename_;
   int line_;
   const char* function_;
-  TO_STRING_KV(K(filename_), K(line_), K(function_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class StaticInfos {
@@ -270,7 +270,7 @@ struct DynamicInfo {
   DynamicInfo()
       : tid_(GETTID()), cid_(CO_IS_ENABLED() ? CO_ID() : 0lu), create_time_(common::ObTimeUtility::fast_current_time())
   {}
-  TO_STRING_KV(K(tid_), K(cid_), K(create_time_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t tid_;
   int64_t cid_;
   int64_t create_time_;
@@ -376,8 +376,7 @@ class MemoryContext {
     return *default_allocator_;
   }
   static MemoryContext& root();
-  TO_STRING_KV(KP(this), "static_id", static_id_, "static_info", StaticInfos::get_instance().get(static_id_),
-      "dynamic info", di_, K(properties_), K(attr_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   static MemoryContext* node2context(TreeNode* node)

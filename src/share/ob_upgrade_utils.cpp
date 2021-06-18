@@ -28,6 +28,14 @@ using namespace share::schema;
 using namespace rootserver;
 
 namespace share {
+int64_t ObBaseUpgradeProcessor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(cluster_version), K_(tenant_id), K_(mode));
+  J_OBJ_END();
+  return pos;
+}
 #define CALC_CLUSTER_VERSION(major, minor, patch) (((major) << 32) + ((minor) << 16) + (patch))
 const uint64_t ObUpgradeChecker::UPGRADE_PATH[CLUTER_VERSION_NUM] = {
     CALC_CLUSTER_VERSION(1UL, 4UL, 3UL),   // 1.4.3

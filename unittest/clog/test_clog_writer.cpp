@@ -104,7 +104,14 @@ class MyCLogItem : public ObICLogItem {
   virtual int after_flushed(
       const file_id_t file_id, const offset_t offset, const int error_code, const ObLogWritePoolType type);
   void wait();
-  TO_STRING_KV(KP_(buf), K_(data_len));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP_(buf), K_(data_len));
+    J_OBJ_END();
+    return pos;
+  }
   char* buf_;
   int64_t data_len_;
   bool is_flushed_;

@@ -78,7 +78,7 @@ class ObReplayTaskInfo {
   {
     return (this->log_id_ == other.log_id_ && this->log_type_ == other.log_type_);
   }
-  TO_STRING_KV(K(log_id_), K(log_type_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t log_id_;
@@ -132,7 +132,7 @@ struct ObReplayTask {
       log_type_ = log_type;
       ret_code_ = ret_code;
     }
-    TO_STRING_KV(K(has_encount_fatal_error_), K(table_version_), K(fail_ts_), K(log_id_), K(log_type_), K(ret_code_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     bool has_encount_fatal_error_;
@@ -406,15 +406,13 @@ struct ObReplayLogTask : common::ObLink {
   char* log_buf_;
   RefBuf* ref_buf_;
 
-  TO_STRING_KV("partition_key", pk_, "log_type", log_type_, "log_submit_timestamp", log_submit_timestamp_, "log_id",
-      log_id_, "log_size", log_size_, "batch_committed", batch_committed_, "task_submit_timestamp",
-      task_submit_timestamp_, KP(ref_buf_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObReplayLogTaskEx {
   ObReplayLogTask* task_;
   int64_t trans_id_;
-  TO_STRING_KV("trans_id", trans_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObReplayErrInfo {
@@ -440,7 +438,7 @@ struct ObReplayErrInfo {
     err_ts_ = err_ts;
     err_ret_ = err_ret;
   }
-  TO_STRING_KV(K(task_info_), K(err_ts_), K(err_ret_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObReplayTaskInfo task_info_;
@@ -467,8 +465,7 @@ class ObReplayStatus {
     }
     void reset();
     bool is_valid() const;
-    TO_STRING_KV(K(ret_code_), K(is_out_of_memstore_mem_), K(has_barrier_), K(is_pre_barrier_),
-        K(need_wait_schema_refresh_), K(pkey_), K(task_info_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     public:
     int ret_code_;
@@ -710,10 +707,7 @@ class ObReplayStatus {
   }
   bool is_tenant_out_of_memory() const;
 
-  TO_STRING_KV(K(ref_cnt_), K(replay_err_info_), K(last_task_info_), K(post_barrier_status_), K(pending_task_count_),
-      K(pending_abort_task_count_), K(pending_task_mutator_size_), K(eagain_count_), K(eagain_start_ts_),
-      K(total_submitted_task_num_), K(total_replayed_task_num_), K(is_enabled_), K(is_pending_), K(can_receive_log_),
-      K(offline_partition_log_id_), K(offline_partition_task_submitted_), K(submit_log_task_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int check_barrier_(const ObStorageLogType log_type, const common::ObPartitionKey& pkey);

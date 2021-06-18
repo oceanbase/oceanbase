@@ -101,7 +101,7 @@ class ObTransSubmitLogCb : public ObITransSubmitLogCb {
   int retry_redo_sync_task_(uint64_t log_id);
 
   public:
-  TO_STRING_KV(KP_(ts), K_(partition), K_(trans_id), K_(log_type), K_(submit_timestamp), KP_(ctx), K_(have_prev_trans));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   DISALLOW_COPY_AND_ASSIGN(ObTransSubmitLogCb);

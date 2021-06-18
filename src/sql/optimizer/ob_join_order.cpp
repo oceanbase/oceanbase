@@ -7677,3 +7677,59 @@ int ObJoinOrder::extract_real_join_keys(ObIArray<ObRawExpr*>& join_keys)
   }
   return ret;
 }
+int64_t sql::ObJoinOrder::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(output_rows), K_(interesting_paths));
+  J_OBJ_END();
+  return pos;
+}
+int64_t sql::InnerPathInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(join_conditions), K_(inner_paths));
+  J_OBJ_END();
+  return pos;
+}
+int64_t sql::ObRowCountEstTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), K_(path_id_set));
+  J_OBJ_END();
+  return pos;
+}
+int64_t sql::AccessPath::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(ref_table_id), K_(index_id), K_(is_cte_table_path), K_(path_type), K_(cost),K_(exec_params), K_(ordering), K_(is_get), K_(order_direction), K_(is_hash_index), K_(table_row_count),K_(output_row_count), K_(phy_query_range_row_count), K_(query_range_row_count), K_(index_back_row_count),K_(index_back_cost), K_(est_cost_info), K_(sample_info), K_(range_prefix_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t sql::Path::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(path_type), K_(cost), K_(op_cost), K_(exec_params), K_(ordering), K_(is_inner_path),K_(inner_row_count), K_(interesting_order_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t sql::ConflictDetector::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(join_info), K_(CR), K_(cross_product_rule), K_(delay_cross_product_rule), K_(L_TES), K_(R_TES),K_(L_DS), K_(R_DS), K_(is_degenerate_pred), K_(is_commutative), K_(is_redundancy));
+  J_OBJ_END();
+  return pos;
+}
+int64_t sql::JoinInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(join_type), K_(table_set), K_(on_condition), K_(where_condition), K_(equal_join_condition));
+  J_OBJ_END();
+  return pos;
+}

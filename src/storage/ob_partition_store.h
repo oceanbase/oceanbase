@@ -55,7 +55,7 @@ struct TableStoreStat {
   TableStoreStat();
   uint64_t index_id_;
   bool has_dropped_flag_;
-  TO_STRING_KV(K_(index_id), K_(has_dropped_flag));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObPGStorage;
@@ -177,7 +177,7 @@ class ObPartitionStore {
   int set_drop_schema_info(const int64_t index_id, const int64_t schema_version);
   int get_drop_schema_info(const int64_t index_id, int64_t& drop_schema_version, int64_t& drop_schema_refreshed_ts);
 
-  TO_STRING_KV(K_(is_inited), K_(log_seq_num), "meta", *meta_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int create_partition_store(const ObPGPartitionStoreMeta& meta, const bool write_slog, ObIPartitionGroup* pg,

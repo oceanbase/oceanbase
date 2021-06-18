@@ -76,7 +76,14 @@ class ObHandleMgr {
   {
     return is_inited_;
   }
-  TO_STRING_KV(KP_(last_handle), KP_(handle_cache));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP_(last_handle), KP_(handle_cache));
+    J_OBJ_END();
+    return pos;
+  }
 
   protected:
   typedef ObHandleCache<Key, Handle, N> HandleCache;

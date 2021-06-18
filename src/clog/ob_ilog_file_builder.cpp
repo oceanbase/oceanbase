@@ -24,6 +24,14 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t MemberListInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(memberlist_), K(replica_num_), K(membership_log_id_), K(memberlist_version_));
+  J_OBJ_END();
+  return pos;
+}
 class ObIlogFileBuilder::PrepareRawArrayFunctor {
   public:
   explicit PrepareRawArrayFunctor(RawArray& raw_array) : raw_array_(raw_array), curr_idx_(0)

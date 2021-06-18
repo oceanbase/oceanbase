@@ -23,6 +23,22 @@ using namespace common;
 using namespace share;
 using namespace transaction;
 namespace gts {
+int64_t ObHaGtsSource::ObTenantLease::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id_), K(lease_begin_), K(lease_end_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHaGtsSource::ObGtsMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_lease_array_), K(member_list_));
+  J_OBJ_END();
+  return pos;
+}
 int ObHaGtsSource::ObHaGtsSourceTask::init(ObHaGtsSource* gts_source)
 {
   int ret = OB_SUCCESS;

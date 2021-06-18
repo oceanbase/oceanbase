@@ -262,3 +262,11 @@ int ObPhysicalRestoreStat::check_stop()
   }
   return ret;
 }
+int64_t PhysicalRestorePartition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(schema_id), K_(partition_id), K_(partition_cnt), K_(schema_paxos_cnt), K_(begin), K_(end), K_(table_cnt));
+  J_OBJ_END();
+  return pos;
+}

@@ -78,8 +78,14 @@ class Ob20ProtocolHeader {
   ~Ob20ProtocolHeader()
   {}
 
-  TO_STRING_KV("ob 20 protocol header", cp_hdr_, K_(magic_num), K_(header_checksum), K_(connection_id), K_(request_id),
-      K_(pkt_seq), K_(payload_len), K_(version), K_(flag_.flags), K_(reserved));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV("ob 20 protocol header", cp_hdr_, K_(magic_num), K_(header_checksum), K_(connection_id), K_(request_id),K_(pkt_seq), K_(payload_len), K_(version), K_(flag_.flags), K_(reserved));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 struct Ob20ExtraInfo {
@@ -94,7 +100,14 @@ struct Ob20ExtraInfo {
   {}
   ~Ob20ExtraInfo()
   {}
-  TO_STRING_KV(K_(extra_len), K_(exist_trace_info), K_(trace_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(extra_len), K_(exist_trace_info), K_(trace_info));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 class Ob20Packet : public rpc::ObPacket {

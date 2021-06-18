@@ -85,7 +85,7 @@ class ObRowkeyObjComparer {
     }
     return cmp_ret;
   }
-  TO_STRING_KV(K_(type), K_(is_collation_free), K_(cmp_ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   rowkey_obj_comp_func cmp_func_;
@@ -237,8 +237,7 @@ class ObSSTableRowkeyHelper {
   {
     return is_oracle_mode_;
   }
-  TO_STRING_KV(K_(endkeys), K_(collation_free_endkeys), K_(rowkey_column_cnt), KP_(column_type_array),
-      K_(exist_collation_free), K_(use_cmp_nullsafe), K_(is_oracle_mode), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   static OB_INLINE int32_t compare(const common::ObStoreRowkey& rowkey, const common::ObStoreRowkey& cmp_rowkey,
       RowkeyCmpFuncArray& cmp_funcs, const bool with_prefix = false)
   {

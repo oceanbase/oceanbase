@@ -15,6 +15,22 @@
 
 namespace oceanbase {
 namespace archive {
+int64_t PGFetchTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pg_key_), K(incarnation_), K(archive_round_), K(epoch_), K(start_log_id_), K(ilog_file_id_),K(clog_task_), K(clog_size_), K(clog_count_), K(first_log_gen_tstamp_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t IlogPGFetchQueue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(ilog_file_id_), K(next_), K(pg_array_));
+  J_OBJ_END();
+  return pos;
+}
 using namespace oceanbase::common;
 using namespace oceanbase::clog;
 PGFetchTask::PGFetchTask()

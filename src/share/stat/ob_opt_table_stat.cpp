@@ -11,3 +11,19 @@
  */
 
 #include "share/stat/ob_opt_table_stat.h"
+int64_t ObOptTableStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(last_analyzed));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOptTableStat::Key::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id));
+  J_OBJ_END();
+  return pos;
+}

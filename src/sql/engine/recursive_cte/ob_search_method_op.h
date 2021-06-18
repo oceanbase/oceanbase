@@ -32,7 +32,7 @@ class ObSearchMethodOp {
     ObChunkDatumStore::StoredRow* stored_row_;
     struct _BreadthFirstSearchTreeNode** children_;
     struct _BreadthFirstSearchTreeNode* parent_;
-    TO_STRING_KV("row ", stored_row_, "child_num_", child_num_);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   } ObBFSTreeNode;
 
   typedef struct _TreeNode {
@@ -42,7 +42,7 @@ class ObSearchMethodOp {
     uint64_t tree_level_;
     ObChunkDatumStore::StoredRow* stored_row_;
     ObBFSTreeNode* in_bstree_node_;
-    TO_STRING_KV("is tree level", tree_level_, "is cycle", is_cycle_, "row", stored_row_);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   } ObTreeNode;
 
   struct ObNodeComparer {

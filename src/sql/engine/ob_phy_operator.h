@@ -115,8 +115,7 @@ struct ColumnContent {
   //  column_id_(common::OB_INVALID_ID)
   {}
 
-  TO_STRING_KV(N_INDEX, projector_index_, N_AUTO_FILL_TIMESTAMP, auto_filled_timestamp_, N_NULLABLE, is_nullable_,
-      "implicit", is_implicit_, N_COLUMN_NAME, column_name_, K_(column_type), K_(coll_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   //               N_COLUMN_ID, column_id_);
 
   uint64_t projector_index_;
@@ -141,7 +140,7 @@ struct ObForeignKeyColumn {
     idx_ = -1;
     name_idx_ = -1;
   }
-  TO_STRING_KV(N_COLUMN_NAME, name_, N_INDEX, idx_, N_INDEX, name_idx_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObString name_;
   int32_t idx_;  // index of the column id in column_ids_ of ObTableModify. value column idx
   int32_t name_idx_;
@@ -161,7 +160,7 @@ class ObForeignKeyArg {
     table_name_.reset();
     columns_.reset();
   }
-  TO_STRING_KV(K_(ref_action), K_(database_name), K_(table_name), K_(columns), K_(is_self_ref));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   share::schema::ObReferenceAction ref_action_;
@@ -195,7 +194,7 @@ class ObOpSchemaObj {
   {
     return NULLS_FIRST_ASC == order_type_ || NULLS_LAST_ASC == order_type_;
   }
-  TO_STRING_KV(K_(obj_type), K_(is_not_null), K_(order_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObObjType obj_type_;

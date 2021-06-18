@@ -30,6 +30,14 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 namespace oceanbase {
 namespace observer {
+int64_t ObAllVirtualZoneStat::ZoneStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone_info), K_(server_count), K_(resource_pool_count), K_(unit_count));
+  J_OBJ_END();
+  return pos;
+}
 ObAllVirtualZoneStat::ZoneStat::ZoneStat() : zone_info_(), server_count_(0), resource_pool_count_(0), unit_count_(0)
 {}
 

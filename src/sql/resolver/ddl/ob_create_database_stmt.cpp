@@ -19,6 +19,14 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObCreateDatabaseStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(create_database_arg));
+  J_OBJ_END();
+  return pos;
+}
 ObCreateDatabaseStmt::ObCreateDatabaseStmt()
     : ObDDLStmt(stmt::T_CREATE_DATABASE),
       is_charset_specify_(false),

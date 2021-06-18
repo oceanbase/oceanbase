@@ -104,7 +104,7 @@ struct LocationConstraint {
   static int calc_constraints_inclusion(
       const ObLocationConstraint* left, const ObLocationConstraint* right, InclusionType& inclusion_result);
 
-  TO_STRING_KV(K_(key), K_(phy_loc_type), K_(constraint_flags));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObLocationConstraintContext {
@@ -121,7 +121,7 @@ struct ObLocationConstraintContext {
   static int calc_constraints_inclusion(
       const ObPwjConstraint* left, const ObPwjConstraint* right, InclusionType& inclusion_result);
 
-  TO_STRING_KV(K_(base_table_constraints), K_(strict_constraints), K_(non_strict_constraints));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // Base table location constraints, including the base table on the TABLE_SCAN operator and the
   // base table on the INSERT operator
   ObLocationConstraint base_table_constraints_;
@@ -194,7 +194,7 @@ class ObMultiStmtItem {
     batched_queries_ = batched_queries;
   }
 
-  TO_STRING_KV(K_(is_part_of_multi_stmt), K_(seq_num), K_(sql));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool is_part_of_multi_stmt_;
@@ -238,7 +238,7 @@ class ObQueryRetryInfo {
     return last_query_retry_err_;
   }
 
-  TO_STRING_KV(K_(inited), K_(is_rpc_timeout), K_(invalid_servers), K_(last_query_retry_err));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   bool inited_;  // This variable is used to write some defensive code, basically useless
@@ -411,7 +411,7 @@ struct ObQueryCtx {
     common::ObString name_;
     common::ObString origin_name_;
     stmt::StmtType stmt_type_;
-    TO_STRING_KV(K_(id), K_(name), K_(origin_name), K_(stmt_type));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   ObQueryCtx()
@@ -437,7 +437,7 @@ struct ObQueryCtx {
         has_pl_udf_(false),
         temp_table_infos_()
   {}
-  TO_STRING_KV(N_PARAM_NUM, question_marks_count_, N_FETCH_CUR_TIME, fetch_cur_time_, K_(calculable_items));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void reset()
   {

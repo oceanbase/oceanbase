@@ -94,3 +94,11 @@ void ObPGAllMetaCheckpointWriter::reset()
   pg_checkpoint_info_.reset();
   file_ = nullptr;
 }
+int64_t ObPGCheckpointInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tables_handle), KP_(pg_meta_buf), K_(pg_meta_buf_len));
+  J_OBJ_END();
+  return pos;
+}

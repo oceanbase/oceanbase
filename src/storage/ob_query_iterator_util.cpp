@@ -16,6 +16,14 @@
 namespace oceanbase {
 using namespace common;
 namespace storage {
+int64_t ObPadCol::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("idx", idx_, "type", meta_type_, "data_length", data_length_);
+  J_OBJ_END();
+  return pos;
+}
 
 int pad_column(const ObAccuracy accuracy, common::ObIAllocator& padding_alloc, common::ObObj& cell)
 {

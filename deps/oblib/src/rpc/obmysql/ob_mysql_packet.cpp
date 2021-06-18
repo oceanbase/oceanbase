@@ -22,6 +22,30 @@ using namespace oceanbase::obmysql;
 
 namespace oceanbase {
 namespace obmysql {
+int64_t ObMySQLPacketHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("length", len_, "sequence", seq_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMySQLCompressedPacketHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("compressed_length", comp_len_, "compressed_sequence", comp_seq_, "length_before_compression", uncomp_len);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMySQLRawPacket::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("header", hdr_, "can_reroute", can_reroute_pkt_);
+  J_OBJ_END();
+  return pos;
+}
 
 int ObMySQLPacket::store_string_kv(char* buf, int64_t len, const ObStringKV& str, int64_t& pos)
 {

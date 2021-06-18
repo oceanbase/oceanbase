@@ -54,7 +54,7 @@ struct ObMCLogRpcInfo {
   {
     return key_.is_valid() && timestamp_ > 0;
   }
-  TO_STRING_KV(K_(key), K_(log_id), K_(timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -76,8 +76,7 @@ struct ObMemberChangeArg {
   {
     return key_.is_valid() && member_.is_valid() && quorum_ > 0;
   }
-  TO_STRING_KV(
-      K_(key), K_(member), K_(no_used), K_(quorum), K_(reserved_modify_quorum_type), K_(task_id), K_(orig_quorum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(3);
 };
@@ -88,7 +87,7 @@ struct ObMemberChangeBatchResult {
   {}
 
   public:
-  TO_STRING_KV(K_(return_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObSArray<int> return_array_;
@@ -103,7 +102,7 @@ struct ObMemberChangeBatchArg {
 
   public:
   bool is_valid() const;
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObSArray<ObMemberChangeArg> arg_array_;
@@ -119,7 +118,7 @@ struct ObModifyQuorumBatchResult {
   {}
 
   public:
-  TO_STRING_KV(K_(return_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObSArray<int> return_array_;
@@ -140,7 +139,7 @@ struct ObModifyQuorumArg {
   {
     return key_.is_valid() && quorum_ > 0 && orig_quorum_ > 0 && member_list_.get_member_number() > 0;
   }
-  TO_STRING_KV(K_(key), K_(quorum), K_(orig_quorum), K_(member_list), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(3);
 };
@@ -152,7 +151,7 @@ struct ObModifyQuorumBatchArg {
 
   public:
   bool is_valid() const;
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObSArray<ObModifyQuorumArg> arg_array_;
@@ -170,7 +169,7 @@ struct ObRemoveReplicaArg {
   {
     return pkey_.is_valid() && replica_member_.is_valid();
   }
-  TO_STRING_KV(K_(pkey), K_(replica_member));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -190,7 +189,7 @@ struct ObRemoveReplicaArgs {
     return b_ret;
   }
 
-  TO_STRING_KV(K_(arg_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSArray<ObRemoveReplicaArg> arg_array_;
   OB_UNIS_VERSION(1);
@@ -203,7 +202,7 @@ struct ObFetchMacroBlockArg {
   ObFetchMacroBlockArg() : macro_block_index_(0), data_version_(0), data_seq_(0)
   {}
   void reset();
-  TO_STRING_KV(K_(macro_block_index), K_(data_version), K_(data_seq));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t macro_block_index_;  // the index of the macro block in the sstable macro block array
   common::ObVersion data_version_;
@@ -215,7 +214,7 @@ struct ObFetchMacroBlockListArg {
 
   public:
   ObFetchMacroBlockListArg();
-  TO_STRING_KV(K_(table_key), "arg_count", arg_list_.count());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   storage::ObITable::TableKey table_key_;
   common::ObSArray<ObFetchMacroBlockArg> arg_list_;
 };
@@ -228,7 +227,7 @@ struct ObFetchPartitionInfoArg {
   {}
   ~ObFetchPartitionInfoArg()
   {}
-  TO_STRING_KV(K_(pkey), K_(replica_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey pkey_;
   common::ObReplicaType replica_type_;
@@ -242,7 +241,7 @@ struct ObFetchPartitionInfoResult {
   {}
   ~ObFetchPartitionInfoResult()
   {}
-  TO_STRING_KV(K_(meta), K_(table_id_list), K_(major_version), K_(is_log_sync));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset();
   int assign(const ObFetchPartitionInfoResult& result);
 
@@ -258,7 +257,7 @@ struct ObFetchTableInfoArg {
   {}
   ~ObFetchTableInfoArg()
   {}
-  TO_STRING_KV(K_(pkey), K_(table_id), K_(snapshot_version), K_(is_only_major_sstable));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey pkey_;
   uint64_t table_id_;
@@ -293,7 +292,7 @@ struct ObLogicMigrateRpcHeader {
   {
     return ENDCONNECT == connect_status_;
   }
-  TO_STRING_KV(K_(header_size), K_(occupy_size), K_(data_offset), K_(object_count), K_(data_size), K_(connect_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
@@ -306,7 +305,7 @@ struct ObLogicDataChecksumProtocol {
   int64_t data_checksum_;
   bool is_rowkey_valid_;
   ObStoreRowkey rowkey_;
-  TO_STRING_KV(K_(data_checksum), K_(is_rowkey_valid), K_(rowkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 
@@ -314,7 +313,7 @@ struct ObFetchTableInfoResult {
   ObFetchTableInfoResult();
   ~ObFetchTableInfoResult()
   {}
-  TO_STRING_KV(K_(multi_version_start), K_(is_ready_for_read), K_(table_keys), K_(gc_table_keys));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void reset();
   ObSArray<storage::ObITable::TableKey> table_keys_;
@@ -342,7 +341,7 @@ struct ObSplitDestPartitionResult {
   {
     return (common::OB_SUCCESS != status_) || (src_pkey_.is_valid() && dest_pkey_.is_valid());
   }
-  TO_STRING_KV(K_(status), K_(progress), K_(schema_version), K_(src_pkey), K_(dest_pkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int status_;
   int progress_;
   int64_t schema_version_;
@@ -356,7 +355,7 @@ struct ObFetchLogicBaseMetaArg {
   {}
   ~ObFetchLogicBaseMetaArg()
   {}
-  TO_STRING_KV(K_(table_key), K_(task_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   storage::ObITable::TableKey table_key_;
   int64_t task_count_;
@@ -368,7 +367,7 @@ struct ObFetchPhysicalBaseMetaArg {
   {}
   ~ObFetchPhysicalBaseMetaArg()
   {}
-  TO_STRING_KV(K_(table_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   storage::ObITable::TableKey table_key_;
   OB_UNIS_VERSION(1);
@@ -400,7 +399,7 @@ struct ObFetchLogicRowArg {
     }
     return ret;
   }
-  TO_STRING_KV(K_(table_key), K_(key_range), K_(schema_version), K_(data_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   storage::ObITable::TableKey table_key_;
   common::ObStoreRange key_range_;
@@ -419,7 +418,7 @@ struct ObSplitDestPartitionRequestArg {
   {
     return dest_pkey_.is_valid();
   }
-  TO_STRING_KV(K_(dest_pkey), K_(split_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey dest_pkey_;
   storage::ObPartitionSplitInfo split_info_;
   OB_UNIS_VERSION(1);
@@ -438,7 +437,7 @@ struct ObReplicaSplitProgressRequest {
   int64_t schema_version_;
   common::ObPartitionKey pkey_;
   common::ObAddr addr_;
-  TO_STRING_KV(K_(schema_version), K_(pkey), K_(addr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -455,7 +454,7 @@ struct ObReplicaSplitProgressResult {
   common::ObPartitionKey pkey_;
   common::ObAddr addr_;
   int progress_;
-  TO_STRING_KV(K_(pkey), K_(addr), K_(progress));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -478,7 +477,7 @@ struct ObFetchPGInfoArg {
   {}
   ~ObFetchPGInfoArg()
   {}
-  TO_STRING_KV(K_(pg_key), K_(replica_type), K_(use_slave_safe_read_ts), K_(compat_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPGKey pg_key_;
   common::ObReplicaType replica_type_;
@@ -497,7 +496,7 @@ struct ObFetchPGPartitionInfoArg {
     return pg_key_.is_valid() && snapshot_version_ >= 0;
   }
 
-  TO_STRING_KV(K_(pg_key), K_(snapshot_version), K_(is_only_major_sstable), K_(log_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPGKey pg_key_;
   int64_t snapshot_version_;
   bool is_only_major_sstable_;
@@ -512,7 +511,7 @@ struct ObPGPartitionMetaInfo {
   {}
   ~ObPGPartitionMetaInfo()
   {}
-  TO_STRING_KV(K_(meta), K_(table_id_list), K_(table_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset();
   int assign(const ObPGPartitionMetaInfo& result);
   bool is_valid() const;
@@ -535,7 +534,7 @@ struct ObFetchPGInfoResult {
   {}
   ~ObFetchPGInfoResult()
   {}
-  TO_STRING_KV(K_(pg_meta), K_(major_version), K_(is_log_sync), K_(pg_file_id), K_(compat_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset();
   int assign(const ObFetchPGInfoResult& result);
   bool is_from_31x() const
@@ -556,7 +555,7 @@ struct ObFetchReplicaInfoArg {
   {}
   ~ObFetchReplicaInfoArg()
   {}
-  TO_STRING_KV(K_(pg_key), K_(local_publish_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset();
   int assign(const ObFetchReplicaInfoArg& arg);
   bool is_valid() const;
@@ -575,8 +574,7 @@ struct ObFetchReplicaInfoRes {
   {}
   ~ObFetchReplicaInfoRes()
   {}
-  TO_STRING_KV(K_(pg_key), K_(remote_minor_snapshot_version), K_(remote_replica_type),
-      K_(remote_major_snapshot_version), K_(remote_last_replay_log_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset();
   int assign(const ObFetchReplicaInfoRes);
   bool is_valid() const;
@@ -593,7 +591,7 @@ struct ObBatchFetchReplicaInfoArg {
   {}
   ~ObBatchFetchReplicaInfoArg()
   {}
-  TO_STRING_KV(K_(replica_info_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void reset();
   int assign(const ObBatchFetchReplicaInfoArg& arg);
@@ -607,7 +605,7 @@ struct ObBatchFetchReplicaInfoRes {
   {}
   ~ObBatchFetchReplicaInfoRes()
   {}
-  TO_STRING_KV(K_(replica_info_res));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset();
   int assign(const ObBatchFetchReplicaInfoRes& res);
 
@@ -627,7 +625,7 @@ struct ObSuspendPartitionArg {
   {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K(pg_key_), K(mig_dest_server_), K(need_force_change_owner_), K(is_batch_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObPGKey pg_key_;
@@ -648,7 +646,7 @@ struct ObSuspendPartitionRes {
   {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K(pg_key_), K(max_clog_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObPGKey pg_key_;
@@ -675,7 +673,7 @@ struct ObHandoverPartitionArg {
   {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K(type_), K(pg_key_), K(src_file_id_), K(candidate_server_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObHandoverPartitionType type_;
@@ -1265,9 +1263,7 @@ class ObFetchLogicRowInfo final {
   ObFetchLogicRowInfo();
   ~ObFetchLogicRowInfo();
   int add_row(const storage::ObStoreRow& row);
-  TO_STRING_KV(K_(total_row_count), K_(not_exist_row_count), K_(exist_row_count), K_(del_row_count),
-      K_(sparse_row_count), "dml_count", common::ObArrayWrap<int64_t>(dml_count_, storage::T_DML_MAX),
-      "first_dml_count", common::ObArrayWrap<int64_t>(first_dml_count_, storage::T_DML_MAX));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t total_row_count_;

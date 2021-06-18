@@ -30,7 +30,7 @@ struct MVDesc {
 
   MVDesc() : mv_tid_(OB_INVALID_ID), base_tid_(OB_INVALID_ID), dep_tid_(OB_INVALID_ID), mv_stmt_(NULL)
   {}
-  TO_STRING_KV("mv_tid", mv_tid_, "base_tid", base_tid_, "dep_tid_", dep_tid_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObTransformMaterializedView : public ObTransformRule {

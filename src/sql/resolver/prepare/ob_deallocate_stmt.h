@@ -42,7 +42,7 @@ class ObDeallocateStmt : public ObCMDStmt {
     return prepare_id_;
   }
 
-  TO_STRING_KV(N_STMT_NAME, prepare_name_, N_SQL_ID, prepare_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObString prepare_name_;

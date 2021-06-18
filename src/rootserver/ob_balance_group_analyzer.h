@@ -56,7 +56,7 @@ class TablePrefixKey {
   {
     return digit_length_ == other.digit_length_ && prefix_ == other.prefix_ && suffix_ == other.suffix_;
   }
-  TO_STRING_KV(K_(prefix), K_(suffix), K_(digit_length));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class TablePrefixValue {
@@ -64,7 +64,7 @@ class TablePrefixValue {
   uint64_t tablegroup_id_;
   uint64_t table_id_;
   const share::schema::ObTableSchema* schema_;
-  TO_STRING_KV(K_(tablegroup_id), K_(table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class DistributionUtil {

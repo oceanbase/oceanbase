@@ -30,7 +30,7 @@ class ObSimpleUDFSchema : public ObSchema {
   ObSimpleUDFSchema(const ObSimpleUDFSchema& src_schema);
   virtual ~ObSimpleUDFSchema();
   ObSimpleUDFSchema& operator=(const ObSimpleUDFSchema& other);
-  TO_STRING_KV(K_(tenant_id), K_(udf_id), K_(schema_version), K_(udf_name), K_(ret), K_(dl), K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual void reset();
   inline bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -186,7 +186,7 @@ class ObUDFHashWrapper {
   {
     return udf_name_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(udf_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t tenant_id_;

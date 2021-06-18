@@ -21,6 +21,14 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace observer {
+int64_t ObRebuildFlagReporter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_key), K_(server), K_(rebuild_flag));
+  J_OBJ_END();
+  return pos;
+}
 
 ObRebuildFlagReporter::ObRebuildFlagReporter()
     : inited_(false), part_key_(), server_(), rebuild_flag_(OB_REBUILD_INVALID)

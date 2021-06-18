@@ -38,6 +38,22 @@ using namespace oceanbase::transaction;
 
 namespace oceanbase {
 namespace archive {
+int64_t ObPGArchiveRestoreTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(restore_pg_key_), K(archive_pg_key_), K(is_expired_), K(has_located_file_range_), K(start_log_id_),K(start_log_ts_), K(end_snapshot_version_), K(leader_takeover_ts_), K(last_fetched_log_id_),K(last_checkpoint_ts_), K(last_fetched_log_submit_ts_), K(cur_offset_), K(cur_log_file_id_), K(end_log_file_id_),K(retry_cnt_),K(io_fail_cnt_),K(fetch_log_result_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObArchiveRestoreEngine::TenantRestoreMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(restore_info), K_(file_store), K(cur_restore_concurrency_), K(restore_concurrency_threshold_));
+  J_OBJ_END();
+  return pos;
+}
 using oceanbase::clog::ObLogEntry;
 
 void ObPGArchiveRestoreTask::reset()

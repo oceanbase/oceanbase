@@ -30,7 +30,7 @@ struct ObSortFieldCollation {
   ObSortFieldCollation()
       : field_idx_(UINT32_MAX), cs_type_(common::CS_TYPE_INVALID), is_ascending_(true), null_pos_(common::NULL_LAST)
   {}
-  TO_STRING_KV(K_(field_idx), K_(cs_type), K_(is_ascending), K_(null_pos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint32_t field_idx_;
   common::ObCollationType cs_type_;
   bool is_ascending_;

@@ -30,6 +30,38 @@ using namespace lib;
 using namespace obrpc;
 using namespace share;
 namespace rootserver {
+int64_t ObGtsReplicaTaskKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(gts_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGtsReplicaTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(task_key_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRsGtsReplicaTaskGenerator::ZoneReplicaCnt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRsGtsReplicaTaskGenerator::MemberCandStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(zone));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObRsGtsInfoCollector::init(common::ObMySQLProxy* sql_proxy)
 {

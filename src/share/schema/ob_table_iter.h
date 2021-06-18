@@ -33,7 +33,7 @@ class ObTenantIterator {
   int init(ObSchemaGetterGuard& schema_guard);
   virtual int next(uint64_t& tenant_id);
 
-  TO_STRING_KV(K_(is_inited), K_(cur_tenant_idx), K_(tenant_ids))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   private:
   int get_tenant_ids(ObMultiVersionSchemaService& schema_service);
   bool is_inited_;
@@ -85,7 +85,7 @@ class ObTenantTableIterator : public ObITableIterator {
   int init(ObMultiVersionSchemaService* schema_service, const uint64_t tenant_id);
   virtual int next(uint64_t& table_id);
 
-  TO_STRING_KV(K_(is_inited), K_(cur_table_idx), K_(table_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int get_table_ids(ObMultiVersionSchemaService* schema_service, const uint64_t tenant_id);
@@ -110,7 +110,7 @@ class ObTenantPartitionEntityIterator : public ObITableIterator {
   int init(ObSchemaGetterGuard& schema_guard, const uint64_t tenant_id);
   virtual int next(uint64_t& partition_entity_id) override;
 
-  TO_STRING_KV(K_(is_inited), K_(cur_idx), K_(entity_id_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int get_partition_entity_id_array(ObSchemaGetterGuard& schema_guard, const uint64_t tenant_id);

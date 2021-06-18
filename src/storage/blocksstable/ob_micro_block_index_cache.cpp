@@ -23,6 +23,30 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace blocksstable {
+int64_t ObMicroBlockIndexInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_id), K_(table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockIndexBufferHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(handle), KP_(index_mgr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockIndexCache::ObMicroBlockIndexIOCallback::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), KP_(buffer), K_(offset), K_(buf_size), KP_(cache), KP_(idx_mgr));
+  J_OBJ_END();
+  return pos;
+}
 ObMicroBlockIndexInfo::ObMicroBlockIndexInfo() : block_id_(), table_id_(0), file_id_(OB_INVALID_DATA_FILE_ID)
 {}
 

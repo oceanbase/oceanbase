@@ -14,6 +14,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObIdSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_ID_SET, id_set_);
+  J_OBJ_END();
+  return pos;
+}
 
 ObId2Idx::ObId2Idx()
 {}

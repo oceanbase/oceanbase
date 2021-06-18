@@ -108,9 +108,7 @@ class ObMsInfoTask {
   int update_curr_member_list(const common::ObMemberList& curr_member_list);
   ObMsInfoTask& operator=(const ObMsInfoTask& rv);
 
-  TO_STRING_KV(N_KEY, pkey_, "server", server_, "cluster_id", cluster_id_, "log_type", log_type_, "ms_log_id",
-      ms_log_id_, "mc_timestamp", mc_timestamp_, "replica_num", replica_num_, "prev_member_list", prev_member_list_,
-      "curr_member_list", curr_member_list_, "ms_proposal_id", ms_proposal_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey pkey_;

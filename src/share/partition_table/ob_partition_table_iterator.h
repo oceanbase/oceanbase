@@ -293,7 +293,7 @@ class ObPTPartPartitionIterator : public ObIPartitionTableIterator {
   }
   virtual int next(ObPartitionInfo& partition);
 
-  TO_STRING_KV(K_(inited), K_(pt_table_id), K_(pt_partition_id), K_(prefetch_partitions), K_(prefetch_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int prefetch();
@@ -325,7 +325,7 @@ class ObPartitionTableIdIterator {
 
   int init(schema::ObMultiVersionSchemaService& schema_service);
   virtual int get_next_partition(uint64_t& pt_table_id, int64_t& pt_partition_id);
-  TO_STRING_KV(K_(inited), K_(tenant_iter), K_(pt_tables), K_(pt_table_id), K_(pt_partition_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int get_part_num(const uint64_t table_id, int64_t& part_num);
@@ -356,7 +356,7 @@ class ObFullPartitionTableIterator : public ObIPartitionTableIterator {
 
   virtual int next(ObPartitionInfo& partition);
 
-  TO_STRING_KV(K_(inited), K_(part_iter), K_(pt_part_iter));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int next_partition();
@@ -383,7 +383,7 @@ class ObFullMetaTableIterator : public ObIPartitionTableIterator {
 
   virtual int next(ObPartitionInfo& partition);
 
-  TO_STRING_KV(K_(inited), K_(part_iter), K_(tenant_iter), K_(pt_table));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int next_partition();

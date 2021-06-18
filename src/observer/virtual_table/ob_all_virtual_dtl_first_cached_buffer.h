@@ -29,7 +29,7 @@ class ObAllVirtualDtlFirstBufferInfo {
 
   void set_first_buffer_info(uint64_t tenant_id, sql::dtl::ObDtlCacheBufferInfo* buffer_info);
 
-  TO_STRING_KV(K(tenant_id_), K(channel_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t tenant_id_;  // 1

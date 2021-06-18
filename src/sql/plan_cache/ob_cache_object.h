@@ -58,7 +58,7 @@ struct ObOutlineState {
     outline_version_.reset();
     is_plan_fixed_ = false;
   }
-  TO_STRING_KV(K(outline_version_), K(is_plan_fixed_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   share::schema::ObSchemaObjVersion outline_version_;
   bool is_plan_fixed_;  // whether the plan will be fixed with outline_content
 };
@@ -98,8 +98,7 @@ struct DeletedCacheObjInfo {
         added_to_pc_(false)
   {}
 
-  TO_STRING_KV(
-      K_(obj_id), K_(tenant_id), K_(log_del_time), K_(real_del_time), K_(ref_count), K_(added_to_pc), K_(mem_used));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObCacheObject {

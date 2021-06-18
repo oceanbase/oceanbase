@@ -32,7 +32,7 @@ struct ObFrameInfo {
       : expr_cnt_(expr_cnt), frame_idx_(frame_idx), frame_size_(frame_size)
   {}
 
-  TO_STRING_KV(K_(expr_cnt), K_(frame_idx), K_(frame_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   uint64_t expr_cnt_;
@@ -59,7 +59,7 @@ struct ObExprFrameInfo {
   int alloc_frame(
       common::ObIAllocator& exec_allocator, ObPhysicalPlanCtx& phy_ctx, uint64_t& frame_cnt, char**& frames) const;
 
-  TO_STRING_KV(K_(const_frame_ptrs), K_(const_frame), K_(dynamic_frame), K_(datum_frame));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   // count of expression need context. exec_ctx pre allocate memory according to it.

@@ -18,6 +18,70 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObTailCursor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_id), K_(offset));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogCursor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_id), K_(offset), K_(size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogCursorExt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_id), K_(offset), K_(size), "submit_timestamp", get_submit_timestamp(), "is_batch_committed",is_batch_committed(), K_(acc_cksm));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetCursorResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(csr_arr_), K(arr_len_), K(ret_len_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogFlushCbArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_type), K_(log_id), K_(proposal_id), K_(leader), K_(cluster_id), K_(log_cursor),K_(after_consume_timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGLogArchiveStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), "status_str", share::ObLogArchiveStatus::get_str(status_), K_(round_start_ts),K_(round_start_log_id), K_(round_snapshot_version), K_(round_log_submit_ts), K_(round_clog_epoch_id),K_(round_accum_checksum), K_(archive_incarnation), K_(log_archive_round), K_(last_archived_log_id),K_(last_archived_checkpoint_ts), K_(last_archived_log_submit_ts), K_(clog_epoch_id), K_(accum_checksum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReadCost::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(read_disk_count), K_(read_clog_disk_time), K_(fill_clog_cold_cache_time), K_(memcpy_time),K_(valid_data_size), K_(read_disk_size), K_(total_read_clog_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIlogStorageQueryCost::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(read_ilog_disk_count), K_(read_info_block_disk_count), K_(get_cursor_batch_time));
+  J_OBJ_END();
+  return pos;
+}
 DEFINE_SERIALIZE(ObLogCursorExt)
 {
   int ret = OB_SUCCESS;

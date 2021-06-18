@@ -33,7 +33,7 @@ class ObPGMemtableMgr;
 struct ObVirtualPartitionSplitInfo {
   ObVirtualPartitionSplitInfo() : is_major_split_(false), table_id_(0), partition_id_(0), merge_version_(0)
   {}
-  TO_STRING_KV(K_(is_major_split), K_(table_id), K_(partition_id), K_(merge_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_major_split_;
   int64_t table_id_;
   int64_t partition_id_;
@@ -292,7 +292,7 @@ class ObLogTsCompater {
   {
     return version_ > rtable.version_;
   }
-  TO_STRING_KV(K_(version), K_(log_ts_range), K_(is_base));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t version_;
   ObLogTsRange* log_ts_range_;
   bool is_base_;
@@ -312,7 +312,7 @@ class ObTableCompater {
   int add_tables(ObIArray<ObSSTable*>& sstables);
   int add_tables(ObIArray<ObMigrateTableInfo::SSTableInfo>& sstables);
   int fill_log_ts();
-  TO_STRING_KV(K_(compaters));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObSEArray<ObLogTsCompater, 8> compaters_;

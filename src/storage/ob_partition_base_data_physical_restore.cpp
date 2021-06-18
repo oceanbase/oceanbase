@@ -2628,3 +2628,35 @@ int ObPGPartitionBaseDataMetaRestoreReaderV1::check_sstable_ids_contain_schema_t
   }
   return ret;
 }
+int64_t ObPartitionBaseDataMetaRestoreReaderV1::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(restore_info), K_(last_read_size), K_(partition_store_meta), K_(data_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionMetaPhysicalReader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(sstable_index), K_(data_size), K_(pkey));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhyRestoreMacroIndexStore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhyRestoreMetaIndexStore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}

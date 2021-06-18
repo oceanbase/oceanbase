@@ -31,6 +31,14 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace sql {
+int64_t PCVSchemaObj::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(database_id), K_(schema_id), K_(schema_version), K_(schema_type), K_(table_type),K_(table_name), K_(is_tmp_table), K_(is_explicit_db_name));
+  J_OBJ_END();
+  return pos;
+}
 
 int PCVSchemaObj::init(const ObTableSchema* schema)
 {

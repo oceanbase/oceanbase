@@ -33,7 +33,7 @@ class ObCheckPoingLogCb : public clog::ObISubmitLogCb {
   int on_finished(const common::ObPartitionKey& partition_key, const uint64_t log_id);
 
   public:
-  TO_STRING_KV(K_(checkpoint));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObPartitionService* ps_;

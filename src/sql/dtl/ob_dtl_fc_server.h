@@ -157,7 +157,7 @@ class ObTenantDfc {
   ObDtlLocalFirstBufferCacheManager first_buffer_mgr_;
 
   public:
-  TO_STRING_KV(K_(tenant_id), K_(blocked_dfc_cnt), K_(channel_total_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObDfcServer : public ObTimerTask {

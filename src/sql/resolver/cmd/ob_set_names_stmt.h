@@ -69,8 +69,14 @@ class ObSetNamesStmt : public ObCMDStmt {
   {
     this->collation_ = collation;
   }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(is_set_names), K_(is_default_charset), K_(is_default_collation),
-      K_(charset), K_(collation));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(N_STMT_TYPE, ((int)stmt_type_), K_(is_set_names), K_(is_default_charset), K_(is_default_collation),K_(charset), K_(collation));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   // types and constants

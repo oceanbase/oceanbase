@@ -28,6 +28,14 @@ using namespace share::schema;
 using namespace obrpc;
 using namespace blocksstable;
 namespace storage {
+int64_t ObMacroBlockStorageReader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(args), K_(data_size), K_(result_code), K_(is_data_ready), K_(backup_pair),K_(backup_index_tid), KP_(meta), K_(data), K_(init_ts), K_(finish_ts), "limit time", finish_ts_ - init_ts_);
+  J_OBJ_END();
+  return pos;
+}
 ////////////////////////////////ObPartitionMetaOssBaseReader///////////////////////////////////
 ObPartitionMetaStorageReader::ObPartitionMetaStorageReader()
     : is_inited_(false),

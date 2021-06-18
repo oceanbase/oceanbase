@@ -86,7 +86,7 @@ class ObPushdownFilterNode {
   {
     return common::OB_SUCCESS;
   }
-  TO_STRING_KV(K_(type), K_(n_child), K_(col_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   common::ObIAllocator& alloc_;

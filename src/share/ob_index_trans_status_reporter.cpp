@@ -132,3 +132,11 @@ int ObIndexTransStatusReporter::get_wait_trans_status(const uint64_t index_table
   }
   return ret;
 }
+int64_t ObIndexTransStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(trans_status), K_(snapshot_version), K_(frozen_version), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}

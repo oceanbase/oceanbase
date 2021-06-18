@@ -85,7 +85,7 @@ class ObSqlTask : public observer::ObSrvTask {
   {
     return req_ts_;
   }
-  TO_STRING_KV(KP(this), K_(msg_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   static const int64_t MAX_SQL_TASK_SIZE = 16 * 1024 - 128;

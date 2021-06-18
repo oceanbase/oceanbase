@@ -79,10 +79,7 @@ class ObUpdateStmt : public ObDelUpdStmt {
   const ObTablesAssignments* get_slice_from_all_table_assignments(
       common::ObIAllocator& allocator, int64_t table_idx, int64_t index_idx) const;
 
-  TO_STRING_KV(N_STMT_TYPE, stmt_type_, N_TABLE, table_items_, N_IS_IGNORE, ignore_, N_PARTITION_EXPR, part_expr_items_,
-      N_COLUMN, column_items_, "input_columns", all_table_columns_, N_ASSIGN, tables_assignments_, N_WHERE,
-      condition_exprs_, N_ORDER_BY, order_items_, N_LIMIT, limit_count_expr_, N_OFFSET, limit_offset_expr_,
-      N_QUERY_HINT, stmt_hint_, N_QUERY_CTX, query_ctx_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   // Get the root expr of all query-related expressions in stmt

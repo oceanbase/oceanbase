@@ -57,7 +57,7 @@ class ObAlterDatabaseStmt : public ObDDLStmt {
     return alter_database_arg_.database_schema_.get_collation_type();
   }
 
-  TO_STRING_KV(K_(alter_database_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   obrpc::ObAlterDatabaseArg alter_database_arg_;

@@ -7513,3 +7513,19 @@ int64_t ObLogPlan::check_pwj_cons(const ObPwjConstraint& pwj_cons,
   }
   return ret;
 }
+int64_t ObLogPlan::LeadingInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_set), K_(left_table_set), K_(right_table_set));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SubPlanInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(init_expr), K_(sp_params), K_(subplan), K_(init_plan));
+  J_OBJ_END();
+  return pos;
+}

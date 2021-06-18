@@ -28,7 +28,7 @@ struct ReplicaAttr {
   {}
   ReplicaAttr(const int64_t num, const int64_t memstore_percent) : num_(num), memstore_percent_(memstore_percent)
   {}
-  TO_STRING_KV(K_(num), K_(memstore_percent));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool operator<(const ReplicaAttr& that)
   {
     bool bool_ret = true;
@@ -86,8 +86,7 @@ class BaseReplicaAttrSet {
   int64_t get_paxos_replica_num() const;
   int64_t get_specific_replica_num() const;
 
-  TO_STRING_KV("full_replica_attr_array", get_full_replica_attr_array(), "logonly_replica_attr_array",
-      get_logonly_replica_attr_array(), "readonly_replica_attr_array", get_readonly_replica_attr_array());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObArrayHelper<share::ReplicaAttr> SchemaReplicaAttrArray;
@@ -274,7 +273,7 @@ struct SchemaZoneReplicaAttrSet {
   {
     return replica_attr_set_.get_specific_replica_num();
   }
-  TO_STRING_KV(K_(replica_attr_set), K_(zone_set), K_(zone));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   SchemaReplicaAttrSet replica_attr_set_;
   common::ObArrayHelper<common::ObString> zone_set_;
@@ -386,7 +385,7 @@ struct ObZoneReplicaAttrSet {
   int append(const share::ObZoneReplicaAttrSet& that);
 
   bool check_paxos_num_valid() const;
-  TO_STRING_KV(K_(zone), K_(replica_attr_set), K_(zone_set));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObZone zone_;  // For the time being, for the interface to be compiled and passed, it will be removed after
                          // the schema split is completed.
   ObReplicaAttrSet replica_attr_set_;
@@ -430,7 +429,7 @@ struct ObReplicaNumSet {
 
   int64_t get_specific_replica_num() const;
 
-  TO_STRING_KV(K(full_replica_num_), K(logonly_replica_num_), K(readonly_replica_num_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t full_replica_num_;
   int64_t logonly_replica_num_;
@@ -503,7 +502,7 @@ struct ObRegionReplicaNumSet {
   {
     return replica_num_set_.get_specific_replica_num();
   }
-  TO_STRING_KV(K(region_), K(replica_num_set_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObRegion region_;
   ObReplicaNumSet replica_num_set_;

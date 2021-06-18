@@ -1667,3 +1667,27 @@ int ObAutoincrementService::get_sequence_value(
 
 }  // end namespace share
 }  // end namespace oceanbase
+int64_t TableNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(table_id), K_(next_value), K_(local_sync), K_(last_refresh_ts), K_(curr_node), K_(prefetch_node),K_(prefetching));
+  J_OBJ_END();
+  return pos;
+}
+int64_t CacheHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(prefetch_start), K_(prefetch_end), K_(next_value), K_(offset), K_(increment), K_(max_value));
+  J_OBJ_END();
+  return pos;
+}
+int64_t CacheNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cache_start), K_(cache_end));
+  J_OBJ_END();
+  return pos;
+}

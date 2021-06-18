@@ -94,7 +94,7 @@ typedef struct TableJoinType_ {
   std::pair<uint64_t, uint64_t> table_pair_;
   // sql::ObJoinType type_;
   int join_type_;
-  TO_STRING_KV(K_(table_pair), K_(join_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 } TableJoinType;
 
 enum ObTableModeFlag {
@@ -151,7 +151,7 @@ struct ObTableMode {
     return (ObTablePKMode)((table_mode >> TM_PK_MODE_OFFSET) & PK_MODE_MASK);
   }
 
-  TO_STRING_KV("table_mode_flag", mode_flag_, "pk_mode", pk_mode_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   union {
     int32_t mode_;
     struct {

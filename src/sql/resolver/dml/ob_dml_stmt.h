@@ -44,7 +44,7 @@ struct TransposeItem {
     {}
     ~AggrPair()
     {}
-    TO_STRING_KV(KPC_(expr), K_(alias_name));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ForPair {
@@ -54,7 +54,7 @@ struct TransposeItem {
     ~ForPair()
     {}
 
-    TO_STRING_KV(K_(column_name));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct InPair {
@@ -66,7 +66,7 @@ struct TransposeItem {
     ~InPair()
     {}
     int assign(const InPair& other);
-    TO_STRING_KV(K_(exprs), K_(pivot_expr_alias), K_(column_names));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   TransposeItem() : old_column_count_(0), is_unpivot_(false), is_incude_null_(false)
@@ -115,8 +115,7 @@ struct TransposeItem {
   }
   int assign(const TransposeItem& other);
   int deep_copy(const TransposeItem& other, ObRawExprFactory& expr_factory);
-  TO_STRING_KV(K_(old_column_count), K_(is_unpivot), K_(is_incude_null), K_(aggr_pairs), K_(for_columns), K_(in_pairs),
-      K_(unpivot_columns), K_(alias_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t old_column_count_;
   bool is_unpivot_;
@@ -161,7 +160,7 @@ struct ObUnpivotInfo {
   {
     return old_column_count_ + get_new_column_count();
   }
-  TO_STRING_KV(K_(is_include_null), K_(old_column_count), K_(unpivot_column_count), K_(for_column_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool is_include_null_;
   int64_t old_column_count_;
@@ -382,8 +381,7 @@ struct ColumnItem {
     return column_type;
   }
   inline uint64_t hash(uint64_t seed) const;
-  TO_STRING_KV(N_CID, column_id_, N_TID, table_id_, N_COLUMN, column_name_, K_(auto_filled_timestamp), N_DEFAULT_VALUE,
-      default_value_, K_(base_tid), K_(base_cid), N_EXPR, expr_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t column_id_;
   uint64_t table_id_;
@@ -424,7 +422,7 @@ struct FromItem {
   }
 
   int deep_copy(const FromItem& other);
-  TO_STRING_KV(N_TID, table_id_, N_IS_JOIN, is_joined_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct JoinedTable : public TableItem {
@@ -469,8 +467,7 @@ struct JoinedTable : public TableItem {
   {
     return join_conditions_;
   }
-  TO_STRING_KV(N_TID, table_id_, N_TABLE_TYPE, static_cast<int32_t>(type_), N_JOIN_TYPE, ob_join_type_str(joined_type_),
-      N_LEFT_TABLE, left_table_, N_RIGHT_TABLE, right_table_, "join_condition", join_conditions_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObJoinType joined_type_;
   TableItem* left_table_;
@@ -500,7 +497,7 @@ class SemiInfo {
   {
     return LEFT_ANTI_JOIN == join_type_ || RIGHT_ANTI_JOIN == join_type_;
   }
-  TO_STRING_KV(K_(join_type), K_(semi_id), K_(left_table_ids), K_(right_table_id), K_(semi_conditions));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObJoinType join_type_;
   uint64_t semi_id_;
@@ -545,7 +542,7 @@ struct ObAssignment {
     return seed;
   }
 
-  TO_STRING_KV(N_COLUMN, column_expr_, N_EXPR, expr_, K_(base_table_id), K_(base_column_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMaterializedViewContext {
@@ -557,8 +554,7 @@ struct ObMaterializedViewContext {
   common::ObArray<ObColumnRefRawExpr*> base_join_cols_;
   common::ObArray<ObColumnRefRawExpr*> depend_join_cols_;
   common::ObArray<ObColumnRefRawExpr*> order_cols_;
-  TO_STRING_KV(K_(base_table_id), K_(depend_table_id), K_(select_cols), K_(base_select_cols), K_(depend_select_cols),
-      K_(base_join_cols), K_(depend_join_cols), K_(order_cols));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObSEArray<ObAssignment, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> ObAssignments;
@@ -586,7 +582,7 @@ struct ObTableAssignment {
   uint64_t table_id_;
   ObAssignments assignments_;
   bool is_update_part_key_;
-  TO_STRING_KV(K_(table_id), N_ASSIGN, assignments_, K_(is_update_part_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 /// multi-table assignments
 typedef common::ObSEArray<ObTableAssignment, 3, common::ModulePageAllocator, true> ObTablesAssignments;
@@ -611,7 +607,7 @@ class ObDMLStmt : public ObStmt {
       subpart_expr_array_.reset();
     }
     int deep_copy(ObRawExprFactory& expr_factory, const PartExprArray& other, const uint64_t copy_types);
-    TO_STRING_KV(K_(table_id), K_(index_tid));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct PartExprItem {
@@ -630,7 +626,7 @@ class ObDMLStmt : public ObStmt {
       subpart_expr_ = NULL;
     }
     int deep_copy(ObRawExprFactory& expr_factory, const PartExprItem& other, const uint64_t copy_types);
-    TO_STRING_KV(K_(table_id), K_(index_tid), KPC_(part_expr), KPC_(subpart_expr));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ObViewTableIds;
 
@@ -1260,10 +1256,7 @@ class ObDMLStmt : public ObStmt {
   int check_pseudo_column_exist(ObItemType type, ObPseudoColumnRawExpr*& expr);
 
   /////////end of functions for sql hint//////////
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), N_TABLE, table_items_, N_TABLE, CTE_table_items_, N_PARTITION_EXPR,
-      part_expr_items_, N_COLUMN, column_items_, N_COLUMN, nextval_sequence_ids_, N_COLUMN, currval_sequence_ids_,
-      N_WHERE, condition_exprs_, N_ORDER_BY, order_items_, N_LIMIT, limit_count_expr_, N_OFFSET, limit_offset_expr_,
-      N_QUERY_HINT, stmt_hint_, N_SUBQUERY_EXPRS, subquery_exprs_, N_USER_VARS, user_var_exprs_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void set_is_table_flag();
   int has_is_table(bool& has_is_table) const;

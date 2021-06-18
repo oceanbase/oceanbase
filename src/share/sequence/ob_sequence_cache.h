@@ -38,7 +38,7 @@ struct SequenceCacheNode {
   void reset()
   {}
 
-  TO_STRING_KV(K_(start), K_(end));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int set_start(const common::number::ObNumber& start)
   {
@@ -86,7 +86,7 @@ struct CacheItemKey {
     hash_val = common::murmurhash(&key_, sizeof(key_), hash_val);
     return hash_val;
   }
-  TO_STRING_KV(K_(key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t key_;
 };
 
@@ -141,8 +141,7 @@ struct ObSequenceCacheItem : public common::LinkHashValue<CacheItemKey> {
   ObSequenceValue last_number_;
 
   public:
-  TO_STRING_KV(K_(curr_node), K_(prefetch_node), K_(prefetching), K_(with_prefetch_node), K_(last_refresh_ts),
-      K_(last_number), K_(base_on_last_number));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObSequenceCache {

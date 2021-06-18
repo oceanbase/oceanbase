@@ -52,7 +52,7 @@ struct ObDatumMeta {
   {
     new (this) ObDatumMeta();
   }
-  TO_STRING_KV(K_(type), K_(cs_type), K_(scale), K_(precision));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObObjType type_;
   common::ObCollationType cs_type_;
@@ -245,9 +245,7 @@ struct ObExpr {
     return g_expr_ser_array;
   }
 
-  TO_STRING_KV("type", get_type_name(type_), K_(datum_meta), K_(obj_meta), K_(obj_datum_map), KP_(eval_func),
-      KP_(inner_functions), K_(inner_func_cnt), K_(arg_cnt), K_(parent_cnt), K_(frame_idx), K_(datum_off),
-      K_(res_buf_off), K_(res_buf_len), K_(expr_ctx_id), K_(extra), KP(this));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   char* alloc_str_res_mem(ObEvalCtx& ctx, const int64_t size) const;
@@ -356,7 +354,7 @@ struct ObDatumObj {
   {
     meta_.scale_ = scale;
   }
-  TO_STRING_KV(K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   ObDatumMeta meta_;
@@ -372,7 +370,7 @@ struct ObDatumObjParam : public ObDatumObj {
   ObDatumObjParam(const ObDatumObj& other) : ObDatumObj(other), accuracy_(), res_flags_(0), flag_()
   {}
 
-  TO_STRING_KV(K_(accuracy), K_(res_flags), K_(datum), K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int from_objparam(const common::ObObjParam& objparam);

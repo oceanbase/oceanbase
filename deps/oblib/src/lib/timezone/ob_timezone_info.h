@@ -302,7 +302,7 @@ class ObTimeZoneInfo {
     error_on_overlap_time_ = false;
     tz_map_wrap_.set_tz_map(NULL);
   }
-  TO_STRING_KV(N_ID, tz_id_, N_OFFSET, offset_, N_ERROR_ON_OVERLAP_TIME, error_on_overlap_time_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   static ObTimeZoneName TIME_ZONE_NAMES[];
@@ -359,7 +359,7 @@ struct ObTZTransitionStruct {
     return !(*this == other);
   }
 
-  TO_STRING_KV(K_(offset_sec), K_(tran_type_id), K_(is_dst), "abbr", common::ObString(abbr_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int32_t offset_sec_;
   int32_t tran_type_id_;
@@ -476,7 +476,7 @@ class ObTZIDKey {
     }
     return cmp;
   }
-  TO_STRING_KV(K_(tz_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int64_t tz_id_;
@@ -506,7 +506,7 @@ class ObTZNameKey {
   }
 
   uint64_t hash(uint64_t seed = 0) const;
-  TO_STRING_KV("tz_name", common::ObString(common::OB_MAX_TZ_NAME_LEN, tz_name_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   char tz_name_[common::OB_MAX_TZ_NAME_LEN];
@@ -652,7 +652,7 @@ class ObTZNameIDInfo : public ObTZNameHashValue {
   }
   ~ObTZNameIDInfo()
   {}
-  TO_STRING_KV(K_(tz_id), K_(tz_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   int64_t tz_id_;
@@ -902,7 +902,7 @@ struct ObIntervalYMValue {
     return ret;
   }
 
-  TO_STRING_KV(K_(nmonth));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t nmonth_;
 
@@ -1073,7 +1073,7 @@ struct ObIntervalDSValue {
 
   int8_t calc_leading_scale();
 
-  TO_STRING_KV(K_(nsecond), K_(fractional_second));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // compat with object, store order is int32_t + int64_t
   int32_t fractional_second_;

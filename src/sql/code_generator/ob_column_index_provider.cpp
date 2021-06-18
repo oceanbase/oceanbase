@@ -16,6 +16,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t RowDesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_EXPR, exprs_);
+  J_OBJ_END();
+  return pos;
+}
 int RowDesc::init()
 {
   static const int64_t BUCKET_SIZE = 256;

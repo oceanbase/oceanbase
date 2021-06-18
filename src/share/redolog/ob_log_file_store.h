@@ -49,7 +49,7 @@ struct ObLogFileIOInfo final {
     ret_ = OB_SUCCESS;
   }
 
-  TO_STRING_KV(K_(disk_id), K_(fd), KP_(buf), K_(size), K_(offset), K_(complete), K_(ret));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObLogFileDescriptor final {
@@ -71,7 +71,7 @@ class ObLogFileDescriptor final {
     return fd_infos_.count();
   }
 
-  TO_STRING_KV(K_(flag), KP_(disk_mgr), K_(file_id), K_(is_inited), "fd_cnt", fd_infos_.count());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   static const int8_t READ_FLAG = 1;
   static const int8_t WRITE_FLAG = 2;

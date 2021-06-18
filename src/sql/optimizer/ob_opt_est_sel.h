@@ -91,7 +91,7 @@ class ObEstColumnStat {
     origin_ndv_ = ndv;
   }
 
-  TO_STRING_KV(K_(column_id), K_(ndv), K_(origin_ndv));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t column_id_;
@@ -182,8 +182,7 @@ class ObEstTableStat {
   int compute_number_distinct(const char* llc_bitmap, int64_t& num_distinct);
   double select_alpha_value(const int64_t num_bucket);
 
-  TO_STRING_KV(
-      K_(table_id), K_(ref_id), K_(rel_id), K_(rows), K_(origin_rows), K_(all_used_parts), K_(pk_ids), K_(all_cstat));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   uint64_t table_id_;
@@ -245,7 +244,7 @@ class ObEstAllTableStat {
 
   int get_cstat_by_table_id(const uint64_t table_id, const uint64_t column_id, ObEstColumnStat*& cstat);
 
-  TO_STRING_KV(K_(all_tstat));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObSEArray<ObEstTableStat, 8, common::ModulePageAllocator, true> all_tstat_;
@@ -387,7 +386,7 @@ class ObEstSelInfo {
   {
     return use_origin_stat_;
   }
-  TO_STRING_KV(K_(table_stats));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObOptimizerContext& opt_ctx_;
@@ -471,7 +470,7 @@ class ObOptEstSel {
       return ret;
     }
 
-    TO_STRING_KV(K(var_), K(has_lt_), K(has_gt_), K(lt_sel_), K(gt_sel_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObRawExpr* var_;
     bool has_lt_;
     bool has_gt_;

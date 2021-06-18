@@ -24,6 +24,14 @@ using namespace share;
 using namespace share::schema;
 using namespace common;
 namespace sql {
+int64_t _ObLookupInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(ref_table_id), K_(partition_num), K_(partition_cnt), K_(schema_version), K_(is_old_no_pk_table));
+  J_OBJ_END();
+  return pos;
+}
 
 class ObTableLookup::ObTableLookupCtx : public ObPhyOperatorCtx {
   friend class ObTableLookup;

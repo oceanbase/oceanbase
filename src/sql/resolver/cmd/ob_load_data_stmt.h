@@ -44,9 +44,7 @@ struct ObLoadArgument {
 
   {}
 
-  TO_STRING_KV(K_(load_file_storage), K_(is_default_charset), K_(ignore_rows), K_(dupl_action), K_(charset),
-      K_(file_name), K_(access_info), K_(database_name), K_(table_name), K_(combined_name), K_(tenant_id),
-      K_(database_id), K_(table_id), K_(is_csv_format), K_(full_file_path));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void assign(const ObLoadArgument& other)
   {
@@ -115,8 +113,7 @@ struct ObDataInFileStruct {
     field_enclosed_char_ = other.field_enclosed_char_;
     is_opt_field_enclosed_ = other.is_opt_field_enclosed_;
   }
-  TO_STRING_KV(K_(line_term_str), K_(line_start_str), K_(field_term_str), K_(field_escaped_str), K_(field_enclosed_str),
-      K_(field_escaped_char), K_(field_enclosed_char), K_(is_opt_field_enclosed));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObString line_term_str_;       // line teminated str
   common::ObString line_start_str_;      // line string by
@@ -152,8 +149,7 @@ class ObLoadDataHint {
   int get_value(IntHintItem item, int64_t& value) const;
   int set_value(StringHintItem item, const ObString& value);
   int get_value(StringHintItem item, ObString& value) const;
-  TO_STRING_KV("Int Hint Item", common::ObArrayWrap<int64_t>(integer_values_, TOTAL_INT_ITEM), "String Hint Item",
-      common::ObArrayWrap<ObString>(string_values_, TOTAL_STRING_ITEM));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int64_t integer_values_[TOTAL_INT_ITEM];
@@ -166,7 +162,7 @@ class ObLoadDataStmt : public ObCMDStmt {
     FieldOrVarStruct()
         : field_or_var_name_(), column_id_(OB_INVALID_ID), column_type_(common::ObMaxType), is_table_column_(true)
     {}
-    TO_STRING_KV(K_(field_or_var_name), K_(column_id), K_(column_type), K_(is_table_column));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObString field_or_var_name_;
     uint64_t column_id_;
     common::ColumnType column_type_;
@@ -229,8 +225,7 @@ class ObLoadDataStmt : public ObCMDStmt {
   {
     return is_default_table_columns_;
   }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(load_args), K_(data_struct_in_file), K_(field_or_var_list),
-      K_(assignments), K_(hints), K_(is_default_table_columns));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObLoadArgument load_args_;

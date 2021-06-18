@@ -116,7 +116,7 @@ class ObTransResultInfo : public ObTransResultInfoLinkNode {
   {
     next_ = next;
   }
-  TO_STRING_KV(K_(state), K_(commit_version), K_(min_log_id), K_(trans_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
   static const int64_t TOTAL_NUM = 1024;

@@ -88,8 +88,14 @@ class ObXaStmt : public ObStmt, public ObICmd {
     return flags_;
   }
 
-  TO_STRING_KV(
-      N_STMT_TYPE, ((int)stmt_type_), K_(xid_string), K_(gtrid_string), K_(bqual_string), K_(format_id), K_(flags));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(N_STMT_TYPE, ((int)stmt_type_), K_(xid_string), K_(gtrid_string), K_(bqual_string), K_(format_id), K_(flags));
+    J_OBJ_END();
+    return pos;
+  }
 
   public:
   static const int32_t MAX_XID_LENGTH = 128;

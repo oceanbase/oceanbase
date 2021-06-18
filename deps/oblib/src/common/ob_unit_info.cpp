@@ -266,5 +266,14 @@ int ObUnitInfo::assign(const ObUnitInfo& other)
   return ret;
 }
 
+int64_t ObUnitInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(unit), K_(config), K_(pool));
+  J_OBJ_END();
+  return pos;
+}
+
 }  // end namespace share
 }  // end namespace oceanbase

@@ -32,7 +32,14 @@ struct Node {
   ptr_t next;
   ptr_t prev;
   T data;
-  TO_STRING_KV(K(data));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(data));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 template <class List>
@@ -123,7 +130,14 @@ class ConstIterator {
     node_ = node_->prev;
     return tmp;
   };
-  TO_STRING_KV(K_(node));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(node));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   node_ptr_t node_;
@@ -209,7 +223,14 @@ class Iterator {
     node_ = node_->prev;
     return tmp;
   };
-  TO_STRING_KV(K_(node));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(node));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   node_ptr_t node_;

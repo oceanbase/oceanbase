@@ -36,7 +36,14 @@ class Matrix {
   bool is_contain(const T& element) const;
   template <typename Func>
   int sort_column_group(const int64_t start_column_idx, const int64_t column_count, Func& func);
-  TO_STRING_KV(K(is_inited_), K(row_count_), K(column_count_), K(inner_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(is_inited_), K(row_count_), K(column_count_), K(inner_array_));
+    J_OBJ_END();
+    return pos;
+  }
 
   private:
   ObArray<T> inner_array_;
@@ -221,7 +228,7 @@ class ObServerBalancer {
     // During the equalization process, the position where the unit is arranged,
     // the initial value is the same as original_pos_
     ObUnitManager::ObUnitLoad unit_load_;  // unit_ info
-    TO_STRING_KV(K(tenant_id_), K(original_pos_), K(arranged_pos_), K(unit_load_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   public:
@@ -296,7 +303,7 @@ class ObServerBalancer {
     {}
     bool is_valid() const;
     void reset();
-    TO_STRING_KV(K(load_sum_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     double get_required(const ObResourceType resource_type) const;
     int append_load(const share::ObUnitConfig& load);
     int append_load(const ObUnitManager::ObUnitLoad& unit_load);
@@ -325,7 +332,7 @@ class ObServerBalancer {
       arranged_server_.reset();
       load_sum_.reset();
     }
-    TO_STRING_KV(K(column_tenant_id_), K(original_server_), K(arranged_server_), K(load_sum_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     uint64_t column_tenant_id_;
     common::ObAddr original_server_;
     common::ObAddr arranged_server_;
@@ -347,8 +354,7 @@ class ObServerBalancer {
     int sum_group_load();
     int get_intra_ttg_load_value(const ServerLoad& target_server_load, double& intra_ttg_load_value) const;
     int get_inter_ttg_load_value(const ServerLoad& target_server_load, double& inter_ttg_load_value) const;
-    TO_STRING_KV(K(column_tenant_id_), K(start_column_idx_), K(column_count_), K(server_), KP(server_load_),
-        K(unit_loads_), K(load_sum_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     uint64_t column_tenant_id_;  // Fill in the tenant_id of the tenant in the first row of this column
     // When unitgroup load comes from the same group (belonging to the same tenant),
@@ -376,7 +382,7 @@ class ObServerBalancer {
     {}
     bool is_valid() const;
     void reset();
-    TO_STRING_KV(K(resource_sum_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     double get_capacity(const ObResourceType resource_type) const;
     int append_resource(const share::ObServerResourceInfo& resource);
     int append_resource(const ResourceSum& resource);
@@ -401,7 +407,7 @@ class ObServerBalancer {
     }
     virtual int update_load_value() = 0;
     double get_true_capacity(const ObResourceType resource_type) const;
-    TO_STRING_KV(K(server_), K(inter_ttg_load_value_), K(resource_info_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     share::ObServerResourceInfo resource_info_;
     common::ObAddr server_;
     double inter_ttg_load_value_;
@@ -427,8 +433,7 @@ class ObServerBalancer {
       intra_ttg_load_value_ = 0.0;
     }
     double get_intra_ttg_resource_capacity(const ObResourceType resource_type) const;
-    TO_STRING_KV(K(server_), K(unitgroup_loads_), K(alien_ug_loads_), K(resource_info_), K(inter_ttg_load_value_),
-        K(intra_ttg_load_value_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     virtual int update_load_value() override;
 
     // Save the unitgroup loads of this group during intra equilibrium
@@ -457,7 +462,7 @@ class ObServerBalancer {
       load_sum_.reset();
     }
     virtual int update_load_value() override;
-    TO_STRING_KV(K(server_), K(load_sum_), K(resource_info_), K(inter_ttg_load_value_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     LoadSum load_sum_;
     bool wild_server_;  // not in available server
     double resource_weights_[RES_MAX];
@@ -501,7 +506,7 @@ class ObServerBalancer {
   struct ServerLoadSum {
     ServerLoadSum() : server_(), load_sum_(), disk_in_use_(0)
     {}
-    TO_STRING_KV(K(server_), K(load_sum_), K(disk_in_use_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObAddr server_;
     LoadSum load_sum_;
     int64_t disk_in_use_;
@@ -513,7 +518,7 @@ class ObServerBalancer {
     PoolOccupation(const uint64_t tenant_id, const uint64_t pool_id, const common::ObAddr& server)
         : tenant_id_(tenant_id), resource_pool_id_(pool_id), server_(server)
     {}
-    TO_STRING_KV(K(tenant_id_), K(resource_pool_id_), K(server_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     uint64_t tenant_id_;
     // When the resource pool does not have a grant, tenant_id_ is an invalid value
     uint64_t resource_pool_id_;
@@ -535,8 +540,7 @@ class ObServerBalancer {
     bool is_stable() const;
     ServerLoad* get_server_load(const common::ObAddr& server);
     int get_all_unit_loads(common::ObIArray<ObUnitManager::ObUnitLoad>& unit_loads);
-    TO_STRING_KV(KP(tenant_id_matrix_), K(unit_migrate_stat_matrix_), K(column_unit_num_array_),
-        K(unitgroup_load_array_), K(server_load_array_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     const Matrix<uint64_t>* tenant_id_matrix_;
     Matrix<UnitMigrateStat> unit_migrate_stat_matrix_;
@@ -597,7 +601,7 @@ class ObServerBalancer {
       return percent;
     }
 
-    TO_STRING_KV(K(server_), K(disk_in_use_), K(disk_total_), K(wild_server_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     common::ObAddr server_;
     int64_t disk_in_use_;
@@ -643,7 +647,7 @@ class ObServerBalancer {
     int check_all_available_servers_over_disk_waterlevel(
         const double disk_waterlevel, bool& all_available_servers_over_disk_waterlevel);
 
-    TO_STRING_KV(K(zone_), K(server_disk_statistic_array_), K(over_disk_waterlevel_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     common::ObZone zone_;
     common::ObArray<ServerDiskStatistic> server_disk_statistic_array_;

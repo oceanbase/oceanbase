@@ -25,7 +25,7 @@ struct ObTenantFileSuperBlockCheckpointEntry final {
   explicit ObTenantFileSuperBlockCheckpointEntry(ObTenantFileInfo& file_info) : file_info_(file_info)
   {}
   ~ObTenantFileSuperBlockCheckpointEntry() = default;
-  TO_STRING_KV(K_(file_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(TENANT_FILE_ENTRY_VERSION);
   ObTenantFileInfo& file_info_;
 };
@@ -40,7 +40,7 @@ class ObTenantFileSuperBlockItem : public ObIPGMetaItem {
   {
     return TENANT_FILE_INFO;
   }
-  TO_STRING_KV(KP_(buf), K_(buf_size), KP_(entry));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   int extend_buf(const int64_t request_size);

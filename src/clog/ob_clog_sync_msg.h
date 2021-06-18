@@ -39,7 +39,7 @@ struct McCtx {
   int64_t mc_timestamp_;
   uint64_t max_confirmed_log_id_;
   bool is_normal_partition_;
-  TO_STRING_KV(K(partition_key_), K(mc_timestamp_), K(max_confirmed_log_id_), K(is_normal_partition_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 typedef common::ObSEArray<McCtx, OB_ARRAY_COUNT> McCtxArray;
 }  // namespace clog
@@ -69,7 +69,7 @@ class ObLogGetMCTsRequest {
   {
     partition_key_ = partition_key;
   }
-  TO_STRING_KV(K_(partition_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey partition_key_;
@@ -129,7 +129,7 @@ class ObLogGetMCTsResponse {
   {
     is_normal_partition_ = is_normal_partition;
   }
-  TO_STRING_KV(K_(partition_key), K_(membership_timestamp), K_(max_confirmed_log_id), K_(is_normal_partition));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey partition_key_;
@@ -170,7 +170,7 @@ class ObLogGetPriorityArrayRequest {
     ret = partition_array_.assign(partition_array);
     return ret;
   }
-  TO_STRING_KV(K(partition_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionArray partition_array_;
@@ -203,7 +203,7 @@ class ObLogGetPriorityArrayResponse {
   {
     priority_array_ = priority_array;
   }
-  TO_STRING_KV(K(priority_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   election::PriorityArray priority_array_;
@@ -236,7 +236,7 @@ class ObLogGetMcCtxArrayRequest {
   {
     partition_array_ = partition_array;
   }
-  TO_STRING_KV(K(partition_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionArray partition_array_;
@@ -269,7 +269,7 @@ class ObLogGetMcCtxArrayResponse {
   {
     mc_ctx_array_ = mc_ctx_array;
   }
-  TO_STRING_KV(K(mc_ctx_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   clog::McCtxArray mc_ctx_array_;
@@ -308,7 +308,7 @@ class ObLogGetRemoteLogRequest {
   {
     return log_id_;
   }
-  TO_STRING_KV(K(partition_key_), K(log_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey partition_key_;
@@ -359,7 +359,7 @@ class ObLogGetRemoteLogResponse {
   {
     return ret_value_;
   }
-  TO_STRING_KV(K(partition_key_), K(log_id_), K(trans_id_), K(submit_timestamp_), K(ret_value_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey partition_key_;

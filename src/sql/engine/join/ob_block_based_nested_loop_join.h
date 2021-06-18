@@ -57,7 +57,7 @@ class ParamaterWrapper {
     return !operator==(other);
   }
   common::ObSArray<common::ObObjParam> paramater_list_;
-  TO_STRING_KV("paramaters", paramater_list_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObBLKNestedLoopJoin : public ObBasicNestedLoopJoin {

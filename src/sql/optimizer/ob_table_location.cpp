@@ -5733,3 +5733,91 @@ int ObTableLocation::recursive_convert_generated_column(
   }
   return ret;
 }
+int64_t ObTableLocation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(ref_table_id), K_(part_num), K_(is_global_index), K_(duplicate_type),K_(part_expr_param_idxs), K_(part_projector), K_(part_expr), K_(gen_col_expr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableLocation::PartProjector::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(virtual_column_exprs), K_(column_cnt), "part_projector",common::ObArrayWrap<int32_t>(part_projector_, part_projector_size_), "subpart_projector",common::ObArrayWrap<int32_t>(subpart_projector_, subpart_projector_size_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TableLocationKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(ref_table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHashPartMapValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(part_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHashPartMapKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObListPartMapValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(part_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObListPartMapKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPLFuncValueNode::ParamValuePair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(param_idx), K_(obj_value));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartLocCalcNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(node_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartIdRowMapManager::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(manager), K_(part_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartIdRowMapManager::MapEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(list));
+  J_OBJ_END();
+  return pos;
+}

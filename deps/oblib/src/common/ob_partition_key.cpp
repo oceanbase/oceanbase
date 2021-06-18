@@ -412,6 +412,15 @@ int ObPartitionLeaderArray::is_duplicate_partition(const ObPartitionKey& key, bo
   return ret;
 }
 
+int64_t ObPartitionLeaderArray::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partitions), K_(leaders), K_(type_array));
+  J_OBJ_END();
+  return pos;
+}
+
 int ObPartitionKey::to_yson(char* buf, const int64_t buf_len, int64_t& pos) const
 {
   int ret = OB_SUCCESS;

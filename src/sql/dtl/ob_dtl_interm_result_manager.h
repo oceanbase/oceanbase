@@ -36,7 +36,7 @@ struct ObDTLIntermResultKey {
   {
     return channel_id_ == key.channel_id_;
   }
-  TO_STRING_KV(K(channel_id_), K(time_us_), K(start_time_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObDTLIntermResultInfo {

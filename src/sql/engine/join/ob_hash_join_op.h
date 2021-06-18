@@ -70,7 +70,7 @@ class ObHashJoinOp : public ObJoinOp {
     // before using them. for performance.
     ObHashJoinStoredJoinRow* stored_row_;
     HashTableCell* next_tuple_;
-    TO_STRING_KV(K_(stored_row), K(static_cast<void*>(next_tuple_)));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   struct PartHashJoinTable {
     PartHashJoinTable()
@@ -173,7 +173,7 @@ class ObHashJoinOp : public ObJoinOp {
   struct HistItem {
     int64_t hash_value_;
     ObHashJoinStoredJoinRow* store_row_;
-    TO_STRING_KV(K_(hash_value), K(static_cast<void*>(store_row_)));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   struct ResultItem {
     HistItem left_;

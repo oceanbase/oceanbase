@@ -42,7 +42,7 @@ struct ObTableStatValueHandle {
   ObTableStatValueHandle(const ObTableStatValueHandle& other);
   virtual ~ObTableStatValueHandle();
   void reset();
-  TO_STRING_KV(K(cache_value_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 } /* namespace common */
 } /* namespace oceanbase */

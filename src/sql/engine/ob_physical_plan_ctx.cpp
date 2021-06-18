@@ -26,6 +26,30 @@ using namespace common;
 using namespace share;
 using namespace transaction;
 namespace sql {
+int64_t PartParamIdxArray::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_id), K_(part_param_idxs));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoteSqlInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(use_ps), K_(is_batched_stmt), K_(remote_sql), KPC_(ps_params));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhysicalPlanCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("tenant_id", tenant_id_);
+  J_OBJ_END();
+  return pos;
+}
 ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator& allocator)
     : allocator_(allocator),
       tenant_id_(OB_INVALID_ID),

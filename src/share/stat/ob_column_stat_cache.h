@@ -44,7 +44,7 @@ class ObColumnStatValueHandle {
     *this = tmp_handle;
   }
   const ObColumnStat* cache_value_;
-  TO_STRING_KV(K(cache_value_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObColumnStatCache* cache_;

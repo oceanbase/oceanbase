@@ -153,7 +153,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
 
     QueueTaskType task_type_;
 
-    TO_STRING_KV("QueueTaskType", print_type(task_type_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   // partition operation type, including online, offline
@@ -222,9 +222,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
       }
       return str;
     }
-    TO_STRING_KV("partition op str", print_partition_op(op_type_), "svr", addr_, "start_log_id", start_log_id_,
-        "start_log_timestamp_", start_log_timestamp_, "end_log_id", end_log_id_, "end_log_timestamp",
-        end_log_timestamp_, "next", next_);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   typedef PartitionOp TaskHead;
@@ -333,7 +331,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
     TaskHead* head_;
     TaskHead* tail_;
 
-    TO_STRING_KV(K_(pkey), KPC_(head), KPC_(tail));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   // whne delete server-A, its all records in __all_clog_history_reporter_info_v2 need be deleted.
@@ -361,7 +359,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
 
     common::ObAddr delete_addr_;
 
-    TO_STRING_KV(K_(delete_addr));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   private:
@@ -376,7 +374,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
     {
       return err_;
     }
-    TO_STRING_KV(K_(err), K_(op));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     int err_;
@@ -393,7 +391,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
     {
       return err_;
     }
-    TO_STRING_KV(K_(err), K_(task));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     int err_;
@@ -410,7 +408,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
     {
       return err_;
     }
-    TO_STRING_KV(K(err_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     private:
     int err_;

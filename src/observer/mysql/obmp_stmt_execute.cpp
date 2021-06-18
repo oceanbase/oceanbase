@@ -51,6 +51,14 @@ using namespace obmysql;
 using namespace rpc;
 using namespace sql;
 namespace observer {
+int64_t ObSavedException::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pos_), K(error_code_), K(error_msg_));
+  J_OBJ_END();
+  return pos;
+}
 ObMPStmtExecute::ObMPStmtExecute(const ObGlobalContext& gctx)
     : ObMPBase(gctx),
       retry_ctrl_(/*ctx_.retry_info_*/),

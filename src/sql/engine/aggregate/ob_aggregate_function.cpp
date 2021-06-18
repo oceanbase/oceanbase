@@ -28,6 +28,30 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObAggregateDistinctItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(group_id), K_(col_idx), KP_(cells), K_(cs_type_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAggregateFunction::GroupRow::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(row_), KP(ctx_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAggregateFunction::ExprCtxIdx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(expr_), K(ctx_idx_));
+  J_OBJ_END();
+  return pos;
+}
 uint64_t ObAggregateDistinctItem::hash() const
 {
   uint64_t hash_id = 0;

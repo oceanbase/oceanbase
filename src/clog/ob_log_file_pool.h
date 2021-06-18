@@ -75,8 +75,7 @@ class ObLogWriteFilePool : public IFilePool {
   void update_min_using_file_id(const file_id_t file_id);
   void try_recycle_file();
   int get_total_used_size(int64_t& total_size) const;
-  TO_STRING_KV(K_(is_inited), K_(log_dir), K_(file_size), K_(free_quota), K_(limit_free_quota), K_(type),
-      K_(min_file_id), K_(min_using_file_id), K_(max_file_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   protected:
   int create_new_file(const int dest_dir_fd, const int dest_file_id, const char* dest_file, int& fd);

@@ -100,7 +100,7 @@ class ObDtlBcastService {
   {
     bcast_ch_count_ = ch_count;
   }
-  TO_STRING_KV(K_(server_addr), K_(bcast_ch_count), K_(peer_ids), K_(ch_infos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // the destination server that will receive the buffer.
   common::ObAddr server_addr_;
@@ -127,7 +127,7 @@ class ObDtlChanAgent {
     ObDtlBasicChannel* ch_;
     int64_t ch_count_;
     common::ObAddr server_addr_;
-    TO_STRING_KV(K(server_addr_), K(ch_count_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   public:

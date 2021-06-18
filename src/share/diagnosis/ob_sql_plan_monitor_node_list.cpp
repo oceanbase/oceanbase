@@ -141,3 +141,11 @@ int ObSqlPlanMonitorRecycleTask::init(ObPlanMonitorNodeList* node_list)
   }
   return ret;
 }
+int64_t ObMonitorNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(op_id), "op_name", get_operator_name(), K_(thread_id));
+  J_OBJ_END();
+  return pos;
+}

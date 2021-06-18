@@ -20,6 +20,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObDynamicParamSetter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(param_idx), K_(src), K_(dst));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObDynamicParamSetter, param_idx_, src_, dst_);
 

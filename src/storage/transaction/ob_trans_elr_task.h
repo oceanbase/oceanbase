@@ -42,7 +42,7 @@ class WaitTransEndTask : public ObTransTask {
   {
     return partition_;
   }
-  TO_STRING_KV(K_(partition), K_(trans_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   ObTransID trans_id_;
@@ -83,7 +83,7 @@ class CallbackTransTask : public ObTransTask {
   {
     return status_;
   }
-  TO_STRING_KV(K_(partition), K_(trans_id), K_(prev_trans_id), K_(status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
   common::ObPartitionKey partition_;
