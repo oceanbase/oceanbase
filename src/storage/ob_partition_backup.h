@@ -52,8 +52,7 @@ public:
     return PART_GROUP_BACKUP_TASK;
   }
 
-  TO_STRING_KV(K_(task_id), K_(is_inited), K_(is_finished), K_(is_batch_mode), KP_(partition_service),
-      K_(first_error_code), K_(type), "sub_task_count", task_list_.count(), K_(task_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int check_partition_validation();  // only invoked before executing, so without concurrency invoke

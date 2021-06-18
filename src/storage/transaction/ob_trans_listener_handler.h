@@ -92,7 +92,7 @@ public:
   {
     return in_clear_;
   }
-  TO_STRING_KV(K_(is_commit_log_synced), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int init_listener_mask_set_(ObPartTransCtx* ctx);

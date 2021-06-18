@@ -17,6 +17,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObTimeoutCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(abs_timeout_us));
+  J_OBJ_END();
+  return pos;
+}
 
 ObTimeoutCtx::ObTimeoutCtx() : abs_timeout_us_(-1), trx_timeout_us_(-1), next_(NULL)
 {

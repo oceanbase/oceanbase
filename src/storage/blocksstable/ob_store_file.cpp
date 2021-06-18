@@ -39,6 +39,62 @@ using namespace oceanbase::storage;
 
 namespace oceanbase {
 namespace blocksstable {
+int64_t ObMacroBlockInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_cnt), K_(write_seq), K_(is_free), K_(access_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockWriteInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(buffer), K_(meta), K_(size), K_(io_desc), K_(block_write_ctx), K_(reuse_block_ctx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockReadInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(offset), K_(size), K_(io_desc), KP_(io_callback), K_(macro_block_ctx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlocksHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_id_list), "tenant_id", nullptr == file_ ? 0 : file_->get_tenant_id(), "file_id",nullptr == file_ ? 0 : file_->get_file_id());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_id), K_(io_handle), KP_(block_write_ctx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockHandleV1::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_id), K_(io_handle));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBadBlockInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(disk_id_), K(macro_block_id_), K(error_type_), K(store_file_path_), K(error_msg_), K(check_time_));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ---------------------------------------------------------ObMacroBlockHandle-----------------------------------------------------------
  */

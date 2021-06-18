@@ -196,7 +196,14 @@ public:
     buf->next_ = alloc_list_;
     alloc_list_ = buf;
   }
-  TO_STRING_KV(K_(tenant_id), K_(is_alloc), K_(alloc_size), K_(alloc_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(tenant_id), K_(is_alloc), K_(alloc_size), K_(alloc_count));
+    J_OBJ_END();
+    return pos;
+  }
 
 public:
   uint64_t tenant_id_;

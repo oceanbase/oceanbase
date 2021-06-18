@@ -76,7 +76,7 @@ public:
     return send_timestamp_;
   }
   void reset();
-  TO_STRING_KV(K_(status), K_(send_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static const int64_t OB_TRANS_RPC_TIMEOUT_THRESHOLD = 3 * 1000 * 1000;
@@ -392,8 +392,7 @@ public:
   {
     return task_timeout_;
   }
-  TO_STRING_KV(K_(partition), K_(trans_id), K_(msg_type), K_(status), K_(msg), K_(task_type), K_(addr), K_(request_id),
-      K_(sql_no), K_(task_timeout));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   ObPartitionKey partition_;

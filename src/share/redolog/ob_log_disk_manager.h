@@ -68,7 +68,7 @@ public:
 
   bool is_valid() const;
 
-  TO_STRING_KV(K_(fd), K_(disk_id), K_(file_id), K_(refresh_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObLogDiskInfo {
@@ -146,8 +146,7 @@ public:
   //         writing log file, ObLogFileDescriptor uses this method to inform ObLogDiskManager
   void restore_start(const int64_t file_id, const int64_t offset);
 
-  TO_STRING_KV(K_(disk_id), K_(dir_path), K_(state), K_(state_modify_timestamp), K_(restore_start_file_id),
-      K_(restore_start_offset), K_(log_dir), K_(file_pool), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   OB_INLINE void set_disk_path(const char* path)
@@ -281,8 +280,7 @@ public:
     int64_t copy_start_file_id_;  // the upper boundary of coping log files
     int64_t copied_file_id_;      // the minimum successfully copied log file id
 
-    TO_STRING_KV(K_(checksum), K_(length), K_(version), K_(catchup_complete), K_(copy_complete), K_(catchup_file_id),
-        K_(catchup_offset), K_(copy_start_file_id), K_(copied_file_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     static const int16_t DATA_VERSION = 1;
 
@@ -373,7 +371,7 @@ private:
         : disk_id_(-1), min_log_id_(-1), max_log_id_(-1), continuous_(false), has_log_(false), is_restoring_(false)
     {}
 
-    TO_STRING_KV(K_(disk_id), K_(min_log_id), K_(max_log_id), K_(continuous), K_(has_log), K_(is_restoring));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   class MonitorTask : public common::ObTimerTask {

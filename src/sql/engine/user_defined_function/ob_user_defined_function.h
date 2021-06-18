@@ -81,7 +81,7 @@ public:
     idx_in_udf_arg_ = other.idx_in_udf_arg_;
     return *this;
   }
-  TO_STRING_KV(K_(idx_in_udf_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObSqlExpression* sql_calc_;
   int64_t idx_in_udf_arg_;
 };
@@ -172,7 +172,7 @@ public:
   {}
   virtual ~ObAggUdfMeta() = default;
   ObAggUdfMeta& operator=(const ObAggUdfMeta& other);
-  TO_STRING_KV(K_(udf_meta), K_(udf_attributes), K_(udf_attributes_types), K_(calculable_results));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   share::schema::ObUDFMeta udf_meta_;                         /* all the info we need about udf*/
   common::ObSEArray<common::ObString, 16> udf_attributes_;    /* udf's input, args' name */
   common::ObSEArray<ObExprResType, 16> udf_attributes_types_; /* udf's input, aatribute type */

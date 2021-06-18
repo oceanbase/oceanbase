@@ -161,7 +161,7 @@ public:
     reset();
   }
   void reset();
-  TO_STRING_KV(K(pg_key_), K(type_), K(epoch_), K(takeover_ts_), K(create_timestamp_), K(retry_times_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   ObPGKey pg_key_;

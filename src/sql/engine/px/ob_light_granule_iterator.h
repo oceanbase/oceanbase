@@ -32,7 +32,7 @@ class ObLGIInput : public ObIPhyOperatorInput {
   public:
     ObArrayParamInfo() : param_store_idx_(common::OB_INVALID_INDEX), array_param_()
     {}
-    TO_STRING_KV(K_(param_store_idx), K_(array_param));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t param_store_idx_;
     common::ObSEArray<ObObj, 16> array_param_;
   };
@@ -56,7 +56,7 @@ public:
   virtual ObPhyOperatorType get_phy_op_type() const override;
   virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override;
   int assign_pkeys(const common::ObIArray<common::ObPartitionKey>& pkeys);
-  TO_STRING_KV(K_(location_idx_list), K_(param_array_list), K_(part_stmt_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int init_param_array_list(ObPhysicalPlanCtx& plan_ctx, ObPhyTableLocation& table_loc, ObTaskInfo& task_info,
@@ -95,7 +95,7 @@ public:
           table_location_key_(common::OB_INVALID_ID),
           tsc_op_id_(common::OB_INVALID_ID)
     {}
-    TO_STRING_KV(K_(ref_table_id), K_(table_location_key), K_(tsc_op_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     uint64_t ref_table_id_;
     uint64_t table_location_key_;
     uint64_t tsc_op_id_;
@@ -120,7 +120,7 @@ public:
     {
       return state_ == LGI_UNINITIALIZED;
     }
-    TO_STRING_KV(K_(cur_granule_pos), K_(cur_part_id), K_(cur_param_idx), K_(state));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     int64_t cur_granule_pos_;

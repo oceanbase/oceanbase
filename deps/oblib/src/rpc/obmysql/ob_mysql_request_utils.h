@@ -78,10 +78,7 @@ public:
     }
   }
 
-  TO_STRING_KV(K_(header_buffered_len), K_(payload_buffered_len), K_(payload_buffered_total_len), K_(last_pkt_seq),
-      K_(payload_len), K_(curr_pkt_seq), K_(payload_buf_alloc_len), "next_read_step",
-      get_read_step_str(next_read_step_), K_(raw_pkt), "used", arena_.used(), "total", arena_.total(),
-      K_(is_multi_pkt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   char header_buf_[common::OB_MYSQL_HEADER_LENGTH];
@@ -116,7 +113,7 @@ public:
     is_multi_pkt_ = false;
   }
 
-  TO_STRING_KV(K_(last_pkt_seq), K_(is_multi_pkt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   uint8_t last_pkt_seq_;
@@ -142,7 +139,7 @@ public:
     proto20_last_pkt_seq_ = 0;
   }
 
-  TO_STRING_KV(K_(comp_last_pkt_seq), K_(is_multi_pkt), K_(proto20_last_request_id), K_(proto20_last_pkt_seq));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   uint8_t comp_last_pkt_seq_;
@@ -236,8 +233,7 @@ public:
     return ret;
   }
 
-  TO_STRING_KV(KP_(read_pos), KP(buf_.pos), KP(buf_.last), KP(buf_.end), "orig_buf_size", orig_buf_size(),
-      "orig_data_size", orig_data_size(), "read_avail_size", read_avail_size(), "write_avail_size", write_avail_size());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   easy_buf_t& buf_;

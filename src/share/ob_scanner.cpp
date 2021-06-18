@@ -20,6 +20,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObScanner::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_ROWSTORE, row_store_, N_MEM_LIMIT, mem_size_limit_, N_AFFECTED_ROWS, affected_rows_,K_(row_matched_count), K_(row_duplicated_count), K_(found_rows), N_LAST_INSERT_ID_TO_CLIENT,last_insert_id_to_client_, N_LAST_INSERT_ID_SESSION, last_insert_id_session_, K_(is_result_accurate),K_(trans_result), K_(implicit_cursors), K_(rcode));
+  J_OBJ_END();
+  return pos;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

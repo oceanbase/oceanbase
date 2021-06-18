@@ -36,6 +36,14 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ObIndexSSTableBuilder::BuildIndexJob::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(job_id_), K(schema_version_), K(snapshot_version_), K(data_table_id_), K(index_table_id_),K(degree_of_parallelism_));
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace common;
 using namespace share;
@@ -50,7 +58,14 @@ public:
       : scan_table_id_(data_table_id), scan_ranges_(data_ranges), index_ranges_(index_ranges), alloc_(alloc)
   {}
 
-  TO_STRING_KV(K(scan_table_id_), K(scan_ranges_), K(index_ranges_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(scan_table_id_), K(scan_ranges_), K(index_ranges_));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   uint64_t& scan_table_id_;

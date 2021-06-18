@@ -42,7 +42,7 @@ private:
     ObStmtMapInfo map_info_;
     TransformFlag trans_flag_ = DEFAULT;  // defalut value;
 
-    TO_STRING_KV(K(exists_expr_), K(not_exists_expr_), K(any_expr_), K(all_expr_), K(map_info_), K(trans_flag_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   int transform_same_exprs(ObDMLStmt* stmt, ObIArray<ObRawExpr*>& conds, bool& is_happened);

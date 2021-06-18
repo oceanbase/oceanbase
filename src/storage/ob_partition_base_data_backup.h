@@ -50,7 +50,7 @@ struct ObBackupSSTableInfo {
   {}
   ~ObBackupSSTableInfo()
   {}
-  TO_STRING_KV(K_(sstable_meta), K_(part_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void reset();
   bool is_valid() const;
@@ -64,7 +64,7 @@ struct ObBackupMacroBlockArg final {
   ObBackupMacroBlockArg();
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(fetch_arg), KP_(table_key_ptr), K_(need_copy));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   obrpc::ObFetchMacroBlockArg fetch_arg_;
   const ObITable::TableKey* table_key_ptr_;
@@ -135,8 +135,7 @@ public:
   }
   int get_macro_block_meta(blocksstable::ObFullMacroBlockMeta& meta, blocksstable::ObBufferReader& data);
   void reset();
-  TO_STRING_KV(K_(is_inited), K_(args), K_(data_size), K_(result_code), K_(is_data_ready), K_(macro_arg),
-      K_(backup_index_tid), K_(full_meta), K_(data));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int process();
@@ -177,8 +176,7 @@ public:
   int fetch_sstable_pair_list(const uint64_t index_id, common::ObIArray<blocksstable::ObSSTablePair>& pair_list);
   int fetch_all_table_ids(common::ObIArray<uint64_t>& table_id_array);
   int fetch_table_keys(const uint64_t index_id, obrpc::ObFetchTableInfoResult& table_res);
-  TO_STRING_KV(K_(pkey), KP(backup_arg_), K_(last_read_size), K_(partition_store_meta), K_(snapshot_version),
-      K_(schema_version), K_(data_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int prepare(const common::ObPartitionKey& pkey, const ObDataStorageInfo& data_info);
@@ -333,7 +331,7 @@ public:
     return file_offset_ + data_buffer_.pos();
   }
 
-  TO_STRING_KV(K_(is_opened), K_(file_offset), K_(max_buf_size), KP(backup_arg_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int get_data_version(const ObBackupFileType data_type, uint16& data_version);
@@ -367,7 +365,7 @@ public:
   int open(common::ObInOutBandwidthThrottle& bandwidth_throttle, ObIArray<ObPartMigrationTask>& task_list);
   int process();
   int close();
-  TO_STRING_KV(K_(is_inited), K_(task_id), KP_(cp_fty), K_(meta_appender), K_(index_appender));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int prepare_appender(common::ObInOutBandwidthThrottle& bandwidth_throttle, const share::ObPhysicalBackupArg& arg);
@@ -399,7 +397,7 @@ private:
 struct ObBackupMacroBlockInfo final {
   ObBackupMacroBlockInfo();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_key), K_(start_index), K_(cur_block_count), K_(total_block_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObITable::TableKey table_key_;
   int64_t start_index_;
   int64_t cur_block_count_;
@@ -414,7 +412,7 @@ public:
     virtual ~SubTask();
     void reset();
 
-    TO_STRING_KV(K_(block_info), K_(block_count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObArray<ObBackupMacroBlockInfo> block_info_;
     int64_t block_count_;
   };
@@ -423,7 +421,7 @@ public:
     MacroIndexMergePoint();
     void reset();
     bool is_valid() const;
-    TO_STRING_KV(K_(table_id), K_(sstable_idx), KP_(macro_index_array));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     uint64_t table_id_;
     int64_t sstable_idx_;
     const ObArray<ObBackupTableMacroIndex>* macro_index_array_;
@@ -433,7 +431,7 @@ public:
     MacroIndexRetryPoint();
     void reset();
     bool is_valid() const;
-    TO_STRING_KV(K_(table_key), K_(last_idx));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObITable::TableKey table_key_;
     int64_t last_idx_;
   };
@@ -469,8 +467,7 @@ public:
     return is_opened_;
   }
 
-  TO_STRING_KV(K_(macro_block_count), K_(base_task_id), K_(retry_cnt), K_(task_turn), K_(index_merge_point), K_(result),
-      K_(pg_key), K_(table_keys), "task_count", tasks_.count(), K_(macro_index_appender));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
   ObArray<ObITable::TableKey> table_keys_;
   ObArray<SubTask> tasks_;
@@ -571,7 +568,7 @@ struct ObBackupMacroData final {
 
 public:
   ObBackupMacroData(blocksstable::ObBufferHolder& meta, blocksstable::ObBufferReader& data);
-  TO_STRING_KV(K_(data), K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   blocksstable::ObBufferHolder& meta_;

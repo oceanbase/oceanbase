@@ -49,6 +49,14 @@ using namespace omt;
 using namespace transaction;
 
 namespace storage {
+int64_t ObPartGroupBackupTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_id), K_(is_inited), K_(is_finished), K_(is_batch_mode), KP_(partition_service),K_(first_error_code), K_(type), "sub_task_count", task_list_.count(), K_(task_list));
+  J_OBJ_END();
+  return pos;
+}
 
 ObPartGroupBackupTask::ObPartGroupBackupTask() : ObPartGroupTask()
 {}

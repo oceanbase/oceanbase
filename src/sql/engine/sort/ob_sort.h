@@ -120,10 +120,7 @@ public:
   }
   // TODO():minimum_row_count and topk_precision should be defined as N_XXX after library
   // is  merged
-  TO_STRING_KV(N_ID, id_, N_COLUMN_COUNT, column_count_, N_PROJECTOR,
-      common::ObArrayWrap<int32_t>(projector_, projector_size_), N_FILTER_EXPRS, filter_exprs_, N_CALC_EXPRS,
-      calc_exprs_, N_ORDER_BY, sort_columns_, N_LIMIT, mem_limit_, "minimum_row_count", minimum_row_count_,
-      "topk_precision", topk_precision_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // function members

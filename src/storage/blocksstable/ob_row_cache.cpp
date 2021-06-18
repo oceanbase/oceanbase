@@ -17,6 +17,30 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace blocksstable {
+int64_t ObRowCacheKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(file_id), K_(rowkey_size), K_(data_version), K_(table_type), K_(rowkey));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRowCacheValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(obj_array), K_(size), K_(block_id), KP_(column_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRowValueHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(row_value_), K(handle_));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * -----------------------------------------------------ObRowCacheKey------------------------------------------------------
  */

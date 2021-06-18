@@ -78,7 +78,7 @@ public:
   }
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(status), K_(srr), K_(gts_start), K_(gts_end));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static const int64_t OB_GTS_RPC_TIMEOUT = 1 * 1000 * 1000;

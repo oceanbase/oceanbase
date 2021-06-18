@@ -93,8 +93,7 @@ public:
     return ret;
   }
 
-  TO_STRING_KV(K_(func_type), K_(win_type), K_(is_distinct), K_(is_ignore_null), K_(upper), K_(lower), K_(result_index),
-      K_(partition_cols), K_(sort_cols));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObPhysicalPlan* my_phy_plan_;
   ObItemType func_type_;
   ObAggregateExpression* aggr_column_;
@@ -119,7 +118,7 @@ private:
     {}
     int64_t head_;
     int64_t tail_;
-    TO_STRING_KV(K(head_), K(tail_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   class IGetRow {
@@ -173,7 +172,7 @@ private:
       row_cnt_ = 0;
       return reset_buf(tenant_id);
     }
-    TO_STRING_KV(K_(begin_idx), K_(row_cnt));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     virtual int inner_get_row(const int64_t row_idx, const common::ObNewRow*& row)
@@ -215,7 +214,7 @@ private:
     int64_t part_first_row_;
     bool part_iter_end_;
     RowsWrapper rw_;
-    TO_STRING_KV(KP(this), K(*func_info_), K_(part_first_row), K_(part_iter_end), K_(rw));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   class BaseFunc : public common::ObDLinkBase<BaseFunc> {

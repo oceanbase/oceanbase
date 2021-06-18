@@ -232,3 +232,11 @@ int ObUnitPlacementHybridStrategy::choose_server(common::ObArray<ObServerResourc
   }
   return ret;
 }
+int64_t ObUnitPlacementStrategy::ObServerResource::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), "capacity", common::ObArrayWrap<double>(capacity_, RES_MAX), "assigned",common::ObArrayWrap<double>(assigned_, RES_MAX), "max_assigned",common::ObArrayWrap<double>(max_assigned_, RES_MAX));
+  J_OBJ_END();
+  return pos;
+}

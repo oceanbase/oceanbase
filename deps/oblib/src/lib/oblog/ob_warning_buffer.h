@@ -91,7 +91,7 @@ public:
     }
     WarningItem& operator=(const WarningItem& other);
 
-    TO_STRING_KV(K_(msg), K_(code));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 private:

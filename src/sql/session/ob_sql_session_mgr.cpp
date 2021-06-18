@@ -702,3 +702,11 @@ int ObSQLSessionMgr::is_need_clear_sessid(const ObSMConnection* conn, bool& is_n
   }
   return ret;
 }
+int64_t ObSQLSessionMgr::SessionPool::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(session_pool_.capacity()), K(session_pool_.get_total()), K(session_pool_.get_free()));
+  J_OBJ_END();
+  return pos;
+}

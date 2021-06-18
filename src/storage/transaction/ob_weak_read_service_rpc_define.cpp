@@ -18,6 +18,38 @@
 namespace oceanbase {
 using namespace common;
 namespace obrpc {
+int64_t ObWrsGetClusterVersionRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(req_server));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWrsGetClusterVersionResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err_code), K_(version), K_(version_duration_us));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWrsClusterHeartbeatRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(req_server), K_(version), K_(valid_part_count), K_(total_part_count), K_(generate_timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWrsClusterHeartbeatResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err_code));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObWrsGetClusterVersionRequest, req_server_);
 OB_SERIALIZE_MEMBER(ObWrsGetClusterVersionResponse, err_code_, version_, version_duration_us_);

@@ -21,6 +21,30 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ObDeterminateTaskTransmit::TaskIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(loc_idx_), K(part_loc_idx_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDeterminateTaskTransmit::IdRange::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(begin_), K(end_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDeterminateTaskTransmit::ResultRange::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(task_range_), K(slice_range_));
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace common;
 using namespace share;

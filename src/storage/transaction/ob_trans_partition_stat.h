@@ -99,10 +99,7 @@ public:
     return end_trans_by_self_count_;
   }
 
-  TO_STRING_KV(K_(addr), K_(partition), K_(ctx_type), K_(is_master), K_(is_frozen), K_(is_stopped), K_(read_only_count),
-      K_(active_read_write_count), K_(active_memstore_version), K_(total_ctx_count), K_(mgr_addr),
-      K_(with_dependency_trx_count), K_(without_dependency_trx_count), K_(end_trans_by_prev_count),
-      K_(end_trans_by_checkpoint_count), K_(end_trans_by_self_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObAddr addr_;

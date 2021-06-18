@@ -23,6 +23,14 @@ using namespace share;
 using namespace share::schema;
 
 namespace rootserver {
+int64_t ObAllServerStat::ServerStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server_load), K_(cpu_assigned_percent), K_(disk_assigned_percent), K_(unit_num),K_(migrating_unit_num), K_(merged_version), K_(leader_count));
+  J_OBJ_END();
+  return pos;
+}
 ObAllServerStat::ServerStat::ServerStat()
 {
   reset();

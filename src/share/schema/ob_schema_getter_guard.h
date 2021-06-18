@@ -125,7 +125,7 @@ public:
     return mgr_handle_;
   }
   void reset();
-  TO_STRING_KV(K_(tenant_id), K_(snapshot_version), KP_(schema_mgr), K_(schema_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t tenant_id_;
@@ -146,7 +146,7 @@ class ObSchemaGetterGuard : public common::ObPartMgr {
     uint64_t schema_id_;
     ObSchema* schema_;
     common::ObKVCacheHandle handle_;
-    TO_STRING_KV(K_(schema_type), K_(schema_id), KP_(schema));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   const static int DEFAULT_RESERVE_SIZE = 2;
   const static int DEFAULT_TENANT_NUM = 2;
@@ -541,7 +541,7 @@ public:
     ObSchemaType schema_type_;
     uint64_t schema_id_;
     const ObSchema* schema_;
-    TO_STRING_KV(K_(schema_type), K_(schema_id), KP_(schema));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   template <typename T>

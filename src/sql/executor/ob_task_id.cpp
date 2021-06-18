@@ -17,6 +17,14 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
+int64_t ObTaskID::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_OB_JOB_ID, ob_job_id_, N_TASK_ID, task_id_, K_(task_cnt));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObTaskID, ob_job_id_, task_id_, task_cnt_);
 

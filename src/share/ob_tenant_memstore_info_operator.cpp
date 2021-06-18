@@ -24,6 +24,14 @@ namespace oceanbase {
 using namespace common;
 using namespace common::sqlclient;
 namespace share {
+int64_t ObTenantMemstoreInfoOperator::TenantServerMemInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(server), K_(active_memstore_used), K_(total_memstore_used), K_(major_freeze_trigger),K_(memstore_limit));
+  J_OBJ_END();
+  return pos;
+}
 
 bool ObTenantMemstoreInfoOperator::TenantServerMemInfo::is_valid() const
 {

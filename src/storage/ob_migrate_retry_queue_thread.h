@@ -41,7 +41,7 @@ struct ObMigrateRetryTask {
     return (pkey_.is_valid() && INVALID_RETRY_TYPE != task_type_);
   }
 
-  TO_STRING_KV(N_KEY, pkey_, "task_type", task_type_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObMigrateRetryQueueThread : public lib::TGTaskHandler {

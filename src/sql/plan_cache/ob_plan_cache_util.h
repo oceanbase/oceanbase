@@ -141,7 +141,7 @@ struct ObPlanCacheKey {
 
     return cmp_ret;
   }
-  TO_STRING_KV(K_(name), K_(key_id), K_(db_id), K_(sessid), K_(is_ps_mode), K_(sys_vars_str), K_(namespace));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObString name_;
   uint64_t key_id_;
   uint64_t db_id_;
@@ -181,7 +181,7 @@ struct ObPCKeyValue {
   ObPCKeyValue(ObPlanCacheKey& key, ObPCVSet* pcv_set) : key_(key), pcv_set_(pcv_set)
   {}
 
-  TO_STRING_KV(K_(key), KP(pcv_set_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObPlanCacheKey key_;
   ObPCVSet* pcv_set_;
@@ -316,7 +316,7 @@ struct ObSysVarInPC {
     return ret;
   }
 
-  TO_STRING_KV(K_(system_variables));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPCMemPctConf {
@@ -354,13 +354,13 @@ struct NotParamInfo {
     raw_text_.reset();
   }
 
-  TO_STRING_KV(K_(idx), K_(raw_text));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct PsNotParamInfo {
   int64_t idx_;
   common::ObObjParam ps_param_;
-  TO_STRING_KV(K_(idx), K_(ps_param));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPCParam {
@@ -369,19 +369,19 @@ struct ObPCParam {
 
   ObPCParam() : node_(NULL), flag_(INVALID_PARAM)
   {}
-  TO_STRING_KV(KP_(node), K_(flag));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPCConstParamInfo {
   common::ObSEArray<int64_t, 4> const_idx_;
   common::ObSEArray<common::ObObj, 4> const_params_;
-  TO_STRING_KV(K_(const_idx), K_(const_params));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPCParamEqualInfo {
   int64_t first_param_idx_;
   int64_t second_param_idx_;
-  TO_STRING_KV(K_(first_param_idx), K_(second_param_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObFastParserResult {
@@ -400,7 +400,7 @@ struct ObFastParserResult {
     ps_params_.reuse();
     cache_params_ = NULL;
   }
-  TO_STRING_KV(K(pc_key_), K(raw_params_), K(ps_params_), K(cache_params_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 enum WayToGenPlan {
@@ -438,8 +438,7 @@ struct SelectItemParamInfo {
     name_len_ = 0;
   }
 
-  TO_STRING_KV(K_(questions_pos), K_(params_idx), K_(neg_params_idx), K_(name_len), K_(esc_str_flag),
-      K(common::ObString(name_len_, paramed_field_name_)));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObFixedArray<SelectItemParamInfo, common::ObIAllocator> SelectItemParamInfoArray;
@@ -507,8 +506,7 @@ struct ObPlanCacheCtx {
 
   int is_retry(bool& v) const;
   int is_retry_for_dup_tbl(bool& v) const;
-  TO_STRING_KV(K(is_ps_mode_), K(raw_sql_), K(need_real_add_), K(add_pre_acs_), K(not_param_info_), K(not_param_var_),
-      K(not_param_index_), K(neg_param_index_), K(param_charset_type_), K(outlined_sql_len_), K(should_add_plan_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_ps_mode_;  // control use which variables to do match
 
   const common::ObString& raw_sql_;  // query sql
@@ -557,7 +555,7 @@ struct ObPlanCacheStat {
   ObPlanCacheStat() : access_count_(0), hit_count_(0)
   {}
 
-  TO_STRING_KV("access_count", access_count_, "hit_count", hit_count_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObOperatorStat {
@@ -585,7 +583,7 @@ struct ObOperatorStat {
     rescan_times_ = 0;
     output_rows_ = 0;
   }
-  TO_STRING_KV(K_(plan_id), K_(operation_id), K_(execute_times), K_(input_rows), K_(rescan_times), K_(output_rows));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObAcsIdxSelRange {
@@ -597,7 +595,7 @@ struct ObAcsIdxSelRange {
   ObString index_name_;
   double low_bound_sel_;
   double high_bound_sel_;
-  TO_STRING_KV(K_(index_name), K_(low_bound_sel), K_(high_bound_sel));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObTableScanStat {
@@ -636,9 +634,7 @@ struct ObTableScanStat {
     block_cache_hit_cnt_ = 0;
     block_cache_miss_cnt_ = 0;
   }
-  TO_STRING_KV(K_(query_range_row_count), K_(indexback_row_count), K_(output_row_count), K_(bf_filter_cnt),
-      K_(bf_access_cnt), K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(fuse_row_cache_hit_cnt),
-      K_(fuse_row_cache_miss_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -650,7 +646,7 @@ struct ObTableRowCount {
   {}
   ObTableRowCount(int64_t op_id, int64_t row_count) : op_id_(op_id), row_count_(row_count)
   {}
-  TO_STRING_KV(K_(op_id), K_(row_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(1);
 };
@@ -991,20 +987,14 @@ struct ObPlanStat {
   /* XXX: support printing maxium 30 class members.
    * if you want to print more members, remove some first
    */
-  TO_STRING_KV(K_(plan_id), "sql_text", ObString(stmt_len_, stmt_), K_(raw_sql), K_(gen_time), K_(schema_version),
-      K_(last_active_time), K_(hit_count), K_(mem_used), K_(slow_count), K_(slowest_exec_time), K_(slowest_exec_usec),
-      K_(execute_times), K_(disk_reads), K_(direct_writes), K_(buffer_gets), K_(application_wait_time),
-      K_(concurrency_wait_time), K_(user_io_wait_time), K_(rows_processed), K_(elapsed_time), K_(cpu_time),
-      K_(large_querys), K_(delayed_large_querys), K_(outline_version), K_(outline_id), K_(is_evolution),
-      K_(is_last_open_succ), K_(is_bind_sensitive), K_(is_bind_aware), K_(is_last_open_succ), K_(timeout_count),
-      K_(bl_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct SysVarNameVal {
   common::ObString name_;
   common::ObObj value_;
 
-  TO_STRING_KV(K_(name), K_(value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct StmtStat {
@@ -1049,8 +1039,7 @@ struct StmtStat {
     return weight;
   }
 
-  TO_STRING_KV(K_(memory_used), K_(last_active_timestamp), K_(execute_average_time), K_(execute_slowest_time),
-      K_(execute_slowest_timestamp), K_(execute_count), K_(execute_slow_count), K_(ps_count), K_(to_delete));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObGetAllPlanIdOp {

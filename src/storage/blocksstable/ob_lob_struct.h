@@ -40,17 +40,25 @@ struct ObLobMacroBlockHeader : public ObSSTableMacroBlockHeader {
            (ObMacroBlockCommonHeader::LobData == attr_ || ObMacroBlockCommonHeader::LobIndex == attr_ ||
                0 == attr_ /*temporarily for 147 bug*/);
   }
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(table_id), K_(data_version), K_(column_count),
-      K_(rowkey_column_count), K_(column_index_scale), K_(row_store_type), K_(row_count), K_(occupy_size),
-      K_(micro_block_count), K_(micro_block_size), K_(micro_block_data_offset), K_(micro_block_data_size),
-      K_(micro_block_index_offset), K_(micro_block_index_size), K_(micro_block_endkey_offset),
-      K_(micro_block_endkey_size), K_(data_checksum), K_(compressor_name), K_(data_seq),
-      K_(partition_id),  // in 2.0 partition_id replace reserved_[1] in 14x
-      K_(micro_block_size_array_offset), K_(micro_block_size_array_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(table_id), K_(data_version), K_(column_count),K_(rowkey_column_count), K_(column_index_scale), K_(row_store_type), K_(row_count), K_(occupy_size),K_(micro_block_count), K_(micro_block_size), K_(micro_block_data_offset), K_(micro_block_data_size),K_(micro_block_index_offset), K_(micro_block_index_size), K_(micro_block_endkey_offset),K_(micro_block_endkey_size), K_(data_checksum), K_(compressor_name), K_(data_seq),K_(partition_id),K_(micro_block_size_array_offset), K_(micro_block_size_array_size));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 struct ObLobMicroBlockHeader {
-  TO_STRING_KV(K_(header_size), K_(version), K_(magic));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(header_size), K_(version), K_(magic));
+    J_OBJ_END();
+    return pos;
+  }
   int32_t header_size_;
   int32_t version_;
   int32_t magic_;

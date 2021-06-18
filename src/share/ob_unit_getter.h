@@ -67,8 +67,7 @@ public:
              mode_ == other.mode_ && create_timestamp_ == other.create_timestamp_ &&
              has_memstore_ == other.has_memstore_ && is_removed_ == other.is_removed_;
     }
-    TO_STRING_KV(
-        K_(tenant_id), K_(has_memstore), K_(unit_stat), K_(config), K_(mode), K_(create_timestamp), K_(is_removed));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     uint64_t tenant_id_;
     ObUnitStatus unit_stat_;
@@ -94,7 +93,7 @@ public:
       server_.reset();
       config_.reset();
     }
-    TO_STRING_KV(K_(server), K_(config));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     common::ObAddr server_;
     ObUnitConfig config_;

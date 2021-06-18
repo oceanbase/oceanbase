@@ -32,7 +32,7 @@ public:
     bool operator==(const ObBuildIndexStatus& other) const;
     bool operator!=(const ObBuildIndexStatus& other) const;
     bool is_valid() const;
-    TO_STRING_KV(K_(index_status), K_(ret_code), K_(role));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     share::schema::ObIndexStatus index_status_;
     int ret_code_;
     common::ObRole role_;

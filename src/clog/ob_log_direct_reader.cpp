@@ -28,6 +28,14 @@ namespace oceanbase {
 using namespace common;
 using namespace share;
 namespace clog {
+int64_t ObAlignedBuffer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(align_buf_), K(size_), K(align_size_), K(is_inited_));
+  J_OBJ_END();
+  return pos;
+}
 ObAlignedBuffer::ObAlignedBuffer() : align_buf_(NULL), size_(0), align_size_(0), is_inited_(false)
 {}
 

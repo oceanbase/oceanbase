@@ -392,3 +392,27 @@ int ObSequenceCache::nextval(const ObSequenceSchema& schema, ObIAllocator& alloc
   }
   return ret;
 }
+int64_t ObSequenceCacheItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(curr_node), K_(prefetch_node), K_(prefetching), K_(with_prefetch_node), K_(last_refresh_ts),K_(last_number), K_(base_on_last_number));
+  J_OBJ_END();
+  return pos;
+}
+int64_t CacheItemKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SequenceCacheNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start), K_(end));
+  J_OBJ_END();
+  return pos;
+}

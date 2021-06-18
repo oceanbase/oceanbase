@@ -23,6 +23,14 @@
 namespace oceanbase {
 using namespace common;
 namespace share {
+int64_t ObLocationUpdateTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(table_id), K_(partition_id), K_(add_timestamp), K_(cluster_id), K_(force_sql_renew));
+  J_OBJ_END();
+  return pos;
+}
 void TSILocationCacheStatistics::reset()
 {
   type_ = ObLocationCacheQueueSet::LOC_QUEUE_MAX;

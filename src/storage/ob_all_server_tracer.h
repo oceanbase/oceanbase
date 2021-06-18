@@ -48,7 +48,7 @@ public:
   virtual ~ObServerTraceTask();
   int init(ObServerTraceMap* trace_map, int tg_id);
   virtual void runTimerTask();
-  TO_STRING_KV(KP_(trace_map));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   const static int64_t REFRESH_INTERVAL_US = 5L * 1000 * 1000;

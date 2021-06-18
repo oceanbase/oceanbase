@@ -26,6 +26,38 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ObGranulePumpArgs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(partitions_info_), K(parallelism_), K(tablet_size_), K(gi_attri_flag_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGITaskSet::Pos::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(task_idx_), K(partition_idx_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGITaskSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(partition_keys_), K(ranges_), K(ranges_.count()), K(offsets_), K(offsets_.count()),K(partition_offsets_), K(cur_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t GITaskArrayItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tsc_op_id_));
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace oceanbase::share::schema;
 

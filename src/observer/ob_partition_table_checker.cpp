@@ -33,6 +33,22 @@ using namespace share::schema;
 using namespace storage;
 
 namespace observer {
+int64_t ObCheckPartitionTableTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("pt_checker", reinterpret_cast<int64_t>(&pt_checker_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckDanglingReplicaTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("pt_checker", reinterpret_cast<int64_t>(&pt_checker_), K_(version));
+  J_OBJ_END();
+  return pos;
+}
 ObCheckDanglingReplicaTask::ObCheckDanglingReplicaTask(
     ObPartitionTableChecker& pt_checker, volatile const bool& stopped, int64_t version)
     : IObDedupTask(T_DANGLING_REPLICA_CHECK), pt_checker_(pt_checker), stopped_(stopped), version_(version)

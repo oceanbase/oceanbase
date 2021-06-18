@@ -26,6 +26,14 @@ using namespace share;
 using namespace share::schema;
 
 namespace observer {
+int64_t ObAgentTableBase::MapItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(base_col_name_), KP(convert_func_), "combine_tenant_id_", combine_tenant_id_ ? "true" : "false");
+  J_OBJ_END();
+  return pos;
+}
 
 ObAgentTableBase::ObAgentTableBase()
     : allocator_bak_(NULL),

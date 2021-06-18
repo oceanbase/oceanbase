@@ -18,6 +18,46 @@
 namespace oceanbase {
 using namespace common;
 namespace blocksstable {
+int64_t ObBaseStorageLogHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_id), K_(log_seq), K_(subcmd), K_(log_len), K_(tenant_id), K_(data_file_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageLogAttribute::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(data_file_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBaseStorageLogBuffer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(data), K_(capacity), K_(pos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageLogValidRecordEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(extent_count), K_(rollback_count), K_(savepoint_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageLogActiveTrans::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_count), K_(start_cursor), K_(valid_record), K_(log_buffer));
+  J_OBJ_END();
+  return pos;
+}
 
 ObBaseStorageLogHeader::ObBaseStorageLogHeader()
     : trans_id_(0),

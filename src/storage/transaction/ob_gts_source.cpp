@@ -25,6 +25,14 @@ using namespace common;
 using namespace share;
 
 namespace transaction {
+int64_t ObGtsSource::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(gts_pkey), K_(gts_local_cache), K_(server));
+  J_OBJ_END();
+  return pos;
+}
 /////////////////////Implementation of ObGtsStatistics/////////////////////////
 void ObGtsStatistics::reset()
 {

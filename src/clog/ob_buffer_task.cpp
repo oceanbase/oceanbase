@@ -15,6 +15,14 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObIBatchBufferTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_BUF, ((uint64_t)(batch_buf_)), N_BUF_LEN, batch_size_, N_COUNT, subtask_count_);
+  J_OBJ_END();
+  return pos;
+}
 int64_t DummyBuffferTask::get_data_len() const
 {
   CLOG_LOG(ERROR, "the function should not be called");

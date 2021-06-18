@@ -124,8 +124,14 @@ public:
            0 == strncmp(ZONE_TYPE_NAME, record_name_, strlen(ZONE_TYPE_NAME));
   }
 
-  TO_STRING_KV(K(svr_ip_), K(svr_port_), K(zone_), K(info_), K(value_), K(record_name_), K(start_service_time_),
-      K(server_stop_time_), K(svr_status_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(svr_ip_), K(svr_port_), K(zone_), K(info_), K(value_), K(record_name_), K(start_service_time_),K(server_stop_time_), K(svr_status_));
+    J_OBJ_END();
+    return pos;
+  }
 
   char svr_ip_[MAX_IP_ADDR_LENGTH];
   int32_t svr_port_;

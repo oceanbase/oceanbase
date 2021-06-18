@@ -14,6 +14,14 @@
 
 namespace oceanbase {
 namespace share {
+int64_t ObClusterSwitchoverInfoWrap::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(info), "info_str", switchover_info_to_str(info_), K_(synced_cluster_id_array), K_(can_not_access_cluster));
+  J_OBJ_END();
+  return pos;
+}
 
 const char* switchover_info_to_str(const ObClusterSwitchoverInfo so_info)
 {

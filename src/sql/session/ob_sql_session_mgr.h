@@ -140,7 +140,7 @@ private:
     int pop_session(uint64_t tenant_id, ObSQLSessionInfo*& session);
     int push_session(uint64_t tenant_id, ObSQLSessionInfo*& session);
     int64_t count() const;
-    TO_STRING_KV(K(session_pool_.capacity()), K(session_pool_.get_total()), K(session_pool_.get_free()));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     static const int64_t POOL_CAPACIPY = 512;

@@ -16,6 +16,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObIterExprRangeParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(expr_id), K_(expr_type), K_(start_index), K_(end_index));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER((ObIterExprRangeParam, ObIterExprOperator), start_index_, end_index_);
 
 int ObIterExprRangeParam::get_next_row(ObIterExprCtx& expr_ctx, const common::ObNewRow*& result) const

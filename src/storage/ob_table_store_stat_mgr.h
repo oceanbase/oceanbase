@@ -38,7 +38,7 @@ public:
   bool is_valid() const;
   int add(const ObMergeIterStat& other);
   ObMergeIterStat& operator=(const ObMergeIterStat& other);
-  TO_STRING_KV(K_(call_cnt), K_(output_row_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t call_cnt_;
   int64_t output_row_cnt_;
@@ -58,7 +58,7 @@ public:
   bool is_valid() const;
   int add(const ObBlockAccessStat& other);
   ObBlockAccessStat& operator=(const ObBlockAccessStat& other);
-  TO_STRING_KV(K_(effect_read_cnt), K_(empty_read_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t effect_read_cnt_;
   int64_t empty_read_cnt_;
@@ -74,11 +74,7 @@ public:
   bool is_valid() const;
   int add(const ObTableStoreStat& other);
   ObTableStoreStat& operator=(const ObTableStoreStat& other);
-  TO_STRING_KV(K_(pkey), K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(row_cache_put_cnt), K_(bf_filter_cnt),
-      K_(bf_empty_read_cnt), K_(bf_access_cnt), K_(block_cache_hit_cnt), K_(block_cache_miss_cnt), K_(access_row_cnt),
-      K_(output_row_cnt), K_(fuse_row_cache_hit_cnt), K_(fuse_row_cache_miss_cnt), K_(fuse_row_cache_put_cnt),
-      K_(single_get_stat), K_(multi_get_stat), K_(index_back_stat), K_(single_scan_stat), K_(multi_scan_stat),
-      K_(exist_row), K_(get_row), K_(scan_row));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey pkey_;
   int64_t row_cache_hit_cnt_;
@@ -128,7 +124,7 @@ public:
   {
     return (*this == other);
   }
-  TO_STRING_KV(K_(table_id), K_(partition_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t table_id_;
   int64_t partition_id_;
 };

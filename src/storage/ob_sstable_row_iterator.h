@@ -48,8 +48,7 @@ public:
   {
     return macro_block_ctx_.get_macro_block_id();
   }
-  TO_STRING_KV(K_(is_get), K_(state), K_(range_idx), K_(macro_block_ctx), K_(macro_idx), K_(micro_begin_idx),
-      K_(micro_end_idx), K_(is_left_border), K_(is_right_border));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   union {
@@ -99,7 +98,7 @@ private:
 struct ObSSTableMicroBlockInfo {
   ObSSTableMicroBlockInfo() : macro_ctx_(), micro_info_(), micro_idx_(-1), is_skip_(false)
   {}
-  TO_STRING_KV(K_(macro_ctx), K_(micro_info), K_(micro_idx), K_(is_skip));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   blocksstable::ObMacroBlockCtx macro_ctx_;
   blocksstable::ObMicroBlockInfo micro_info_;
   int64_t micro_idx_;
@@ -213,8 +212,7 @@ public:
   {
     return range_idx_ >= 0 && macro_idx_ >= 0 && micro_idx_ >= 0 && org_range_macro_cnt_ > 0;
   }
-  TO_STRING_KV(
-      K_(range_idx), K_(macro_idx), K_(micro_idx), K_(org_range_macro_cnt), K_(is_micro_reopen), K_(need_skip));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset()
   {
     range_idx_ = -1;
@@ -302,8 +300,7 @@ struct ObFastSkipChecker {
   {
     return is_checked_ && OB_INVALID_INDEX != effective_border_micro_idx_ && idx <= effective_border_micro_idx_;
   }
-  TO_STRING_KV(
-      K_(iter_del_row), K_(is_checked), K_(effective_border_micro_idx), K_(check_border_micro_idx), K_(border_rowkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool iter_del_row_;
   bool is_checked_;
   int64_t effective_border_micro_idx_;

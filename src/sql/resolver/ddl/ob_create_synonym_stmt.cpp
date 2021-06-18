@@ -22,6 +22,14 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObCreateSynonymStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(create_synonym_arg));
+  J_OBJ_END();
+  return pos;
+}
 
 ObCreateSynonymStmt::ObCreateSynonymStmt(ObIAllocator* name_pool)
     : ObDDLStmt(name_pool, stmt::T_CREATE_SYNONYM), create_synonym_arg_()

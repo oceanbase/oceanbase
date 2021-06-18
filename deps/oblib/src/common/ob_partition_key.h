@@ -173,7 +173,7 @@ public:
   int find_leader(const ObPartitionKey& part_key, common::ObAddr& leader) const;
   int is_duplicate_partition(const ObPartitionKey& key, bool& is_duplicate_partition) const;
 
-  TO_STRING_KV(K_(partitions), K_(leaders), K_(type_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionArray partitions_;

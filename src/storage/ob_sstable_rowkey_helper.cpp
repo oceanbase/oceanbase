@@ -22,6 +22,22 @@ using namespace blocksstable;
 using namespace share;
 using namespace share::schema;
 namespace storage {
+int64_t ObRowkeyObjComparer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(is_collation_free), K_(cmp_ctx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableRowkeyHelper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(endkeys), K_(collation_free_endkeys), K_(rowkey_column_cnt), KP_(column_type_array),K_(exist_collation_free), K_(use_cmp_nullsafe), K_(is_oracle_mode), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
 /*
  *ObRowkeyObjComparer
  */

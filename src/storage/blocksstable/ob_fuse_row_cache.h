@@ -30,7 +30,7 @@ public:
   virtual int64_t size() const override;
   virtual int deep_copy(char* buf, const int64_t buf_len, ObIKVCacheKey*& key) const override;
   bool is_valid() const;
-  TO_STRING_KV(K_(table_id), K_(rowkey_size), K_(rowkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t table_id_;
@@ -84,8 +84,7 @@ public:
   {
     return &fq_ctx_;
   }
-  TO_STRING_KV(KP_(obj_array), K_(size), K_(column_cnt), K_(schema_version), K_(flag), K_(snapshot_version),
-      K_(partition_id), K_(sstable_end_log_ts), K(fq_ctx_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObObj* obj_array_;
@@ -112,7 +111,7 @@ struct ObFuseRowValueHandle {
     value_ = nullptr;
     handle_.reset();
   }
-  TO_STRING_KV(KP_(value), K_(handle));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObFuseRowCacheValue* value_;
   common::ObKVCacheHandle handle_;
 };

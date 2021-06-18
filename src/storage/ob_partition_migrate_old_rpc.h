@@ -48,7 +48,7 @@ public:
   {
     return sstable_count_;
   }
-  TO_STRING_KV(K_(saved_storage_info), K_(sstable_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(1);
 
@@ -71,7 +71,7 @@ struct ObMigrateInfoFetchArg {
   {}
   explicit ObMigrateInfoFetchArg(const common::ObPartitionKey& pkey) : pkey_(pkey)
   {}
-  TO_STRING_KV(K_(pkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -93,7 +93,7 @@ struct ObMigrateStoreInfo {
   {
     return store_info_.get_sstable_count();
   }
-  TO_STRING_KV(K_(store_info), K_(server));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -111,7 +111,7 @@ struct ObMigrateInfoFetchResult {
   int add_store_info(const storage::ObStoreInfo& info, const common::ObAddr server);
   bool is_continues() const;
   inline void dump_simple_string(const char* msg) const;
-  TO_STRING_KV(K_(info_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(2);
 };
 
@@ -121,7 +121,7 @@ struct ObFetchBaseDataMetaArg {
 public:
   ObFetchBaseDataMetaArg() : pkey_(), version_(0), store_type_(storage::INVALID_STORE_TYPE)
   {}
-  TO_STRING_KV(K_(pkey), K_(version), K_(store_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey pkey_;
   common::ObVersion version_;
@@ -137,7 +137,7 @@ public:
   void reset();
   bool operator==(const ObFetchMacroBlockOldArg& arg) const;
   int64_t hash() const;
-  TO_STRING_KV(K_(index_id), K_(macro_block_index), K_(data_version), K_(data_seq));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t index_id_;
   int64_t macro_block_index_;  // the index of the macro block in the sstable macro block array
@@ -150,7 +150,7 @@ struct ObFetchMacroBlockListOldArg {
 
 public:
   ObFetchMacroBlockListOldArg();
-  TO_STRING_KV(K_(pkey), K_(data_version), K(store_type_), "arg_count", arg_list_.count());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey pkey_;
   common::ObVersion data_version_;
   common::ObSArray<ObFetchMacroBlockOldArg> arg_list_;

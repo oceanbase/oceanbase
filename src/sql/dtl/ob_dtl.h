@@ -80,7 +80,7 @@ public:
   int get_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel*& chan);
 
   int foreach_refactored(int64_t interval, std::function<int(ObDtlChannel* ch)> op);
-  TO_STRING_KV(K_(idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t idx_;

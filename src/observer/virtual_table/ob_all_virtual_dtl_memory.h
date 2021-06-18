@@ -43,7 +43,7 @@ public:
 
   void set_mem_pool_info(sql::dtl::ObTenantDfc*& tenant_dfc, sql::dtl::ObDtlChannelMemManager* mgr);
 
-  TO_STRING_KV(K(tenant_id_), K(seqno_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   uint64_t tenant_id_;  // 1

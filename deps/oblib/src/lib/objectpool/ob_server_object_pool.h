@@ -55,8 +55,7 @@ struct ObPoolArenaHead {
   int64_t last_miss_ts;         // The time of the last direct allocation
   int64_t last_miss_return_ts;  // The return time of the last direct allocation
   void* next;                   // Point to the first free object
-  TO_STRING_KV(KP(this), K(lock), K(borrow_cnt), K(return_cnt), K(miss_cnt), K(miss_return_cnt), K(last_borrow_ts),
-      K(last_return_ts), K(last_miss_ts), K(last_miss_return_ts), KP(next));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset()
   {
     new (&lock) ObLatch();
@@ -140,7 +139,7 @@ public:
     }
 
   public:
-    TO_STRING_KV(K_(pool_idx), K_(arena_idx));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     int64_t pool_idx_;

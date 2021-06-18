@@ -25,7 +25,7 @@ struct ObSessionVariable {
     meta_.reset();
     value_.reset();
   }
-  TO_STRING_KV(K_(meta), K_(value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObObjMeta meta_;  // Meta Type of the seseion variable
   common::ObObj value_;     // value of the session variable
 };

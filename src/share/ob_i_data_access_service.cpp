@@ -19,6 +19,46 @@
 namespace oceanbase {
 
 namespace common {
+int64_t ObEstRowCountRecord::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(table_type), K_(version_range), K_(logical_row_count), K_(physical_row_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SampleInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(method), K_(percent), K_(seed), K_(table_id), K_(scope));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLimitParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("offset_", offset_, "limit_", limit_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableScanStatistic::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(access_row_cnt), K_(out_row_cnt), K_(bf_filter_cnt), K_(bf_access_cnt), K_(empty_read_cnt),K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(fuse_row_cache_hit_cnt), K_(fuse_row_cache_miss_cnt),K_(rowkey_prefix));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObVTableScanParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_KEY, pkey_, N_PG_KEY, pg_key_, N_COLUMN_IDS, column_ids_, N_INDEX_ID, index_id_, N_KEY_RANGES,key_ranges_, N_TIMEOUT, timeout_, N_SCAN_FLAG, scan_flag_, N_SQL_MODE, sql_mode_, N_RESERVED_CELL_COUNT,reserved_cell_count_, N_SCHEMA_VERSION, schema_version_, N_QUERY_BEGIN_SCHEMA_VERSION,query_begin_schema_version_, N_FILTER_EXPRS, filters_, N_INDEX_FILTER_EXPRS, filters_before_index_back_,N_LIMIT_OFFSET, limit_param_, N_FOR_UPDATE, for_update_, N_WAIT, for_update_wait_timeout_, N_FROZEN_VERSION,frozen_version_, K_(is_get));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObLimitParam, offset_, limit_);
 OB_SERIALIZE_MEMBER(SampleInfo, table_id_, method_, scope_, percent_, seed_);

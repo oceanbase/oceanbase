@@ -86,7 +86,7 @@ public:
 
   static const int64_t OB_INVALID_FREEZE_TS = INT64_MAX;
 
-  TO_STRING_KV(K(snapshot_version_), K(emergency_), K(active_protection_clock_), K(storage_info_), K(is_valid_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t snapshot_version_;

@@ -87,7 +87,7 @@ public:
   {
     return index_map_;
   }
-  TO_STRING_KV(K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t BUCKET_SIZE = 1024;
@@ -114,7 +114,7 @@ public:
     return PHY_RESTORE_MACRO_INDEX_STORE_V1;
   }
   virtual bool is_inited() const;
-  TO_STRING_KV(K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t BUCKET_SIZE = 100000;  // 10w
@@ -151,7 +151,7 @@ public:
   {
     return is_inited_;
   }
-  TO_STRING_KV(K_(is_inited), K_(sstable_index), K_(data_size), K_(pkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int read_all_sstable_meta();
@@ -217,7 +217,7 @@ public:
   int fetch_sstable_pair_list(const uint64_t index_id, common::ObIArray<blocksstable::ObSSTablePair>& pair_list);
   int fetch_all_table_ids(common::ObIArray<uint64_t>& table_id_array);
   int fetch_table_keys(const uint64_t index_id, obrpc::ObFetchTableInfoResult& table_res);
-  TO_STRING_KV(K_(pkey), K_(restore_info), K_(last_read_size), K_(partition_store_meta), K_(data_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int prepare(const common::ObPartitionKey& pkey);

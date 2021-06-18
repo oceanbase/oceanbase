@@ -27,6 +27,38 @@ using namespace clog;
 using namespace storage;
 using namespace obrpc;
 namespace logservice {
+int64_t NeedFetchStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(need_fetch_), K(reach_upper_limit_), K(reach_max_log_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStreamItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pkey_), K(next_log_id_), K(fetch_progress_ts_), K(last_slide_log_id_), K(fetch_rpc_id_),K(need_fetch_status_), K(next_cursor_), K(cursor_array_size_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStream::LiboblogInstanceId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(addr_), K(peer_pid_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SeqStreamPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(seq_), KP(stream_));
+  J_OBJ_END();
+  return pos;
+}
 
 // ************************ ObStreamItem ************************
 

@@ -15,6 +15,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObProposalID::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TIME_TO_USEC, ts_, N_SERVER, addr_);
+  J_OBJ_END();
+  return pos;
+}
 void ObProposalID::reset()
 {
   ts_ = OB_INVALID_TIMESTAMP;

@@ -96,7 +96,7 @@ public:
 
     common::ObAddr server_;
     int64_t count_;
-    TO_STRING_KV(K_(server), K_(count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObArray<ServerLeaderCount> ServerLeaderStat;
   typedef common::ObArray<common::ObZone> ObZoneList;
@@ -147,7 +147,7 @@ public:
     int64_t partition_count_;   // fetch from observer
     bool is_switch_limited_;    // switch limit for this server in this round
 
-    TO_STRING_KV(K_(server), K_(new_leader_count), K_(leader_count), K_(partition_count), K_(is_switch_limited));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   typedef common::hash::ObHashMap<common::ObAddr, ServerSwitchLeaderInfo, common::hash::NoPthreadDefendMode>
@@ -353,7 +353,7 @@ private:
     {}
     PreSwitchPgInfo(const int64_t index) : index_(index)
     {}
-    TO_STRING_KV(K_(index));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     bool is_valid() const
     {
       return index_ >= 0;
@@ -373,8 +373,7 @@ private:
     virtual bool has_self_partition() const = 0;
     virtual uint64_t get_partition_entity_id() const = 0;
     virtual uint64_t get_tablegroup_id() const = 0;
-    TO_STRING_KV("has_self_partition", has_self_partition(), "partition_entity_id", get_partition_entity_id(),
-        "tablegroup_id", get_tablegroup_id());
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   class TablegroupEntity : public IPartitionEntity {
@@ -443,7 +442,7 @@ private:
     ServerList candidates_;
     ServerList prep_candidates_;
     CandidateStatusList candidate_status_array_;
-    TO_STRING_KV(K_(table_id), K_(tg_id), K_(info), K_(candidates), K_(prep_candidates), K_(candidate_status_array));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(Partition);
@@ -510,7 +509,7 @@ private:
     Partition* partition_msg_;
     // Count that all replicas on the server are the leader's partition
     ObPartitionMsg* next_part_;
-    TO_STRING_KV(K_(partition_msg), K_(next_part));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObDList<ObPartitionMsg> ObPartitionMsgList;
   // Record the leader information on the server
@@ -522,7 +521,7 @@ private:
     int curr_leader_cnt_;
     ObPartitionMsgList leader_partition_list_;
     common::ObZone zone_;
-    TO_STRING_KV(K_(curr_leader_cnt), K_(zone), K_(leader_partition_list));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   // Record which server the leader of the partition is finally switched to
@@ -533,7 +532,7 @@ private:
     {}
     common::ObAddr original_leader_addr_;
     common::ObAddr final_leader_addr_;
-    TO_STRING_KV(K_(original_leader_addr), K_(final_leader_addr));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ObServerMsg {
@@ -545,7 +544,7 @@ private:
     ObPartitionMsg* head_;  // partition msg info
     int64_t partition_cnt_;
     ObServerMsg* parent_node_;  // parent server info
-    TO_STRING_KV(K_(self_addr), K_(partition_cnt), K_(head), K_(parent_node));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   // Count each server, which partition leaders are on the server
   typedef common::hash::ObHashMap<common::ObAddr, ObServerLeaderMsg*> ObAllServerLeaderMsg;
@@ -560,7 +559,7 @@ private:
     LcBgPair(const int64_t bg_array_idx, const int64_t in_group_idx)
         : bg_array_idx_(bg_array_idx), in_group_idx_(in_group_idx)
     {}
-    TO_STRING_KV(K_(bg_array_idx), K_(in_group_idx));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     bool is_valid() const
     {
       return bg_array_idx_ >= 0 && in_group_idx_ >= 0;
@@ -574,7 +573,7 @@ private:
   struct LcBalanceGroupInfo {
     LcBalanceGroupInfo(common::ObIAllocator& allocator) : pg_idx_array_(allocator), pg_cnt_(0), balance_group_id_(-1)
     {}
-    TO_STRING_KV(K_(pg_cnt), K_(balance_group_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     // pg_idx_array_ records the index of this pg group in tenant_partition_array
     common::ObFixedArrayImpl<LcBgPair, common::ObIAllocator> pg_idx_array_;
@@ -588,7 +587,7 @@ private:
     ServerReplicaCounter() : full_replica_cnt_(0), leader_cnt_(0), zone_()
     {}
 
-    TO_STRING_KV(K_(full_replica_cnt), K_(leader_cnt), K_(zone));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     int64_t full_replica_cnt_;
     int64_t leader_cnt_;
@@ -622,9 +621,7 @@ private:
           seed_(-1)
     {}
 
-    TO_STRING_KV(K_(max_full_replica_cnt), K_(min_full_replica_cnt), K_(max_leader_cnt), K_(min_leader_cnt),
-        K_(max_exp_leader_cnt), K_(min_exp_leader_cnt), K_(max_leader_server_cnt), K_(min_leader_server_cnt),
-        K_(curr_max_leader_server_cnt), K_(total_leader_cnt), K_(expected_leader_cnt), K_(available_server_cnt));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     int64_t max_full_replica_cnt_;
     int64_t min_full_replica_cnt_;
@@ -936,14 +933,14 @@ private:
       {
         return first_level_idx_ >= 0 && second_level_idx_ >= 0;
       }
-      TO_STRING_KV(K_(first_level_idx), K_(second_level_idx));
+      int64_t to_string(char* buf, const int64_t buf_len) const;
       int64_t first_level_idx_;
       int64_t second_level_idx_;
     };
     struct PartIndexInfo {
       PartIndexInfo() : part_index_array_(), dest_server_(), arg_()
       {}
-      TO_STRING_KV(K_(part_index_array), K_(dest_server), K_(arg));
+      int64_t to_string(char* buf, const int64_t buf_len) const;
       void reuse()
       {
         part_index_array_.reuse();
@@ -1088,7 +1085,7 @@ private:
   public:
     CandidateZoneInfo() : zone_(), region_score_(INT64_MAX), candidate_count_(0)
     {}
-    TO_STRING_KV(K_(zone), K_(region_score), K_(candidate_count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObZone zone_;
     int64_t region_score_;
     int64_t candidate_count_;
@@ -1126,11 +1123,7 @@ private:
     {}
     void reset();
 
-    TO_STRING_KV(K_(server_addr), K_(zone), K_(balance_group_score), K_(region_score), K_(not_merging),
-        K_(start_service), K_(zone_candidate_count), K_(candidate_count), K_(is_candidate), K_(not_excluded),
-        K_(migrate_out_or_transform_count), K_(zone_migrate_out_or_transform_count), K_(in_normal_unit_count),
-        K_(zone_score), K_(original_leader_count), K_(random_score), K_(cur_leader_count),
-        K_(in_revoke_blacklist_count), K_(partition_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   class ChooseLeaderCmp {
@@ -1204,8 +1197,7 @@ private:
           advised_leader_(advised_leader),
           ignore_switch_percent_(ignore_switch_percent)
     {}
-    TO_STRING_KV(
-        K(part_idx_), K(part_cnt_), K(array_idx_), K(cur_leader_), K(advised_leader_), K(ignore_switch_percent_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     bool switch_finish()
     {
       return part_idx_ >= part_cnt_;
@@ -1237,7 +1229,7 @@ private:
     int reorganize();
 
   public:
-    TO_STRING_KV(K(cursor_array_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObArray<PartitionArrayCursor> cursor_array_;
   };
   struct CandidateElectionPriority {
@@ -1256,9 +1248,7 @@ private:
     int64_t server_status_;
     bool is_clog_disk_full_;
     bool is_offline_;
-    TO_STRING_KV(K_(addr), K_(pkey), K_(role), K_(is_candidate), K_(membership_version), K_(log_id), K_(locality),
-        K_(sys_score), K_(is_tenant_active), K_(on_revoke_blacklist), K_(on_loop_blacklist), K_(replica_type),
-        K_(server_status), K_(is_clog_disk_full), K_(is_offline));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObArray<PartitionArray*> TenantPartition;
   typedef common::ObArray<PartitionArray*> TablegroupPartition;

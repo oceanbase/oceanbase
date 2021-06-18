@@ -116,8 +116,14 @@ struct PartitionSSStoreInfo {
     rewrite_macro_old_micro_block_count_ = 0;
     rewrite_macro_total_micro_block_count_ = 0;
   }
-  TO_STRING_KV(K_(version), K_(macro_block_count), K_(use_old_macro_block_count), K_(is_merged), K_(is_modified),
-      K_(rewrite_macro_old_micro_block_count), K_(rewrite_macro_total_micro_block_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(version), K_(macro_block_count), K_(use_old_macro_block_count), K_(is_merged), K_(is_modified),K_(rewrite_macro_old_micro_block_count), K_(rewrite_macro_total_micro_block_count));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 class ObIPartitionStorage {

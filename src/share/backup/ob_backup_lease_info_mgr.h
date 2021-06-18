@@ -37,7 +37,7 @@ struct ObBackupLeaseInfo {
   int release_lease(const int64_t round);
   int update_lease_start_ts(const int64_t now_ts);
   bool is_valid() const;
-  TO_STRING_KV(K_(is_leader), K_(lease_start_ts), K_(leader_epoch), K_(leader_takeover_ts), K_(round));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_leader_;
   int64_t lease_start_ts_;
   int64_t leader_epoch_;

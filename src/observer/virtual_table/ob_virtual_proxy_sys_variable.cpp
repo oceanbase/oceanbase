@@ -28,6 +28,14 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase {
 namespace observer {
+int64_t ObVirtualProxySysVariable::ObVarStateInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_type), K_(flags), K_(tenant_id), K_(name_buf), K_(name_len), K_(value_buf), K_(value_len),K_(gmt_modified));
+  J_OBJ_END();
+  return pos;
+}
 ObVirtualProxySysVariable::ObVirtualProxySysVariable()
     : is_inited_(false),
       is_queried_(false),

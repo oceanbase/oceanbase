@@ -20,6 +20,62 @@
 
 namespace oceanbase {
 namespace rootserver {
+int64_t ObFirstSchemaKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(first_schema_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSecondSchemaKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(first_schema_id), K_(second_schema_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObThirdSchemaKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(first_schema_id), K_(second_schema_id), K_(third_schema_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSystemVariableSchemaKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSystemVariableCompressSchemaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(max_schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecycleSchemaValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_deleted), K_(max_schema_version), K_(record_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFirstCompressSchemaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(max_schema_version));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 using namespace share;
 using namespace share::schema;

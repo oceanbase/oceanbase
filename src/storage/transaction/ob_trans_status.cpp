@@ -16,6 +16,14 @@
 
 namespace oceanbase {
 namespace transaction {
+int64_t ObTransStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_id), K_(status));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 
 static inline uint64_t cal_hash(const ObTransID& trans_id)

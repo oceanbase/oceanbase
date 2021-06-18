@@ -64,7 +64,7 @@ struct SearchByTs {
     start_log_ts_ = common::OB_INVALID_TIMESTAMP;
     min_greater_log_id_ = common::OB_INVALID_ID;
   }
-  TO_STRING_KV(K(start_ts_), K(err_), K(start_log_id_), K(start_log_ts_), K(min_greater_log_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // Locating offset based on log_id, the information recorded by each partition during the scanning process
@@ -92,7 +92,7 @@ struct SearchById {
     err_ = common::OB_NOT_INIT;
     res_file_id_ = common::OB_INVALID_FILE_ID;
   }
-  TO_STRING_KV(K(start_log_id_), K(err_), K(res_file_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 enum SearchStatusType { SST_INVALID = -1, SST_BY_TS = 0, SST_BY_ID = 1 };
@@ -210,7 +210,7 @@ public:
   {
     return SST_BY_ID == type_;
   }
-  TO_STRING_KV(K(type_), KP(map_allocator_), KP(info_allocator_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(SearchParam);
@@ -349,8 +349,7 @@ struct Progress {
   {
     return break_file_id_;
   }
-  TO_STRING_KV(
-      K(total_), K(finished_), K(min_file_id_), K(max_file_id_), K(cur_file_id_), K(start_file_id_), K(break_file_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(Progress);
@@ -372,7 +371,7 @@ public:
     {
       return (NULL != ilog_dir_) && (0 < read_timeout_);
     }
-    TO_STRING_KV(K(ilog_dir_), K(read_timeout_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 public:

@@ -32,7 +32,14 @@ public:
   {
     return partitions_;
   }
-  TO_STRING_KV(K_(msg_type), K_(is_do_major_freeze), K_(partitions));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(msg_type), K_(is_do_major_freeze), K_(partitions));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   int64_t msg_type_;

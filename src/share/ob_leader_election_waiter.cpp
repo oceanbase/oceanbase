@@ -24,6 +24,14 @@ using namespace common;
 using namespace share::schema;
 using namespace share;
 namespace share {
+int64_t ObLeaderElectionWaiter::ExpectedLeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(exp_leader), K_(old_leader), K_(new_leader));
+  J_OBJ_END();
+  return pos;
+}
 ObLeaderElectionWaiter::ObLeaderElectionWaiter(ObPartitionTableOperator& pt_operator, volatile bool& stop)
     : stop_(stop), allocator_(ObModIds::OB_RS_PARTITION_TABLE_TEMP), pt_operator_(pt_operator)
 {}

@@ -63,7 +63,14 @@ public:
     return AsyncCB::result_;
   }
 
-  TO_STRING_KV("dst", get_dst(), "ret_code", get_ret_code(), "result", get_result());
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV("dst", get_dst(), "ret_code", get_ret_code(), "result", get_result());
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   AsyncRpcProxy& proxy_;

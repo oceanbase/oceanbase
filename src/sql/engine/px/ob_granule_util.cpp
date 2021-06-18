@@ -25,6 +25,14 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
+int64_t ObParallelBlockRangeTaskParams::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(parallelism_), K(expected_task_load_), K(min_task_count_per_thread_), K(max_task_count_per_thread_),K(min_task_access_size_), K(marcos_count_));
+  J_OBJ_END();
+  return pos;
+}
 
 void ObParallelBlockRangeTaskParams::reset()
 {

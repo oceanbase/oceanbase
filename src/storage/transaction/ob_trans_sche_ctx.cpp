@@ -33,6 +33,14 @@ using namespace obrpc;
 using namespace share;
 
 namespace transaction {
+int64_t ObXABranchInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(xid), K_(state), K_(timeout_seconds), K_(addr), K_(unrespond_msg_cnt), K_(last_hb_ts));
+  J_OBJ_END();
+  return pos;
+}
 int ObScheTransCtx::init(const uint64_t tenant_id, const ObTransID& trans_id, const int64_t trans_expired_time,
     const ObPartitionKey& self, ObITransCtxMgr* ctx_mgr, const ObStartTransParam& trans_param,
     const uint64_t cluster_version, ObTransService* trans_service, const bool can_elr)

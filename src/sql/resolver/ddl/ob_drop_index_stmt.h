@@ -54,7 +54,7 @@ public:
   {
     return drop_index_arg_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(drop_index_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   common::ObIAllocator* name_pool_;

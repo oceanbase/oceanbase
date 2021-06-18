@@ -20,6 +20,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObKillSessionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(sess_id_), K(tenant_id_), K(user_id_), K(is_query_), K(has_user_super_privilege_));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObKillSessionArg, sess_id_, tenant_id_, user_id_, is_query_, has_user_super_privilege_);
 

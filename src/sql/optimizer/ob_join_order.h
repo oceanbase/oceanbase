@@ -56,7 +56,7 @@ struct JoinInfo {
   {}
 
   virtual ~JoinInfo(){};
-  TO_STRING_KV(K_(join_type), K_(table_set), K_(on_condition), K_(where_condition), K_(equal_join_condition));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObRelIds table_set_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> on_condition_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> where_condition_;
@@ -84,8 +84,7 @@ struct ConflictDetector {
 
   static int build_confict(common::ObIAllocator& allocator, ConflictDetector*& detector);
 
-  TO_STRING_KV(K_(join_info), K_(CR), K_(cross_product_rule), K_(delay_cross_product_rule), K_(L_TES), K_(R_TES),
-      K_(L_DS), K_(R_DS), K_(is_degenerate_pred), K_(is_commutative), K_(is_redundancy));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   JoinInfo join_info_;
   // conflict rules: R1 -> R2
@@ -253,8 +252,7 @@ public:
   }
   bool is_valid() const;
   virtual int estimate_cost() = 0;
-  TO_STRING_KV(K_(path_type), K_(cost), K_(op_cost), K_(exec_params), K_(ordering), K_(is_inner_path),
-      K_(inner_row_count), K_(interesting_order_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   // member variables
@@ -403,10 +401,7 @@ public:
   }
   virtual int estimate_cost() override;
 
-  TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(index_id), K_(is_cte_table_path), K_(path_type), K_(cost),
-      K_(exec_params), K_(ordering), K_(is_get), K_(order_direction), K_(is_hash_index), K_(table_row_count),
-      K_(output_row_count), K_(phy_query_range_row_count), K_(query_range_row_count), K_(index_back_row_count),
-      K_(index_back_cost), K_(est_cost_info), K_(sample_info), K_(range_prefix_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   // member variables
@@ -564,7 +559,7 @@ struct ObRowCountEstTask {
   ObBitSet<> path_id_set_;
   obrpc::ObEstPartArg* est_arg_;
 
-  TO_STRING_KV(K_(addr), K_(path_id_set));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct InnerPathInfo {
@@ -572,7 +567,7 @@ struct InnerPathInfo {
   {}
   virtual ~InnerPathInfo()
   {}
-  TO_STRING_KV(K_(join_conditions), K_(inner_paths));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> join_conditions_;
   common::ObSEArray<Path*, 8, common::ModulePageAllocator, true> inner_paths_;
@@ -1024,7 +1019,7 @@ public:
     BUF_PRINTF(")");
     return pos;
   }
-  TO_STRING_KV(K_(type), K_(output_rows), K_(interesting_paths));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int add_access_filters(

@@ -17,6 +17,22 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t EqualSetKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(expr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEqualAnalysis::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(equal_sets));
+  J_OBJ_END();
+  return pos;
+}
 ObEqualAnalysis::ObEqualAnalysis()
     : equal_set_alloc_(ObModIds::OB_SQL_OPTIMIZER_EQUAL_SETS), column_set_(), equal_sets_()
 {}

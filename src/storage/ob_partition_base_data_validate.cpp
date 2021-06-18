@@ -27,6 +27,14 @@ using namespace oceanbase::share;
 
 namespace oceanbase {
 namespace storage {
+int64_t ObValidateBackupPGCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(result), K_(pg_key), K_(sub_task_cnt), K_(path_info));
+  J_OBJ_END();
+  return pos;
+}
 
 ObBackupMetaIndexStore::ObBackupMetaIndexStore() : is_inited_(false)
 {}

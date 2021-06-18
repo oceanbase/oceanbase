@@ -77,7 +77,7 @@ struct ObMicroBlockInfo {
   {
     return offset_ >= 0 && size_ > 0;
   }
-  TO_STRING_KV(K_(offset), K_(size), K_(index), K_(mark_deletion));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMicroBlockIndex {
@@ -93,7 +93,7 @@ struct ObMicroBlockIndex {
   {
     return data_offset_ >= 0 && endkey_offset_ >= 0;
   }
-  TO_STRING_KV(K_(data_offset), K_(endkey_offset));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockIndex);
@@ -107,7 +107,7 @@ struct ObMicroIndexNode {
   ObMicroIndexNode() : obj_(), first_micro_index_(0), first_child_index_(0), child_num_(0)
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(obj), K_(first_micro_index), K_(first_child_index), K_(child_num));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMicroIndexNode);
@@ -119,7 +119,7 @@ public:
     int32_t data_offset_;
     MemMicroIndexItem() : data_offset_(0)
     {}
-    TO_STRING_KV(K_(data_offset));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(MemMicroIndexItem);
@@ -132,7 +132,7 @@ public:
     Bound() : start_(NULL), end_(NULL)
     {}
     bool is_valid() const;
-    TO_STRING_KV(K_(start), K_(end));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(Bound);
@@ -149,7 +149,7 @@ private:
     const ObMicroIndexNode* father_node_;
     const ObMicroIndexNode* next_node_;
     int64_t column_idx_;
-    TO_STRING_KV(K_(begin_node), K_(end_node), K_(father_node), K_(next_node), K_(column_idx));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 public:

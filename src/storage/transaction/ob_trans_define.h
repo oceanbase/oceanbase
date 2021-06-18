@@ -701,7 +701,7 @@ public:
   {
     return app_trace_id_;
   }
-  TO_STRING_KV(K_(app_trace_info), K_(app_trace_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t MAX_TRACE_INFO_BUFFER = 128;
@@ -825,7 +825,7 @@ public:
   {
     return schema_version_;
   }
-  TO_STRING_KV(K_(pkey), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey pkey_;
@@ -885,7 +885,7 @@ public:
     return end_stmt_cnt_;
   }
   void reset_stmt_info();
-  TO_STRING_KV(K_(nested_sql), K_(start_stmt_cnt), K_(end_stmt_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   bool nested_sql_;
@@ -906,7 +906,7 @@ public:
   {
     return 0 == active_task_cnt_;
   }
-  TO_STRING_KV(K_(sql_no), K_(active_task_cnt), K_(snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int32_t sql_no_;
@@ -932,7 +932,7 @@ public:
   {
     tasks_.reset();
   }
-  TO_STRING_KV(K(tasks_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObSEArray<ObTaskInfo, 1> tasks_;
@@ -1008,7 +1008,7 @@ public:
     return sql_no_;
   }
 
-  TO_STRING_KV(K_(sql_no), K_(start_task_cnt), K_(end_task_cnt), K_(need_rollback), K_(task_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   void update_sql_no(const int64_t sql_no)
@@ -1107,7 +1107,7 @@ public:
   {
     return MonotonicTs(common::ObTimeUtility::current_time());
   }
-  TO_STRING_KV(K_(mts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t mts_;
 } MonotonicTs;
 
@@ -1144,7 +1144,7 @@ public:
   {
     return get_remaining_wait_interval_us() > 0;
   }
-  TO_STRING_KV(K_(receive_gts_ts), K_(need_wait_interval_us));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   MonotonicTs receive_gts_ts_;
@@ -1182,7 +1182,7 @@ public:
   {
     reset();
   }
-  TO_STRING_KV(K_(id), K_(id_len), K_(sql_no));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t sql_no_;
@@ -1219,7 +1219,7 @@ public:
     return max_sql_no_;
   }
   int update_max_sql_no(const int64_t sql_no);
-  TO_STRING_KV(K_(partition), K_(max_sql_no));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_;
@@ -1254,7 +1254,7 @@ public:
   int del_savepoint(const common::ObString& id);
   int update_savepoint_partition_info(const common::ObPartitionArray& participants, const int64_t sql_no);
   int get_savepoint_rollback_info(const common::ObString& id, int64_t& sql_no, common::ObPartitionArray& partition_arr);
-  TO_STRING_KV(K_(savepoint_arr), K_(savepoint_partition_arr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t find_savepoint_location_(const common::ObString& id);
@@ -1326,7 +1326,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(snapshot_version), K_(read_sql_no), K_(sql_no), K_(trans_id), K_(is_cursor_or_nested));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t snapshot_version_;
@@ -1362,7 +1362,7 @@ public:
   {
     return to_;
   }
-  TO_STRING_KV(K_(from), K_(to));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t from_;
@@ -1383,7 +1383,7 @@ public:
   int push(const ObStmtPair& stmt_pair);
   int search(const int64_t sql_no, ObStmtPair& stmt_pair) const;
   int assign(const ObStmtRollbackInfo& other);
-  TO_STRING_KV(K_(stmt_pair_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObSEArray<ObStmtPair, 16> stmt_pair_array_;
@@ -1477,9 +1477,7 @@ public:
   {
     return first_pkey_;
   }
-  TO_STRING_KV(K_(trans_id), K_(tenant_id), K_(stmt_expired_time), K_(trx_lock_timeout), K_(consistency_type),
-      K_(read_snapshot_type), K_(snapshot_version), K_(is_local_single_partition), K_(is_standalone_stmt_end),
-      K_(first_pkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // for standalone transaction
@@ -1546,8 +1544,7 @@ public:
   bool operator!=(const ObXATransID& xid) const;
   int32_t to_full_xid_string(char* buffer, const int64_t capacity) const;
   bool all_equal_to(const ObXATransID& other) const;
-  TO_STRING_KV(K_(gtrid_str), K_(bqual_str), K_(format_id), KPHEX(gtrid_str_.ptr(), gtrid_str_.length()),
-      KPHEX(bqual_str_.ptr(), bqual_str_.length()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static const int32_t MAX_GTRID_LENGTH = 64;
@@ -2080,15 +2077,7 @@ public:
   {
     trx_idle_timeout_ = true;
   }
-  TO_STRING_KV(K_(tenant_id), K_(trans_id), K_(snapshot_version), K_(trans_snapshot_version), K_(trans_param),
-      K_(participants), K_(stmt_participants), K_(sql_no), K_(max_sql_no), K_(stmt_min_sql_no), K_(cur_stmt_desc),
-      K_(need_rollback), K_(trans_expired_time), K_(cur_stmt_expired_time), K_(trans_type), K_(is_all_select_stmt),
-      K_(stmt_participants_pla), K_(participants_pla), K_(is_sp_trans_exiting), K_(trans_end), K_(snapshot_gene_type),
-      K_(local_consistency_type), "snapshot_gene_type_str", ObTransSnapshotGeneType::cstr(snapshot_gene_type_),
-      "local_consistency_type_str", ObTransConsistencyType::cstr(local_consistency_type_), K_(session_id),
-      K_(proxy_session_id), K_(app_trace_id_confirmed), K_(can_elr), K_(is_dup_table_trans), K_(is_local_trans),
-      K_(trans_need_wait_wrap), K_(is_fast_select), K_(trace_info), K_(standalone_stmt_desc),
-      K_(need_check_at_end_participant), K_(is_nested_stmt), K_(stmt_min_sql_no), K_(xid), K_(gc_participants));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static const int32_t MAX_XID_LENGTH = 128;
@@ -2477,7 +2466,7 @@ public:
     return partition_.is_valid() && addr_.is_valid();
   }
 
-  TO_STRING_KV(K_(partition), K_(addr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_;
@@ -2519,7 +2508,7 @@ public:
     }
     return ret;
   }
-  TO_STRING_KV(K_(partition), K_(log_id), K_(log_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_;
@@ -2554,7 +2543,7 @@ public:
   {
     return partition_ == other.partition_ && epoch_ == other.epoch_;
   }
-  TO_STRING_KV(K_(partition), K_(epoch));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_;
@@ -2596,7 +2585,7 @@ public:
     return partition_;
   }
   bool is_all_identical_epoch() const;
-  TO_STRING_KV(K_(partition), K_(epoch_arr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   bool is_inited_;
@@ -2639,7 +2628,7 @@ public:
   }
   bool operator==(const ObMemtableKeyInfo& other) const;
 
-  TO_STRING_KV(K_(buf));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static const int MEMTABLE_KEY_INFO_BUF_SIZE = 512;
@@ -2690,7 +2679,7 @@ public:
   {
     return ATOMIC_BCAS(&result_, o, n);
   }
-  TO_STRING_KV(K_(trans_id), K_(commit_version), K_(result), K_(ctx_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObTransID trans_id_;
@@ -2752,7 +2741,7 @@ public:
     return task_type_;
   }
   bool ready_to_handle();
-  TO_STRING_KV(K_(task_type), K_(retry_interval_us), K_(next_handle_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static const int64_t RP_TOTAL_NUM = 512;
@@ -2975,7 +2964,7 @@ public:
   {
     return log_id_;
   }
-  TO_STRING_KV(K_(addr), K_(log_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObAddr addr_;
@@ -3036,7 +3025,7 @@ public:
   {
     return undo_from_;
   }
-  TO_STRING_KV(K_(undo_from), K_(undo_to));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // from > to
@@ -3070,7 +3059,7 @@ public:
   int undo(const int64_t undo_to, const int64_t undo_from);
   bool is_contain(const int64_t sql_no) const;
   int deep_copy(ObTransUndoStatus& status);
-  TO_STRING_KV(K_(undo_action_arr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   mutable common::ObSpinLock latch_;
@@ -3089,7 +3078,7 @@ public:
   int64_t trans_version_;
   ObTransUndoStatus undo_status_;
   int64_t end_log_ts_;
-  TO_STRING_KV(K_(status), K_(trans_version), K_(undo_status), K_(end_log_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObTransTableStatusInfo {
@@ -3162,7 +3151,7 @@ public:
   {
     return trans_version_;
   }
-  TO_STRING_KV(K_(status), K_(trans_version), K_(undo_status), K_(terminate_log_ts), K_(checksum), K_(checksum_log_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObTransTableStatusType status_;
@@ -3205,7 +3194,7 @@ public:
   {
     return leader_.is_valid() && partition_arr_.count() > 0;
   }
-  TO_STRING_KV(K_(leader), K_(partition_arr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObAddr leader_;
@@ -3246,7 +3235,7 @@ public:
   {
     reset();
   }
-  TO_STRING_KV(K_(array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObSameLeaderPartitionArrArray array_;
@@ -3279,7 +3268,7 @@ public:
       const int64_t base_ts, const int64_t batch_count, bool& need_response, common::ObPartitionArray& batch_partitions,
       int64_t& same_leader_batch_base_ts);
   int try_preempt(const ObTransID& trans_id);
-  TO_STRING_KV(K_(msg_type), K_(trans_id), K_(participants));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t ALLOW_PREEMPT_INTERVAL_US = 1 * 1000 * 1000;
 
 private:
@@ -3358,7 +3347,7 @@ public:
     return base_timestamp_;
   }
   static const int64_t FLUSH_INTERVAL_US = 1 * 1000 * 1000;
-  TO_STRING_KV(K_(offset), K_(last_flush_ts), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   void flush_(bool& need_submit_log);
@@ -3488,13 +3477,7 @@ public:
   {
     reset();
   }
-  TO_STRING_KV(K_(trans_table_info), K_(partition), K_(trans_param), K_(tenant_id), K_(trans_expired_time),
-      K_(cluster_id), K_(scheduler), K_(coordinator), K_(participants), K_(prepare_status), K_(prev_redo_log_ids),
-      K_(app_trace_id_str), K_(partition_log_info_arr), K_(prev_trans_arr), K_(can_elr), K_(max_durable_log_ts),
-      K_(global_trans_version), K_(commit_log_checksum), K_(state), K_(prepare_version), K_(max_durable_sql_no),
-      K_(trans_type), K_(elr_prepared_state), K_(is_dup_table_trans), K_(redo_log_no), K_(mutator_log_no),
-      K_(stmt_info), K_(min_log_ts), K_(sp_user_request), K_(need_checksum), K_(prepare_log_id),
-      K_(prepare_log_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObTransTableStatusInfo trans_table_info_;
   common::ObPartitionKey partition_;
   ObStartTransParam trans_param_;
@@ -3534,7 +3517,7 @@ struct CtxInfo final {
   {}
   CtxInfo(ObTransCtx* ctx) : ctx_(ctx)
   {}
-  TO_STRING_KV(KP(ctx_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObTransCtx* ctx_;
 };
 
@@ -3586,7 +3569,7 @@ public:
   // return whether the data is readable, and corresponding state and version
   int lock_for_read(
       const ObLockForReadArg& lock_for_read_arg, bool& can_read, int64_t& trans_version, bool& is_determined_state);
-  TO_STRING_KV(KP_(partition_trans_ctx_mgr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObPartitionTransCtxMgr* partition_trans_ctx_mgr_;
@@ -3619,7 +3602,7 @@ public:
   {
     return trans_state_table_.check_trans_table_valid(pkey, valid);
   }
-  TO_STRING_KV(K_(trans_state_table));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObTransStateTable trans_state_table_;

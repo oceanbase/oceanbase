@@ -17,6 +17,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObSqcAsyncCB::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("dst", get_dst(), "timeout", get_timeout(), "ret_code", get_ret_code(), "result", get_result(),"is_visited", is_visited(), "is_timeout", is_timeout(), "is_processed", is_processed(), "is_invalid",is_invalid());
+  J_OBJ_END();
+  return pos;
+}
 /* ObSqcAsyncCB */
 int ObSqcAsyncCB::process()
 {

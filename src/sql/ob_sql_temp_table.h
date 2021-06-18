@@ -34,8 +34,14 @@ public:
   virtual ~ObTempTableSqcInfo()
   {}
 
-  TO_STRING_KV(K_(sqc_id), K_(temp_sqc_addr), K_(interm_result_ids), K_(min_task_count), K_(max_task_count),
-      K_(task_count), K_(part_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(sqc_id), K_(temp_sqc_addr), K_(interm_result_ids), K_(min_task_count), K_(max_task_count),K_(task_count), K_(part_count));
+    J_OBJ_END();
+    return pos;
+  }
 
   uint64_t sqc_id_;
   ObAddr temp_sqc_addr_;
@@ -53,7 +59,14 @@ public:
   virtual ~ObSqlTempTableCtx()
   {}
 
-  TO_STRING_KV(K_(temp_table_id), K_(temp_table_infos));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(temp_table_id), K_(temp_table_infos));
+    J_OBJ_END();
+    return pos;
+  }
 
   // private:
   uint64_t temp_table_id_;
@@ -74,7 +87,14 @@ public:
     const uint64_t svr_id = GCTX.server_id_;
     return ((ATOMIC_AAF(&sequence, 1) & 0x0000FFFFFFFFFFFF) | (svr_id << 48));
   }
-  TO_STRING_KV(K_(ref_table_id), K_(table_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(ref_table_id), K_(table_name));
+    J_OBJ_END();
+    return pos;
+  }
 
 public:
   uint64_t ref_table_id_;

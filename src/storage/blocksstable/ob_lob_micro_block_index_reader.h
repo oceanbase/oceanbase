@@ -21,13 +21,13 @@ namespace oceanbase {
 namespace blocksstable {
 
 struct ObLobMicroIndexSizeItem {
-  TO_STRING_KV(K_(char_size), K_(byte_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t char_size_;  // micro block char size
   uint64_t byte_size_;  // uncompressed micro block byte size
 };
 
 struct ObLobMicroIndexItem {
-  TO_STRING_KV(K_(offset), K_(data_size), K_(size_item));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int32_t offset_;     // micro block data offset
   int32_t data_size_;  // micro block size after compressed
   struct ObLobMicroIndexSizeItem size_item_;

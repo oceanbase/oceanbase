@@ -123,7 +123,7 @@ public:
   virtual void reuse() = 0;
   virtual int64_t get_seq() const = 0;
   virtual ObICLogItem* get_flush_task() = 0;
-  TO_STRING_KV(N_BUF, ((uint64_t)(batch_buf_)), N_BUF_LEN, batch_size_, N_COUNT, subtask_count_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // alloc memory for RpcPostHandler's Task

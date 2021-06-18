@@ -49,7 +49,7 @@ struct ObMacroBlocksWriteCtx final {
   {
     return macro_block_list_;
   }
-  TO_STRING_KV(K_(file_ctx), K_(macro_block_list), K_(file_handle));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 }  // end namespace blocksstable

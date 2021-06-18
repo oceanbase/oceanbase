@@ -23,6 +23,14 @@ using namespace common;
 using namespace share;
 
 namespace storage {
+int64_t ObPartitionSplitTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version), K_(partition_pair), K_(next_run_ts));
+  J_OBJ_END();
+  return pos;
+}
 int ObPartitionSplitTask::init(const int64_t schema_version, const ObSplitPartitionPair& partition_pair)
 {
   int ret = OB_SUCCESS;

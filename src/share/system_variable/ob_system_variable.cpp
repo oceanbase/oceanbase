@@ -38,6 +38,14 @@ using namespace common;
 using namespace sql;
 using namespace transaction;
 namespace share {
+int64_t ObSetVar::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(var_name), K_(set_scope), K_(is_set_default), K_(actual_tenant_id));
+  J_OBJ_END();
+  return pos;
+}
 char ObSpecialSysVarValues::version_comment_[ObSpecialSysVarValues::VERSION_COMMENT_MAX_LEN];
 char ObSpecialSysVarValues::version_[ObSpecialSysVarValues::VERSION_MAX_LEN];
 char ObSpecialSysVarValues::parallel_count_str_[ObSpecialSysVarValues::MAX_PARALLEL_DEGREE_MAX_LEN];

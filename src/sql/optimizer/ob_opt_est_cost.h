@@ -61,9 +61,7 @@ struct ObTableMetaInfo {
   {}
 
   void assign(const ObTableMetaInfo& table_meta_info);
-  TO_STRING_KV(K_(ref_table_id), K_(part_count), K_(micro_block_size), K_(part_size), K_(average_row_size),
-      K_(table_column_count), K_(table_rowkey_count), K_(table_row_count), K_(row_count), K_(is_only_memtable_data),
-      K_(cost_est_type), K_(table_est_part));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t ref_table_id_;       // ref table id
   int64_t schema_version_;      // schema version
   int64_t part_count_;          // partition count
@@ -96,8 +94,7 @@ struct ObIndexMetaInfo {
   virtual ~ObIndexMetaInfo()
   {}
   void assign(const ObIndexMetaInfo& index_meta_info);
-  TO_STRING_KV(K_(ref_table_id), K_(index_id), K_(index_micro_block_size), K_(index_part_size), K_(index_column_count),
-      K_(is_index_back), K_(is_unique_index));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t ref_table_id_;           // ref table id
   uint64_t index_id_;               // index id
   int64_t index_micro_block_size_;  // index micro block size, same as main table when path is primary
@@ -115,7 +112,7 @@ struct ObBasicCostInfo {
   {}
   ObBasicCostInfo(double rows, double cost, double width) : rows_(rows), cost_(cost), width_(width)
   {}
-  TO_STRING_KV(K_(rows), K_(cost), K_(width));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   double rows_;
   double cost_;
   double width_;
@@ -175,9 +172,7 @@ struct ObCostTableScanInfo {
     return est_sel_info_;
   }
 
-  TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(index_id), K_(table_meta_info), K_(index_meta_info),
-      K_(is_virtual_table), K_(is_unique), K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
-      K_(postfix_filter_sel), K_(table_filter_sel));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // the following information need to be set before estimating cost
   uint64_t table_id_;                                                                  // table id
   uint64_t ref_table_id_;                                                              // ref table id
@@ -232,8 +227,7 @@ struct ObCostBaseJoinInfo : public ObTwoChildrenNodeCostInfo {
     return est_sel_info_;
   }
 
-  TO_STRING_KV(K_(left_rows), K_(left_cost), K_(right_rows), K_(right_cost), K_(left_width), K_(right_width),
-      K_(left_ids), K_(right_ids), K_(join_type), K_(equal_join_condition), K_(other_join_condition));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObRelIds left_ids_;
   ObRelIds right_ids_;
   ObJoinType join_type_;
@@ -258,9 +252,7 @@ struct ObCostNLJoinInfo : public ObCostBaseJoinInfo {
   {}
   virtual ~ObCostNLJoinInfo()
   {}
-  TO_STRING_KV(K_(left_rows), K_(left_cost), K_(right_rows), K_(right_cost), K_(left_width), K_(right_width),
-      K_(left_ids), K_(right_ids), K_(join_type), K_(anti_or_semi_match_sel), K_(with_nl_param), K_(need_mat),
-      K_(equal_join_condition), K_(other_join_condition));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   double anti_or_semi_match_sel_;
   bool with_nl_param_;
   bool need_mat_;
@@ -281,9 +273,7 @@ struct ObCostMergeJoinInfo : public ObCostBaseJoinInfo {
         right_need_ordering_(right_need_ordering)
   {}
   virtual ~ObCostMergeJoinInfo(){};
-  TO_STRING_KV(K_(left_rows), K_(left_cost), K_(right_rows), K_(right_cost), K_(left_width), K_(right_width),
-      K_(left_ids), K_(right_ids), K_(join_type), K_(left_need_ordering), K_(right_need_ordering),
-      K_(equal_join_condition), K_(other_join_condition));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const common::ObIArray<OrderItem>& left_need_ordering_;
   const common::ObIArray<OrderItem>& right_need_ordering_;
 
@@ -302,8 +292,7 @@ struct ObCostHashJoinInfo : public ObCostBaseJoinInfo {
       const common::ObIArray<ObRawExpr*>& other_join_condition, ObEstSelInfo* est_sel_info)
       : ObCostBaseJoinInfo(left_rows, left_cost, left_width, right_rows, right_cost, right_width, left_ids, right_ids,
             join_type, equal_join_condition, other_join_condition, est_sel_info){};
-  TO_STRING_KV(K_(left_rows), K_(left_cost), K_(right_rows), K_(right_cost), K_(left_width), K_(right_width),
-      K_(left_ids), K_(right_ids), K_(join_type), K_(equal_join_condition), K_(other_join_condition));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual ~ObCostHashJoinInfo(){};
 
 private:
@@ -315,7 +304,7 @@ struct ObSubplanFilterCostInfo {
       const ObIArray<std::pair<int64_t, ObRawExpr*> >& onetime_exprs, const ObBitSet<>& initplans)
       : children_(children), onetime_exprs_(onetime_exprs), initplans_(initplans)
   {}
-  TO_STRING_KV(K_(children), K_(onetime_exprs), K_(initplans));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   const ObIArray<ObBasicCostInfo>& children_;
   const ObIArray<std::pair<int64_t, ObRawExpr*> >& onetime_exprs_;

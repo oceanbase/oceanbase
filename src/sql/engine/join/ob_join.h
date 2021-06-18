@@ -131,10 +131,7 @@ public:
     return is_nocycle_;
   }
   int set_sort_siblings_columns(const common::ObIArray<ObSortColumn>& sort_siblings_columns);
-  TO_STRING_KV(N_ID, id_, N_COLUMN_COUNT, column_count_, N_PROJECTOR,
-      common::ObArrayWrap<int32_t>(projector_, projector_size_), N_FILTER_EXPRS, filter_exprs_, N_CALC_EXPRS,
-      calc_exprs_, N_JOIN_TYPE, ob_join_type_str(join_type_), N_JOIN_EQ_COND, equal_join_conds_, N_JOIN_OTHER_COND,
-      other_join_conds_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   inline bool need_left_join() const;

@@ -31,7 +31,7 @@ public:
     {}
     GenColExpr() : col_id_(common::OB_NOT_EXIST_COLUMN_ID), gen_col_expr_(NULL)
     {}
-    TO_STRING_KV(K_(col_id), K_(gen_col_expr));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     ~GenColExpr()
     {}

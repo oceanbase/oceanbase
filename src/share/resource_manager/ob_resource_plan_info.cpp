@@ -62,3 +62,35 @@ int ObResourceUserMappingRule::assign(const ObResourceUserMappingRule& other)
   ret = group_name_.assign(other.group_name_);
   return ret;
 }
+int64_t ObResourceUserMappingRule::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(group_id), "group_name", group_name_.get_group_name());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObResourceMappingRule::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(attr), K_(value), K_(group));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPlanDirective::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), "group_name", group_name_.get_group_name(), K_(mgmt_p1), K_(utilization_limit), K_(level));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGroupName::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(group_name));
+  J_OBJ_END();
+  return pos;
+}

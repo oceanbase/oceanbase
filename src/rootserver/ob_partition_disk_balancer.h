@@ -51,7 +51,7 @@ public:
     {
       key_ = key;
     }
-    TO_STRING_KV(K_(key), K_(data_size));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef RowItemDiskStat Stat;
   typedef common::hash::ObReferedMap<int64_t, Stat> UnitLoadMap;
@@ -77,7 +77,7 @@ public:
   int get_unit_load(int64_t unit_id, int64_t& load) const;
   int get_unit_load(int64_t unit_id, Stat*& unit_load);
   int get_total_load(int64_t& load) const;
-  TO_STRING_KV(K_(item_disk_info), K_(zone), K_(row_idx), K_(map));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObSEArray<Stat, 16> item_disk_info_;
@@ -106,7 +106,7 @@ public:
     {
       key_ = key;
     }
-    TO_STRING_KV(K_(key), K_(unit_stat));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef UnitItemDiskStat Stat;
   typedef common::hash::ObReferedMap<int64_t, Stat> UnitLoadMap;

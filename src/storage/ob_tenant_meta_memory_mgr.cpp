@@ -128,3 +128,11 @@ ObTenantMetaMemoryMgr& ObTenantMetaMemoryMgr::get_instance()
   static ObTenantMetaMemoryMgr instance;
   return instance;
 }
+int64_t ObTenantMetaMemoryMgr::TenantInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version), K_(memory_size));
+  J_OBJ_END();
+  return pos;
+}

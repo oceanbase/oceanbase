@@ -25,6 +25,22 @@ namespace oceanbase {
 using namespace common;
 using namespace obrpc;
 namespace storage {
+int64_t ObWarmUpCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(request_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSendWarmUpTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(warm_ctx));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ------------------------------------------------------------ObWarmUpCtx---------------------------------------------------------
  */

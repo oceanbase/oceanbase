@@ -37,7 +37,7 @@ struct ObCtxMemConfig {
   {}
   uint64_t ctx_id_;
   int64_t idle_size_;
-  TO_STRING_KV(K_(ctx_id), K_(idle_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObICtxMemConfigGetter {

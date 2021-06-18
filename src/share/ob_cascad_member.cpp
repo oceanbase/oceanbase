@@ -16,6 +16,14 @@ namespace oceanbase {
 using namespace common;
 
 namespace share {
+int64_t ObCascadMember::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(cluster_id));
+  J_OBJ_END();
+  return pos;
+}
 ObCascadMember::ObCascadMember() : server_(), cluster_id_(common::INVALID_CLUSTER_ID)
 {}
 

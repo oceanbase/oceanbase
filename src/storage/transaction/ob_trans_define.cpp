@@ -33,6 +33,302 @@ using namespace observer;
 using namespace clog;
 
 namespace transaction {
+int64_t ObTraceInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(app_trace_info), K_(app_trace_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionSchemaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStmtInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(nested_sql), K_(start_stmt_cnt), K_(end_stmt_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTaskInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sql_no), K_(active_task_cnt), K_(snapshot_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransTaskInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tasks_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransStmtInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sql_no), K_(start_task_cnt), K_(end_task_cnt), K_(need_rollback), K_(task_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t MonotonicTs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(mts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransNeedWaitWrap::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(receive_gts_ts), K_(need_wait_interval_us));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSavepointInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(id), K_(id_len), K_(sql_no));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSavepointPartitionInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(max_sql_no));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSavepointMgr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(savepoint_arr), K_(savepoint_partition_arr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransSnapInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(snapshot_version), K_(read_sql_no), K_(sql_no), K_(trans_id), K_(is_cursor_or_nested));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStmtPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(from), K_(to));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStmtRollbackInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_pair_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStandaloneStmtDesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_id), K_(tenant_id), K_(stmt_expired_time), K_(trx_lock_timeout), K_(consistency_type),K_(read_snapshot_type), K_(snapshot_version), K_(is_local_single_partition), K_(is_standalone_stmt_end),K_(first_pkey));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObXATransID::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(gtrid_str), K_(bqual_str), K_(format_id), KPHEX(gtrid_str_.ptr(), gtrid_str_.length()),KPHEX(bqual_str_.ptr(), bqual_str_.length()));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransDesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(trans_id), K_(snapshot_version), K_(trans_snapshot_version), K_(trans_param),K_(participants), K_(stmt_participants), K_(sql_no), K_(max_sql_no), K_(stmt_min_sql_no), K_(cur_stmt_desc),K_(need_rollback), K_(trans_expired_time), K_(cur_stmt_expired_time), K_(trans_type), K_(is_all_select_stmt),K_(stmt_participants_pla), K_(participants_pla), K_(is_sp_trans_exiting), K_(trans_end), K_(snapshot_gene_type),K_(local_consistency_type), "snapshot_gene_type_str", ObTransSnapshotGeneType::cstr(snapshot_gene_type_),"local_consistency_type_str", ObTransConsistencyType::cstr(local_consistency_type_), K_(session_id),K_(proxy_session_id), K_(app_trace_id_confirmed), K_(can_elr), K_(is_dup_table_trans), K_(is_local_trans),K_(trans_need_wait_wrap), K_(is_fast_select), K_(trace_info), K_(standalone_stmt_desc),K_(need_check_at_end_participant), K_(is_nested_stmt), K_(stmt_min_sql_no), K_(xid), K_(gc_participants));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionLeaderInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(addr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionLogInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(log_id), K_(log_timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionEpochInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(epoch));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionLeaderEpochInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(epoch_arr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMemtableKeyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(buf));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObElrTransInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_id), K_(commit_version), K_(result), K_(ctx_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_type), K_(retry_interval_us), K_(next_handle_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAddrLogId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), K_(log_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUndoAction::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(undo_from), K_(undo_to));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransUndoStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(undo_action_arr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransStatusInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), K_(trans_version), K_(undo_status), K_(end_log_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransTableStatusInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), K_(trans_version), K_(undo_status), K_(terminate_log_ts), K_(checksum), K_(checksum_log_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSameLeaderPartitionArr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(leader), K_(partition_arr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSameLeaderPartitionArrMgr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartTransSameLeaderBatchRpcItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(msg_type), K_(trans_id), K_(participants));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransLogBufferAggreContainer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(offset), K_(last_flush_ts), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransSSTableDurableCtxInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_table_info), K_(partition), K_(trans_param), K_(tenant_id), K_(trans_expired_time),K_(cluster_id), K_(scheduler), K_(coordinator), K_(participants), K_(prepare_status), K_(prev_redo_log_ids),K_(app_trace_id_str), K_(partition_log_info_arr), K_(prev_trans_arr), K_(can_elr), K_(max_durable_log_ts),K_(global_trans_version), K_(commit_log_checksum), K_(state), K_(prepare_version), K_(max_durable_sql_no),K_(trans_type), K_(elr_prepared_state), K_(is_dup_table_trans), K_(redo_log_no), K_(mutator_log_no),K_(stmt_info), K_(min_log_ts), K_(sp_user_request), K_(need_checksum), K_(prepare_log_id),K_(prepare_log_timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t CtxInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(ctx_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransStateTable::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(partition_trans_ctx_mgr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTransStateTableGuard::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_state_table));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ObTransID, hv_, server_, inc_, timestamp_);
 // no need to serialize and deserialize autocommit
 OB_SERIALIZE_MEMBER(ObStartTransParam, access_mode_, type_, isolation_, consistency_type_, cluster_version_,

@@ -220,3 +220,35 @@ int main(int argc, char** argv)
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+int64_t IORunner::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(duration_ms), K_(read_ctx), K_(write_ctx), K_(begin_time), K_(end_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t IORunContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(thread_cnt), K_(workload), K_(succ_cnt), K_(fail_cnt), KP_(generator), K_(sum_rt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t IOInfoGenerator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(mode), K_(io_category), K_(io_size), K_(is_sequence));
+  J_OBJ_END();
+  return pos;
+}
+int64_t IOWorkload::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(category), K_(size), K_(iops), K_(depth), K_(is_sequence));
+  J_OBJ_END();
+  return pos;
+}

@@ -31,6 +31,14 @@ using namespace storage;
 using namespace transaction;
 using namespace share::schema;
 namespace memtable {
+int64_t ObMemtableMultiVersionScanIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC_(context), K_(row), KPC_(key), KPC_(value_iter), K_(scan_state), K_(iter_mode));
+  J_OBJ_END();
+  return pos;
+}
 
 /**
  * ---------------------------ObMemtableGetIterator-----------------------------

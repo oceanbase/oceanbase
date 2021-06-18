@@ -39,7 +39,7 @@ public:
         sstable_end_log_ts_(0)
   {}
   ~ObQueryRowInfo() = default;
-  TO_STRING_KV(K_(row), K_(final_result), K_(final_result), K_(end_iter_idx), K_(sstable_end_log_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObStoreRow row_;
   ObNopPos nop_pos_;
   bool final_result_;

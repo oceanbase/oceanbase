@@ -31,7 +31,7 @@ public:
     common::ObNewRow* row_;
     struct _BreadthFirstSearchTreeNode** children_;
     struct _BreadthFirstSearchTreeNode* parent_;
-    TO_STRING_KV("row ", row_, "child_num_", child_num_);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   } ObBFSTreeNode;
 
   typedef struct _TreeNode {
@@ -41,7 +41,7 @@ public:
     uint64_t tree_level_;
     common::ObNewRow* row_;
     ObBFSTreeNode* in_bstree_node_;
-    TO_STRING_KV("is tree level", tree_level_, "is cycle", is_cycle_, "row ", row_)
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   } ObTreeNode;
 
   struct ObNodeComparer {

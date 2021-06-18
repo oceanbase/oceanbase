@@ -29,6 +29,22 @@ using namespace common;
 
 namespace share {
 namespace schema {
+int64_t ObSchemaCacheKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_type), K_(schema_id), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSchemaCacheValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_type), KP_(schema));
+  J_OBJ_END();
+  return pos;
+}
 
 ObSchemaCacheKey::ObSchemaCacheKey()
     : schema_type_(OB_MAX_SCHEMA), schema_id_(OB_INVALID_ID), schema_version_(OB_INVALID_VERSION)

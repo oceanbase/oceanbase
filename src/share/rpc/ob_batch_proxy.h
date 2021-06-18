@@ -134,7 +134,7 @@ public:
   uint64_t src_;
   char* buf_;
   common::ObAddr src_addr_;  // for ipv6 support
-  TO_STRING_KV(N_DATA_SIZE, size_, N_ID, id_, N_SERVER, src_, N_BUFFER, ((uint64_t)buf_), N_SERVER_ADDR, src_addr_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObBatchRpcProxy : public obrpc::ObRpcProxy {

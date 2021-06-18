@@ -37,7 +37,7 @@ class planText;
 struct partition_location {
   int64_t partition_id;
   // server id
-  TO_STRING_KV(K(partition_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 static const char ID[] = "ID";
 static const char OPERATOR[] = "OPERATOR";
@@ -376,7 +376,7 @@ public:
   {
     return SlaveMappingType::SM_NONE != slave_mapping_type_;
   }
-  TO_STRING_KV(K(alloc_gi_), K(tablet_size_), K(state_), K(exchange_op_above_count_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool alloc_gi_;
   int64_t tablet_size_;
   GIState state_;
@@ -401,7 +401,7 @@ public:
         multi_child_op_above_count_in_dfo_(0),
         enable_gi_partition_pruning_(false)
   {}
-  TO_STRING_KV(K(state_), K(pw_op_ptr_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual ~ObAllocGIInfo() = default;
   void set_info(AllocGIContext& ctx)
   {
@@ -456,7 +456,7 @@ public:
     return plan_type_;
   }
 
-  TO_STRING_KV(K(plan_type_), K(parallel_), K(servers_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSEArray<std::pair<ObRawExpr*, ObRawExpr*>, 4, common::ModulePageAllocator, true>
       group_push_down_replaced_exprs_;
@@ -475,7 +475,7 @@ struct ObExchangeInfo {
     HashExpr(ObRawExpr* expr, const ObObjMeta& cmp_type) : expr_(expr), cmp_type_(cmp_type)
     {}
 
-    TO_STRING_KV(K_(expr), K_(cmp_type));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     ObRawExpr* expr_;
 
@@ -586,10 +586,7 @@ struct ObExchangeInfo {
   // slave mapping exchange
   SlaveMappingType slave_mapping_type_;
 
-  TO_STRING_KV(K_(is_task_order), K_(slice_count), K_(repartition_type), K_(repartition_ref_table_id),
-      K_(repartition_table_name), K_(calc_part_id_expr), K_(repartition_keys), K_(repartition_sub_keys),
-      K_(hash_dist_exprs), "dist_method", ObPQDistributeMethod::get_type_string(dist_method_), K_(px_dop),
-      K_(px_single), K_(repartition_func_exprs), K_(keep_ordering), K_(pdml_pkey), K_(slave_mapping_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
@@ -644,7 +641,7 @@ public:
   {
     return common::OB_INVALID_ID == producer_branch_;
   }
-  TO_STRING_KV(K_(consumer_id), K_(producer_id), K_(producer_branch), K(is_shared_), KPC_(expr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   const ObRawExpr* expr_;
   uint64_t producer_branch_;
@@ -691,7 +688,7 @@ struct ObPxPipeBlockingCtx {
     {
       return exch_;
     }
-    TO_STRING_KV(K_(exch));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     bool exch_;
@@ -721,14 +718,14 @@ struct ObPxPipeBlockingCtx {
     bool has_dfo_below_;
     int64_t dfo_depth_;
 
-    TO_STRING_KV(K_(in), K_(out), K_(has_dfo_below), K_(dfo_depth));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   explicit ObPxPipeBlockingCtx(common::ObIAllocator& alloc);
   ~ObPxPipeBlockingCtx();
 
   OpCtx* alloc();
-  TO_STRING_KV(K(op_ctxs_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObIAllocator& alloc_;

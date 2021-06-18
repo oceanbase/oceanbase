@@ -36,6 +36,62 @@ using namespace share;
 using namespace common::sqlclient;
 using namespace share::schema;
 namespace clog {
+int64_t ObClogHistoryReporter::IQueueTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("QueueTaskType", print_type(task_type_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClogHistoryReporter::PartitionOp::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("partition op str", print_partition_op(op_type_), "svr", addr_, "start_log_id", start_log_id_,"start_log_timestamp_", start_log_timestamp_, "end_log_id", end_log_id_, "end_log_timestamp",end_log_timestamp_, "next", next_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClogHistoryReporter::PartitionQueueTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), KPC_(head), KPC_(tail));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClogHistoryReporter::DeleteQueueTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(delete_addr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClogHistoryReporter::InsertTaskTailFunctor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err), K_(op));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClogHistoryReporter::InsertTaskHeadFunctor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err), K_(task));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClogHistoryReporter::PushTaskFunctor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(err_));
+  J_OBJ_END();
+  return pos;
+}
 int ObClogHistoryReporter::init(common::ObMySQLProxy* sql_proxy, const common::ObAddr& addr)
 {
   int ret = OB_SUCCESS;

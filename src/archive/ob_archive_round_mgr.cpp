@@ -17,6 +17,14 @@
 
 namespace oceanbase {
 namespace archive {
+int64_t ObArchiveRoundMgr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(add_pg_finish_), K(total_pg_count_), K(started_pg_count_), K(current_archive_round_), K(start_tstamp_),K(root_path_), K(storage_info_));
+  J_OBJ_END();
+  return pos;
+}
 using namespace oceanbase::common;
 
 ObArchiveRoundMgr::ObArchiveRoundMgr()

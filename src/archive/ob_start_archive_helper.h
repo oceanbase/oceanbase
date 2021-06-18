@@ -37,8 +37,7 @@ public:
     reset();
   }
   void reset();
-  TO_STRING_KV(K_(max_log_id_archived), K_(max_checkpoint_ts_archived), K_(max_log_submit_ts_archived),
-      K_(clog_epoch_id), K_(accum_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   uint64_t max_log_id_archived_;        // max archived log id
@@ -62,11 +61,7 @@ public:
   bool is_valid();
   int handle();
   bool check_query_info_ready();
-  TO_STRING_KV(K(pg_key_), K(takeover_ts_), K(create_timestamp_), K(round_start_info_), K(start_log_id_),
-      K(max_archived_log_info_), K(min_index_file_id_), K(max_index_file_id_), K(index_record_exist_),
-      K(max_archived_index_info_), K(min_data_file_id_), K(max_data_file_id_), K(data_file_exist_unrecorded_),
-      K(min_log_id_unrecorded_), K(min_log_ts_unrecorded_), K(max_log_id_unrecorded_), K(max_checkpoint_ts_unrecorded_),
-      K(max_log_submit_ts_unrecorded_), K(exist_log_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int handle_pg_start_archive_();

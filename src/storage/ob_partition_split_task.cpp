@@ -31,6 +31,22 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase {
 namespace storage {
+int64_t ObSSTableScheduleSplitParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_major_split), K_(frozen_version), K_(merge_version), K_(src_pkey), K_(dest_pkey), K_(index_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableSplitCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(param), K_(tables_handle), K_(base_sstable_version), K_(concurrent_count), K_(checksum_method),K_(schema_version), K_(split_schema_version), KP_(table_schema), KP_(split_table_schema), K_(split_handle),K_(remain_handle), K_(split_cnt), K_(column_cnt), K_(is_range_opt));
+  J_OBJ_END();
+  return pos;
+}
 
 ObSSTableScheduleSplitParam::ObSSTableScheduleSplitParam()
     : is_major_split_(false), merge_version_(), src_pkey_(), dest_pkey_(), index_id_(OB_INVALID_ID)

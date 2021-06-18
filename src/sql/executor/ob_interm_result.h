@@ -63,7 +63,7 @@ public:
   {
     return slice_id_.equal(other.slice_id_);
   }
-  TO_STRING_KV(K_(slice_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObIntermResult {

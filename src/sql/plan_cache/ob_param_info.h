@@ -38,7 +38,7 @@ struct ObParamInfo {
 
   void reset();
 
-  TO_STRING_KV(K_(flag), K_(scale), K_(type), K_(ext_real_type), K_(is_oracle_empty_string));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION_V(1);
 };

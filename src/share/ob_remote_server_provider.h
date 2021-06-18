@@ -35,7 +35,7 @@ class ObRemoteServerProvider : public common::sqlclient::ObMySQLServerProvider {
     virtual ~ServerAddr()
     {}
     void reset();
-    TO_STRING_KV(K_(server), K_(sql_port));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
     common::ObAddr server_;
@@ -51,7 +51,7 @@ class ObRemoteServerProvider : public common::sqlclient::ObMySQLServerProvider {
     {}
     virtual ~ServerInfo()
     {}
-    TO_STRING_KV("server_cnt", server_list_.count(), K_(cluster_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
     ServerAddrList server_list_;

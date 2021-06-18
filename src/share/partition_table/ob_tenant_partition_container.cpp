@@ -23,6 +23,14 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 namespace oceanbase {
 namespace share {
+int64_t ObTenantPartitionContainer::Partition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_info), K_(tablegroup_id));
+  J_OBJ_END();
+  return pos;
+}
 int ObTenantPartitionContainer::Partition::assign(const Partition& other)
 {
   int ret = OB_SUCCESS;

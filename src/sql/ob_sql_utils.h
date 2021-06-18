@@ -76,7 +76,7 @@ struct EstimatedPartition {
     row_count_ = row_count;
   }
 
-  TO_STRING_KV(K_(pkey), K_(addr), K_(row_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObHiddenColumnItem {
@@ -87,7 +87,7 @@ struct ObHiddenColumnItem {
   }
   ObRawExpr* expr_;
   int64_t hidden_idx_;
-  TO_STRING_KV(K_(hidden_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObSQLUtils {
@@ -366,8 +366,7 @@ struct ObAcsIndexInfo {
   {}
   virtual ~ObAcsIndexInfo();
   int deep_copy(const ObAcsIndexInfo& other);
-  TO_STRING_KV(
-      K_(index_id), K_(index_name), K_(is_index_back), K_(is_whole_range), K_(prefix_filter_sel), K_(column_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t index_id_;
   common::ObString index_name_;
   bool is_index_back_;
@@ -504,8 +503,7 @@ struct ObSqlTraits {
     is_commit_stmt_ = false;
     stmt_type_ = T_INVALID;
   }
-  TO_STRING_KV(
-      K(is_readonly_stmt_), K(is_modify_tenant_stmt_), K(is_cause_implicit_commit_), K(is_commit_stmt_), K(stmt_type_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 template <typename ValueType>
@@ -527,7 +525,14 @@ public:
     return (value.length() < min_value_ || value.length() > max_value_) ? err_ret_code_ : common::OB_SUCCESS;
   }
 
-  TO_STRING_KV(K_(min_value), K_(max_value), K_(err_ret_code));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(min_value), K_(max_value), K_(err_ret_code));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   ValueType min_value_;
@@ -548,7 +553,14 @@ public:
     return (nullptr == value) ? err_ret_code_ : common::OB_SUCCESS;
   }
 
-  TO_STRING_KV(K_(err_ret_code));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(err_ret_code));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   int err_ret_code_;
@@ -601,7 +613,14 @@ public:
   {
     return ObEnumBitSet<T>(this->flag_ & other.flag_);
   }
-  TO_STRING_KV(K_(flag));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(flag));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   inline uint64_t bit2flag(int bit) const
@@ -629,7 +648,7 @@ public:
   {}
 
   int merge_cursor(const ObImplicitCursorInfo& other);
-  TO_STRING_KV(K_(stmt_id), K_(affected_rows), K_(found_rows), K_(matched_rows), K_(duplicated_rows), K_(deleted_rows));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t stmt_id_;
   int64_t affected_rows_;
@@ -649,7 +668,7 @@ public:
   {}
   virtual ~ObParamPosIdx()
   {}
-  TO_STRING_KV(N_POS, pos_, N_IDX, idx_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int32_t pos_;
   int32_t idx_;
 };

@@ -78,8 +78,7 @@ public:
   {
     return schema_param_;
   }
-  TO_STRING_KV("index_id", NULL == schema_ ? 0 : schema_->get_table_id(), KP(schema_), K_(allow_not_ready),
-      K_(use_schema_param), KPC(schema_param_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int get_rowkey_col_desc_by_idx(const int64_t idx, share::schema::ObColDesc& col_desc) const;

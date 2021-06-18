@@ -44,7 +44,7 @@ public:
   }
   bool is_valid() const;
   int is_below_given_snapshot(const int64_t snapshot_version, bool& is_below);
-  TO_STRING_KV(K(tables_.count()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(OB_RECOVERY_TABLE_DATA_VERSION);
 
 private:
@@ -215,7 +215,7 @@ public:
     {}
     SerializePair() : buf_(nullptr), size_(0)
     {}
-    TO_STRING_KV(KP_(buf), K_(size));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     char* buf_;
     int64_t size_;
   };
@@ -265,7 +265,7 @@ public:
   int check_backup_point_exist(const int64_t snapshot_version, bool& is_exist);
   int get_all_backup_tables(const int64_t snapshot_version, ObTablesHandle& handle);
 
-  TO_STRING_KV(K_(pg_key), K_(restore_point_data), K_(backup_point_data));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int add_recovery_point_(const ObRecoveryPointType point_type, const int64_t snapshot_version,
@@ -324,7 +324,7 @@ public:
   }
   int get_tables(ObTablesHandle& handle) const;
   int assign(const ObRecoveryPointInfo& other);
-  TO_STRING_KV(K_(type), K(tables_handle_.get_count()), K_(snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObRecoveryPointType type_;

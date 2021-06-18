@@ -151,7 +151,7 @@ struct ObPartitionPrefixAccessStat {
       }
       return *this;
     }
-    TO_STRING_KV(K_(bf_filter_cnt), K_(bf_access_cnt), K_(empty_read_cnt));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t bf_filter_cnt_;
     int64_t bf_access_cnt_;
     int64_t empty_read_cnt_;
@@ -198,7 +198,7 @@ public:
   }
   bool is_inited() const;
 
-  TO_STRING_KV(K_(pkey), K_(store));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   //
   // scan table partition
   //

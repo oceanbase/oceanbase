@@ -73,7 +73,7 @@ public:
   virtual int locate_file_by_log_ts_for_clear(
       const common::ObPGKey& pg_key, const int64_t log_ts, uint64_t& index_file_id, uint64_t& data_file_id);
 
-  TO_STRING_KV(K(inited_), K(storage_info_), K(restore_info_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int get_file_id_range_(

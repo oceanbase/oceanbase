@@ -2189,3 +2189,11 @@ int ObLocalUniqueIndexCallback::operator()(const int ret_code)
   UNUSED(ret_code);
   return ret;
 }
+int64_t ObUniqueIndexChecker::ObScanTableParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(data_table_schema), KP_(index_schema), K_(snapshot_version), KP_(col_ids), KP_(output_projector),KP_(tables_handle));
+  J_OBJ_END();
+  return pos;
+}

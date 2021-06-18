@@ -34,6 +34,22 @@ using namespace transaction;
 using namespace share::schema;
 using namespace share;
 namespace storage {
+int64_t ObPGPartition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), KP_(cp_fty), KP_(storage));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGPartitionGuard::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(pg_partition), K_(pkey), KP_(map));
+  J_OBJ_END();
+  return pos;
+}
 
 ObPGPartition::ObPGPartition()
     : is_inited_(false),

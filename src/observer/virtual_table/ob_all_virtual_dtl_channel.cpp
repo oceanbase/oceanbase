@@ -294,3 +294,11 @@ int ObAllVirtualDtlChannel::inner_get_next_row(ObNewRow*& row)
   }
   return ret;
 }
+int64_t ObVirtualChannelInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(channel_id_), K(op_id_), K(peer_id_), K(tenant_id_));
+  J_OBJ_END();
+  return pos;
+}

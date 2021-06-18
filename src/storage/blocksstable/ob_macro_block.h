@@ -94,13 +94,7 @@ struct ObDataStoreDesc {
   {
     return SPARSE_ROW_STORE == row_store_type_;
   }
-  TO_STRING_KV(K_(table_id), K_(data_version), K_(micro_block_size), K_(row_column_count), K_(rowkey_column_count),
-      K_(column_index_scale), K_(row_store_type), K_(compressor_name), K_(schema_version), K_(schema_rowkey_col_cnt),
-      K_(partition_id), K_(pct_free), K_(has_lob_column), K_(is_major), K_(need_calc_column_checksum),
-      K_(store_micro_block_column_checksum), K_(snapshot_version), K_(need_calc_physical_checksum), K_(need_index_tree),
-      K_(need_prebuild_bloomfilter), K_(bloomfilter_rowkey_prefix), KP_(rowkey_helper), "column_types",
-      common::ObArrayWrap<common::ObObjMeta>(column_types_, row_column_count_), K_(pg_key), K_(file_handle),
-      K_(need_check_order), K_(need_index_tree), K_(major_working_cluster_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int cal_row_store_type(const share::schema::ObTableSchema& table_schema, const storage::ObMergeType merge_type);
@@ -148,9 +142,7 @@ struct ObMicroBlockDesc {
   void reset();
 
   // last_rowkey is byte stream, don't print it
-  TO_STRING_KV(K_(last_rowkey), KP_(buf), K_(buf_size), K_(data_size), K_(row_count), K_(column_count),
-      K_(row_count_delta), K_(can_mark_deletion), KP_(column_checksums), K_(max_merged_trans_version),
-      K_(contain_uncommitted_row));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObMacroBlock {

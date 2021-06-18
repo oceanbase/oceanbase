@@ -45,7 +45,7 @@ public:
     return true;
   }
 
-  TO_STRING_KV(K_(drop_dblink_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObDropDbLinkArg drop_dblink_arg_;

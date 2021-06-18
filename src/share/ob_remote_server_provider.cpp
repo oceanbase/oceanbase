@@ -24,6 +24,22 @@ using namespace oceanbase::common;
 using namespace oceanbase::rootserver;
 namespace oceanbase {
 namespace share {
+int64_t ObRemoteServerProvider::ServerAddr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(sql_port));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoteServerProvider::ServerInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("server_cnt", server_list_.count(), K_(cluster_id));
+  J_OBJ_END();
+  return pos;
+}
 void ObRemoteServerProvider::ServerAddr::reset()
 {
   server_.reset();

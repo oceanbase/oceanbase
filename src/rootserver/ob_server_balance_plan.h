@@ -32,7 +32,7 @@ struct ServerBalancePlanTask {
   uint64_t resource_pool_id_;
   common::ObAddr src_addr_;
   common::ObAddr dst_addr_;
-  TO_STRING_KV(K(unit_id_), K(zone_), K(resource_pool_id_), K(src_addr_), K(dst_addr_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ServerManager : public ObServerManager {

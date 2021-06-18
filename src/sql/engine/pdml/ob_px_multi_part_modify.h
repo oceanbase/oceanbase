@@ -33,7 +33,7 @@ public:
   {
     return common::OB_INVALID_ID != index_tid_ && 0 <= partition_cnt_;
   }
-  TO_STRING_KV(K_(index_tid), K_(partition_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   // index table's physical table_id
@@ -63,7 +63,7 @@ public:
     return part_id_index_;
   }
 
-  TO_STRING_KV(K_(part_id_index));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t part_id_index_;

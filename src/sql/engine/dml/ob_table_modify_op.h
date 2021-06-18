@@ -195,7 +195,7 @@ public:
   {
     return static_cast<const ObTableModifySpec&>(spec_);
   }
-  TO_STRING_KV(K_(location_idx), K_(part_infos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t location_idx_;
@@ -234,7 +234,7 @@ public:
     struct ObFkRowResInfo {
       ObExpr* rt_expr_;
       ObDatum ori_datum_;
-      TO_STRING_KV(K_(rt_expr), K_(ori_datum));
+      int64_t to_string(char* buf, const int64_t buf_len) const;
     };
     static int do_handle_old_row(
         ObTableModifyOp& modify_op, const ObForeignKeyArgArray& fk_args, const ObExprPtrIArray& old_row);

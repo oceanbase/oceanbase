@@ -1158,3 +1158,27 @@ int ObRestoreMeta::get_backup_index_id(const uint64_t table_id, ObIArray<ObSchem
   }
   return ret;
 }
+int64_t ObRestoreMeta::IndexIdPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(index_id), K_(backup_index_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreMeta::TableIdPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(backup_table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreMeta::TablegroupIdPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tablegroup_id), K_(backup_tablegroup_id));
+  J_OBJ_END();
+  return pos;
+}

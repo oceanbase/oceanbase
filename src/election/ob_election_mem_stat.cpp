@@ -15,6 +15,14 @@
 
 namespace oceanbase {
 namespace election {
+int64_t ObElectionMemStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("type_name", type_name_, K_(alloc_count), K_(release_count));
+  J_OBJ_END();
+  return pos;
+}
 using namespace oceanbase::common;
 
 void ObElectionMemStat::reset()

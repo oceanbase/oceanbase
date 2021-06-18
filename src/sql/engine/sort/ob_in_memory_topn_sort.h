@@ -62,7 +62,7 @@ private:
     RowWrapper() : row_(), buf_len_(0)
     {}
 
-    TO_STRING_KV(K_(row), K_(buf_len));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObNewRow row_;
     int64_t buf_len_;
   };

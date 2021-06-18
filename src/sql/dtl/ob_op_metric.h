@@ -145,8 +145,7 @@ public:
     return exec_time_;
   }
 
-  TO_STRING_KV(
-      K_(id), K_(type), K_(first_in_ts), K_(first_out_ts), K_(last_in_ts), K_(last_out_ts), K_(counter), K_(exec_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t FIRST_IN = 0x01;

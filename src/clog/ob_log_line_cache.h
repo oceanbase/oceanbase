@@ -281,7 +281,7 @@ private:
       return 0 == ATOMIC_LOAD(&v_.key_);
     }
 
-    TO_STRING_KV("file_id", v_.file_id_, "ref_cnt", v_.ref_cnt_);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct Block {
@@ -347,7 +347,7 @@ private:
       return key_.get_file_id();
     }
 
-    TO_STRING_KV(K_(key), KP_(lines), K_(token_id), K_(read_size), K_(last_access_timestamp));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     int do_get_line_(

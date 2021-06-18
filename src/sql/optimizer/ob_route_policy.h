@@ -44,7 +44,7 @@ struct ObRoutePolicyCtx {
         is_proxy_priority_hit_support_(false)
   {}
 
-  TO_STRING_KV(K(policy_type_), K(consistency_level_), K(is_proxy_priority_hit_support_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObRoutePolicyType policy_type_;
   common::ObConsistencyLevel consistency_level_;
@@ -102,8 +102,7 @@ public:
       server_stop_time_ = 0;
       server_status_ = share::ObServerStatus::OB_DISPLAY_MAX;
     }
-    TO_STRING_KV(K(pos_type_), K(merge_status_), K(zone_type_), K(zone_status_), K(start_service_time_),
-        K(server_stop_time_), K(server_status_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     PositionType pos_type_;
     MergeStatus merge_status_;
     share::ObZoneStatus::Status zone_status_;
@@ -144,7 +143,7 @@ public:
     }
 
   public:
-    TO_STRING_KV(K(server_), K(role_), K(sql_port_), K(replica_type_), K(attr_), K(is_filter_), K(replica_idx_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ReplicaAttribute attr_;
     bool is_filter_;
     int64_t replica_idx_;  // invalid
@@ -172,8 +171,7 @@ public:
       common::ObList<ObRoutePolicy::CandidateReplica, common::ObArenaAllocator>& intersect_server_list,
       bool& is_proxy_hit);
 
-  TO_STRING_KV(K(local_addr_), K(local_locality_), K(server_locality_array_), K(has_refresh_locality_),
-      K(has_readonly_zone_), K(is_inited_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   inline bool is_follower_first_route_policy_type(const ObRoutePolicyCtx& ctx) const
   {

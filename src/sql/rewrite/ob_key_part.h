@@ -52,7 +52,7 @@ public:
     return !(*this == other);
   }
 
-  TO_STRING_KV(N_TID, table_id_, N_CID, column_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t table_id_;
   uint64_t column_id_;
 };
@@ -88,7 +88,7 @@ public:
   {
     return enum_set_values_;
   }
-  TO_STRING_KV(N_OFFSET, offset_, N_COLUMN_TYPE, column_type_, N_ENUM_SET_VALUES, enum_set_values_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t offset_;
   ObExprResType column_type_;

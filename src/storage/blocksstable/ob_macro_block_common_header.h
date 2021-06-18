@@ -129,8 +129,7 @@ public:
   int64_t get_serialize_size() const;
   static int get_attr_name(int32_t attr, common::ObString& attr_name);
 
-  TO_STRING_KV(
-      K_(header_size), K_(version), K_(magic), K_(attr), K_(data_version), K_(payload_size), K_(payload_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // NOTE: data members should be 64 bits aligned!!!

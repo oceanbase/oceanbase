@@ -20,6 +20,22 @@
 namespace oceanbase {
 using namespace sql;
 namespace common {
+int64_t ObCmpFunc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(cmp_func));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHashFunc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(hash_func));
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace cmp_func_helper;
 

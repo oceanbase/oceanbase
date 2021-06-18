@@ -65,7 +65,7 @@ private:
   struct RowRun {
     RowRun() : id_(0), row_(NULL)
     {}
-    TO_STRING_KV("run_id", id_);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t id_;
     const common::ObNewRow* row_;
   };

@@ -86,7 +86,7 @@ public:
   {
     return create_synonym_arg_;
   }
-  TO_STRING_KV(K_(create_synonym_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   //  int set_table_id(ObStmtResolver &ctx, const uint64_t table_id);

@@ -265,8 +265,7 @@ public:
     return false;
   }
   virtual int assign(const ObDDLArg& other);
-  TO_STRING_KV(
-      K_(ddl_stmt_str), K_(exec_tenant_id), K_(ddl_id_str), K_(is_replay_schema), K_(based_schema_object_infos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObString ddl_stmt_str_;
   uint64_t exec_tenant_id_;
   common::ObString ddl_id_str_;
@@ -409,7 +408,7 @@ public:
     return true;
   }
   virtual int assign(const ObSplitResourcePoolArg& other);
-  TO_STRING_KV(K_(pool_name), K_(zone_list), K_(split_pool_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObString pool_name_;
   common::ObSArray<common::ObZone> zone_list_;
@@ -431,7 +430,7 @@ public:
     return true;
   }
   virtual int assign(const ObMergeResourcePoolArg& other);
-  TO_STRING_KV(K_(old_pool_list), K_(new_pool_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSArray<common::ObString> old_pool_list_;
   common::ObSArray<common::ObString> new_pool_list_;
@@ -719,7 +718,7 @@ public:
   {
     return option_bitset_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(seq_schema), K_(database_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t stmt_type_;
@@ -928,7 +927,7 @@ public:
   {}
 
   bool is_valid() const;
-  TO_STRING_KV(K_(batch_cnt), K_(tenant_id), K_(is_pg_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t batch_cnt_;
@@ -950,7 +949,7 @@ public:
   {
     return frozen_version_ > 0;
   }
-  TO_STRING_KV(K_(frozen_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t frozen_version_;
@@ -974,7 +973,7 @@ public:
   {
     return tenant_id_arg_list_.size() > 0;
   }
-  TO_STRING_KV(K_(tenant_id_arg_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<uint64_t> tenant_id_arg_list_;
@@ -1047,7 +1046,7 @@ struct ObCreateSynonymArg : ObDDLArg {
 public:
   ObCreateSynonymArg() : or_replace_(false), synonym_info_(), db_name_()
   {}
-  TO_STRING_KV(K_(synonym_info), K_(db_name), K_(obj_db_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool or_replace_;
   share::schema::ObSynonymInfo synonym_info_;
   common::ObString db_name_;
@@ -1067,7 +1066,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(tenant_id), K_(is_force), K_(db_name), K_(synonym_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   bool is_force_;
@@ -1088,7 +1087,7 @@ public:
   ObAlterPlanBaselineArg() : plan_baseline_info_(), field_update_bitmap_(0)
   {}
 
-  TO_STRING_KV(K_(plan_baseline_info), K_(field_update_bitmap));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   share::schema::ObPlanBaselineInfo plan_baseline_info_;
   uint64_t field_update_bitmap_;
 
@@ -1101,7 +1100,7 @@ struct ObCreatePlanBaselineArg : ObDDLArg {
 public:
   ObCreatePlanBaselineArg() : plan_baseline_info_(), is_replace_(false)
   {}
-  TO_STRING_KV(K_(plan_baseline_info), K(is_replace_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   share::schema::ObPlanBaselineInfo plan_baseline_info_;
   bool is_replace_;
 };
@@ -1124,7 +1123,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(tenant_id), K_(sql_id), K_(plan_hash_value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   common::ObString sql_id_;
@@ -1543,9 +1542,7 @@ public:
     tz_info_.set_tz_info_map(tz_info_map);
   }
   int set_nls_formats(const common::ObString* nls_formats);
-  TO_STRING_KV(K_(is_alter_columns), K_(is_alter_indexs), K_(is_alter_options), K_(session_id), K_(index_arg_list),
-      K_(alter_table_schema), K_(is_inner), "nls_formats",
-      common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool is_alter_columns_;
   bool is_alter_indexs_;
@@ -1988,8 +1985,7 @@ public:
   common::ObString new_table_name_;
   uint64_t origin_table_id_;  // only used in work thread, no need add to SERIALIZE now
 
-  TO_STRING_KV(K_(tenant_id), K_(origin_db_name), K_(origin_table_name), K_(new_db_name), K_(new_table_name),
-      K_(origin_table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObFlashBackTableToScnArg : public ObDDLArg {
@@ -2005,7 +2001,7 @@ public:
   common::ObSArray<ObTableItem> tables_;
   int64_t query_end_time_;
 
-  TO_STRING_KV(K_(tenant_id), K_(time_point), K_(tables), K_(query_end_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObFlashBackIndexArg : public ObDDLArg {
@@ -2027,7 +2023,7 @@ public:
   common::ObString new_table_name_;
   uint64_t origin_table_id_;  // only used in work thread, no need add to SERIALIZE now
 
-  TO_STRING_KV(K_(tenant_id), K_(origin_table_name), K_(new_db_name), K_(new_table_name), K_(origin_table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObFlashBackDatabaseArg : public ObDDLArg {
@@ -2041,7 +2037,7 @@ public:
   common::ObString origin_db_name_;
   common::ObString new_db_name_;
 
-  TO_STRING_KV(K_(tenant_id), K_(origin_db_name), K_(new_db_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObFlashBackTenantArg : public ObDDLArg {
@@ -2055,7 +2051,7 @@ public:
   common::ObString origin_tenant_name_;
   common::ObString new_tenant_name_;
 
-  TO_STRING_KV(K_(tenant_id), K_(origin_tenant_name), K_(new_tenant_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPurgeTableArg : public ObDDLArg {
@@ -2071,7 +2067,7 @@ public:
   }
   uint64_t tenant_id_;
   common::ObString table_name_;
-  TO_STRING_KV(K_(tenant_id), K_(table_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPurgeIndexArg : public ObDDLArg {
@@ -2089,7 +2085,7 @@ public:
   common::ObString table_name_;
   uint64_t table_id_;  // only used in work thread, no need add to SERIALIZE now
 
-  TO_STRING_KV(K_(tenant_id), K_(table_name), K_(table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPurgeDatabaseArg : public ObDDLArg {
@@ -2105,7 +2101,7 @@ public:
   }
   uint64_t tenant_id_;
   common::ObString db_name_;
-  TO_STRING_KV(K_(tenant_id), K_(db_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPurgeTenantArg : public ObDDLArg {
@@ -2121,7 +2117,7 @@ public:
   }
   uint64_t tenant_id_;
   common::ObString tenant_name_;
-  TO_STRING_KV(K_(tenant_id), K_(tenant_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObPurgeRecycleBinArg : public ObDDLArg {
@@ -2144,7 +2140,7 @@ public:
   int64_t purge_num_;
   int64_t expire_time_;
   bool auto_purge_;
-  TO_STRING_KV(K_(tenant_id), K_(purge_num), K_(expire_time), K_(auto_purge));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 /*
@@ -2379,7 +2375,7 @@ public:
     ret_list_.reuse();
   }
 
-  TO_STRING_KV(K_(ret_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // response includes all rets
   common::ObSArray<int64_t> ret_list_;
 
@@ -2398,7 +2394,7 @@ public:
   ~ObCheckUniqueIndexRequestArg() = default;
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(pkey), K_(index_id), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObPartitionKey pkey_;
@@ -2420,7 +2416,7 @@ public:
   ~ObCheckUniqueIndexResponseArg() = default;
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(pkey), K_(index_id), K_(ret_code), K_(is_valid));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObPartitionKey pkey_;
@@ -2443,7 +2439,7 @@ public:
   ~ObCalcColumnChecksumRequestArg() = default;
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(pkey), K_(index_id), K_(schema_version), K_(execution_id), K_(snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObPartitionKey pkey_;
@@ -2467,7 +2463,7 @@ public:
   ~ObCalcColumnChecksumResponseArg() = default;
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(pkey), K_(index_id), K_(ret_code));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObPartitionKey pkey_;
@@ -2489,7 +2485,7 @@ public:
   ~ObCheckSingleReplicaMajorSSTableExistArg() = default;
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(pkey), K_(index_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey pkey_;
   uint64_t index_id_;
 
@@ -2507,7 +2503,7 @@ public:
   }
   ~ObCheckSingleReplicaMajorSSTableExistResult() = default;
   void reset();
-  TO_STRING_KV(K_(timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t timestamp_;
 };
 
@@ -2522,7 +2518,7 @@ public:
   ~ObCheckAllReplicaMajorSSTableExistArg() = default;
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(pkey), K_(index_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey pkey_;
   uint64_t index_id_;
 
@@ -2540,7 +2536,7 @@ public:
   }
   ~ObCheckAllReplicaMajorSSTableExistResult() = default;
   void reset();
-  TO_STRING_KV(K_(max_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t max_timestamp_;
 };
 
@@ -2591,8 +2587,7 @@ public:
     }
     return bret;
   }
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(cluster_id), K_(task_id), K_(type), K_(index_table_id), K_(priority),
-      K(skip_change_member_list_), K(switch_epoch_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
   common::ObReplicaMember dst_;
@@ -2624,7 +2619,7 @@ public:
            (common::OB_COPY_SSTABLE_TYPE_LOCAL_INDEX != type_ || common::OB_INVALID_ID != index_table_id_);
   }
 
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(data_src), K_(result), K_(type), K_(index_table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
@@ -2663,8 +2658,7 @@ public:
     return bret;
   }
 
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(quorum), K_(reserved_modify_quorum_type), K(task_id_), K_(priority),
-      K(cluster_id_), K_(skip_change_member_list), K_(switch_epoch), K_(pg_file_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
@@ -2689,7 +2683,7 @@ public:
   {
     return key_.is_valid() && src_.is_valid() && dst_.is_valid();
   }
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(quorum), K_(data_src), K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
@@ -2723,7 +2717,7 @@ public:
     return bret;
   }
 
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(task_id), K_(priority), K_(skip_change_member_list), K_(switch_epoch));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
@@ -2745,7 +2739,7 @@ public:
     return key_.is_valid() && src_.is_valid() && dst_.is_valid();
   }
 
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(data_src), K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
@@ -2771,7 +2765,7 @@ public:
     return bret;
   }
 
-  TO_STRING_KV(K_(key), K_(dst), K_(task_id), K_(skip_change_member_list), K_(switch_epoch));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember dst_;
@@ -2786,7 +2780,7 @@ public:
   {}
 
 public:
-  TO_STRING_KV(K_(return_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<int> return_array_;
@@ -2817,7 +2811,7 @@ public:
     return bret;
   }
 
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(priority), K_(skip_change_member_list), K_(switch_epoch));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   share::ObRestoreArgs src_;
@@ -2839,7 +2833,7 @@ public:
     return key_.is_valid() && src_.is_valid() && dst_.is_valid();
   }
 
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   share::ObRestoreArgs src_;
@@ -2853,7 +2847,7 @@ struct ObPhyRestoreReplicaArg {
 public:
   ObPhyRestoreReplicaArg();
   bool is_valid() const;
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(task_id), K_(priority));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   share::ObPhysicalRestoreArg src_;
@@ -2869,7 +2863,7 @@ public:
   ObPhyRestoreReplicaRes();
   bool is_valid() const;
 
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   share::ObPhysicalRestoreArg src_;
@@ -2905,8 +2899,7 @@ public:
     return bret;
   }
 
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(data_source), K_(quorum), K_(task_id), K_(priority),
-      K_(skip_change_member_list), K_(switch_epoch), K_(migrate_mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
@@ -2930,7 +2923,7 @@ public:
   {
     return key_.is_valid() && src_.is_valid() && dst_.is_valid();
   }
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(result), K_(data_src));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
@@ -2955,8 +2948,7 @@ public:
   {}
   bool is_valid() const;
 
-  TO_STRING_KV(
-      K_(key), K_(src), K_(dst), K_(quorum), K_(task_id), K_(priority), K_(skip_change_member_list), K_(switch_epoch))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
@@ -2979,7 +2971,7 @@ public:
     return key_.is_valid() && src_.is_valid() && dst_.is_valid();
   }
 
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(quorum), K_(data_src), K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
@@ -3013,8 +3005,7 @@ public:
     }
     return bret;
   }
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(physical_backup_arg), K_(cluster_id), K_(task_id), K_(priority),
-      K(skip_change_member_list_), K(switch_epoch_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
   common::ObReplicaMember dst_;
@@ -3037,7 +3028,7 @@ public:
   {
     return physical_validate_arg_.is_valid();
   }
-  TO_STRING_KV(K_(trace_id), K_(dst), K_(physical_validate_arg), K_(priority));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   share::ObTaskId trace_id_;
   common::ObReplicaMember dst_;
@@ -3055,7 +3046,7 @@ public:
   {
     return pkey_.is_valid();
   }
-  TO_STRING_KV(K_(dst), K_(pkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObReplicaMember dst_;
   common::ObPartitionKey pkey_;
 };
@@ -3071,7 +3062,7 @@ public:
     return key_.is_valid() && src_.is_valid() && dst_.is_valid() && physical_backup_arg_.is_valid();
   }
 
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(data_src), K_(physical_backup_arg), K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObReplicaMember src_;
@@ -3093,7 +3084,7 @@ public:
     return key_.is_valid() && dst_.is_valid() && validate_arg_.is_valid();
   }
 
-  TO_STRING_KV(K_(key), K_(dst), K_(validate_arg), K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey key_;
   common::ObReplicaMember dst_;
   share::ObPhysicalValidateArg validate_arg_;
@@ -3111,7 +3102,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(res_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObAddReplicaRes> res_array_;
@@ -3126,7 +3117,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(res_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObRebuildReplicaRes> res_array_;
@@ -3141,7 +3132,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(res_array), K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObCopySSTableRes> res_array_;
@@ -3155,7 +3146,7 @@ public:
   ObMigrateReplicaBatchRes() : res_array_()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(res_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObMigrateReplicaRes> res_array_;
@@ -3170,7 +3161,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(res_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObChangeReplicaRes> res_array_;
@@ -3187,7 +3178,7 @@ public:
     return key_.is_valid() && dst_.is_valid();
   }
 
-  TO_STRING_KV(K_(key), K_(dst), K_(result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey key_;
   common::ObReplicaMember dst_;
   int64_t result_;
@@ -3203,7 +3194,7 @@ public:
 public:
   int assign(const struct ObStandbyCutDataBatchTaskRes& res);
   bool is_valid() const;
-  TO_STRING_KV(K_(res_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObStandbyCutDataTaskRes> res_array_;
@@ -3218,7 +3209,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(res_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObBackupRes> res_array_;
@@ -3234,7 +3225,7 @@ public:
 public:
   int assign(const ObValidateBatchRes& res);
   bool is_valid() const;
-  TO_STRING_KV(K_(res_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObValidateRes> res_array_;
@@ -3251,7 +3242,7 @@ public:
 public:
   bool is_valid() const;
 
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObAddReplicaArg> arg_array_;
@@ -3268,7 +3259,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObRemoveNonPaxosReplicaArg> arg_array_;
@@ -3285,7 +3276,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObMigrateReplicaArg> arg_array_;
@@ -3302,7 +3293,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObChangeReplicaArg> arg_array_;
@@ -3319,7 +3310,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id), K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObCopySSTableArg> arg_array_;
@@ -3337,7 +3328,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObRebuildReplicaArg> arg_array_;
@@ -3355,7 +3346,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(data_src), K_(dst), K_(pkey), K_(index_table_id), K_(cluster_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObAddr data_src_;
@@ -3374,7 +3365,7 @@ public:
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObBackupArg> arg_array_;
@@ -3396,7 +3387,7 @@ public:
   ObAuthReplicaMovingkArg() : file_id_(0), type_(REPLICA_MOVING_TYPE_INVALID)
   {}
   bool is_valid() const;
-  TO_STRING_KV(K(pg_key_), K(addr_), K(file_id_), K(type_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObPGKey pg_key_;
@@ -3415,7 +3406,7 @@ public:
 public:
   int assign(const ObValidateBatchArg& arg);
   bool is_valid() const;
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObValidateArg> arg_array_;
@@ -3435,7 +3426,7 @@ public:
   int init(const int64_t timeout, const share::ObTaskId& task_id, const common::ObCurTraceId::TraceId& fo_trace_id,
       const int64_t flashback_ts, const int64_t switchover_epoch);
   bool is_valid() const;
-  TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(trace_id), K_(flashback_ts), K_(switchover_epoch), K_(fo_trace_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObSArray<ObStandbyCutDataTaskArg> arg_array_;
@@ -3566,7 +3557,7 @@ public:
     schema_version_ = 0;
   }
   int build(rootserver::ObGlobalIndexTask* task, common::ObPartitionKey& pkey);
-  TO_STRING_KV(K_(pkey), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey pkey_;
   int64_t schema_version_;
 };
@@ -3587,7 +3578,7 @@ public:
     sstable_exist_ts_ = 0;
   }
   int build(rootserver::ObGlobalIndexTask* task, common::ObPartitionKey& pkey);
-  TO_STRING_KV(K_(pkey), K_(sstable_exist_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey pkey_;
   int64_t sstable_exist_ts_;
 };
@@ -3606,7 +3597,7 @@ public:
   {
     snapshot_ = common::OB_INVALID_TIMESTAMP;
   }
-  TO_STRING_KV(K_(snapshot));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t snapshot_;
 };
 
@@ -3624,7 +3615,7 @@ public:
   {
     snapshot_ = common::OB_INVALID_TIMESTAMP;
   }
-  TO_STRING_KV(K_(snapshot));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t snapshot_;
 };
 
@@ -3643,7 +3634,7 @@ public:
     return partitions_.count() > 0;
   }
 
-  TO_STRING_KV(K_(partitions));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObPartitionList partitions_;
 };
@@ -3664,7 +3655,7 @@ public:
     return ((partitions_.count() > 0) && (prep_candidates_.count() > 0));
   }
 
-  TO_STRING_KV(K_(partitions));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObPartitionList partitions_;
   ObServerList prep_candidates_;
@@ -3697,7 +3688,7 @@ public:
     }
     return ret_in_black_list;
   }
-  TO_STRING_KV("in_black_list", get_in_black_list());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   union {
@@ -3722,7 +3713,7 @@ public:
     candidates_.reuse();
     candidate_status_array_.reuse();
   }
-  TO_STRING_KV(K_(candidates));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSArray<ObServerList> candidates_;
   common::ObSArray<CandidateStatusList> candidate_status_array_;
@@ -3756,7 +3747,7 @@ public:
   {
     return 0 == host_name_.compare(common::OB_DEFAULT_HOST_NAME);
   }
-  TO_STRING_KV(K_(user_name), K_(host_name), K_(is_role));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObString user_name_;
   common::ObString host_name_;
@@ -3778,7 +3769,7 @@ public:
   {}
   bool is_valid() const;
   int assign(const ObCreateUserArg& other);
-  TO_STRING_KV(K_(tenant_id), K_(user_infos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   bool if_not_exist_;
@@ -3800,7 +3791,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(tenant_id), K_(users), K_(hosts), K_(is_role));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   common::ObSArray<common::ObString> users_;
@@ -3817,7 +3808,7 @@ public:
   virtual ~ObRenameUserArg()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(old_users), K_(old_hosts), K_(new_users), K_(new_hosts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   common::ObSArray<common::ObString> old_users_;
@@ -3836,8 +3827,7 @@ public:
   virtual ~ObSetPasswdArg()
   {}
   bool is_valid() const;
-  TO_STRING_KV(
-      K_(tenant_id), K_(user), K_(host), K_(passwd), K_(ssl_type), K_(ssl_cipher), K_(x509_issuer), K_(x509_subject));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   common::ObString user_;
@@ -3858,7 +3848,7 @@ public:
   virtual ~ObLockUserArg()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(users), K_(hosts), K_(locked));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   common::ObSArray<common::ObString> users_;
@@ -3884,7 +3874,7 @@ public:
   {}
   int assign(const ObAlterUserProfileArg& other);
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(user_name), K_(host_name), K_(profile_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   common::ObString user_name_;
@@ -3927,9 +3917,7 @@ public:
   int assign(const ObGrantArg& other);
   virtual bool is_allow_when_disable_ddl() const;
 
-  TO_STRING_KV(K_(tenant_id), K_(priv_level), K_(db), K_(table), K_(priv_set), K_(users_passwd), K_(hosts),
-      K_(need_create_user), K_(has_create_user_priv), K_(option), K_(object_type), K_(object_id), K_(grantor_id),
-      K_(ins_col_ids), K_(upd_col_ids), K_(ref_col_ids), K_(grantor_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   share::schema::ObPrivLevel priv_level_;
@@ -3972,7 +3960,7 @@ public:
   virtual ~ObStandbyGrantArg()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(priv_level), K_(priv_set), K_(db), K_(table), K_(priv_level));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
   uint64_t user_id_;
   common::ObString db_;
@@ -3995,8 +3983,7 @@ public:
         role_ids_()
   {}
   bool is_valid() const;
-  TO_STRING_KV(
-      K_(tenant_id), K_(user_id), "priv_set", share::schema::ObPrintPrivSet(priv_set_), K_(revoke_all), K_(role_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   uint64_t user_id_;
@@ -4012,7 +3999,7 @@ public:
   ObRevokeDBArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID), priv_set_(0)
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db), "priv_set", share::schema::ObPrintPrivSet(priv_set_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   uint64_t user_id_;
@@ -4037,8 +4024,7 @@ public:
         revoke_all_ora_(false)
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db), K_(table), "priv_set", share::schema::ObPrintPrivSet(priv_set_),
-      K_(grant), K_(obj_id), K_(obj_type), K_(grantor_id), K_(obj_priv_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   uint64_t user_id_;
@@ -4061,7 +4047,7 @@ public:
       : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), grantee_id_(common::OB_INVALID_ID), sys_priv_array_()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(grantee_id), K_(sys_priv_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   uint64_t grantee_id_;
@@ -4075,7 +4061,7 @@ public:
   ObCreateRoleArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID)
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(user_infos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   // role and user share the same user schema structure
@@ -4109,7 +4095,7 @@ public:
   {
     return servers_.count() > 0;
   }
-  TO_STRING_KV(K_(servers), K_(zone), K_(force_stop), K_(op));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObServerList servers_;
   common::ObZone zone_;
@@ -4148,7 +4134,7 @@ public:
   {
     return !zone_.is_empty();
   }
-  TO_STRING_KV(K_(zone), K_(region), K_(idc), K_(zone_type), K_(sql_stmt_str), K_(force_stop), K_(op));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObZone zone_;
   common::ObRegion region_;
@@ -4171,7 +4157,7 @@ public:
   {}
 
   bool is_valid() const;
-  TO_STRING_KV(K_(role), K_(partition_key), K_(server), K_(zone), K_(tenant_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObRole role_;
   common::ObPartitionKey partition_key_;
@@ -4190,7 +4176,7 @@ public:
   {}
 
   bool is_valid() const;
-  TO_STRING_KV(K_(role), K_(server), K_(zone));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObRole role_;
   common::ObAddr server_;
@@ -4207,7 +4193,7 @@ public:
   {}
 
   bool is_valid() const;
-  TO_STRING_KV(K_(partition_key), K_(member), K_(force_cmd));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey partition_key_;
   common::ObReplicaMember member_;
@@ -4220,7 +4206,7 @@ struct ObCheckGtsReplicaStopServer {
 public:
   ObCheckGtsReplicaStopServer() : servers_()
   {}
-  TO_STRING_KV(K_(servers));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int init(const common::ObIArray<common::ObAddr>& servers)
   {
     int ret = common::OB_SUCCESS;
@@ -4247,7 +4233,7 @@ public:
   {}
   ObCheckGtsReplicaStopZone(const common::ObZone& zone) : zone_(zone)
   {}
-  TO_STRING_KV(K_(zone));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid() const
   {
     return !zone_.is_empty();
@@ -4267,7 +4253,7 @@ public:
   {}
 
   bool is_valid() const;
-  TO_STRING_KV(K_(partition_key), K_(server), K_(zone), K_(create_timestamp), K_(force_cmd));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey partition_key_;
   common::ObAddr server_;
@@ -4286,7 +4272,7 @@ public:
   {}
 
   bool is_valid() const;
-  TO_STRING_KV(K_(diskgroup_name), K_(disk_path), K_(alias_name), K_(server), K_(zone));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObString diskgroup_name_;
   common::ObString disk_path_;
@@ -4304,7 +4290,7 @@ public:
   ~ObAdminDropDiskArg()
   {}
 
-  TO_STRING_KV(K_(diskgroup_name), K_(alias_name), K_(server), K_(zone));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObString diskgroup_name_;
   common::ObString alias_name_;
@@ -4322,7 +4308,7 @@ public:
   {}
 
   bool is_valid() const;
-  TO_STRING_KV(K_(is_copy), K_(partition_key), K_(src), K_(dest), K_(force_cmd));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool is_copy_;
   common::ObPartitionKey partition_key_;
@@ -4337,8 +4323,7 @@ struct ObPhysicalRestoreTenantArg : public ObCmdArg {
 public:
   ObPhysicalRestoreTenantArg();
   bool is_valid() const;
-  TO_STRING_KV(
-      K_(tenant_name), K_(uri), K_(restore_option), K_(restore_timestamp), K_(backup_tenant_name), K_(passwd_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObString tenant_name_;
   common::ObString uri_;
@@ -4358,7 +4343,7 @@ public:
   {
     return !tenant_name_.is_empty() && !oss_uri_.empty();
   }
-  TO_STRING_KV(K_(tenant_name), K_(oss_uri));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
   common::ObString oss_uri_;
@@ -4375,7 +4360,7 @@ public:
         schema_version_(common::OB_INVALID_VERSION)
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(schema_id), K_(mode), K_(schema_version), "partition_cnt", partition_ids_.count());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t schema_id_;
   obrpc::ObCreateTableMode mode_;
@@ -4396,7 +4381,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(server), K_(zone));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObAddr server_;
   common::ObZone zone_;
@@ -4423,7 +4408,7 @@ public:
   {
     return ObServerZoneArg::is_valid() && !job_.empty();
   }
-  TO_STRING_KV(K_(server), K_(zone), K_(job));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObString job_;
 };
@@ -4438,7 +4423,7 @@ public:
   ObUpgradeJobArg();
   bool is_valid() const;
   int assign(const ObUpgradeJobArg& other);
-  TO_STRING_KV(K_(action), K_(version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   Action action_;
@@ -4458,7 +4443,7 @@ public:
   ObAdminMergeArg() : type_(START_MERGE), zone_()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(type), K_(zone));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   Type type_;
   common::ObZone zone_;
@@ -4476,7 +4461,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(tenant_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
 };
@@ -4495,8 +4480,7 @@ public:
         exec_tenant_id_(common::OB_SYS_TENANT_ID),
         tenant_ids_()
   {}
-  TO_STRING_KV(
-      K_(name), K_(value), K_(comment), K_(zone), K_(server), K_(tenant_name), K_(exec_tenant_id), K_(tenant_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObFixedLengthString<common::OB_MAX_CONFIG_NAME_LEN> name_;
   common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> value_;
@@ -4521,7 +4505,7 @@ public:
   {
     return items_.count() > 0;
   }
-  TO_STRING_KV(K_(items), K_(is_inner));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSArray<ObAdminSetConfigItem> items_;
   bool is_inner_;
@@ -4540,7 +4524,7 @@ public:
   {
     return tenant_ids_.push_back(tenant_id);
   }
-  TO_STRING_KV(K_(tenant_ids), K_(sql_id), K_(plan_hash_value), K_(fixed), K_(enabled));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSEArray<uint64_t, 8> tenant_ids_;
   common::ObString sql_id_;
@@ -4565,7 +4549,7 @@ public:
   {
     return tenant_ids_.push_back(tenant_id);
   }
-  TO_STRING_KV(K_(tenant_ids), K_(cache_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSEArray<uint64_t, 8> tenant_ids_;
   ObCacheType cache_type_;
@@ -4584,7 +4568,7 @@ public:
   {
     return common::OB_INVALID_ID != unit_id_ && (destination_.is_valid() || is_cancel_);
   }
-  TO_STRING_KV(K_(unit_id), K_(is_cancel), K_(destination));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t unit_id_;
   bool is_cancel_;
@@ -4603,7 +4587,7 @@ public:
         table_part_num_(0),
         auto_increment_(0)
   {}
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(column_id), K_(sync_value), K_(table_part_num), K_(auto_increment));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -4626,7 +4610,7 @@ public:
     return partition_key_.is_valid() && member_.is_valid();
   }
 
-  TO_STRING_KV(K_(partition_key), K_(member));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey partition_key_;
   common::ObReplicaMember member_;
@@ -4649,7 +4633,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(index_table_id), K_(status), K_(create_mem_version), K_(convert_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t index_table_id_;
   share::schema::ObIndexStatus status_;
@@ -4668,7 +4652,7 @@ public:
   {
     return server_.is_valid() && frozen_version_ > 0;
   }
-  TO_STRING_KV(K_(server), K_(frozen_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObAddr server_;
   int64_t frozen_version_;
@@ -4682,7 +4666,7 @@ public:
   {}
 
   bool is_valid() const;
-  TO_STRING_KV(K_(partition_key), K_(server), K_(error_code));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey partition_key_;
   common::ObAddr server_;
@@ -4700,7 +4684,7 @@ public:
   {
     return key_.is_valid() && server_.is_valid();
   }
-  TO_STRING_KV(K_(key), K_(server));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey key_;
   common::ObAddr server_;
@@ -4717,7 +4701,7 @@ public:
   {
     return reset_ || clear_ || action_.is_valid();
   }
-  TO_STRING_KV(K_(reset), K_(clear), K_(action));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool reset_;
   bool clear_;
@@ -4742,8 +4726,7 @@ public:
     return try_frozen_version_ >= 0;
   }
 
-  TO_STRING_KV(
-      K_(try_frozen_version), K_(launch_new_round), K(ignore_server_list_), K(svr_), K(tenant_id_), K_(force_launch));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t try_frozen_version_;
   bool launch_new_round_;
@@ -4771,7 +4754,7 @@ public:
     return true;
   }
 
-  TO_STRING_KV(K_(tenant_ids), K_(partition_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSArray<uint64_t> tenant_ids_;
   common::ObPartitionKey partition_key_;
@@ -4797,7 +4780,7 @@ public:
     return true;
   }
 
-  TO_STRING_KV(K_(tenant_ids), K_(partition_key), K_(server_list), K_(zone));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSArray<uint64_t> tenant_ids_;
   common::ObPartitionKey partition_key_;
@@ -4816,7 +4799,7 @@ public:
   {
     return server_.is_valid() && version_ > 0;
   }
-  TO_STRING_KV(K_(server), K_(version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObAddr server_;
   int64_t version_;
@@ -4833,7 +4816,7 @@ public:
   {
     return server_.is_valid() && version_ > 0;
   }
-  TO_STRING_KV(K_(server), K_(version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObAddr server_;
   int64_t version_;
@@ -4850,7 +4833,7 @@ public:
   {
     return server_.is_valid() && version_ > 0;
   }
-  TO_STRING_KV(K_(server), K_(version), K_(dangling_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObAddr server_;
   int64_t version_;
@@ -4872,7 +4855,7 @@ public:
   }
 
   int assign(const ObGetMemberListAndLeaderResult& other);
-  TO_STRING_KV(K_(member_list), K_(leader), K_(self), K_(lower_list), K_(replica_type), K_(property));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSEArray<common::ObMember, common::OB_MAX_MEMBER_NUMBER, common::ObNullAllocator, false>
       member_list_;  // copy won't fail
@@ -4901,7 +4884,7 @@ public:
   bool is_valid() const;
   bool check_leader_is_valid() const;
   int assign(const ObMemberListAndLeaderArg& other);
-  TO_STRING_KV(K_(member_list), K_(leader), K_(self), K_(lower_list), K_(replica_type), K_(property), K_(role));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSEArray<common::ObAddr, common::OB_MAX_MEMBER_NUMBER, common::ObNullAllocator, false>
       member_list_;  // copy won't fail
@@ -4924,7 +4907,7 @@ public:
   {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(keys));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObSArray<common::ObPartitionKey> keys_;
 };
 
@@ -4938,7 +4921,7 @@ public:
   {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(results));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObSArray<int> results_;
 };
 
@@ -4960,7 +4943,7 @@ public:
     return partition_key_list_.count() > 0 && leader_addr_.is_valid();
   }
 
-  TO_STRING_KV(K_(leader_addr), K_(partition_key_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ;
 
   common::ObSArray<common::ObPartitionKey> partition_key_list_;
@@ -4980,7 +4963,7 @@ public:
   {
     return min_weak_read_timestamp_ != common::OB_INVALID_TIMESTAMP;
   }
-  TO_STRING_KV(K_(min_weak_read_timestamp))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t min_weak_read_timestamp_;
 };
 
@@ -4998,7 +4981,7 @@ public:
   ~ObCheckFlashbackInfoResult()
   {}
   int assign(const ObCheckFlashbackInfoResult& other);
-  TO_STRING_KV(K_(addr), K_(pkey), K_(result), K_(switchover_timestamp), K_(ret_code))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObAddr addr_;           // Addr of current obs
   common::ObPartitionKey pkey_;   // Unfinished partition_key
   bool result_;                   // Current obs query result
@@ -5016,7 +4999,7 @@ public:
   {
     partition_count_ = 0;
   }
-  TO_STRING_KV(K_(partition_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t partition_count_;
 };
@@ -5113,7 +5096,7 @@ public:
   {
     return !udf_.get_name_str().empty();
   }
-  TO_STRING_KV(K_(udf));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   share::schema::ObUDF udf_;
 };
@@ -5134,7 +5117,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(tenant_id), K_(name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   common::ObString name_;
@@ -5150,7 +5133,7 @@ public:
   virtual ~ObCreateOutlineArg()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(or_replace), K_(outline_info), K_(db_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool or_replace_;
   share::schema::ObOutlineInfo outline_info_;
@@ -5171,7 +5154,7 @@ public:
     return (!db_name_.empty() && !alter_outline_info_.get_signature_str().empty() &&
             (!alter_outline_info_.get_outline_content_str().empty() || alter_outline_info_.has_outline_params()));
   }
-  TO_STRING_KV(K_(alter_outline_info), K_(db_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   share::schema::ObAlterOutlineInfo alter_outline_info_;
   common::ObString db_name_;
@@ -5190,7 +5173,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(outline_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   common::ObString db_name_;
@@ -5206,7 +5189,7 @@ public:
   virtual ~ObCreateDbLinkArg()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(dblink_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   share::schema::ObDbLinkInfo dblink_info_;
 };
 
@@ -5219,7 +5202,7 @@ public:
   virtual ~ObDropDbLinkArg()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(dblink_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
   common::ObString dblink_name_;
 };
@@ -5238,7 +5221,7 @@ struct ObFetchAliveServerArg {
 public:
   ObFetchAliveServerArg() : cluster_id_(0)
   {}
-  TO_STRING_KV(K_(cluster_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid() const
   {
     return cluster_id_ >= 0;
@@ -5251,7 +5234,7 @@ struct ObFetchAliveServerResult {
   OB_UNIS_VERSION(1);
 
 public:
-  TO_STRING_KV(K_(active_server_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid() const
   {
     return !active_server_list_.empty();
@@ -5275,7 +5258,7 @@ public:
   {}
   virtual ~ObLoadBaselineArg()
   {}
-  TO_STRING_KV(K(is_all_tenant_), K_(tenant_id), K_(sql_id), K_(plan_hash_value), K_(fixed), K_(enabled));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool is_all_tenant_;
   uint64_t tenant_id_;
@@ -5297,7 +5280,7 @@ public:
   {
     return cache_type_ > CACHE_TYPE_INVALID && cache_type_ < CACHE_TYPE_MAX;
   }
-  TO_STRING_KV(K(is_all_tenant_), K_(tenant_id), K_(cache_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool is_all_tenant_;
   uint64_t tenant_id_;
@@ -5310,7 +5293,7 @@ struct ObGetAllSchemaArg {
 public:
   ObGetAllSchemaArg() : schema_version_(common::OB_INVALID_VERSION)
   {}
-  TO_STRING_KV(K_(schema_version), K_(tenant_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t schema_version_;
   common::ObString tenant_name_;
@@ -5328,7 +5311,7 @@ public:
     return (error_code_ <= 0 && (trigger_freq_ >= 0));
   }
 
-  TO_STRING_KV(K_(event_no), K_(event_name), K_(occur), K_(trigger_freq), K_(error_code));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t event_no_;             // tracepoint no
   common::ObString event_name_;  // tracepoint name
@@ -5343,7 +5326,7 @@ struct ObCancelTaskArg : public ObServerZoneArg {
 public:
   ObCancelTaskArg() : task_id_()
   {}
-  TO_STRING_KV(K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   share::ObTaskId task_id_;
 };
 
@@ -5358,7 +5341,7 @@ public:
     return partition_key_.is_valid();
   }
 
-  TO_STRING_KV(K_(partition_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey partition_key_;
 };
@@ -5386,7 +5369,7 @@ public:
   ~ObAdminClearBalanceTaskArg()
   {}
 
-  TO_STRING_KV(K_(tenant_ids), K_(type), K_(zone_names));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM> tenant_ids_;
   TaskType type_;
   common::ObSEArray<common::ObZone, common::OB_PREALLOCATED_NUM> zone_names_;
@@ -5407,7 +5390,7 @@ public:
 public:
   uint64_t log_id_;
   int64_t timestamp_;
-  TO_STRING_KV(K_(log_id), K_(timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObChangeMemberArg {
@@ -5420,7 +5403,7 @@ public:
   common::ObMember member_;
   int64_t quorum_;
   int64_t switch_epoch_;
-  TO_STRING_KV(K_(partition_key), K_(member), K_(quorum), K_(switch_epoch));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObChangeMemberCtx {
@@ -5432,7 +5415,7 @@ public:
   common::ObPartitionKey partition_key_;
   int32_t ret_value_;
   ObMCLogInfo log_info_;
-  TO_STRING_KV(K_(partition_key), K_(ret_value), K_(log_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObSArray<ObChangeMemberArg> ObChangeMemberArgs;
@@ -5446,7 +5429,7 @@ public:
   {}
   int32_t result_code_;
   ObChangeMemberCtxs ctxs_;
-  TO_STRING_KV(K_(result_code), K_(ctxs));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMemberMajorSSTableCheckArg {
@@ -5455,7 +5438,7 @@ struct ObMemberMajorSSTableCheckArg {
 public:
   ObMemberMajorSSTableCheckArg() : pkey_(), table_ids_()
   {}
-  TO_STRING_KV(K_(pkey), K_(table_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey pkey_;
   common::ObSArray<uint64_t> table_ids_;
 };
@@ -5534,7 +5517,7 @@ public:
     return true;
   }
   common::ObString locality_;
-  TO_STRING_KV(K_(exec_tenant_id), K_(locality));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObRootSplitPartitionArg : public ObDDLArg {
@@ -5567,7 +5550,7 @@ public:
   {}
   ~ObSplitPartitionArg()
   {}
-  TO_STRING_KV(K_(split_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid() const
   {
     return split_info_.is_valid();
@@ -5601,7 +5584,7 @@ public:
   {
     return results_;
   }
-  TO_STRING_KV(K_(results));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObSArray<share::ObPartitionSplitProgress> results_;
@@ -5667,7 +5650,7 @@ public:
 
   common::ObPartitionArray partition_array_;
   int64_t last_max_decided_trans_version_;
-  TO_STRING_KV(K(partition_array_), K_(last_max_decided_trans_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObQueryMaxDecidedTransVersionResponse {
@@ -5687,7 +5670,7 @@ public:
   int ret_value_;
   int64_t trans_version_;
   common::ObPartitionKey pkey_;
-  TO_STRING_KV(K(ret_value_), K(trans_version_), K_(pkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObQueryIsValidMemberRequest {
@@ -5706,7 +5689,7 @@ public:
 
   common::ObAddr self_addr_;
   common::ObPartitionArray partition_array_;
-  TO_STRING_KV(K(self_addr_), K(partition_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObQueryIsValidMemberResponse {
@@ -5730,7 +5713,7 @@ public:
   common::ObPartitionArray partition_array_;
   common::ObSEArray<bool, 16> candidates_status_;
   common::ObSEArray<int, 16> ret_array_;
-  TO_STRING_KV(K(ret_value_), K(partition_array_), K(candidates_status_), K(ret_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObQueryMaxFlushedILogIdRequest {
@@ -5747,7 +5730,7 @@ public:
   }
 
   common::ObPartitionArray partition_array_;
-  TO_STRING_KV(K(partition_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObQueryMaxFlushedILogIdResponse {
@@ -5768,7 +5751,7 @@ public:
   int err_code_;
   common::ObPartitionArray partition_array_;
   common::ObSEArray<uint64_t, 16> max_flushed_ilog_ids_;
-  TO_STRING_KV(K_(err_code), K_(partition_array), K_(max_flushed_ilog_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObBootstrapArg {
@@ -5787,8 +5770,7 @@ public:
   {}
   ~ObBootstrapArg()
   {}
-  TO_STRING_KV(K_(server_list), K_(cluster_type), K_(initial_frozen_version), K_(initial_schema_version),
-      K_(primary_cluster_id), K_(primary_rs_list), K_(freeze_schemas), K_(frozen_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int assign(const ObBootstrapArg& arg);
   ObServerInfoList server_list_;
   common::ObClusterType cluster_type_;
@@ -5894,8 +5876,7 @@ public:
   {
     return switch_type_;
   }
-  TO_STRING_KV(K_(trace_id), "count", pkeys_.count(), K_(member_list), K_(lease_start_time), K_(leader),
-      K_(switch_timestamp), K_(switch_type), K_(pkeys), K_(quorum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static bool is_valid_switch_type(const int32_t switch_type)
@@ -6011,8 +5992,7 @@ public:
   {
     return pkeys_.count() > 0;
   }
-  TO_STRING_KV(K_(switchover_timestamp), K_(flashback_to_ts), K_(flashback_from_ts), K_(leader),
-      K_(is_logical_flashback), K_(pkeys), K_(frozen_timestamp), K_(query_end_time), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t switchover_timestamp_;
@@ -6047,7 +6027,7 @@ public:
         is_force_(false),
         level_(common::MAXIMUM_PERFORMANCE_LEVEL)
   {}
-  TO_STRING_KV(K_(op_type), K_(ddl_stmt_str), K_(mode), K_(level), K_(is_force));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int assign(ObAlterClusterInfoArg& arg);
   ~ObAlterClusterInfoArg()
   {}
@@ -6176,8 +6156,7 @@ public:
     }
     return cstr;
   }
-  TO_STRING_KV(K_(cluster_name), K_(cluster_id), K_(alter_type), K_(is_force), K_(ddl_stmt_str), K_(rootservice_list),
-      K_(redo_transport_options));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObString cluster_name_;
   int64_t cluster_id_;
   AlterClusterType alter_type_;
@@ -6209,7 +6188,7 @@ public:
   {
     return INVALID_TYPE != verify_type_;
   }
-  TO_STRING_KV(K_(verify_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   VerifyType verify_type_;
 };
 
@@ -6236,7 +6215,7 @@ public:
   {
     schema_operation_.reset();
   }
-  TO_STRING_KV(K_(schema_operation));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLNopOpreatorArg);
@@ -6255,7 +6234,7 @@ struct ObEstPartArgElement {
   int64_t index_id_;
   int64_t range_columns_count_;
 
-  TO_STRING_KV(K(scan_flag_), K(index_id_), K(batch_), K(range_columns_count_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t get_serialize_size(void) const;
   int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
   int deserialize(common::ObIAllocator& allocator, const char* buf, const int64_t data_len, int64_t& pos);
@@ -6296,8 +6275,7 @@ struct ObEstPartArg {
     return pkey_.is_valid();
   }
 
-  TO_STRING_KV(K_(column_ids), K_(pkey), K_(schema_version), K_(partition_keys), K_(scan_param), K_(index_params),
-      K_(index_pkeys));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(1);
 };
@@ -6327,7 +6305,7 @@ struct ObEstPartResElement {
     est_records_.reset();
   }
 
-  TO_STRING_KV(K(logical_row_count_), K(physical_row_count_), K(reliable_), K(est_records_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -6355,7 +6333,7 @@ struct ObEstPartRowCountSizeRes {
     reliable_ = false;
   }
 
-  TO_STRING_KV(K(row_count_), K(part_size_), K(avg_row_size_), K(reliable_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(1);
 };
@@ -6367,7 +6345,7 @@ struct ObEstPartRes {
   ObEstPartRes() : part_rowcount_size_res_(), index_param_res_()
   {}
 
-  TO_STRING_KV(K(part_rowcount_size_res_), K(index_param_res_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(1);
 };
@@ -6392,7 +6370,7 @@ public:
   bool if_not_grant_;
   bool is_delete_;
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(unit_config), K_(compat_mode), K_(replica_type), K_(if_not_grant), K_(is_delete));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION(1);
 };
@@ -6402,7 +6380,7 @@ struct ObGetWRSArg {
 
 public:
   enum Scope { INVALID_RANGE = 0, INNER_TABLE, USER_TABLE, ALL_TABLE };
-  TO_STRING_KV(K_(tenant_id), K_(scope), K_(need_filter));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid() const;
   int64_t tenant_id_;
   Scope scope_;  // The machine-readable timestamp can be calculated separately for the timestamp of the system table or
@@ -6444,7 +6422,7 @@ public:
   // machine-readable timestamps
   share::ObReplicaWrsInfoList replica_wrs_info_list_;  // Standby machine-readable timestamp of each copy of this server
 
-  TO_STRING_KV(K_(err_code), K_(self_addr), "replica_count", replica_wrs_info_list_.count(), K_(replica_wrs_info_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObTenantSchemaVersions {
@@ -6471,7 +6449,7 @@ public:
     }
     return ret;
   }
-  TO_STRING_KV(K_(tenant_schema_versions));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObGetSchemaArg : public ObDDLArg {
@@ -6509,7 +6487,7 @@ public:
         min_user_table_scn_(min_user_table_scn)
   {}
 
-  TO_STRING_KV(K_(tenant_id), K_(refreshed_schema_version), K_(ddl_lag), K_(min_sys_table_scn), K_(min_user_table_scn));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void reset()
   {
@@ -6543,7 +6521,7 @@ public:
     }
     return ret;
   }
-  TO_STRING_KV(K_(tenant_stats_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObSArray<obrpc::TenantIdAndStats> tenant_stats_array_;
 };
 
@@ -6562,7 +6540,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(tenant_id), K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   uint64_t tenant_id_;
@@ -6580,7 +6558,7 @@ public:
 public:
   uint64_t tenant_id_;
   int64_t schema_version_;
-  TO_STRING_KV(K_(tenant_id), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObCheckMergeFinishArg {
@@ -6593,7 +6571,7 @@ public:
 
 public:
   int64_t frozen_version_;
-  TO_STRING_KV(K_(frozen_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObGetRecycleSchemaVersionsArg {
@@ -6610,7 +6588,7 @@ public:
 
 public:
   common::ObSArray<uint64_t> tenant_ids_;
-  TO_STRING_KV(K_(tenant_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObGetRecycleSchemaVersionsResult {
@@ -6627,7 +6605,7 @@ public:
 
 public:
   common::ObSArray<share::TenantIdAndSchemaVersion> recycle_schema_versions_;
-  TO_STRING_KV(K_(recycle_schema_versions));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObGetClusterInfoArg {
@@ -6643,8 +6621,7 @@ public:
   {}
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(need_check_sync), K_(max_primary_schema_version), K_(primary_schema_versions), K_(cluster_version),
-      K_(standby_became_primary_scn));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   bool need_check_sync_;
@@ -6669,7 +6646,7 @@ public:
   {
     cluster_version_ = common::OB_INVALID_ID;
   }
-  TO_STRING_KV(K_(cluster_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   uint64_t cluster_version_;
@@ -6723,7 +6700,7 @@ public:
   {
     return request_ts_;
   }
-  TO_STRING_KV(K(gts_id_), K(req_id_), K(epoch_id_), K(request_ts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t gts_id_;
@@ -6780,7 +6757,7 @@ public:
   {
     return response_ts_;
   }
-  TO_STRING_KV(K(gts_id_), K(req_id_), K(epoch_id_), K(response_ts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t gts_id_;
@@ -6838,7 +6815,7 @@ public:
   {
     return srr_;
   }
-  TO_STRING_KV(K(gts_id_), K(self_addr_), K(tenant_id_), K(srr_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t gts_id_;
@@ -6896,7 +6873,7 @@ public:
   {
     return gts_;
   }
-  TO_STRING_KV(K(gts_id_), K(tenant_id_), K(srr_), K(gts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t gts_id_;
@@ -6933,7 +6910,7 @@ public:
   {
     return addr_;
   }
-  TO_STRING_KV(K(gts_id_), K(addr_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t gts_id_;
@@ -6983,7 +6960,7 @@ public:
   {
     return local_ts_;
   }
-  TO_STRING_KV(K(gts_id_), K(epoch_id_), K(member_list_), K(local_ts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t gts_id_;
@@ -7014,7 +6991,7 @@ public:
   {
     return local_ts_;
   }
-  TO_STRING_KV(K(local_ts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t local_ts_;
@@ -7047,7 +7024,7 @@ public:
   {
     return offline_replica_;
   }
-  TO_STRING_KV(K(gts_id_), K(offline_replica_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t gts_id_;
@@ -7072,7 +7049,7 @@ public:
   {
     return ret_value_;
   }
-  TO_STRING_KV(K(ret_value_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int ret_value_;
@@ -7086,7 +7063,7 @@ public:
       : cluster_info_(), server_status_(share::OBSERVER_INVALID_STATUS), sync_cluster_ids_(), redo_options_()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(cluster_info), K_(server_status), K_(sync_cluster_ids), K_(redo_options));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int assign(const ObClusterInfoArg& other);
 
 public:
@@ -7110,7 +7087,7 @@ public:
   {
     schema_version_ = 0;
   }
-  TO_STRING_KV(K_(schema_version), K_(frozen_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t schema_version_;
@@ -7126,9 +7103,7 @@ public:
   ObSchemaSnapshotRes();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(schema_version), K_(frozen_version), "table_count", table_schemas_.count(), "tenant_count",
-      tenant_schemas_.count(), "user_count", user_infos_.count(), "freeze_schema", freeze_schemas_,
-      K_(tenant_flashback_scn), K_(failover_timestamp), K_(frozen_status), K_(cluster_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int assign(const ObSchemaSnapshotRes& res);
 
 public:
@@ -7165,7 +7140,7 @@ public:
   uint64_t cluster_id_;
   bool pre_regist_;
   share::ObClusterAddr cluster_addr_;
-  TO_STRING_KV(K_(cluster_id), K_(cluster_name), K_(pre_regist), K_(cluster_addr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObAlterTableResArg {
@@ -7184,7 +7159,7 @@ public:
   void reset();
 
 public:
-  TO_STRING_KV(K_(schema_type), K_(schema_id), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   share::schema::ObSchemaType schema_type_;
   uint64_t schema_id_;
   int64_t schema_version_;
@@ -7203,7 +7178,7 @@ public:
   void reset();
 
 public:
-  TO_STRING_KV(K_(index_table_id), K_(constriant_id), K_(schema_version), K_(res_arg_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t index_table_id_;
   uint64_t constriant_id_;
   int64_t schema_version_;
@@ -7232,7 +7207,7 @@ public:
   void reset();
 
 public:
-  TO_STRING_KV(K_(cluster_idx), K_(login_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t cluster_idx_;
   share::ObClusterInfo::UserNameString login_name_;
   share::ObClusterInfo::PassWdString login_passwd_;
@@ -7277,7 +7252,7 @@ public:
   }
 
 public:
-  TO_STRING_KV(K_(primary_addr), K_(standby_addr), K_(primary_schema_info), K_(protection_mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   share::ObClusterAddr primary_addr_;
   share::ObClusterAddr standby_addr_;
   share::schema::ObPrimarySchemaInfo primary_schema_info_;
@@ -7295,7 +7270,7 @@ public:
   {}
 
 public:
-  TO_STRING_KV(K_(switchover_status), K_(switchover_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   share::ObClusterInfo::InMemorySwitchOverStatus switchover_status_;
   share::ObClusterSwitchoverInfoWrap switchover_info_;
 };
@@ -7311,7 +7286,7 @@ public:
     return common::OB_INVALID_TENANT_ID != tenant_id_;
   }
 
-  TO_STRING_KV(K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
 };
 
@@ -7326,7 +7301,7 @@ public:
     return schema_version_ > 0;
   }
 
-  TO_STRING_KV(K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t schema_version_;
 };
 
@@ -7345,7 +7320,7 @@ public:
     return true;
   }
 
-  TO_STRING_KV(K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t schema_version_;
 };
 
@@ -7360,7 +7335,7 @@ public:
     return tenant_id_ > 0 && memory_size_ > 0 && refresh_interval_ >= 0;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(memory_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t tenant_id_;
   int64_t memory_size_;
   int64_t refresh_interval_;
@@ -7380,7 +7355,7 @@ public:
   share::schema::ObProfileSchema schema_;
   share::schema::ObSchemaOperationType ddl_type_;
   bool is_cascade_;
-  TO_STRING_KV(K_(schema), K_(ddl_type), K_(is_cascade));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObCheckServerEmptyArg {
@@ -7391,7 +7366,7 @@ public:
 
   ObCheckServerEmptyArg() : mode_(BOOTSTRAP)
   {}
-  TO_STRING_KV(K_(mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   Mode mode_;
 };
 
@@ -7416,8 +7391,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(exec_tenant_id), K_(schema_id), K_(type), "partition_cnt", partition_ids_.count(), "subpartition_cnt",
-      subpartition_ids_.count());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t recycle_schema_version_;           // The backed up schema_version is used for verification
   uint64_t schema_id_;                       // table_id/tablegroup_id
   common::ObSArray<int64_t> partition_ids_;  // Non-empty means to delete the partition (including the delayed deletion
@@ -7434,7 +7408,7 @@ struct ObArchiveLogArg {
 public:
   ObArchiveLogArg() : enable_(true)
   {}
-  TO_STRING_KV(K_(enable));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool enable_;
 };
 
@@ -7444,7 +7418,7 @@ struct ObBackupDatabaseArg {
 public:
   ObBackupDatabaseArg();
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(is_incremental), K_(passwd), K_(encryption_mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
   bool is_incremental_;
   share::ObBackupEncryptionMode::EncryptionMode encryption_mode_;
@@ -7471,7 +7445,7 @@ public:
   };
   ObBackupManageArg() : tenant_id_(common::OB_INVALID_TENANT_ID), type_(MAX_TYPE), value_(0)
   {}
-  TO_STRING_KV(K_(type), K_(value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
   Type type_;
   int64_t value_;
@@ -7489,7 +7463,7 @@ public:
   {}
   ~ObCheckStandbyCanAccessArg()
   {}
-  TO_STRING_KV(K_(failover_epoch), K_(last_merged_version), K_(cluster_status), K_(tenant_flashback_scn));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid() const
   {
     return common::OB_INVALID_VERSION != failover_epoch_ && common::OB_INVALID_VERSION != last_merged_version_ &&
@@ -7510,7 +7484,7 @@ public:
   {}
   ~ObPhysicalFlashbackResultArg()
   {}
-  TO_STRING_KV(K_(min_version), K_(max_version), K_(enable_result));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t min_version_;
   int64_t max_version_;
   bool enable_result_;
@@ -7525,7 +7499,7 @@ public:
   {}
   ~ObCheckPhysicalFlashbackArg()
   {}
-  TO_STRING_KV(K_(merged_version), K_(flashback_scn));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t merged_version_;
@@ -7554,7 +7528,7 @@ public:
   }
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(switchover_timestamp), K_(epoch), K_(tenant_id), K_(ml_pk_index), K_(pkey_info_start_index));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObBatchWriteCutdataClogArg {
@@ -7628,8 +7602,7 @@ public:
   {
     trace_id_ = trace_id;
   }
-  TO_STRING_KV(
-      K_(switchover_timestamp), K_(pkeys), K_(flashback_ts), K_(schema_version), K_(trace_id), K_(query_end_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static const int64_t MAX_COUNT = 1024;
@@ -7669,7 +7642,7 @@ public:
   {
     trace_id_ = trace_id;
   }
-  TO_STRING_KV(K_(index), K_(pkeys));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObBatchCheckRes {
@@ -7687,7 +7660,7 @@ public:
   {}
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(index), K_(results));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObRebuildIndexInRestoreArg {
@@ -7709,7 +7682,7 @@ public:
 
 public:
   uint64_t tenant_id_;
-  TO_STRING_KV(K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObUpdateTableSchemaVersionArg : public ObDDLArg {
@@ -7730,7 +7703,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset();
 
 public:
@@ -7761,7 +7734,7 @@ public:
   ~ObRestoreModifySchemaArg()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(type), K_(schema_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   TYPE type_;
@@ -7774,7 +7747,7 @@ struct ObCheckDeploymentModeArg {
 public:
   ObCheckDeploymentModeArg() : single_zone_deployment_on_(false)
   {}
-  TO_STRING_KV(K_(single_zone_deployment_on));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool single_zone_deployment_on_;
 };
 
@@ -7784,7 +7757,7 @@ struct ObPreProcessServerArg {
 public:
   ObPreProcessServerArg() : server_(), rescue_server_()
   {}
-  TO_STRING_KV(K_(server));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid() const
   {
     return server_.is_valid() && rescue_server_.is_valid();
@@ -7805,7 +7778,7 @@ public:
   ~ObAdminRollingUpgradeArg()
   {}
   bool is_valid() const;
-  TO_STRING_KV(K_(stage));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObUpgradeStage stage_;
 };
@@ -7816,7 +7789,7 @@ struct ObPreProcessServerReplyArg {
 public:
   ObPreProcessServerReplyArg() : server_(), rescue_server_(), ret_code_(common::OB_SUCCESS)
   {}
-  TO_STRING_KV(K_(server), K_(rescue_server), K_(ret_code));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid() const
   {
     return server_.is_valid() && rescue_server_.is_valid();
@@ -7841,7 +7814,7 @@ public:
   {
     return rs_list_.count() > 0 && master_rs_.is_valid();
   }
-  TO_STRING_KV(K_(rs_list), K_(master_rs));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObServerList rs_list_;
   common::ObAddr master_rs_;
 };
@@ -7859,7 +7832,7 @@ public:
   {
     return keys_.count() > 0;
   }
-  TO_STRING_KV(K_(keys));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSArray<common::ObPartitionKey> keys_;
 };
@@ -7876,7 +7849,7 @@ public:
   {
     return results_.count() > 0;
   }
-  TO_STRING_KV(K_(results));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObSArray<ObMemberListAndLeaderArg> results_;
 };
@@ -7893,7 +7866,7 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(K_(str));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   char buf_[share::OB_CLOG_ENCRYPT_MASTER_KEY_LEN];
   common::ObString str_;
 };
@@ -7910,7 +7883,7 @@ public:
   {
     return partition_key_.is_valid();
   }
-  TO_STRING_KV(K_(partition_key), K_(trans_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey partition_key_;
   transaction::ObTransID trans_id_;
 };
@@ -7924,7 +7897,7 @@ public:
   {}
   bool is_valid() const;
   int assign(const ObPhysicalRestoreResult& other);
-  TO_STRING_KV(K_(job_id), K_(return_ret), K_(mod), K_(tenant_id), K_(trace_id), K_(addr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t job_id_;
   int32_t return_ret_;
@@ -7952,7 +7925,7 @@ public:
   common::ObPartitionKey partition_key_;
   common::ObRowkey rowkey_;
 
-  TO_STRING_KV(K(partition_key_), K(rowkey_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObRefreshTimezoneArg {
@@ -7969,7 +7942,7 @@ public:
   {
     return common::OB_INVALID_TENANT_ID != tenant_id_;
   }
-  TO_STRING_KV(K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
 };
 
@@ -7992,7 +7965,7 @@ public:
   }
   int64_t tenant_id_;
   common::ObString name_;
-  TO_STRING_KV(K(tenant_id_), K(name_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObDropRestorePointArg {
@@ -8014,7 +7987,7 @@ public:
   }
   int64_t tenant_id_;
   common::ObString name_;
-  TO_STRING_KV(K(tenant_id_), K(name_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObCheckBuildIndexTaskExistArg {
@@ -8041,7 +8014,7 @@ public:
   sql::ObTaskID task_id_;
   uint64_t scheduler_id_;
 
-  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(scheduler_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 }  // end namespace obrpc

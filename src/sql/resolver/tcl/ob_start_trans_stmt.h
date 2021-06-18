@@ -28,7 +28,14 @@ public:
   {
     return true;
   }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(read_only), K_(with_consistent_snapshot));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(N_STMT_TYPE, ((int)stmt_type_), K_(read_only), K_(with_consistent_snapshot));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   // types and constants

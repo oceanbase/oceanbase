@@ -128,7 +128,7 @@ public:
   {
     return thread_id_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(op_id), "op_name", get_operator_name(), K_(thread_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t tenant_id_;

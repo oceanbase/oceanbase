@@ -40,6 +40,22 @@ using namespace share;
 using namespace share::schema;
 using namespace jit::expr;
 namespace sql {
+int64_t ObSelectResolver::ObCteResolverCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_with_clause_resolver), K_(current_cte_table_name), K_(is_recursive_cte), K_(is_cte_subquery),K_(cte_resolve_level), K_(cte_col_names));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSelectResolver::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(has_calc_found_rows), K_(has_top_limit), K_(in_set_query), K_(in_subquery));
+  J_OBJ_END();
+  return pos;
+}
 
 ObSelectResolver::ObSelectResolver(ObResolverParams& params)
     : ObDMLResolver(params),

@@ -17,6 +17,22 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObColumnStat::Key::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(table_id_), K(partition_id_), K(column_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObColumnStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(table_id_), K(partition_id_), K(column_id_), K(version_), K(last_rebuild_version_), K(num_distinct_),K(num_null_), K(min_value_), K(max_value_), K(is_modified_));
+  J_OBJ_END();
+  return pos;
+}
 
 ObColumnStat::ObColumnStat()
     : table_id_(0),

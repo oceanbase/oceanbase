@@ -25,6 +25,14 @@ using namespace memtable;
 using transaction::ObTransVersion;
 
 namespace storage {
+int64_t ObFreezeRecord::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(snapshot_version_), K(emergency_), K(active_protection_clock_), K(storage_info_), K(is_valid_));
+  J_OBJ_END();
+  return pos;
+}
 
 ObFreezeRecord::ObFreezeRecord()
     : snapshot_version_(ObTransVersion::INVALID_TRANS_VERSION),

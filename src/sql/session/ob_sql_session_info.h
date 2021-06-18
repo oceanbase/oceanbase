@@ -110,8 +110,7 @@ struct ObSessionStat final {
     new (this) ObSessionStat();
   }
 
-  TO_STRING_KV(K_(total_logical_read), K_(total_physical_read), K_(total_logical_write), K_(total_lock_count),
-      K_(total_cpu_time_us), K_(total_exec_time_us), K_(total_alive_time_us));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t total_logical_read_;
   uint64_t total_physical_read_;

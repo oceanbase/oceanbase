@@ -161,9 +161,7 @@ public:
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  TO_STRING_KV(K(checksum_), K(pcode_), K(hlen_), K(priority_), K(flags_), K(tenant_id_), K(priv_tenant_id_),
-      K(session_id_), K(trace_id_), K(timeout_), K_(timestamp), K_(dst_cluster_id), K_(cost_time), K(compressor_type_),
-      K(original_len_), K(src_cluster_id_), K(seq_no_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObRpcPacketHeader()
   {
@@ -313,7 +311,7 @@ public:
   inline void set_group_id(int32_t group_id);
   inline int32_t get_group_id() const;
 
-  TO_STRING_KV(K(hdr_), K(chid_), K(clen_), K_(assemble), K_(msg_count), K_(payload));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObRpcPacketHeader hdr_;

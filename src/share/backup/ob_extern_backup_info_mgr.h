@@ -76,7 +76,7 @@ public:
     return extern_backup_info_array_.empty();
   }
 
-  TO_STRING_KV(K_(extern_backup_info_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObSArray<ObExternBackupInfo> extern_backup_info_array_;
@@ -147,7 +147,7 @@ public:
   int add(const ObExternBackupSetInfo& extern_backup_set_info);
   int get_extern_backup_set_infos(common::ObIArray<ObExternBackupSetInfo>& extern_backup_set_infos);
 
-  TO_STRING_KV(K_(extern_backup_set_info_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObSArray<ObExternBackupSetInfo> extern_backup_set_info_array_;
@@ -194,7 +194,7 @@ public:
   virtual int read_buf(const char* buf, const int64_t buf_len);
   int add(const common::ObPGKey& pg_key);
   int get(common::ObIArray<common::ObPGKey>& pg_keys);
-  TO_STRING_KV(K_(pkeys));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObSArray<common::ObPGKey> pkeys_;
 };
 
@@ -253,7 +253,7 @@ public:
     return is_modified_;
   }
 
-  TO_STRING_KV(K_(extern_tenant_info_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObSArray<ObExternTenantInfo> extern_tenant_info_array_;
@@ -308,7 +308,7 @@ public:
     return extern_tenant_locality_info_;
   }
   int set_tenant_locality_info(const ObExternTenantLocalityInfo& tenant_locality_info);
-  TO_STRING_KV(K_(extern_tenant_locality_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObExternTenantLocalityInfo extern_tenant_locality_info_;

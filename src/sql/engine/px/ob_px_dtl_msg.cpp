@@ -59,3 +59,75 @@ void ObPxDmlRowInfo::set_px_dml_row_info(const ObPhysicalPlanCtx& plan_ctx)
   row_duplicated_count_ = plan_ctx.get_row_duplicated_count();
   row_deleted_count_ = plan_ctx.get_row_deleted_count();
 }
+int64_t ObPxFinishTaskResultMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(dfo_id), K_(sqc_id), K_(task_id), K_(rc));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxFinishSqcResultMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(sqc_affected_rows));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxInitSqcResultMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(task_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxTransmitDataChannelMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ch_sets), K_(part_affinity_map), K_(ch_total_info), K_(ch_map_opt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxReceiveDataChannelMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(child_dfo_id), K_(ch_sets), K_(ch_map_opt), K_(ch_total_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxPartChMapItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(first), K_(second), K_(third));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxTaskMonitorInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sched_exec_time_start), K_(sched_exec_time_end), K_(exec_time_start), K_(exec_time_end), K(metrics_.count()));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxDmlRowInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row_match_count), K_(row_duplicated_count), K_(row_deleted_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxPartitionInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key), K_(logical_row_count), K_(physical_row_count));
+  J_OBJ_END();
+  return pos;
+}

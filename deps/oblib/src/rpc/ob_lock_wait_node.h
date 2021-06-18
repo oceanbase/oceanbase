@@ -81,8 +81,7 @@ struct ObLockWaitNode : public common::SpHashNode {
     block_sessid_ = block_sessid;
   }
 
-  TO_STRING_KV(KP(this), KP_(addr), K_(hash), K_(lock_ts), K_(abs_timeout), K_(key), K_(sessid), K_(sessid_version),
-      K_(block_sessid), K_(run_ts), K_(ctx_desc), K_(is_standalone_task));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t hold_key_;
   ObLink retire_link_;
   bool need_wait_;

@@ -40,6 +40,14 @@ using namespace storage;
 // 2. gc_snapshot1 > gc_snapshot2, gc_schema_version1 >= gc_schema_version2
 ///////////////////////////////////////////
 namespace rootserver {
+int64_t ObFreezeInfoManager::FreezeInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_loaded), K_(fast_loaded), K_(current_frozen_status), K_(frozen_schema_versions),K_(frozen_status_without_schema_version), K_(latest_snapshot_gc_ts), K_(latest_snapshot_gc_schema_versions),K_(latest_defined_frozen_version), K_(latest_multi_versions));
+  J_OBJ_END();
+  return pos;
+}
 void ObFreezeInfoManager::FreezeInfo::reset()
 {
   is_loaded_ = false;

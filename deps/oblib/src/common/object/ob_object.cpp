@@ -1523,3 +1523,75 @@ int64_t ObHexEscapeSqlStr::get_extra_length() const
   }
   return ret_length;
 }
+int64_t ObDataType::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta), K_(accuracy), K_(charset), K_(is_binary_collation), K_(is_zero_fill));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ParamFlag::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(need_to_check_type), K_(need_to_check_bool_value), K_(expected_bool_value));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObObjPrintParams::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tz_info), K_(cs_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLobData::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(byte_size), K_(char_size), K_(idx_cnt), "lob_idx_array",common::ObArrayWrap<ObLobIndex>(lob_idx_, idx_cnt_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLobIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(reserved), K_(logic_macro_id), K_(byte_size), K_(char_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogicMacroBlockId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_seq), K_(data_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObObjMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TYPE, ob_obj_type_str(static_cast<ObObjType>(type_)), N_COLLATION,ObCharset::collation_name(get_collation_type()), N_COERCIBILITY,ObCharset::collation_level(get_collation_level()));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLobScale::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(scale));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEnumSetInnerValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(numberic_value), K_(string_value));
+  J_OBJ_END();
+  return pos;
+}

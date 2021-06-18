@@ -61,6 +61,86 @@ using namespace omt;
 using namespace transaction;
 
 namespace storage {
+int64_t ObPartitionGroupInfoResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(result), K_(choose_src_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(replica_op_arg), KP_(macro_indexs), "action", trans_action_to_str(action_), K_(result),K_(replica_state), K_(doing_task_cnt), K_(total_task_cnt), K_(need_rebuild), K(create_ts_), K(task_id_),K(copy_size_), K(continue_fail_count_), K(rebuild_count_), K(finish_ts_), K(clog_parent_), K(migrate_src_info_),K(wait_replay_start_ts_), K(wait_minor_merge_start_ts_), K(last_confirmed_log_id_), K(last_confirmed_log_ts_),K(group_task_id_), KP(group_task_), K_(during_migrating), K_(need_online_for_rebuild), K_(trace_id_array),K_(need_offline), K_(is_restore), K_(use_slave_safe_read_ts), K_(is_copy_cover_minor), K(mig_src_file_id_),K(mig_dest_file_id_), K(src_suspend_ts_), K(is_takeover_finished_), K(is_member_change_finished_),K_(local_last_replay_log_ts), K_(trans_table_handle), K_(create_new_pg), K_(fetch_pg_info_compat_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionMigrateCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(ctx), K_(copy_info), K_(is_partition_exist), K_(handle), K_(need_reuse_local_minor));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIPartMigrationTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), K_(result), K_(arg));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartMigrationTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), K_(result), K_(arg), K_(need_reset_migrate_status), K_(during_migrating), K_(ctx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReportPartMigrationTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(need_report_checksum), K_(partitions), KP_(ctx), K_(data_statics));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartGroupTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_id), K_(is_inited), K_(is_finished), K_(is_batch_mode), KP_(partition_service),K_(first_error_code), K_(type), "sub_task_count", task_list_.count(), K_(task_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartGroupMigrationTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_id), K_(is_inited), K_(is_finished), K_(is_batch_mode), K_(schedule_ts),K_(start_change_member_ts), KP_(partition_service), K_(first_error_code), K_(type), "sub_task_count",task_list_.count(), K_(task_list), K_(restore_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateLogicSSTableCtx::SubLogicTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(end_key), K_(block_write_ctx), K_(lob_block_write_ctx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateLogicSSTableCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta), K_(task_count));
+  J_OBJ_END();
+  return pos;
+}
 #define MIGRATOR (::oceanbase::storage::ObPartitionMigrator::get_instance())
 typedef common::hash::ObHashMap<uint64_t, ObSSTable*> SSTableMap;
 

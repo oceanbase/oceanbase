@@ -79,7 +79,7 @@ struct HashKey {
     rowkey_.reuse();
   }
   common::ObSEArray<ObObj, 4> rowkey_;
-  TO_STRING_KV(K_(rowkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::hash::ObHashSet<HashKey, common::hash::NoPthreadDefendMode> UniqueHashSet;
@@ -232,7 +232,7 @@ struct TablePart {
   int64_t ref_table_id_;
   int64_t part_id_;
   ObPGKey pg_key_;
-  TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(part_id), K_(pg_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObSqlPlanSet : public ObPlanSet {

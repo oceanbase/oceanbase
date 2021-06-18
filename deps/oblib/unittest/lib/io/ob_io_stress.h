@@ -56,9 +56,14 @@ public:
   {
     no_wait_ = true;
   }
-  TO_STRING_KV(K(fd_), K(file_size_), K(user_thread_cnt_), K(sys_thread_cnt_), K(busy_thread_cnt_), K(user_iops_),
-      K(sys_iops_), K(user_io_size_), K(sys_io_size_), K(no_wait_), K(fail_count_), K(succeed_count_), K(user_io_cnt_),
-      K(user_io_rt_), K(sys_io_cnt_), K(sys_io_rt_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(fd_), K(file_size_), K(user_thread_cnt_), K(sys_thread_cnt_), K(busy_thread_cnt_), K(user_iops_),K(sys_iops_), K(user_io_size_), K(sys_io_size_), K(no_wait_), K(fail_count_), K(succeed_count_), K(user_io_cnt_),K(user_io_rt_), K(sys_io_cnt_), K(sys_io_rt_));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   ObDiskFd fd_;

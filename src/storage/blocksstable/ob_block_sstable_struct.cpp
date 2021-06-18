@@ -36,6 +36,286 @@ using namespace share;
 using namespace share::schema;
 using namespace storage;
 namespace blocksstable {
+int64_t ObPosition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(offset), K_(length));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroDataSeq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_seq), K_(parallel_idx), K_(split_flag), K_(block_type), K_(merge_type), K_(reserved), K_(sign),K_(macro_data_seq));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCommitLogSpec::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_dir), K_(max_log_size), K_(log_sync_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageEnv::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_dir), K_(default_block_size), K_(disk_avail_space), K_(datafile_disk_percentage),K_(redundancy_level), K_(log_spec), K_(clog_dir), K_(ilog_dir), K_(clog_shm_path), K_(ilog_shm_path),K_(index_cache_priority), K_(user_block_cache_priority), K_(user_row_cache_priority), K_(fuse_row_cache_priority),K_(bf_cache_priority), K_(clog_cache_priority), K_(index_clog_cache_priority), K_(bf_cache_miss_count_threshold),K_(ethernet_speed));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSuperBlockHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(super_block_size), K_(version), K_(magic), K_(attr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSuperBlockHeaderV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(magic));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSuperBlockV1::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header), K_(create_timestamp), K_(modify_timestamp), K_(macro_block_size),K_(total_macro_block_count), K_(reserved_block_count), K_(free_macro_block_count), K_(first_macro_block),K_(first_free_block_index), K_(total_file_size), K_(backup_meta_count), "backup_meta_blocks_",common::ObArrayWrap<int64_t>(backup_meta_blocks_, backup_meta_count_), K_(macro_block_meta_entry_block_index),K_(partition_meta_entry_block_index), K_(table_mgr_meta_entry_block_index), K_(partition_meta_log_seq),K_(table_mgr_meta_log_seq), K_(replay_start_point));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSuperBlockV2::MetaEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_index), K_(log_seq), K_(file_id), K_(file_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSuperBlockV2::SuperBlockContent::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(create_timestamp), K_(modify_timestamp), K_(macro_block_size), K_(total_macro_block_count),K_(free_macro_block_count), K_(total_file_size), K_(replay_start_point), K_(macro_block_meta),K_(partition_meta), K_(table_mgr_meta), K_(tenant_config_meta));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSuperBlockV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header), K_(content));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(column_count), K_(row_index_offset), K_(row_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockHeaderV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_size), K_(version), K_(row_count), K_(var_column_count), K_(row_data_offset),K_(row_index_byte), K_(extend_value_bit), K_(store_row_header));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBloomFilterMicroBlockHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_size), K_(version), K_(magic), K_(rowkey_column_count), K_(row_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLinkedMacroBlockHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(meta_data_offset), K_(meta_data_count),K_(previous_block_index), K_(total_previous_count), K_(user_data1), K_(user_data2));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLinkedMacroBlockHeaderV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(item_count), K_(fragment_offset),K_(previous_block_first_id), K_(previous_block_second_id), K_(previous_block_third_id),K_(previous_block_fourth_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableMacroBlockHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(table_id), K_(data_version), K_(column_count),K_(rowkey_column_count), K_(column_index_scale), K_(row_store_type), K_(row_count), K_(occupy_size),K_(micro_block_count), K_(micro_block_size), K_(micro_block_data_offset), K_(micro_block_data_size),K_(micro_block_index_offset), K_(micro_block_index_size), K_(micro_block_endkey_offset),K_(micro_block_endkey_size), K_(data_checksum), K_(compressor_name), K_(encrypt_id), K_(master_key_id),K_(encrypt_key), K_(data_seq), K_(partition_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBloomFilterMacroBlockHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_size), K_(version), K_(magic), K_(attr), K_(table_id), K_(partition_id), K_(data_version),K_(rowkey_column_count), K_(row_count), K_(occupy_size), K_(micro_block_count), K_(micro_block_data_offset),K_(micro_block_data_size), K_(data_checksum), K_(compressor_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableColumnMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(column_id), K_(column_default_checksum), K_(column_checksum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStoreFileInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_id), K_(file_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStoreFileCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_system_type), K_(file_type), K_(block_count_per_file), K_(file_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableMacroBlockId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_block_id), K_(macro_block_id_in_files));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sstable_block_id), KP_(file_ctx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id), K_(partition_cnt), K_(data_version), K_(table_type), K_(migrate_status),K_(replica_status), K_(migrate_timestamp), K_(step_merge_start_version), K_(step_merge_end_version),K_(index_table_count), K(log_info_.length()), K_(store_type), K_(is_restore), K_(partition_checksum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRowHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row_flag), K_(column_index_bytes), K_(row_dml), K_(version), K_(row_type_flag), K_(reserved8),K_(column_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableTriple::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_id), K_(data_version), K_(data_seq));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTablePair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_version), K_(data_seq));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogicBlockIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(logic_block_index));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_block_id), K_(logic_block_index));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSimpleMacroBlockMetaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_index), K_(attr), K_(table_id), K_(data_version), K_(data_seq), K_(write_seq), K_(create_timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockMarkerStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(total_block_count), K_(reserved_block_count), K_(macro_meta_block_count),K_(partition_meta_block_count), K_(data_block_count), K_(lob_data_block_count), K_(second_index_count),K_(lob_second_index_count), K_(bloomfilter_count), K_(hold_count), K_(pending_free_count), K_(free_count),K_(mark_cost_time), K_(sweep_cost_time), K_(hold_alert_time), K_(hold_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecordHeaderV3::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(magic), K_(header_length), K_(version), K_(header_checksum), K_(reserved16), K_(data_length),K_(data_zlength), K_(data_checksum), K_(data_encoding_length), K_(row_count), K_(column_cnt),KP(column_checksums_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSuperBlockMetaEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_block_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerSuperBlock::ServerSuperBlockContent::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("Type", "ObServerSuperBlock", K_(create_timestamp), K_(modify_timestamp), K_(macro_block_size),K_(total_macro_block_count), K_(total_file_size), K_(replay_start_point), K_(super_block_meta),K_(tenant_config_meta));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFullMacroBlockMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema), K_(meta));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockInfoPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_id), K_(meta));
+  J_OBJ_END();
+  return pos;
+}
 
 const char* BLOCK_SSTBALE_DIR_NAME = "sstable";
 const char* BLOCK_SSTBALE_FILE_NAME = "block_file";

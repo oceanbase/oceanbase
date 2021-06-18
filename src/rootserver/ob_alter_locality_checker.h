@@ -53,7 +53,7 @@ public:
   {
     return common::OB_INVALID_ID != tenant_id_;
   }
-  TO_STRING_KV(K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
 };
@@ -68,7 +68,7 @@ public:
   {
     return common::OB_INVALID_ID != tablegroup_id_;
   }
-  TO_STRING_KV(K_(tablegroup_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tablegroup_id_;
 };
@@ -83,7 +83,7 @@ public:
   {
     return common::OB_INVALID_ID != table_id_;
   }
-  TO_STRING_KV(K_(table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t table_id_;
 };

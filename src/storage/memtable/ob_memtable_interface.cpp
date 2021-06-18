@@ -18,6 +18,14 @@
 namespace oceanbase {
 using namespace common;
 namespace memtable {
+int64_t ObMergePriorityInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(last_freeze_timestamp), K_(handle_id), K_(emergency), K_(protection_clock), KP_(partition));
+  J_OBJ_END();
+  return pos;
+}
 ObMemtableCtxFactory::ObMemtableCtxFactory()
     : is_inited_(false),
       mod_(ObModIds::OB_MEMTABLE_CTX_OBJECT),

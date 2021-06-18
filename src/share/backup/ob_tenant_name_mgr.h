@@ -43,7 +43,7 @@ public:
     ObTenantIdItem();
     uint64_t tenant_id_;
     int64_t timestamp_;
-    TO_STRING_KV(K_(tenant_id), K_(timestamp));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct ObTenantIdCompare {
@@ -63,7 +63,7 @@ public:
     common::ObString tenant_name_;
     bool is_complete_;
     common::ObSEArray<ObTenantIdItem, DEFAULT_TENANT_ID_ITEM_COUNT> id_list_;
-    TO_STRING_KV(KP(this), K_(tenant_name), K_(is_complete), K_(id_list));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     DISALLOW_COPY_AND_ASSIGN(ObTenantNameInfo);
   };
 
@@ -76,7 +76,7 @@ public:
     void reset();
     int64_t schema_version_;  // 0 for not ready
     int64_t tenant_count_;
-    TO_STRING_KV(K_(schema_version), K_(tenant_count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   typedef common::hash::ObHashMap<common::ObString, ObTenantNameInfo*, common::hash::NoPthreadDefendMode>

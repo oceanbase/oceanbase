@@ -38,6 +38,46 @@ using namespace oceanbase::storage;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObInsertResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(exec_ret_), K(flags_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObInsertTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id_), K(task_id_), K(row_count_), K(column_count_), K(insert_value_data_.count()));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObShuffleTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(task_id_), K(gid_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLoadbuffer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(table_id), K_(insert_column_num), K_(stored_row_cnt), K_(stored_pos), K_(task_id),K_(part_id), K_(task_status), K_(insert_mode), K_(returned_timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLoadResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_id), K_(part_id), K_(affected_rows), K_(failed_rows), K_(task_flags));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObLoadbuffer::deep_copy_str(const ObString& src, ObString& dest)
 {

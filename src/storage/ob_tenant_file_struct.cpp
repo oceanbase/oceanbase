@@ -370,3 +370,27 @@ int ObTenantFileCheckpointEntry::assign(const ObTenantFileCheckpointEntry& other
   }
   return ret;
 }
+int64_t ObTenantFileValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_info), K_(storage_file), KP_(info_file), K_(is_owner), K_(from_svr_ckpt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantFileSuperBlock::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_meta_entry), K_(pg_meta_entry), K_(status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantFileKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(file_id));
+  J_OBJ_END();
+  return pos;
+}

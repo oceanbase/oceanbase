@@ -35,8 +35,7 @@ public:
           memstore_limit_(0)
     {}
 
-    TO_STRING_KV(K_(tenant_id), K_(server), K_(active_memstore_used), K_(total_memstore_used), K_(major_freeze_trigger),
-        K_(memstore_limit));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     bool is_valid() const;
     void reset()

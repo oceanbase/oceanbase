@@ -48,7 +48,7 @@ struct ObBackupSetId {
   virtual ~ObBackupSetId() = default;
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(backup_set_id), K_(clean_mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t backup_set_id_;
   ObBackupDataCleanMode clean_mode_;
 };
@@ -58,7 +58,7 @@ struct ObLogArchiveRound {
   virtual ~ObLogArchiveRound() = default;
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(log_archive_round), K_(log_archive_status), K_(start_ts), K_(checkpoint_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t log_archive_round_;
   ObLogArchiveStatus::STATUS log_archive_status_;
   int64_t start_ts_;
@@ -82,7 +82,7 @@ struct ObBackupDataCleanElement {
   int set_backup_set_id(const ObBackupSetId& backup_set_id);
   int set_log_archive_round(const ObLogArchiveRound& log_archive_round);
 
-  TO_STRING_KV(K_(cluster_id), K_(incarnation), K_(backup_dest), K_(backup_set_id_array), K_(log_archive_round_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t cluster_id_;
   int64_t incarnation_;
   share::ObBackupDest backup_dest_;
@@ -99,7 +99,7 @@ struct ObSimpleBackupDataCleanTenant {
   void reset();
   uint64_t hash() const;
 
-  TO_STRING_KV(K_(tenant_id), K_(is_deleted));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t tenant_id_;
   bool is_deleted_;
 };
@@ -118,7 +118,7 @@ struct ObBackupDataCleanTenant {
       const share::ObBackupDest& backup_dest, const ObLogArchiveRound& archive_round);
   bool has_clean_backup_set(const int64_t backup_set_id) const;
 
-  TO_STRING_KV(K_(simple_clean_tenant), K_(backup_element_array), K_(clog_data_clean_point), K_(clog_gc_snapshot));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObSimpleBackupDataCleanTenant simple_clean_tenant_;
   common::ObArray<ObBackupDataCleanElement> backup_element_array_;
   ObTenantBackupTaskInfo clog_data_clean_point_;
@@ -139,9 +139,7 @@ struct ObBackupDataCleanStatics {
   int64_t deleted_base_data_files_ts_;
   int64_t touched_clog_files_ts_;
   int64_t deleted_clog_files_ts_;
-  TO_STRING_KV(K_(touched_base_data_files), K_(deleted_base_data_files), K_(touched_clog_files), K_(deleted_clog_files),
-      K_(touched_base_data_files_ts), K_(deleted_base_data_files_ts), K_(touched_clog_files_ts),
-      K_(deleted_clog_files_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObBackupDataCleanUtil {

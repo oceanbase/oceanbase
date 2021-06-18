@@ -46,7 +46,14 @@ struct ObUnitStat {
     return unit_id_;
   }
 
-  TO_STRING_KV(K_(unit_id), K_(required_size), K_(partition_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(unit_id), K_(required_size), K_(partition_cnt));
+    J_OBJ_END();
+    return pos;
+  }
 
   uint64_t unit_id_;
   int64_t required_size_;

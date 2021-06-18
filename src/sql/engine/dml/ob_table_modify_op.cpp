@@ -31,6 +31,22 @@ using namespace share;
 using namespace share::schema;
 using namespace observer;
 namespace sql {
+int64_t ObTableModifyOpInput::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(location_idx), K_(part_infos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableModifyOp::ForeignKeyHandle::ObFkRowResInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rt_expr), K_(ori_datum));
+  J_OBJ_END();
+  return pos;
+}
 
 // make MY_SPEC macro available.
 OB_INLINE static const ObTableModifySpec& get_my_spec(const ObTableModifyOp& op)

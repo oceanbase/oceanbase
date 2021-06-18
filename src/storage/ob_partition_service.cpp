@@ -108,6 +108,54 @@ using namespace oceanbase::rootserver;
 using namespace oceanbase::election;
 
 namespace storage {
+int64_t ObPartitionMigrationDataStatics::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(total_macro_block), K_(ready_macro_block), K_(major_count), K_(mini_minor_count),K_(normal_minor_count), K_(buf_minor_count), K_(reuse_count), K_(partition_count), K_(finish_partition_count),K_(input_bytes), K_(output_bytes));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartMigrationRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(data_src), K_(backup_arg), K_(validate_arg), K_(data_statics), K_(quorum),K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplicaOpArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(dst), K_(src), K_(data_src), K_(quorum), "type", get_replica_op_type_str(), K_(base_version),K_(restore_arg), K_(validate_arg), K_(backup_arg), K_(phy_restore_arg), K_(index_id), K_(priority),K_(cluster_id), K_(restore_version), K_(change_member_option), K_(switch_epoch));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateSrcInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(src_addr), K_(cluster_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionService::ParitionRegisterStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(in_tran_service), K_(in_election), K_(in_replay_engine));
+  J_OBJ_END();
+  return pos;
+}
 
 #define AUDIT_PARTITION_V2(mem_ctx, op, count)                                        \
   do {                                                                                \

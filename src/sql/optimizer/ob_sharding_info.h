@@ -256,9 +256,7 @@ public:
 
   int get_all_partition_keys(common::ObIArray<ObRawExpr*>& out_part_keys, bool ignore_single_partition = false) const;
 
-  TO_STRING_KV(K(is_sharding()), K(is_local()), K(is_remote_or_distribute()), K(is_match_all()), K_(part_level),
-      K_(part_func_type), K_(subpart_func_type), K_(part_num), K_(subpart_num), K_(location_type),
-      K_(can_reselect_replica), K_(phy_table_location_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int set_partition_key(ObRawExpr* part_expr, const share::schema::ObPartitionFuncType part_func_type,

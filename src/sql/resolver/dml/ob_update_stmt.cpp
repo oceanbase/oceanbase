@@ -16,6 +16,14 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 namespace oceanbase {
 namespace sql {
+int64_t ObUpdateStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_STMT_TYPE, stmt_type_, N_TABLE, table_items_, N_IS_IGNORE, ignore_, N_PARTITION_EXPR, part_expr_items_,N_COLUMN, column_items_, "input_columns", all_table_columns_, N_ASSIGN, tables_assignments_, N_WHERE,condition_exprs_, N_ORDER_BY, order_items_, N_LIMIT, limit_count_expr_, N_OFFSET, limit_offset_expr_,N_QUERY_HINT, stmt_hint_, N_QUERY_CTX, query_ctx_);
+  J_OBJ_END();
+  return pos;
+}
 using namespace oceanbase::common;
 
 ObUpdateStmt::ObUpdateStmt()

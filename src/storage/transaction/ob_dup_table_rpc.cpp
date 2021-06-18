@@ -277,6 +277,46 @@ int ObRedoLogSyncResponseP::process()
 }  // namespace obrpc
 
 namespace transaction {
+int64_t ObDupTableMsgHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(src), K_(dst), K_(proxy));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDupTableLeaseRequestMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(request_ts), K_(partition), K_(addr), K_(last_log_id), K_(request_lease_interval_us));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDupTableLeaseResponseMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(request_ts), K_(partition), K_(cur_log_id), K_(status), K_(lease_interval_us));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRedoLogSyncRequestMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(log_id), K_(log_ts), K_(trans_id), K_(log_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRedoLogSyncResponseMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(log_id), K_(trans_id), K_(addr), K_(status));
+  J_OBJ_END();
+  return pos;
+}
 int ObDupTableRpc::init(ObTransService* trans_service, obrpc::ObDupTableRpcProxy* rpc_proxy)
 {
   int ret = OB_SUCCESS;

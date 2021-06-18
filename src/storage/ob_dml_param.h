@@ -232,9 +232,7 @@ struct ObDMLBaseParam {
   {
     return (timeout_ > 0 && schema_version_ >= 0);
   }
-  TO_STRING_KV(N_TIMEOUT, timeout_, N_SCHEMA_VERSION, schema_version_, N_SCAN_FLAG, query_flag_, N_SQL_MODE, sql_mode_,
-      N_IS_TOTAL_QUANTITY_LOG, is_total_quantity_log_, K_(only_data_table), KP_(table_param), K_(tenant_schema_version),
-      K_(is_ignore), K_(duplicated_rows), K_(prelock));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 }  // end namespace storage

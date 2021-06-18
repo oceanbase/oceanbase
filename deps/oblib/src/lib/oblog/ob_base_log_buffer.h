@@ -53,7 +53,7 @@ union ObAtomicFilePos {
   {
     return file_id_ > other.file_id_ || (file_id_ == other.file_id_ && file_offset_ >= other.file_offset_);
   }
-  TO_STRING_KV(K_(file_id), K_(file_offset));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   volatile uint64_t atomic_;
   struct {
     uint32_t file_id_;

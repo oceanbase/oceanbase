@@ -37,7 +37,7 @@ public:
   virtual int deep_copy(char* buf, const int64_t buf_len, ObIKVCacheKey*& key) const;
   void set(const uint64_t table_id, const MacroBlockId& block_id, const int64_t file_id, const int64_t offset,
       const int64_t size);
-  TO_STRING_KV(K_(table_id), K_(block_id), K_(file_id), K_(offset), K_(size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t table_id_;
@@ -62,7 +62,7 @@ public:
   {
     return block_data_;
   }
-  TO_STRING_KV(K_(block_data));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObMicroBlockData block_data_;
@@ -92,7 +92,7 @@ public:
   {
     return NULL != micro_block_ && handle_.is_valid();
   }
-  TO_STRING_KV(K_(handle), KP_(micro_block));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   friend class ObIMicroBlockCache;
@@ -134,7 +134,7 @@ struct ObMultiBlockIOCtx {
   ObMicroBlockInfo* micro_block_infos_;
   bool* hit_cache_bitmap_;
   int64_t block_count_;
-  TO_STRING_KV(KP(micro_block_infos_), KP(hit_cache_bitmap_), K_(block_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObMultiBlockIOResult {
@@ -216,7 +216,7 @@ public:
     virtual int inner_process(const bool is_success);
     virtual int inner_deep_copy(char* buf, const int64_t buf_len, ObIOCallback*& callback) const;
     virtual const char* get_data();
-    TO_STRING_KV(KP_(micro_block));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     friend class ObIMicroBlockCache;
@@ -232,7 +232,7 @@ public:
     virtual int inner_process(const bool is_success);
     virtual int inner_deep_copy(char* buf, const int64_t buf_len, ObIOCallback*& callback) const;
     virtual const char* get_data();
-    TO_STRING_KV(KP_(&io_result));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     friend class ObIMicroBlockCache;

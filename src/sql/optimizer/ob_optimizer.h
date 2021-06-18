@@ -129,7 +129,7 @@ private:
     {}
     int64_t current_px_id_;
     int64_t next_dfo_id_;
-    TO_STRING_KV(K_(current_px_id), K_(next_dfo_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 public:
@@ -183,7 +183,7 @@ struct ObExprSelPair {
   {
     return expr_ == rhs.expr_;
   }
-  TO_STRING_KV(K(expr_), K(sel_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const ObRawExpr* expr_;
   double sel_;  // selectiviy of expr
 };

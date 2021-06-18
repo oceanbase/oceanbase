@@ -27,6 +27,22 @@ namespace oceanbase {
 using namespace lib;
 using namespace share;
 namespace common {
+int64_t ObObjCastParams::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(cur_time_), KP(cast_mode_), K(warning_), K(dest_collation_), K(expect_obj_collation_),K(res_accuracy_), K(format_number_with_limit_), K(is_ignore_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExpectType::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(type_), K(cs_type_), KPC(type_infos_));
+  J_OBJ_END();
+  return pos;
+}
 using namespace number;
 
 static const int64_t MAX_DOUBLE_STRICT_PRINT_SIZE = 512;

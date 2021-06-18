@@ -56,7 +56,7 @@ public:
     return const_cast<common::ObIArray<int64_t>&>(static_cast<const ObSplittedRanges&>(*this).get_offsets());
   }
 
-  TO_STRING_KV(K_(ranges), K_(offsets));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObSEArray<common::ObNewRange, 1> ranges_;
@@ -124,8 +124,7 @@ public:
   {
     return partition_location_list_.count();
   }
-  TO_STRING_KV(K_(table_location_key), K_(ref_table_id), K_(partition_location_list), K_(splitted_range_list),
-      K_(duplicate_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const share::ObPartitionReplicaLocation* get_part_replic_by_part_id(int64_t part_id) const;
   template <typename SrcArray, typename DstArray>
   int find_not_include_part_ids(const SrcArray& all_part_ids, DstArray& expected_part_ids);

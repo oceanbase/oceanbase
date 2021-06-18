@@ -84,7 +84,14 @@ struct SimpleSortList {
     return task;
   }
 
-  TO_STRING_KV(KP_(head), KP_(tail), K_(num));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP_(head), KP_(tail), K_(num));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 // simultaneous unsafe

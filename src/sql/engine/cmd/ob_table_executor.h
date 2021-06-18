@@ -81,7 +81,7 @@ private:
       pkey_.reset();
       server_.reset();
     }
-    TO_STRING_KV(K(pkey_), K(server_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int set_server(const common::ObAddr& server)
     {
       int ret = common::OB_SUCCESS;

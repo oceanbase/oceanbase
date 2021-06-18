@@ -21,6 +21,22 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObConnectByBase::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_ID, id_, N_COLUMN_COUNT, column_count_, N_PROJECTOR,common::ObArrayWrap<int32_t>(projector_, projector_size_), N_FILTER_EXPRS, filter_exprs_, N_CALC_EXPRS,calc_exprs_, N_JOIN_TYPE, ob_join_type_str(join_type_), N_JOIN_EQ_COND, rescan_params_, N_JOIN_OTHER_COND,other_join_conds_, N_INNER_GET, is_inner_get_, N_SELF_JOIN, is_self_join_, N_PUMP_ROW_DESC, pump_row_desc_,N_ROOT_ROW_DESC, root_row_desc_, N_PSEUDO_COLUMN_ROW_DESC, pseudo_column_row_desc_, N_CONNECT_BY_PRIOR_EXPRS,connect_by_prior_exprs_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObConnectBy::EqualConditionInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cmp_type), K_(ctype));
+  J_OBJ_END();
+  return pos;
+}
 ObConnectByBase::ObConnectByBase(ObIAllocator& alloc) : ObBasicNestedLoopJoin(alloc), level_params_(alloc)
 {}
 

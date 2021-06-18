@@ -98,7 +98,7 @@ public:
   {}
   ~KillTransArg()
   {}
-  TO_STRING_KV(K_(graceful), K_(ignore_ro_trans), K_(need_kill_coord_ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   bool graceful_;

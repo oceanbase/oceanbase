@@ -2864,3 +2864,347 @@ int ObBackupCleanInfo::check_backup_clean_info_match(const ObBackupCleanInfo& cl
   }
   return ret;
 }
+int64_t ObBackupDataType::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupCleanInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(job_id), K_(start_time), K_(end_time), K_(incarnation), K_(type), K_(status),K_(expired_time), K_(backup_set_id), K_(error_msg), K_(comment), K_(clog_gc_snapshot), K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExternBackupDiagnoseInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(tenant_locality_info), K_(backup_set_info), K_(extern_backup_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExternTenantLocalityInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(backup_set_id), K_(backup_snapshot_version), K_(compat_mode), K_(tenant_name),K_(locality), K_(primary_zone));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExternTenantInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(create_timestamp), K_(delete_timestamp), K_(compat_mode), K_(tenant_name),K_(backup_snapshot_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExternBackupSetInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(backup_set_id), K_(backup_snapshot_version), K_(compatible), K_(pg_count), K_(macro_block_count),K_(input_bytes), K_(output_bytes), K_(cluster_version), K_(compress_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExternBackupInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(full_backup_set_id), K_(inc_backup_set_id), K_(backup_data_version), K_(backup_snapshot_version),K_(backup_schema_version), K_(frozen_snapshot_version), K_(frozen_schema_version), K_(prev_full_backup_set_id),K_(prev_inc_backup_set_id), K_(prev_backup_data_version), K_(compatible), K_(cluster_version), K_(backup_type),K_(status), K_(encryption_mode), K_(passwd), K_(is_mark_deleted));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupBackupsetArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(src_uri_header), K_(src_storage_info), K_(dst_uri_header), K_(dst_storage_info), K_(cluster_name),K_(server), K_(copy_id), K_(job_id), K_(tenant_id), K_(cluster_id), K_(incarnation), K_(pg_key),K_(backup_set_id), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(delete_input), K_(backup_type),K_(cluster_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhysicalBackupArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(uri_header), K_(storage_info), K_(incarnation), K_(tenant_id), K_(backup_set_id),K_(backup_data_version), K_(backup_schema_version), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id),K_(prev_data_version), K_(task_id), K_(backup_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhysicalValidateArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(backup_dest), K_(cluster_name), K_(uri_header), K_(storage_info), K_(job_id), K_(task_id),K_(trace_id), K_(server), K_(cluster_id), K_(pg_key), K_(table_id), K_(partition_id), K_(tenant_id),K_(incarnation), K_(archive_round), K_(backup_set_id), K_(total_partition_count), K_(total_macro_block_count),K_(clog_end_timestamp), K_(start_log_id), K_(end_log_id), K_(log_size), K_(is_dropped_tenant),K_(need_validate_clog), K_(full_backup_set_id), K_(inc_backup_set_id), K_(cluster_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhysicalRestoreArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(restore_info), K_(pg_key), K_(restore_data_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreBackupInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(compat_mode), K_(locality), K_(primary_zone), K_(snapshot_version), K_(schema_version),K_(frozen_data_version), K_(frozen_snapshot_version), K_(frozen_schema_version), K_(physical_restore_info),K_(sys_pg_key_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhysicalRestoreInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(backup_dest), K_(cluster_name), K_(cluster_id), K_(incarnation), K_(tenant_id),K_(full_backup_set_id), K_(inc_backup_set_id), K_(log_archive_round), K_(restore_snapshot_version),K_(restore_start_ts), K_(compatible), K_(cluster_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupBaseDataPathInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(dest), K_(tenant_id), K_(full_backup_set_id), K_(inc_backup_set_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClusterBackupDest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(dest), K_(cluster_name), K_(cluster_id), K_(incarnation));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGBackupBackupsetTaskItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(job_id), K_(tenant_id), K_(backup_set_id), K_(backup_set_id), K_(copy_id), K_(table_id),K_(partition_id), K_(status), K_(total_partition_count), K_(finish_partition_count), K_(total_macro_block_count),K_(finish_macro_block_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGBackupBackupsetTaskStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(total_partition_count), K_(total_macro_block_count), K_(finish_partition_count), K_(finish_macro_block_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGBackupBackupsetTaskRowKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(job_id), K_(incarnation), K_(backup_set_id), K_(copy_id), K_(table_id), K_(partition_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantBackupBackupsetTaskItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(job_id), K_(tenant_id), K_(backup_set_id), K_(task_status), K_(src_backup_dest), K_(dst_backup_dest),K_(start_ts), K_(end_ts), K_(total_pg_count), K_(finish_pg_count), K_(total_partition_count),K_(finish_partition_count), K_(total_macro_block_count), K_(finish_macro_block_count), K_(result),K_(is_mark_deleted));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupBackupsetJobItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(job_id), K_(incarnation), K_(backup_set_id), K_(copy_id), K_(type), K_(tenant_name),K_(job_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupBackupsetType::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGValidateTaskRowKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(job_id), K_(task_id), K_(incarnation), K_(backup_set_id), K_(table_id), K_(partition_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGValidateTaskItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(job_id), K_(task_id), K_(tenant_id), K_(table_id), K_(partition_id), K_(partition_id),K_(incarnation), K_(backup_set_id), K_(archive_round), K_(total_partition_count), K_(finish_partition_count),K_(total_macro_block_count), K_(finish_macro_block_count), K_(server), K_(log_size), K_(result), K_(trace_id),K_(status), K_(comment));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantValidateTaskItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(job_id), K_(tenant_id), K_(incarnation), K_(backup_set_id), K_(status), K_(start_time), K_(end_time),K_(total_pg_count), K_(finish_pg_count), K_(total_partition_count), K_(finish_partition_count),K_(total_macro_block_count), K_(finish_macro_block_count), K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupValidateTaskItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(job_id), K_(tenant_id), K_(tenant_name), K_(incarnation), K_(backup_set_id), K_(progress_percent), K_(status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupValidateTenant::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(is_dropped));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGBackupTaskItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(table_id), K_(partition_id), K_(incarnation), K_(backup_set_id), K_(backup_type),K_(snapshot_version), K_(partition_count), K_(macro_block_count), K_(finish_partition_count),K_(finish_macro_block_count), K_(input_bytes), K_(output_bytes), K_(start_time), K_(end_time), K_(retry_count),K_(role), K_(replica_type), K_(server), K_(status), K_(result), K_(task_id), K_(trace_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantBackupTaskItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(backup_set_id), K_(incarnation), K_(snapshot_version), K_(prev_full_backup_set_id),K_(prev_inc_backup_set_id), K_(prev_backup_data_version), K_(pg_count), K_(macro_block_count),K_(finish_pg_count), K_(finish_macro_block_count), K_(input_bytes), K_(output_bytes), K_(start_time),K_(end_time), K_(compatible), K_(cluster_version), K_(backup_type), K_(status), K_(device_type), K_(result),K_(cluster_id), K_(backup_dest), K_(backup_data_version), K_(backup_schema_version), K_(partition_count),K_(finish_partition_count), K_(encryption_mode), K_(passwd), K_(is_mark_deleted));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBaseBackupInfoStruct::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(backup_set_id), K_(incarnation), K_(backup_dest), K_(backup_snapshot_version),K_(backup_schema_version), K_(backup_data_version), K_(detected_backup_region), K_(backup_type),K_(backup_status), K_(backup_task_id), K_(encryption_mode));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupDeviceType::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupType::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupInfoStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), "status_str", get_status_str(status_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupDest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(device_type), K_(root_path), K_(storage_info), "type", get_type_str());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogArchiveBackupInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), K_(backup_dest));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantLogArchiveStatusWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(result_code), K_(status_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantLogArchiveStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(start_ts), K_(checkpoint_ts), K_(status), K_(incarnation), K_(round), "status_str",ObLogArchiveStatus::get_str(status_), K_(is_mark_deleted), K_(is_mount_file_created), K_(compatible));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetTenantLogArchiveStatusArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(incarnation), K(round_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMetaIndexKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id), K_(meta_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupSStableMacroIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_version), K_(data_type), K_(header_length), K_(header_checksum), K_(reserved), K_(table_id),K_(partition_id), K_(index_table_id), K_(offset), K_(count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupMacroIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id), K_(index_table_id), K_(sstable_macro_index), K_(data_version),K_(data_seq), K_(backup_set_id), K_(sub_task_id), K_(offset), K_(data_length));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupMetaIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(meta_type), K_(table_id), K_(partition_id), K_(offset), K_(data_length), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupMetaHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_version), K_(meta_type), K_(header_checksum), K_(data_length), K_(data_checksum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupCommonHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(header_version), K_(compressor_type), K_(data_type), K_(data_version), K_(header_length),K_(header_checksum), K_(data_length), K_(data_zlength), K_(data_checksum), K_(align_length));
+  J_OBJ_END();
+  return pos;
+}

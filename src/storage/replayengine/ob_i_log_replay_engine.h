@@ -44,7 +44,14 @@ public:
     {
       return (total_limit_ >= 0) && (hold_limit_ >= 0) && (page_size_ >= 0);
     }
-    TO_STRING_KV(K(total_limit_), K(hold_limit_), K(page_size_));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K(total_limit_), K(hold_limit_), K(page_size_));
+      J_OBJ_END();
+      return pos;
+    }
   };
 
 public:

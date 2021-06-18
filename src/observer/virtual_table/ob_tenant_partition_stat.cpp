@@ -22,6 +22,14 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 namespace observer {
+int64_t ObTenantPartitionStat::PartitionStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id), K_(partition_cnt), K_(row_count), K_(diff_percentage));
+  J_OBJ_END();
+  return pos;
+}
 ObTenantPartitionStat::PartitionStat::PartitionStat()
 {
   reset();

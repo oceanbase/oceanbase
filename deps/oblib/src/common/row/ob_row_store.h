@@ -38,7 +38,7 @@ public:
     const common::ObString get_compact_row() const;
     void* get_compact_row_ptr();
     const void* get_compact_row_ptr() const;
-    TO_STRING_KV(N_PAYLOAD, payload_, N_CELLS, ObArrayWrap<ObObj>(reserved_cells_, reserved_cells_count_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   class Iterator : public ObOuterRowIterator {
   public:
@@ -236,8 +236,7 @@ public:
   }
 
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(N_BLOCK_SIZE, block_size_, N_DATA_SIZE, data_size_, N_BLOCK_NUM, blocks_.get_block_count(), N_ROW_COUNT,
-      row_count_, N_COLUMN_COUNT, col_count_, N_READ_ONLY, is_read_only_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRowStore);

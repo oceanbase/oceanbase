@@ -28,6 +28,22 @@ using namespace lib;
 using namespace common;
 using namespace omt;
 namespace share {
+int64_t ObLoadShedder::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cpu_cnt_online), K_(cpu_cnt_configure), K_(load_per_cpu_threshold), K_(load_shedding_factor),"load_past_one", load_avg_[LOAD_PAST_ONE], "load_past_five", load_avg_[LOAD_PAST_FIVE], "load_past_fifteen",load_avg_[LOAD_PAST_FIFTEEN]);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDagScheduler::ThreadLimit::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(min_thread), K_(max_thread));
+  J_OBJ_END();
+  return pos;
+}
 
 ObITask::ObITask(ObITask::ObITaskType type)
     : dag_(NULL),

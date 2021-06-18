@@ -248,7 +248,7 @@ public:
   {
     return NULL != mb_handle_;
   }
-  TO_STRING_KV(KP_(mb_handle));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   template <class Key, class Value>

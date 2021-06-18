@@ -56,7 +56,7 @@ public:
   int64_t get_matched_rows() const;
   int64_t get_duplicated_rows() const;
 
-  TO_STRING_KV(K_(task_location), K_(slice_events));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   ObTaskLocation task_location_;
@@ -119,7 +119,7 @@ public:
   {
     return is_root_job_;
   }
-  TO_STRING_KV("tasks", tasks_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int get_task_by_state(common::ObIArray<ObTaskInfo*>& tasks, int state) const;

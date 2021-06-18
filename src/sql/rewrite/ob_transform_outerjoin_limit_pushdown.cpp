@@ -20,6 +20,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObTransformOuterJoinLimitPushDown::OjLimitPushDownHelper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(select_stmt), K_(target_table), K_(view_table), K_(extracted_conditions), K_(saved_order_items),K_(is_limit_only), K_(need_create_view));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * @brief ObTransformOuterJoinLimitPushDown::transform_one_stmt
  * Pushdown limit/orderby limit into outer join

@@ -22,6 +22,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObExprLike::ObExprLikeContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(instr_mode), K_(instr_length), K_(is_analyzed));
+  J_OBJ_END();
+  return pos;
+}
 
 ObExprLike::ObExprLike(ObIAllocator& alloc)
     : ObFuncExprOperator(alloc, T_OP_LIKE, N_LIKE, 3, NOT_ROW_DIMENSION),

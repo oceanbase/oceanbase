@@ -16,6 +16,22 @@
 #include "lib/utility/utility.h"
 namespace oceanbase {
 namespace common {
+int64_t ObRowStore::StoredRow::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_PAYLOAD, payload_, N_CELLS, ObArrayWrap<ObObj>(reserved_cells_, reserved_cells_count_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRowStore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_BLOCK_SIZE, block_size_, N_DATA_SIZE, data_size_, N_BLOCK_NUM, blocks_.get_block_count(), N_ROW_COUNT,row_count_, N_COLUMN_COUNT, col_count_, N_READ_ONLY, is_read_only_);
+  J_OBJ_END();
+  return pos;
+}
 
 ////////////////////////////////////////////////////////////////
 struct ObRowStore::BlockInfo {

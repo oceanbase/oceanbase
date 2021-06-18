@@ -2270,3 +2270,11 @@ int ObLogTableScan::try_add_extra_access_exprs_for_lob_col()
   }
   return ret;
 }
+int64_t ObLogTableScan::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(index_table_id), K_(is_fake_cte_table), K_(table_name), K_(index_name));
+  J_OBJ_END();
+  return pos;
+}

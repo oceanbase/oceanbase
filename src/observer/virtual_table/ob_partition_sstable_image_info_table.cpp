@@ -28,6 +28,14 @@ using namespace oceanbase::storage;
 using namespace oceanbase::compaction;
 namespace oceanbase {
 namespace observer {
+int64_t SSStoreVersionInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(ss_store_count), K_(macro_block_count), K_(use_old_macro_block_count),K_(merged_ss_store_count), K_(modified_ss_store_count), K_(rewrite_macro_old_micro_block_count),K_(rewrite_macro_total_micro_block_count));
+  J_OBJ_END();
+  return pos;
+}
 
 ObPartitionSstableImageInfoTable::ObPartitionSstableImageInfoTable()
     : ObVirtualTableScannerIterator(), inited_(false), addr_(NULL), partition_service_(NULL), schema_service_(NULL)

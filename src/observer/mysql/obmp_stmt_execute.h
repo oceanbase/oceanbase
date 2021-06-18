@@ -27,7 +27,7 @@ struct ObSavedException {
   int32_t error_code_;
   common::ObString error_msg_;
 
-  TO_STRING_KV(K(pos_), K(error_code_), K(error_msg_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::Ob2DArray<common::ObObjParam, common::OB_MALLOC_BIG_BLOCK_SIZE, ObWrapperAllocator, false> ParamStore;

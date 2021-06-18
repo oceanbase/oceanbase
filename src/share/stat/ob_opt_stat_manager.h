@@ -36,7 +36,7 @@ public:
     key_.reset();
     stat_version_ = 0;
   }
-  TO_STRING_KV(K_(key), K_(stat_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObOptTableStat::Key key_;
   int64_t stat_version_;
 };

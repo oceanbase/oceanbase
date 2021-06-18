@@ -18,6 +18,14 @@ namespace oceanbase {
 using namespace common;
 
 namespace sql {
+int64_t ObSliceID::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_OB_TASK_ID, ob_task_id_, N_SLICE_ID, slice_id_);
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObSliceID, ob_task_id_, slice_id_);
 

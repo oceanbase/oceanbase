@@ -31,7 +31,7 @@ public:
     warnings_.reset();
   }
 
-  TO_STRING_KV("code", rcode_, "msg", msg_, K_(warnings));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void reset()
   {

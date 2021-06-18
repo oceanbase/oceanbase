@@ -321,7 +321,7 @@ public:
   struct HostIndex {
     HostIndex() : begin_(0), end_(0), idx_(0)
     {}
-    TO_STRING_KV(K(begin_), K(end_), K(idx_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     uint64_t begin_;
     uint64_t end_;

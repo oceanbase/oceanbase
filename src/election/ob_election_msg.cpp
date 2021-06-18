@@ -460,3 +460,11 @@ void ObEGBatchReq::reset()
   buf_ser_size_ = 0;
   eg_msg_ = NULL;
 }
+int64_t ObElectionMsgBuffer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(capacity), K_(position), K_(limit));
+  J_OBJ_END();
+  return pos;
+}

@@ -15,6 +15,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObAccuracy::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_LENGTH, length_, N_PRECISION, precision_, N_SCALE, scale_);
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace number;
 

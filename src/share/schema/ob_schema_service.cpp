@@ -21,6 +21,22 @@
 namespace oceanbase {
 namespace share {
 namespace schema {
+int64_t ObPrimarySchemaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(primary_broadcasted_schema_version_), K(primary_next_schema_version_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMockSchemaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_id), "mock_index_unavaliable", mock_schema_type_[MOCK_INDEX_UNAVAILABLE], "mock_schema_split",mock_schema_type_[MOCK_SCHEMA_SPLIT]);
+  J_OBJ_END();
+  return pos;
+}
 using namespace oceanbase::common;
 DEFINE_ENUM_FUNC(ObSchemaOperationType, op_type, OP_TYPE_DEF);
 // only liboblog will set it to true

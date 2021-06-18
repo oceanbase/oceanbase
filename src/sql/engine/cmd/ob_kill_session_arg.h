@@ -37,7 +37,7 @@ public:
   {}
   int init(ObExecContext& ctx, const ObKillStmt& stmt);
   int calculate_sessid(ObExecContext& ctx, const ObKillStmt& stmt);
-  TO_STRING_KV(K(sess_id_), K(tenant_id_), K(user_id_), K(is_query_), K(has_user_super_privilege_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   uint32_t sess_id_;

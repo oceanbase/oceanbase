@@ -181,7 +181,7 @@ struct MonitorEntry {
   int64_t warn_ts_;
   int64_t physical_thread_idx_;
   MonitorCallbackWrapper callback_;
-  TO_STRING_KV(K(start_ts_), K(warn_ts_), K(physical_thread_idx_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class MonitorEntryStack {

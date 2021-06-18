@@ -40,7 +40,7 @@ public:
     logical_row_count_ = partition_info.logical_row_count_;
     physical_row_count_ = partition_info.physical_row_count_;
   }
-  TO_STRING_KV(K_(partition_key), K_(logical_row_count), K_(physical_row_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObPartitionKey partition_key_;
   int64_t logical_row_count_;
   int64_t physical_row_count_;
@@ -65,7 +65,7 @@ public:
     row_duplicated_count_ += row_info.row_duplicated_count_;
     row_deleted_count_ += row_info.row_deleted_count_;
   }
-  TO_STRING_KV(K_(row_match_count), K_(row_duplicated_count), K_(row_deleted_count))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 public:
   int64_t row_match_count_;
   int64_t row_duplicated_count_;
@@ -122,8 +122,7 @@ public:
     return metrics_;
   }
 
-  TO_STRING_KV(
-      K_(sched_exec_time_start), K_(sched_exec_time_end), K_(exec_time_start), K_(exec_time_end), K(metrics_.count()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t sched_exec_time_start_;
@@ -202,7 +201,7 @@ public:
   int64_t first_;
   int64_t second_;
   int64_t third_;
-  TO_STRING_KV(K_(first), K_(second), K_(third));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObArray<ObPxPartChMapItem, common::ModulePageAllocator, false, /*auto free*/
@@ -280,7 +279,7 @@ public:
   {
     return ch_map_opt_;
   }
-  TO_STRING_KV(K_(child_dfo_id), K_(ch_sets), K_(ch_map_opt), K_(ch_total_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t child_dfo_id_;
@@ -366,7 +365,7 @@ public:
   {
     return 0 < ch_sets_.count() || ch_map_opt_;
   }
-  TO_STRING_KV(K_(ch_sets), K_(part_affinity_map), K_(ch_total_info), K_(ch_map_opt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObPxTaskChSets ch_sets_;
@@ -385,7 +384,7 @@ public:
   virtual ~ObPxInitSqcResultMsg() = default;
   void reset()
   {}
-  TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(task_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t dfo_id_;
@@ -428,7 +427,7 @@ public:
     task_monitor_info_array_.reset();
     dml_row_info_.reset();
   }
-  TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(sqc_affected_rows));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t dfo_id_;
@@ -463,7 +462,7 @@ public:
   }
   void reset()
   {}
-  TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(task_id), K_(rc));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t dfo_id_;

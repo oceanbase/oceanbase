@@ -37,8 +37,7 @@ enum DumpType { DUMP_CONTEXT, DUMP_CHUNK, STAT_LABEL };
 
 class ObMemoryDumpTask {
 public:
-  TO_STRING_KV(K(type_), K(dump_all_), KP(p_context_), K(slot_idx_), K(dump_tenant_ctx_), K(tenant_id_), K(ctx_id_),
-      KP(p_chunk_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   DumpType type_;
   bool dump_all_;
   union {

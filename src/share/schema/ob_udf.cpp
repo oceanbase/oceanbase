@@ -21,6 +21,22 @@ using namespace common;
 
 namespace share {
 namespace schema {
+int64_t ObUDF::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(udf_id), K_(name), K_(ret), K_(dl), K_(type), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUDFMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(name), K_(ret), K_(dl), K_(type));
+  J_OBJ_END();
+  return pos;
+}
 
 ObUDF::ObUDF(common::ObIAllocator* allocator)
     : ObSchema(allocator),

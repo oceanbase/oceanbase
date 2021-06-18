@@ -19,6 +19,14 @@
 using namespace oceanbase::share;
 namespace oceanbase {
 namespace common {
+int64_t ObConfigLogArchiveOptionsItem::ObInnerConfigLogArchiveOptionsItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(valid), K_(is_mandatory), K_(is_compress_enabled), K_(compressor_type), K_(encryption_mode),K_(encryption_algorithm));
+  J_OBJ_END();
+  return pos;
+}
 const char* log_archive_config_keywords[] = {
     "MANDATORY",
     "OPTIONAL",

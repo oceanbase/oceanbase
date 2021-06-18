@@ -21,6 +21,46 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 namespace dtl {
+int64_t ObDtlChannelInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(chid), K_(type), K_(peer), K_(role), K_(tenant_id), K(state_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlChSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(exec_addr), K_(ch_info_set));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlExecServer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(total_task_cnt), K_(exec_addrs), K_(prefix_task_counts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlChTotalInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start_channel_id), K_(transmit_exec_server), K_(receive_exec_server), K_(channel_count), K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(jobid));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObDtlChannelInfo, chid_, type_, peer_, role_, tenant_id_);
 OB_SERIALIZE_MEMBER(ObDtlChSet, exec_addr_, ch_info_set_);

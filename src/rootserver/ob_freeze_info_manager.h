@@ -83,9 +83,7 @@ private:
     {
       reset();
     }
-    TO_STRING_KV(K_(is_loaded), K_(fast_loaded), K_(current_frozen_status), K_(frozen_schema_versions),
-        K_(frozen_status_without_schema_version), K_(latest_snapshot_gc_ts), K_(latest_snapshot_gc_schema_versions),
-        K_(latest_defined_frozen_version), K_(latest_multi_versions));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     void reset();
     void limited_reset();
     bool is_valid() const;

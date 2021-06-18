@@ -18,6 +18,22 @@
 namespace oceanbase {
 using namespace common;
 namespace storage {
+int64_t LeaderActiveArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_elected_by_changing_leader));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCbTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("task_type", task_type_, N_KEY, pkey_, "role", role_, "succeed", succeed_, "ret_code", ret_code_,"retry_count", retry_cnt_, "leader_active_arg", leader_active_arg_, "large_cb", large_cb_);
+  J_OBJ_END();
+  return pos;
+}
 int64_t ObCallbackQueueThread::QUEUE_THREAD_NUM = max(4, get_cpu_count() / 5);
 
 ObCallbackQueueThread::ObCallbackQueueThread()

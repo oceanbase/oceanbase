@@ -30,6 +30,38 @@ using namespace obrpc;
 using namespace share;
 using namespace storage;
 namespace rootserver {
+int64_t UpdateFileRecoveryStatusTaskV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(zone_), K(server_), K(svr_seq_), K(dest_server_), K(dest_svr_seq_), K(tenant_id_), K(file_id_), K(is_stopped_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t RefugeeServerInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(server), K_(svr_seq), K_(rescue_server), K_(rescue_progress));
+  J_OBJ_END();
+  return pos;
+}
+int64_t RefugeeFileInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(svr_seq), K_(tenant_id), K_(file_id), K_(dest_server), K_(dest_svr_seq), K_(dest_unit_id),K_(file_recovery_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecoveryTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(zone_), K(server_), K(svr_seq_), K(rescue_server_), K(progress_), K(refugee_file_infos_),K(pre_process_server_status_), K(recover_file_task_gen_status_), K(last_drive_ts_));
+  J_OBJ_END();
+  return pos;
+}
 
 int64_t UpdateFileRecoveryStatusTaskV2::hash() const
 {

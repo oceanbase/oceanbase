@@ -26,7 +26,7 @@ struct ObPadCol {
   common::ObObjMeta meta_type_;
   int32_t data_length_;
 
-  TO_STRING_KV("idx", idx_, "type", meta_type_, "data_length", data_length_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObSEArray<ObPadCol, common::OB_ROW_MAX_COLUMNS_COUNT> PadColArray;

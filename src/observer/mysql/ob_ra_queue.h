@@ -37,7 +37,14 @@ public:
       idx_ = -1;
       val_ = NULL;
     }
-    TO_STRING_KV("idx", idx_, "val", val_);
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV("idx", idx_, "val", val_);
+      J_OBJ_END();
+      return pos;
+    }
     int64_t idx_;
     void* val_;
   };

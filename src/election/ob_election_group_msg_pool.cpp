@@ -331,3 +331,11 @@ int ObEGVoteMsgPool::get_eg_centralized_majority_(common::ObAddr& cur_leader, co
 
   return ret;
 }
+int64_t ObEGVoteMsgPool::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(eg_prepare_array), K_(eg_vote_array));
+  J_OBJ_END();
+  return pos;
+}

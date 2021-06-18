@@ -30,7 +30,7 @@ public:
   ObSimpleSysVariableSchema(const ObSimpleSysVariableSchema& src_schema);
   virtual ~ObSimpleSysVariableSchema();
   ObSimpleSysVariableSchema& operator=(const ObSimpleSysVariableSchema& other);
-  TO_STRING_KV(K_(tenant_id), K_(schema_version), K_(name_case_mode), K_(read_only));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual void reset();
   bool is_valid() const;
   int64_t get_convert_size() const;
@@ -100,7 +100,7 @@ public:
   {
     return tenant_id_;
   }
-  TO_STRING_KV(K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t tenant_id_;

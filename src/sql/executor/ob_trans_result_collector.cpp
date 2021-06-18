@@ -21,6 +21,14 @@ namespace oceanbase {
 using namespace common;
 using namespace transaction;
 namespace sql {
+int64_t ObReporter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(task_id_), K(exec_svr_), K(part_keys_), K(status_));
+  J_OBJ_END();
+  return pos;
+}
 
 ObReporter::ObReporter() : task_id_(), exec_svr_(), part_keys_(), status_(TS_INVALID), lock_()
 {}

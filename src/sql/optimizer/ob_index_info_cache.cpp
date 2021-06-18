@@ -16,6 +16,38 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t QueryRangeInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_valid), K_(contain_always_false), K_(range_columns), K_(equal_prefix_count),K_(equal_prefix_null_count), K_(range_prefix_count), K_(index_column_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t OrderingInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(scan_direction), K_(index_keys));
+  J_OBJ_END();
+  return pos;
+}
+int64_t IndexInfoEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global), K_(range_info),K_(ordering_info), K_(interesting_order_info), K_(interesting_order_prefix_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIndexInfoCache::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(base_table_id), K_(entry_count));
+  J_OBJ_END();
+  return pos;
+}
 
 ObIndexInfoCache::~ObIndexInfoCache()
 {

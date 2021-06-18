@@ -43,6 +43,14 @@ using namespace share;
 using namespace share::schema;
 using namespace observer;
 namespace sql {
+int64_t ObAlterTableExecutor::PartitionServer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pkey_), K(server_));
+  J_OBJ_END();
+  return pos;
+}
 
 ObCreateTableExecutor::ObCreateTableExecutor()
 {}

@@ -35,7 +35,7 @@ public:
   int try_rdlock_all();
   int wrlock_all();
   int unlock_all();
-  TO_STRING_KV(K_(bucket_cnt), K_(latch_cnt), K_(latch_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   friend class ObMultiBucketLockGuard;

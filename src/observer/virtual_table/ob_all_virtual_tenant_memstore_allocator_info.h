@@ -32,7 +32,7 @@ struct ObMemstoreAllocatorInfo {
   {}
   ~ObMemstoreAllocatorInfo()
   {}
-  TO_STRING_KV(K_(protection_clock), K_(is_frozen), K_(pkey), K_(trans_version_range), K_(version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t protection_clock_;
   bool is_frozen_;
   common::ObPartitionKey pkey_;

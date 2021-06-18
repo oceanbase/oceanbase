@@ -62,8 +62,7 @@ private:
     ObSEArray<ObRawExpr*, 16> outer_new_exprs_;
     // dummy expr
     ObConstRawExpr* dummy_expr_;
-    TO_STRING_KV(K_(ref_groupby_exprs), K_(ref_column_exprs), K_(inner_pos), K_(inner_winexprs), K_(outer_pos),
-        K_(outer_old_exprs), K_(outer_new_exprs));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 public:

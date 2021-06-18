@@ -15,6 +15,14 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
+int64_t ObExecutionID::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_SERVER, server_, N_EXECUTION_ID, execution_id_, N_TASK_TYPE, task_type_, "hash", static_cast<uint64_t>(hash()));
+  J_OBJ_END();
+  return pos;
+}
 
 const common::ObAddr& ObExecutionID::global_id_addr()
 {

@@ -33,6 +33,22 @@ using namespace share;
 using namespace share::schema;
 
 namespace rootserver {
+int64_t ObPartitionTableUtil::ObZoneLeaderInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(leader_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionTableUtil::MergeProgress::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(unmerged_partition_cnt), K_(unmerged_data_size), K_(merged_partition_cnt),K_(merged_data_size), K_(smallest_data_version), "merged_partition_percentage",get_merged_partition_percentage(), "merged_data_percentage", get_merged_data_percentage());
+  J_OBJ_END();
+  return pos;
+}
 
 template <typename T>
 T first_param_percnetage(const T first, const T second)

@@ -135,7 +135,7 @@ public:
     return ret;
   }
 
-  TO_STRING_KV(K_(exprs));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   OB_INLINE static int64_t& global_stack_top()

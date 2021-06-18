@@ -199,7 +199,7 @@ public:
   {
     return 0 != (task_status_ & (1 << static_cast<int64_t>(flag)));
   }
-  TO_STRING_KV(K_(task_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
 private:
@@ -229,7 +229,7 @@ public:
   {
     return total_time_us_ / 1000000;
   }
-  TO_STRING_KV("secs", get_wait_secs());
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t total_time_us_;
@@ -313,7 +313,7 @@ struct ObLoadDataGID {
     id = other.id;
   }
   int64_t id;
-  TO_STRING_KV(K(id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 

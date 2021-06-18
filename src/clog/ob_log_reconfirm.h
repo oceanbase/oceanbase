@@ -111,7 +111,7 @@ public:
     }
     log_entry_.reset();
   }
-  TO_STRING_KV(K_(leader_ts), K_(ack_list), K_(status_map), K_(log_entry));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t leader_ts_;

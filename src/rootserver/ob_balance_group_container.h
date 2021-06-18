@@ -172,7 +172,7 @@ private:
     uint64_t table_id_;
     int64_t all_tg_idx_;
     int64_t part_idx_;
-    TO_STRING_KV(K_(pkey), K_(tablegroup_id), K_(table_id), K_(all_tg_idx), K_(part_idx));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObArray<SameRangePartInfo, common::ObIAllocator&> SameRangeArray;
   typedef common::hash::ObHashMap<common::ObRowkey, SameRangeArray*> SameRangeMap;

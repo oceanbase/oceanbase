@@ -63,7 +63,7 @@ public:
   {
     ps_sql_ = ps_sql;
   }  // not deep copy
-  TO_STRING_KV(K_(db_id), K_(ps_sql));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t db_id_;  // tenant id encoded in database id
@@ -122,7 +122,7 @@ public:
     return external_allocator_;
   }
 
-  TO_STRING_KV(K_(ref_count), K_(db_id), K_(ps_sql), K_(stmt_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   volatile int64_t ref_count_;
@@ -383,7 +383,7 @@ struct TypeInfo {
   bool is_elem_type_;
   bool is_basic_type_;
 
-  TO_STRING_KV(K_(relation_name), K_(package_name), K_(type_name), K_(elem_type), K_(is_elem_type), K_(is_basic_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObSEArray<obmysql::EMySQLFieldType, 48> ParamTypeArray;
@@ -495,7 +495,7 @@ public:
     return inner_stmt_id_;
   }
 
-  TO_STRING_KV(K_(stmt_id), K_(stmt_type), K_(num_of_params), K_(ref_cnt), K_(ps_stmt_checksum), K_(inner_stmt_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObPsStmtId stmt_id_;

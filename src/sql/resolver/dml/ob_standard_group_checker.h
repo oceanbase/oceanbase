@@ -20,7 +20,7 @@ class ObRawExpr;
 class ObColumnRefRawExpr;
 class ObStandardGroupChecker {
   struct ObUnsettledExprItem {
-    TO_STRING_KV(N_EXPR, PC(expr_), K_(start_idx), K_(dependent_column_cnt));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     const ObRawExpr* expr_;
     // the column start index of expr_ in dependent_columns_

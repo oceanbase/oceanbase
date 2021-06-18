@@ -45,7 +45,7 @@ public:
   virtual uint64_t hash() const;
   virtual int64_t size() const;
   virtual int deep_copy(char* buf, const int64_t buf_len, ObIKVCacheKey*& key) const;
-  TO_STRING_KV(K(addr_), K(seq_), K(file_id_), K(offset_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // Intentionally copyable and assignable
 private:
   common::ObAddr addr_;
@@ -67,7 +67,7 @@ public:
   }
   virtual int64_t size() const;
   virtual int deep_copy(char* buf, const int64_t buf_len, ObIKVCacheValue*& value) const;
-  TO_STRING_KV(KP(buf_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   char* buf_;
@@ -124,7 +124,7 @@ public:
   int alloc_byte_arr(const int64_t hot_cache_size);
   int append_data(const file_id_t file_id, const offset_t offset, const char* new_data, const int64_t write_len);
   int read(const file_id_t file_id, const offset_t offset, const int64_t size, char* user_buf);
-  TO_STRING_KV(K(is_inited_), KP(byte_arr_), K(base_offset_), K(head_offset_), K(tail_offset_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   inline int64_t get_pos(const int64_t offset) const

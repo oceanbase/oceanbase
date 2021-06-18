@@ -18,6 +18,14 @@
 namespace oceanbase {
 using namespace common;
 namespace lib {
+int64_t TGCommonAttr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(name), K_(desc), K_(scope), K_(type));
+  J_OBJ_END();
+  return pos;
+}
 CreateFunc create_funcs_[] = {nullptr};
 bool create_func_inited_ = false;
 

@@ -56,6 +56,38 @@ using namespace share;
 using namespace share::schema;
 using namespace sql;
 namespace rootserver {
+int64_t ObIndexBuildStatus::PartitionIndexStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_id), K_(server), K_(index_status), K_(ret_code));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIndexBuildStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(loaded), K_(all_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIndexWaitTransStatus::PartitionWaitTransStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_id), K_(trans_status), K_(snapshot_version), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRSBuildIndexTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(state), K_(index_id), K_(data_table_id), K_(schema_version), KP_(ddl_service));
+  J_OBJ_END();
+  return pos;
+}
 
 ObIndexBuildStatus::PartitionIndexStatus::PartitionIndexStatus()
 {

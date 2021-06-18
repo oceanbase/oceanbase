@@ -121,7 +121,7 @@ public:
   int64_t unpin();
   int64_t get_pins() const;
 
-  TO_STRING_KV(KP_(id), K_(peer));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   static uint64_t generate_id(uint64_t ch_cnt = 1);
 

@@ -22,6 +22,14 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ParamaterWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("paramaters", paramater_list_);
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 
 // REGISTER_PHY_OPERATOR(ObBLKNestedLoopJoin, PHY_BLOCK_BASED_NESTED_LOOP_JOIN);

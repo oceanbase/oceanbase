@@ -14,6 +14,22 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ObDMLTableDesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_tid), K_(partition_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDMLRowDesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_id_index));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ObDMLTableDesc, index_tid_, partition_cnt_);
 OB_SERIALIZE_MEMBER(ObDMLRowDesc, part_id_index_);
 OB_SERIALIZE_MEMBER(ObPxModifyInput, task_id_, sqc_id_, dfo_id_);

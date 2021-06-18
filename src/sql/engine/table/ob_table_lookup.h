@@ -40,8 +40,7 @@ public:
   {}
   int assign(const _ObLookupInfo& other);
   void reset();
-  TO_STRING_KV(
-      K_(table_id), K_(ref_table_id), K_(partition_num), K_(partition_cnt), K_(schema_version), K_(is_old_no_pk_table));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // real table id
   uint64_t ref_table_id_;
   // for get phy table location

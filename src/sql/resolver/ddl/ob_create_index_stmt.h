@@ -101,7 +101,7 @@ public:
   {
     return create_index_arg_.index_schema_.set_encryption_str(str);
   }
-  TO_STRING_KV(K_(stmt_type), K_(create_index_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObCreateIndexArg create_index_arg_;

@@ -39,7 +39,7 @@ public:
   {
     return pkey_.hash();
   }
-  TO_STRING_KV(K_(pkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey pkey_;

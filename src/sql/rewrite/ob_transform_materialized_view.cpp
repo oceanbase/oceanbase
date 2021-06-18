@@ -684,3 +684,11 @@ int ObTransformMaterializedView::transform_one_stmt(
   }
   return ret;
 }
+int64_t MVDesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("mv_tid", mv_tid_, "base_tid", base_tid_, "dep_tid_", dep_tid_);
+  J_OBJ_END();
+  return pos;
+}

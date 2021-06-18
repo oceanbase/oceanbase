@@ -56,7 +56,7 @@ public:
     accum_checksum_ = confirmed_info.accum_checksum_;
   }
   friend bool operator==(const ObConfirmedInfo& lhs, const ObConfirmedInfo& rhs);
-  TO_STRING_KV(K_(data_checksum), K_(epoch_id), K_(accum_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t data_checksum_;
@@ -220,7 +220,7 @@ public:
   {
     return round_snapshot_version_;
   }
-  TO_STRING_KV(K_(version), K_(checkpoint_ts), K_(round_start_ts), K_(round_snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int16_t ARCHIVE_CHECKPOINT_LOG_VERSION = 1;

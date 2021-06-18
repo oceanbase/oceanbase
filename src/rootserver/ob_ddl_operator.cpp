@@ -66,6 +66,22 @@ using namespace obrpc;
 using namespace sql;
 
 namespace rootserver {
+int64_t ObSysStat::Item::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("name", common::ObString(name_), K_(value), "info", common::ObString(info_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSysStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(item_list));
+  J_OBJ_END();
+  return pos;
+}
 
 ObSysStat::Item::Item(ObSysStat::ItemList& list, const char* name, const char* info) : name_(name), info_(info)
 {

@@ -16,6 +16,14 @@ namespace oceanbase {
 using namespace common;
 
 namespace transaction {
+int64_t ObTransMemoryStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), "type", type_, K_(alloc_count), K_(release_count));
+  J_OBJ_END();
+  return pos;
+}
 void ObTransMemoryStat::reset()
 {
   addr_.reset();

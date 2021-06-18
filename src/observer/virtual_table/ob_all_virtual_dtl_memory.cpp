@@ -323,3 +323,11 @@ int ObAllVirtualDtlMemory::get_row(ObAllVirtualDtlMemoryPoolInfo& mem_pool_info,
   }
   return ret;
 }
+int64_t ObAllVirtualDtlMemoryPoolInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id_), K(seqno_));
+  J_OBJ_END();
+  return pos;
+}

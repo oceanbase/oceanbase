@@ -522,3 +522,43 @@ int ObRestoreUtil::check_has_physical_restore_job(
   }
   return ret;
 }
+int64_t ObRecoveryHelper::ObLeaderPkeyLists::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inner_leader_pkeys), K_(user_leader_pkeys));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecoveryHelper::ObLeaderPkeyList::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(leader), K_(pkey_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecoveryHelper::ObMemberListPkeyList::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(epoch), K_(pkey_array), K_(ml_pk_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecoveryHelper::ObMemberListPkeyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(member_list), K_(pkey_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecoveryHelper::PkeyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey_index), K_(part_valid));
+  J_OBJ_END();
+  return pos;
+}

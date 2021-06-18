@@ -71,8 +71,7 @@ public:
     return trace_id_;
   }
 
-  TO_STRING_KV(
-      K_(message), K_(affected_rows), K_(last_insert_id_to_client), K_(is_partition_hit), K_(trace_id), K_(is_valid));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   char message_[common::MSG_SIZE];  // null terminated message string

@@ -18,6 +18,22 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObBasicNestedLoopJoin::RescanParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_EXPR, expr_, N_INDEX, param_idx_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBasicNestedLoopJoin::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_ID, id_, N_COLUMN_COUNT, column_count_, N_PROJECTOR,common::ObArrayWrap<int32_t>(projector_, projector_size_), N_FILTER_EXPRS, filter_exprs_, N_CALC_EXPRS,calc_exprs_, N_JOIN_TYPE, ob_join_type_str(join_type_), N_JOIN_EQ_COND, rescan_params_, N_JOIN_OTHER_COND,other_join_conds_, N_INNER_GET, is_inner_get_, N_SELF_JOIN, is_self_join_);
+  J_OBJ_END();
+  return pos;
+}
 
 ObBasicNestedLoopJoin::ObBasicNestedLoopJoin(common::ObIAllocator& alloc)
     : ObJoin(alloc), rescan_params_(alloc), left_scan_index_(alloc), is_inner_get_(false), is_self_join_(false)

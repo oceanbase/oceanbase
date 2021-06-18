@@ -67,8 +67,7 @@ struct ObServerTaskStat {
            total_in_data_size_ >= 0 && total_out_data_size_ >= 0 && in_schedule_backup_cnt_ >= 0;
   }
 
-  TO_STRING_KV(K_(addr), K_(in_schedule_in_cnt), K_(in_schedule_out_cnt), K_(total_in_cnt), K_(total_out_cnt),
-      K_(total_in_data_size), K_(total_out_data_size), K_(data_in_limit_ts), K_(in_schedule_backup_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObAddr addr_;
   // after batch migration is introduced, rs migration task sent to observer
@@ -112,7 +111,7 @@ struct ObTenantTaskStat {
     return common::OB_INVALID_ID != tenant_id_ && high_priority_task_cnt_ >= 0 && low_priority_task_cnt_ >= 0;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(high_priority_task_cnt), K_(low_priority_task_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
   int64_t high_priority_task_cnt_;
@@ -126,7 +125,7 @@ typedef common::hash::ObReferedMap<uint64_t, ObTenantTaskStat> ObTenantTaskStatM
 struct OnlineReplica {
   OnlineReplica() : unit_id_(common::OB_INVALID_ID), zone_(), member_()
   {}
-  TO_STRING_KV(K_(zone), K_(unit_id), K_(member));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid() const
   {
     return member_.is_valid();
@@ -157,7 +156,7 @@ struct ReplicaInfo {
   ReplicaInfo(const ObPartitionKey& pkey, int64_t data_size) : pkey_(pkey), data_size_(data_size)
   {}
 
-  TO_STRING_KV(K_(pkey), K_(data_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   const ObPartitionKey& pkey_;
   int64_t data_size_;
@@ -205,7 +204,7 @@ public:
   int init(const uint64_t key_1, const uint64_t key_2, const uint64_t key_3, const uint64_t key_4,
       const RebalanceKeyType key_type);
   int init(const ObRebalanceTaskKey& that);
-  TO_STRING_KV(K_(key_1), K_(key_2), K_(key_3), K_(key_4), K_(key_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t inner_hash() const;

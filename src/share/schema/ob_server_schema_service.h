@@ -60,10 +60,7 @@ struct SchemaKey {
   uint64_t obj_type_;
   uint64_t dblink_id_;
 
-  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(database_id), K_(tablegroup_id), K_(table_id), K_(outline_id),
-      K_(database_name), K_(table_name), K_(schema_version), K_(synonym_id), K_(sequence_id), K_(sequence_name),
-      K_(udf_id), K_(udf_name), K_(profile_id), K_(grantee_id), K_(grantor_id), K_(col_id), K_(obj_type),
-      K_(dblink_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   SchemaKey()
       : tenant_id_(common::OB_INVALID_ID),
@@ -176,7 +173,7 @@ struct VersionHisKey {
   }
   ObSchemaType schema_type_;
   int64_t schema_id_;
-  TO_STRING_KV(K(schema_type_), K(schema_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 const static int MAX_CACHED_VERSION_CNT = 16;
 struct VersionHisVal {
@@ -198,8 +195,7 @@ struct VersionHisVal {
   int64_t versions_[MAX_CACHED_VERSION_CNT];
   int valid_cnt_;
   int64_t min_version_;
-  TO_STRING_KV(K(snapshot_version_), K(is_deleted_), "versions", common::ObArrayWrap<int64_t>(versions_, valid_cnt_),
-      K(min_version_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObMaxSchemaVersionFetcher {

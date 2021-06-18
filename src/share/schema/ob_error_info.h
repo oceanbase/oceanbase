@@ -117,8 +117,7 @@ public:
   int get_error_obj_seq(common::ObISQLClient& sql_client, bool& exist);
   int delete_error(const IObErrorInfo* info);
 
-  TO_STRING_KV(K_(tenant_id), K_(obj_id), K_(obj_type), K_(obj_seq), K_(line), K_(position), K_(text_length), K_(text),
-      K_(property), K_(error_number), K_(database_id), K_(schema_version), K_(error_status))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   int gen_error_dml(const uint64_t exec_tenant_id, oceanbase::share::ObDMLSqlSplicer& dml);
   uint64_t extract_tenant_id() const;

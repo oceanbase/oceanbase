@@ -18,6 +18,22 @@ using rpc::frame::ObReqTransport;
 using rpc::frame::SPAlloc;
 
 namespace obrpc {
+int64_t ObBlacklistReq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sender), K_(send_timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBlacklistResp::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sender), K_(req_send_timestamp), K_(req_recv_timestamp));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ObBlacklistReq, sender_, send_timestamp_);
 OB_SERIALIZE_MEMBER(ObBlacklistResp, sender_, req_send_timestamp_, req_recv_timestamp_, is_clog_disk_full_);
 

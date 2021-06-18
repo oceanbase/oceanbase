@@ -36,7 +36,7 @@ public:
   static const int64_t LOCAL_ARRAY_SIZE = 16;
   common::ObSEArray<blocksstable::ObMacroBlockCtx, LOCAL_ARRAY_SIZE> macro_blocks_;
 
-  TO_STRING_KV(KP_(sstable), KP_(rowkeys), K_(macro_blocks), K_(multi_version_range));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObISSTableEstimator {

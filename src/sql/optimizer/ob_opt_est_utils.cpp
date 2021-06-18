@@ -27,6 +27,14 @@ using namespace common;
 using namespace number;
 using namespace share::schema;
 namespace sql {
+int64_t RangeExprs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(column_id));
+  J_OBJ_END();
+  return pos;
+}
 bool ObOptEstUtils::is_monotonic_op(const ObItemType type)
 {
   return (T_OP_ADD == type || T_OP_MINUS == type || T_OP_MUL == type);

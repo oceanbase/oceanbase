@@ -17,6 +17,22 @@
 
 namespace oceanbase {
 namespace transaction {
+int64_t ObTransTimeoutTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(is_registered), K_(is_running), K_(delay), KP_(ctx), K_(bucket_idx), K_(run_ticket),K_(is_scheduled), KP_(prev), KP_(next));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPrepareChangingLeaderTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(expected_ts), KP_(txs), K_(pkey), K_(proposal_leader), K_(round), K_(cnt));
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace common;
 

@@ -43,7 +43,7 @@ public:
     return prepare_sql_;
   }
 
-  TO_STRING_KV(N_STMT_NAME, prepare_name_, N_PREPARE_SQL, prepare_sql_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObString prepare_name_;

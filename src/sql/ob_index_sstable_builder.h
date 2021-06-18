@@ -61,8 +61,7 @@ public:
              OB_INVALID_ID != index_table_id_ && degree_of_parallelism_ > 0;
     }
 
-    TO_STRING_KV(K(job_id_), K(schema_version_), K(snapshot_version_), K(data_table_id_), K(index_table_id_),
-        K(degree_of_parallelism_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   class ReplicaPicker : public ObDeterminateTaskTransmit::ITaskRouting {

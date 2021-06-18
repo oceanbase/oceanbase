@@ -83,7 +83,7 @@ struct ObSysStat {
     {}
     Item(ItemList& list, const char* name, const char* info);
 
-    TO_STRING_KV("name", common::ObString(name_), K_(value), "info", common::ObString(info_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     const char* name_;
     common::ObObj value_;
     const char* info_;
@@ -94,7 +94,7 @@ struct ObSysStat {
   // set values after bootstrap
   int set_initial_values(const uint64_t tenant_id);
 
-  TO_STRING_KV(K_(item_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ItemList item_list_;
 

@@ -22,7 +22,14 @@ struct ObRpcPostHandler::Task : public QLink {
   {}
   ~Task()
   {}
-  TO_STRING_KV(K_(callback), K_(server), K_(pcode), KP_(buf), K_(len));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(callback), K_(server), K_(pcode), KP_(buf), K_(len));
+    J_OBJ_END();
+    return pos;
+  }
   ObIBatchBufferTask* callback_;
   ObAddr server_;
   int pcode_;

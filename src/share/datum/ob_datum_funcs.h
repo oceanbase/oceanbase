@@ -104,7 +104,7 @@ public:
     common::ObDatumCmpFuncType cmp_func_;
     sql::serializable_function ser_cmp_func_;
   };
-  TO_STRING_KV(KP_(cmp_func));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObHashFunc {
@@ -117,7 +117,7 @@ public:
     common::ObDatumHashFuncType hash_func_;
     sql::serializable_function ser_hash_func_;
   };
-  TO_STRING_KV(K_(hash_func));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObFixedArray<ObCmpFunc, common::ObIAllocator> ObCmpFuncs;

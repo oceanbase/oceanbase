@@ -20,6 +20,22 @@
 
 namespace oceanbase {
 namespace share {
+int64_t ObPartitionReplica::Member::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionReplica::FailMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(dest_server), K_(task_type), "last_fail_time", get_last_fail_time(), K_(count), K_(start_pos));
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace common;
 static const char* replica_display_status_strs[] = {

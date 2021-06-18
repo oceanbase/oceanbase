@@ -406,3 +406,11 @@ void ObSSTableChecksumUpdater::run1()
     cond_.wait_us(std::min(time_to_wait, COND_WAIT_US));
   }
 }
+int64_t ObSSTableChecksumUpdateTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(sstable_id), K_(sstable_type), K_(is_remove));
+  J_OBJ_END();
+  return pos;
+}

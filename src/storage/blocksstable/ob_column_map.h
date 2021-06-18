@@ -33,8 +33,7 @@ struct ObColumnIndexItem {
   {
     return request_column_type_;
   }
-  TO_STRING_KV(
-      K_(column_id), K_(request_column_type), K_(macro_column_type), K_(store_index), K_(is_column_type_matched));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObColumnHashSet {
@@ -190,8 +189,7 @@ public:
   {
     return multi_version_rowkey_cnt_;
   }
-  TO_STRING_KV(K_(request_count), K_(store_count), K_(rowkey_store_count), K_(schema_version), KP_(cols_id_map),
-      K_(is_inited), K_(multi_version_rowkey_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int init_column_index(const uint64_t col_id, const int64_t schema_rowkey_cnt, const int64_t store_index,

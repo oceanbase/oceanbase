@@ -230,3 +230,11 @@ int ObDtlChannelMemManager::auto_free_on_time(int64_t cur_max_reserve_count)
   // LOG_INFO("auto free channel buffer", K(max_mem_percent_));
   return ret;
 }
+int64_t ObDtlChannelMemManager::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(size_per_buffer));
+  J_OBJ_END();
+  return pos;
+}

@@ -14,6 +14,14 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ObParamInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(flag), K_(scale), K_(type), K_(ext_real_type), K_(is_oracle_empty_string));
+  J_OBJ_END();
+  return pos;
+}
 
 void ObParamInfo::reset()
 {

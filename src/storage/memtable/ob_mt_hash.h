@@ -324,7 +324,14 @@ private:
     {}
     ObHashNode* bucket_node_;
     int64_t bucket_idx_;
-    TO_STRING_KV(KP(bucket_node_), K(bucket_idx_));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(KP(bucket_node_), K(bucket_idx_));
+      J_OBJ_END();
+      return pos;
+    }
   };
   struct Genealogy {
     struct Parent list_[GENEALOGY_LEN];
@@ -347,7 +354,14 @@ private:
     {
       return 0 == depth_ ? NULL : list_[0].bucket_node_;
     }
-    TO_STRING_KV(K(depth_), K(list_));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K(depth_), K(list_));
+      J_OBJ_END();
+      return pos;
+    }
   };
 
 public:

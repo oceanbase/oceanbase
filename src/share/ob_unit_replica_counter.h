@@ -68,8 +68,14 @@ public:
   {
     return leader_cnt_;
   }
-  TO_STRING_KV(
-      K_(f_replica_cnt), K_(d_replica_cnt), K_(l_replica_cnt), K_(r_replica_cnt), K_(index_num), K_(leader_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(f_replica_cnt), K_(d_replica_cnt), K_(l_replica_cnt), K_(r_replica_cnt), K_(index_num), K_(leader_cnt));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 inline UnitReplicaCounter& UnitReplicaCounter::operator=(const UnitReplicaCounter& unit_rep_cnt)
@@ -105,7 +111,14 @@ struct ObTURepSortKey {
     return bret;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(unit_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(tenant_id), K_(unit_id));
+    J_OBJ_END();
+    return pos;
+  }
 
   uint64_t tenant_id_;
   uint64_t unit_id_;
@@ -146,7 +159,14 @@ public:
     return ObTURepSortKey(tenant_id_, unit_id_);
   }
 
-  TO_STRING_KV(K_(unit_rep_cnt), K_(unit_id), K_(tenant_id), K_(non_table_cnt), K_(now_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(unit_rep_cnt), K_(unit_id), K_(tenant_id), K_(non_table_cnt), K_(now_time));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 inline TenantUnitRepCnt& TenantUnitRepCnt::operator=(const TenantUnitRepCnt& other)

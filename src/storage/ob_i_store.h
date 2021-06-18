@@ -363,8 +363,7 @@ struct ObMultiVersionRowFlag {
     return magic_row_;
   }
 
-  TO_STRING_KV("row_compact", compacted_row_, "row_last", last_row_, "row_first", first_row_, "row_uncommitted",
-      uncommitted_row_, "row_magic", magic_row_, "reserved", reserved_, K_(flag));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObStoreRowDml {
@@ -410,7 +409,7 @@ struct ObStoreRowDml {
     return static_cast<ObRowDml>(dml_);
   }
 
-  TO_STRING_KV(K_(first_dml), K_(dml));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObFastQueryContext {
@@ -457,7 +456,7 @@ public:
   {
     row_version_ = row_version;
   }
-  TO_STRING_KV(K_(timestamp), KP_(memtable), KP_(mvcc_row), K_(row_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t timestamp_;
@@ -489,7 +488,7 @@ struct ObRowPositionFlag {
   {
     macro_first_ = is_first & OBSF_MASK_MACRO_FIRST_ROW;
   }
-  TO_STRING_KV(K_(flag), K_(micro_first), K_(macro_first));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   static const uint8_t OB_MICRO_FIRST_ROW = 1;
   static const uint8_t OB_MACRO_FIRST_ROW = 1;
@@ -513,7 +512,7 @@ public:
   ObStoreRowLockState() : is_locked_(false), trans_version_(0), lock_trans_id_()
   {}
   void reset();
-  TO_STRING_KV(K_(is_locked), K_(trans_version), K_(lock_trans_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_locked_;
   int64_t trans_version_;
   transaction::ObTransID lock_trans_id_;
@@ -974,8 +973,7 @@ struct ObStoreCtx {
   {
     return common::is_valid_tenant_id(tenant_id_);
   }
-  TO_STRING_KV(KP_(mem_ctx), KP_(warm_up_ctx), KP_(tables), K_(tenant_id), K_(trans_id), K_(is_sp_trans), K_(isolation),
-      K_(sql_no), K_(stmt_min_sql_no), K_(snapshot_info), KP_(trans_table_guard));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   memtable::ObIMemtableCtx* mem_ctx_;
   ObWarmUpCtx* warm_up_ctx_;
@@ -1025,10 +1023,7 @@ struct ObTableAccessStat {
     return (sstable_bf_access_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM / 5 ||
             sstable_bf_filter_cnt_ > sstable_bf_access_cnt_ / 4);
   }
-  TO_STRING_KV(K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(row_cache_put_cnt), K_(bf_filter_cnt),
-      K_(bf_access_cnt), K_(empty_read_cnt), K_(block_cache_hit_cnt), K_(block_cache_miss_cnt),
-      K_(sstable_bf_filter_cnt), K_(sstable_bf_empty_read_cnt), K_(sstable_bf_access_cnt), K_(fuse_row_cache_hit_cnt),
-      K_(fuse_row_cache_miss_cnt), K_(fuse_row_cache_put_cnt), K_(rowkey_prefix));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t row_cache_hit_cnt_;
   int64_t row_cache_miss_cnt_;
@@ -1057,7 +1052,7 @@ public:
     return NULL != partition_store_ || NULL != tables_handle_;
   }
   void reset();
-  TO_STRING_KV(KP_(partition_store), K_(frozen_version), K_(sample_info), KP_(tables_handle));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObPartitionStore* partition_store_;
   common::ObVersion frozen_version_;
   common::SampleInfo sample_info_;
@@ -1088,9 +1083,7 @@ public:
   int get_out_cols_param(
       const bool is_get, const common::ObIArray<share::schema::ObColumnParam*>*& out_cols_param) const;
   bool enable_fuse_row_cache() const;
-  TO_STRING_KV(K_(table_id), K_(schema_version), K_(rowkey_cnt), KP_(out_cols), KP_(cols_id_map), KP_(projector),
-      KP_(full_projector), KP_(out_cols_project), KP_(out_cols_param), KP_(full_out_cols_param),
-      K_(is_multi_version_minor_merge), KP_(full_out_cols), KP_(full_cols_id_map), K_(need_scn), K_(iter_mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   uint64_t table_id_;
@@ -1135,7 +1128,7 @@ public:
     return static_cast<int64_t>(col_cnt_);
   }
 
-  TO_STRING_KV(K(local_cols_), KPC_(ref_cols), K_(col_cnt), K(is_local_), K(is_inited_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObColDescArray local_cols_;
@@ -1182,7 +1175,7 @@ struct ObFastAggProjectCell {
   {
     return static_cast<ObFastAggregationType>(type_);
   }
-  TO_STRING_KV(K_(agg_project), K_(project_id), K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   static const uint32_t OB_AGG_PROJECT_ID = 16;
   static const uint32_t OB_AGG_TYPE = 8;
@@ -1233,11 +1226,7 @@ public:
   }
 
 public:
-  TO_STRING_KV(K_(iter_param), K_(reserve_cell_cnt), K_(out_col_desc_param), KP_(full_out_cols), KP_(out_cols_param),
-      KP_(index_back_project), KP_(join_key_project), KP_(right_key_project), KP_(padding_cols), KP_(filters),
-      KP_(virtual_column_exprs), KP_(index_projector), K_(projector_size), KP_(output_exprs), KP_(op), KP_(op_filters),
-      KP_(row2exprs_projector), KP_(join_key_project), KP_(right_key_project), KP_(fast_agg_project),
-      K_(enable_fast_skip), K_(need_fill_scale), K_(col_scale_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   // 1. Basic Param for Table Iteration
@@ -1285,8 +1274,7 @@ public:
   {
     return is_inited_;
   }
-  TO_STRING_KV(
-      K_(table_id), K_(snapshot_version), K_(rowid_version), KPC(rowid_project_), K_(rowid_objs), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t DEFAULT_LOCATOR_OBJ_ARRAY_SIZE = 8;
@@ -1361,10 +1349,7 @@ struct ObTableAccessContext {
   // used for exist or simple scan
   int init(const common::ObQueryFlag& query_flag, const ObStoreCtx& ctx, common::ObArenaAllocator& allocator,
       const common::ObVersionRange& trans_version_range);
-  TO_STRING_KV(K_(is_inited), K_(timeout), K_(pkey), K_(query_flag), K_(sql_mode), KP_(store_ctx), KP_(expr_ctx),
-      KP_(limit_param), KP_(stmt_allocator), KP_(allocator), KP_(stmt_mem), KP_(scan_mem), KP_(table_scan_stat),
-      KP_(block_cache_ws), K_(out_cnt), K_(is_end), K_(trans_version_range), KP_(row_filter), K_(merge_log_ts),
-      K_(read_out_type), K_(lob_locator_helper));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int build_lob_locator_helper(ObTableScanParam& scan_param, const common::ObVersionRange& trans_version_range);
@@ -1443,8 +1428,7 @@ public:
   {
     return prefix_rowkey_;
   }
-  TO_STRING_KV(K_(ext_rowkeys), K_(min_key), K_(table_id), K_(row_count), K_(delete_count),
-      K_(collation_free_transformed), K_(exist_helper));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   struct ExistHelper final {
@@ -1464,7 +1448,7 @@ public:
     {
       return *table_iter_param_.out_cols_;
     }
-    TO_STRING_KV(K_(table_iter_param), K_(table_access_context));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObTableIterParam table_iter_param_;
     ObTableAccessContext table_access_context_;
     bool is_inited_;
@@ -1539,7 +1523,7 @@ const double CACHE_MISS_SEL = 6.0 / 10.0;
 struct ObPartitionEst {
   int64_t logical_row_count_;
   int64_t physical_row_count_;
-  TO_STRING_KV(K_(logical_row_count), K_(physical_row_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObPartitionEst();
   int add(const ObPartitionEst& pe);
@@ -1565,7 +1549,7 @@ struct ObRowStat {
   {
     MEMSET(this, 0, sizeof(ObRowStat));
   }
-  TO_STRING_KV(K_(base_row_count), K_(inc_row_count), K_(merge_row_count), K_(result_row_count), K_(filt_del_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 OB_INLINE bool ObStoreRow::is_valid() const

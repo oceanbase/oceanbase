@@ -238,7 +238,7 @@ public:
   {
     type_ = type;
   }
-  TO_STRING_KV(K_(row_cell_count), K_(des_row_buf_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t EOF_ROW_FLAG = -1;

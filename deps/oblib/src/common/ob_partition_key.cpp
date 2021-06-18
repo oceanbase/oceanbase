@@ -19,6 +19,14 @@ using namespace oceanbase::lib;
 
 namespace oceanbase {
 namespace common {
+int64_t ObPartitionLeaderArray::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partitions), K_(leaders), K_(type_array));
+  J_OBJ_END();
+  return pos;
+}
 // TODO delete partition_cnt
 int ObPartitionKey::init(const uint64_t table_id, const int64_t partition_id, const int64_t partition_cnt)
 {

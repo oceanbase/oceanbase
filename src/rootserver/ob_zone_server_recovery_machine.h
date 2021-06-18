@@ -103,8 +103,7 @@ public:
   }
   virtual int process();
 
-  TO_STRING_KV(
-      K(zone_), K(server_), K(svr_seq_), K(dest_server_), K(dest_svr_seq_), K(tenant_id_), K(file_id_), K(is_stopped_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   const common::ObZone zone_;
@@ -138,7 +137,7 @@ public:
 public:
   int init(const common::ObZone& zone, const common::ObAddr& server, const int64_t svr_seq,
       const common::ObAddr& rescue_server, ZoneServerRecoveryProgress progress);
-  TO_STRING_KV(K_(zone), K_(server), K_(svr_seq), K_(rescue_server), K_(rescue_progress));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int assign(const RefugeeServerInfo& that);
 
 public:
@@ -164,8 +163,7 @@ public:
   virtual ~RefugeeFileInfo()
   {}
 
-  TO_STRING_KV(K_(server), K_(svr_seq), K_(tenant_id), K_(file_id), K_(dest_server), K_(dest_svr_seq), K_(dest_unit_id),
-      K_(file_recovery_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int assign(const RefugeeFileInfo& that);
 
 public:
@@ -183,8 +181,7 @@ struct ObRecoveryTask {
 public:
   ObRecoveryTask();
   virtual ~ObRecoveryTask();
-  TO_STRING_KV(K(zone_), K(server_), K(svr_seq_), K(rescue_server_), K(progress_), K(refugee_file_infos_),
-      K(pre_process_server_status_), K(recover_file_task_gen_status_), K(last_drive_ts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int get_refugee_datafile_info(const uint64_t tenant_id, const int64_t file_id, const common::ObAddr& dest_server,
       RefugeeFileInfo*& refugee_info);
 

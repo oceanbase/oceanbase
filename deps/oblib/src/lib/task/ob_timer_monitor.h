@@ -69,7 +69,7 @@ private:
 
     int64_t seq_;
 
-    TO_STRING_KV(K(thread_id_), K(start_time_), K(interval_), K(*task_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   bool inited_;

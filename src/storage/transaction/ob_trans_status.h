@@ -39,7 +39,7 @@ public:
   {
     return status_;
   }
-  TO_STRING_KV(K_(trans_id), K_(status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObTransID trans_id_;

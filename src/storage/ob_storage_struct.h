@@ -126,8 +126,7 @@ struct ObReportStatus {
         required_size_(0),
         snapshot_version_(0)
   {}
-  TO_STRING_KV(K_(data_version), K_(row_count), K_(row_checksum), K_(data_checksum), K_(data_size), K_(required_size),
-      K_(snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset()
   {
     data_version_ = 0;
@@ -160,7 +159,7 @@ struct ObPGReportStatus {
     required_size_ = 0;
     snapshot_version_ = 0;
   }
-  TO_STRING_KV(K_(data_version), K_(data_size), K_(required_size), K_(snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t data_version_;
   int64_t data_size_;
   int64_t required_size_;
@@ -195,9 +194,7 @@ struct ObPartitionStoreMeta {
   void reset();
   int deep_copy(const ObPartitionStoreMeta& meta);
 
-  TO_STRING_KV(K_(pkey), K_(is_restore), K_(replica_type), K_(saved_split_state), K_(migrate_status),
-      K_(migrate_timestamp), K_(storage_info), K_(report_status), K_(multi_version_start), K_(data_table_id),
-      K_(split_info), K_(replica_property));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(PARTITION_STORE_META_VERSION);
 
 private:
@@ -225,8 +222,7 @@ struct ObPGPartitionStoreMeta {
   int deep_copy(const ObPGPartitionStoreMeta& meta);
   int copy_from_old_meta(const ObPartitionStoreMeta& old_meta);
 
-  TO_STRING_KV(K_(pkey), K_(report_status), K_(multi_version_start), K_(data_table_id), K_(create_schema_version),
-      K_(replica_type), K_(create_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(PARTITION_STORE_META_VERSION_V2);
 
 private:
@@ -273,10 +269,7 @@ struct ObPartitionGroupMeta {
   int clear_recover_points_for_physical_flashback(const int64_t version);
   int64_t get_migrate_replay_log_ts() const;
 
-  TO_STRING_KV(K_(pg_key), K_(is_restore), K_(replica_type), K_(replica_property), K_(saved_split_state),
-      K_(migrate_status), K_(migrate_timestamp), K_(storage_info), K_(report_status), K_(create_schema_version),
-      K_(split_info), K_(partitions), K_(ddl_seq_num), K_(create_timestamp), K_(create_frozen_version),
-      K_(last_restore_log_id), K_(restore_snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_UNIS_VERSION_V(PARTITION_GROUP_META_VERSION);
 
@@ -301,7 +294,7 @@ struct ObGetMergeTablesParam {
   {
     return is_major_merge() && OB_INVALID_ID != index_id_ && merge_version_.major_ > 0 && merge_version_.minor_ == 0;
   }
-  TO_STRING_KV(K_(merge_type), K_(index_id), K_(merge_version), K_(trans_table_end_log_ts), K_(trans_table_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObGetMergeTablesResult {
@@ -323,9 +316,7 @@ struct ObGetMergeTablesResult {
   bool is_valid() const;
   void reset();
   int deep_copy(const ObGetMergeTablesResult& src);
-  TO_STRING_KV(K_(version_range), K_(merge_version), K_(base_schema_version), K_(schema_version),
-      K_(create_snapshot_version), K_(checksum_method), K_(suggest_merge_type), K_(handle), K_(base_handle),
-      K_(create_sstable_for_large_snapshot), K_(log_ts_range), K_(dump_memtable_timestamp), K_(read_base_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus& status)
 {
@@ -335,9 +326,7 @@ OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus& status)
 struct AddTableParam {
   AddTableParam();
   bool is_valid() const;
-  TO_STRING_KV(KP_(table), K_(max_kept_major_version_number), K_(multi_version_start), K_(in_slog_trans),
-      K_(need_prewarm), K_(is_daily_merge), K_(backup_snapshot_version), KP_(complement_minor_sstable),
-      K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   storage::ObSSTable* table_;
   int64_t max_kept_major_version_number_;
@@ -366,8 +355,7 @@ struct ObPartitionReadableInfo {
   void calc_readable_ts();
   void reset();
 
-  TO_STRING_KV(K(min_log_service_ts_), K(min_trans_service_ts_), K(min_replay_engine_ts_), K(generated_ts_),
-      K(max_readable_ts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObCreatePGParam {
@@ -380,9 +368,7 @@ public:
   void reset();
   int set_storage_info(const ObSavedStorageInfoV2& info);
   int set_split_info(const ObPartitionSplitInfo& split_info);
-  TO_STRING_KV(K_(info), K_(is_restore), K_(replica_type), K_(replica_property), K_(data_version), K_(write_slog),
-      K_(split_info), K_(split_state), K_(create_frozen_version), K_(last_restore_log_id), K_(restore_snapshot_version),
-      K_(migrate_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObSavedStorageInfoV2 info_;
   int64_t is_restore_;  // ObReplicaRestoreStatus
@@ -503,8 +489,7 @@ public:
   {
     return id_hash_array_;
   };
-  TO_STRING_KV(K_(is_valid), K_(table_id), K_(data_table_id), K_(progressive_merge_round), K_(is_global_index_table),
-      K_(table_type), K_(table_mode), K_(index_type), K_(rowkey_column_num), K_(column_ids), KP(id_hash_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   //!!!! attention:only after successfully extracting from a ObTableSchema instance, can is_valid_ be true
@@ -545,9 +530,7 @@ public:
   {
     return is_valid_;
   }
-  TO_STRING_KV(K_(is_valid), K_(member_list), K_(partition_key), K_(need_create_sstable), K_(schema_version),
-      K_(memstore_version), K_(lease_start), K_(replica_type), K_(restore), K_(frozen_timestamp), K_(pg_key),
-      K_(schemas));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   //!!!! attention:only after successfully extracting from a ObTableSchema instance, can is_valid_ be true
@@ -600,9 +583,7 @@ struct ObMigrateRemoteTableInfo {
   int64_t remote_max_snapshot_version_;
   bool need_reuse_local_minor_;
   bool buffer_minor_end_log_ts_;
-  TO_STRING_KV(K_(remote_min_major_version), K_(remote_min_start_log_ts), K_(remote_min_base_version),
-      K_(remote_max_end_log_ts), K_(remote_max_snapshot_version), K_(need_reuse_local_minor),
-      K_(buffer_minor_end_log_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObRecoveryPointSchemaFilter final {
@@ -620,8 +601,7 @@ public:
   int check_if_table_miss_by_schema(
       const common::ObPartitionKey& pgkey, const common::hash::ObHashSet<uint64_t>& table_ids);
 
-  TO_STRING_KV(
-      K_(is_inited), K_(tenant_id), K_(tenant_recovery_point_schema_version), K_(tenant_current_schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int get_table_ids_in_pg_(const common::ObPartitionKey& pgkey, common::ObIArray<uint64_t>& table_ids,

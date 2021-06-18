@@ -85,7 +85,7 @@ public:
   int init(const int64_t deadline);
   // check should_hurry_quit when start to perform a time-consuming operation
   bool should_hurry_quit() const;
-  TO_STRING_KV(K(deadline_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t RESERVED_INTERVAL = 1 * 1000 * 1000;  // 1 second
@@ -148,8 +148,7 @@ struct SearchStatus {
     }
   }
 
-  TO_STRING_KV(K_(start_ts), K_(err), K_(start_log_id), K_(start_log_ts), K_(min_greater_log_id),
-      K_(min_greater_log_ts), K_(finished));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(SearchStatus);
@@ -180,7 +179,7 @@ public:
   {
     return (NULL != map_allocator_);
   }
-  TO_STRING_KV(KP(map_allocator_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(SearchParam);

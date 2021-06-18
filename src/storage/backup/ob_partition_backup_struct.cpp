@@ -29,6 +29,46 @@ using namespace blocksstable;
 using namespace oceanbase::share::schema;
 
 namespace storage {
+int64_t ObBackupSSTableMetaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sstable_meta), K_(table_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupPartitionStoreMetaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_store_meta), K_(sstable_meta_info_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupPGMetaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_meta), K_(partition_store_meta_info_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupTableMacroIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sstable_macro_index), K_(data_version), K_(data_seq), K_(backup_set_id), K_(sub_task_id), K_(offset),K_(data_length), KP_(table_key_ptr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupTableKeyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_key), K_(total_macro_block_count));
+  J_OBJ_END();
+  return pos;
+}
 
 /**********************ObBackupSSTableMetaInfo***********************/
 OB_SERIALIZE_MEMBER(ObBackupSSTableMetaInfo, sstable_meta_, table_key_);

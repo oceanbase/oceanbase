@@ -71,7 +71,7 @@ public:
     return sizeof(*this);
   }
   virtual ObIDDLTask* deep_copy(char* buf, const int64_t size) const override;
-  TO_STRING_KV(K_(tenant_id), K_(base_version), K_(refreshed_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   static int generate_schedule_index_task(const common::ObPartitionKey& pkey, const uint64_t index_id,
       const int64_t schema_version, const bool is_unique_index);
 
@@ -115,7 +115,7 @@ public:
     return sizeof(*this);
   }
   virtual ObIDDLTask* deep_copy(char* buf, const int64_t size) const override;
-  TO_STRING_KV(K_(pkey), K_(index_id), K_(schema_version), K_(state));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int check_trans_end(bool& is_trans_end, int64_t& snapshot_version);

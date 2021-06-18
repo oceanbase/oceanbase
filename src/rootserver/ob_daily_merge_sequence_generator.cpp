@@ -23,6 +23,22 @@
 #include "share/ob_define.h"
 namespace oceanbase {
 namespace rootserver {
+int64_t ObDailyMergeSequenceGenerator::ObMergeUnit::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(region), K_(servers), K_(leader_cnt), K_(type), K_(replica_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDailyMergeSequenceGenerator::ObConflictPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(first), K(second), K(same_partition_cnt_));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 using namespace share;
 using namespace share::schema;

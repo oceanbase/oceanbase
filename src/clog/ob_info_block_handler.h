@@ -68,7 +68,7 @@ public:
   {
     max_log_id_ = log_id;
   }
-  TO_STRING_KV(K(partition_key_), K(max_log_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_key_;
@@ -114,7 +114,7 @@ protected:
     {
       max_log_id_ = 0;
     }
-    TO_STRING_KV("max_log_id", max_log_id_);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObArrayHashMap<common::ObPartitionKey, InfoEntryV2> InfoHashV2;
   class InfoEntrySerializeFunctorV2 {
@@ -275,7 +275,7 @@ struct IndexInfoBlockEntry {
     return common::OB_INVALID_ID != min_log_id_ && common::OB_INVALID_TIMESTAMP != min_log_timestamp_;
   }
 
-  TO_STRING_KV(K_(min_log_id), K_(max_log_id), K_(min_log_timestamp), K_(max_log_timestamp), K(start_offset_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObArrayHashMap<common::ObPartitionKey, IndexInfoBlockEntry> IndexInfoBlockMap;
@@ -303,7 +303,7 @@ private:
       min_log_timestamp_ = common::OB_INVALID_TIMESTAMP;
       max_log_timestamp_ = common::OB_INVALID_TIMESTAMP;
     }
-    TO_STRING_KV(K_(min_log_id), K_(min_log_timestamp), K_(max_log_timestamp));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObArrayHashMap<common::ObPartitionKey, InfoEntry> InfoHash;
   typedef common::ObSEArray<int64_t, 128> TstampArray;

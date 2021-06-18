@@ -596,3 +596,19 @@ int ObConnectByPumpBFS::set_cur_node_path(int64_t idx, const ObString& path)
   }
   return ret;
 }
+int64_t ObConnectByPumpBFS::PumpNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC(pump_row_), KPC(output_row_), K(path_node_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObConnectByPumpBFS::PathNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC(prior_exprs_result_), K(paths_), K(level_));
+  J_OBJ_END();
+  return pos;
+}

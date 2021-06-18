@@ -44,7 +44,7 @@ public:
   ObMySQLConnectionPool* get_root();
   void close_all_connection();
   void dump();
-  TO_STRING_KV(K_(free_conn_count), K_(busy_conn_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // dblink.
   int init_dblink(uint64_t dblink_id, const ObAddr& server, const ObString& db_tenant, const ObString& db_user,
       const ObString& db_pass, const ObString& db_name, ObMySQLConnectionPool* root, int64_t max_allowed_conn_count);

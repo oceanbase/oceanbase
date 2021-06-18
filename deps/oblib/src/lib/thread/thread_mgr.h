@@ -77,7 +77,7 @@ public:
   const char* desc_;
   enum TGScope scope_;
   enum TGType type_;
-  TO_STRING_KV(K_(name), K_(desc), K_(scope), K_(type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ITG;

@@ -51,7 +51,7 @@ public:
   void reset();
 
 public:
-  TO_STRING_KV(K_(schema_version), K_(partition_pair), K_(next_run_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t schema_version_;

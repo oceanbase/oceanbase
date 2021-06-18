@@ -98,7 +98,7 @@ public:
   }
   int init_oceanbase_connection();
 
-  TO_STRING_KV(K_(db_name), K_(busy));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // dblink.
   int connect_dblink();

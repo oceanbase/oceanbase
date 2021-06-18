@@ -47,7 +47,7 @@ public:
     return lock_user_arg_;
   }
   // function members
-  TO_STRING_KV(K_(stmt_type), K_(tenant_id), K_(user), K_(locked));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual bool cause_implicit_commit() const
   {
     return true;

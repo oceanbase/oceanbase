@@ -246,3 +246,11 @@ int ObAllServerTracer::check_migrate_in_blocked(const ObAddr& addr, bool& is_blo
 {
   return trace_map_.check_migrate_in_blocked(addr, is_block);
 }
+int64_t ObServerTraceTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(trace_map));
+  J_OBJ_END();
+  return pos;
+}

@@ -33,6 +33,22 @@ using namespace share;
 using namespace lib;
 
 namespace share {
+int64_t ObSnapshotInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(snapshot_type), K_(snapshot_ts), K_(schema_version), K_(tenant_id), K_(table_id), KP_(comment));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TenantSnapshot::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(snapshot_ts));
+  J_OBJ_END();
+  return pos;
+}
 ObSnapshotInfo::ObSnapshotInfo()
 {
   reset();

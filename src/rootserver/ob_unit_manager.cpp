@@ -51,6 +51,46 @@ using namespace common::hash;
 using namespace share;
 using namespace share::schema;
 namespace rootserver {
+int64_t ObUnitManager::ZoneUnit::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(unit_infos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUnitManager::ObUnitLoad::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(unit), KP_(unit_config), KP_(pool));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUnitManager::ObServerLoad::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sum_load), K_(status), K_(all_normal_unit), K_(mark_delete_indexes));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUnitManager::ZoneUnitPtr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(unit_ptrs));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUnitManager::UnitNum::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(full_unit_num), K_(logonly_unit_num));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObUnitManager::ZoneUnitPtr::assign(const ZoneUnitPtr& other)
 {

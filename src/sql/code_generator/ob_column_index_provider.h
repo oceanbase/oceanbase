@@ -43,7 +43,7 @@ public:
   const common::ObIArray<ObRawExpr*>& get_columns() const;
   int get_column(int64_t idx, ObRawExpr*& raw_expr) const;
   int get_idx(const jit::expr::ObExpr* raw_expr, int64_t& idx) const override;
-  TO_STRING_KV(N_EXPR, exprs_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> ExprIdxMap;

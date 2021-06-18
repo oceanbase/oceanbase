@@ -69,7 +69,7 @@ public:
   {
     return partition_key_.is_valid() && is_valid_log_id(log_id_);
   }
-  TO_STRING_KV(K(partition_key_), K(log_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_key_;
@@ -106,7 +106,7 @@ public:
   {
     return curr_member_list_;
   }
-  TO_STRING_KV(K(partition_key_), K(log_id_), K(curr_member_list_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_key_;
@@ -140,7 +140,7 @@ public:
   {
     return ts_;
   }
-  TO_STRING_KV(K(trans_id_), K(submit_timestamp_), K(ts_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   transaction::ObTransID trans_id_;

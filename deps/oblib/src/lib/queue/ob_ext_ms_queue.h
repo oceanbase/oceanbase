@@ -63,7 +63,14 @@ public:
       ms_queue_item_ = NULL;
       ObLink::reset();
     }
-    TO_STRING_KV(K_(queue_index), KP_(ms_queue_item));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K_(queue_index), KP_(ms_queue_item));
+      J_OBJ_END();
+      return pos;
+    }
   };
 
   struct MsQueueItem {
@@ -102,8 +109,14 @@ public:
     int end_batch(const int64_t seq, const int64_t count);
     int get(Task*& task, const int64_t queue_index);
 
-    TO_STRING_KV(K_(inited), K_(key), K_(flags), K_(terminated_qcount), K_(next_to_terminate_queue_index),
-        KP_(task_ctx_array), K_(queue));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K_(inited), K_(key), K_(flags), K_(terminated_qcount), K_(next_to_terminate_queue_index),KP_(task_ctx_array), K_(queue));
+      J_OBJ_END();
+      return pos;
+    }
   };
 
   typedef ObLinearHashMap<KeyType, MsQueueItem*> MsQueueMap;

@@ -112,7 +112,7 @@ public:
   }
   virtual int pre_upgrade() = 0;
   virtual int post_upgrade() = 0;
-  TO_STRING_KV(K_(inited), K_(cluster_version), K_(tenant_id), K_(mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   virtual int check_inner_stat() const;

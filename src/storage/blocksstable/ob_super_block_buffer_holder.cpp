@@ -16,6 +16,14 @@
 namespace oceanbase {
 using namespace common;
 namespace blocksstable {
+int64_t ObSuperBlockBufferHolder::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(buf), K_(len));
+  J_OBJ_END();
+  return pos;
+}
 ObSuperBlockBufferHolder::ObSuperBlockBufferHolder()
     : is_inited_(false), buf_(NULL), len_(0), allocator_(ObModIds::OB_SUPER_BLOCK_BUFFER)
 {}

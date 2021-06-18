@@ -383,3 +383,19 @@ int ObRunFile::end_read_bucket()
   run_blocks_.reset();
   return ret;
 }
+int64_t ObRunFile::RunBlock::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(run_end_offset), K_(block_offset), K_(block_data_size), K_(next_row_pos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRunFile::RunTrailer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(bucket_idx), K_(curr_run_size));
+  J_OBJ_END();
+  return pos;
+}

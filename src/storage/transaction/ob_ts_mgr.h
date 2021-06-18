@@ -412,7 +412,7 @@ public:
   int refresh_gts_location(const uint64_t tenant_id);
 
 public:
-  TO_STRING_KV("ts_source", "GTS");
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static ObTsMgr& get_instance();

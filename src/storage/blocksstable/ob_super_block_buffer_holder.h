@@ -40,7 +40,7 @@ public:
     return len_;
   }
 
-  TO_STRING_KV(KP_(buf), K_(len));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   bool is_inited_;

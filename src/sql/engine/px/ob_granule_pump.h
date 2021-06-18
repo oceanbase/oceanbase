@@ -47,7 +47,7 @@ public:
   {}
   virtual ~ObGranulePumpArgs() = default;
 
-  TO_STRING_KV(K(partitions_info_), K(parallelism_), K(tablet_size_), K(gi_attri_flag_))
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool partition_filter() const
   {
@@ -102,7 +102,7 @@ public:
   struct Pos {
     Pos() : task_idx_(0), partition_idx_(0)
     {}
-    TO_STRING_KV(K(task_idx_), K(partition_idx_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     int64_t task_idx_;
     int64_t partition_idx_;
@@ -110,8 +110,7 @@ public:
 
   ObGITaskSet() : partition_keys_(), ranges_(), offsets_(), partition_offsets_()
   {}
-  TO_STRING_KV(K(partition_keys_), K(ranges_), K(ranges_.count()), K(offsets_), K(offsets_.count()),
-      K(partition_offsets_), K(cur_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int get_task_at_pos(ObGranuleTaskInfo& info, const Pos& pos) const;
   int get_next_gi_task_pos(Pos& pos);
   int get_next_gi_task(ObGranuleTaskInfo& info);
@@ -138,7 +137,7 @@ typedef common::ObSEArray<ObGITaskSet, OB_DEFAULT_GI_TASK_COUNT> ObGITaskArray;
 typedef common::ObIArray<ObGITaskSet> GITaskIArray;
 
 struct GITaskArrayItem {
-  TO_STRING_KV(K(tsc_op_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // table scan operator id or insert op id
   uint64_t tsc_op_id_;
   // gi task set array

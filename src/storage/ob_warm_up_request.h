@@ -57,7 +57,7 @@ public:
   {
     return table_id_;
   }
-  TO_STRING_KV(K_(pkey), K_(table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(1);
 
 protected:
@@ -185,7 +185,7 @@ public:
     request_list_.reset();
     allocator_.reuse();
   }
-  TO_STRING_KV(K_(request_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 
 private:
@@ -201,7 +201,7 @@ struct ObWarmUpRequestArg {
   {
     wrapper_.reuse();
   }
-  TO_STRING_KV(K_(wrapper));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 }  // namespace obrpc

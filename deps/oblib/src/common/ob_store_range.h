@@ -392,7 +392,7 @@ public:
     return ext_start_key_.get_range_array_idx();
   }
 
-  TO_STRING_KV(K_(range), K_(ext_start_key), K_(ext_end_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObStoreRange range_;

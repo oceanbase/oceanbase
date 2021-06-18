@@ -38,7 +38,7 @@ struct EqualSetKey {
     return result;
   }
   const ObRawExpr* expr_;
-  TO_STRING_KV(K_(expr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 class ObEqualAnalysis {
 public:
@@ -53,7 +53,7 @@ public:
   int finish_feed();
   // output
   int get_equal_sets(ObIAllocator* allocator, EqualSets& equal_sets) const;
-  TO_STRING_KV(K_(equal_sets));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   static int check_type_equivalent(
       const ObRawExpr& cur_expr, const ObRawExpr& same_expr, const ObRawExpr& new_expr, bool& can_be);

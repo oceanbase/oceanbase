@@ -22,6 +22,14 @@
 
 namespace oceanbase {
 namespace clog {
+int64_t ObLogFlushTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_LOG_TYPE, log_type_, N_LOG_ID, log_id_, "submit_timestamp", submit_timestamp_, N_PARTITION_KEY,partition_key_, "leader", leader_, "cluster_id", cluster_id_);
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 ObLogFlushTask::ObLogFlushTask()
 {

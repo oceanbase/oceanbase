@@ -47,7 +47,7 @@ public:
   ObZoneRecoveryTaskKey& operator=(const ObZoneRecoveryTaskKey& that);
   uint64_t hash() const;
   int init(const uint64_t tenant_id, const int64_t file_id, const common::ObAddr& server);
-  TO_STRING_KV(K_(tenant_id), K_(file_id), K_(server));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t inner_hash() const;
@@ -173,8 +173,7 @@ public:
   {
     return dest_unit_id_;
   }
-  TO_STRING_KV(K(task_id_), K(task_key_), K(generate_time_), K(schedule_time_), K(execute_time_), K(src_server_),
-      K(src_svr_seq_), K(dest_server_), K(dest_svr_seq_), K(tenant_id_), K(file_id_), K(dest_unit_id_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int set_task_id(const common::ObAddr& addr);

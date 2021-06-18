@@ -74,7 +74,7 @@ private:
     common::ObPGKey pg_key_;
     NeedGCReason gc_reason_;
 
-    TO_STRING_KV(K(pg_key_), K(gc_reason_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct PGOfflineIlogFlushedInfo {
@@ -83,7 +83,7 @@ private:
     uint64_t offline_log_id_;
     NeedGCReason gc_reason_;
 
-    TO_STRING_KV(K(replica_num_), K(offline_ilog_flushed_replica_num_), K(offline_log_id_), K(gc_reason_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   typedef common::ObSEArray<GCCandidate, 16> ObGCCandidateArray;

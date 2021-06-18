@@ -1123,3 +1123,19 @@ int64_t ObPwjComparer::get_matched_phy_part_id(const int64_t l_phy_part_id)
   }
   return phy_part_id;
 }
+int64_t ObPwjComparer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_strict), K_(pwj_tables), K_(partition_id_group));
+  J_OBJ_END();
+  return pos;
+}
+int64_t PwjTable::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_table_id), K_(part_level), K_(part_type), K_(subpart_type), K_(is_sub_part_template),K_(part_number), K_(def_subpart_number), K_(is_partition_single), K_(is_subpartition_single),K_(all_partition_indexes), K_(all_subpartition_indexes));
+  J_OBJ_END();
+  return pos;
+}

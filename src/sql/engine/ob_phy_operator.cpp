@@ -29,6 +29,38 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ColumnContent::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_INDEX, projector_index_, N_AUTO_FILL_TIMESTAMP, auto_filled_timestamp_, N_NULLABLE, is_nullable_,"implicit", is_implicit_, N_COLUMN_NAME, column_name_, K_(column_type), K_(coll_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObForeignKeyColumn::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_COLUMN_NAME, name_, N_INDEX, idx_, N_INDEX, name_idx_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObForeignKeyArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_action), K_(database_name), K_(table_name), K_(columns), K_(is_self_ref));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOpSchemaObj::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(obj_type), K_(is_not_null), K_(order_type));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ColumnContent, projector_index_, auto_filled_timestamp_, column_name_, is_nullable_, is_implicit_,
     column_type_, coll_type_);
 OB_SERIALIZE_MEMBER(ObForeignKeyColumn, name_, idx_, name_idx_);

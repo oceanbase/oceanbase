@@ -26,6 +26,38 @@ using namespace lib;
 using namespace common;
 
 namespace blocksstable {
+int64_t ObStorageLogItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start_cursor), K_(end_cursor), K_(is_inited), K_(is_local), K_(buf_size), KP_(buf), K_(len),K_(flush_finish), K_(flush_ret));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageLogWriter::NopLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(ctime), K_(last_ctime));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageLogWriter::SwitchLog::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(next_file_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageLogWriter::ObSerializableBuffer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(buf), K_(len));
+  J_OBJ_END();
+  return pos;
+}
 ObStorageLogItem::ObStorageLogItem()
     : start_cursor_(),
       end_cursor_(),

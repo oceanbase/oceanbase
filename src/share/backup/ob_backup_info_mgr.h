@@ -33,13 +33,13 @@ public:
     ObLogArchiveSimpleInfo();
     void reset();
     bool is_valid() const;
-    TO_STRING_KV(K_(update_ts), K_(checkpoint_ts), K_(start_ts), K_(status), K_(tenant_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   static ObLogArchiveInfoMgr& get_instance();
 
   int init(common::ObMySQLProxy& sql_proxy);
   int get_log_archive_status(const uint64_t tenant_id, const int64_t need_ts, ObLogArchiveSimpleInfo& status);
-  TO_STRING_KV(K_(update_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObLogArchiveInfoMgr();

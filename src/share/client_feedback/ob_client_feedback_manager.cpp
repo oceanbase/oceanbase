@@ -17,6 +17,14 @@
 
 namespace oceanbase {
 namespace share {
+int64_t ObFBPartitionParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version), K_(original_partition_id), K_(pl));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 
 int ObFeedbackManager::serialize(char* buf, const int64_t len, int64_t& pos) const

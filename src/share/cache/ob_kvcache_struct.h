@@ -143,8 +143,7 @@ struct ObKVMemBlockHandle : public common::ObDLink {
   {
     return this;
   }
-  TO_STRING_KV(
-      KP_(mem_block), K_(status), KP_(inst), K_(policy), K_(get_cnt), K_(recent_get_cnt), K_(score), K_(kv_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObKVCacheInstKey {
@@ -175,7 +174,7 @@ struct ObKVCacheInstKey {
     tenant_id_ = OB_INVALID_ID;
     cache_id_ = -1;
   }
-  TO_STRING_KV(K_(cache_id), K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObKVCacheConfig {
@@ -201,8 +200,7 @@ public:
     return ATOMIC_LOAD(&hold_size_);
   }
   void reset();
-  TO_STRING_KV(KP_(config), K_(kv_cnt), K_(store_size), K_(map_size), K_(lru_mb_cnt), K_(lfu_mb_cnt), K_(base_mb_score),
-      K_(hold_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   const ObKVCacheConfig* config_;
   ObPCNonAtomicCounter total_put_cnt_;
@@ -224,7 +222,7 @@ struct ObKVCacheInfo {
   ObKVCacheStatus status_;
   ObKVCacheInfo() : inst_key_(), status_()
   {}
-  TO_STRING_KV(K_(inst_key), K_(status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObIMBHandleAllocator {

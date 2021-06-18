@@ -101,7 +101,7 @@ public:
     return data_;
   }
 
-  TO_STRING_KV(N_FLAG, data_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int8_t data_;
@@ -331,7 +331,7 @@ public:
   int64_t base_version_;
   int64_t snapshot_version_;
 
-  TO_STRING_KV(K_(multi_version_start), K_(base_version), K_(snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObLogTsRange {
@@ -378,7 +378,7 @@ public:
   int64_t end_log_ts_;
   int64_t max_log_ts_;
 
-  TO_STRING_KV(K_(start_log_ts), K_(end_log_ts), K_(max_log_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObNewRange {

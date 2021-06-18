@@ -64,7 +64,7 @@ private:
   int add_filter(ObSqlExpression* expr);
 
   int try_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
-  TO_STRING_KV(K_(nextval_seq_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSequence);
 

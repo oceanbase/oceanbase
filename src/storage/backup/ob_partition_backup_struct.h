@@ -32,7 +32,7 @@ public:
   void reset();
   int set_sstable_meta_info(const blocksstable::ObSSTableBaseMeta& sstable_meta, const ObITable::TableKey& table_key);
 
-  TO_STRING_KV(K_(sstable_meta), K_(table_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObArenaAllocator allocator_;
   // OB_SERIALIZE_MEMBER
@@ -50,7 +50,7 @@ public:
   int assign(const ObBackupPartitionStoreMetaInfo& partition_store_meta_info);
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(partition_store_meta), K_(sstable_meta_info_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObPGPartitionStoreMeta partition_store_meta_;
   common::ObSArray<ObBackupSSTableMetaInfo> sstable_meta_info_array_;
 };
@@ -64,7 +64,7 @@ public:
   int assign(const ObBackupPGMetaInfo& pg_meta_info);
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(pg_meta), K_(partition_store_meta_info_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObPartitionGroupMeta pg_meta_;
   common::ObSArray<ObBackupPartitionStoreMetaInfo> partition_store_meta_info_array_;
 };
@@ -80,8 +80,7 @@ public:
   virtual ~ObBackupTableMacroIndex() = default;
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(sstable_macro_index), K_(data_version), K_(data_seq), K_(backup_set_id), K_(sub_task_id), K_(offset),
-      K_(data_length), KP_(table_key_ptr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // need serialize
   int64_t sstable_macro_index_;
@@ -104,7 +103,7 @@ public:
   virtual ~ObBackupTableKeyInfo() = default;
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_key), K_(total_macro_block_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   // need serialize
   ObITable::TableKey table_key_;

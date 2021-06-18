@@ -614,9 +614,7 @@ public:
   {
     return load_shedding_factor_;
   }
-  TO_STRING_KV(K_(cpu_cnt_online), K_(cpu_cnt_configure), K_(load_per_cpu_threshold), K_(load_shedding_factor),
-      "load_past_one", load_avg_[LOAD_PAST_ONE], "load_past_five", load_avg_[LOAD_PAST_FIVE], "load_past_fifteen",
-      load_avg_[LOAD_PAST_FIFTEEN]);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t DEFAULT_LOAD_PER_CPU_THRESHOLD = 500;
@@ -690,7 +688,7 @@ private:
     int32_t max_thread_;
     ThreadLimit() : min_thread_(0), max_thread_(0)
     {}
-    TO_STRING_KV(K_(min_thread), K_(max_thread));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObDList<ObIDag> DagList;
   typedef ObPriorityList<ObIDag, ObIDag::DAG_PRIO_MAX> PriorityDagList;

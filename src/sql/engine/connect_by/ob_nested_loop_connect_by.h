@@ -89,12 +89,7 @@ public:
 
   // set level pseudo as a param store.
   int set_level_as_param(ObConnectByBaseCtx& join_ctx, int64_t level) const;
-  TO_STRING_KV(N_ID, id_, N_COLUMN_COUNT, column_count_, N_PROJECTOR,
-      common::ObArrayWrap<int32_t>(projector_, projector_size_), N_FILTER_EXPRS, filter_exprs_, N_CALC_EXPRS,
-      calc_exprs_, N_JOIN_TYPE, ob_join_type_str(join_type_), N_JOIN_EQ_COND, rescan_params_, N_JOIN_OTHER_COND,
-      other_join_conds_, N_INNER_GET, is_inner_get_, N_SELF_JOIN, is_self_join_, N_PUMP_ROW_DESC, pump_row_desc_,
-      N_ROOT_ROW_DESC, root_row_desc_, N_PSEUDO_COLUMN_ROW_DESC, pseudo_column_row_desc_, N_CONNECT_BY_PRIOR_EXPRS,
-      connect_by_prior_exprs_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   int construct_mock_right_row(const ObNewRow& root_row, ObNewRow& mock_right_row) const;
@@ -180,7 +175,7 @@ public:
       cmp_type_ = common::ObNullType;
       ctype_ = common::CS_TYPE_INVALID;
     }
-    TO_STRING_KV(K_(cmp_type), K_(ctype));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObObjType cmp_type_;
     common::ObCollationType ctype_;  // collation type
   };

@@ -18,6 +18,54 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace blocksstable {
+int64_t ObMicroBlockInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(offset), K_(size), K_(index), K_(mark_deletion));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_offset), K_(endkey_offset));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroIndexNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(obj), K_(first_micro_index), K_(first_child_index), K_(child_num));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockIndexMgr::MemMicroIndexItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_offset));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockIndexMgr::Bound::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start), K_(end));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockIndexMgr::SearchContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(begin_node), K_(end_node), K_(father_node), K_(next_node), K_(column_idx));
+  J_OBJ_END();
+  return pos;
+}
 bool ObMicroBlockIndex::operator==(const ObMicroBlockIndex& other) const
 {
   return data_offset_ == other.data_offset_;

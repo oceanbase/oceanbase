@@ -8468,3 +8468,83 @@ int ObLogicalOperator::check_subplan_filter_child_exchange_rescanable()
   }
   return ret;
 }
+int64_t ObPxPipeBlockingCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(op_ctxs_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxPipeBlockingCtx::OpCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(in), K_(out), K_(has_dfo_below), K_(dfo_depth));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPxPipeBlockingCtx::PipeEnd::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(exch));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ExprProducer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(consumer_id), K_(producer_id), K_(producer_branch), K(is_shared_), KPC_(expr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExchangeInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_task_order), K_(slice_count), K_(repartition_type), K_(repartition_ref_table_id),K_(repartition_table_name), K_(calc_part_id_expr), K_(repartition_keys), K_(repartition_sub_keys),K_(hash_dist_exprs), "dist_method", ObPQDistributeMethod::get_type_string(dist_method_), K_(px_dop),K_(px_single), K_(repartition_func_exprs), K_(keep_ordering), K_(pdml_pkey), K_(slave_mapping_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExchangeInfo::HashExpr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(expr), K_(cmp_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t AllocExchContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(plan_type_), K(parallel_), K(servers_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAllocGIInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(state_), K(pw_op_ptr_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t AllocGIContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(alloc_gi_), K(tablet_size_), K(state_), K(exchange_op_above_count_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t partition_location::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(partition_id));
+  J_OBJ_END();
+  return pos;
+}

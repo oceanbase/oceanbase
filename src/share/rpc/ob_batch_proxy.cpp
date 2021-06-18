@@ -17,6 +17,14 @@
 namespace oceanbase {
 using namespace common;
 namespace obrpc {
+int64_t ObBatchPacket::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_DATA_SIZE, size_, N_ID, id_, N_SERVER, src_, N_BUFFER, ((uint64_t)buf_), N_SERVER_ADDR, src_addr_);
+  J_OBJ_END();
+  return pos;
+}
 
 DEFINE_SERIALIZE(ObBatchPacket)
 {

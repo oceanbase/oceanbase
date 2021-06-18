@@ -26,7 +26,14 @@ struct ObExprCallDepth {
       : expr_(NULL), need_stack_check_(false), max_check_depth_(0), max_call_depth_(0), checked_parent_cnt_(0)
   {}
 
-  TO_STRING_KV(KP(expr_), K(need_stack_check_), K(max_check_depth_), K(max_call_depth_), K(checked_parent_cnt_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP(expr_), K(need_stack_check_), K(max_check_depth_), K(max_call_depth_), K(checked_parent_cnt_));
+    J_OBJ_END();
+    return pos;
+  }
 
   ObExpr* expr_;
   bool need_stack_check_;
@@ -398,7 +405,14 @@ struct TmpFrameInfo {
   TmpFrameInfo(uint64_t start_pos, uint64_t expr_cnt, uint32_t frame_idx, uint32_t frame_size)
       : expr_start_pos_(start_pos), frame_info_(expr_cnt, frame_idx, frame_size)
   {}
-  TO_STRING_KV(K_(expr_start_pos), K_(frame_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(expr_start_pos), K_(frame_info));
+    J_OBJ_END();
+    return pos;
+  }
 
 public:
   uint64_t expr_start_pos_;

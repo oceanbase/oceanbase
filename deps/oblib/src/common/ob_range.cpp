@@ -16,6 +16,30 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObBorderFlag::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_FLAG, data_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObVersionRange::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(multi_version_start), K_(base_version), K_(snapshot_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogTsRange::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start_log_ts), K_(end_log_ts), K_(max_log_ts));
+  J_OBJ_END();
+  return pos;
+}
 
 ObVersion ObVersion::MIN_VERSION(0);
 ObVersion ObVersion::MAX_VERSION(INT32_MAX, INT16_MAX);

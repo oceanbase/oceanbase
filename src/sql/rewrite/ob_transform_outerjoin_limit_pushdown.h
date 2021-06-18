@@ -47,8 +47,7 @@ private:
     bool is_limit_only_;
     bool need_create_view_;
 
-    TO_STRING_KV(K_(select_stmt), K_(target_table), K_(view_table), K_(extracted_conditions), K_(saved_order_items),
-        K_(is_limit_only), K_(need_create_view));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 public:

@@ -309,14 +309,14 @@ struct ObQueryFlag {
     return is_sstable_cut_;
   }
 
-  TO_STRING_KV("scan_order", scan_order_, "daily_merge", daily_merge_, "rmmb_optimize", rmmb_optimize_,
-      "whole_macro_scan", whole_macro_scan_, "full_row", full_row_, "index_back", index_back_, "query_stat",
-      query_stat_, "sql_mode", sql_mode_, "read_latest", read_latest_, "prewarm", prewarm_, "join_type", join_type_,
-      "use_row_cache", use_row_cache_, "use_block_index_cache", use_block_index_cache_, "use_bloomfilter_cache",
-      use_bloomfilter_cache_, "multi_version_minor_merge", multi_version_minor_merge_, "is_need_feedback",
-      is_need_feedback_, "use_fuse_row_cache", use_fuse_row_cache_, "use_fast_agg", use_fast_agg_,
-      "iter_uncommitted_row", iter_uncommitted_row_, "ignore_trans_stat", ignore_trans_stat_, "is_large_query",
-      is_large_query_, "is_sstable_cut", is_sstable_cut_, "reserved", reserved_);
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV("scan_order", scan_order_, "daily_merge", daily_merge_, "rmmb_optimize", rmmb_optimize_,"whole_macro_scan", whole_macro_scan_, "full_row", full_row_, "index_back", index_back_, "query_stat",query_stat_, "sql_mode", sql_mode_, "read_latest", read_latest_, "prewarm", prewarm_, "join_type", join_type_,"use_row_cache", use_row_cache_, "use_block_index_cache", use_block_index_cache_, "use_bloomfilter_cache",use_bloomfilter_cache_, "multi_version_minor_merge", multi_version_minor_merge_, "is_need_feedback",is_need_feedback_, "use_fuse_row_cache", use_fuse_row_cache_, "use_fast_agg", use_fast_agg_,"iter_uncommitted_row", iter_uncommitted_row_, "ignore_trans_stat", ignore_trans_stat_, "is_large_query",is_large_query_, "is_sstable_cut", is_sstable_cut_, "reserved", reserved_);
+    J_OBJ_END();
+    return pos;
+  }
   OB_UNIS_VERSION(1);
 };
 

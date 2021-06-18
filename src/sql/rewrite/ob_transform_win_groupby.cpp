@@ -21,6 +21,14 @@ namespace oceanbase {
 using namespace common;
 
 namespace sql {
+int64_t ObTransformWinGroupBy::WinGroupByHelper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_groupby_exprs), K_(ref_column_exprs), K_(inner_pos), K_(inner_winexprs), K_(outer_pos),K_(outer_old_exprs), K_(outer_new_exprs));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObTransformWinGroupBy::transform_one_stmt(
     common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened)

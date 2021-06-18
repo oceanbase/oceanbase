@@ -21,6 +21,14 @@ namespace oceanbase {
 using namespace common;
 using namespace lib;
 namespace clog {
+int64_t ObBatchSubmitCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(trans_id_), K(partition_array_), K(log_info_array_), K(log_persist_size_array_), K(member_list_),K(replica_num_), K(leader_), K(self_));
+  J_OBJ_END();
+  return pos;
+}
 int ObBatchSubmitCtx::init(const transaction::ObTransID& trans_id, const common::ObPartitionArray& partition_array,
     const ObLogInfoArray& log_info_array, const ObLogPersistSizeArray& size_array, const ObISubmitLogCbArray& cb_array,
     const common::ObMemberList& member_list, const int64_t replica_num, const common::ObAddr& leader,

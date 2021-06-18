@@ -44,7 +44,7 @@ public:
   {
     return prefix_rowkey_len_;
   }
-  TO_STRING_KV(K_(table_id), K_(macro_block_id), K_(file_id), K_(prefix_rowkey_len));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t table_id_;
@@ -101,7 +101,7 @@ public:
   {
     return bloom_filter_.get_nbytes();
   }
-  TO_STRING_KV(K_(version), K_(rowkey_column_cnt), K_(row_count), K_(bloom_filter), K_(is_inited));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(BLOOM_FILTER_CACHE_VALUE_VERSION);
 
 private:
@@ -174,7 +174,7 @@ struct ObEmptyReadCell {
   {
     state_ = BUILDING;
   }
-  TO_STRING_KV(K_(state), K_(count), K_(hashcode), K_(build_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t ELIMINATE_TIMEOUT_US = 1000 * 1000 * 120;  // 2min
   volatile int32_t state_;                                        // 0:init,1:building
   volatile int32_t count_;
@@ -255,7 +255,7 @@ public:
   {
     return NULL != buckets_;
   }
-  TO_STRING_KV(K_(bf_cache_miss_count_threshold), KP_(buckets), K_(bucket_size), K_(bucket_magic));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int get_cell(const uint64_t hashcode, ObEmptyReadCell*& cell);
@@ -324,7 +324,7 @@ public:
   {
     return bf_cache_value_.get_prefix_len();
   }
-  TO_STRING_KV(K_(is_inited), K_(need_build), K_(max_row_count), K_(bf_cache_value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObBloomFilterCacheValue bf_cache_value_;

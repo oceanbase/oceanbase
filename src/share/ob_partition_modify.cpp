@@ -17,6 +17,38 @@ namespace oceanbase {
 using namespace common;
 
 namespace share {
+int64_t ObSplitInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(split_type), K_(part_type), K_(table_id), K_(partition_id), K_(source_part_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSplitPartitionPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(src_pkey), K_(dest_pkey_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSplitPartition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(split_info), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionSplitProgress::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(progress));
+  J_OBJ_END();
+  return pos;
+}
 int ObSplitInfo::assign(const ObSplitInfo& other)
 {
   int ret = OB_SUCCESS;

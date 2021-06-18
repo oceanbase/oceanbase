@@ -60,7 +60,7 @@ public:
   }
   virtual const SquareIdMap::Item* begin() = 0;
   virtual const SquareIdMap::Item* end() = 0;
-  TO_STRING_KV(K_(row_unit));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   struct UnitCounter {
@@ -70,7 +70,7 @@ protected:
     {}
     uint64_t unit_id_;
     int64_t count_;
-    TO_STRING_KV(K_(unit_id), K_(count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   int get_unit_cnt_value(UnitCounter& unit_counter, double& unit_cnt_value);
   int check_gts_monopolized_unit_without_element(UnitCounter& unit_counter, bool& is_gts_monopolized_without_element);

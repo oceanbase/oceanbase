@@ -15,6 +15,14 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 namespace oceanbase {
 namespace common {
+int64_t ObVirtualTableProjector::Column::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(column_id), K_(column_value));
+  J_OBJ_END();
+  return pos;
+}
 int ObVirtualTableProjector::project_row(const ObIArray<Column>& columns, ObNewRow& row, const bool full_columns)
 {
   int ret = OB_SUCCESS;

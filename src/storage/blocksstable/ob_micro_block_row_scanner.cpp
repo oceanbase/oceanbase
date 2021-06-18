@@ -2282,3 +2282,11 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::filter_unneeded_row(bool& add_
   }
   return ret;
 }
+int64_t ObMultiVersionMicroBlockMinorMergeRowScanner::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_id), K_(is_last_multi_version_row), K_(is_row_queue_ready), "row_queue_count",row_queue_.count(), K_(start), K_(current), K_(last));
+  J_OBJ_END();
+  return pos;
+}

@@ -28,6 +28,14 @@
 
 namespace oceanbase {
 namespace sql {
+int64_t ObSQLMockedTables::ObMockedRowIDIndexInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(org_table_id), K_(mocked_table_id));
+  J_OBJ_END();
+  return pos;
+}
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;

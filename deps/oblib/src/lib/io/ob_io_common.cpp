@@ -19,6 +19,102 @@
 namespace oceanbase {
 using namespace lib;
 namespace common {
+int64_t ObDiskID::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(disk_idx), K_(install_seq));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDiskFd::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(fd), K_(disk_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIOConfig::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sys_io_low_percent), K_(sys_io_high_percent), K_(user_iort_up_percent), K_(cpu_high_water_level),K_(write_failure_detect_interval), K_(read_failure_black_list_interval), K_(retry_warn_limit),K_(retry_error_limit), K_(disk_io_thread_count), K_(callback_thread_count), K_(large_query_io_percent),K_(data_storage_io_timeout_ms));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIODesc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(category), K_(mode), K_(wait_event_no), K_(req_deadline_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIOPoint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(fd), K_(offset), K_(size), KP_(write_buf));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIORetCode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(io_ret), K_(sys_errno));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIOStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(io_cnt), K_(io_bytes), K_(io_rt_us));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIOStatDiff::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(average_size), K_(average_rt_us), K_(old_stat), K_(new_stat));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCpuStatDiff::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(avg_usage));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIOChannel::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(submit_cnt), K_(can_submit_request));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIOInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(size), K_(io_desc), K_(batch_count), "io_points",common::ObArrayWrap<ObIOPoint>(io_points_, batch_count_), K_(fail_disk_count), "fail_disk_ids",common::ObArrayWrap<int64_t>(fail_disk_ids_, fail_disk_count_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDefaultIOCallback::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(data_buf));
+  J_OBJ_END();
+  return pos;
+}
 
 int ob_io_setup(int maxevents, io_context_t* ctxp)
 {

@@ -90,7 +90,7 @@ public:
   ~ObElectionMsgBuffer()
   {}
 
-  TO_STRING_KV(K_(capacity), K_(position), K_(limit));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static const int64_t MAX_MSGBUF_SIZE = 8192 - 256;

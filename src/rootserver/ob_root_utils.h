@@ -329,7 +329,7 @@ public:
     int64_t row_;
     int64_t column_;
     common::ObSEArray<common::ObString, 128> tenants_;
-    TO_STRING_KV(K_(row), K(column_), K(tenants_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 public:
@@ -479,7 +479,7 @@ struct AlterPaxosLocalityTask {
     zone_set_.reset();
     associated_replica_type_set_.reset();
   }
-  TO_STRING_KV(K_(task_type), K_(zone_set), K_(associated_replica_type_set));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObLocalityCheckHelp {
@@ -515,7 +515,7 @@ private:
     {}
     int64_t x_;
     int64_t y_;
-    TO_STRING_KV(K_(x), K_(y));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct YIndexCmp {

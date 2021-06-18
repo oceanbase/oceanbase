@@ -140,7 +140,7 @@ public:
   int init(const common::ObIArray<ObColDesc>& column_descs);
   int init(const common::ObIArray<uint64_t>& column_ids);
   int get(const uint64_t column_id, int32_t& proj) const;
-  TO_STRING_KV(K(is_inited_), K(use_array_), K(shadow_use_array_), K(has_), K(has_shadow_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ColumnMap();
@@ -236,8 +236,7 @@ public:
   }
   int assign(const ObColumnParam& other);
 
-  TO_STRING_KV(K_(column_id), K_(meta_type), K_(order), K_(accuracy), K_(orig_default_value), K_(cur_default_value),
-      K_(is_nullable));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int deep_copy_obj(const common::ObObj& src, common::ObObj& dest);

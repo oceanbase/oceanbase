@@ -114,7 +114,7 @@ private:
     {}
     Token(const int64_t st, const int64_t dt, ObTimerTask* task) : scheduled_time(st), delay(dt), task(task)
     {}
-    TO_STRING_KV(K(scheduled_time), K(delay), KP(task), KPC(task));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t scheduled_time;
     int64_t delay;
     ObTimerTask* task;

@@ -31,6 +31,14 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 namespace oceanbase {
 namespace sql {
+int64_t ObTaskExecutorCtx::CalcVirtualPartitionIdParams::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(ref_table_id));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObTaskExecutorCtx::CalcVirtualPartitionIdParams::init(uint64_t ref_table_id)
 {

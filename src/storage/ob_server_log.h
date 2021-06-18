@@ -37,7 +37,7 @@ public:
   }
   ObTenantFileKey file_key_;
   ObTenantFileSuperBlock super_block_;
-  TO_STRING_KV(K_(file_key), K_(super_block));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(UPDATE_TENANT_FILE_SUPER_BLOCK_VERSION);
 };
 
@@ -56,7 +56,7 @@ public:
   }
   ObTenantFileKey key_;
   bool delete_file_;
-  TO_STRING_KV(K_(key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(REMOVE_TENANT_FILE_SUPER_BLOCK_VERSION);
 };
 
@@ -73,7 +73,7 @@ public:
   {
     return file_key_.is_valid() && pg_key_.is_valid();
   }
-  TO_STRING_KV(K_(file_key), K_(pg_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObTenantFileKey file_key_;
   common::ObPGKey pg_key_;
   OB_UNIS_VERSION_V(ADD_PG_TO_TENANT_FILE_VERSION);
@@ -92,7 +92,7 @@ public:
   {
     return file_key_.is_valid() && pg_key_.is_valid();
   }
-  TO_STRING_KV(K_(file_key), K_(pg_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObTenantFileKey file_key_;
   common::ObPGKey pg_key_;
   OB_UNIS_VERSION_V(REMOVE_PG_FROM_TENANT_FILE_VERSION);
@@ -109,7 +109,7 @@ public:
     return file_info_.is_valid();
   }
   ObTenantFileInfo file_info_;
-  TO_STRING_KV(K_(file_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(UPDATE_TENANT_FILE_INFO_VERSION);
 };
 }  // end namespace storage

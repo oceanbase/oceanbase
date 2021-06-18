@@ -18,6 +18,14 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t RawArray::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(arr_), K(count_));
+  J_OBJ_END();
+  return pos;
+}
 int ObIlogPerFileCache::init(const file_id_t file_id, const int64_t array_size, PageArena<>* pf_allocator)
 {
   int ret = OB_SUCCESS;

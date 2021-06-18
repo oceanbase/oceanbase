@@ -36,7 +36,7 @@ public:
   void reset();
   int init(const uint64_t tenant_id, const uint64_t region_priority);
   ObLocalityZone& operator=(const ObLocalityZone& item);
-  TO_STRING_KV(K_(tenant_id), K_(region_priority));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   uint64_t get_tenant_id()
@@ -66,7 +66,7 @@ public:
 public:
   typedef common::ObFixedLengthString<common::MAX_ZONE_LENGTH> Zone;
   typedef common::ObSEArray<Zone, 5> OneZoneArray;
-  TO_STRING_KV(K_(region), K_(region_priority), K_(zone_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObRegion region_;
@@ -98,8 +98,7 @@ public:
   const char* get_local_idc() const;
   int copy_to(ObLocalityInfo& locality_info);
   common::ObZoneType get_local_zone_type();
-  TO_STRING_KV(K_(version), K_(local_region), K_(local_zone), K_(local_idc), K_(local_zone_type),
-      K_(local_merge_status), K_(local_zone_status), K_(locality_region_array), K_(locality_zone_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_valid();
 
 public:

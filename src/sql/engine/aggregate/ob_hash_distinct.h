@@ -48,7 +48,7 @@ public:
       {}
       const ObChunkRowStore::StoredRow* stored_row_;
       HashRow* next_tuple_;
-      TO_STRING_KV(K_(stored_row), K(static_cast<void*>(next_tuple_)));
+      int64_t to_string(char* buf, const int64_t buf_len) const;
     };
     struct HashTable {
       const static int16_t BUCKET_BUF_SIZE = 1024;
@@ -68,7 +68,7 @@ public:
         nbuckets_ = 0;
         cur_ = 0;
       }
-      TO_STRING_KV(K_(nbuckets), K_(buf_cnt), K_(cur));
+      int64_t to_string(char* buf, const int64_t buf_len) const;
       lib::MemoryContext* mem_context_;
       using RowArray = common::ObSegmentArray<HashRow*, OB_MALLOC_BIG_BLOCK_SIZE, common::ModulePageAllocator>;
       RowArray buckets_;

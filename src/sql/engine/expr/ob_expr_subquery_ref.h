@@ -34,7 +34,7 @@ public:
     uint16_t iter_idx_;
     uint16_t is_scalar_;
 
-    TO_STRING_KV(K(op_id_), K(iter_idx_), K(is_scalar_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     bool is_valid() const
     {
       return DEF_OP_ID != op_id_;

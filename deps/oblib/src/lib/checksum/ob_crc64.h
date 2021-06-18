@@ -129,7 +129,7 @@ public:
     base_ = other.base_;
     MEMCPY(buffer_, other.buffer_, BUFFER_SIZE);
   }
-  TO_STRING_KV(K_(pos), K_(base), K_(buffer));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   char buffer_[BUFFER_SIZE];

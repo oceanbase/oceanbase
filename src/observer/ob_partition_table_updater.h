@@ -83,7 +83,7 @@ public:
   {
     return false;
   }
-  TO_STRING_KV(K_(pkey), K_(data_version), K_(first_submit_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey pkey_;
@@ -128,7 +128,7 @@ public:
   bool is_barrier() const;
   static bool is_barrier(const common::ObPartitionKey& pkey);
 
-  TO_STRING_KV(K_(part_key), K_(data_version), K_(first_submit_time), K_(is_remove), K_(with_role));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   const static int64_t rpc_task_group_id_;

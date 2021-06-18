@@ -717,3 +717,19 @@ int NonPartitionTableAnalyzer::next(common::ObIArray<const share::schema::ObPart
   }
   return ret;
 }
+int64_t TablePrefixValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tablegroup_id), K_(table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TablePrefixKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(prefix), K_(suffix), K_(digit_length));
+  J_OBJ_END();
+  return pos;
+}

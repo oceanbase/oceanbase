@@ -33,7 +33,7 @@ public:
     {}
     virtual ~VariableSetNode()
     {}
-    TO_STRING_KV(K_(variable_name), K_(is_system_variable), K_(set_scope), K_(value_expr), K_(is_set_default));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     common::ObString variable_name_;
     bool is_system_variable_;
@@ -94,7 +94,7 @@ public:
   {
     return modify_sysvar_arg_;
   }
-  TO_STRING_KV(K_(actual_tenant_id), K_(variable_nodes));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t actual_tenant_id_;

@@ -25,6 +25,14 @@ namespace oceanbase {
 using namespace common;
 namespace share {
 namespace schema {
+int64_t ObDependencyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(dep_obj_id), K_(dep_obj_type), K_(order), K_(dep_timestamp), K_(ref_obj_id),K_(ref_obj_type), K_(ref_timestamp), K_(dep_obj_owner_id), K_(property), K_(dep_attrs), K_(dep_reason),K_(ref_obj_name), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
 
 ObDependencyInfo::ObDependencyInfo()
 {

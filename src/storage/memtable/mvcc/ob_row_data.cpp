@@ -17,6 +17,14 @@ namespace oceanbase {
 using namespace common;
 using namespace serialization;
 namespace memtable {
+int64_t ObRowData::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(data), K_(size));
+  J_OBJ_END();
+  return pos;
+}
 static int serialize_data(char* buf, const int64_t len, int64_t& pos, const char* data, int64_t data_len)
 {
   int ret = OB_SUCCESS;

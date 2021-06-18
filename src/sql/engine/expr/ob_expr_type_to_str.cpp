@@ -20,6 +20,14 @@
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
+int64_t ObEnumSetInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cast_mode), K_(str_values));
+  J_OBJ_END();
+  return pos;
+}
 
 //////////////////////////// ObExprTypeToStr ////////////////////////////
 

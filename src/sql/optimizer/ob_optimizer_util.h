@@ -37,7 +37,7 @@ struct MergeKeyInfo {
         order_items_(allocator, size)
   {}
   virtual ~MergeKeyInfo(){};
-  TO_STRING_KV(K_(need_sort), K_(map_array), K_(order_directions), K_(order_exprs), K_(order_items));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool need_sort_;
   common::ObFixedArray<int64_t, common::ObIAllocator> map_array_;
   common::ObFixedArray<ObOrderDirection, common::ObIAllocator> order_directions_;

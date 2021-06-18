@@ -110,7 +110,7 @@ public:
   static void mtl_destroy(ObTenantWeakReadService*& twrs);
 
 public:
-  TO_STRING_KV(K_(inited), K_(tenant_id), K_(self), K_(svr_version_mgr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   /// internal get cluster version function

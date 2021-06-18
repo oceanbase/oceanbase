@@ -157,12 +157,7 @@ public:
   int reconfirm_fetch_log_result();
 
 public:
-  TO_STRING_KV(K(restore_pg_key_), K(archive_pg_key_), K(is_expired_), K(has_located_file_range_), K(start_log_id_),
-      K(start_log_ts_), K(end_snapshot_version_), K(leader_takeover_ts_), K(last_fetched_log_id_),
-      K(last_checkpoint_ts_), K(last_fetched_log_submit_ts_), K(cur_offset_), K(cur_log_file_id_), K(end_log_file_id_),
-      K(retry_cnt_),    // Number of consecutive failed retries
-      K(io_fail_cnt_),  // Number of consecutive IO failures
-      K(fetch_log_result_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int locate_start_file_id_(uint64_t& start_file_id);
@@ -274,7 +269,7 @@ public:
     {
       ATOMIC_DEC(&cur_restore_concurrency_);
     }
-    TO_STRING_KV(K_(restore_info), K_(file_store), K(cur_restore_concurrency_), K(restore_concurrency_threshold_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
     static const int64_t DEFAULT_RESTORE_CONCURRENCY_THRESHOLD = 4;

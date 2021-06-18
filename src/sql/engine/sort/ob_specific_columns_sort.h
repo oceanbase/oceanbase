@@ -63,7 +63,7 @@ public:
   }
   int check_block_row(const common::ObNewRow& row, const common::ObNewRow* last_row, bool& is_cur_block);
   int deep_copy_new_row(const common::ObNewRow& row, common::ObNewRow*& new_row, common::ObArenaAllocator& alloc);
-  TO_STRING_KV(K_(row_count), K_(prefix_keys_pos), K_(row_array_pos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   // private funs
 private:
   int init_specific_columns();

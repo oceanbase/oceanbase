@@ -36,7 +36,7 @@ public:
   {
     return column_cnt_;
   }
-  TO_STRING_KV(KP_(column_checksum), K_(column_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int calc_column_checksum(const int64_t checksum_method, const common::ObNewRow& row, const bool new_row,

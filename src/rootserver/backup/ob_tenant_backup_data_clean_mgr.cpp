@@ -25,6 +25,54 @@ using namespace share::schema;
 using namespace storage;
 
 namespace rootserver {
+int64_t ObBackupSetId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(backup_set_id), K_(clean_mode));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogArchiveRound::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_archive_round), K_(log_archive_status), K_(start_ts), K_(checkpoint_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupDataCleanElement::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cluster_id), K_(incarnation), K_(backup_dest), K_(backup_set_id_array), K_(log_archive_round_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSimpleBackupDataCleanTenant::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(is_deleted));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupDataCleanTenant::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(simple_clean_tenant), K_(backup_element_array), K_(clog_data_clean_point), K_(clog_gc_snapshot));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupDataCleanStatics::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(touched_base_data_files), K_(deleted_base_data_files), K_(touched_clog_files), K_(deleted_clog_files),K_(touched_base_data_files_ts), K_(deleted_base_data_files_ts), K_(touched_clog_files_ts),K_(deleted_clog_files_ts));
+  J_OBJ_END();
+  return pos;
+}
 
 ObBackupSetId::ObBackupSetId() : backup_set_id_(0), clean_mode_(MAX)
 {}

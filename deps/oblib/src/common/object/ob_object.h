@@ -56,7 +56,7 @@ public:
   virtual ~ObEnumSetInnerValue()
   {}
 
-  TO_STRING_KV(K_(numberic_value), K_(string_value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t numberic_value_;
   common::ObString string_value_;
 };
@@ -107,7 +107,7 @@ struct ObLobScale {
   {
     return static_cast<ObScale>(scale_);
   }
-  TO_STRING_KV(K_(scale));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObObjMeta {
@@ -833,9 +833,7 @@ public:
     return extend_type_;
   }
 
-  TO_STRING_KV(N_TYPE, ob_obj_type_str(static_cast<ObObjType>(type_)), N_COLLATION,
-      ObCharset::collation_name(get_collation_type()), N_COERCIBILITY,
-      ObCharset::collation_level(get_collation_level()));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   static uint32_t type_offset_bits()
@@ -880,7 +878,7 @@ struct ObLogicMacroBlockId {
   {
     return data_seq_ >= 0;
   }
-  TO_STRING_KV(K_(data_seq), K_(data_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t data_seq_;
   uint64_t data_version_;
   OB_UNIS_VERSION(LOGIC_BLOCK_ID_VERSION);
@@ -892,7 +890,7 @@ struct ObLobIndex {
   {}
   bool operator==(const ObLobIndex& other) const;
   bool operator!=(const ObLobIndex& other) const;
-  TO_STRING_KV(K_(version), K_(reserved), K_(logic_macro_id), K_(byte_size), K_(char_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint32_t version_;
   uint32_t reserved_;
   ObLogicMacroBlockId logic_macro_id_;
@@ -913,8 +911,7 @@ struct ObLobData {
   int64_t get_serialize_size() const;
   int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
   int deserialize(const char* buf, const int64_t buf_len, int64_t& pos);
-  TO_STRING_KV(K_(version), K_(byte_size), K_(char_size), K_(idx_cnt), "lob_idx_array",
-      common::ObArrayWrap<ObLobIndex>(lob_idx_, idx_cnt_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t get_direct_cnt() const
   {
     return DIRECT_CNT;
@@ -1041,7 +1038,7 @@ struct ObObjPrintParams {
   {}
   ObObjPrintParams() : tz_info_(NULL), cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI), print_flags_(0)
   {}
-  TO_STRING_KV(K_(tz_info), K_(cs_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const ObTimeZoneInfo* tz_info_;
   ObCollationType cs_type_;
   union {
@@ -3748,7 +3745,7 @@ struct ParamFlag {
         is_ref_cursor_type_(false),
         reserved_(0)
   {}
-  TO_STRING_KV(K_(need_to_check_type), K_(need_to_check_bool_value), K_(expected_bool_value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset();
 
   static uint32_t flag_offset_bits()
@@ -3956,7 +3953,7 @@ struct ObDataType {
 public:
   ObDataType() : meta_(), accuracy_(), charset_(CHARSET_UTF8MB4), is_binary_collation_(false), is_zero_fill_(false)
   {}
-  TO_STRING_KV(K_(meta), K_(accuracy), K_(charset), K_(is_binary_collation), K_(is_zero_fill));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   inline void reset()
   {
     meta_.reset();

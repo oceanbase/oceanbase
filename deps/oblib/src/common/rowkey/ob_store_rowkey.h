@@ -360,8 +360,7 @@ public:
   int deep_copy(ObExtStoreRowkey& extkey, ObIAllocator& allocator) const;
   int deserialize(ObIAllocator& allocator, const char* buf, const int64_t data_len, int64_t& pos);
 
-  TO_STRING_KV(
-      K_(store_rowkey), K_(collation_free_store_rowkey), K_(range_cut_pos), K_(range_check_min), K_(range_array_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObStoreRowkey store_rowkey_;

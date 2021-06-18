@@ -2375,3 +2375,35 @@ int ObRecoveryPointIterator::get_next(ObRecoveryPointInfo*& point_info)
   }
   return ret;
 }
+int64_t ObRecoveryPointInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K(tables_handle_.get_count()), K_(snapshot_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecoveryDataMgr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(restore_point_data), K_(backup_point_data));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecoveryDataMgr::SerializePair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(buf), K_(size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecoveryTableData::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tables_.count()));
+  J_OBJ_END();
+  return pos;
+}

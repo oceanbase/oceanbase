@@ -57,7 +57,7 @@ public:
   common::ObString column_info_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> str_values_;
 
-  TO_STRING_KV(K_(type), K_(column_flags), K_(column_info), K_(str_values));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObTableModify;
@@ -70,8 +70,7 @@ struct DMLSubPlan {
   ObTableModify* subplan_root_;
   int32_t* value_projector_;
   int64_t value_projector_size_;
-  TO_STRING_KV(
-      KPC_(subplan_root), "value_projector", common::ObArrayWrap<int32_t>(value_projector_, value_projector_size_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct SeDMLSubPlan {
@@ -119,7 +118,7 @@ struct ObGlobalIndexDMLInfo {
   SeDMLSubPlanArray se_subplans_;
   common::ObFixedArray<int64_t, common::ObIAllocator> hint_part_ids_;
 
-  TO_STRING_KV(K_(table_id), K_(index_tid), K_(part_cnt), K_(table_locs), K_(dml_subplans));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObGlobalIndexDMLCtx {
@@ -140,7 +139,7 @@ struct ObGlobalIndexDMLCtx {
   DMLSubPlanArray dml_subplans_;
   SeDMLSubPlanArray se_subplans_;
   common::ObSEArray<int64_t, 4> partition_ids_;
-  TO_STRING_KV(K_(table_id), K_(index_tid), K_(part_cnt), K_(is_table), K_(dml_subplans), K_(partition_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObAssignColumns {
@@ -221,8 +220,7 @@ struct ObAssignColumns {
     return assign_columns_;
   }
 
-  TO_STRING_KV("old_projector", common::ObArrayWrap<int32_t>(old_projector_, old_projector_size_), "new_projector",
-      common::ObArrayWrap<int32_t>(new_projector_, new_projector_size_), K_(assign_columns));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int32_t* old_projector_;
   int64_t old_projector_size_;
   int32_t* new_projector_;
@@ -261,8 +259,7 @@ struct ObTableDMLInfo {
     return is_enable_row_movement_;
   }
 
-  TO_STRING_KV(K_(distinct_algo), K_(index_infos), K_(assign_columns), K_(is_enable_row_movement), K_(rowkey_cnt),
-      K_(need_check_filter_null));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct RowkeyItem {
@@ -333,7 +330,7 @@ struct DMLPartInfo {
   OB_UNIS_VERSION(1);
 
 public:
-  TO_STRING_KV(K_(partition_key), K_(part_row_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey partition_key_;
   int64_t part_row_cnt_;
@@ -375,7 +372,7 @@ public:
   {
     part_infos_.set_allocator(allocator);
   }
-  TO_STRING_KV(K_(location_idx), K_(is_single_part), K_(part_infos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t location_idx_;

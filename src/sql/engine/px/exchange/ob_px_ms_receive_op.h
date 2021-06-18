@@ -84,7 +84,7 @@ private:
     }
     virtual void clean_row_store(ObExecContext& ctx) = 0;
 
-    TO_STRING_KV(K_(finish));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   public:
     ObChunkDatumStore* get_row_store_;

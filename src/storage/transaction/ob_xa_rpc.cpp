@@ -23,6 +23,55 @@ using namespace transaction;
 using namespace common;
 
 namespace obrpc {
+int64_t ObXAPrepareRPCRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_id), K_(xid), K_(stmt_timeout));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObXAEndTransRPCRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_id), K_(xid), K_(is_rollback), K_(is_terminated));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObXASyncStatusRPCRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_id), K_(xid), K_(sender), K_(is_new_branch), K_(is_stmt_pull), K_(is_tightly_coupled),K_(pull_trans_desc), K_(timeout_seconds));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObXASyncStatusRPCResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_desc), K_(is_stmt_pull));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObXAMergeStatusRPCRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_desc), K_(is_stmt_push), K_(is_tightly_coupled), K_(xid), K_(seq_no));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObXAHbRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trans_id), K_(xid), K_(sender));
+  J_OBJ_END();
+  return pos;
+}
+
 OB_SERIALIZE_MEMBER(ObXAPrepareRPCRequest, trans_id_, xid_, stmt_timeout_);
 OB_SERIALIZE_MEMBER(ObXAEndTransRPCRequest, trans_id_, xid_, is_rollback_, is_terminated_);
 OB_SERIALIZE_MEMBER(ObXASyncStatusRPCRequest, trans_id_, xid_, sender_, is_new_branch_, is_stmt_pull_,

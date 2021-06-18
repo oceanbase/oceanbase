@@ -17,6 +17,14 @@
 
 namespace oceanbase {
 namespace blocksstable {
+int64_t ObMacroBlocksWriteCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_ctx), K_(macro_block_list), K_(file_handle));
+  J_OBJ_END();
+  return pos;
+}
 ObMacroBlocksWriteCtx::ObMacroBlocksWriteCtx()
     : allocator_(ObModIds::OB_MACRO_BLOCK_WRITE_CTX),
       file_ctx_(allocator_),

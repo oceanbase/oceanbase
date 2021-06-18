@@ -397,3 +397,19 @@ int ObOptimizer::check_unique_index(const ObIArray<ObColumnRefRawExpr*>& column_
   }
   return ret;
 }
+int64_t ObExprSelPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(expr_), K(sel_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t NumberingExchangeCtx::IdStruct::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(current_px_id), K_(next_dfo_id));
+  J_OBJ_END();
+  return pos;
+}

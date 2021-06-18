@@ -20,6 +20,14 @@
 
 namespace oceanbase {
 namespace storage {
+int64_t ObDMLBaseParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TIMEOUT, timeout_, N_SCHEMA_VERSION, schema_version_, N_SCAN_FLAG, query_flag_, N_SQL_MODE, sql_mode_,N_IS_TOTAL_QUANTITY_LOG, is_total_quantity_log_, K_(only_data_table), KP_(table_param), K_(tenant_schema_version),K_(is_ignore), K_(duplicated_rows), K_(prelock));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 using namespace share::schema;
 

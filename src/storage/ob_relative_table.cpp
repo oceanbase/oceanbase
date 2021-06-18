@@ -23,6 +23,14 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 namespace storage {
+int64_t ObRelativeTable::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("index_id", NULL == schema_ ? 0 : schema_->get_table_id(), KP(schema_), K_(allow_not_ready),K_(use_schema_param), KPC(schema_param_));
+  J_OBJ_END();
+  return pos;
+}
 // ------ ObRelativeTable ------ //
 bool ObRelativeTable::set_schema_param(const ObTableSchemaParam* param)
 {

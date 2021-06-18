@@ -18,6 +18,62 @@ namespace oceanbase {
 using namespace common;
 
 namespace transaction {
+int64_t ObTrxMsgBase::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(trans_id), K_(msg_type), K_(trans_time), K_(sender), K_(receiver), K_(trans_param),K_(sender_addr), K_(timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTrx2PCPrepareRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(stc),K_(partition_log_info_arr), K_(batch_same_leader_partitions), K_(app_trace_info), K_(xid), K_(is_xa_prepare));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTrx2PCPrepareResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(state),K_(partition_log_info_arr), K_(trans_version), K_(prepare_log_id), K_(prepare_log_timestamp),K_(need_wait_interval_us), K_(app_trace_info), K_(publish_version), K_(xid), K_(is_xa_prepare));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTrx2PCCommitRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(batch_same_leader_partitions));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTrx2PCCommitResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status),K_(batch_same_leader_partitions), K_(commit_log_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTrx2PCAbortRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(batch_same_leader_partitions));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTrx2PCClearRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status),K_(batch_same_leader_partitions), K_(clear_log_base_ts));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObTrxMsgBase, tenant_id_, trans_id_, msg_type_, timestamp_, trans_time_, sender_, receiver_,
     trans_param_, sender_addr_);

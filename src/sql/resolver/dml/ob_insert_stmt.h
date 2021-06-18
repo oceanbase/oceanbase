@@ -36,8 +36,7 @@ struct ObDupKeyScanInfo {
         conflict_exprs_()
   {}
 
-  TO_STRING_KV(K_(table_id), K_(index_tid), K_(loc_table_id), K_(table_name), K_(only_data_table), K_(output_exprs),
-      K_(conflict_exprs));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int deep_copy(ObRawExprFactory& expr_factory, const ObDupKeyScanInfo& other);
   int assign(const ObDupKeyScanInfo& other);
@@ -56,7 +55,7 @@ struct ObUniqueConstraintInfo {
   ObUniqueConstraintInfo()
       : table_id_(common::OB_INVALID_ID), index_tid_(common::OB_INVALID_ID), constraint_name_(), constraint_columns_()
   {}
-  TO_STRING_KV(K_(table_id), K_(index_tid), K_(constraint_name), K_(constraint_columns));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   inline void reset()
   {
     table_id_ = common::OB_INVALID_ID;
@@ -92,7 +91,7 @@ struct ObInsertTableInfo {
 
   int deep_copy(ObRawExprFactory& expr_factory, const ObInsertTableInfo& other);
   int assign(const ObInsertTableInfo& other);
-  TO_STRING_KV(K_(table_id), K_(when_conds_idx), K_(check_constraint_exprs), K_(when_conds_expr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t table_id_;
   int64_t when_conds_idx_;
   RawExprArray when_conds_expr_;

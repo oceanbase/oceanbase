@@ -109,7 +109,7 @@ struct DfoInfo {
     }
     return f;
   }
-  TO_STRING_KV(K_(status), K_(dop));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObLogExchange;
@@ -123,7 +123,7 @@ struct PxInfo {
   DfoInfo* root_dfo_;
   int64_t threads_;
   int64_t acc_threads_;
-  TO_STRING_KV(K_(threads), K_(acc_threads));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObPxResourceAnalyzer {

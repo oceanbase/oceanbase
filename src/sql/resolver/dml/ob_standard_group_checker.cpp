@@ -16,6 +16,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObStandardGroupChecker::ObUnsettledExprItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_EXPR, PC(expr_), K_(start_idx), K_(dependent_column_cnt));
+  J_OBJ_END();
+  return pos;
+}
 int ObStandardGroupChecker::add_group_by_expr(const ObRawExpr* expr)
 {
   int ret = OB_SUCCESS;

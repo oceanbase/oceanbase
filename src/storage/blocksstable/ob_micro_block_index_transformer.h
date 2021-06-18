@@ -46,7 +46,7 @@ struct MediumNode {
   int32_t first_child_index_;
   int32_t child_num_;
   bool is_valid();
-  TO_STRING_KV(K_(obj), K_(first_block_index), K_(first_child_index), K_(child_num));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObMicroBlockIndexTransformer {

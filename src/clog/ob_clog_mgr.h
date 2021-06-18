@@ -471,7 +471,7 @@ private:
     int64_t quorum_;
     int64_t mc_timestamp_;
     int64_t sync_num_;
-    TO_STRING_KV(K(member_list_), K(quorum_), K(mc_timestamp_), K(sync_num_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   typedef common::ObLinearHashMap<common::ObAddr, McCtxArray> ServerMcCtxMap;
   typedef common::ObLinearHashMap<common::ObPartitionKey, PartitionInfoCtx> PartitionInfoCtxMap;

@@ -22,6 +22,14 @@
 namespace oceanbase {
 using namespace common;
 namespace share {
+int64_t ObZoneInfoItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(name), K_(value), K_(info));
+  J_OBJ_END();
+  return pos;
+}
 
 ObZoneInfoItem::ObZoneInfoItem(ObZoneInfoItem::ItemList& list, const char* name, int64_t value, const char* info)
     : name_(name), value_(value), info_(info)

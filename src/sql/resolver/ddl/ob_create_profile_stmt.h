@@ -33,7 +33,7 @@ public:
   {
     return create_profile_arg_;
   }
-  TO_STRING_KV(K_(create_profile_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // data members

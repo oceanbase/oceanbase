@@ -31,3 +31,11 @@ ObUserProfileStmt::ObUserProfileStmt() : ObDDLStmt(NULL, stmt::T_USER_PROFILE), 
 
 ObUserProfileStmt::~ObUserProfileStmt()
 {}
+int64_t ObUserProfileStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(create_profile_arg));
+  J_OBJ_END();
+  return pos;
+}

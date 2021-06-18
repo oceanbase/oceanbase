@@ -46,8 +46,7 @@ struct ObRaidCommonHeader final {
   int set_checksum(const void* payload_buf, const int64_t len);
   int check_checksum(const void* payload_buf, const int64_t len) const;
 
-  TO_STRING_KV(K_(magic), K_(version), K_(header_length), K_(header_checksum), K_(data_size), K_(data_checksum),
-      K_(data_timestamp), "strip_size", header_length_ + data_size_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObScanDiskInfo final {
@@ -56,7 +55,7 @@ struct ObScanDiskInfo final {
 
   ObScanDiskInfo() : disk_id_(-1), has_sstable_file_(false)
   {}
-  TO_STRING_KV(K_(disk_id), K_(has_sstable_file));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObDiskFileInfo {
@@ -87,8 +86,7 @@ struct ObDiskFileInfo {
   ObDiskFileInfo& operator=(const ObDiskFileInfo& r);
   int set_disk_path(const common::ObString& sstable_path, const common::ObString& disk_name);
   const char* get_status_str() const;
-  TO_STRING_KV(
-      KP(this), K_(disk_id), K_(status), K_(create_ts), K_(rebuild_finish_ts), K_(disk_name), K_(sstable_path));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(OB_DISK_FILE_INFO_VERSION);
 };
 
@@ -100,7 +98,7 @@ struct ObDiskFileStatus {
   {}
   bool is_valid() const;
   int get_disk_fd(ObDiskFd& fd) const;
-  TO_STRING_KV(K_(fd), K_(info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // must keep this struct operator =() won't fail
@@ -129,9 +127,7 @@ struct ObRaidFileInfo final {
   }
   bool equals(const ObRaidFileInfo& other) const;
 
-  TO_STRING_KV(K_(format_version), K_(rebuild_seq), K_(rebuild_ts), K_(bootstrap_ts), K_(blocksstable_size),
-      K_(strip_size), "strip_payload_size", get_strip_payload_size(), K_(src_data_num), K_(parity_num),
-      K_(macro_block_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(OB_RAID_FILE_INFO_VERSION);
 };
 
@@ -146,7 +142,7 @@ struct ObDiskFileSuperBlock {
   bool is_valid() const;
   bool equals(const ObDiskFileSuperBlock& other) const;
   void reset();
-  TO_STRING_KV(K_(disk_idx), K_(info), K_(disk_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(OB_DISK_FILE_SUPER_BLOCK_VERSION);
 };
 
@@ -182,7 +178,7 @@ struct ObRaidFileStatus {
 
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(is_inited), K_(info), K_(disk_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObRaidStripLocation {
@@ -193,9 +189,7 @@ public:
       const int64_t block_index, const int64_t block_offset, const ObRaidFileInfo& info, const bool include_header);
 
   int next_strip(int64_t& strip_idx, int64_t& disk_id, int64_t& offset, int64_t& strip_left_size);
-  TO_STRING_KV(K_(block_index), K_(block_offset), K_(strip_num), K_(strip_size), K_(strip_payload_size), K_(disk_count),
-      K_(blocksstable_size), K_(include_header), K_(is_inited), K_(strip_skewing_step), K_(cur_idx), K_(has_next),
-      K_(strip_infos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   struct StripInfo final {
@@ -203,7 +197,7 @@ private:
     int64_t disk_idx_;
     int64_t offset_;
     int64_t strip_idx_;
-    TO_STRING_KV(K_(disk_idx), K_(offset), K_(strip_idx));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   bool is_inited_;
@@ -245,8 +239,7 @@ public:
       const ObBitSet<OB_MAX_DISK_NUMBER>& recover_disk_idx_set, ObIAllocator* allocator, ObIOMaster* io_master);
   virtual int set_read_io_buf(char* io_buf, const int64_t io_buf_size, const int64_t aligned_offset);
   virtual int get_recover_request_num(int64_t& recover_request_num) const;
-  TO_STRING_KV(K_(is_inited), K_(macro_block_ctx), K_(offset), K_(size), K_(io_desc), KP_(out_io_buf),
-      K_(out_io_buf_size), K_(aligned_offset));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   bool is_inited_;
@@ -274,7 +267,7 @@ public:
     RecoverParam();
     int assign(const RecoverParam& param);
     bool is_valid() const;
-    TO_STRING_KV(K_(data_count), K_(parity_count), K_(strip_size), K_(input_index), K_(recover_index), K_(block_index));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   ObRaidRecoverIOCallback();
   virtual ~ObRaidRecoverIOCallback();
@@ -286,8 +279,7 @@ public:
   virtual int inner_process(const bool is_success);
   virtual int inner_deep_copy(char* buf, const int64_t buf_len, ObIOCallback*& callback) const;
   virtual const char* get_data();
-  TO_STRING_KV(K_(is_inited), KP_(allocator), KP_(buf), KP_(io_buf_size), K_(io_buf_size), K_(recover_param),
-      K_(out_offset), KP_(out_io_buf), K_(out_io_buf_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   bool is_inited_;
@@ -374,7 +366,7 @@ public:
   virtual int unlink_block(const ObStorageFile& file, const MacroBlockId& macro_id) override;
   virtual int link_block(const ObStorageFile& file, const MacroBlockId& macro_id) override;
 
-  TO_STRING_KV("type", "RAID");
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int open(bool& is_formated);

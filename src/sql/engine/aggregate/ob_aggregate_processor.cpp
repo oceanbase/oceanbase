@@ -29,6 +29,22 @@ namespace oceanbase {
 using namespace common;
 using namespace common::number;
 namespace sql {
+int64_t ObAggregateProcessor::GroupRow::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(n_cells));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGroupRowItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(group_id), KPC_(group_row), K_(groupby_datums_hash), KP_(group_exprs), KP_(next));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_DEF_SERIALIZE(ObAggrInfo)
 {

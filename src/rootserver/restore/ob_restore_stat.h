@@ -41,8 +41,7 @@ public:
         table_cnt_(0)
   {}
 
-  TO_STRING_KV(
-      KT_(schema_id), K_(partition_id), K_(partition_cnt), K_(schema_paxos_cnt), K_(begin), K_(end), K_(table_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObPartitionKey get_key() const
   {

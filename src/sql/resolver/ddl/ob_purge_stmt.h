@@ -46,7 +46,14 @@ public:
   {
     return purge_table_arg_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(purge_table_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(stmt_type), K_(purge_table_arg));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   obrpc::ObPurgeTableArg purge_table_arg_;
@@ -95,7 +102,14 @@ public:
   {
     return purge_index_arg_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(purge_index_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(stmt_type), K_(purge_index_arg));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   obrpc::ObPurgeIndexArg purge_index_arg_;
@@ -143,7 +157,14 @@ public:
   {
     return purge_db_arg_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(purge_db_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(stmt_type), K_(purge_db_arg));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   obrpc::ObPurgeDatabaseArg purge_db_arg_;
@@ -186,7 +207,14 @@ public:
   {
     return purge_tenant_arg_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(purge_tenant_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(stmt_type), K_(purge_tenant_arg));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   obrpc::ObPurgeTenantArg purge_tenant_arg_;
@@ -238,7 +266,14 @@ public:
   {
     return purge_recyclebin_arg_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(purge_recyclebin_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(stmt_type), K_(purge_recyclebin_arg));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   obrpc::ObPurgeRecycleBinArg purge_recyclebin_arg_;

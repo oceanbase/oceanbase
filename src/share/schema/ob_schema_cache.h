@@ -42,7 +42,7 @@ public:
   virtual uint64_t hash() const;
   virtual int64_t size() const;
   virtual int deep_copy(char* buf, int64_t buf_len, ObIKVCacheKey*& key) const;
-  TO_STRING_KV(K_(schema_type), K_(schema_id), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObSchemaType schema_type_;
   uint64_t schema_id_;
@@ -57,7 +57,7 @@ public:
   {}
   virtual int64_t size() const;
   virtual int deep_copy(char* buf, int64_t buf_len, ObIKVCacheValue*& value) const;
-  TO_STRING_KV(K_(schema_type), KP_(schema));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObSchemaType schema_type_;
   const ObSchema* schema_;

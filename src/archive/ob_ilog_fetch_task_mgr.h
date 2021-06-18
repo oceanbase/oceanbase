@@ -31,8 +31,7 @@ public:
   int assign(const PGFetchTask& task);
   void free();  // free clog_task_, only call when stop archive
   void destroy();
-  TO_STRING_KV(K(pg_key_), K(incarnation_), K(archive_round_), K(epoch_), K(start_log_id_), K(ilog_file_id_),
-      K(clog_task_), K(clog_size_), K(clog_count_), K(first_log_gen_tstamp_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   // start_log_id = max_log_id + 1, this log maybe not exist
@@ -63,7 +62,7 @@ public:
   IlogPGFetchQueue* get_next();
   int64_t get_task_count();
   void destroy();
-  TO_STRING_KV(K(ilog_file_id_), K(next_), K(pg_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   typedef common::ObSEArray<PGFetchTask, 32> PGArray;
 
 private:

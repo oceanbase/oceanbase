@@ -67,7 +67,7 @@ public:
     *this = tmp_handle;
   }
   const ObOptColumnStat* stat_;
-  TO_STRING_KV(K(stat_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObOptColumnStatCache* cache_;

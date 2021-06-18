@@ -44,7 +44,7 @@ public:
   {
     return NULL != name_ && value_ >= 0;
   }
-  TO_STRING_KV(K_(name), K_(value), K_(info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   operator int64_t() const
   {
     return value_;

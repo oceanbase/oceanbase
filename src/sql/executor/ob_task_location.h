@@ -95,7 +95,7 @@ public:
   {
     return task_loc.server_ == server_ && task_loc.ob_task_id_.equal(ob_task_id_);
   }
-  TO_STRING_KV(N_SERVER, server_, N_OB_TASK_ID, ob_task_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObAddr server_;  // immediate result server address

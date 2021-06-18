@@ -36,7 +36,7 @@ public:
 public:
   ObDebugSyncAction() : sync_point_(INVALID_DEBUG_SYNC_POINT), timeout_(0), execute_(0), no_clear_()
   {}
-  TO_STRING_KV(K_(sync_point), K_(timeout), K_(execute), K_(signal), K_(wait), K_(no_clear), K_(broadcast));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void reset()
   {

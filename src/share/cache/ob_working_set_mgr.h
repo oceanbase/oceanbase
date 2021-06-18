@@ -64,7 +64,7 @@ struct WorkingSetMB {
   int store(const ObIKVCacheKey& key, const ObIKVCacheValue& value, ObKVCachePair*& kvpair);
   int alloc(const int64_t key_size, const int64_t value_size, const int64_t align_kv_size, ObKVCachePair*& kvpair);
   void set_full(const double base_mb_score);
-  TO_STRING_KV(KP_(mb_handle), K_(seq_num), K_(block_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObKVMemBlockHandle* mb_handle_;
   uint32_t seq_num_;  // used to check whether mb_handle_ still store working set's data
   int64_t block_size_;
@@ -122,7 +122,7 @@ public:
   {
     return used_;
   }
-  TO_STRING_KV(K_(inited), K_(ws_list_key), K_(used), K_(limit));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int build_ws_mb(ObKVMemBlockHandle* mb_handle, WorkingSetMB*& ws_mb);
@@ -183,7 +183,7 @@ private:
       seq_num_ = 0;
       in_array_ = false;
     }
-    TO_STRING_KV(KP_(mb_handle), K_(seq_num), K_(in_array));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObKVMemBlockHandle* mb_handle_;
     uint32_t seq_num_;
     bool in_array_;  // indicate whether already in free array

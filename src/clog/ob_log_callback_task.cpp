@@ -15,6 +15,14 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObLogCallbackTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_type), K_(partition_key));
+  J_OBJ_END();
+  return pos;
+}
 int ObLogCallbackTask::init(const CallbackTaskType& task_type, const common::ObPartitionKey& partition_key)
 {
   int ret = OB_SUCCESS;

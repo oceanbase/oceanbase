@@ -76,7 +76,7 @@ struct ObPartitionGroupInfoResult {
   {
     return choose_src_info_.is_valid();
   }
-  TO_STRING_KV(K_(result), K_(choose_src_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   obrpc::ObFetchPGInfoResult result_;
   ObMigrateSrcInfo choose_src_info_;
@@ -132,14 +132,7 @@ public:
   int set_is_restore_for_add_replica(const int16_t src_is_restore);
   bool is_copy_index() const;
   int alloc_migrate_dag(ObBaseMigrateDag*& base_migrate_dag);
-  TO_STRING_KV(K_(replica_op_arg), KP_(macro_indexs), "action", trans_action_to_str(action_), K_(result),
-      K_(replica_state), K_(doing_task_cnt), K_(total_task_cnt), K_(need_rebuild), K(create_ts_), K(task_id_),
-      K(copy_size_), K(continue_fail_count_), K(rebuild_count_), K(finish_ts_), K(clog_parent_), K(migrate_src_info_),
-      K(wait_replay_start_ts_), K(wait_minor_merge_start_ts_), K(last_confirmed_log_id_), K(last_confirmed_log_ts_),
-      K(group_task_id_), KP(group_task_), K_(during_migrating), K_(need_online_for_rebuild), K_(trace_id_array),
-      K_(need_offline), K_(is_restore), K_(use_slave_safe_read_ts), K_(is_copy_cover_minor), K(mig_src_file_id_),
-      K(mig_dest_file_id_), K(src_suspend_ts_), K(is_takeover_finished_), K(is_member_change_finished_),
-      K_(local_last_replay_log_ts), K_(trans_table_handle), K_(create_new_pg), K_(fetch_pg_info_compat_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::SpinRWLock lock_;
   ObReplicaOpArg replica_op_arg_;
@@ -236,7 +229,7 @@ struct ObPartitionMigrateCtx final {
   // to prevent discontinuity after the migration
   bool need_reuse_local_minor_;
 
-  TO_STRING_KV(KP_(ctx), K_(copy_info), K_(is_partition_exist), K_(handle), K_(need_reuse_local_minor));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionMigrateCtx);
@@ -247,7 +240,7 @@ struct ObIPartMigrationTask {
   ObIPartMigrationTask() : arg_(), status_(MAX), result_(OB_SUCCESS)
   {}
 
-  TO_STRING_KV(K_(status), K_(result), K_(arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObReplicaOpArg arg_;
   TaskStatus status_;
   int32_t result_;
@@ -257,7 +250,7 @@ struct ObPartMigrationTask : ObIPartMigrationTask {
   ObPartMigrationTask() : ObIPartMigrationTask(), ctx_(), need_reset_migrate_status_(false), during_migrating_(false)
   {}
   int assign(const ObPartMigrationTask& task);
-  TO_STRING_KV(K_(status), K_(result), K_(arg), K_(need_reset_migrate_status), K_(during_migrating), K_(ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObMigrateCtx ctx_;
   bool need_reset_migrate_status_;
   bool during_migrating_;
@@ -284,7 +277,7 @@ struct ObReportPartMigrationTask : ObIPartMigrationTask {
     return ret;
   }
 
-  TO_STRING_KV(K_(need_report_checksum), K_(partitions), KP_(ctx), K_(data_statics));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool need_report_checksum_;
   ObPartitionArray partitions_;
@@ -411,8 +404,7 @@ public:
   virtual int do_task() = 0;
   virtual Type get_task_type() const = 0;
 
-  TO_STRING_KV(K_(task_id), K_(is_inited), K_(is_finished), K_(is_batch_mode), KP_(partition_service),
-      K_(first_error_code), K_(type), "sub_task_count", task_list_.count(), K_(task_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   int build_migrate_ctx(const ObReplicaOpArg& arg, ObMigrateCtx& migrate_ctx);
@@ -479,9 +471,7 @@ public:
     return PART_GROUP_MIGATION_TASK;
   }
 
-  TO_STRING_KV(K_(task_id), K_(is_inited), K_(is_finished), K_(is_batch_mode), K_(schedule_ts),
-      K_(start_change_member_ts), KP_(partition_service), K_(first_error_code), K_(type), "sub_task_count",
-      task_list_.count(), K_(task_list), K_(restore_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int check_partition_validation();  // Called only before starting execution, do not consider concurrency
@@ -926,7 +916,7 @@ struct ObMigrateLogicSSTableCtx {
 
     SubLogicTask();
     virtual ~SubLogicTask();
-    TO_STRING_KV(K_(end_key), K_(block_write_ctx), K_(lob_block_write_ctx));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   SubLogicTask* tasks_;
   int64_t task_count_;
@@ -944,7 +934,7 @@ struct ObMigrateLogicSSTableCtx {
   int build_sub_task(const common::ObIArray<common::ObStoreRowkey>& end_key_list);
   int get_sub_task(const int64_t idx, SubLogicTask*& sub_task);
   int get_dest_table_key(ObITable::TableKey& dest_table_key);
-  TO_STRING_KV(K_(meta), K_(task_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrateLogicSSTableCtx);

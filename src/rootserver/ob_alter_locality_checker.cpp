@@ -39,6 +39,30 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 namespace rootserver {
+int64_t ObCommitAlterTenantLocalityArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCommitAlterTablegroupLocalityArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tablegroup_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCommitAlterTableLocalityArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER((ObCommitAlterTenantLocalityArg, ObDDLArg), tenant_id_);
 OB_SERIALIZE_MEMBER((ObCommitAlterTablegroupLocalityArg, ObDDLArg), tablegroup_id_);

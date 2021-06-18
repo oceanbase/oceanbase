@@ -15,6 +15,14 @@
 namespace oceanbase {
 using namespace common;
 namespace extlog {
+int64_t ObExtRpcQit::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_inited_), K(type_), K(deadline_));
+  J_OBJ_END();
+  return pos;
+}
 
 static const int64_t handle_times_[ObExtRpcQit::RPC_TYPE_MAX] = {
     ObExtRpcQit::HANDLE_TIME_INVALD,

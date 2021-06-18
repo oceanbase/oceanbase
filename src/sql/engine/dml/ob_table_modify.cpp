@@ -35,6 +35,70 @@ using namespace share;
 using namespace share::schema;
 using namespace observer;
 namespace sql {
+int64_t ObColumnConvInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(column_flags), K_(column_info), K_(str_values));
+  J_OBJ_END();
+  return pos;
+}
+int64_t DMLSubPlan::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KPC_(subplan_root), "value_projector", common::ObArrayWrap<int32_t>(value_projector_, value_projector_size_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGlobalIndexDMLInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(index_tid), K_(part_cnt), K_(table_locs), K_(dml_subplans));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGlobalIndexDMLCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(index_tid), K_(part_cnt), K_(is_table), K_(dml_subplans), K_(partition_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAssignColumns::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("old_projector", common::ObArrayWrap<int32_t>(old_projector_, old_projector_size_), "new_projector",common::ObArrayWrap<int32_t>(new_projector_, new_projector_size_), K_(assign_columns));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableDMLInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(distinct_algo), K_(index_infos), K_(assign_columns), K_(is_enable_row_movement), K_(rowkey_cnt),K_(need_check_filter_null));
+  J_OBJ_END();
+  return pos;
+}
+int64_t DMLPartInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key), K_(part_row_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableModifyInput::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(location_idx), K_(is_single_part), K_(part_infos));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(DMLPartInfo, partition_key_, part_row_cnt_);
 
 int SeRowkeyItem::init(const ObExprPtrIArray& row, ObEvalCtx& ctx, ObIAllocator& alloc, const int64_t rowkey_cnt)

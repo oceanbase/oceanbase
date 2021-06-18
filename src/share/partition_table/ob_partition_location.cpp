@@ -20,6 +20,38 @@
 namespace oceanbase {
 using namespace common;
 namespace share {
+int64_t ObPidAddrPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pid), K_(addr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplicaLocation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(role), K_(sql_port), K_(replica_type), K_(reserved), K_(property));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionLocation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(table_id), K_(partition_id), K_(partition_cnt), K_(pg_key), K_(replica_locations), K_(renew_time),K_(sql_renew_time), K_(is_mark_fail));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionReplicaLocation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KT_(table_id), K_(partition_id), K_(partition_cnt), K_(pg_key), K_(replica_location), K_(renew_time));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObPartitionLocation, table_id_, partition_id_, partition_cnt_, replica_locations_, renew_time_,
     is_mark_fail_, pg_key_);

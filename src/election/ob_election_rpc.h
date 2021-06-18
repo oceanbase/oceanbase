@@ -76,7 +76,7 @@ public:
     return send_timestamp_;
   }
 
-  TO_STRING_KV(K_(status), K_(send_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int status_;

@@ -24,6 +24,30 @@ using namespace common;
 using namespace share;
 
 namespace storage {
+int64_t ObRecoverPoint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(snapshot_version_), K(recover_log_id_), K(checksum_), K_(epoch_id), K_(submit_timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecoverVec::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(recover_vec_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSavedStorageInfoV2::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("clog_info", clog_info_, "data_info", data_info_, K_(pg_file_id));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_DEF_SERIALIZE(ObSavedStorageInfoV2)
 {

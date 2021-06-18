@@ -83,7 +83,14 @@ struct TraverseStackFrame {
   const ParseNode* cur_node_;
   int64_t next_child_idx_;
 
-  TO_STRING_KV(K_(next_child_idx), K(cur_node_->type_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(next_child_idx), K(cur_node_->type_));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 }  // namespace sql

@@ -86,7 +86,7 @@ public:
     return flag_ & OB_MYSQL_ZEROFILL_FLAG;
   }
 
-  TO_STRING_KV(N_CALC_META, calc_meta_, N_LENGTH, max_length_, N_FLAG, flag_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // connvert ObObj to this type
@@ -222,7 +222,7 @@ public:
     return expr_type_;
   }
 
-  TO_STRING_KV(K_(expr_id), K_(expr_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   uint64_t expr_id_;
@@ -1139,7 +1139,7 @@ public:
     // compare operator's right operator is row_iterator
     bool right_is_iter_;
 
-    TO_STRING_KV(K(subquery_key_), K(left_is_iter_), K(right_is_iter_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   } __attribute__((packed));
   static_assert(sizeof(ExtraInfo) <= sizeof(uint64_t), "too big extra info");
 

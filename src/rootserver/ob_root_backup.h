@@ -77,7 +77,7 @@ struct ObBreakPointPGInfo {
   {
     pkey_.reset();
   }
-  TO_STRING_KV(K_(pkey));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObTenantBackupMetaInfo {
@@ -90,7 +90,7 @@ struct ObTenantBackupMetaInfo {
     pg_count_ = 0;
     partition_count_ = 0;
   }
-  TO_STRING_KV(K_(break_point_info), K_(pg_count), K_(partition_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObBreakPointPGInfo break_point_info_;
   int64_t pg_count_;

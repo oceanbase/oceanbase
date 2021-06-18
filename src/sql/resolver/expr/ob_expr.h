@@ -165,7 +165,7 @@ public:
   virtual int64_t get_children_count() const;
   virtual int get_children(ExprArray& jit_exprs) const;
 
-  TO_STRING_KV(K_(type), K_(expr_class));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   ObItemType type_;

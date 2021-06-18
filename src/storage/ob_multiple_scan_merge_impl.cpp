@@ -427,3 +427,11 @@ int ObMultipleScanMergeImpl::prepare_loser_tree()
   loser_tree_.reset();
   return ret;
 }
+int64_t ObQueryIteratorConsumer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("consumers", ObArrayWrap<int64_t>(consumer_iters_, consumer_num_), K_(consumer_num), K_(base_sstable_iter_idx));
+  J_OBJ_END();
+  return pos;
+}

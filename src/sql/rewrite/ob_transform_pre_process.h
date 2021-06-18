@@ -33,7 +33,7 @@ struct MVDesc {
 
   MVDesc() : mv_tid_(OB_INVALID_ID), base_tid_(OB_INVALID_ID), dep_tid_(OB_INVALID_ID), mv_stmt_(NULL)
   {}
-  TO_STRING_KV("mv_tid", mv_tid_, "base_tid", base_tid_, "dep_tid_", dep_tid_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObTransformPreProcess : public ObTransformRule {
@@ -73,7 +73,7 @@ private:
       bool cs_level_equal = share::is_oracle_mode() ? true : (coll_level_ == other.coll_level_);
       return obj_type_ == other.obj_type_ && coll_type_ == other.coll_type_ && cs_level_equal;
     }
-    TO_STRING_KV(K_(obj_type), K_(coll_type));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   /*
    * following functions are for grouping sets and multi rollup

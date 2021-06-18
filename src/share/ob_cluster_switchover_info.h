@@ -134,8 +134,7 @@ public:
     can_not_access_cluster_.reset();
   }
 
-  TO_STRING_KV(
-      K_(info), "info_str", switchover_info_to_str(info_), K_(synced_cluster_id_array), K_(can_not_access_cluster));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 }  // namespace share

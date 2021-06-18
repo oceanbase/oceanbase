@@ -34,7 +34,14 @@ struct Item {
   {}
   Item(const int64_t key, const int64_t value, const int64_t ref) : key_(key), value_(value), ref_(ref)
   {}
-  TO_STRING_KV(K_(key), K_(value));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(key), K_(value));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 struct Node : public ObPreAllocLinkHashNode<int64_t, Item> {

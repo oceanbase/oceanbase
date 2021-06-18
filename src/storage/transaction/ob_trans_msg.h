@@ -483,13 +483,7 @@ public:
     return get_serialize_size();
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(trans_id), K_(msg_type), K_(err_msg_type), K_(sender), K_(receiver), K_(scheduler),
-      K_(coordinator), K_(participants), K_(trans_param), K_(sender_addr), K_(prepare_log_id),
-      K_(prepare_log_timestamp), K_(partition_log_info_arr), K_(sql_no), K_(additional_sql_no), K_(status), K_(state),
-      K_(trans_version), K_(request_id), K_(trans_location_cache), K_(commit_times), K_(cluster_id),
-      K_(snapshot_version), K_(stmt_expired_time), K_(need_create_ctx), K_(cluster_version), K_(snapshot_gene_type),
-      K_(can_elr), K_(is_dup_table_trans), K_(is_not_create_ctx_participant), K_(batch_same_leader_partitions),
-      K_(app_trace_info), K_(xid), K_(is_xa_prepare), K_(stmt_rollback_participants), K_(msg_timeout));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   bool is_valid() const;

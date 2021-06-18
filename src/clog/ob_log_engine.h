@@ -84,9 +84,7 @@ public:
     int64_t disk_log_buffer_cnt_;
     int64_t disk_log_buffer_size_;
     int64_t ethernet_speed_;
-    TO_STRING_KV(K_(log_dir), K_(index_log_dir), K_(log_shm_path), K_(index_log_shm_path), K_(cache_name),
-        K_(index_cache_name), K_(cache_priority), K_(index_cache_priority), K_(file_size), K_(read_timeout),
-        K_(write_timeout), K_(disk_log_buffer_size), K_(disk_log_buffer_cnt), K_(ethernet_speed));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 public:

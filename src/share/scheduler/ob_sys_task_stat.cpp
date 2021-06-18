@@ -15,6 +15,14 @@
 namespace oceanbase {
 using namespace common;
 namespace share {
+int64_t ObSysTaskStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(start_time), K_(task_id), K_(task_type), K_(svr_ip), K_(tenant_id), K_(is_cancel), K_(comment));
+  J_OBJ_END();
+  return pos;
+}
 
 const char* sys_task_type_to_str(const ObSysTaskType& type)
 {

@@ -27,7 +27,7 @@ public:
     return arg_;
   }
   // function members
-  TO_STRING_KV(K_(stmt_type), K_(arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void set_set_role_flag(int set_role_flag)
   {
     set_role_flag_ = set_role_flag;

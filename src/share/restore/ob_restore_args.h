@@ -34,7 +34,7 @@ struct ObSchemaIdPair {
   }
   uint64_t schema_id_;
   uint64_t backup_schema_id_;  // The schema_id of the remote backup
-  TO_STRING_KV(K_(schema_id), K_(backup_schema_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(1);
 };
 
@@ -126,8 +126,7 @@ public:
     char backup_index_name_buf_[common::OB_MAX_TABLE_NAME_BUF_LENGTH];
     char backup_tablegroup_name_buf_[common::OB_MAX_TABLEGROUP_NAME_LENGTH];
     char backup_database_name_buf_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH];
-    TO_STRING_KV(K_(backup_table_id), K_(backup_index_id), K_(backup_tablegroup_id), K_(backup_table_name),
-        K_(backup_index_name), K_(backup_database_name), K_(backup_tablegroup_name));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 public:
@@ -183,10 +182,7 @@ public:
   ObSchemaIdPair schema_id_pair_;  // tablegroup_id:backup_tablegroup_id or table_id:backup_table_id
   // TODO(): fix it after find out to_string core
   // TO_STRING_KV(K(tenant_id_));
-  TO_STRING_KV(K(tenant_id_), K_(locality), K_(primary_zone), K_(pool_list), K_(tcp_invited_nodes),
-      K_(base_data_version), K_(curr_data_version), K_(tenant_id), K_(restore_timeu), K_(backup_schema_id),
-      K_(partition_id), K_(schema_id_list), K_(sql_info), K_(schema_version), K_(uri_header), K_(cluster_name),
-      K_(storage_info), K_(schema_id_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   /* functions */

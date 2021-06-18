@@ -78,7 +78,7 @@ public:
       table_id_ = OB_INVALID_ID;
       partition_id_ = OB_INVALID_INDEX;
     }
-    TO_STRING_KV(K_(table_id), K_(partition_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     int64_t table_id_;
     int64_t partition_id_;
@@ -228,7 +228,7 @@ public:
     last_analyzed_ = 0;
   }
 
-  TO_STRING_KV(K_(last_analyzed));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t sstable_row_count_;

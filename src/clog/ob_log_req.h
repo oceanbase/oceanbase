@@ -97,8 +97,7 @@ struct ObLogReqContext {
   {
     return server_.is_valid() && pkey_.is_valid() && NULL != data_ && len_ >= 0;
   }
-  TO_STRING_KV(
-      N_TYPE, type_, N_SERVER, server_, N_PKEY, pkey_, N_REQ_ID, req_id_, N_SIZE, len_, N_CLUSTER_ID, cluster_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObLogReqType type_;
   common::ObAddr server_;
   common::ObPartitionKey pkey_;
@@ -413,7 +412,7 @@ public:
   uint64_t log_id_;
   ObConfirmedInfo confirmed_info_;
   bool batch_committed_;
-  TO_STRING_KV(K_(log_id), K_(confirmed_info), K_(batch_committed));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObRenewMsLogConfirmedInfoReq : public ObINetReq {
@@ -434,7 +433,7 @@ public:
   uint64_t log_id_;
   common::ObProposalID ms_proposal_id_;
   ObConfirmedInfo confirmed_info_;
-  TO_STRING_KV(K_(log_id), K_(ms_proposal_id), K_(confirmed_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObLogKeepaliveMsg : public ObINetReq {
@@ -451,7 +450,7 @@ public:
   uint64_t next_log_id_;
   int64_t next_log_ts_lb_;
   uint64_t deliver_cnt_;
-  TO_STRING_KV(K_(next_log_id), K_(next_log_ts_lb), K_(deliver_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObRestoreAliveMsg : public ObINetReq {
@@ -465,7 +464,7 @@ public:
   ~ObRestoreAliveMsg()
   {}
   void reset();
-  TO_STRING_KV(K_(start_log_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t start_log_id_;
 };
 
@@ -480,7 +479,7 @@ public:
   ~ObRestoreAliveReq()
   {}
   void reset();
-  TO_STRING_KV(K_(send_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t send_ts_;
 };
 
@@ -495,7 +494,7 @@ public:
   ~ObRestoreAliveResp()
   {}
   void reset();
-  TO_STRING_KV(K_(send_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t send_ts_;
 };
 
@@ -509,7 +508,7 @@ public:
   {}
   ~ObRestoreTakeoverMsg()
   {}
-  TO_STRING_KV(K_(send_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t send_ts_;
 };
 
@@ -533,7 +532,7 @@ public:
   uint64_t start_log_id_;
   bool is_in_member_list_;
   int32_t msg_type_;
-  TO_STRING_KV(K_(start_log_id), K_(is_in_member_list), K_(msg_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObFetchRegisterServerRespV2 : public ObINetReq {
@@ -682,7 +681,7 @@ public:
   int init(const transaction::ObTransID& trans_id, const common::ObPartitionArray& partition_array,
       const ObLogInfoArray& log_info_array);
   void reset();
-  TO_STRING_KV(K(trans_id_), K(partition_array_), K(log_info_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   transaction::ObTransID trans_id_;
@@ -707,7 +706,7 @@ public:
   }
   int init(const transaction::ObTransID& trans_id, const ObBatchAckArray& batch_ack_array);
   void reset();
-  TO_STRING_KV(K(trans_id_), K(batch_ack_array_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   transaction::ObTransID trans_id_;
@@ -753,7 +752,7 @@ public:
   int64_t switchover_epoch_;
   uint64_t leader_max_log_id_;
   int64_t leader_next_log_ts_;
-  TO_STRING_KV(K_(switchover_epoch), K_(leader_max_log_id), K_(leader_next_log_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObCheckRebuildReq : public ObINetReq {
@@ -783,7 +782,7 @@ public:
   ~ObSyncLogArchiveProgressMsg()
   {}
   ObPGLogArchiveStatus status_;
-  TO_STRING_KV(K_(status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 };  // end namespace clog

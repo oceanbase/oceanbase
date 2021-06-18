@@ -137,7 +137,7 @@ public:
     return enable_fast_freeze_;
   }
   int check_hotspot_need_fast_freeze(ObIPartitionGroup& pg, bool& need_fast_freeze);
-  TO_STRING_KV(K_(tenant_id), K_(enable_fast_freeze));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // the minimum schedule interval of fast freeze is 2min

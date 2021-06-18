@@ -22,6 +22,22 @@ using namespace oceanbase::sql::log_op_def;
 
 namespace oceanbase {
 namespace sql {
+int64_t DfoInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(status), K_(dop));
+  J_OBJ_END();
+  return pos;
+}
+int64_t PxInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(threads), K_(acc_threads));
+  J_OBJ_END();
+  return pos;
+}
 
 template <class T>
 class DfoTreeNormalizer {

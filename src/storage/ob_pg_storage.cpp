@@ -60,6 +60,30 @@ using namespace share::schema;
 using namespace share;
 using namespace obrpc;
 namespace storage {
+int64_t ObPGCreateSSTableParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(with_partition_param), KP_(with_table_param), KP_(table_key), KP_(meta), K_(data_blocks),K_(lob_blocks), KP_(bloomfilter_block), KP_(sstable_merge_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGStorage::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(pkey), KP_(meta), K_(log_seq_num), K_(last_freeze_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPGStorage::SerializePair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(buf), K_(size));
+  J_OBJ_END();
+  return pos;
+}
 
 bool ObPGCreateSSTableParam::is_valid() const
 {

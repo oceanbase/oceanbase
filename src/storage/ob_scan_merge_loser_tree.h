@@ -32,7 +32,7 @@ struct ObScanMergeLoserTreeItem {
     iter_idx_ = 0;
     iter_flag_ = 0;
   }
-  TO_STRING_KV(K_(iter_idx), K_(iter_flag), KPC(row_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObScanMergeLoserTreeCmp {

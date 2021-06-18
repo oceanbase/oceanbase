@@ -35,7 +35,7 @@ class ObPxDmlRowInfo;
 struct PartParamIdxArray {
   PartParamIdxArray() : part_id_(-1), part_param_idxs_()
   {}
-  TO_STRING_KV(K_(part_id), K_(part_param_idxs));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t part_id_;
   ObFixedArray<int64_t, common::ObIAllocator> part_param_idxs_;
 };
@@ -46,7 +46,7 @@ struct ObRemoteSqlInfo {
   ObRemoteSqlInfo() : use_ps_(false), is_batched_stmt_(false), remote_sql_(), ps_params_(nullptr)
   {}
 
-  TO_STRING_KV(K_(use_ps), K_(is_batched_stmt), K_(remote_sql), KPC_(ps_params));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool use_ps_;
   bool is_batched_stmt_;
@@ -535,7 +535,7 @@ public:
     return is_large_query_;
   }
   void add_px_dml_row_info(const ObPxDmlRowInfo& dml_row_info);
-  TO_STRING_KV("tenant_id", tenant_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int extend_param_frame(const int64_t old_size);

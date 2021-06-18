@@ -31,6 +31,14 @@ using namespace omt;
 using namespace observer;
 
 namespace obrpc {
+int64_t ObGtsRpcResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(status), K_(srr), K_(gts_start), K_(gts_end));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ObGtsRpcResult, tenant_id_, status_, srr_.mts_, gts_start_, gts_end_);
 
 int ObGtsRpcResult::init(

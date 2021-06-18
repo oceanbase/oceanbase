@@ -16,6 +16,30 @@
 
 namespace oceanbase {
 namespace share {
+int64_t ObFeedbackReplicaLocation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(role), K_(replica_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFeedbackPartitionLocation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("type", get_feedback_element_type_str(type_), KT_(table_id), K_(partition_id), K_(schema_version), K_(replicas));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFeedbackRerouteInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(role), K_(replica_type), "FeedbackTableName", common::ObString(tbl_name_len_, tbl_name_),K_(tbl_schema_version));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 
 int ObFeedbackReplicaLocation::serialize_struct_content(char* buf, const int64_t len, int64_t& pos) const

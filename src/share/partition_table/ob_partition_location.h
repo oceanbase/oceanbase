@@ -40,7 +40,7 @@ public:
     return pid_ == other.pid_ && addr_ == other.addr_;
   }
 
-  TO_STRING_KV(K_(pid), K_(addr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObPartitionReplicaLocation;
@@ -89,7 +89,7 @@ public:
   {
     return REPLICA_NOT_RESTORE != restore_status_ && REPLICA_LOGICAL_RESTORE_DATA != restore_status_;
   }
-  TO_STRING_KV(K_(server), K_(role), K_(sql_port), K_(replica_type), K_(reserved), K_(property));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 inline bool ObReplicaLocation::is_valid() const
@@ -222,8 +222,7 @@ public:
   }
 
   static int alloc_new_location(common::ObIAllocator& allocator, ObPartitionLocation*& new_location);
-  TO_STRING_KV(KT_(table_id), K_(partition_id), K_(partition_cnt), K_(pg_key), K_(replica_locations), K_(renew_time),
-      K_(sql_renew_time), K_(is_mark_fail));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // return OB_ENTRY_NOT_EXIST for not found.
@@ -315,7 +314,7 @@ public:
     return pg_key_;
   }
 
-  TO_STRING_KV(KT_(table_id), K_(partition_id), K_(partition_cnt), K_(pg_key), K_(replica_location), K_(renew_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t table_id_;

@@ -80,8 +80,7 @@ public:
     return network_limit_;
   }
 
-  TO_STRING_KV(K_(timestamp), K_(partition_key), K_(server), K_(cluster_id), K_(start_log_id), K_(end_log_id),
-      K_(fetch_type), K_(proposal_id), K_(network_limit));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFetchLogTask);

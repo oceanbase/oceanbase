@@ -20,6 +20,14 @@ using namespace common;
 using namespace storage;
 
 namespace transaction {
+int64_t ObTransResultInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(state), K_(commit_version), K_(min_log_id), K_(trans_id));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObTransResultInfoLinkNode::connect(ObTransResultInfoLinkNode* next)
 {

@@ -75,7 +75,7 @@ public:
   {
     return TS_INVALID < status_ && status_ < TS_NEED_WAIT_ABOVE;
   }
-  TO_STRING_KV(K(task_id_), K(exec_svr_), K(part_keys_), K(status_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // const attributes.

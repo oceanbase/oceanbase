@@ -86,7 +86,7 @@ public:
   }
   void destroy();
   int get_data_macro_block_count(int64_t& macro_block_count);
-  TO_STRING_KV(K_(is_inited), K_(concurrent_cnt), K_(finish_count), K_(sstable_merge_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int add_lob_macro_blocks(const int64_t idx, blocksstable::ObMacroBlocksWriteCtx* blocks_ctx);
@@ -144,7 +144,7 @@ struct ObSSTableScheduleMergeParam {
   {
     return MINI_MINOR_MERGE == merge_type_ || MINOR_MERGE == merge_type_;
   }
-  TO_STRING_KV(K_(merge_type), K_(merge_version), K_(pkey), K_(index_id), K_(schedule_merge_type), K_(pg_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObMergeType merge_type_;
   common::ObVersion merge_version_;
@@ -252,15 +252,7 @@ struct ObSSTableMergeCtx {
   int64_t trans_table_timestamp_;
   int64_t read_base_version_;  // use for major merge
 
-  TO_STRING_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version), K_(base_schema_version),
-      K_(schema_version), K_(dump_memtable_timestamp), KP_(table_schema), K_(is_full_merge), K_(stat_sampling_ratio),
-      K_(merge_level), K_(progressive_merge_num), K_(progressive_merge_start_version), K_(parallel_merge_ctx),
-      K_(checksum_method), K_(result_code), KP_(data_table_schema), KP_(mv_dep_table_schema), K_(index_stats),
-      "tables_handle count", tables_handle_.get_count(), K_(index_stats), K_(is_in_progressive_new_checksum),
-      K_(store_column_checksum_in_micro), K_(progressive_merge_round), K_(progressive_merge_step),
-      K_(use_new_progressive), K_(tables_handle), K_(base_table_handle), K_(create_sstable_for_large_snapshot),
-      K_(logical_data_version), K_(log_ts_range), K_(merge_log_ts), K_(trans_table_end_log_ts),
-      K_(trans_table_timestamp), K_(read_base_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMergeCtx);
@@ -299,9 +291,7 @@ struct ObMergeParameter {
   {
     return storage::is_major_merge(merge_type_);
   }
-  TO_STRING_KV(K_(is_full_merge), K_(merge_type), K_(checksum_method), K_(merge_level), KP_(table_schema),
-      KP_(mv_dep_table_schema), K_(version_range), KP_(checksum_calculator), KP_(tables_handle),
-      K_(is_iter_complement));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeParameter);

@@ -51,8 +51,7 @@ struct ObBlockIntermediateHeader {
   int64_t macro_version_;
   int64_t macro_logic_id_;
 
-  TO_STRING_KV(K_(version), K_(offset), K_(size), K_(is_leaf_node), K_(reserved), K_(row_count), K_(macro_version),
-      K_(macro_logic_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObBlockIntermediateHeader();
   ObBlockIntermediateHeader(const int64_t macro_version, const int64_t macro_logic_id, const int32_t offset,
       const int32_t size, const int64_t row_count, const bool is_leaf_node);

@@ -76,7 +76,7 @@ public:
     return tenant_id_array_;
   }
 
-  TO_STRING_KV(K_(gts_id), K_(gts_name), K_(region), K_(tenant_id_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t gts_id_;

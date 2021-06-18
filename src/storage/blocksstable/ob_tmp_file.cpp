@@ -18,6 +18,70 @@
 namespace oceanbase {
 using namespace storage;
 namespace blocksstable {
+int64_t ObTmpFileIOInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(fd), K_(dir_id), K_(size), K_(tenant_id), KP_(buf), K_(io_desc));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpFileIOHandle::ObIOReadHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_handle), K_(offset), K_(size), KP_(buf));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpFileIOHandle::ObPageCacheHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(page_handle), K_(offset), K_(size), KP_(buf));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpFileIOHandle::ObBlockCacheHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_handle), K_(offset), K_(size), KP_(buf));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpFileIOHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(buf), K_(size), K_(is_read));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpFileExtent::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_alloced), K_(fd), K_(g_offset_start), K_(g_offset_end), KP_(owner), K_(start_page_id),K_(page_nums), K_(block_id), K_(offset), K_(is_closed));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpFileMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(fd), K_(dir_id), K_(extents));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTmpFile::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_meta), K_(is_big), K_(tenant_id), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
 
 ObTmpFileIOInfo::ObTmpFileIOInfo() : fd_(0), dir_id_(0), size_(0), tenant_id_(OB_INVALID_ID), buf_(NULL), io_desc_()
 {}

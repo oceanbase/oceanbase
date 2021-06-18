@@ -37,7 +37,7 @@ public:
     {}
     bool is_valid() const;
     void reset();
-    TO_STRING_KV(K_(zone_info), K_(server_count), K_(resource_pool_count), K_(unit_count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     share::ObZoneInfo zone_info_;
     int64_t server_count_;

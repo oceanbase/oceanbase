@@ -19,6 +19,30 @@
 namespace oceanbase {
 using namespace lib;
 namespace common {
+int64_t WorkingSetMB::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(mb_handle), K_(seq_num), K_(block_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWorkingSet::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(ws_list_key), K_(used), K_(limit));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObWorkingSetMgr::FreeArrayMB::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(mb_handle), K_(seq_num), K_(in_array));
+  J_OBJ_END();
+  return pos;
+}
 void WorkingSetMB::reset()
 {
   mb_handle_ = NULL;

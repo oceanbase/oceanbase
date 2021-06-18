@@ -54,6 +54,14 @@ using namespace share::schema;
 using namespace share;
 using namespace obrpc;
 namespace storage {
+int64_t ObPartitionGroup::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(replay_status), K_(partition_state));
+  J_OBJ_END();
+  return pos;
+}
 
 const char* OB_PARTITION_STATE_STR[INVALID_STATE + 1] = {"INIT",
     "F_WORKING",

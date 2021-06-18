@@ -28,6 +28,38 @@ using namespace common;
 
 namespace share {
 namespace schema {
+int64_t ObPartitionKeyIter::Info::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_id), K_(drop_schema_version), K_(tg_partition_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionKeyIter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_id), K_(part_level), KP_(partition_schema), K_(check_dropped_schema));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDroppedPartitionKeyIter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(iter));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(part_idx_), K(part_id_), K(part_num_), KP(part_name_), KP(part_high_bound_),K(subpart_idx_), K(subpart_id_), K(subpart_num_), KP(subpart_name_), KP(subpart_high_bound_),K(partition_idx_), K(partition_id_), K(partition_num_));
+  J_OBJ_END();
+  return pos;
+}
 
 /*
  * Currently this interface is only used when creating partitions. Consider the following scenarios:

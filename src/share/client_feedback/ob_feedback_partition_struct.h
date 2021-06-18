@@ -52,7 +52,7 @@ public:
     replica_type_ = common::REPLICA_TYPE_FULL;
   }
 
-  TO_STRING_KV(K_(server), K_(role), K_(replica_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   FB_OBJ_DEFINE_METHOD;
 };
 
@@ -80,8 +80,7 @@ public:
     replicas_.reset();
   }
 
-  TO_STRING_KV(
-      "type", get_feedback_element_type_str(type_), KT_(table_id), K_(partition_id), K_(schema_version), K_(replicas));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   void set_table_id(const uint64_t table_id)
   {
@@ -189,8 +188,7 @@ public:
 
   int set_tbl_name(const common::ObString& table_name);
 
-  TO_STRING_KV(K_(server), K_(role), K_(replica_type), "FeedbackTableName", common::ObString(tbl_name_len_, tbl_name_),
-      K_(tbl_schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   FB_OBJ_DEFINE_METHOD;
 
 public:

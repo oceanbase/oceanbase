@@ -17,6 +17,14 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObIlogMemstore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(create_ts_), K(cursor_size_), K(clog_size_), K(partition_meta_info_.count()));
+  J_OBJ_END();
+  return pos;
+}
 
 ObIlogMemstore::ObIlogMemstore()
     : is_inited_(false),

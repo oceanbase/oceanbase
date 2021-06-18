@@ -34,6 +34,14 @@ using namespace oceanbase::election;
 
 namespace oceanbase {
 namespace clog {
+int64_t ObCLogWriterCfg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), KP_(log_file_writer), KP_(log_cache), KP_(info_getter), KP_(tail_ptr), K_(use_cache));
+  J_OBJ_END();
+  return pos;
+}
 ObCLogWriter::ObCLogWriter()
     : is_started_(false),
       is_disk_error_(false),

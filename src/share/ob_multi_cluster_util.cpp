@@ -25,6 +25,14 @@ namespace oceanbase {
 using namespace common;
 using namespace share::schema;
 namespace share {
+int64_t ObTenantFlashbackSCN::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(inner_scn), K_(user_scn), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObMultiClusterUtil::get_parent_cluster(const obrpc::ObCommonRpcProxy& rpc_proxy, common::ObISQLClient& sql_proxy,
     ObClusterInfo& parent_cluster, ObClusterAddr& parent_addr)

@@ -29,7 +29,14 @@ struct FakeMajorFreezePartition {
   int64_t frozen_version_;
   int64_t frozen_timestamp_;
   int64_t status_;
-  TO_STRING_KV(K_(pk), K_(frozen_version), K_(frozen_timestamp), K_(status));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(pk), K_(frozen_version), K_(frozen_timestamp), K_(status));
+    J_OBJ_END();
+    return pos;
+  }
 };
 
 class FakeMajorFreezePartitionService;

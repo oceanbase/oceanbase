@@ -22,6 +22,38 @@ using namespace oceanbase::blocksstable;
 
 namespace oceanbase {
 namespace storage {
+int64_t ObSSTableReadHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_get), K_(state), K_(range_idx), K_(macro_block_ctx), K_(macro_idx), K_(micro_begin_idx),K_(micro_end_idx), K_(is_left_border), K_(is_right_border));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableMicroBlockInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_ctx), K_(micro_info), K_(micro_idx), K_(is_skip));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSSTableSkipRangeCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(range_idx), K_(macro_idx), K_(micro_idx), K_(org_range_macro_cnt), K_(is_micro_reopen), K_(need_skip));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFastSkipChecker::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(iter_del_row), K_(is_checked), K_(effective_border_micro_idx), K_(check_border_micro_idx), K_(border_rowkey));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ---------------------------------------------------ObSSTableReadHandle------------------------------------------------
  */

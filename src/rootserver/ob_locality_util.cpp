@@ -28,6 +28,14 @@
 
 namespace oceanbase {
 namespace rootserver {
+int64_t ObLocalityDistribution::ZoneSetReplicaDist::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("zone_set", zone_set_, "full_replica_attr", all_replica_attr_array_[FULL_REPLICA],"logonly_replica_attr", all_replica_attr_array_[LOGONLY_REPLICA], "readonly_replica_attr",all_replica_attr_array_[READONLY_REPLICA]);
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace oceanbase;
 using namespace oceanbase::common;

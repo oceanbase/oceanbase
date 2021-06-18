@@ -23,6 +23,62 @@ namespace oceanbase {
 using namespace common;
 
 namespace sql {
+int64_t ObChunkDatumStore::StoredRow::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cnt), K_(row_size), "cells", common::ObArrayWrap<common::ObDatum>(cells(), cnt_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChunkDatumStore::Block::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(magic), K_(blk_size), K_(rows));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChunkDatumStore::BlockList::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(size), K_(head), K_(last), K_(*head), K_(last));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChunkDatumStore::BlockBuffer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(data), K_(cur_pos), K_(cap));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChunkDatumStore::RowIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(store), K_(*store), K_(cur_iter_blk), K_(cur_row_in_blk), K_(cur_pos_in_blk), K_(n_blocks),K_(cur_nth_block));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChunkDatumStore::ChunkIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(store), KP_(cur_iter_blk), KP_(cur_iter_blk_buf), K_(cur_chunk_n_blocks), K_(cur_iter_pos),K_(file_size), K_(chunk_read_size), KP_(chunk_mem));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChunkDatumStore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(label), K_(ctx_id), K_(mem_limit), K_(row_cnt), K_(file_size));
+  J_OBJ_END();
+  return pos;
+}
 int ObChunkDatumStore::BlockBuffer::init(char* buf, const int64_t buf_size)
 {
   int ret = OB_SUCCESS;

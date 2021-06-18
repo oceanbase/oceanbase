@@ -49,7 +49,7 @@ public:
   {
     return optimize_table_arg_.tenant_id_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(optimize_table_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObOptimizeTableArg optimize_table_arg_;

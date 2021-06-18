@@ -37,6 +37,462 @@
 namespace oceanbase {
 namespace share {
 namespace schema {
+int64_t ObRefreshSchemaStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(snapshot_timestamp), K_(readable_schema_version), K_(created_schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRefreshSchemaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version), K_(tenant_id), K_(sequence_id), K_(split_schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDropTenantInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIndexTableStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_id), K_(index_status), K_(is_drop_schema));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantTableId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantDatabaseId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(database_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantTablegroupId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(tablegroup_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSchemaStatisticsInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_type), K_(size), K_(count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSimpleTableSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(database_id), K_(tablegroup_id), K_(table_id), K_(data_table_id), K_(table_name),K_(schema_version), K_(table_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSchemaObjVersion::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TID, object_id_, N_SCHEMA_VERSION, version_, K_(object_type), K_(is_db_explicit), K_(is_existed));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObZoneScore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(zone_), K(score_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObZoneRegion::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(zone_), K(region_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocality::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(locality_str), K_(zone_replica_attr_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPrimaryZone::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(primary_zone_str), K_(primary_zone_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSysVarSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(name), K_(data_type), K_(value), K_(min_val), K_(max_val), K_(info), K_(zone),K_(schema_version), K_(flags));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSysVariableSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(schema_version), "sysvars",common::ObArrayWrap<ObSysVarSchema*>(sysvar_array_, ObSysVarFactory::ALL_SYS_VARS_COUNT), K_(read_only),K_(name_case_mode));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(schema_version), K_(tenant_name), K_(replica_num), K_(zone_list), K_(primary_zone),K_(charset_type), K_(locked), K_(comment), K_(name_case_mode), K_(read_only), K_(rewrite_merge_version),K_(locality_str), K_(logonly_replica_num), K_(zone_replica_attr_array), K_(primary_zone_array),K_(storage_format_version), K_(storage_format_work_version), K_(previous_locality_str), "sysvars",common::ObArrayWrap<ObSysVarSchema*>(sysvar_array_, ObSysVarFactory::ALL_SYS_VARS_COUNT),K_(default_tablegroup_id), K_(default_tablegroup_name), K_(compatibility_mode), K_(drop_tenant_time), K_(status),K_(in_recyclebin));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDatabaseSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(database_id), K_(schema_version), K_(database_name), K_(replica_num), K_(zone_list),K_(primary_zone), K_(charset_type), K_(collation_type), K_(name_case_mode), K_(comment), K_(read_only),K_(default_tablegroup_id), K_(default_tablegroup_name), K_(in_recyclebin), K_(primary_zone_array),K_(drop_schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionOption::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_func_type), K_(part_func_expr), K_(part_num), K_(partition_cnt_within_partition_table),K_(max_used_part_id), K_(auto_part), K_(auto_part_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObViewSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_VIEW_DEFINITION, view_definition_, N_CHECK_OPTION, ob_view_check_option_str(view_check_option_),N_IS_UPDATABLE, STR_BOOL(view_is_updatable_), N_IS_MATERIALIZED, STR_BOOL(materialized_),K_(character_set_client), K_(collation_connection));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObColumnSchemaWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(column_name), K_(prefix_len));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantPlanBaselineId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(plan_baseline_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantOutlineId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(outline_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantUserId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantUrObjId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(grantee_id), K_(obj_id), K_(obj_type), K_(col_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPriv::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(schema_version), "privileges", ObPrintPrivSet(priv_set_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUserInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(user_name), K_(host_name), "privileges", ObPrintPrivSet(priv_set_),K_(info), K_(locked), K_(ssl_type), K_(ssl_cipher), K_(x509_issuer), K_(x509_subject), K_(type),K_(grantee_id_array), K_(role_id_array), K_(profile_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDBPrivSortKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K(sort_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOriginalDBKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(db));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSysPrivKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(grantee_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDBPriv::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(db), "privileges", ObPrintPrivSet(priv_set_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTablePrivSortKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(db), K_(table));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObObjPrivSortKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(obj_id), K_(obj_type), K_(col_id), K_(grantor_id), K_(grantee_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTablePriv::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(db), K_(table), "privileges", ObPrintPrivSet(priv_set_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObObjPriv::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(obj_id), K_(obj_type), K_(col_id), "privileges",ObPrintPrivSet(priv_set_), K_(grantor_id), K_(grantee_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObNeedPriv::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(db), K_(table), K_(priv_set), K_(priv_level), K_(is_sys_table));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStmtNeedPrivs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(need_privs));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOraNeedPriv::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(db_name), K_(grantee_id), K_(obj_id), K_(col_id), K_(obj_type), K_(check_flag), K_(obj_privs), K_(owner_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStmtOraNeedPrivs::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(need_privs));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUserLoginInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_name), K_(user_name), K_(client_ip), K_(db), K_(scramble_str));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSysPriv::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(grantee_id), "privileges", ObPrintPrivSet(priv_set_), "packedprivarray",ObPrintPackedPrivArray(priv_array_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOutlineParamsWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(outline_params));
+  J_OBJ_END();
+  return pos;
+}
+int64_t BaselineKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(db_id), K_(constructed_sql), K_(params_info_str));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantDbLinkId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(dblink_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantUDFId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(udf_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantSynonymId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(synonym_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantSequenceId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(sequence_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSysTableChecker::TableNameWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(database_id), K_(name_case_mode), K_(table_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRecycleObject::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(tablegroup_id), K_(object_name), K_(original_name),K_(type), K_(tablegroup_name), K_(database_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBasedSchemaObjectInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_id), K_(schema_type), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAuxTableMetaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(table_type), K_(drop_schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObForeignKeyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(foreign_key_id), K_(child_table_id), K_(parent_table_id), K_(child_column_ids),K_(parent_column_ids), K_(update_action), K_(delete_action), K_(foreign_key_name), K_(enable_flag),K_(is_modify_enable_flag), K_(validate_flag), K_(is_modify_validate_flag), K_(rely_flag), K_(is_modify_rely_flag),K_(is_modify_fk_state), K_(ref_cst_type), K_(ref_cst_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSimpleForeignKeyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(foreign_key_name), K_(foreign_key_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSimpleConstraintInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(constraint_name), K_(constraint_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantCommonSchemaId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(schema_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObProfileSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(profile_id), K_(schema_version), K_(profile_name), K_(failed_login_attempts),K_(password_lock_time), K_(password_life_time), K_(password_grace_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObObjectStruct::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(id));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 using namespace sql;
 using namespace rootserver;

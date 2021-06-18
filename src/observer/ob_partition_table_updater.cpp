@@ -38,6 +38,22 @@
 
 namespace oceanbase {
 namespace observer {
+int64_t ObPTUpdateRoleTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(data_version), K_(first_submit_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPTUpdateTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_key), K_(data_version), K_(first_submit_time), K_(is_remove), K_(with_role));
+  J_OBJ_END();
+  return pos;
+}
 
 using namespace common;
 using namespace share;

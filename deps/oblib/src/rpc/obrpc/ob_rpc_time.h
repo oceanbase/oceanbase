@@ -42,8 +42,7 @@ public:
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  TO_STRING_KV(K_(len), K_(arrival_push_diff), K_(push_pop_diff), K_(pop_process_start_diff),
-      K_(process_start_end_diff), K_(process_end_response_diff), K_(packet_id), K_(request_arrival_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 }  // namespace obrpc

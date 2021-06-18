@@ -1073,7 +1073,7 @@ public:
   {
     return !operator==(other);
   }
-  TO_STRING_KV(K_(v));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t v_;
@@ -1117,7 +1117,7 @@ public:
   }
 
 public:
-  TO_STRING_KV(K_(start), K_(base), K_(end));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t start_;

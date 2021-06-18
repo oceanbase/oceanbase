@@ -39,7 +39,7 @@ struct ObProposalID {
   ObAddr addr_;
   int64_t ts_;
 
-  TO_STRING_KV(N_TIME_TO_USEC, ts_, N_SERVER, addr_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 

@@ -91,7 +91,7 @@ public:
   int update(const share::TenantIdAndSchemaVersion& tenant_schema_version);
   bool is_schema_new_enough(const common::ObIArray<share::TenantIdAndSchemaVersion>& curr_schema_versions) const;
   void reset();
-  TO_STRING_KV(K_(tenant_schema_versions));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::SpinRWLock lock_;

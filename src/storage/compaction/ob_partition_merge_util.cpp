@@ -35,6 +35,46 @@ using namespace storage;
 using namespace memtable;
 
 namespace compaction {
+int64_t ObMergeIndexInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_id), K_(table_exist));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBuildIndexParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(table_schema), KP_(index_schema), KP_(dep_table_schema), K_(schema_version), K_(schema_cnt),K_(version), K_(concurrent_cnt), K_(row_store_type), K_(snapshot_version), KP_(report), K_(checksum_method));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBuildIndexContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_report_succ), K_(update_sstore_snapshot_version), K_(is_unique_checking_complete),K_(build_index_ret), K_(need_build), KP_(main_table_checksum), K_(column_cnt), K_(row_cnt),K_(is_update_sstore_complete), K_(index_macro_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroRowIterator::Param::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(memctx_factory), KP_(schema), KP_(column_ids), KP_(table), K_(is_base_iter), K_(is_last_iter),K_(is_full_merge), K_(merge_level), K_(row_store_type), KP_(range), KP_(multi_version_row_info), K_(merge_type),K_(log_ts_range), K_(merge_log_ts), K_(is_iter_overflow_to_complement), K_(is_sstable_cut));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroRowIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(rowkey_column_cnt), KP_(column_ids), K_(schema_version), KP_(table), KP_(curr_row),KP_(ctx_factory), K_(is_iter_end), K_(use_block), K_(is_base_iter), K_(is_sstable_iter), K_(is_inited),K_(curr_block_desc), K_(macro_block_opened), K_(micro_block_opened), K_(curr_range), K_(macro_range),K_(merge_range), K_(advice_merge_level), K_(curr_merge_level), K_(micro_block_count), K_(reuse_micro_block_count),K_(iter_row_count), K_(magic_row_count), K_(purged_count), K_(need_rewrite_dirty_macro_block));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObBuildIndexContext::add_main_table_checksum(
     const int64_t* main_table_checksum, const int64_t row_cnt, const int64_t column_cnt)

@@ -39,7 +39,7 @@ public:
   {
     return NULL != name_;
   }
-  TO_STRING_KV(K_(name), K_(value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const char* get_value_ptr() const
   {
     return value_.ptr();
@@ -187,7 +187,7 @@ struct ObBackupInfoSimpleItem {
   ObBackupInfoSimpleItem(const char* name, const char* value);
   const char* name_;
   const char* value_;
-  TO_STRING_KV(K_(name), K_(value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObBackupInfoChecker final {

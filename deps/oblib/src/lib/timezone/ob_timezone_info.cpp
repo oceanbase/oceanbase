@@ -20,6 +20,62 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObTimeZoneInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_ID, tz_id_, N_OFFSET, offset_, N_ERROR_ON_OVERLAP_TIME, error_on_overlap_time_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTZTransitionStruct::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(offset_sec), K_(tran_type_id), K_(is_dst), "abbr", common::ObString(abbr_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTZIDKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tz_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTZNameKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("tz_name", common::ObString(common::OB_MAX_TZ_NAME_LEN, tz_name_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTZNameIDInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tz_id), K_(tz_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIntervalYMValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(nmonth));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIntervalDSValue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(nsecond), K_(fractional_second));
+  J_OBJ_END();
+  return pos;
+}
 
 ObTimeZoneName ObTimeZoneInfo::TIME_ZONE_NAMES[] = {
     {"", 0, 0, 0},  // // used to occupy this place.

@@ -19,6 +19,14 @@ namespace oceanbase {
 using namespace common;
 using obrpc::ObTableItem;
 namespace sql {
+int64_t ObOptimizeTableStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_type), K_(optimize_table_arg));
+  J_OBJ_END();
+  return pos;
+}
 ObOptimizeTableStmt::ObOptimizeTableStmt(ObIAllocator* name_pool)
     : ObDDLStmt(name_pool, stmt::T_OPTIMIZE_TABLE), optimize_table_arg_()
 {}

@@ -33,7 +33,7 @@ public:
   {
     return replicas_;
   }
-  TO_STRING_KV(K_(replicas));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t DEFAULT_REPLICA_COUNT = 7;

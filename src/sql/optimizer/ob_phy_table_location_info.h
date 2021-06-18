@@ -85,8 +85,7 @@ public:
     return pg_key_;
   }
 
-  TO_STRING_KV(KT_(table_id), K_(partition_id), K_(partition_cnt), K_(pg_key), K_(replica_locations), K_(renew_time),
-      K_(is_mark_fail));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t table_id_;
@@ -142,7 +141,7 @@ public:
       bool l_can_reselect, ObPhyPartitionLocationInfo& r, bool r_can_reselect);
   int reset_duplicate_table_best_replica(const common::ObIArray<int64_t>& new_replic_idxs);
   bool is_server_in_replica(const common::ObAddr& server, int64_t& idx) const;
-  TO_STRING_KV(K_(partition_location), K_(selected_replica_idx), K_(priority_replica_idxs));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObOptPartLoc partition_location_;
@@ -233,8 +232,7 @@ public:
   bool is_server_in_replica(const common::ObAddr& server, common::ObIArray<int64_t>& new_replic_idxs) const;
   static int is_server_in_replica(const ObPhyTableLocationInfo& l_phy_loc,
       const ObPhyPartitionLocationInfo& part_loc_info, bool& is_same, common::ObAddr& the_server, int64_t& new_idx);
-  TO_STRING_KV(K_(table_location_key), K_(ref_table_id), K_(phy_part_loc_info_list), K_(splitted_range_list),
-      K_(duplicate_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t table_location_key_;

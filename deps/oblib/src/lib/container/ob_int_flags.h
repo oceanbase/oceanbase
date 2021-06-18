@@ -41,7 +41,14 @@ struct ObInt64Flags {
   inline bool del_member(int64_t index);
   inline bool has_member(int64_t index);
 
-  TO_STRING_KV("flags", PHEX(&flags_, sizeof(flags_)));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV("flags", PHEX(&flags_, sizeof(flags_)));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   int64_t flags_;

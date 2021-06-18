@@ -32,6 +32,46 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_OB_TASK_ID, ob_task_id_, K_(runner_svr), K_(ctrl_svr), K_(partition_keys), K_(ranges), K_(location_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMiniTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ob_task_id), K_(runner_svr), K_(ctrl_svr), K_(partition_keys), K_(ranges), K_(location_idx),KPC_(extend_root), KP_(extend_root_spec));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPingSqlTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(trans_id_), K(sql_no_), K(task_id_), K(exec_svr_), K(part_keys_), K(cur_status_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPingSqlTaskResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(err_code_), K(ret_status_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoteTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_schema_version), K_(sys_schema_version), K_(runner_svr), K_(ctrl_svr), K_(task_id),KPC_(remote_sql_info));
+  J_OBJ_END();
+  return pos;
+}
 
 ObTask::ObTask()
     : exec_ctx_(NULL),

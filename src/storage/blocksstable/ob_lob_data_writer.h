@@ -44,7 +44,7 @@ private:
 };
 
 struct ObLobMicroBlockDesc {
-  TO_STRING_KV(K_(buf), K_(byte_size), K_(char_size), K_(old_micro_block), K_(column_id), K_(column_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const char* buf_;
   int64_t buf_size_;
   int64_t byte_size_;

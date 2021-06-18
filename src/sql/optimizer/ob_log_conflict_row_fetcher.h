@@ -77,7 +77,7 @@ public:
     only_data_table_ = only_data_table;
   }
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
-  TO_STRING_KV(K_(table_id), K_(index_tid), K_(only_data_table), K_(conflict_exprs), K_(access_exprs));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);

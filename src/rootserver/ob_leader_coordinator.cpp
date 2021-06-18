@@ -53,6 +53,166 @@ using namespace obrpc;
 using namespace share;
 using namespace share::schema;
 namespace rootserver {
+int64_t ObILeaderCoordinator::ServerLeaderCount::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerSwitchLeaderInfoStat::ServerSwitchLeaderInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(new_leader_count), K_(leader_count), K_(partition_count), K_(is_switch_limited));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::PreSwitchPgInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::IPartitionEntity::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("has_self_partition", has_self_partition(), "partition_entity_id", get_partition_entity_id(),"tablegroup_id", get_tablegroup_id());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::Partition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(tg_id), K_(info), K_(candidates), K_(prep_candidates), K_(candidate_status_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::ObPartitionMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_msg), K_(next_part));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::ObServerLeaderMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(curr_leader_cnt), K_(zone), K_(leader_partition_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::ObPartitionSwitchMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(original_leader_addr), K_(final_leader_addr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::ObServerMsg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(self_addr), K_(partition_cnt), K_(head), K_(parent_node));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::LcBgPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(bg_array_idx), K_(in_group_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::LcBalanceGroupInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_cnt), K_(balance_group_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::ServerReplicaCounter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(full_replica_cnt), K_(leader_cnt), K_(zone));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::ZoneReplicaCounter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(max_full_replica_cnt), K_(min_full_replica_cnt), K_(max_leader_cnt), K_(min_leader_cnt),K_(max_exp_leader_cnt), K_(min_exp_leader_cnt), K_(max_leader_server_cnt), K_(min_leader_server_cnt),K_(curr_max_leader_server_cnt), K_(total_leader_cnt), K_(expected_leader_cnt), K_(available_server_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::GetLeaderCandidatesAsyncV2Operator::PartIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(first_level_idx), K_(second_level_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::GetLeaderCandidatesAsyncV2Operator::PartIndexInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(part_index_array), K_(dest_server), K_(arg));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::CandidateZoneInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(region_score), K_(candidate_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::CandidateLeaderInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server_addr), K_(zone), K_(balance_group_score), K_(region_score), K_(not_merging),K_(start_service), K_(zone_candidate_count), K_(candidate_count), K_(is_candidate), K_(not_excluded),K_(migrate_out_or_transform_count), K_(zone_migrate_out_or_transform_count), K_(in_normal_unit_count),K_(zone_score), K_(original_leader_count), K_(random_score), K_(cur_leader_count),K_(in_revoke_blacklist_count), K_(partition_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::PartitionArrayCursor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(part_idx_), K(part_cnt_), K(array_idx_), K(cur_leader_), K(advised_leader_), K(ignore_switch_percent_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::CursorContainer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(cursor_array_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLeaderCoordinator::CandidateElectionPriority::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), K_(pkey), K_(role), K_(is_candidate), K_(membership_version), K_(log_id), K_(locality),K_(sys_score), K_(is_tenant_active), K_(on_revoke_blacklist), K_(on_loop_blacklist), K_(replica_type),K_(server_status), K_(is_clog_disk_full), K_(is_offline));
+  J_OBJ_END();
+  return pos;
+}
 using namespace balancer;
 
 int ObRandomZoneSelector::init(ObZoneManager& zone_mgr)

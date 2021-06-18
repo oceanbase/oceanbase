@@ -71,8 +71,7 @@ public:
     return opt_server_list_.push_back(server);
   }
 
-  TO_STRING_KV(
-      N_STMT_TYPE, ((int)stmt_type_), K_(major_freeze), K(opt_server_list_), K(opt_tenant_ids_), K(opt_partition_key_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   bool major_freeze_;
@@ -93,7 +92,7 @@ public:
   {}
   virtual ~ObFlushCacheStmt()
   {}
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(flush_cache_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   obrpc::ObAdminFlushCacheArg flush_cache_arg_;
   bool is_global_;
@@ -105,7 +104,7 @@ public:
   {}
   virtual ~ObLoadBaselineStmt()
   {}
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(load_baseline_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   obrpc::ObAdminLoadBaselineArg load_baseline_arg_;
 };
@@ -117,7 +116,7 @@ public:
   virtual ~ObFlushKVCacheStmt()
   {}
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_name), K_(cache_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> cache_name_;
 };
@@ -128,7 +127,7 @@ public:
   {}
   virtual ~ObFlushIlogCacheStmt()
   {}
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(file_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int32_t file_id_;
 };
@@ -139,7 +138,7 @@ public:
   {}
   virtual ~ObFlushDagWarningsStmt()
   {}
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObAdminServerStmt : public ObSystemCmdStmt {
@@ -287,7 +286,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminSwitchReplicaRoleArg rpc_arg_;
@@ -305,7 +304,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminSwitchRSRoleArg rpc_arg_;
@@ -323,7 +322,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminChangeReplicaArg rpc_arg_;
@@ -341,7 +340,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminDropReplicaArg rpc_arg_;
@@ -359,7 +358,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminMigrateReplicaArg rpc_arg_;
@@ -377,7 +376,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminReportReplicaArg rpc_arg_;
@@ -395,7 +394,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminRecycleReplicaArg rpc_arg_;
@@ -413,7 +412,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminMergeArg rpc_arg_;
@@ -431,7 +430,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminClearRoottableArg rpc_arg_;
@@ -449,7 +448,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminRefreshSchemaArg rpc_arg_;
@@ -467,7 +466,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminRefreshMemStatArg rpc_arg_;
@@ -485,7 +484,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminSetConfigArg rpc_arg_;
@@ -503,7 +502,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminSetTPArg rpc_arg_;
@@ -521,7 +520,7 @@ public:
     return rpc_arg_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   obrpc::ObAdminMigrateUnitArg rpc_arg_;
@@ -733,7 +732,7 @@ public:
   {
     return tenant_id_;
   }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
 };
@@ -777,7 +776,7 @@ public:
   {}
   virtual ~ObSetDiskValidStmt()
   {}
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(server));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObAddr server_;
 };
@@ -788,7 +787,7 @@ public:
   {}
   virtual ~ObAddDiskStmt()
   {}
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   obrpc::ObAdminAddDiskArg arg_;
 };
@@ -799,7 +798,7 @@ public:
   {}
   virtual ~ObDropDiskStmt()
   {}
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   obrpc::ObAdminDropDiskArg arg_;
 };
@@ -874,8 +873,7 @@ public:
     return queue_time_;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(priority), K_(rt), K_(io), K_(network), K_(cpu), K_(logical_reads),
-      K_(queue_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t priority_;
@@ -907,7 +905,7 @@ public:
   {
     return tenant_id_;
   }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   uint64_t tenant_id_;
 };
@@ -926,7 +924,7 @@ public:
   {
     enable_ = enable;
   }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(enable));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   bool enable_;
@@ -960,7 +958,7 @@ public:
 
     return ret;
   }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(incremental));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t tenant_id_;
@@ -1004,7 +1002,7 @@ public:
 
     return ret;
   }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(type), K_(value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t tenant_id_;
@@ -1026,8 +1024,7 @@ public:
     return encrypted_passwd_;
   }
   int set_param(const int64_t mode, const common::ObString& passwd);
-  TO_STRING_KV(
-      N_STMT_TYPE, ((int)stmt_type_), "mode", share::ObBackupEncryptionMode::to_str(mode_), K_(encrypted_passwd));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   share::ObBackupEncryptionMode::EncryptionMode mode_;
@@ -1045,7 +1042,7 @@ public:
     return passwd_array_;
   }
   int add_passwd(const ObString& passwd);
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(pos), K_(passwd_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   char passwd_array_[OB_MAX_PASSWORD_ARRAY_LENGTH];

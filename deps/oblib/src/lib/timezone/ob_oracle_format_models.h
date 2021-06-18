@@ -351,8 +351,7 @@ struct ObDFMParseCtx {
   int64_t expected_elem_flag_;
   bool is_matching_by_expected_len_;  // only used for match_int_value
 
-  TO_STRING_KV("parsed len", static_cast<int64_t>(cur_ch_ - fmt_str_), "remain chars", ObString(remain_len_, cur_ch_),
-      K_(expected_elem_flag), K_(is_matching_by_expected_len));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObDFMElem {
@@ -370,7 +369,7 @@ struct ObDFMElem {
   bool is_single_dot_before_;  // for the dot before FF
   UpperCaseMode upper_case_mode_;
   ObString get_elem_name() const;
-  TO_STRING_KV("elem_flag", get_elem_name(), K_(offset), K_(is_single_dot_before), K_(upper_case_mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool inline is_valid()
   {

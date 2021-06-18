@@ -18,6 +18,22 @@ using namespace oceanbase::common::hash;
 
 namespace oceanbase {
 namespace blocksstable {
+int64_t ObMajorMacroBlockKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(partition_id), K_(data_version), K_(data_seq));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockMetaHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(meta_ctrl));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ----------------------------------------------ObMacroBlockMetaEntry-------------------------------------------------
  */

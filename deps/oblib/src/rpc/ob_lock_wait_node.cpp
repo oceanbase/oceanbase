@@ -14,6 +14,14 @@
 
 namespace oceanbase {
 namespace rpc {
+int64_t ObLockWaitNode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), KP_(addr), K_(hash), K_(lock_ts), K_(abs_timeout), K_(key), K_(sessid), K_(sessid_version),K_(block_sessid), K_(run_ts), K_(ctx_desc), K_(is_standalone_task));
+  J_OBJ_END();
+  return pos;
+}
 
 ObLockWaitNode::ObLockWaitNode()
     : hold_key_(0),

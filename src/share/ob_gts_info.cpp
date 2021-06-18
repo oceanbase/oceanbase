@@ -15,6 +15,22 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObGtsInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(gts_id_), K(gts_name_), K(region_), K(epoch_id_), K(member_list_), K(standby_), K(heartbeat_ts_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGtsTenantInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(gts_id_), K(tenant_id_), K(member_list_));
+  J_OBJ_END();
+  return pos;
+}
 ObGtsInfo::ObGtsInfo()
 {
   reset();

@@ -21,6 +21,22 @@ namespace oceanbase {
 using namespace clog;
 using namespace share;
 namespace common {
+int64_t ObLogFileIOInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(disk_id), K_(fd), KP_(buf), K_(size), K_(offset), K_(complete), K_(ret));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogFileDescriptor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(flag), KP_(disk_mgr), K_(file_id), K_(is_inited), "fd_cnt", fd_infos_.count());
+  J_OBJ_END();
+  return pos;
+}
 ObLogFileDescriptor::ObLogFileDescriptor()
     : flag_(0), disk_mgr_(NULL), file_id_(OB_INVALID_FILE_ID), fd_infos_(), is_inited_(false)
 {}

@@ -44,7 +44,7 @@ public:
   {
     return used_request_cnt_ >= 0 && used_buf_size_ >= 0 && used_cache_block_cnt_ >= 0;
   }
-  TO_STRING_KV(K_(used_request_cnt), K_(used_buf_size), K_(used_cache_block_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t used_request_cnt_;
@@ -69,8 +69,7 @@ public:
   }
   int64_t get_last_io_failure_ts() const;
   void reset();
-  TO_STRING_KV(K_(is_disk_error), K_(disk_error_begin_ts), K_(disk_error_last_ts), K_(last_read_failure_warn_ts),
-      K_(write_failure_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // more than 100 times of write failure per second, the disk is considered broken
@@ -153,7 +152,7 @@ public:
   void inc_ref();
   void dec_ref();
 
-  TO_STRING_KV(K_(fd), K_(ref_cnt), K_(admin_status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int update_request_deadline(ObIORequest& req);
@@ -226,7 +225,7 @@ public:
     return disk_;
   };
   void reset();
-  TO_STRING_KV(KP_(disk));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObDisk* disk_;

@@ -81,8 +81,7 @@ public:
   void print_cur_status();
   bool contain_overflow_trans_node();
   void jump_overflow_trans_node();
-  TO_STRING_KV(K_(value), KPC_(version_iter), KPC_(multi_version_iter), K_(max_committed_trans_version),
-      K_(cur_trans_version), K_(is_node_compacted), K_(merge_log_ts), K_(iter_mode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int get_trans_status_with_log_ts(const int64_t log_ts, ObMvccTransNode* trans_node,

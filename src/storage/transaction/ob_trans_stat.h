@@ -149,11 +149,7 @@ public:
     return flushed_log_size_;
   }
 
-  TO_STRING_KV(K_(addr), K_(trans_id), K_(tenant_id), K_(is_exiting), K_(is_readonly), K_(has_decided), K_(is_dirty),
-      K_(active_memstore_version), K_(partition), K_(participants), K_(trans_param), K_(ctx_create_time),
-      K_(expired_time), K_(refer), K_(sql_no), K_(state), K_(session_id), K_(proxy_session_id), K_(trans_type),
-      K_(ctx_addr), K_(prev_trans_arr), K_(next_trans_arr), K_(prev_trans_commit_count), K_(ctx_id),
-      K_(pending_log_size), K_(flushed_log_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   bool is_inited_;
@@ -238,8 +234,7 @@ public:
     return expired_time_;
   }
 
-  TO_STRING_KV(K_(addr), K_(tenant_id), K_(partition), K_(memtable_key), K_(session_id), K_(proxy_session_id),
-      K_(trans_id), K_(ctx_create_time), K_(expired_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   bool is_inited_;
@@ -290,7 +285,7 @@ public:
     return addr_;
   }
 
-  TO_STRING_KV(K_(state), K_(commit_version), K_(min_log_id), K_(trans_id), K_(partition), K_(addr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   bool is_inited_;
@@ -339,7 +334,7 @@ public:
   {
     return lease_list_;
   }
-  TO_STRING_KV(K_(addr), K_(partition), K_(cur_log_id), K_(is_master), K_(lease_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObAddr addr_;

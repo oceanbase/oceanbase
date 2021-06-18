@@ -28,7 +28,7 @@ struct ObGlobalStatItem : public common::ObDLinkBase<ObGlobalStatItem> {
     list.add_last(this);
   }
 
-  TO_STRING_KV(K_(name), K_(value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   const char* name_;
   int64_t value_;

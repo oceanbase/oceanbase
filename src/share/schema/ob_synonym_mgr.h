@@ -31,8 +31,7 @@ public:
   ObSimpleSynonymSchema(const ObSimpleSynonymSchema& src_schema);
   virtual ~ObSimpleSynonymSchema();
   ObSimpleSynonymSchema& operator=(const ObSimpleSynonymSchema& other);
-  TO_STRING_KV(K_(tenant_id), K_(synonym_id), K_(schema_version), K_(database_id), K_(synonym_name), K_(object_name),
-      K_(object_database_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual void reset();
   inline bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -158,7 +157,7 @@ public:
   {
     return synonym_name_;
   }
-  TO_STRING_KV(K_(tenant_id), K_(database_id), K_(synonym_name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t tenant_id_;

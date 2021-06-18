@@ -425,3 +425,11 @@ int ObMergeSort::attach_row(const common::ObNewRow& src, common::ObNewRow& dst)
   }
   return ret;
 }
+int64_t ObMergeSort::RowRun::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("run_id", id_);
+  J_OBJ_END();
+  return pos;
+}

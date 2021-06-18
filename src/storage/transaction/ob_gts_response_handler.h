@@ -86,7 +86,7 @@ public:
   {
     return ts_type_;
   }
-  TO_STRING_KV(KP(this), K_(queue_index), K_(ts_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t tenant_id_;

@@ -97,8 +97,7 @@ public:
     return constraint_infos_;
   }
 
-  TO_STRING_KV(
-      K_(unique_index_cnt), KPC_(gui_lookup_root), KPC_(table_scan_root), K_(gui_scan_roots), KPC_(constraint_infos));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t unique_index_cnt_;

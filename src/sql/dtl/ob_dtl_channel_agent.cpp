@@ -449,3 +449,19 @@ void ObDtlChanAgent::destroy()
     bc_services_.at(i)->~ObDtlBcastService();
   }
 }
+int64_t ObDtlChanAgent::ObServerChannel::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(server_addr_), K(ch_count_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDtlBcastService::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server_addr), K_(bcast_ch_count), K_(peer_ids), K_(ch_infos));
+  J_OBJ_END();
+  return pos;
+}

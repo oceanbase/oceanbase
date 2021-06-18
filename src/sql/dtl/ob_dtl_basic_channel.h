@@ -319,7 +319,7 @@ public:
     return ch_id_;
   }
 
-  TO_STRING_KV(KP_(inited), K_(ret));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // disallow copy
@@ -442,7 +442,7 @@ public:
     bc_service_ = bc_service;
   }
 
-  TO_STRING_KV(KP_(id), K_(peer));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   int push_back_send_list();

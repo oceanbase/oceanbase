@@ -33,6 +33,102 @@ using namespace blocksstable;
 using namespace lib;
 
 namespace storage {
+int64_t ObBackupSSTableInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sstable_meta), K_(part_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupMacroBlockArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(fetch_arg), KP_(table_key_ptr), K_(need_copy));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMacroBlockBackupSyncReader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(args), K_(data_size), K_(result_code), K_(is_data_ready), K_(macro_arg),K_(backup_index_tid), K_(full_meta), K_(data));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionBaseDataMetaBackupReader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), KP(backup_arg_), K_(last_read_size), K_(partition_store_meta), K_(snapshot_version),K_(schema_version), K_(data_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupFileAppender::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_opened), K_(file_offset), K_(max_buf_size), KP(backup_arg_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupMetaWriter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(task_id), KP_(cp_fty), K_(meta_appender), K_(index_appender));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupMacroBlockInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_key), K_(start_index), K_(cur_block_count), K_(total_block_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupPhysicalPGCtx::SubTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_info), K_(block_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupPhysicalPGCtx::MacroIndexMergePoint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(sstable_idx), KP_(macro_index_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupPhysicalPGCtx::MacroIndexRetryPoint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_key), K_(last_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupPhysicalPGCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(macro_block_count), K_(base_task_id), K_(retry_cnt), K_(task_turn), K_(index_merge_point), K_(result),K_(pg_key), K_(table_keys), "task_count", tasks_.count(), K_(macro_index_appender));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupMacroData::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data), K_(meta));
+  J_OBJ_END();
+  return pos;
+}
 
 /******************ObBackupSSTableInfo*********************/
 

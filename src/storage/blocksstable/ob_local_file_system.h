@@ -113,7 +113,7 @@ public:
   virtual int get_super_block_version(int64_t& super_block_version) override;
   virtual int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage) override;
 
-  TO_STRING_KV("type", "LOCAL");
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int open(bool& exist);

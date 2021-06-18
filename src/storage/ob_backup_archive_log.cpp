@@ -33,6 +33,38 @@ using namespace oceanbase::obrpc;
 
 namespace oceanbase {
 namespace storage {
+int64_t ObBackupArchiveLogPGCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pg_key), K_(src_backup_dest), K_(src_storage_info), K_(dst_backup_dest), K_(dst_storage_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupArchiveLogPGTask::RoundRange::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(min_round), K_(max_round));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupArchiveLogPGTask::FileRange::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(min_file_id), K_(max_file_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupArchiveLogPGTask::FileInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(uri), K_(info));
+  J_OBJ_END();
+  return pos;
+}
 
 ObBackupArchiveLogPGCtx::ObBackupArchiveLogPGCtx()
     : is_opened_(false),

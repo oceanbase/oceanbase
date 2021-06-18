@@ -90,7 +90,7 @@ public:
     {
       return !name_.empty();
     }
-    TO_STRING_KV(K_(name), K_(value), K_(is_hex_value));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   struct UpdateCell {
@@ -106,7 +106,7 @@ public:
     {
       return cell_.is_valid();
     }
-    TO_STRING_KV(K_(is_filter_cell), K_(cell));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   class Row {
@@ -238,7 +238,7 @@ public:
   int delete_row(const common::ObIArray<UpdateCell>& cells, int64_t& affected_rows);
   int supplement_cell(const UpdateCell& cell);
 
-  TO_STRING_KV(K_(table_name), K_(load_for_update), K_(cur_idx), K_(all_row));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int store_string(const common::ObString& src, common::ObString& dest);

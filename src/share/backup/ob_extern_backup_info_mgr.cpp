@@ -2185,3 +2185,43 @@ int ObExternTenantBackupDiagnoseMgr::upload_tenant_backup_diagnose_info(const Ob
 
   return ret;
 }
+int64_t ObExternTenantLocality::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(extern_tenant_locality_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExternTenantInfos::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(extern_tenant_info_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExternPGList::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkeys));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExternBackupSetInfos::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(extern_backup_set_info_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExternBackupInfos::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(extern_backup_info_array));
+  J_OBJ_END();
+  return pos;
+}

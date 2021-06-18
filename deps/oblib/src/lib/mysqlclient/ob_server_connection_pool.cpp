@@ -17,6 +17,14 @@
 namespace oceanbase {
 namespace common {
 namespace sqlclient {
+int64_t ObServerConnectionPool::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(free_conn_count), K_(busy_conn_count));
+  J_OBJ_END();
+  return pos;
+}
 ObServerConnectionPool::ObServerConnectionPool()
     : free_conn_count_(0),
       busy_conn_count_(0),

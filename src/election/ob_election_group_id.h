@@ -89,7 +89,7 @@ struct PartState {
     takeover_t1_timestamp_ = -1;
     vote_cnt_ = 0;
   }
-  TO_STRING_KV(K_(lease_end), K_(takeover_t1_timestamp), K_(vote_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObSEArray<PartState, 16> ObPartStateArray;

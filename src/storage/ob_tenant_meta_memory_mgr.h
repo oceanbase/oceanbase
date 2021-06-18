@@ -38,7 +38,7 @@ private:
     {
       return schema_version_ > 0 && memory_size_ > 0;
     }
-    TO_STRING_KV(K_(schema_version), K_(memory_size));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     int64_t schema_version_;
     int64_t memory_size_;
   };

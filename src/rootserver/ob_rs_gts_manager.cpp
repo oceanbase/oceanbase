@@ -24,6 +24,14 @@ using namespace common;
 using namespace share;
 
 namespace rootserver {
+int64_t RsGtsInstance::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(gts_id), K_(gts_name), K_(region), K_(tenant_id_array));
+  J_OBJ_END();
+  return pos;
+}
 
 void RsGtsInstance::reset()
 {

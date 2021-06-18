@@ -888,7 +888,14 @@ struct ObIntegerCombine {
     return v_ & (~((~(static_cast<T>(0))) << SECOND));
   }
 
-  TO_STRING_KV("value", v_, "first", first(), "second", second());
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV("value", v_, "first", first(), "second", second());
+    J_OBJ_END();
+    return pos;
+  }
 
   T v_;
 };

@@ -20,6 +20,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObCompareCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cmp_type), K_(cmp_cs_type), K_(is_null_safe), K_(tz_off));
+  J_OBJ_END();
+  return pos;
+}
 
 bool is_calc_with_end_space(
     ObObjType type1, ObObjType type2, bool is_oracle_mode, ObCollationType cs_type1, ObCollationType cs_type2)

@@ -93,6 +93,22 @@ using namespace oceanbase::compaction;
 using namespace oceanbase::memtable;
 
 namespace storage {
+int64_t ObPartitionPrefixAccessStat::AccessStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(bf_filter_cnt), K_(bf_access_cnt), K_(empty_read_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionStorage::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(store));
+  J_OBJ_END();
+  return pos;
+}
 
 // can only reset pointer of memtable, cannot reset other variables
 void ObStorageWriterGuard::reset()

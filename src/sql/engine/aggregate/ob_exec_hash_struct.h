@@ -308,7 +308,7 @@ public:
     return *reinterpret_cast<ObHashCols**>(&next_);
   };
 
-  TO_STRING_KV(K_(row), K_(stored_row), K_(hash_col_idx), K_(next), K_(hash_val));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   const common::ObNewRow* row_;

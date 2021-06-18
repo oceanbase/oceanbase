@@ -22,6 +22,14 @@ using namespace oceanbase::share::schema;
 using namespace storage;
 
 namespace storage {
+int64_t ObStoreInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(saved_storage_info), K_(sstable_count));
+  J_OBJ_END();
+  return pos;
+}
 
 ObStoreInfo::ObStoreInfo() : saved_storage_info_(), sstable_count_(-1)
 {}
@@ -58,6 +66,54 @@ int ObStoreInfo::assign(const ObSavedStorageInfo& info, const int64_t sstable_co
 }  // namespace storage
 
 namespace obrpc {
+int64_t ObMigrateInfoFetchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateStoreInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(store_info), K_(server));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateInfoFetchResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(info_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchBaseDataMetaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(version), K_(store_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchMacroBlockOldArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_id), K_(macro_block_index), K_(data_version), K_(data_seq));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchMacroBlockListOldArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(data_version), K(store_type_), "arg_count", arg_list_.count());
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ObMigrateInfoFetchArg, pkey_);
 
 int ObMigrateStoreInfo::assign(const ObMigrateStoreInfo& info)

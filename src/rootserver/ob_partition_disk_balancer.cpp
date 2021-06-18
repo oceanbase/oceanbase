@@ -559,3 +559,27 @@ int DynamicAverageDiskBalancer::update_unit_stat(UnitDiskBalanceStat& unit_stat)
   }
   return OB_SUCCESS;
 }
+int64_t UnitDiskBalanceStat::UnitItemDiskStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(unit_stat));
+  J_OBJ_END();
+  return pos;
+}
+int64_t RowDiskBalanceStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(item_disk_info), K_(zone), K_(row_idx), K_(map));
+  J_OBJ_END();
+  return pos;
+}
+int64_t RowDiskBalanceStat::RowItemDiskStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(data_size));
+  J_OBJ_END();
+  return pos;
+}

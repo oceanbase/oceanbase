@@ -307,7 +307,7 @@ public:
       : str_(str), collation_type_(collation_type)
   {}
   int next_character(ObString& encoding, int32_t& wchar);
-  TO_STRING_KV(K_(str), K_(collation_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   const ObString& str_;

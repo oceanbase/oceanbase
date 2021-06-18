@@ -59,7 +59,7 @@ public:
     membership_log_id_ = membership_log_id;
     memberlist_version_ = memberlist_version;
   }
-  TO_STRING_KV(K(memberlist_), K(replica_num_), K(membership_log_id_), K(memberlist_version_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObMemberList memberlist_;

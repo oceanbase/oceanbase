@@ -32,6 +32,14 @@ using namespace share::schema;
 using namespace obrpc;
 
 namespace transaction {
+int64_t ObTsMgr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("ts_source", "GTS");
+  J_OBJ_END();
+  return pos;
+}
 ObTsSourceGuard::~ObTsSourceGuard()
 {
   if (NULL != ts_source_ && NULL != ts_source_info_) {

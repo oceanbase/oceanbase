@@ -30,6 +30,78 @@ using namespace share;
 using namespace storage;
 using namespace rootserver;
 namespace blocksstable {
+int64_t ObServerWorkingDir::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(svr_addr_), K(start_ts_), K(status_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageFileWithRef::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_cnt), K_(file));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageFileHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(file_with_ref));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageFilesHandle::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStorageFile::BlockInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_cnt), K_(access_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStoreFileWriteInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_id), KP_(buf), K_(size), K_(io_desc), KP_(io_callback), K_(ctx), K_(reuse_block_ctx), KP_(store_file));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStoreFileReadInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(offset), K_(size), K_(io_desc), KP_(io_callback), K_(macro_block_ctx), KP_(store_file));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDiskStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(disk_idx), K_(install_seq), K_(create_ts), K_(finish_ts), K_(percent), K_(status), K_(alias_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDiskStats::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_num), K_(parity_num), K_(disk_stats));
+  J_OBJ_END();
+  return pos;
+}
 
 // ---------- ObServerWorkingDir ---------- //
 const char* ObServerWorkingDir::SVR_WORKING_DIR_PREFIX[(int32_t)DirStatus::MAX] = {

@@ -3358,3 +3358,107 @@ int ObRaidFileWriteMgr::notice_finish(const int64_t block_index)
 
   return ret;
 }
+int64_t ObRaidFileSystem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("type", "RAID");
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRaidRecoverIOCallback::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), KP_(allocator), KP_(buf), KP_(io_buf_size), K_(io_buf_size), K_(recover_param),K_(out_offset), KP_(out_io_buf), K_(out_io_buf_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRaidRecoverIOCallback::RecoverParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_count), K_(parity_count), K_(strip_size), K_(input_index), K_(recover_index), K_(block_index));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRaidIOErrorHandler::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(macro_block_ctx), K_(offset), K_(size), K_(io_desc), KP_(out_io_buf),K_(out_io_buf_size), K_(aligned_offset));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRaidStripLocation::StripInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(disk_idx), K_(offset), K_(strip_idx));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRaidStripLocation::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_index), K_(block_offset), K_(strip_num), K_(strip_size), K_(strip_payload_size), K_(disk_count),K_(blocksstable_size), K_(include_header), K_(is_inited), K_(strip_skewing_step), K_(cur_idx), K_(has_next),K_(strip_infos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRaidFileStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(info), K_(disk_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDiskFileSuperBlock::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(disk_idx), K_(info), K_(disk_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRaidFileInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(format_version), K_(rebuild_seq), K_(rebuild_ts), K_(bootstrap_ts), K_(blocksstable_size),K_(strip_size), "strip_payload_size", get_strip_payload_size(), K_(src_data_num), K_(parity_num),K_(macro_block_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDiskFileStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(fd), K_(info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDiskFileInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(disk_id), K_(status), K_(create_ts), K_(rebuild_finish_ts), K_(disk_name), K_(sstable_path));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObScanDiskInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(disk_id), K_(has_sstable_file));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRaidCommonHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(magic), K_(version), K_(header_length), K_(header_checksum), K_(data_size), K_(data_checksum),K_(data_timestamp), "strip_size", header_length_ + data_size_);
+  J_OBJ_END();
+  return pos;
+}

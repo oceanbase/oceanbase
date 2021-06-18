@@ -362,7 +362,7 @@ public:
     return gen_schema_version > primary_broadcasted_schema_version_ &&
            gen_schema_version < primary_next_schema_version_;
   }
-  TO_STRING_KV(K(primary_broadcasted_schema_version_), K(primary_next_schema_version_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObMockSchemaInfo {
@@ -397,8 +397,7 @@ public:
   int add_mock_schema_type(MockSchemaType schema_mock_type);
   int del_mock_schema_type(MockSchemaType schema_mock_type);
   int has_mock_schema_type(MockSchemaType schema_mock_type, bool& is_exist);
-  TO_STRING_KV(K_(schema_id), "mock_index_unavaliable", mock_schema_type_[MOCK_INDEX_UNAVAILABLE], "mock_schema_split",
-      mock_schema_type_[MOCK_SCHEMA_SPLIT]);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t schema_id_;

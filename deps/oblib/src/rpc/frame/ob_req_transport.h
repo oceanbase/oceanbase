@@ -190,7 +190,14 @@ public:
       cb_ = NULL;
     }
 
-    TO_STRING_KV("pkt", *pkt_);
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV("pkt", *pkt_);
+      J_OBJ_END();
+      return pos;
+    }
 
   public:
     easy_session_t* s_;

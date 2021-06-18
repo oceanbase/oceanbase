@@ -14,6 +14,22 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObMember::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(timestamp), K_(flag));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReplicaMember::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(timestamp), K_(flag), K_(replica_type), K_(region), K_(memstore_percent));
+  J_OBJ_END();
+  return pos;
+}
 ObMember::ObMember() : timestamp_(OB_INVALID_TIMESTAMP), flag_(0)
 {}
 

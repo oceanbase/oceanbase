@@ -27,6 +27,22 @@ using namespace common;
 using namespace lib;
 using namespace share;
 namespace clog {
+int64_t ObLogSimpleBitMap::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(val));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(log_type_), K(proposal_id_), K(log_buf_len_), K_(generation_timestamp), K(submit_timestamp_),K(next_replay_log_ts_), K_(data_checksum), K(epoch_id_), K(accum_checksum_), K_(state_map), K_(ack_list),KP_(submit_cb), K_(majority_cnt), K_(log_cursor));
+  J_OBJ_END();
+  return pos;
+}
 void ObLogSimpleBitMap::reset_all()
 {
   ATOMIC_STORE(&val_, 0);

@@ -38,7 +38,14 @@ public:
   {
     return drop_func_arg_;
   }
-  TO_STRING_KV(K_(drop_func_arg));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(drop_func_arg));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   obrpc::ObDropUserDefinedFunctionArg drop_func_arg_;

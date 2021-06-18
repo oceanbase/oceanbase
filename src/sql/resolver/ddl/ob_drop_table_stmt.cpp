@@ -19,6 +19,14 @@ namespace oceanbase {
 using namespace common;
 using obrpc::ObTableItem;
 namespace sql {
+int64_t ObDropTableStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_type), K_(drop_table_arg));
+  J_OBJ_END();
+  return pos;
+}
 ObDropTableStmt::ObDropTableStmt(ObIAllocator* name_pool)
     : ObDDLStmt(name_pool, stmt::T_DROP_TABLE), drop_table_arg_(), is_view_stmt_(false)
 {}

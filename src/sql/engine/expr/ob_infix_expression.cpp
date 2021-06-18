@@ -25,6 +25,14 @@ namespace oceanbase {
 using namespace common;
 using namespace share;
 namespace sql {
+int64_t ObInfixExpression::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(exprs));
+  J_OBJ_END();
+  return pos;
+}
 
 OB_DEF_SERIALIZE_SIZE(ObInfixExprItem)
 {

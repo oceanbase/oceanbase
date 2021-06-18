@@ -20,6 +20,38 @@
 namespace oceanbase {
 using namespace lib;
 namespace common {
+int64_t ObDiskMemoryStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(used_request_cnt), K_(used_buf_size), K_(used_cache_block_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDiskDiagnose::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_disk_error), K_(disk_error_begin_ts), K_(disk_error_last_ts), K_(last_read_failure_warn_ts),K_(write_failure_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDisk::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(fd), K_(ref_cnt), K_(admin_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDiskGuard::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(disk));
+  J_OBJ_END();
+  return pos;
+}
 /**
  * ---------------------------------- ObDiskFailure ----------------------------------------
  */

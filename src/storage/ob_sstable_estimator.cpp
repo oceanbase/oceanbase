@@ -18,6 +18,14 @@ namespace oceanbase {
 using namespace common;
 using namespace blocksstable;
 namespace storage {
+int64_t ObSSTableEstimateContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(sstable), KP_(rowkeys), K_(macro_blocks), K_(multi_version_range));
+  J_OBJ_END();
+  return pos;
+}
 
 ObSSTableEstimateContext::ObSSTableEstimateContext() : sstable_(NULL), rowkeys_(NULL)
 {}

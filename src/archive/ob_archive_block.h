@@ -79,9 +79,7 @@ public:
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
   int64_t get_serialize_size() const;
 
-  TO_STRING_KV(K(magic_), K(total_len_), K(timestamp_), K(clog_epoch_id_), K(accum_checksum_), K(min_log_id_in_file_),
-      K(min_log_ts_in_file_), K(max_log_id_), K(max_checkpoint_ts_), K(max_log_submit_ts_), K(input_bytes_),
-      K(output_bytes_), K(data_checksum_), K(meta_checksum_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int generate_block_(const char* buf, const int64_t data_len);

@@ -40,7 +40,7 @@ struct ObXABranchInfo {
   {}
   int init(const ObXATransID& xid, const int64_t state, const int64_t timeout_seconds, const int64_t abs_expired_time,
       const common::ObAddr& addr, const int64_t unrespond_msg_cnt, const int64_t last_hb_ts);
-  TO_STRING_KV(K_(xid), K_(state), K_(timeout_seconds), K_(addr), K_(unrespond_msg_cnt), K_(last_hb_ts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObXATransID xid_;
   int64_t state_;
   int64_t timeout_seconds_;

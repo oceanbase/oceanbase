@@ -28,6 +28,14 @@ using namespace storage;
 using namespace transaction;
 using namespace common;
 namespace memtable {
+int64_t ObMultiVersionValueIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(value), KPC_(version_iter), KPC_(multi_version_iter), K_(max_committed_trans_version),K_(cur_trans_version), K_(is_node_compacted), K_(merge_log_ts), K_(iter_mode));
+  J_OBJ_END();
+  return pos;
+}
 
 ObMultiVersionValueIterator::ObMultiVersionValueIterator()
     : is_inited_(false),

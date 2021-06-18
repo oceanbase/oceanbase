@@ -695,3 +695,27 @@ int HashIndexCollection::get_partition_index(
   }
   return ret;
 }
+int64_t HashIndexMapItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(in_group_index), K_(group_count), K_(group_id), K_(balance_group_id), K_(balance_group_type), K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SquareIdMap::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(map_id), K_(ignore_leader_balance), K_(primary_zone), K_(tenant_id), K_(row_size), K_(col_size),"type", get_map_type(), K_(is_valid));
+  J_OBJ_END();
+  return pos;
+}
+int64_t SquareIdMapItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(designated_leader), K_(all_tg_idx), K_(all_pg_idx), K_(part_idx), K_(unit_id),K_(dest_unit_id), K_(tablegroup_id), K_(table_id), K_(replica_type), K_(memstore_percent));
+  J_OBJ_END();
+  return pos;
+}

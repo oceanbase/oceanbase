@@ -28,6 +28,14 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::observer;
 namespace oceanbase {
 namespace sql {
+int64_t ObDistributedTransmit::ObSliceInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(part_offset_), K(subpart_offset_), K(part_idx_), K(subpart_idx_), K(slice_idx_));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObDistributedTransmitInput::init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op)
 {

@@ -19,6 +19,22 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t ObLogMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(log_id_), K(submit_timestamp_), K(proposal_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(size_), K(log_id_), K(submit_timestamp_), K(proposal_id_), K(need_flushed_));
+  J_OBJ_END();
+  return pos;
+}
 char ObNewLogFileBuf::buf_[CLOG_DIO_ALIGN_SIZE] __attribute__((aligned(CLOG_DIO_ALIGN_SIZE)));
 
 static class NEW_LOG_FILE_BUF_CONSTRUCTOR {

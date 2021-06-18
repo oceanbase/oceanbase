@@ -18,6 +18,14 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObMergeJoinSpec::EqualConditionInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(expr_), KP(ns_cmp_func_), K(is_opposite_));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER((ObMergeJoinSpec, ObJoinSpec), equal_cond_infos_, merge_directions_, is_left_unique_);
 
 OB_SERIALIZE_MEMBER(ObMergeJoinSpec::EqualConditionInfo, expr_, ser_eval_func_, is_opposite_);

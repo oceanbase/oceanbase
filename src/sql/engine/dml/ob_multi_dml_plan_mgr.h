@@ -28,7 +28,7 @@ class ObMultiDMLPlanMgr {
           part_key_ref_id_(common::OB_INVALID_ID),
           value_ref_id_(common::OB_INVALID_ID)
     {}
-    TO_STRING_KV(K_(part_key), KPC_(row_store), K_(part_key_ref_id), K_(value_ref_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     common::ObPartitionKey part_key_;
     ObChunkDatumStore* datum_store_;

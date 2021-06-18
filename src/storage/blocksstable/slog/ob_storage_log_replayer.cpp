@@ -22,6 +22,14 @@ using namespace common;
 using namespace share;
 using namespace storage;
 namespace blocksstable {
+int64_t ObRedoModuleReplayParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_seq_num), K_(subcmd), K_(file_id), KP_(buf), K_(buf_len));
+  J_OBJ_END();
+  return pos;
+}
 
 ObRedoModuleReplayParam::ObRedoModuleReplayParam()
     : log_seq_num_(0), subcmd_(0), file_id_(0), buf_(nullptr), buf_len_(0)

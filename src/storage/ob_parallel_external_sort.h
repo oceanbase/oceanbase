@@ -96,7 +96,14 @@ public:
   void assign(const int64_t buf_pos, const int64_t buf_cap, char* buf);
   int serialize_header();
   bool has_item();
-  TO_STRING_KV(KP(buf_), K(buf_pos_), K(buf_cap_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP(buf_), K(buf_pos_), K(buf_cap_));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   char* buf_;
@@ -384,7 +391,14 @@ public:
   int read_item(T& item);
   int deserialize_header();
   void assign(const int64_t buf_pos, const int64_t buf_cap, const char* buf);
-  TO_STRING_KV(KP(buf_), K(buf_pos_), K(buf_len_), K(buf_cap_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(KP(buf_), K(buf_pos_), K(buf_len_), K(buf_cap_));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   const char* buf_;
@@ -733,7 +747,14 @@ private:
       item_ = NULL;
       idx_ = 0;
     }
-    TO_STRING_KV(K_(item), K_(idx));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K_(item), K_(idx));
+      J_OBJ_END();
+      return pos;
+    }
   };
   class HeapCompare {
   public:
@@ -1443,8 +1464,14 @@ public:
   }
   void reset();
   int transfer_final_sorted_fragment_iter(ExternalSortRound& dest_round);
-  TO_STRING_KV(K(is_inited_), K(is_in_memory_), K(has_data_), K(buf_mem_limit_), K(expire_timestamp_), KP(next_round_),
-      KP(compare_), KP(iter_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(is_inited_), K(is_in_memory_), K(has_data_), K(buf_mem_limit_), K(expire_timestamp_), KP(next_round_),KP(compare_), KP(iter_));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   int build_iterator();
@@ -1711,8 +1738,14 @@ public:
   int add_fragment_iter(ObFragmentIterator<T>* iter);
   int transfer_final_sorted_fragment_iter(ObExternalSort<T, Compare>& merge_sorter);
   int get_current_round(ExternalSortRound*& round);
-  TO_STRING_KV(K(is_inited_), K(file_buf_size_), K(buf_mem_limit_), K(expire_timestamp_), K(merge_count_per_round_),
-      KP(tenant_id_), KP(compare_));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K(is_inited_), K(file_buf_size_), K(buf_mem_limit_), K(expire_timestamp_), K(merge_count_per_round_),KP(tenant_id_), KP(compare_));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   static const int64_t EXTERNAL_SORT_ROUND_CNT = 2;

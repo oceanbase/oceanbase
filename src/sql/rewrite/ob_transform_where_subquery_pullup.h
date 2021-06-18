@@ -62,8 +62,7 @@ private:
     // Just in case different parameters hit same plan, firstly we need add const param constraint
     bool need_add_limit_constraint_;
 
-    TO_STRING_KV(K_(op), K_(subquery_expr), K_(subquery), K_(left_hand), K_(can_unnest_pullup), K_(can_be_transform),
-        K_(direct_correlated), K_(need_create_spj), K_(need_add_limit_constraint));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   int transform_anyall_query(ObDMLStmt* stmt, bool& trans_happened);

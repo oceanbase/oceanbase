@@ -51,7 +51,7 @@ public:
   {
     return seqno_;
   }
-  TO_STRING_KV(K_(size_per_buffer));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   OB_INLINE int64_t get_alloc_cnt()
   {

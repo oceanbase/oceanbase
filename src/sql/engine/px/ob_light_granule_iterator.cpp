@@ -18,6 +18,38 @@ using namespace std;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObLGIInput::ObArrayParamInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(param_store_idx), K_(array_param));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLGIInput::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(location_idx_list), K_(param_array_list), K_(part_stmt_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLightGranuleIterator::ObLGIScanInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_table_id), K_(table_location_key), K_(tsc_op_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLightGranuleIterator::ObLGICtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cur_granule_pos), K_(cur_part_id), K_(cur_param_idx), K_(state));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObLGIInput::init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op)
 {

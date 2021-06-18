@@ -17,6 +17,14 @@
 namespace oceanbase {
 using namespace common;
 namespace election {
+int64_t ObElectionEventHistory::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition), K_(addr), K_(current_leader), K_(event_type));
+  J_OBJ_END();
+  return pos;
+}
 //  caution:
 //    the limit of name field is 32 bytes
 const char* const ObElectionEventHistory::EVENT_NAME_STR[EVENT_MAX] = {"invalid event",

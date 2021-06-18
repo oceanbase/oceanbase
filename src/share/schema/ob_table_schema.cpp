@@ -33,6 +33,22 @@
 namespace oceanbase {
 namespace share {
 namespace schema {
+int64_t TableJoinType_::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_pair), K_(join_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableMode::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("table_mode_flag", mode_flag_, "pk_mode", pk_mode_);
+  J_OBJ_END();
+  return pos;
+}
 using namespace std;
 using namespace oceanbase;
 using namespace oceanbase::common;

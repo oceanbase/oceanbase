@@ -19,6 +19,14 @@ namespace oceanbase {
 using namespace storage;
 
 namespace blocksstable {
+int64_t ObRowQueue::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cell_cnt), K_(cur_pos), "count", rows_.count(), K_(row_type));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObRowQueue::init(const ObRowStoreType row_type, const int64_t cell_cnt)
 {

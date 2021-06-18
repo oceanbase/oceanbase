@@ -37,6 +37,14 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 namespace rootserver {
+int64_t ObShrinkResourcePoolChecker::ZoneReplicas::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(in_pool_paxos_replicas), K_(not_in_pool_paxos_replicas), K_(in_pool_non_paxos_replicas),K_(not_in_pool_non_paxos_replicas));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObShrinkResourcePoolChecker::ZoneReplicas::assign(const ObShrinkResourcePoolChecker::ZoneReplicas& other)
 {

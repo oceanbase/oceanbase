@@ -58,7 +58,7 @@ public:
   {
     return proxy_;
   }
-  TO_STRING_KV(K_(src), K_(dst), K_(proxy));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   ObAddr src_;
@@ -100,7 +100,7 @@ public:
   }
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(request_ts), K_(partition), K_(addr), K_(last_log_id), K_(request_lease_interval_us));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // the send timestamp of a copy replica applying for lease
@@ -152,7 +152,7 @@ public:
   }
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(request_ts), K_(partition), K_(cur_log_id), K_(status), K_(lease_interval_us));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // the send timestamp of a copy replica applying for lease
@@ -198,7 +198,7 @@ public:
   }
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(partition), K_(log_id), K_(log_ts), K_(trans_id), K_(log_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_;
@@ -248,7 +248,7 @@ public:
   }
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(partition), K_(log_id), K_(trans_id), K_(addr), K_(status));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_;

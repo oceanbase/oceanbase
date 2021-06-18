@@ -56,7 +56,7 @@ public:
   {
     return v_;
   }
-  TO_STRING_KV(K_(v));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t v_;
@@ -154,7 +154,7 @@ private:
     bool is_null_;
     bool is_hex_value_;
 
-    TO_STRING_KV(K_(primary_key), K_(is_null), K_(name), K_(value_end_pos));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     Column() : name_(NULL), value_end_pos_(0), primary_key_(false), is_null_(false), is_hex_value_(false)
     {}

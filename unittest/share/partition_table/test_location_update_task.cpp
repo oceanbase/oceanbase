@@ -53,7 +53,14 @@ public:
     {}
     common::ObAddr server_;
     bool is_local_;
-    TO_STRING_KV(K_(server), K_(is_local));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K_(server), K_(is_local));
+      J_OBJ_END();
+      return pos;
+    }
   };
   MockLocalityManager() : is_readonly_(false), server_info_()
   {}

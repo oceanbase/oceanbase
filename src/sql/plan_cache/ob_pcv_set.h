@@ -49,7 +49,7 @@ class ObPCVSet {
       param_idxs_.reset();
       is_last_ = false;
     }
-    TO_STRING_KV(K_(param_idxs), K_(is_last))
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 public:
@@ -130,7 +130,7 @@ public:
   }
   int update_stmt_stat();
 
-  TO_STRING_KV(K_(is_inited), K_(ref_count), K_(min_merged_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t MAX_PCV_SET_PLAN_NUM = 200;

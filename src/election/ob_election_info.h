@@ -133,10 +133,7 @@ public:
     return ATOMIC_LOAD(&last_leader_revoke_time_);
   }
 
-  TO_STRING_KV(K_(is_running), K_(is_changing_leader), K_(self), K_(proposal_leader), K_(current_leader),
-      K_(previous_leader), K_(curr_candidates), K_(curr_membership_version), K_(replica_num), K_(leader_lease),
-      K_(election_time_offset), K_(active_timestamp), K_(T1_timestamp), K_(leader_epoch), K_(state), K_(role),
-      K_(stage), K_(type), K_(change_leader_timestamp), K_(eg_id), K_(last_leader_revoke_time));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   class State {

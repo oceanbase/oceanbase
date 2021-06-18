@@ -53,8 +53,7 @@ public:
   int fetch_sstable_pair_list(const uint64_t index_id, common::ObIArray<blocksstable::ObSSTablePair>& pair_list);
   int fetch_all_table_ids(common::ObIArray<uint64_t>& table_id_array);
   int fetch_table_keys(const uint64_t index_id, obrpc::ObFetchTableInfoResult& table_res);
-  TO_STRING_KV(K_(pkey), K_(restore_info), K_(last_read_size), K_(partition_store_meta), K_(snapshot_version),
-      K_(schema_version), K_(data_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int prepare(const common::ObPartitionKey& pkey, const ObDataStorageInfo& data_info);

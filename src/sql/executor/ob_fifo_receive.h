@@ -122,7 +122,7 @@ public:
 
   virtual int open(ObExecContext& exec_ctx, const ObTaskResult& task_result);
   virtual int close() = 0;
-  TO_STRING_KV(K_(inited), K_(cur_scanner));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   virtual int fetch_next_scanner() = 0;
@@ -395,7 +395,7 @@ private:
       merge_id_ = 0;
       curhandler_scanner_.reset();
     }
-    TO_STRING_KV("merge id", merge_id_);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     FetchIntermResultStreamHandle stream_handler_;
     int64_t merge_id_;  // pos in merge_handles
     common::ObRowStore::Iterator row_iter_;
@@ -405,7 +405,7 @@ private:
   struct ObSortRow {
     ObSortRow() : row_(NULL), pos_(0)
     {}
-    TO_STRING_KV("pos", pos_);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     common::ObNewRow* row_;
     int64_t pos_;
   };
@@ -499,7 +499,7 @@ private:
   int init_row_heap(ObExecContext& ctx, ObFifoReceiveCtx& fifo_receive_ctx) const;
   int pop_a_row_from_heap(ObFifoReceiveCtx& fifo_receive_ctx, ObSortRow& row) const;
   int push_a_row_into_heap(ObFifoReceiveCtx& fifo_receive_ctx, ObSortRow& row) const;
-  TO_STRING_KV(N_ORDER_BY, sort_columns_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFifoReceive);

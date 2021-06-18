@@ -18,6 +18,14 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace blocksstable {
+int64_t ObBlockIntermediateHeader::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(version), K_(offset), K_(size), K_(is_leaf_node), K_(reserved), K_(row_count), K_(macro_version),K_(macro_logic_id));
+  J_OBJ_END();
+  return pos;
+}
 
 ObBlockIntermediateHeader::ObBlockIntermediateHeader()
     : version_(INTERMEDIATE_HEADER_VERSION),

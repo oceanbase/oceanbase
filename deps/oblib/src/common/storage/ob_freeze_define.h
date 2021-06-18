@@ -72,8 +72,7 @@ struct ObFrozenStatus {
                 this->status_ == other.status_ && this->schema_version_ == other.schema_version_ &&
                 this->cluster_version_ == other.cluster_version_));
   }
-  TO_STRING_KV(N_FROZEN_VERSION, frozen_version_, "frozen_timestamp", frozen_timestamp_, "freeze_status", status_,
-      N_SCHEMA_VERSION, schema_version_, "cluster_version", cluster_version_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObVersion frozen_version_;
   int64_t frozen_timestamp_;

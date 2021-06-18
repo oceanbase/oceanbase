@@ -27,6 +27,14 @@ using namespace transaction;
 using namespace clog;
 
 namespace storage {
+int64_t ObPartitionLoopWorker::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(replay_status), K_(is_migrating_flag), K_(last_checkpoint), K_(replay_pending_checkpoint),K_(last_max_trans_version), K_(next_gene_checkpoint_log_ts), K_(safe_slave_read_timestamp),K_(last_checkpoint_value));
+  J_OBJ_END();
+  return pos;
+}
 int ObPartitionLoopWorker::init(ObPartitionGroup* partition)
 {
   int ret = OB_SUCCESS;

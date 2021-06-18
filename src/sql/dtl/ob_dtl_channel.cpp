@@ -23,6 +23,14 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 namespace dtl {
+int64_t ObDtlChannel::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(id), K_(peer));
+  J_OBJ_END();
+  return pos;
+}
 
 ObDtlChannel::ObDtlChannel(uint64_t id, const common::ObAddr& peer)
     : cond_(),

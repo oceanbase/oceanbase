@@ -72,7 +72,7 @@ public:
   }
   int update_publish_version(const int64_t publish_version);
   int get_publish_version(int64_t& publish_version);
-  TO_STRING_KV(K_(tenant_id), K_(gts_local_cache), K_(server));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   void statistics_();

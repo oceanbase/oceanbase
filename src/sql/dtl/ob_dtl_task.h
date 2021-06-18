@@ -53,7 +53,7 @@ public:
   // no need to serialize
   DTL_CHAN_STATE state_;
 
-  TO_STRING_KV(KP_(chid), K_(type), K_(peer), K_(role), K_(tenant_id), K(state_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObDtlChSet {
@@ -84,7 +84,7 @@ public:
   {
     ch_info_set_.reset();
   }
-  TO_STRING_KV(K_(exec_addr), K_(ch_info_set));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   common::ObAddr exec_addr_;
@@ -115,7 +115,7 @@ public:
   {
     return prefix_task_counts_;
   }
-  TO_STRING_KV(K_(total_task_cnt), K_(exec_addrs), K_(prefix_task_counts));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t total_task_cnt_;
@@ -144,8 +144,7 @@ public:
     tenant_id_ = 0;
   }
 
-  TO_STRING_KV(
-      K_(start_channel_id), K_(transmit_exec_server), K_(receive_exec_server), K_(channel_count), K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t start_channel_id_;
@@ -175,7 +174,7 @@ public:
   const common::ObAddr& get_exec_addr() const;
   const common::ObAddr& get_submit_addr() const;
 
-  TO_STRING_KV(K_(jobid));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   // Link channels with channel ID.

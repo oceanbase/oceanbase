@@ -57,7 +57,7 @@ public:
   {}
   ObMergeIndexInfo(const uint64_t index_id, const bool table_exist) : index_id_(index_id), table_exist_(table_exist)
   {}
-  TO_STRING_KV(K_(index_id), K_(table_exist));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t index_id_;
   bool table_exist_;
 };
@@ -101,8 +101,7 @@ public:
     allocator_.reset();
     checksum_method_ = 0;
   }
-  TO_STRING_KV(KP_(table_schema), KP_(index_schema), KP_(dep_table_schema), K_(schema_version), K_(schema_cnt),
-      K_(version), K_(concurrent_cnt), K_(row_store_type), K_(snapshot_version), KP_(report), K_(checksum_method));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   const share::schema::ObTableSchema* table_schema_;
@@ -147,9 +146,7 @@ public:
   int preallocate_local_sorters(const int64_t concurrent_cnt);
   void add_index_macro_cnt(const int64_t index_macro_cnt);
   void destroy();
-  TO_STRING_KV(K_(is_report_succ), K_(update_sstore_snapshot_version), K_(is_unique_checking_complete),
-      K_(build_index_ret), K_(need_build), KP_(main_table_checksum), K_(column_cnt), K_(row_cnt),
-      K_(is_update_sstore_complete), K_(index_macro_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   bool is_report_succ_;
   int64_t update_sstore_snapshot_version_;
   bool is_unique_checking_complete_;
@@ -172,9 +169,7 @@ public:
   struct Param {
     Param();
     bool is_valid() const;
-    TO_STRING_KV(KP_(memctx_factory), KP_(schema), KP_(column_ids), KP_(table), K_(is_base_iter), K_(is_last_iter),
-        K_(is_full_merge), K_(merge_level), K_(row_store_type), KP_(range), KP_(multi_version_row_info), K_(merge_type),
-        K_(log_ts_range), K_(merge_log_ts), K_(is_iter_overflow_to_complement), K_(is_sstable_cut));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     memtable::ObIMemtableCtxFactory* memctx_factory_;
     const share::schema::ObTableSchema* schema_;
@@ -326,11 +321,7 @@ public:
   }
   bool is_trans_state_table_valid() const;
 
-  TO_STRING_KV(K_(table_id), K_(rowkey_column_cnt), KP_(column_ids), K_(schema_version), KP_(table), KP_(curr_row),
-      KP_(ctx_factory), K_(is_iter_end), K_(use_block), K_(is_base_iter), K_(is_sstable_iter), K_(is_inited),
-      K_(curr_block_desc), K_(macro_block_opened), K_(micro_block_opened), K_(curr_range), K_(macro_range),
-      K_(merge_range), K_(advice_merge_level), K_(curr_merge_level), K_(micro_block_count), K_(reuse_micro_block_count),
-      K_(iter_row_count), K_(magic_row_count), K_(purged_count), K_(need_rewrite_dirty_macro_block));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   // represent cannot compare with other ObMacroRowIterator and this ObMacroRowIterator is a range iterator

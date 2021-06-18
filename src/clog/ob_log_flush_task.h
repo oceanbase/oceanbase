@@ -52,8 +52,7 @@ public:
   {
     return partition_key_;
   }
-  TO_STRING_KV(N_LOG_TYPE, log_type_, N_LOG_ID, log_id_, "submit_timestamp", submit_timestamp_, N_PARTITION_KEY,
-      partition_key_, "leader", leader_, "cluster_id", cluster_id_)
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   ObLogType log_type_;
   uint64_t log_id_;

@@ -51,3 +51,19 @@ int ObLobMicroBlockIndexReader::get_next_index_item(ObLobMicroIndexItem& next_it
   }
   return ret;
 }
+int64_t ObLobMicroIndexItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(offset), K_(data_size), K_(size_item));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLobMicroIndexSizeItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(char_size), K_(byte_size));
+  J_OBJ_END();
+  return pos;
+}

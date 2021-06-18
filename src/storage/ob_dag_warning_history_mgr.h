@@ -109,8 +109,7 @@ public:
   ObDagWarningInfo();
   ~ObDagWarningInfo();
   void reset();
-  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(dag_type), K_(dag_ret), K_(dag_status), K_(gmt_create), K_(gmt_modified),
-      K_(warning_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObDagWarningInfo& operator=(const ObDagWarningInfo& other);
 
 private:

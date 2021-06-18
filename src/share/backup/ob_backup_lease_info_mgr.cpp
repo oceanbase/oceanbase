@@ -28,6 +28,14 @@ using namespace obrpc;
 using namespace storage;
 
 namespace share {
+int64_t ObBackupLeaseInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_leader), K_(lease_start_ts), K_(leader_epoch), K_(leader_takeover_ts), K_(round));
+  J_OBJ_END();
+  return pos;
+}
 ObBackupLeaseInfo::ObBackupLeaseInfo()
     : is_leader_(false), lease_start_ts_(0), leader_epoch_(0), leader_takeover_ts_(0), round_(0)
 {}

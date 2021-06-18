@@ -440,3 +440,19 @@ int ObRowkeyInfo::get_fulltext_column(uint64_t& column_id) const
   }
   return ret;
 }
+int64_t ObRowkeyInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("columns", common::ObArrayWrap<ObRowkeyColumn>(columns_, size_), K_(capacity));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRowkeyColumn::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(length), K_(column_id), K_(type), K_(order), K_(fulltext_flag));
+  J_OBJ_END();
+  return pos;
+}

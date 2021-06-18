@@ -63,7 +63,7 @@ private:
   struct ObBackupSetPGTaskList {
     ObBackupSetPGTaskList(){};
     virtual ~ObBackupSetPGTaskList(){};
-    TO_STRING_KV(K_(backup_set_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     void reset()
     {

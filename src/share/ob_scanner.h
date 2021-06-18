@@ -255,10 +255,7 @@ public:
   }
   // NEED_SERIALIZE_AND_DESERIALIZE;
   // TODO: set "is_result_accurate" as macro after library is merged
-  TO_STRING_KV(N_ROWSTORE, row_store_, N_MEM_LIMIT, mem_size_limit_, N_AFFECTED_ROWS, affected_rows_,
-      K_(row_matched_count), K_(row_duplicated_count), K_(found_rows), N_LAST_INSERT_ID_TO_CLIENT,
-      last_insert_id_to_client_, N_LAST_INSERT_ID_SESSION, last_insert_id_session_, K_(is_result_accurate),
-      K_(trans_result), K_(implicit_cursors), K_(rcode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   ObRowStore row_store_;

@@ -68,7 +68,7 @@ public:
       return ref_table_id_;
     }
 
-    TO_STRING_KV(K_(inited), K_(ref_table_id));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     bool inited_;

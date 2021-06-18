@@ -17,6 +17,14 @@ using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 namespace oceanbase {
 namespace sql {
+int64_t ObDropIndexStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_type), K_(drop_index_arg));
+  J_OBJ_END();
+  return pos;
+}
 
 ObDropIndexStmt::ObDropIndexStmt(ObIAllocator* name_pool)
     : ObDDLStmt(name_pool, stmt::T_DROP_INDEX), name_pool_(name_pool), drop_index_arg_(), table_id_(OB_INVALID_ID)

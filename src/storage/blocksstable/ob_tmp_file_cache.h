@@ -43,7 +43,7 @@ public:
   {
     return page_id_;
   }
-  TO_STRING_KV(K_(block_id), K_(page_id), K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t block_id_;
@@ -69,7 +69,7 @@ public:
   {
     buf_ = buf;
   }
-  TO_STRING_KV(K_(size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   char* buf_;
@@ -87,7 +87,7 @@ public:
     handle_.reset();
     value_ = NULL;
   }
-  TO_STRING_KV(KP_(value), K_(handle));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObTmpPageCacheValue* value_;
   common::ObKVCacheHandle handle_;
 };
@@ -98,7 +98,7 @@ public:
   {}
   virtual ~ObTmpPageIOInfo()
   {}
-  TO_STRING_KV(K_(key), K_(offset), K_(size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObTmpPageCacheKey key_;
   int32_t offset_;
@@ -148,7 +148,7 @@ public:
     virtual int inner_process(const bool is_success) override;
     virtual int inner_deep_copy(char* buf, const int64_t buf_len, ObIOCallback*& callback) const override;
     virtual const char* get_data() override;
-    TO_STRING_KV(KP_(data_buf));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     friend class ObTmpPageCache;
@@ -162,7 +162,7 @@ public:
     virtual int inner_process(const bool is_success) override;
     virtual int inner_deep_copy(char* buf, const int64_t buf_len, ObIOCallback*& callback) const override;
     virtual const char* get_data() override;
-    TO_STRING_KV(KP_(data_buf));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     friend class ObTmpPageCache;
@@ -198,7 +198,7 @@ public:
   {
     return block_id_ > 0 && tenant_id_ > 0 && size() > 0;
   }
-  TO_STRING_KV(K_(block_id), K_(tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t block_id_;
@@ -222,7 +222,7 @@ public:
   {
     return buf_;
   }
-  TO_STRING_KV(K_(size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   char* buf_;
@@ -242,7 +242,7 @@ public:
     value_ = NULL;
     kvpair_ = NULL;
   }
-  TO_STRING_KV(KP_(value), K_(inst_handle), KP_(kvpair), K_(handle));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   ObTmpBlockCacheValue* value_;
   ObKVCacheInstHandle inst_handle_;
   ObKVCachePair* kvpair_;

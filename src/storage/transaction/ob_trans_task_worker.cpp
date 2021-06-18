@@ -20,6 +20,14 @@ using namespace storage;
 using namespace clog;
 
 namespace transaction {
+int64_t BigTransCallbackTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(partition), K_(log_type), K_(log_id), K_(log_timestamp));
+  J_OBJ_END();
+  return pos;
+}
 
 void BigTransCallbackTask::reset()
 {

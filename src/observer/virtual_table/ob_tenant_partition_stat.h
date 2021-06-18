@@ -41,7 +41,7 @@ private:
     void reset();
     bool is_valid() const;
 
-    TO_STRING_KV(K_(table_id), K_(partition_id), K_(partition_cnt), K_(row_count), K_(diff_percentage));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     uint64_t table_id_;
     int64_t partition_id_;

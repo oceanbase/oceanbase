@@ -269,9 +269,7 @@ public:
   }
 
 public:
-  TO_STRING_KV(KP(this), K_(partition), K_(version), K_(with_need_update_version), K_(local_trans_version),
-      K_(with_base_ts), K_(base_ts), K_(submit_task_ts), K_(process_begin_ts), "cb",
-      *(static_cast<ObTransSubmitLogCb*>(cb_)));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_;
@@ -316,7 +314,7 @@ public:
   bool is_valid() const;
 
 public:
-  TO_STRING_KV(KP(this), K_(partition), K_(log_meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_;
@@ -357,7 +355,7 @@ public:
   }
 
 public:
-  TO_STRING_KV(KP(this), K_(partition));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey partition_;

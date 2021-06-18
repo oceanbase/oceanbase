@@ -27,7 +27,7 @@ struct ObMigrateArgMacroBlockInfo {
   ObMigrateArgMacroBlockInfo() : fetch_arg_(), macro_block_id_()
   {}
   void reset();
-  TO_STRING_KV(K_(fetch_arg), K_(macro_block_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   obrpc::ObFetchMacroBlockArg fetch_arg_;
   blocksstable::MacroBlockId macro_block_id_;
@@ -36,7 +36,7 @@ struct ObMigrateArgMacroBlockInfo {
 struct ObMigrateMacroBlockInfo {
   ObMigrateMacroBlockInfo() : pair_(), macro_block_id_(), full_meta_(), need_copy_(true)
   {}
-  TO_STRING_KV(K_(pair), K_(macro_block_id), K_(need_copy));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   blocksstable::ObSSTablePair pair_;
   blocksstable::MacroBlockId macro_block_id_;
   blocksstable::ObFullMacroBlockMeta full_meta_;
@@ -45,7 +45,7 @@ struct ObMigrateMacroBlockInfo {
 
 struct ObMigrateSSTableInfo {
   ObMigrateSSTableInfo();
-  TO_STRING_KV(K_(is_inited), K_(pending_idx), K_(sstable_meta), K_(macro_block_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int assign(const ObMigrateSSTableInfo& sstable_info);
 
   bool is_inited_;
@@ -97,7 +97,7 @@ struct ObLogicTableMeta {
   {
     return schema_version_ >= 0;
   }
-  TO_STRING_KV(K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   int64_t schema_version_;
   OB_UNIS_VERSION(1);
@@ -172,7 +172,7 @@ struct ObSameVersionIncTable {
   int64_t get_max_snapshot_version();
   int64_t get_min_base_version();
 
-  TO_STRING_KV(K_(src_table_keys), K_(pkey), K_(version), K_(table_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   DISALLOW_COPY_AND_ASSIGN(ObSameVersionIncTable);
 };
 
@@ -184,7 +184,7 @@ struct ObMigrateTableInfo {
     SSTableInfo();
     bool is_valid() const;
     void reset();
-    TO_STRING_KV(K_(src_table_key), K_(dest_base_version), K_(dest_log_ts_range));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
   uint64_t table_id_;
@@ -199,7 +199,7 @@ struct ObMigrateTableInfo {
   ~ObMigrateTableInfo();
   int assign(const ObMigrateTableInfo& info);
   void reuse();
-  TO_STRING_KV(K_(table_id), K_(multi_version_start), K_(ready_for_read), K_(major_sstables), K_(minor_sstables));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrateTableInfo);
@@ -217,7 +217,7 @@ struct ObMigratePartitionInfo final {
   int assign(const ObMigratePartitionInfo& info);
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(src), K_(meta), K_(table_id_list), K_(table_infos), K_(is_restore));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigratePartitionInfo);

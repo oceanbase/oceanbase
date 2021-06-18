@@ -35,6 +35,14 @@ using namespace oceanbase::sql;
 
 namespace oceanbase {
 namespace observer {
+int64_t ObVirtualOpenCursorTable::SessionInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(version), K(id), K(addr), K(user_name), K(sql_id));
+  J_OBJ_END();
+  return pos;
+}
 void ObVirtualOpenCursorTable::ObEachSessionId::reset()
 {
   is_success_ = false;

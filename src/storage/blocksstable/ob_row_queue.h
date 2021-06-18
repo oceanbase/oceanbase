@@ -69,7 +69,7 @@ public:
     cur_pos_ = 0;
     rows_.reuse();
   }
-  TO_STRING_KV(K_(cell_cnt), K_(cur_pos), "count", rows_.count(), K_(row_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int alloc_row(storage::ObStoreRow*& row, common::ObIAllocator& allocator);

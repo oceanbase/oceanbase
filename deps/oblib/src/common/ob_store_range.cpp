@@ -14,6 +14,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObExtStoreRange::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(range), K_(ext_start_key), K_(ext_end_key));
+  J_OBJ_END();
+  return pos;
+}
 
 // ObObjs in start_key/end_key are only shallow-copied
 int ObStoreRange::to_new_range(const ObIArrayWrap<ObOrderType>& column_orders, const int64_t rowkey_cnt,

@@ -14,6 +14,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObTimerMonitor::TimerRecord::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(thread_id_), K(start_time_), K(interval_), K(*task_));
+  J_OBJ_END();
+  return pos;
+}
 
 ObTimerMonitor::ObTimerMonitor() : inited_(false), timer_(), monitor_task_(*this), records_(), tail_(0)
 {

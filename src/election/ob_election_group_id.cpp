@@ -22,6 +22,14 @@ namespace oceanbase {
 using namespace common;
 
 namespace election {
+int64_t PartState::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(lease_end), K_(takeover_t1_timestamp), K_(vote_cnt));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(ObElectionGroupId, server_, create_time_, hash_val_);
 
 int ObElectionGroupId::init(const ObAddr& server, const int64_t create_time)

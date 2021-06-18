@@ -143,8 +143,7 @@ private:
 
     int assign(const ServerStat& other);
 
-    TO_STRING_KV(K_(server_load), K_(cpu_assigned_percent), K_(disk_assigned_percent), K_(unit_num),
-        K_(migrating_unit_num), K_(merged_version), K_(leader_count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(ServerStat);

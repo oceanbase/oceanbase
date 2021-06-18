@@ -43,7 +43,7 @@ private:
     }
     int init_path_array(const int64_t size);
 
-    TO_STRING_KV(KPC(prior_exprs_result_), K(paths_), K(level_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     const ObChunkDatumStore::StoredRow* prior_exprs_result_;
     // results of sys_connect_by_path functions in a connect by query.
     common::ObSEArray<common::ObString, 16> paths_;
@@ -62,7 +62,7 @@ private:
       output_row_ = NULL;
       path_node_.reset();
     }
-    TO_STRING_KV(KPC(pump_row_), KPC(output_row_), K(path_node_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     const ObChunkDatumStore::StoredRow* pump_row_;
     const ObChunkDatumStore::StoredRow* output_row_;
     PathNode path_node_;

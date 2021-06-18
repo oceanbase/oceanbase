@@ -82,7 +82,7 @@ public:
   virtual int64_t get_data_len() const;
   virtual int after_flushed(
       const file_id_t file_id, const offset_t offset, const int error_code, const ObLogWritePoolType type);
-  TO_STRING_KV(KP_(host), KP_(buffer_task), KP_(batch_buffer));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t MAX_TASK_NUM_PER_CB = 20;

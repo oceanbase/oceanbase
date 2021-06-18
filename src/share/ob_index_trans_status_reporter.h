@@ -34,7 +34,7 @@ struct ObIndexTransStatus {
     frozen_version_ = -1;
     schema_version_ = -1;
   }
-  TO_STRING_KV(K_(server), K_(trans_status), K_(snapshot_version), K_(frozen_version), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObAddr server_;
   int trans_status_;
   int64_t snapshot_version_;

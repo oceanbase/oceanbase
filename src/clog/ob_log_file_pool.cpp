@@ -29,6 +29,14 @@ namespace oceanbase {
 using namespace common;
 using namespace share;
 namespace clog {
+int64_t ObLogWriteFilePool::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(log_dir), K_(file_size), K_(free_quota), K_(limit_free_quota), K_(type),K_(min_file_id), K_(min_using_file_id), K_(max_file_id));
+  J_OBJ_END();
+  return pos;
+}
 
 // for stat event
 void set_free_quota_event(const char* path, const int64_t free_quota)

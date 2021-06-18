@@ -49,7 +49,7 @@ public:
   }
   common::ObSEArray<common::ObNewRange, 16> ranges_;
   int64_t partition_id_;
-  TO_STRING_KV(K_(partition_id), K_(ranges));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObIAllocator* deserialize_allocator_;

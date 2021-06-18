@@ -24,6 +24,14 @@ using namespace common;
 using namespace share;
 
 namespace archive {
+int64_t ObArchiveLogFileStore::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(inited_), K(storage_info_), K(restore_info_));
+  J_OBJ_END();
+  return pos;
+}
 ObArchiveLogFileStore::ObArchiveLogFileStore() : inited_(false), storage_info_(), restore_info_()
 {}
 

@@ -69,3 +69,11 @@ int ObHashPartCols::equal_temp(const ObTempHashPartCols& other, const ObIArray<O
   }
   return ret;
 }
+int64_t ObHashPartCols::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(store_row));
+  J_OBJ_END();
+  return pos;
+}

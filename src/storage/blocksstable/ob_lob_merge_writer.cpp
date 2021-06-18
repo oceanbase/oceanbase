@@ -21,6 +21,14 @@ using namespace share::schema;
 using namespace storage;
 
 namespace blocksstable {
+int64_t ObLobMergeWriter::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(orig_lob_macro_blocks), K_(block_write_ctx), K_(macro_start_seq), K_(use_old_macro_block_count));
+  J_OBJ_END();
+  return pos;
+}
 
 ObLobMergeWriter::ObLobMergeWriter()
     : orig_lob_macro_blocks_(),

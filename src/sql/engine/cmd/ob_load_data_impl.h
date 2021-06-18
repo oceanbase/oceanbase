@@ -54,7 +54,7 @@ struct ObLoadDataReplacedExprInfo {
   {}
   ObConstRawExpr* replaced_expr;      // column refs and user variables will be replaced into an const expr
   int64_t correspond_file_field_idx;  // the index of column in the load file
-  TO_STRING_KV(KPC(replaced_expr), K(correspond_file_field_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObLoadTableColumnDesc {
@@ -77,7 +77,7 @@ struct ObLoadTableColumnDesc {
   ObRawExpr* expr_value_;  // the expr of set value
   common::ColumnType column_type_;
   int64_t array_ref_idx_;  // index of source data array (field_str_ or set_expr_str_)
-  TO_STRING_KV(K_(column_name), K_(column_id), K_(is_set_values), K_(array_ref_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObInsertValueGenerator {
@@ -155,7 +155,7 @@ struct ObDataFrag : common::ObLink {
   int64_t frag_pos;
   int64_t row_cnt;
   char data[];
-  TO_STRING_KV(K(shuffle_task_id), K(frag_size), K(frag_pos), K(row_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObPartDataFragMgr {
@@ -216,7 +216,7 @@ public:
     {
       reset();
     }
-    TO_STRING_KV(K(frag_row_pos_), K(frag_data_pos_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     inline void reset()
     {
       frag_row_pos_ = 0;
@@ -230,7 +230,7 @@ public:
   int prepare_insert_task(int64_t batch_row_count = 1000);
   int next_insert_task(int64_t batch_row_count, ObInsertTask& task);
   int free_frags();
-  TO_STRING_KV(K(frag_free_list_), K(queue_top_begin_point_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   /**
@@ -289,7 +289,7 @@ public:
   {
     return total_free_cnt_;
   }
-  TO_STRING_KV(K_(total_part_cnt), "total_alloc_cnt", get_total_allocated_frag_count(), K_(total_free_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObMemAttr attr_;
@@ -324,7 +324,7 @@ public:
     return reinterpret_cast<T*>(buffer_);
   }
 
-  TO_STRING_KV(K_(part_id), KP_(buffer));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t part_id_;  // hash key
@@ -413,7 +413,7 @@ public:
     cur_alloc_->set_attr(attr);
   }
 
-  TO_STRING_KV("cur_alloc_", (cur_alloc_ == &permanent_alloc_) ? "permanent" : "temporary");
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObIAllocator* cur_alloc_;
@@ -608,7 +608,7 @@ private:
 struct ObParserErrRec {
   int64_t row_offset_in_task;
   int ret;
-  TO_STRING_KV(K(row_offset_in_task), K(ret));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObShuffleTaskHandle {
@@ -624,7 +624,7 @@ struct ObShuffleTaskHandle {
   ObDataFragMgr& datafrag_mgr;
   ObShuffleResult result;
   ObSEArray<ObParserErrRec, 16> err_records;
-  TO_STRING_KV("task_id", result.task_id_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 OB_INLINE void ObCSVParser::remove_enclosed_char(char*& cur_field_end_pos)
@@ -767,7 +767,7 @@ struct ObFileReadCursor {
     read_size_ = 0;
     read_counter_++;
   }
-  TO_STRING_KV(K(read_counter_), K(file_offset_), K(read_size_), K(is_end_file_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t read_counter_;
   int64_t file_offset_;
   int64_t read_size_;
@@ -785,7 +785,7 @@ struct ObLoadServerInfo {
   ObAddr addr;
   ObSEArray<ObPartDataFragMgr*, 64> part_datafrag_group;
   int64_t last_memory_limit_response;
-  TO_STRING_KV(K(addr));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 /**

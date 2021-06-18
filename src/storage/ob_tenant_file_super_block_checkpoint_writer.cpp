@@ -161,3 +161,19 @@ ObIArray<MacroBlockId>& ObTenantFileSuperBlockCheckpointWriter::get_meta_block_l
 {
   return writer_.get_meta_block_list();
 }
+int64_t ObTenantFileSuperBlockItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(buf), K_(buf_size), KP_(entry));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantFileSuperBlockCheckpointEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_info));
+  J_OBJ_END();
+  return pos;
+}

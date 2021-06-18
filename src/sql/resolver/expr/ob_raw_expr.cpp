@@ -29,6 +29,78 @@ using namespace oceanbase::jit::expr;
 
 namespace oceanbase {
 namespace sql {
+int64_t ObObjAccessIdent::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(access_name), K_(access_index), K_(type), K_(params));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQualifiedName::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_DATABASE_NAME, database_name_, N_TABLE_NAME, tbl_name_, N_COLUMN, col_name_, K_(is_star), K_(ref_expr),K_(parents_expr_info), K_(parent_aggr_level), K_(access_idents), K_(is_access_root));
+  J_OBJ_END();
+  return pos;
+}
+int64_t OrderItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_EXPR, expr_, N_ASCENDING, order_type2name(order_type_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExprEqualCheckContext::ParamExprPair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(param_idx), K_(expr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObVarInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSubQueryInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ref_expr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t Bound::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(is_preceding), K_(is_nmb_literal), KP_(interval_expr), K_(date_unit_expr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRawExprFactory::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("", "");
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRawExprPointer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("", "");
+  J_OBJ_END();
+  return pos;
+}
 ObRawExpr* USELESS_POINTER = NULL;
 
 void ObQualifiedName::format_qualified_name(ObNameCaseMode mode)

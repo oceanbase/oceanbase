@@ -868,3 +868,27 @@ ObTenantNameSimpleMgr* ObTenantNameMgr::get_next_mgr_()
   }
   return next_mgr;
 }
+int64_t ObTenantNameSimpleMgr::ObTenantNameMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version), K_(tenant_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantNameSimpleMgr::ObTenantNameInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP(this), K_(tenant_name), K_(is_complete), K_(id_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantNameSimpleMgr::ObTenantIdItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(timestamp));
+  J_OBJ_END();
+  return pos;
+}

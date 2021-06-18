@@ -46,6 +46,30 @@ using namespace observer;
 
 namespace share {
 namespace schema {
+int64_t ObSchemaMgrInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(snapshot_version), KP_(schema_mgr), K_(schema_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSchemaGetterGuard::SchemaObj::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_type), K_(schema_id), KP_(schema));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSchemaGetterGuard::IdSchemaWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_type), K_(schema_id), KP_(schema));
+  J_OBJ_END();
+  return pos;
+}
 ObSchemaMgrInfo::~ObSchemaMgrInfo()
 {
   mgr_handle_.reset();

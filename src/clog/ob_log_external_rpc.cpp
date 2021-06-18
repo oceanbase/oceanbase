@@ -19,6 +19,310 @@ using namespace common;
 using namespace clog;
 using namespace storage;
 namespace obrpc {
+int64_t ObLogReqStartLogIdByTsRequest::Param::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(start_tstamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartLogIdByTsRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(params));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartLogIdByTsResponse::Result::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err), K_(start_log_id), K_(predict));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartLogIdByTsResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(err), K_(res));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartPosByLogIdRequest::Param::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(start_log_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartPosByLogIdRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(params));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartPosByLogIdResponse::Result::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err), K_(file_id), K_(offset), K_(first_log_id), K_(last_log_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartPosByLogIdResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(err), K_(res));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogExternalFetchLogRequest::Param::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(start_log_id), K_(last_log_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogExternalFetchLogRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(params), K_(file_id), K_(offset), K_(offline_timeout));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogExternalFetchLogResponse::OfflinePartition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(sync_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogExternalFetchLogResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(err), K_(offline_partitions), K_(file_id), K_(offset), K_(log_num), K_(pos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqHeartbeatInfoRequest::Param::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(log_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqHeartbeatInfoRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(params));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqHeartbeatInfoResponse::Result::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err), K_(tstamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqHeartbeatInfoResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(err), K_(res));
+  J_OBJ_END();
+  return pos;
+}
+int64_t BreakInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(break_file_id_), K(min_greater_log_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartLogIdByTsRequestWithBreakpoint::Param::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(start_tstamp), K(break_info_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartLogIdByTsRequestWithBreakpoint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), "param_count", params_.count(), K_(params));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartLogIdByTsResponseWithBreakpoint::Result::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err), K_(start_log_id), K_(start_log_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartLogIdByTsResponseWithBreakpoint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(err), "result_count", res_.count(), "result", res_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartPosByLogIdRequestWithBreakpoint::Param::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pkey_), K(start_log_id_), K(break_info_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartPosByLogIdRequestWithBreakpoint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(rpc_ver_), K(params_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartPosByLogIdResponseWithBreakpoint::Result::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err), K_(file_id), K_(offset), K_(first_log_id), K_(last_log_id), K(break_info_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogReqStartPosByLogIdResponseWithBreakpoint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(err), K_(res));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStreamSeq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(self_), K(seq_ts_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogOpenStreamReq::Param::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pkey_), K(start_log_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogOpenStreamReq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(stream_lifetime), K_(liboblog_pid), K_(stale_stream), "param_count", params_.count(), K_(params));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogOpenStreamResp::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(rpc_ver_), K(err_), K(debug_err_), K(seq_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogStreamFetchLogReq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(seq), K_(upper_limit_ts), K_(log_cnt_per_part_per_round), K_(enable_feedback));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(touched_pkey_count_), K(need_fetch_pkey_count_), K(reach_max_log_id_pkey_count_),K(reach_upper_limit_ts_pkey_count_), K(scan_round_count_), K(l2s_net_time_), K(svr_queue_time_),K(ext_process_time_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogStreamFetchLogResp::FeedbackPartition::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pkey_), K(feedback_type_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogStreamFetchLogResp::FetchLogHeartbeatItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pkey_), K(next_log_id_), K(heartbeat_ts_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogStreamFetchLogResp::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(err), K_(debug_err), K_(fetch_status), K_(log_num), K_(pos), "feedback_count",feedback_partition_arr_.count(), "heartbeat_count", fetch_log_heartbeat_arr_.count(), "feedback_array",feedback_partition_arr_, "heartbeat_array", fetch_log_heartbeat_arr_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogLeaderHeartbeatReq::Param::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pkey_), K(next_log_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogLeaderHeartbeatReq::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), "param_count", params_.count(), K_(params));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogLeaderHeartbeatResp::Result::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(err_), K(next_served_log_id_), K(next_served_ts_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogLeaderHeartbeatResp::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rpc_ver), K_(err), K_(debug_err), "result_count", res_.count(), "result", res_);
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(BreakInfo, break_file_id_, min_greater_log_id_);
 

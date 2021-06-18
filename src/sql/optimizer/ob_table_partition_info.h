@@ -113,7 +113,7 @@ public:
   {
     return table_location_.get_part_level();
   }
-  TO_STRING_KV(K_(table_location), K_(phy_tbl_location_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTablePartitionInfo);

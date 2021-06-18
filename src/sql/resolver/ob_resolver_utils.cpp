@@ -39,6 +39,22 @@ using namespace common;
 using namespace share::schema;
 using namespace obrpc;
 namespace sql {
+int64_t ObRoutineMatchInfo::MatchInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(need_cast), K_(src_type), K_(dest_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRoutineMatchInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(match_info));
+  J_OBJ_END();
+  return pos;
+}
 ObItemType ObResolverUtils::item_type_ = T_INVALID;
 
 const ObString ObResolverUtils::stmt_type_string[] = {

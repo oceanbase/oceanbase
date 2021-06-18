@@ -52,7 +52,7 @@ public:
   {
     return size_;
   }
-  TO_STRING_KV(KP(align_buf_), K(size_), K(align_size_), K(is_inited_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // Save the aligned starting address in the allocated space

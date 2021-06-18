@@ -36,7 +36,7 @@ protected:
     Column() : column_id_(common::OB_INVALID_ID), column_value_()
     {}
 
-    TO_STRING_KV(K_(column_id), K_(column_value));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     uint64_t column_id_;
     common::ObObj column_value_;

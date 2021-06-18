@@ -41,7 +41,7 @@ public:
   int pcode_;
   const char* data_;
   int64_t len_;
-  TO_STRING_KV(N_PCODE, pcode_, N_DATA_LEN, len_, N_BUF, ((uint64_t)data_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObLogRpcProxy : public clog::ObILogRpc, public obrpc::ObRpcProxy {

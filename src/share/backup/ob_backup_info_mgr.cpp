@@ -1268,3 +1268,19 @@ int ObBackupDestDetector::check_backup_dest_(ObLogArchiveBackupInfo& backup_info
   }
   return ret;
 }
+int64_t ObLogArchiveInfoMgr::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(update_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogArchiveInfoMgr::ObLogArchiveSimpleInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(update_ts), K_(checkpoint_ts), K_(start_ts), K_(status), K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}

@@ -81,7 +81,7 @@ public:
     inline int fill_tail(int64_t size);
     inline int compact();
 
-    TO_STRING_KV(KP_(data), K_(head), K_(tail), K_(cap));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     char* data_;
@@ -140,7 +140,7 @@ public:
 
     int to_copyable();
     int to_readable();
-    TO_STRING_KV(K_(readable), K_(cnt), K_(row_size), "cells", common::ObArrayWrap<common::ObDatum>(cells(), cnt_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     uint32_t readable_ : 1;
     uint32_t cnt_ : 31;
@@ -204,7 +204,7 @@ public:
 
     int get_store_row(const int64_t row_id, const StoredRow*& sr);
 
-    TO_STRING_KV(K_(magic), K_(row_id), K_(rows), K_(idx_off));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     int64_t magic_;
     int64_t row_id_;
@@ -219,7 +219,7 @@ public:
     {
       return bi.row_id_ < row_id;
     }
-    TO_STRING_KV(K_(is_idx_block), K_(on_disk), K_(row_id), K_(offset), K_(length));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     uint64_t is_idx_block_ : 1;
     uint64_t on_disk_ : 1;
@@ -261,7 +261,7 @@ public:
       cnt_ = 0;
     }
 
-    TO_STRING_KV(K_(magic), K_(cnt));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
     int64_t magic_;
     int32_t cnt_;
@@ -386,8 +386,7 @@ public:
     return file_size_;
   }
 
-  TO_STRING_KV(
-      K_(tenant_id), K_(label), K_(ctx_id), K_(mem_limit), K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static int get_timeout(int64_t& timeout_ms);

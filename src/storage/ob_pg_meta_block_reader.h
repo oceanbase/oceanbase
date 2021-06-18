@@ -52,7 +52,7 @@ public:
   ObPGMetaItemBuffer() : buf_(nullptr), buf_len_(0), item_type_(0)
   {}
   ~ObPGMetaItemBuffer() = default;
-  TO_STRING_KV(KP_(buf), K_(buf_len), K_(item_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset()
   {
     buf_ = nullptr;

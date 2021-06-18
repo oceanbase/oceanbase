@@ -31,7 +31,7 @@ public:
   virtual ~ObSimpleOutlineSchema();
   ObSimpleOutlineSchema& operator=(const ObSimpleOutlineSchema& other);
   bool operator==(const ObSimpleOutlineSchema& other) const;
-  TO_STRING_KV(K_(tenant_id), K_(outline_id), K_(schema_version), K_(database_id), K_(name), K_(signature));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   virtual void reset();
   inline bool is_valid() const;
   inline int64_t get_convert_size() const;

@@ -18,6 +18,110 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
+int64_t ObTableInHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_QB_NAME, qb_name_, N_DATABASE_NAME, db_name_, N_TABLE_NAME, table_name_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOrgIndexHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TABLE_NAME, table_, N_INDEX_TABLE, index_name_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQNameIndexHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_QB_NAME, qb_name_, N_INDEX_TABLE, index_hint_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObIndexHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TID, table_id_, N_INDEX_TABLE, index_list_, "type", type_, "valid_index_ids", valid_index_ids_);
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(part_ids), K_(part_names));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(read_consistency), K_(query_timeout), K_(frozen_version), K_(plan_cache_policy), K_(use_jit_policy),K_(force_trace_log), K_(log_level), K_(parallel));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMonitorHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(id), K_(flags));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTablesInHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(qb_name), K_(tables));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTablesIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(indexes));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObOrgPQMapHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TABLE_NAME, table_, K_(use_pq_map));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPQMapHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPQMapIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rel_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStmtHint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("read_static", read_static_, "no_rewrite", no_rewrite_, "frozen_version", frozen_version_,"topk_precision", topk_precision_, "sharding_minimum_row_count", sharding_minimum_row_count_, "query_timeout",query_timeout_, "hotspot", hotspot_, N_INDEX, indexes_, "read_consistency", read_consistency_, "join_ordered",join_ordered_, N_JOIN_ORDER, join_order_ids_, "merge_hint_ids", use_merge_ids_, "hash_hint_ids", use_hash_ids_,"no_hash_hint_ids", no_use_hash_ids_, "nl_hint_ids", use_nl_ids_, "part_hints", part_hints_,"use_late_materialization", use_late_mat_, "log_level", log_level_, "max_concurrent", max_concurrent_,"only_concurrent_hint", only_concurrent_hint_, "has_hint_exclude_concurrent", has_hint_exclude_concurrent_,"parallel", parallel_, "use_px", use_px_, "use_expand", use_expand_, "use_view_merge", use_view_merge_,"use_unnest", use_unnest_, "use_place_groupby", use_place_groupby_, "use join filter", px_join_filter_,K_(org_pq_distributes), K_(pq_distributes), K_(pdml_option));
+  J_OBJ_END();
+  return pos;
+}
 
 const char* ObStmtHint::MULTILINE_INDENT = "      ";  // 6 space, align with 'Outputs & filters'
 const char* ObStmtHint::ONELINE_INDENT = " ";

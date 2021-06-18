@@ -66,7 +66,14 @@ public:
     {
       return pkey_.is_valid();
     }
-    TO_STRING_KV(K(pkey_));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K(pkey_));
+      J_OBJ_END();
+      return pos;
+    }
   };
   ObTableStat()
       : row_count_(0), data_size_(0), macro_blocks_num_(0), micro_blocks_num_(0), average_row_size_(0), data_version_(0)
@@ -178,8 +185,14 @@ public:
 
   // return number of rows in the specific table.
 
-  TO_STRING_KV(
-      K_(row_count), K_(data_size), K_(macro_blocks_num), K_(micro_blocks_num), K_(average_row_size), K_(data_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(row_count), K_(data_size), K_(macro_blocks_num), K_(micro_blocks_num), K_(average_row_size), K_(data_version));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   int64_t row_count_;

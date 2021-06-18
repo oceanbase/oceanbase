@@ -79,7 +79,7 @@ public:
       sql_.assign_ptr(ptr, static_cast<int32_t>(buf_size));
     }
 
-    TO_STRING_KV(K_(sql), K_(is_delete));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     ObEventHistoryTableOperator& table_operator_;

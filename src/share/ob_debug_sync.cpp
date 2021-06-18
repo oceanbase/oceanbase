@@ -20,6 +20,14 @@
 
 namespace oceanbase {
 namespace common {
+int64_t ObDebugSyncAction::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sync_point), K_(timeout), K_(execute), K_(signal), K_(wait), K_(no_clear), K_(broadcast));
+  J_OBJ_END();
+  return pos;
+}
 
 bool ObDebugSyncAction::is_valid() const
 {

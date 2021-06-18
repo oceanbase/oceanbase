@@ -29,6 +29,1990 @@ using namespace share::schema;
 using namespace share;
 using namespace storage;
 namespace obrpc {
+int64_t ObDDLArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ddl_stmt_str), K_(exec_tenant_id), K_(ddl_id_str), K_(is_replay_schema), K_(based_schema_object_infos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSplitResourcePoolArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pool_name), K_(zone_list), K_(split_pool_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMergeResourcePoolArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(old_pool_list), K_(new_pool_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSequenceDDLArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stmt_type), K_(seq_schema), K_(database_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReachPartitionLimitArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(batch_cnt), K_(tenant_id), K_(is_pg_arg));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckFrozenVersionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(frozen_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetMinSSTableSchemaVersionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id_arg_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreateSynonymArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(synonym_info), K_(db_name), K_(obj_db_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDropSynonymArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(is_force), K_(db_name), K_(synonym_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAlterPlanBaselineArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(plan_baseline_info), K_(field_update_bitmap));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreatePlanBaselineArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(plan_baseline_info), K(is_replace_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDropPlanBaselineArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(sql_id), K_(plan_hash_value));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAlterTableArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_alter_columns), K_(is_alter_indexs), K_(is_alter_options), K_(session_id), K_(index_arg_list),K_(alter_table_schema), K_(is_inner), "nls_formats",common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFlashBackTableFromRecyclebinArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(origin_db_name), K_(origin_table_name), K_(new_db_name), K_(new_table_name),K_(origin_table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFlashBackTableToScnArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(time_point), K_(tables), K_(query_end_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFlashBackIndexArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(origin_table_name), K_(new_db_name), K_(new_table_name), K_(origin_table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFlashBackDatabaseArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(origin_db_name), K_(new_db_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFlashBackTenantArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(origin_tenant_name), K_(new_tenant_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPurgeTableArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(table_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPurgeIndexArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(table_name), K_(table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPurgeDatabaseArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(db_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPurgeTenantArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(tenant_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPurgeRecycleBinArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(purge_num), K_(expire_time), K_(auto_purge));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetMinSSTableSchemaVersionRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ret_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckUniqueIndexRequestArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(index_id), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckUniqueIndexResponseArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(index_id), K_(ret_code), K_(is_valid));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCalcColumnChecksumRequestArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(index_id), K_(schema_version), K_(execution_id), K_(snapshot_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCalcColumnChecksumResponseArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(index_id), K_(ret_code));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckSingleReplicaMajorSSTableExistArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(index_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckSingleReplicaMajorSSTableExistResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckAllReplicaMajorSSTableExistArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(index_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckAllReplicaMajorSSTableExistResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(max_timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCopySSTableArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(cluster_id), K_(task_id), K_(type), K_(index_table_id), K_(priority),K(skip_change_member_list_), K(switch_epoch_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCopySSTableRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(data_src), K_(result), K_(type), K_(index_table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAddReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(quorum), K_(reserved_modify_quorum_type), K(task_id_), K_(priority),K(cluster_id_), K_(skip_change_member_list), K_(switch_epoch), K_(pg_file_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAddReplicaRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(quorum), K_(data_src), K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRebuildReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(task_id), K_(priority), K_(skip_change_member_list), K_(switch_epoch));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRebuildReplicaRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(data_src), K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoveNonPaxosReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(dst), K_(task_id), K_(skip_change_member_list), K_(switch_epoch));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoveNonPaxosReplicaBatchResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(return_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(priority), K_(skip_change_member_list), K_(switch_epoch));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreReplicaRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhyRestoreReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(task_id), K_(priority));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhyRestoreReplicaRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(data_source), K_(quorum), K_(task_id), K_(priority),K_(skip_change_member_list), K_(switch_epoch), K_(migrate_mode));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateReplicaRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(result), K_(data_src));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChangeReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(quorum), K_(task_id), K_(priority), K_(skip_change_member_list), K_(switch_epoch));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChangeReplicaRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(quorum), K_(data_src), K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(physical_backup_arg), K_(cluster_id), K_(task_id), K_(priority),K(skip_change_member_list_), K(switch_epoch_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObValidateArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trace_id), K_(dst), K_(physical_validate_arg), K_(priority));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStandbyCutDataTaskArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(dst), K_(pkey));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(src), K_(dst), K_(data_src), K_(physical_backup_arg), K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObValidateRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(dst), K_(validate_arg), K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAddReplicaBatchRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(res_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRebuildReplicaBatchRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(res_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCopySSTableBatchRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(res_array), K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateReplicaBatchRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(res_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChangeReplicaBatchRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(res_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStandbyCutDataTaskRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(dst), K_(result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStandbyCutDataBatchTaskRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(res_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupBatchRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(res_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObValidateBatchRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(res_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAddReplicaBatchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRemoveNonPaxosReplicaBatchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateReplicaBatchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChangeReplicaBatchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCopySSTableBatchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(task_id), K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRebuildReplicaBatchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerCopyLocalIndexSSTableArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(data_src), K_(dst), K_(pkey), K_(index_table_id), K_(cluster_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupBatchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAuthReplicaMovingkArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(pg_key_), K(addr_), K(file_id_), K(type_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObValidateBatchArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStandbyCutDataBatchTaskArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(arg_array), K_(timeout_ts), K_(trace_id), K_(flashback_ts), K_(switchover_epoch), K_(fo_trace_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckSchemaVersionElapsedArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckCtxCreateTimestampElapsedArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(sstable_exist_ts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckSchemaVersionElapsedResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(snapshot));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckCtxCreateTimestampElapsedResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(snapshot));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetLeaderCandidatesArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partitions));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetLeaderCandidatesV2Arg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partitions));
+  J_OBJ_END();
+  return pos;
+}
+int64_t CandidateStatus::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("in_black_list", get_in_black_list());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetLeaderCandidatesResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(candidates));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAccountArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(user_name), K_(host_name), K_(is_role));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreateUserArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_infos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDropUserArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(users), K_(hosts), K_(is_role));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRenameUserArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(old_users), K_(old_hosts), K_(new_users), K_(new_hosts));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSetPasswdArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user), K_(host), K_(passwd), K_(ssl_type), K_(ssl_cipher), K_(x509_issuer), K_(x509_subject));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLockUserArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(users), K_(hosts), K_(locked));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAlterUserProfileArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_name), K_(host_name), K_(profile_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGrantArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(priv_level), K_(db), K_(table), K_(priv_set), K_(users_passwd), K_(hosts),K_(need_create_user), K_(has_create_user_priv), K_(option), K_(object_type), K_(object_id), K_(grantor_id),K_(ins_col_ids), K_(upd_col_ids), K_(ref_col_ids), K_(grantor_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStandbyGrantArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(priv_level), K_(priv_set), K_(db), K_(table), K_(priv_level));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRevokeUserArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), "priv_set", share::schema::ObPrintPrivSet(priv_set_), K_(revoke_all), K_(role_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRevokeDBArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(db), "priv_set", share::schema::ObPrintPrivSet(priv_set_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRevokeTableArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(db), K_(table), "priv_set", share::schema::ObPrintPrivSet(priv_set_),K_(grant), K_(obj_id), K_(obj_type), K_(grantor_id), K_(obj_priv_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRevokeSysPrivArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(grantee_id), K_(sys_priv_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreateRoleArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_infos));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminServerArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(servers), K_(zone), K_(force_stop), K_(op));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminZoneArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(region), K_(idc), K_(zone_type), K_(sql_stmt_str), K_(force_stop), K_(op));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminSwitchReplicaRoleArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(role), K_(partition_key), K_(server), K_(zone), K_(tenant_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminSwitchRSRoleArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(role), K_(server), K_(zone));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminChangeReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key), K_(member), K_(force_cmd));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckGtsReplicaStopServer::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(servers));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckGtsReplicaStopZone::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminDropReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key), K_(server), K_(zone), K_(create_timestamp), K_(force_cmd));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminAddDiskArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(diskgroup_name), K_(disk_path), K_(alias_name), K_(server), K_(zone));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminDropDiskArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(diskgroup_name), K_(alias_name), K_(server), K_(zone));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminMigrateReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_copy), K_(partition_key), K_(src), K_(dest), K_(force_cmd));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhysicalRestoreTenantArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_name), K_(uri), K_(restore_option), K_(restore_timestamp), K_(backup_tenant_name), K_(passwd_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreTenantArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_name), K_(oss_uri));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestorePartitionsArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_id), K_(mode), K_(schema_version), "partition_cnt", partition_ids_.count());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObServerZoneArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(zone));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRunJobArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(zone), K_(job));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUpgradeJobArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(action), K_(version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminMergeArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(zone));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminClearRoottableArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminSetConfigItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(name), K_(value), K_(comment), K_(zone), K_(server), K_(tenant_name), K_(exec_tenant_id), K_(tenant_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminSetConfigArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(items), K_(is_inner));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminLoadBaselineArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_ids), K_(sql_id), K_(plan_hash_value), K_(fixed), K_(enabled));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminFlushCacheArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_ids), K_(cache_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminMigrateUnitArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(unit_id), K_(is_cancel), K_(destination));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAutoincSyncArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(table_id), K_(column_id), K_(sync_value), K_(table_part_num), K_(auto_increment));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDropReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key), K_(member));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUpdateIndexStatusArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_table_id), K_(status), K_(create_mem_version), K_(convert_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMergeFinishArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(frozen_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMergeErrorArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key), K_(server), K_(error_code));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminRebuildReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(server));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDebugSyncActionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(reset), K_(clear), K_(action));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRootMajorFreezeArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(try_frozen_version), K_(launch_new_round), K(ignore_server_list_), K(svr_), K(tenant_id_), K_(force_launch));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMinorFreezeArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_ids), K_(partition_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRootMinorFreezeArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_ids), K_(partition_key), K_(server_list), K_(zone));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSyncPartitionTableFinishArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSyncPGPartitionMTFinishArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckDanglingReplicaFinishArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(version), K_(dangling_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetMemberListAndLeaderResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(member_list), K_(leader), K_(self), K_(lower_list), K_(replica_type), K_(property));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMemberListAndLeaderArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(member_list), K_(leader), K_(self), K_(lower_list), K_(replica_type), K_(property), K_(role));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchGetRoleArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(keys));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchGetRoleResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(results));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSwitchLeaderListArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(leader_addr), K_(partition_key_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckFlashbackInfoArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(min_weak_read_timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckFlashbackInfoResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), K_(pkey), K_(result), K_(switchover_timestamp), K_(ret_code));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetPartitionCountResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreateUserDefinedFunctionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(udf));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDropUserDefinedFunctionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreateOutlineArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(or_replace), K_(outline_info), K_(db_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAlterOutlineArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(alter_outline_info), K_(db_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDropOutlineArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(db_name), K_(outline_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreateDbLinkArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(dblink_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDropDbLinkArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(dblink_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchAliveServerArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cluster_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFetchAliveServerResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(active_server_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLoadBaselineArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_all_tenant_), K_(tenant_id), K_(sql_id), K_(plan_hash_value), K_(fixed), K_(enabled));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFlushCacheArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_all_tenant_), K_(tenant_id), K_(cache_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetAllSchemaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version), K_(tenant_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminSetTPArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(event_no), K_(event_name), K_(occur), K_(trigger_freq), K_(error_code));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCancelTaskArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(task_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObReportSingleReplicaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminClearBalanceTaskArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_ids), K_(type), K_(zone_names));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMCLogInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(log_id), K_(timestamp));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChangeMemberArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key), K_(member), K_(quorum), K_(switch_epoch));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChangeMemberCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key), K_(ret_value), K_(log_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObChangeMemberCtxsWrapper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(result_code), K_(ctxs));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMemberMajorSSTableCheckArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(table_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObForceSetLocalityArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(exec_tenant_id), K_(locality));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSplitPartitionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(split_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSplitPartitionResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(results));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryMaxDecidedTransVersionRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(partition_array_), K_(last_max_decided_trans_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryMaxDecidedTransVersionResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(ret_value_), K(trans_version_), K_(pkey));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryIsValidMemberRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(self_addr_), K(partition_array_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryIsValidMemberResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(ret_value_), K(partition_array_), K(candidates_status_), K(ret_array_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryMaxFlushedILogIdRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(partition_array_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryMaxFlushedILogIdResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err_code), K_(partition_array), K_(max_flushed_ilog_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBootstrapArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server_list), K_(cluster_type), K_(initial_frozen_version), K_(initial_schema_version),K_(primary_cluster_id), K_(primary_rs_list), K_(freeze_schemas), K_(frozen_status));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchStartElectionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(trace_id), "count", pkeys_.count(), K_(member_list), K_(lease_start_time), K_(leader),K_(switch_timestamp), K_(switch_type), K_(pkeys), K_(quorum));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchFlashbackArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(switchover_timestamp), K_(flashback_to_ts), K_(flashback_from_ts), K_(leader),K_(is_logical_flashback), K_(pkeys), K_(frozen_timestamp), K_(query_end_time), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAlterClusterInfoArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(op_type), K_(ddl_stmt_str), K_(mode), K_(level), K_(is_force));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminClusterArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cluster_name), K_(cluster_id), K_(alter_type), K_(is_force), K_(ddl_stmt_str), K_(rootservice_list),K_(redo_transport_options));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClusterActionVerifyArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(verify_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDDLNopOpreatorArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_operation));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEstPartArgElement::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(scan_flag_), K(index_id_), K(batch_), K(range_columns_count_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEstPartArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(column_ids), K_(pkey), K_(schema_version), K_(partition_keys), K_(scan_param), K_(index_params),K_(index_pkeys));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEstPartResElement::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(logical_row_count_), K(physical_row_count_), K(reliable_), K(est_records_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEstPartRowCountSizeRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(row_count_), K(part_size_), K(avg_row_size_), K(reliable_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObEstPartRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(part_rowcount_size_res_), K(index_param_res_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TenantServerUnitConfig::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(unit_config), K_(compat_mode), K_(replica_type), K_(if_not_grant), K_(is_delete));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetWRSArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(scope), K_(need_filter));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetWRSResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(err_code), K_(self_addr), "replica_count", replica_wrs_info_list_.count(), K_(replica_wrs_info_list));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantSchemaVersions::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_schema_versions));
+  J_OBJ_END();
+  return pos;
+}
+int64_t TenantIdAndStats::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(refreshed_schema_version), K_(ddl_lag), K_(min_sys_table_scn), K_(min_user_table_scn));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClusterTenantStats::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_stats_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFinishSchemaSplitArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBroadcastSchemaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckMergeFinishArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(frozen_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetRecycleSchemaVersionsArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_ids));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetRecycleSchemaVersionsResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(recycle_schema_versions));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetClusterInfoArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(need_check_sync), K_(max_primary_schema_version), K_(primary_schema_versions), K_(cluster_version),K_(standby_became_primary_scn));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckAddStandbyArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cluster_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHaGtsPingRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(gts_id_), K(req_id_), K(epoch_id_), K(request_ts_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHaGtsPingResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(gts_id_), K(req_id_), K(epoch_id_), K(response_ts_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHaGtsGetRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(gts_id_), K(self_addr_), K(tenant_id_), K(srr_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHaGtsGetResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(gts_id_), K(tenant_id_), K(srr_), K(gts_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHaGtsHeartbeat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(gts_id_), K(addr_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHaGtsUpdateMetaRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(gts_id_), K(epoch_id_), K(member_list_), K(local_ts_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHaGtsUpdateMetaResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(local_ts_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHaGtsChangeMemberRequest::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(gts_id_), K(offline_replica_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHaGtsChangeMemberResponse::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(ret_value_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObClusterInfoArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cluster_info), K_(server_status), K_(sync_cluster_ids), K_(redo_options));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSchemaSnapshotArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version), K_(frozen_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSchemaSnapshotRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version), K_(frozen_version), "table_count", table_schemas_.count(), "tenant_count",tenant_schemas_.count(), "user_count", user_infos_.count(), "freeze_schema", freeze_schemas_,K_(tenant_flashback_scn), K_(failover_timestamp), K_(frozen_status), K_(cluster_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRegistClusterArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cluster_id), K_(cluster_name), K_(pre_regist), K_(cluster_addr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAlterTableResArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_type), K_(schema_id), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAlterTableRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index_table_id), K_(constriant_id), K_(schema_version), K_(res_arg_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRegistClusterRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cluster_idx), K_(login_name));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStandbyHeartBeatRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(primary_addr), K_(standby_addr), K_(primary_schema_info), K_(protection_mode));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetSwitchoverStatusRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(switchover_status), K_(switchover_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetTenantSchemaVersionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetTenantSchemaVersionResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFinishReplayArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantMemoryArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(memory_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObProfileDDLArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema), K_(ddl_type), K_(is_cascade));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckServerEmptyArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(mode));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObForceDropSchemaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(exec_tenant_id), K_(schema_id), K_(type), "partition_cnt", partition_ids_.count(), "subpartition_cnt",subpartition_ids_.count());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObArchiveLogArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(enable));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupDatabaseArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(is_incremental), K_(passwd), K_(encryption_mode));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBackupManageArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(value));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckStandbyCanAccessArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(failover_epoch), K_(last_merged_version), K_(cluster_status), K_(tenant_flashback_scn));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhysicalFlashbackResultArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(min_version), K_(max_version), K_(enable_result));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckPhysicalFlashbackArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(merged_version), K_(flashback_scn));
+  J_OBJ_END();
+  return pos;
+}
+int64_t CheckLeaderRpcIndex::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(switchover_timestamp), K_(epoch), K_(tenant_id), K_(ml_pk_index), K_(pkey_info_start_index));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchWriteCutdataClogArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(switchover_timestamp), K_(pkeys), K_(flashback_ts), K_(schema_version), K_(trace_id), K_(query_end_time));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchCheckLeaderArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index), K_(pkeys));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObBatchCheckRes::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(index), K_(results));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRebuildIndexInRestoreArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObUpdateTableSchemaVersionArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(table_id), K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRestoreModifySchemaArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), K_(schema_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckDeploymentModeArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(single_zone_deployment_on));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPreProcessServerArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObAdminRollingUpgradeArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stage));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPreProcessServerReplyArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(server), K_(rescue_server), K_(ret_code));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRsListArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(rs_list), K_(master_rs));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocationRpcRenewArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(keys));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocationRpcRenewResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(results));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetMasterKeyResultArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(str));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObKillPartTransCtxArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(partition_key), K_(trans_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPhysicalRestoreResult::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(job_id), K_(return_ret), K_(mod), K_(tenant_id), K_(trace_id), K_(addr));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObExecuteRangePartSplitArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(partition_key_), K(rowkey_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRefreshTimezoneArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCreateRestorePointArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id_), K(name_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObDropRestorePointArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(tenant_id_), K(name_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObCheckBuildIndexTaskExistArg::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(task_id), K_(scheduler_id));
+  J_OBJ_END();
+  return pos;
+}
 OB_SERIALIZE_MEMBER(Bool, v_);
 OB_SERIALIZE_MEMBER(Int64, v_);
 OB_SERIALIZE_MEMBER(UInt64, v_);

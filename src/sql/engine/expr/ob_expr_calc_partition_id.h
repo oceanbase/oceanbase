@@ -49,7 +49,7 @@ public:
   int64_t part_num_;
   int64_t subpart_num_;
 
-  TO_STRING_KV(K_(ref_table_id), K_(part_level), K_(part_type), K_(subpart_type), K_(part_num), K_(subpart_num));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 // return NONE_PARTITION_ID(-1) if part id not found

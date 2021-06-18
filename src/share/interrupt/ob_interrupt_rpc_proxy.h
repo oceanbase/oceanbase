@@ -53,7 +53,7 @@ public:
     pos1_ = 0;
     buf1_[0] = '\0';
   }
-  TO_STRING_KV("msg", buf1_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   char buf1_[BUF1_SIZE];  // Allow to piggyback text messages up to 128 letters long and end with 0
@@ -87,7 +87,7 @@ public:
   {}
   int code_;  // Interrupt number
   obrpc::ObInterruptStackInfo info_;
-  TO_STRING_KV(K_(code), K_(info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 };  // namespace common
@@ -101,7 +101,7 @@ public:
   ObInterruptMessage(uint64_t first, uint64_t last, int code) : first_(first), last_(last), code_(code), info_(){};
   ObInterruptMessage(uint64_t first, uint64_t last, common::ObInterruptCode& code)
       : first_(first), last_(last), code_(code.code_), info_(code.info_){};
-  TO_STRING_KV(K_(first), K_(last), K_(code), K_(info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   uint64_t first_;
   uint64_t last_;
   // For compatibility, code_ and info_ are not combined into ObInterruptCode

@@ -17,6 +17,14 @@ namespace oceanbase {
 using namespace common;
 
 namespace storage {
+int64_t ObDataStorageInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("last_replay_log_id", last_replay_log_id_, "last_replay_log_ts", last_replay_log_ts_, "publish_version",publish_version_, "schema_version", schema_version_, "created_by_new_minor_freeze", created_by_new_minor_freeze_);
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObDataStorageInfo, last_replay_log_id_, publish_version_, schema_version_, for_filter_log_compat_,
     created_by_new_minor_freeze_, last_replay_log_ts_);

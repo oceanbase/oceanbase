@@ -313,3 +313,11 @@ int64_t ObInMemorySort::get_used_mem_size() const
 {
   return row_store_.get_used_mem_size() + sort_array_.count() * sizeof(void*);
 }
+int64_t ObInMemorySort::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sort_array_pos));
+  J_OBJ_END();
+  return pos;
+}

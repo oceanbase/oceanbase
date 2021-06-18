@@ -141,7 +141,7 @@ public:
       destroy_wrapper();
     }
   }
-  TO_STRING_KV("node_status", ATOMIC_LOAD(&node_status_), KP_(cache_wrapper), KP(wrapper_allocator_), K_(seq));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   void destroy_wrapper();
@@ -168,7 +168,7 @@ struct ObIlogCacheConfig {
   {
     return hold_file_count_limit_ > 0;
   }
-  TO_STRING_KV(K(hold_file_count_limit_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObIlogCacheStatistic {
@@ -192,7 +192,7 @@ struct ObIlogCacheStatistic {
   {
     ATOMIC_STORE(&hold_file_count_, 0);
   }
-  TO_STRING_KV(K(hold_file_count_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 typedef common::ObSEArray<file_id_t, 16> FileIdArray;
@@ -201,7 +201,7 @@ struct NodeItem {
   file_id_t file_id_;
   ObIlogPerFileCacheNode node_obj_;
 
-  TO_STRING_KV(K(file_id_), K(node_obj_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 typedef common::ObSEArray<NodeItem, 128> NodeItemArray;
 
@@ -220,7 +220,7 @@ private:
     {
       return node_;
     }
-    TO_STRING_KV(K(err_), K(owner_seq_), K(owner_match_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     int err_;
@@ -242,7 +242,7 @@ private:
     {
       return node_;
     }
-    TO_STRING_KV(K(err_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     int err_;
@@ -258,7 +258,7 @@ private:
     {
       return err_;
     }
-    TO_STRING_KV(K(err_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     int err_;
@@ -289,7 +289,7 @@ private:
     {
       return min_access_ts_;
     }
-    TO_STRING_KV(K(err_), K(count_), K(victim_), K(min_access_ts_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     static const int64_t LARGE_ENOUGH_TIMESTAMP = 5000000000000000;  // 2128-06-11 16:53:20
@@ -314,7 +314,7 @@ private:
     {
       return expired_file_id_arr_;
     }
-    TO_STRING_KV(K(err_), K(expired_file_id_arr_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     static const int64_t EXPIRED_INVTERVAL = 600L * 1000L * 1000L;  // 10 min
@@ -332,7 +332,7 @@ private:
     {
       return err_;
     }
-    TO_STRING_KV(K(err_), K(all_file_id_arr_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     int err_;

@@ -28,6 +28,38 @@ using namespace common::hash;
 
 namespace share {
 namespace schema {
+int64_t ObSimpleTenantSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(schema_version), K_(tenant_name), K_(name_case_mode), K_(read_only), K_(primary_zone),K_(locality), K_(previous_locality), K_(compatibility_mode), K_(gmt_modified), K_(drop_tenant_time), K_(status),K_(in_recyclebin));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSimpleUserSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(user_id), K_(schema_version), K_(user_name), K_(host_name), K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSimpleDatabaseSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(database_id), K_(schema_version), K_(database_name), K_(name_case_mode),K_(drop_schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSimpleTablegroupSchema::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(tablegroup_id), K_(schema_version), K_(tablegroup_name), K_(primary_zone),K_(locality), K_(previous_locality), K_(partition_status), K_(binding), K_(partition_schema_version));
+  J_OBJ_END();
+  return pos;
+}
 
 ObSimpleTenantSchema::ObSimpleTenantSchema() : ObSchema()
 {

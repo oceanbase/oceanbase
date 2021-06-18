@@ -24,6 +24,30 @@ namespace oceanbase {
 using namespace common;
 using namespace storage;
 namespace blocksstable {
+int64_t ObRowIndexIterator::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlockData::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(buf), K_(size), K_(extra_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMicroBlock::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(range), K_(data), K_(column_map), K_(row_store_type), K_(row_count), K_(column_cnt),KP_(column_checksums), K_(meta), K_(origin_data_size));
+  J_OBJ_END();
+  return pos;
+}
 
 void ObIMicroBlockReader::reset()
 {

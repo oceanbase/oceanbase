@@ -40,7 +40,7 @@ public:
   {}
   ~InsertValueNode()
   {}
-  TO_STRING_KV(K_(table_idx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t table_idx_;
   const ParseNode* insert_value_node_;
 };
@@ -51,7 +51,7 @@ public:
   {}
   ~InsertConditionNode()
   {}
-  TO_STRING_KV(K_(table_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t table_cnt_;
   const ParseNode* insert_cond_node_;
 };

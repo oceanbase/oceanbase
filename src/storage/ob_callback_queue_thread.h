@@ -43,7 +43,7 @@ public:
     is_elected_by_changing_leader_ = arg.is_elected_by_changing_leader_;
     return *this;
   }
-  TO_STRING_KV(K_(is_elected_by_changing_leader));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   bool is_elected_by_changing_leader_;
@@ -76,8 +76,7 @@ struct ObCbTask {
   {
     return pkey_.is_valid() && retry_cnt_ >= 0;
   }
-  TO_STRING_KV("task_type", task_type_, N_KEY, pkey_, "role", role_, "succeed", succeed_, "ret_code", ret_code_,
-      "retry_count", retry_cnt_, "leader_active_arg", leader_active_arg_, "large_cb", large_cb_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 class ObCallbackQueueThread : public lib::TGTaskHandler {

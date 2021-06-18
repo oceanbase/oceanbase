@@ -57,7 +57,7 @@ public:
     return property_ == o.property_;
   }
 
-  TO_STRING_KV(K(memstore_percent_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   union {

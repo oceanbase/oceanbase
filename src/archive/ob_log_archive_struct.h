@@ -46,7 +46,7 @@ public:
   {
     return CLOG_BUF_SIZE;
   }
-  TO_STRING_KV(K(data_len_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   static const int64_t CLOG_BUF_SIZE = common::OB_MAX_LOG_BUFFER_SIZE;
@@ -112,8 +112,7 @@ public:
     return common::OB_SUCCESS;
   }
 
-  TO_STRING_KV(
-      K_(file_id), K_(offset), K_(size), K_(is_batch_committed), K_(log_id), K_(log_submit_ts), K_(accum_checksum));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   file_id_t file_id_;
@@ -139,8 +138,7 @@ public:
   bool is_valid() const;
 
 public:
-  TO_STRING_KV(
-      K(start_ts_), K(start_log_id_), K(snapshot_version_), K(log_submit_ts_), K(clog_epoch_id_), K(accum_checksum_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t start_ts_;       // round_start_ts_
@@ -217,9 +215,7 @@ public:
   int prepare_read_buf();
   void release_read_buf();
 
-  TO_STRING_KV(K_(epoch_id), K_(need_update_log_ts), K_(round_start_log_id), K_(round_start_ts), K_(checkpoint_ts),
-      K_(log_submit_ts), K_(clog_epoch_id), K_(accum_checksum), K_(processed_log_count), K_(incarnation),
-      K_(log_archive_round), K_(task_type), K_(compressor_type), K_(pg_key), K_(clog_pos_list));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int64_t epoch_id_;
@@ -441,11 +437,7 @@ public:
   bool is_valid();
   int get_real_record_length(const char* buf, const int64_t buf_len, int64_t& record_len);
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K(magic_), K(record_len_), K(version_), K(is_valid_), K(data_file_id_), K(input_bytes_),
-      K(output_bytes_), K(clog_epoch_id_), K(accum_checksum_), K(min_log_id_), K(min_log_ts_), K(max_log_id_),
-      K(max_checkpoint_ts_), K(max_log_submit_ts_), K(round_start_ts_), K(round_start_log_id_),
-      K(round_snapshot_version_), K(round_log_submit_ts_), K(round_clog_epoch_id_), K(round_accum_checksum_),
-      K(checksum_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t calc_checksum_() const;
@@ -509,9 +501,7 @@ public:
   ObArchiveRoundStartInfo round_start_info_;
   // round_start info
 
-  TO_STRING_KV(K(data_file_collect_), K(archived_log_collect_), K(round_start_info_collect_),
-      K(max_record_data_file_id_), K(max_record_log_id_), K(max_record_checkpoint_ts_), K(max_record_log_submit_ts_),
-      K(clog_epoch_id_), K(accum_checksum_), K(round_start_info_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 };
 
 struct ObArchiveStartTimestamp {
@@ -521,7 +511,7 @@ public:
   int set(const int64_t archive_round, const int64_t timestamp);
   bool is_valid();
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K(archive_round_), K(timestamp_), K(checksum_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int64_t calc_checksum_() const;
@@ -573,7 +563,7 @@ public:
   {
     return compressor_type_;
   }
-  TO_STRING_KV(K(magic_), K(version_), K(orig_data_len_), K(compressed_data_len_), K(compressor_type_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
   static bool check_magic_number(const int16_t magic_number)
   {
@@ -607,7 +597,7 @@ public:
   {
     return buf_;
   }
-  TO_STRING_KV(K(header_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
 private:
@@ -637,7 +627,7 @@ struct ObArchiveReadParam {
   }
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K(pg_key_), K(file_id_), K(offset_), K(read_len_), K(timeout_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   static const int64_t OB_ARCHIVE_READ_TIMEOUT = 5000000;  // 5s

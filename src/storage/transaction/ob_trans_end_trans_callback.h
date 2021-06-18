@@ -25,7 +25,7 @@ struct ObEndTransCallbackItem {
   {}
   ~ObEndTransCallbackItem()
   {}
-  TO_STRING_KV(KP_(cb), K_(retcode));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   sql::ObIEndTransCallback* cb_;
   int retcode_;
 };
@@ -85,7 +85,7 @@ public:
   int callback(bool& has_cb);
   int64_t get_need_wait_us() const;
   static const int64_t MAX_NEED_WAIT_US = 500;
-  TO_STRING_KV(K_(param), K_(trans_need_wait_wrap));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObEndTransCallback end_trans_cb_;

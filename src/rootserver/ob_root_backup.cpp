@@ -27,6 +27,22 @@ using namespace share::schema;
 using namespace storage;
 
 namespace rootserver {
+int64_t ObBreakPointPGInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantBackupMetaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(break_point_info), K_(pg_count), K_(partition_count));
+  J_OBJ_END();
+  return pos;
+}
 
 int64_t ORootBackupIdling::get_idle_interval_us()
 {

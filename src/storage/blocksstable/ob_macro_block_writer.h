@@ -70,14 +70,14 @@ public:
   {
     return task_index_writer_->get_macro_block_write_ctx();
   }
-  TO_STRING_KV(K_(block_write_ctx));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   struct IndexMicroBlockBuilder {
   public:
     IndexMicroBlockBuilder()
     {}
     virtual ~IndexMicroBlockBuilder() = default;
-    TO_STRING_KV(K(writer_.get_row_count()));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObMicroBlockWriter writer_;
     ObBlockIntermediateBuilder row_builder_;
   };
@@ -86,7 +86,7 @@ public:
     IndexMicroBlockDesc()
     {}
     virtual ~IndexMicroBlockDesc() = default;
-    TO_STRING_KV(K(writer_.get_row_count()));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
     ObMicroBlockWriter writer_;
     char last_key_buf_[common::OB_MAX_ROW_KEY_LENGTH];
     common::ObStoreRowkey last_key_;

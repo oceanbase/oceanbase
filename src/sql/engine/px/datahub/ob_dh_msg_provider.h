@@ -25,7 +25,14 @@ public:
   virtual int get_msg_nonblock(const dtl::ObDtlMsg*& msg, int64_t timeout_ts) = 0;
   virtual void reset()
   {}
-  TO_STRING_KV(K_(op_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(op_id));
+    J_OBJ_END();
+    return pos;
+  }
   uint64_t op_id_;
 };
 
@@ -61,7 +68,14 @@ public:
     }
     return ret;
   }
-  TO_STRING_KV(K_(msg_set), K_(msg));
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    J_OBJ_START();
+    J_KV(K_(msg_set), K_(msg));
+    J_OBJ_END();
+    return pos;
+  }
 
 private:
   int check_status(int64_t timeout_ts)

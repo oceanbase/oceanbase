@@ -127,11 +127,7 @@ public:
   }
   int update_nop_or_truncate_submit_timestamp(const int64_t submit_timestamp);
   int update_proposal_id(const common::ObProposalID& new_proposal_id);
-  TO_STRING_KV(N_MAGIC, magic_, N_VERSION, version_, N_TYPE, get_log_type(), N_PARTITION_KEY, partition_key_, N_LOG_ID,
-      log_id_, N_DATA_LEN, data_len_, N_GENERATION_TIMESTAMP, generation_timestamp_, N_EPOCH_ID, epoch_id_,
-      N_PROPOSAL_ID, proposal_id_, N_SUBMIT_TIMESTAMP, get_submit_timestamp(), "is_batch_committed",
-      is_batch_committed(), "is_trans_log", is_trans_log(), N_DATA_CHECKSUM, data_checksum_, N_ACTIVE_FREEZE_VERSION,
-      freeze_version_, N_HEADER_CHECKSUM, header_checksum_);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
   int64_t get_submit_ts_serialize_pos() const;
 

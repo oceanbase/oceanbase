@@ -71,7 +71,7 @@ public:
     return replica_nature_;
   }
   int assign(const ZoneReplicaDistTask& that);
-  TO_STRING_KV(K_(replica_nature), K_(zone_set), K_(replica_task_set), K_(multi_zone_dist));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   const common::ObIArray<common::ObZone>& get_zone_set() const
   {
     return zone_set_;
@@ -130,7 +130,14 @@ protected:
       replica_type_ = common::REPLICA_TYPE_MAX;
       memstore_percent_ = 100;
     }
-    TO_STRING_KV(K_(name), K_(replica_type), K_(memstore_percent));
+    int64_t to_string(char* buf, const int64_t buf_len) const
+    {
+      int64_t pos = 0;
+      J_OBJ_START();
+      J_KV(K_(name), K_(replica_type), K_(memstore_percent));
+      J_OBJ_END();
+      return pos;
+    }
 
     Scope name_;  // region/zone name
     common::ObReplicaType replica_type_;
@@ -187,7 +194,7 @@ struct SingleReplica {
   {}
   SingleReplica() : replica_type_(common::REPLICA_TYPE_MAX), memstore_percent_(100)
   {}
-  TO_STRING_KV(K_(replica_type), K_(memstore_percent));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   common::ObReplicaType replica_type_;
   int64_t memstore_percent_;
 };
@@ -473,7 +480,7 @@ public:
            invalid_unit_;
   }
   int build_task(const Partition& partition, ObReplicaTask& task) const;
-  TO_STRING_KV(K_(cmd_type), K_(replica), K_(zone), K_(dest_type));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObRebalanceTaskType cmd_type_;
@@ -495,7 +502,7 @@ public:
     int64_t non_readonly_replica_count_;
     ZoneReplicaInfo() : zone_(), non_readonly_replica_count_(0)
     {}
-    TO_STRING_KV(K_(zone), K_(non_readonly_replica_count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   ObFilterLocalityUtility(const ObZoneManager& zone_mgr, TenantBalanceStat& ts,
       const share::schema::ZoneLocalityIArray& zloc, const common::ObIArray<common::ObZone>& zone_list);

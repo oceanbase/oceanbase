@@ -48,6 +48,46 @@ using namespace obrpc;
 using namespace share;
 using namespace share::schema;
 namespace rootserver {
+int64_t ObServerTaskStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(addr), K_(in_schedule_in_cnt), K_(in_schedule_out_cnt), K_(total_in_cnt), K_(total_out_cnt),K_(total_in_data_size), K_(total_out_data_size), K_(data_in_limit_ts), K_(in_schedule_backup_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTenantTaskStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(high_priority_task_cnt), K_(low_priority_task_cnt));
+  J_OBJ_END();
+  return pos;
+}
+int64_t OnlineReplica::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(zone), K_(unit_id), K_(member));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ReplicaInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pkey), K_(data_size));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRebalanceTaskKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key_1), K_(key_2), K_(key_3), K_(key_4), K_(key_type));
+  J_OBJ_END();
+  return pos;
+}
 
 static const char* rebalance_task_type_strs[] = {"MIGRATE_REPLICA",
     "ADD_REPLICA",

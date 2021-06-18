@@ -20,6 +20,70 @@ using namespace obrpc;
 using namespace blocksstable;
 
 namespace storage {
+int64_t ObMigrateArgMacroBlockInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(fetch_arg), K_(macro_block_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateMacroBlockInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(pair), K_(macro_block_id), K_(need_copy));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateSSTableInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(pending_idx), K_(sstable_meta), K_(macro_block_array));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogicTableMeta::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(schema_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObSameVersionIncTable::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(src_table_keys), K_(pkey), K_(version), K_(table_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateTableInfo::SSTableInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(src_table_key), K_(dest_base_version), K_(dest_log_ts_range));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigrateTableInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(multi_version_start), K_(ready_for_read), K_(major_sstables), K_(minor_sstables));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMigratePartitionInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(src), K_(meta), K_(table_id_list), K_(table_infos), K_(is_restore));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObIPartitionMacroBlockReader::deserialize_macro_meta(
     char* buf, int64_t data_len, int64_t& pos, ObIAllocator& allocator, ObFullMacroBlockMeta& full_meta)

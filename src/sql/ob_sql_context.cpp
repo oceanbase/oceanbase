@@ -23,6 +23,54 @@ using namespace ::oceanbase::common;
 namespace oceanbase {
 using namespace share::schema;
 namespace sql {
+int64_t LocationConstraint::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(key), K_(phy_loc_type), K_(constraint_flags));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLocationConstraintContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(base_table_constraints), K_(strict_constraints), K_(non_strict_constraints));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObMultiStmtItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_part_of_multi_stmt), K_(seq_num), K_(sql));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryRetryInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(inited), K_(is_rpc_timeout), K_(invalid_servers), K_(last_query_retry_err));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryCtx::IdNamePair::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(id), K_(name), K_(origin_name), K_(stmt_type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObQueryCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_PARAM_NUM, question_marks_count_, N_FETCH_CUR_TIME, fetch_cur_time_, K_(calculable_items));
+  J_OBJ_END();
+  return pos;
+}
 bool LocationConstraint::operator==(const LocationConstraint& other) const
 {
   return key_ == other.key_ && phy_loc_type_ == other.phy_loc_type_ && constraint_flags_ == other.constraint_flags_;

@@ -169,9 +169,7 @@ private:
         const ReplicaTypeID replica_type, const int64_t num, const int64_t memstore_percent);
     int append_zone(const common::ObZone& this_zone);
     int replace_zone_set(const common::ObIArray<common::ObZone>& this_zone_set);
-    TO_STRING_KV("zone_set", zone_set_, "full_replica_attr", all_replica_attr_array_[FULL_REPLICA],
-        "logonly_replica_attr", all_replica_attr_array_[LOGONLY_REPLICA], "readonly_replica_attr",
-        all_replica_attr_array_[READONLY_REPLICA]);
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     bool specific_replica_need_format(const ReplicaTypeID replica_type) const;

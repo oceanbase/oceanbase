@@ -50,7 +50,7 @@ public:
     return send_timestamp_;
   }
 
-  TO_STRING_KV(K_(sender), K_(send_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObAddr sender_;
   int64_t send_timestamp_;
@@ -98,7 +98,7 @@ public:
     return is_clog_disk_full_;
   }
 
-  TO_STRING_KV(K_(sender), K_(req_send_timestamp), K_(req_recv_timestamp));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   common::ObAddr sender_;
   int64_t req_send_timestamp_;

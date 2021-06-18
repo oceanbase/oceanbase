@@ -86,7 +86,7 @@ public:
   {
     return sm_group_id_;
   }
-  TO_STRING_KV(K_(exec_addr), K_(sqc_id), K_(task_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObAddr exec_addr_;
@@ -110,7 +110,7 @@ public:
     int64_t location_idx_;
     int64_t value_begin_idx_;
     int64_t value_count_;
-    TO_STRING_KV(K_(partition_id), K_(location_idx), K_(value_begin_idx), K_(value_count));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
 
 public:
@@ -432,10 +432,7 @@ public:
     return partition_id_values_;
   }
   int split_values(ObExecContext& ctx);
-  TO_STRING_KV(K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr), K_(qc_ch_info),
-      K_(sqc_ch_info), K_(task_count), K_(max_task_count), K_(min_task_count), K_(thread_inited), K_(thread_finish),
-      K_(px_int_id), K_(is_fulltree), K_(is_rpc_worker), K_(transmit_use_interm_result), K_(recieve_use_interm_result),
-      K(interm_result_ids_));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   uint64_t execution_id_;
@@ -895,10 +892,7 @@ public:
   {
     return (dfo_id >= 0 && dfo_id <= MAX_DFO_ID) || (dfo_id == MAX_DFO_ID);
   }
-  TO_STRING_KV(K_(execution_id), K_(dfo_id), K_(is_active), K_(is_scheduled), K_(thread_inited), K_(thread_finish),
-      K_(dop), K_(assigned_worker_cnt), K_(used_worker_cnt), K_(is_single), K_(is_root_dfo), K_(is_fulltree),
-      K_(has_scan), K_(sqcs), KP_(depend_sibling), KP_(parent), "child", get_child_count(), K_(slave_mapping_type),
-      K_(dist_method));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDfo);
@@ -980,7 +974,7 @@ public:
   {
     static_engine_root_ = &root;
   }
-  TO_STRING_KV(K_(sqc));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   ObPxSqcMeta sqc_;
@@ -1043,9 +1037,7 @@ public:
   }
 
 public:
-  TO_STRING_KV(K_(qc_id), K_(dfo_id), K_(sqc_id), K_(task_id), K_(execution_id), K_(sqc_ch_info), K_(task_ch_info),
-      K_(sqc_addr), K_(exec_addr), K_(qc_addr), K_(rc), K_(task_co_id), K_(px_int_id), K_(is_fulltree),
-      K_(affected_rows), K_(dml_row_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   dtl::ObDtlChannelInfo& get_sqc_channel_info()
   {
     return sqc_ch_info_;
@@ -1291,7 +1283,7 @@ public:
   {
     return OB_ISNULL(des_phy_plan_) || (OB_ISNULL(op_root_) && OB_ISNULL(op_spec_root_));
   }
-  TO_STRING_KV(K_(task));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   ObPxTask task_;
@@ -1312,7 +1304,7 @@ struct ObPxRpcInitTaskResponse {
 public:
   ObPxRpcInitTaskResponse() : task_co_id_(0)
   {}
-  TO_STRING_KV(K_(task_co_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   uint64_t task_co_id_;
@@ -1324,7 +1316,7 @@ struct ObPxRpcInitSqcResponse {
 public:
   ObPxRpcInitSqcResponse() : rc_(common::OB_NOT_INIT), reserved_thread_count_(0), partitions_info_()
   {}
-  TO_STRING_KV(K_(rc), K_(reserved_thread_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   int rc_;

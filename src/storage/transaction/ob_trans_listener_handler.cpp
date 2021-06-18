@@ -15,6 +15,14 @@
 
 namespace oceanbase {
 namespace transaction {
+int64_t ObTransListenerHandler::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_commit_log_synced), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
 
 int ObTransListenerHandler::init_listener_mask_set_(ObPartTransCtx* part_ctx)
 {

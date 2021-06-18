@@ -27,6 +27,22 @@ namespace oceanbase {
 using namespace omt;
 using namespace common;
 namespace sql {
+int64_t ObHashJoin::HashTableCell::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(stored_row), K(static_cast<void*>(next_tuple_)));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObHashJoin::EqualConditionInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(col1_idx), K_(col2_idx), K_(cmp_type), K_(ctype));
+  J_OBJ_END();
+  return pos;
+}
 using namespace join;
 
 int64_t ObHashJoin::PART_COUNT = 100;

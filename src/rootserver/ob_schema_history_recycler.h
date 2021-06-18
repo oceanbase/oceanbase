@@ -46,7 +46,7 @@ public:
   void reset();
   bool is_valid() const;
   uint64_t hash() const;
-  TO_STRING_KV(K_(first_schema_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   union {
@@ -81,7 +81,7 @@ public:
   bool operator<(const ObSecondSchemaKey& other) const;
   ObSecondSchemaKey& operator=(const ObSecondSchemaKey& other);
   uint64_t hash() const;
-  TO_STRING_KV(K_(first_schema_id), K_(second_schema_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   union {
@@ -106,7 +106,7 @@ public:
   bool operator<(const ObThirdSchemaKey& other) const;
   ObThirdSchemaKey& operator=(const ObThirdSchemaKey& other);
   uint64_t hash() const;
-  TO_STRING_KV(K_(first_schema_id), K_(second_schema_id), K_(third_schema_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   union {
@@ -128,7 +128,7 @@ public:
   void reset();
   bool is_valid() const;
   uint64_t hash() const;
-  TO_STRING_KV(K_(zone), K_(name));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   common::ObString zone_;
@@ -141,7 +141,7 @@ public:
   {}
   ~ObSystemVariableCompressSchemaInfo()
   {}
-  TO_STRING_KV(K_(key), K_(max_schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   ObSystemVariableSchemaKey key_;
@@ -156,7 +156,7 @@ public:
   int assign(const ObRecycleSchemaValue& other);
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(is_deleted), K_(max_schema_version), K_(record_cnt));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   bool is_deleted_;
@@ -170,7 +170,7 @@ public:
   {}
   ~ObFirstCompressSchemaInfo()
   {}
-  TO_STRING_KV(K_(key), K_(max_schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 public:
   ObFirstSchemaKey key_;

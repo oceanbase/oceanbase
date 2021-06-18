@@ -31,6 +31,22 @@ using namespace common;
 using namespace lib;
 using namespace obrpc;
 namespace rootserver {
+int64_t ObZoneRecoveryTaskKey::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(tenant_id), K_(file_id), K_(server));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObZoneRecoveryTask::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(task_id_), K(task_key_), K(generate_time_), K(schedule_time_), K(execute_time_), K(src_server_),K(src_svr_seq_), K(dest_server_), K(dest_svr_seq_), K(tenant_id_), K(file_id_), K(dest_unit_id_));
+  J_OBJ_END();
+  return pos;
+}
 
 bool ObZoneRecoveryTaskKey::is_valid() const
 {

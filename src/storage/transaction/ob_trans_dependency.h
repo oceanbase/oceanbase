@@ -66,7 +66,7 @@ public:
   int merge_cur_stmt_prev_trans_arr();
 
 public:
-  TO_STRING_KV(K_(prev_trans_arr), K_(next_trans_arr), K_(prev_trans_commit_count));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // merge prev transaction and clear duplicate item

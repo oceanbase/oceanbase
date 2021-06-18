@@ -47,7 +47,7 @@ public:
   ~ObSplitInfo()
   {}
   int assign(const ObSplitInfo& other);
-  TO_STRING_KV(K_(split_type), K_(part_type), K_(table_id), K_(partition_id), K_(source_part_ids));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   void reset();
   void set_split_info(PartitionSplitType split_type, share::schema::ObPartitionFuncType part_type);
   bool is_split_table() const;
@@ -91,7 +91,7 @@ public:
     return dest_pkey_array_;
   }
   int replace_tenant_id(const uint64_t new_tenant_id);
-  TO_STRING_KV(K_(src_pkey), K_(dest_pkey_array));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // Split source
@@ -128,7 +128,7 @@ public:
     return split_info_;
   }
   int replace_tenant_id(const uint64_t new_tenant_id);
-  TO_STRING_KV(K_(split_info), K_(schema_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   // All copies of information that need to be split;
@@ -155,7 +155,7 @@ public:
   {
     return progress_;
   }
-  TO_STRING_KV(K_(pkey), K_(progress));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey pkey_;

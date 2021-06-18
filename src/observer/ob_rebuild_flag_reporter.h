@@ -60,7 +60,7 @@ public:
     return false;
   }
 
-  TO_STRING_KV(K_(part_key), K_(server), K_(rebuild_flag));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   int do_process();

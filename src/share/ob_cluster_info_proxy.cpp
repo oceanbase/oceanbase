@@ -28,6 +28,14 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 namespace oceanbase {
 namespace share {
+int64_t ObClusterInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(cluster_id), K_(cluster_type), K_(login_name), K_(login_passwd), "switchover_status",persistent_switchover_status_to_str(switchover_status_), K_(cluster_status), K_(switch_timestamp), K_(is_sync),K_(gc_snapshot_ts), K_(protection_mode), K_(version), K_(protection_level));
+  J_OBJ_END();
+  return pos;
+}
 const char* ObClusterInfoProxy::OB_ALL_CLUSTER_INFO_TNAME = "__all_cluster";
 const char* ObClusterInfoProxy::LOGIN_NAME = "login_name";
 const char* ObClusterInfoProxy::LOGIN_PASSWD = "login_passwd";

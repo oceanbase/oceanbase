@@ -144,7 +144,7 @@ struct ObCreateSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   static const int64_t CREATE_SSTABLE_LOG_VERSION = 1;
   ObCreateSSTableLogEntry(ObSSTable& sstable);
   bool is_valid() const;
-  TO_STRING_KV(K_(sstable));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(CREATE_SSTABLE_LOG_VERSION);
 };
 
@@ -153,7 +153,7 @@ struct ObCompleteSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   static const int64_t COMPLETE_SSTABLE_LOG_VERSION = 1;
   ObCompleteSSTableLogEntry(ObOldSSTable& sstable);
   bool is_valid() const;
-  TO_STRING_KV(K_(sstable));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(COMPLETE_SSTABLE_LOG_VERSION);
 };
 struct ObDeleteSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
@@ -161,7 +161,7 @@ struct ObDeleteSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   static const int64_t DELETE_SSTABLE_LOG_VERSION = 1;
   ObDeleteSSTableLogEntry();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(DELETE_SSTABLE_LOG_VERSION);
 };
 
@@ -172,7 +172,7 @@ public:
   explicit ObAddSSTableLogEntry(ObSSTable& sstable);
   virtual ~ObAddSSTableLogEntry() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(pg_key), K_(sstable));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(ADD_SSTABLE_LOG_VERSION);
 
 public:
@@ -187,7 +187,7 @@ public:
   ObRemoveSSTableLogEntry(const ObPGKey& pg_key, const ObITable::TableKey& table_key);
   virtual ~ObRemoveSSTableLogEntry() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(pg_key), K_(table_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(REMOVE_SSTABLE_LOG_VERSION);
 
 public:
@@ -200,7 +200,7 @@ struct ObCreatePartitionStoreLogEntry : public blocksstable::ObIBaseStorageLogEn
   static const int64_t ADD_SSTABLE_LOG_VERSION = 1;
   ObCreatePartitionStoreLogEntry();
   bool is_valid() const;
-  TO_STRING_KV(K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(ADD_SSTABLE_LOG_VERSION);
 };
 
@@ -211,7 +211,7 @@ struct ObModifyTableStoreLogEntry : public blocksstable::ObIBaseStorageLogEntry 
   static const int64_t MODIFY_TABLE_STORE_LOG_VERSION = 1;
   ObModifyTableStoreLogEntry(ObTableStore& table_store);
   bool is_valid() const;
-  TO_STRING_KV(K_(kept_multi_version_start), K_(table_store), K_(pg_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(MODIFY_TABLE_STORE_LOG_VERSION);
 };
 
@@ -222,7 +222,7 @@ struct ObDropIndexSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry 
   static const int64_t DROP_INDEX_SSTABLE_LOG_VERSION = 1;
   ObDropIndexSSTableLogEntry();
   bool is_valid() const;
-  TO_STRING_KV(K_(pkey), K_(index_id), K_(pg_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(DROP_INDEX_SSTABLE_LOG_VERSION);
 };
 
@@ -231,7 +231,7 @@ struct ObUpdatePartitionMetaLogEntry : public blocksstable::ObIBaseStorageLogEnt
   static const int64_t UPDATE_PARTITION_META_LOG_VERSION = 1;
   ObUpdatePartitionMetaLogEntry();
   bool is_valid() const;
-  TO_STRING_KV(K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(UPDATE_PARTITION_META_LOG_VERSION);
 };
 
@@ -256,7 +256,7 @@ public:
   {
     return pkey_.is_valid() && is_valid_split_state(static_cast<ObPartitionSplitStateEnum>(state_));
   }
-  TO_STRING_KV(K_(pkey), "state", to_state_str(static_cast<ObPartitionSplitStateEnum>(state_)));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey pkey_;
@@ -284,7 +284,7 @@ public:
   {
     return pkey_.is_valid() && split_info_.is_valid();
   }
-  TO_STRING_KV(K_(pkey), K_(split_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   common::ObPartitionKey pkey_;
@@ -302,7 +302,7 @@ public:
   {
     return units_.count() >= 0;
   }
-  TO_STRING_KV(K_(units));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   share::TenantUnits& units_;
@@ -313,7 +313,7 @@ struct ObCreatePartitionGroupLogEntry : public blocksstable::ObIBaseStorageLogEn
   static const int64_t ADD_PARTITION_GROUP_VERSION = 1;
   ObCreatePartitionGroupLogEntry();
   bool is_valid() const;
-  TO_STRING_KV(K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(ADD_PARTITION_GROUP_VERSION);
 };
 
@@ -322,7 +322,7 @@ struct ObUpdatePartitionGroupMetaLogEntry : public blocksstable::ObIBaseStorageL
   static const int64_t UPDATE_PARTITION_GROUP_META_LOG_VERSION = 1;
   ObUpdatePartitionGroupMetaLogEntry();
   bool is_valid() const;
-  TO_STRING_KV(K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(UPDATE_PARTITION_GROUP_META_LOG_VERSION);
 };
 
@@ -332,7 +332,7 @@ struct ObCreatePGPartitionStoreLogEntry : public blocksstable::ObIBaseStorageLog
   static const int64_t CREATE_PG_PARTITION_STORE_LOG_VERSION = 1;
   ObCreatePGPartitionStoreLogEntry();
   bool is_valid() const;
-  TO_STRING_KV(K_(meta), K_(pg_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(CREATE_PG_PARTITION_STORE_LOG_VERSION);
 };
 
@@ -342,7 +342,7 @@ struct ObUpdatePGPartitionMetaLogEntry : public blocksstable::ObIBaseStorageLogE
   static const int64_t UPDATE_PG_PARTITION_META_LOG_VERSION = 1;
   ObUpdatePGPartitionMetaLogEntry();
   bool is_valid() const;
-  TO_STRING_KV(K_(meta), K_(pg_key));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(UPDATE_PG_PARTITION_META_LOG_VERSION);
 };
 
@@ -358,7 +358,7 @@ public:
   {
     return pg_key_.is_valid() && table_key_.is_valid() && macro_block_id_.is_valid() && meta_.is_valid();
   }
-  TO_STRING_KV(K_(pg_key), K_(table_key), K_(data_file_id), K_(disk_no), K_(macro_block_id), K_(meta));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION_V(PG_MACRO_BLOCK_META_VERSION);
 
 public:
@@ -380,7 +380,7 @@ public:
   {}
   virtual ~ObSetStartLogTsAfterMajorLogEntry() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(pg_key), K_(table_key), K_(start_log_ts_after_major));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(SET_START_LOG_TS_AFTER_MAJOR_VERSION);
 
 public:
@@ -398,7 +398,7 @@ public:
   explicit ObAddRecoveryPointDataLogEntry(const ObRecoveryPointType point_type, ObRecoveryPointData& point_data);
   virtual ~ObAddRecoveryPointDataLogEntry() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(point_type), K_(point_data));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(ADD_RECOVERY_POINT_DATA_LOG_VERSION);
 
 public:
@@ -417,7 +417,7 @@ public:
       const ObRecoveryPointType point_type, const ObRecoveryPointData& meta_data);
   virtual ~ObRemoveRecoveryPointDataLogEntry() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(point_type), K_(pg_key), K_(snapshot_version));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   OB_UNIS_VERSION(REMOVE_RECOVERY_POINT_DATA_LOG_VERSION);
 
 public:

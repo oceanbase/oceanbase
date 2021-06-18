@@ -37,6 +37,150 @@ OB_SERIALIZE_MEMBER(ObQueryFlag, flag_);
 }
 
 namespace storage {
+int64_t ObMultiVersionRowFlag::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("row_compact", compacted_row_, "row_last", last_row_, "row_first", first_row_, "row_uncommitted",uncommitted_row_, "row_magic", magic_row_, "reserved", reserved_, K_(flag));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStoreRowDml::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(first_dml), K_(dml));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFastQueryContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(timestamp), KP_(memtable), KP_(mvcc_row), K_(row_version));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRowPositionFlag::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(flag), K_(micro_first), K_(macro_first));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStoreRowLockState::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_locked), K_(trans_version), K_(lock_trans_id));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObStoreCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(mem_ctx), KP_(warm_up_ctx), KP_(tables), K_(tenant_id), K_(trans_id), K_(is_sp_trans), K_(isolation),K_(sql_no), K_(stmt_min_sql_no), K_(snapshot_info), KP_(trans_table_guard));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableAccessStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(row_cache_put_cnt), K_(bf_filter_cnt),K_(bf_access_cnt), K_(empty_read_cnt), K_(block_cache_hit_cnt), K_(block_cache_miss_cnt),K_(sstable_bf_filter_cnt), K_(sstable_bf_empty_read_cnt), K_(sstable_bf_access_cnt), K_(fuse_row_cache_hit_cnt),K_(fuse_row_cache_miss_cnt), K_(fuse_row_cache_put_cnt), K_(rowkey_prefix));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObGetTableParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(KP_(partition_store), K_(frozen_version), K_(sample_info), KP_(tables_handle));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableIterParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(schema_version), K_(rowkey_cnt), KP_(out_cols), KP_(cols_id_map), KP_(projector),KP_(full_projector), KP_(out_cols_project), KP_(out_cols_param), KP_(full_out_cols_param),K_(is_multi_version_minor_merge), KP_(full_out_cols), KP_(full_cols_id_map), K_(need_scn), K_(iter_mode));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObColDescArrayParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(local_cols_), KPC_(ref_cols), K_(col_cnt), K(is_local_), K(is_inited_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFastAggProjectCell::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(agg_project), K_(project_id), K_(type));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableAccessParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(iter_param), K_(reserve_cell_cnt), K_(out_col_desc_param), KP_(full_out_cols), KP_(out_cols_param),KP_(index_back_project), KP_(join_key_project), KP_(right_key_project), KP_(padding_cols), KP_(filters),KP_(virtual_column_exprs), KP_(index_projector), K_(projector_size), KP_(output_exprs), KP_(op), KP_(op_filters),KP_(row2exprs_projector), KP_(join_key_project), KP_(right_key_project), KP_(fast_agg_project),K_(enable_fast_skip), K_(need_fill_scale), K_(col_scale_info));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLobLocatorHelper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_id), K_(snapshot_version), K_(rowid_version), KPC(rowid_project_), K_(rowid_objs), K_(is_inited));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObTableAccessContext::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(is_inited), K_(timeout), K_(pkey), K_(query_flag), K_(sql_mode), KP_(store_ctx), KP_(expr_ctx),KP_(limit_param), KP_(stmt_allocator), KP_(allocator), KP_(stmt_mem), KP_(scan_mem), KP_(table_scan_stat),KP_(block_cache_ws), K_(out_cnt), K_(is_end), K_(trans_version_range), KP_(row_filter), K_(merge_log_ts),K_(read_out_type), K_(lob_locator_helper));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRowsInfo::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ext_rowkeys), K_(min_key), K_(table_id), K_(row_count), K_(delete_count),K_(collation_free_transformed), K_(exist_helper));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRowsInfo::ExistHelper::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_iter_param), K_(table_access_context));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObPartitionEst::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(logical_row_count), K_(physical_row_count));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObRowStat::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(base_row_count), K_(inc_row_count), K_(merge_row_count), K_(result_row_count), K_(filt_del_count));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 
 bool ObMultiVersionRowkeyHelpper::is_valid_multi_version_macro_meta(const blocksstable::ObMacroBlockMeta& meta)

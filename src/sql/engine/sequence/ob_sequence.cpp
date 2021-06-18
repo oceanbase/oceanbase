@@ -24,6 +24,14 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 namespace sql {
+int64_t ObSequence::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(nextval_seq_ids));
+  J_OBJ_END();
+  return pos;
+}
 class ObSequence::ObSequenceCtx : public ObPhyOperatorCtx {
 public:
   explicit ObSequenceCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx), sequence_cache_(nullptr)

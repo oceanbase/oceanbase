@@ -299,3 +299,11 @@ int ObIndexChecksumOperator::get_checksum_method(
   }
   return ret;
 }
+int64_t ObIndexChecksumItem::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(execution_id), K_(tenant_id), K_(table_id), K_(partition_id), K_(column_id), K_(task_id),K_(checksum), K_(checksum_method));
+  J_OBJ_END();
+  return pos;
+}

@@ -174,7 +174,7 @@ public:
     return is_opened_;
   }
   int64_t get_length();
-  TO_STRING_KV(KP(appender_), K_(start_ts), K_(is_opened), K_(uri));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   ObIStorageWriter* appender_;

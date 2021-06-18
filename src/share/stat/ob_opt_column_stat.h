@@ -59,7 +59,7 @@ public:
     common::ObObj endpoint_value_;
     int64_t endpoint_repeat_count_;
     int64_t endpoint_num_;
-    TO_STRING_KV(K_(endpoint_value), K_(endpoint_repeat_count), K_(endpoint_num));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(Bucket);
@@ -133,7 +133,7 @@ public:
       const ObDataTypeCastParams& dtc_params, double& range_density) const;
 
   int bucket_is_popular(const Bucket& bkt, bool& is_popular) const;
-  TO_STRING_KV(K_(type), K_(sample_size), K_(bucket_cnt), K_(buckets));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 protected:
   Type type_;
@@ -193,7 +193,7 @@ public:
     {
       return table_id_ > 0 && column_id_ > 0;
     }
-    TO_STRING_KV(K(table_id_), K(partition_id_), K(column_id_));
+    int64_t to_string(char* buf, const int64_t buf_len) const;
   };
   ObOptColumnStat();
   ObOptColumnStat(ObIAllocator& allocator);
@@ -318,8 +318,7 @@ public:
            && num_distinct_ >= 0 && num_null_ >= 0;
   }
 
-  TO_STRING_KV(K_(table_id), K_(partition_id), K_(column_id), K_(object_type), K_(num_distinct), K_(num_null),
-      K_(min_value), K_(max_value));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptColumnStat);

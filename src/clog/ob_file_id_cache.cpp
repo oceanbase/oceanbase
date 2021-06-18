@@ -18,6 +18,86 @@
 namespace oceanbase {
 using namespace common;
 namespace clog {
+int64_t Log2File::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(file_id), K_(start_offset), K_(min_log_id), "max_log_id", get_max_log_id(), K_(min_log_timestamp),"max_log_timestamp", get_max_log_timestamp());
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObLogBasePos::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(file_id_), K(base_offset_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFileIdCachePurgeByFileId::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(min_file_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFileIdCachePurgeByTimestamp::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(max_decided_trans_version_), K(min_timestamp_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFileIdList::BackFillFunctor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(err_), K(file_id_), K(start_offset_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFileIdList::PurgeChecker::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(purge_strategy_), K(partition_key_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFileIdList::ClearBrokenFunctor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(broken_file_id_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFileIdList::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(is_inited_), K(min_continuous_log_id_), K(base_pos_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFileIdCache::AppendInfoFunctor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(file_id_), K(err_));
+  J_OBJ_END();
+  return pos;
+}
+int64_t ObFileIdCache::ObUndoAppendFunctor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(broken_file_id_), K(dead_pkeys_));
+  J_OBJ_END();
+  return pos;
+}
 // Not thread safe
 template <typename T>
 class ObLog2FileList : public ObISegArray<T> {

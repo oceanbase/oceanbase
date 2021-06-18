@@ -20,6 +20,14 @@
 
 namespace oceanbase {
 namespace share {
+int64_t MonitorEntry::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(start_ts_), K(warn_ts_), K(physical_thread_idx_));
+  J_OBJ_END();
+  return pos;
+}
 using namespace common;
 
 ObTSIBGMonitorMemory::~ObTSIBGMonitorMemory()

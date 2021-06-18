@@ -17,3 +17,11 @@
 using namespace oceanbase::sql;
 
 OB_SERIALIZE_MEMBER(PxOpSizeFactor, factor_);
+int64_t PxOpSizeFactor::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(block_granule_child), K_(block_granule_parent), K_(partition_granule_child),K_(partition_granule_parent), K_(single_partition_table_scan), K_(broadcast_exchange), K_(pk_exchange));
+  J_OBJ_END();
+  return pos;
+}

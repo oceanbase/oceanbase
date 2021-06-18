@@ -93,7 +93,7 @@ public:
   common::ObIAllocator& calc_buf_;
   common::ObMySQLProxy& sql_proxy_;
 
-  TO_STRING_KV(K_(var_name), K_(set_scope), K_(is_set_default), K_(actual_tenant_id));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetVar);

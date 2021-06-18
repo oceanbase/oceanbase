@@ -31,6 +31,14 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 namespace oceanbase {
 namespace sql {
+int64_t ObDistributedTaskSpliter::ObPhyTableLoc::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(table_loc), K_(depend_table_keys));
+  J_OBJ_END();
+  return pos;
+}
 ObIntraPartitionTaskSpliter::ObIntraPartitionTaskSpliter()
     : table_loc_(NULL),
       part_rep_loc_list_(NULL),

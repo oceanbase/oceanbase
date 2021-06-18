@@ -51,3 +51,11 @@ int ObCreateTablegroupStmt::set_locality(const common::ObString& locality)
 {
   return create_tablegroup_arg_.tablegroup_schema_.set_locality(locality);
 }
+int64_t ObCreateTablegroupStmt::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(create_tablegroup_arg));
+  J_OBJ_END();
+  return pos;
+}
