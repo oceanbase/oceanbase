@@ -35,11 +35,11 @@ enum ObIlogFreezeTriggerType {
 class ObIlogMemstore {
   friend ObIlogFileBuilder;
 
-  public:
+public:
   ObIlogMemstore();
   ~ObIlogMemstore();
 
-  public:
+public:
   typedef common::ObLinearHashMap<common::ObPartitionKey, IndexInfoBlockEntry> PartitionMetaInfo;
   typedef common::ObLinearHashMap<common::ObPartitionKey, MemberListInfo> PartitionMemberListInfo;
   typedef common::ObLinearHashMap<ObPartitionLogInfo, ObLogCursorExt> PartitionLogCursorExtInfo;
@@ -123,11 +123,11 @@ class ObIlogMemstore {
   int get_index_entry(const common::ObPartitionKey& partition_key, IndexInfoBlockEntry& index_info_block_entry) const;
   TO_STRING_KV(K(create_ts_), K(cursor_size_), K(clog_size_), K(partition_meta_info_.count()));
 
-  public:
+public:
   const static int64_t CURSOR_SIZE_TRIGGER = 32 * 1024 * 1024;  // 32M
   const static int64_t CLOG_SIZE_TRIGGER = 1024 * 1024 * 1024;  // 1G
   const static int64_t TIME_TRIGGER_US = 10 * 1000L * 1000L;    // 10s
-  private:
+private:
   int check_log_continuous_(
       const common::ObPartitionKey& partition_key, const uint64_t log_id, bool& log_continuous) const;
   int submit_cursor_(
@@ -139,14 +139,14 @@ class ObIlogMemstore {
       const int64_t replica_num, const uint64_t membership_log_id, const int64_t memberlist_version);
 
   class PartitionMetaInfoFunctor {
-    public:
+  public:
     PartitionMetaInfoFunctor(const uint64_t log_id, const ObLogCursorExt& log_cursor_ext)
         : log_id_(log_id), log_cursor_ext_(log_cursor_ext)
     {}
     ~PartitionMetaInfoFunctor()
     {}
 
-    public:
+  public:
     bool operator()(const common::ObPartitionKey& partition_key, IndexInfoBlockEntry& index_info_block_entry)
     {
       UNUSED(partition_key);
@@ -163,12 +163,12 @@ class ObIlogMemstore {
       return bool_ret;
     }
 
-    private:
+  private:
     uint64_t log_id_;
     ObLogCursorExt log_cursor_ext_;
   };
   class MemberListInfoFunctor {
-    public:
+  public:
     MemberListInfoFunctor(const common::ObMemberList& memberlist, const int64_t replica_num,
         const uint64_t membership_log_id, const int64_t memberlist_version)
         : memberlist_(memberlist),
@@ -179,7 +179,7 @@ class ObIlogMemstore {
     ~MemberListInfoFunctor()
     {}
 
-    public:
+  public:
     bool operator()(const common::ObPartitionKey& partition_key, MemberListInfo& memberlist_info)
     {
       UNUSED(partition_key);
@@ -197,14 +197,14 @@ class ObIlogMemstore {
       return true;
     }
 
-    private:
+  private:
     common::ObMemberList memberlist_;
     int64_t replica_num_;
     uint64_t membership_log_id_;
     int64_t memberlist_version_;
   };
 
-  private:
+private:
   bool is_inited_;
   PartitionMetaInfo partition_meta_info_;
   PartitionMemberListInfo partition_memberlist_info_;
@@ -217,7 +217,7 @@ class ObIlogMemstore {
   // The total size of clog in ilog_memstore
   int64_t clog_size_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIlogMemstore);
 };
 }  // namespace clog

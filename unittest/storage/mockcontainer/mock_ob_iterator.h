@@ -24,10 +24,10 @@
 namespace oceanbase {
 namespace common {
 class ObMockIterator : public storage::ObStoreRowIterator {
-  public:
+public:
   static const int64_t DEF_ROW_NUM = 512;
 
-  public:
+public:
   ObMockIterator(bool reverse = false);
   virtual ~ObMockIterator();
 
@@ -183,7 +183,7 @@ class ObMockIterator : public storage::ObStoreRowIterator {
     return metas_;
   }
 
-  private:
+private:
   void setup_start_cursor();
   void advance();
   bool end_of_row() const;
@@ -199,7 +199,7 @@ class ObMockIterator : public storage::ObStoreRowIterator {
 
 template <typename T, typename ROW_TYPE>
 class ObMockRowIterator : public T {
-  public:
+public:
   ObMockRowIterator(bool reverse = false) : iter_(reverse)
   {}
   virtual ~ObMockRowIterator()
@@ -272,7 +272,7 @@ class ObMockRowIterator : public T {
     return bool_ret;
   }
 
-  private:
+private:
   ObMockIterator iter_;
 };
 typedef ObMockRowIterator<storage::ObStoreRowIterator, const storage::ObStoreRow> ObMockStoreRowIterator;
@@ -283,7 +283,7 @@ typedef ObMockRowIterator<common::ObNewRowIterator, common::ObNewRow> ObMockNewR
 // parse -> parse->header
 //       -> parse->row -> parse_int(parse_varchar..)
 class ObMockIteratorBuilder {
-  public:
+public:
   static const int64_t MAX_DATA_LENGTH = 4096;
   static const int64_t DEF_COL_NUM = 16;
   static const int TYPE_NUM = 6;
@@ -326,7 +326,7 @@ class ObMockIteratorBuilder {
 
   typedef int (*ObParseFunc)(common::ObIAllocator*, const common::ObString&, storage::ObStoreRow&, int64_t&);
 
-  public:
+public:
   ObMockIteratorBuilder() : is_inited_(false), allocator_(NULL), escape_('\\')
   {}
   ~ObMockIteratorBuilder()
@@ -337,7 +337,7 @@ class ObMockIteratorBuilder {
   int parse_with_specified_col_ids(const ObString& str, ObMockIterator& iter, uint16_t* col_id_array_list = nullptr,
       int64_t* result_col_id_array = nullptr);
 
-  private:
+private:
   static int static_init();
   static int parse_varchar(
       common::ObIAllocator* allocator, const common::ObString& word, storage::ObStoreRow& row, int64_t& idx);
@@ -400,10 +400,10 @@ class ObMockIteratorBuilder {
   }
 
   // inline bool is_row_end(const common::ObString &word);
-  public:
+public:
   static transaction::ObTransID trans_id_list_[TRANS_ID_NUM];
 
-  private:
+private:
   static bool is_static_inited_;
   // hash ObString to obj parse func , such as parse_int ...
   static common::hash::ObHashMap<common::ObString, ObParseFunc> str_to_obj_parse_func_;
@@ -417,7 +417,7 @@ class ObMockIteratorBuilder {
   static common::hash::ObHashMap<common::ObString, uint8_t> str_to_multi_version_row_flag_;
   static common::hash::ObHashMap<ObString, transaction::ObTransID*> str_to_trans_id_;
 
-  private:
+private:
   bool is_inited_;
   common::ObIAllocator* allocator_;
   char escape_;
@@ -426,7 +426,7 @@ class ObMockIteratorBuilder {
 class MockObNewRowIterator : public ObNewRowIterator {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   MockObNewRowIterator();
   ~MockObNewRowIterator();
   static bool equals(const common::ObNewRow& r1, const common::ObNewRow& r2);
@@ -456,7 +456,7 @@ class MockObNewRowIterator : public ObNewRowIterator {
     return iter_.add_row(row);
   }
 
-  private:
+private:
   ObMockIterator iter_;
   common::PageArena<char> allocator_;
 };

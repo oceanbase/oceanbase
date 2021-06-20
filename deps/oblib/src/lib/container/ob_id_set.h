@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace common {
 // assign each ID an index
 class ObId2Idx {
-  public:
+public:
   ObId2Idx();
   virtual ~ObId2Idx();
   void reset();
@@ -31,28 +31,28 @@ class ObId2Idx {
   /// @retval -1 id not exist
   int32_t get_idx(uint64_t id) const;
 
-  private:
+private:
   // types and constants
   typedef common::hash::ObPlacementHashMap<uint64_t, int32_t, common::OB_MAX_TABLE_NUM_PER_STMT> Id2IdxMap;
 
-  private:
+private:
   // disallow copy
   ObId2Idx(const ObId2Idx& other);
   ObId2Idx& operator=(const ObId2Idx& other);
   // function members
-  private:
+private:
   // data members
   Id2IdxMap id2idx_;
 };
 
 // A set of IDs
 class ObIdSet {
-  public:
+public:
   typedef common::hash::ObIteratableHashSet<uint64_t, common::OB_MAX_TABLE_NUM_PER_STMT> IdSet;
   typedef ObBitSet<common::OB_MAX_TABLE_NUM_PER_STMT> BitSet;
   typedef IdSet::const_iterator_t ConstIterator;
 
-  public:
+public:
   ObIdSet();
   virtual ~ObIdSet();
   void reset();
@@ -76,13 +76,13 @@ class ObIdSet {
   };
   TO_STRING_KV(N_ID_SET, id_set_);
 
-  private:
-  private:
+private:
+private:
   // disallow copy
   ObIdSet(const ObIdSet& other);
   ObIdSet& operator=(const ObIdSet& other);
   // function members
-  private:
+private:
   // data members
   IdSet id_set_;
   BitSet bit_set_;

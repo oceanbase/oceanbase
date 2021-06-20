@@ -45,7 +45,7 @@ class ObTransCtx;
 namespace transaction {
 
 class LeaderActiveFunctor {
-  public:
+public:
   LeaderActiveFunctor(const common::ObPartitionKey& partition, const storage::LeaderActiveArg& arg)
       : partition_(partition), leader_active_arg_(arg)
   {}
@@ -65,13 +65,13 @@ class LeaderActiveFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   common::ObPartitionKey partition_;
   storage::LeaderActiveArg leader_active_arg_;
 };
 
 class LeaderTakeoverFunctor {
-  public:
+public:
   explicit LeaderTakeoverFunctor(const common::ObPartitionKey& partition, const int64_t checkpoint)
       : partition_(partition), checkpoint_(checkpoint)
   {}
@@ -91,13 +91,13 @@ class LeaderTakeoverFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   common::ObPartitionKey partition_;
   int64_t checkpoint_;
 };
 
 class ReleaseAllTransCtxFunctor {
-  public:
+public:
   explicit ReleaseAllTransCtxFunctor(ObPartitionTransCtxMgr& ctx_mgr) : ctx_mgr_(ctx_mgr), released_count_(0)
   {}
   int64_t get_released_count() const
@@ -126,13 +126,13 @@ class ReleaseAllTransCtxFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   ObPartitionTransCtxMgr& ctx_mgr_;
   int64_t released_count_;
 };
 
 class InactiveCtxFunctor {
-  public:
+public:
   InactiveCtxFunctor(const uint64_t tenant_id, ObEndTransCallbackArray& cb_array)
       : tenant_id_(tenant_id), cb_array_(cb_array)
   {}
@@ -159,13 +159,13 @@ class InactiveCtxFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   ObEndTransCallbackArray& cb_array_;
 };
 
 class KillTransCtxFunctor {
-  public:
+public:
   KillTransCtxFunctor(const KillTransArg& arg, ObEndTransCallbackArray& cb_array)
       : arg_(arg), cb_array_(cb_array), freeze_version_()
   {}
@@ -206,7 +206,7 @@ class KillTransCtxFunctor {
     return OB_SUCCESS == ret;
   }
 
-  private:
+private:
   KillTransArg arg_;
   ObEndTransCallbackArray& cb_array_;
   ObVersion freeze_version_;
@@ -214,7 +214,7 @@ class KillTransCtxFunctor {
 };
 
 class StopPartitionFunctor {
-  public:
+public:
   StopPartitionFunctor()
   {}
   ~StopPartitionFunctor()
@@ -239,7 +239,7 @@ class StopPartitionFunctor {
 };
 
 class WaitPartitionFunctor {
-  public:
+public:
   explicit WaitPartitionFunctor(int64_t& retry_count) : retry_count_(retry_count)
   {}
   ~WaitPartitionFunctor()
@@ -269,12 +269,12 @@ class WaitPartitionFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   int64_t& retry_count_;
 };
 
 class RemovePartitionFunctor {
-  public:
+public:
   RemovePartitionFunctor()
   {}
   ~RemovePartitionFunctor()
@@ -303,7 +303,7 @@ class RemovePartitionFunctor {
 };
 
 class CalculateCostFunctor {
-  public:
+public:
   explicit CalculateCostFunctor(const ObTransID& tid) : tid_(tid), total_cost_(0)
   {}
   ~CalculateCostFunctor()
@@ -335,13 +335,13 @@ class CalculateCostFunctor {
     return total_cost_;
   }
 
-  private:
+private:
   ObTransID tid_;
   uint64_t total_cost_;
 };
 
 class IteratePartitionFunctor {
-  public:
+public:
   explicit IteratePartitionFunctor(ObPartitionIterator& partition_iter) : partition_iter_(partition_iter)
   {}
   bool operator()(const ObPartitionKey& partition, ObPartitionTransCtxMgr* part_trans_ctx_mgr)
@@ -361,12 +361,12 @@ class IteratePartitionFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   ObPartitionIterator& partition_iter_;
 };
 
 class ObELRStatSummaryFunctor {
-  public:
+public:
   explicit ObELRStatSummaryFunctor(ObELRStatSummary& elr_stat) : elr_stat_(elr_stat)
   {}
   bool operator()(const ObPartitionKey& partition, ObPartitionTransCtxMgr* part_trans_ctx_mgr)
@@ -390,12 +390,12 @@ class ObELRStatSummaryFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   ObELRStatSummary& elr_stat_;
 };
 
 class IteratePartitionMgrStatFunctor {
-  public:
+public:
   IteratePartitionMgrStatFunctor(ObTransPartitionMgrStatIterator& partition_mgr_stat_iter, const ObAddr& addr)
       : partition_mgr_stat_iter_(partition_mgr_stat_iter), addr_(addr)
   {}
@@ -440,13 +440,13 @@ class IteratePartitionMgrStatFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   ObTransPartitionMgrStatIterator& partition_mgr_stat_iter_;
   const ObAddr& addr_;
 };
 
 class IterateTransSchemaVersionStat {
-  public:
+public:
   explicit IterateTransSchemaVersionStat(const int64_t schema_version, const int64_t refreshed_schema_ts)
       : base_schema_version_(schema_version), refreshed_schema_ts_(refreshed_schema_ts), ret_(common::OB_SUCCESS)
   {}
@@ -481,14 +481,14 @@ class IterateTransSchemaVersionStat {
     return ret_;
   }
 
-  private:
+private:
   int64_t base_schema_version_;
   int64_t refreshed_schema_ts_;
   int ret_;
 };
 
 class IterateCtxCreateTimestamp {
-  public:
+public:
   explicit IterateCtxCreateTimestamp(const int64_t ts) : base_ctx_create_ts_(ts)
   {}
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
@@ -514,12 +514,12 @@ class IterateCtxCreateTimestamp {
     return bool_ret;
   }
 
-  private:
+private:
   int64_t base_ctx_create_ts_;
 };
 
 class IterateMinPrepareVersionFunctor {
-  public:
+public:
   explicit IterateMinPrepareVersionFunctor() : min_prepare_version_(INT64_MAX)
   {}
   int64_t get_min_prepare_version() const
@@ -549,12 +549,12 @@ class IterateMinPrepareVersionFunctor {
     return (OB_SUCCESS == tmp_ret);
   }
 
-  private:
+private:
   int64_t min_prepare_version_;
 };
 
 class IterateMinPrepareVersionBeforeLogtsFunctor {
-  public:
+public:
   explicit IterateMinPrepareVersionBeforeLogtsFunctor(const int64_t log_ts)
       : min_prepare_version_(INT64_MAX), min_logts_(log_ts)
   {}
@@ -585,13 +585,13 @@ class IterateMinPrepareVersionBeforeLogtsFunctor {
     return (OB_SUCCESS == tmp_ret);
   }
 
-  private:
+private:
   int64_t min_prepare_version_;
   int64_t min_logts_;
 };
 
 class IterateMinLogIdFunctor {
-  public:
+public:
   IterateMinLogIdFunctor() : min_uncommit_log_id_(UINT64_MAX), min_uncommit_log_ts_(INT64_MAX)
   {}
   uint64_t get_min_uncommit_log_id() const
@@ -635,13 +635,13 @@ class IterateMinLogIdFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   uint64_t min_uncommit_log_id_;
   int64_t min_uncommit_log_ts_;
 };
 
 class IteratePartCtxAskSchedulerStatusFunctor {
-  public:
+public:
   IteratePartCtxAskSchedulerStatusFunctor()
   {}
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
@@ -672,7 +672,7 @@ class IteratePartCtxAskSchedulerStatusFunctor {
 };
 
 class IterateTransStatFunctor {
-  public:
+public:
   explicit IterateTransStatFunctor(ObTransStatIterator& trans_stat_iter) : trans_stat_iter_(trans_stat_iter)
   {}
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
@@ -828,12 +828,12 @@ class IterateTransStatFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   ObTransStatIterator& trans_stat_iter_;
 };
 
 class IterateTransTableFunctor {
-  public:
+public:
   explicit IterateTransTableFunctor(blocksstable::ObMacroBlockWriter& writer)
       : writer_(writer),
         store_row_(),
@@ -936,11 +936,11 @@ class IterateTransTableFunctor {
     return clean_trx_cnt_;
   }
 
-  private:
+private:
   static const int64_t COLUMN_CNT = 2;
   static const int64_t BUF_LENGTH = 1000;
 
-  private:
+private:
   blocksstable::ObMacroBlockWriter& writer_;
   storage::ObStoreRow store_row_;
   ObObj cells_[COLUMN_CNT];
@@ -954,7 +954,7 @@ class IterateTransTableFunctor {
 };
 
 class CopyTransTableFunctor {
-  public:
+public:
   explicit CopyTransTableFunctor() : trans_table_guards_(), txs_(NULL), trx_count_(0)
   {}
   int init(ObTransService* txs, const common::ObIArray<common::ObPartitionKey>& pkeys)
@@ -1058,14 +1058,14 @@ class CopyTransTableFunctor {
     return trx_count_;
   }
 
-  private:
+private:
   ObSEArray<ObTransStateTableGuard, 2> trans_table_guards_;
   ObTransService* txs_;
   int64_t trx_count_;
 };
 
 class IterateTransLockStatFunctor {
-  public:
+public:
   explicit IterateTransLockStatFunctor(ObTransLockStatIterator& trans_lock_stat_iter)
       : trans_lock_stat_iter_(trans_lock_stat_iter)
   {}
@@ -1122,12 +1122,12 @@ class IterateTransLockStatFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   ObTransLockStatIterator& trans_lock_stat_iter_;
 };
 
 class IterateTransResultInfoFunctor {
-  public:
+public:
   IterateTransResultInfoFunctor(
       ObTransResultInfoStatIterator& iter, common::ObPartitionKey& partition, common::ObAddr& addr)
       : trans_result_info_stat_iter_(iter), partition_(partition), addr_(addr)
@@ -1158,14 +1158,14 @@ class IterateTransResultInfoFunctor {
     return true;
   }
 
-  private:
+private:
   ObTransResultInfoStatIterator& trans_result_info_stat_iter_;
   common::ObPartitionKey& partition_;
   common::ObAddr& addr_;
 };
 
 class ReplayStartWorkingLogFunctor {
-  public:
+public:
   ReplayStartWorkingLogFunctor(const int64_t timestamp, const uint64_t log_id) : timestamp_(timestamp), log_id_(log_id)
   {}
   ~ReplayStartWorkingLogFunctor()
@@ -1189,13 +1189,13 @@ class ReplayStartWorkingLogFunctor {
     return true;
   }
 
-  private:
+private:
   int64_t timestamp_;
   uint64_t log_id_;
 };
 
 class WaitAll1PCTrxEndFunctor {
-  public:
+public:
   WaitAll1PCTrxEndFunctor()
   {}
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
@@ -1224,7 +1224,7 @@ class WaitAll1PCTrxEndFunctor {
 };
 
 class CheckAllTransInTransTableStateFunctor {
-  public:
+public:
   CheckAllTransInTransTableStateFunctor() : all_in_trans_table_state_(true)
   {}
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
@@ -1248,12 +1248,12 @@ class CheckAllTransInTransTableStateFunctor {
     return all_in_trans_table_state_;
   }
 
-  private:
+private:
   bool all_in_trans_table_state_;
 };
 
 class SubmitLogForSplitFunctor {
-  public:
+public:
   SubmitLogForSplitFunctor() : log_finished_(true)
   {}
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
@@ -1285,12 +1285,12 @@ class SubmitLogForSplitFunctor {
     return log_finished_;
   }
 
-  private:
+private:
   bool log_finished_;
 };
 
 class LeaderRevokeFunctor {
-  public:
+public:
   LeaderRevokeFunctor(
       const bool first_check, ObPartitionTransCtxMgr& ctx_mgr, ObEndTransCallbackArray& cb_array, int64_t& retry_count)
       : first_check_(first_check), ctx_mgr_(ctx_mgr), cb_array_(cb_array), retry_count_(retry_count)
@@ -1326,7 +1326,7 @@ class LeaderRevokeFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   bool first_check_;
   ObPartitionTransCtxMgr& ctx_mgr_;
   ObEndTransCallbackArray& cb_array_;
@@ -1334,7 +1334,7 @@ class LeaderRevokeFunctor {
 };
 
 class PrintFunctor {
-  public:
+public:
   PrintFunctor(const int64_t max_print_count, const bool verbose)
       : max_print_count_(max_print_count), print_count_(0), verbose_(verbose)
   {
@@ -1360,14 +1360,14 @@ class PrintFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   int64_t max_print_count_;
   int64_t print_count_;
   bool verbose_;
 };
 
 class PrintAllPartitionTransCtxFunctor {
-  public:
+public:
   PrintAllPartitionTransCtxFunctor()
   {}
   ~PrintAllPartitionTransCtxFunctor()
@@ -1391,7 +1391,7 @@ class PrintAllPartitionTransCtxFunctor {
 };
 
 class CheckpointFunctor {
-  public:
+public:
   explicit CheckpointFunctor(storage::ObPartitionLoopWorker* lp_worker, const int64_t start_ckp_ts,
       const int64_t checkpoint_base_version, int64_t& ckp_total_cnt, int64_t& ckp_succ_cnt)
       : worker_(lp_worker),
@@ -1443,7 +1443,7 @@ class CheckpointFunctor {
     return ckp_succ_cnt_;
   }
 
-  private:
+private:
   storage::ObPartitionLoopWorker* worker_;
   // Record the start time of the checkpoint, those contexts created after this point
   // will be operated in the next round to avoid long-term occupation of the checkpoint thread
@@ -1456,7 +1456,7 @@ class CheckpointFunctor {
 };
 
 class ObTransDataRelocateFunctor {
-  public:
+public:
   explicit ObTransDataRelocateFunctor(memtable::ObIMemtable* memtable) : memtable_(memtable)
   {}
   ~ObTransDataRelocateFunctor()
@@ -1478,12 +1478,12 @@ class ObTransDataRelocateFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   memtable::ObIMemtable* memtable_;
 };
 
 class ObXASchedulerHbFunctor {
-  public:
+public:
   ObXASchedulerHbFunctor()
   {}
   ~ObXASchedulerHbFunctor()
@@ -1507,7 +1507,7 @@ class ObXASchedulerHbFunctor {
 };
 
 class ObPrepareChangingLeaderFunctor {
-  public:
+public:
   explicit ObPrepareChangingLeaderFunctor(const common::ObAddr& proposal_leader, const int64_t round, const int64_t cnt)
       : proposal_leader_(proposal_leader), round_(round), cnt_(cnt)
   {}
@@ -1532,14 +1532,14 @@ class ObPrepareChangingLeaderFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   common::ObAddr proposal_leader_;
   int64_t round_;
   int64_t cnt_;
 };
 
 class ObRemoveAllCtxFunctor {
-  public:
+public:
   explicit ObRemoveAllCtxFunctor()
   {}
   ~ObRemoveAllCtxFunctor()
@@ -1557,7 +1557,7 @@ class ObRemoveAllCtxFunctor {
 };
 
 class ObRemoveCallbackFunctor {
-  public:
+public:
   explicit ObRemoveCallbackFunctor(memtable::ObMemtable* mt) : mt_(mt)
   {}
   ~ObRemoveCallbackFunctor()
@@ -1584,12 +1584,12 @@ class ObRemoveCallbackFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   memtable::ObMemtable* mt_;
 };
 
 class ObRemoveMemCtxFunctor {
-  public:
+public:
   explicit ObRemoveMemCtxFunctor(memtable::ObMemtable* mt) : mt_(mt)
   {}
   ~ObRemoveMemCtxFunctor()
@@ -1616,12 +1616,12 @@ class ObRemoveMemCtxFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   memtable::ObMemtable* mt_;
 };
 
 class ObDirtyTransMarkerFunctor {
-  public:
+public:
   explicit ObDirtyTransMarkerFunctor(
       const memtable::ObMemtable* const frozen_memtable, const memtable::ObMemtable* const active_memtable)
       : frozen_memtable_(frozen_memtable), active_memtable_(active_memtable), cb_cnt_(0), applied_log_ts_(INT64_MAX)
@@ -1660,7 +1660,7 @@ class ObDirtyTransMarkerFunctor {
     return applied_log_ts_;
   }
 
-  private:
+private:
   const memtable::ObMemtable* const frozen_memtable_;
   const memtable::ObMemtable* const active_memtable_;
   int64_t cb_cnt_;
@@ -1668,7 +1668,7 @@ class ObDirtyTransMarkerFunctor {
 };
 
 class ObGetAppliedLogTsFunctor {
-  public:
+public:
   ObGetAppliedLogTsFunctor() : applied_log_ts_(INT64_MAX)
   {}
 
@@ -1693,12 +1693,12 @@ class ObGetAppliedLogTsFunctor {
     return applied_log_ts_;
   }
 
-  private:
+private:
   int64_t applied_log_ts_;
 };
 
 class ObGetMaxTransVersionBeforeLogFunctor {
-  public:
+public:
   explicit ObGetMaxTransVersionBeforeLogFunctor(const int64_t log_ts)
       : log_ts_(log_ts), max_trans_version_(0), is_all_rollback_trans_(true), has_related_trans_(false)
   {}
@@ -1741,7 +1741,7 @@ class ObGetMaxTransVersionBeforeLogFunctor {
     return is_all_rollback_trans_ && has_related_trans_;
   }
 
-  private:
+private:
   int64_t log_ts_;
   int64_t max_trans_version_;
   bool is_all_rollback_trans_;
@@ -1749,7 +1749,7 @@ class ObGetMaxTransVersionBeforeLogFunctor {
 };
 
 class ObCleanTransTableFunctor {
-  public:
+public:
   explicit ObCleanTransTableFunctor(const int64_t max_cleanout_log_ts) : max_cleanout_log_ts_(max_cleanout_log_ts)
   {}
   bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
@@ -1776,12 +1776,12 @@ class ObCleanTransTableFunctor {
     return OB_SUCC(ret);
   }
 
-  private:
+private:
   int64_t max_cleanout_log_ts_;
 };
 
 class ObCheckHasTerminatedTrxBeforeLogFunction {
-  public:
+public:
   explicit ObCheckHasTerminatedTrxBeforeLogFunction(const int64_t start_log_ts, const int64_t end_log_ts)
       : start_log_ts_(start_log_ts), end_log_ts_(end_log_ts), has_terminated_trx_(false)
   {}
@@ -1810,7 +1810,7 @@ class ObCheckHasTerminatedTrxBeforeLogFunction {
     return has_terminated_trx_;
   }
 
-  private:
+private:
   int64_t start_log_ts_;
   int64_t end_log_ts_;
   bool has_terminated_trx_;
@@ -1819,7 +1819,7 @@ class ObCheckHasTerminatedTrxBeforeLogFunction {
 // For physical backup and restore, after pulling the log,
 // use this interface to garbage collect unfinished transactions
 class ObClearTransAfterRestoreLog {
-  public:
+public:
   explicit ObClearTransAfterRestoreLog(
       const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t fake_terminate_log_ts)
       : ret_(OB_SUCCESS),
@@ -1852,7 +1852,7 @@ class ObClearTransAfterRestoreLog {
     return OB_SUCCESS == ret;
   }
 
-  private:
+private:
   int ret_;
   int64_t restore_snapshot_version_;
   uint64_t last_restore_log_id_;

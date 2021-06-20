@@ -33,7 +33,7 @@ struct ObSchemaMgrItem {
 };
 
 class ObSchemaMgrHandle {
-  public:
+public:
   ObSchemaMgrHandle();
   ObSchemaMgrHandle(const ObSchemaMgrHandle& other);
   virtual ~ObSchemaMgrHandle();
@@ -42,10 +42,10 @@ class ObSchemaMgrHandle {
   bool is_valid();
   void dump() const;
 
-  private:
+private:
   void revert();
 
-  private:
+private:
   friend class ObSchemaMgrCache;
   static const int64_t REF_TIME_THRESHOLD = 60 * 1000 * 1000L;
   ObSchemaMgrItem* schema_mgr_item_;
@@ -53,10 +53,10 @@ class ObSchemaMgrHandle {
 };
 
 class ObSchemaMgrCache {
-  public:
+public:
   enum Mode { REFRESH = 0, FALLBACK = 1 };
 
-  public:
+public:
   ObSchemaMgrCache();
   virtual ~ObSchemaMgrCache();
   int init(int64_t init_cached_num, Mode mode);
@@ -69,17 +69,17 @@ class ObSchemaMgrCache {
   int try_elimiante_schema_mgr(ObSchemaMgr*& eli_schema_mgr);
   void dump() const;
 
-  public:
+public:
   const static int64_t MAX_SCHEMA_SLOT_NUM = 8 * 1024L;  // 8192
-  private:
+private:
   bool check_inner_stat() const;
   // need process in wlock
   int try_update_latest_schema_idx();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaMgrCache);
 
-  private:
+private:
   common::TCRWLock lock_;
   ObSchemaMgrItem* schema_mgr_items_;
   int64_t max_cached_num_;

@@ -24,9 +24,9 @@ template <typename COLUMN_INFO = const void*, typename CONST_INFO = const void*>
 class ObEqualSet : public common::ObDLinkBase<ObEqualSet<COLUMN_INFO, CONST_INFO> > {
   typedef typename common::hash::ObIteratableHashMap<int64_t, COLUMN_INFO>::const_iterator_t ColIter;
 
-  public:
+public:
   struct ColumnIterator {
-    public:
+  public:
     ColumnIterator();
     ColumnIterator(const ObEqualSet* equal_set, const ColIter& col_iter);
     ~ColumnIterator();
@@ -41,12 +41,12 @@ class ObEqualSet : public common::ObDLinkBase<ObEqualSet<COLUMN_INFO, CONST_INFO
     int64_t get_expr_idx() const;
     const COLUMN_INFO& get_expr_info() const;
 
-    private:
+  private:
     const ObEqualSet* equal_set_;
     ColIter col_iter_;
   };
 
-  public:
+public:
   ObEqualSet();
   virtual ~ObEqualSet();
 
@@ -84,18 +84,18 @@ class ObEqualSet : public common::ObDLinkBase<ObEqualSet<COLUMN_INFO, CONST_INFO
   }
   TO_STRING_KV(N_COLUMN, exprs_, N_CONST, constants_);
 
-  private:
+private:
   // types and constants
   static const int64_t COMMON_CONST_NUM = 64;
   typedef common::ObSEArray<CONST_INFO, COMMON_CONST_NUM, common::ModulePageAllocator, true> Constants;
   typedef common::hash::ObIteratableHashMap<int64_t, COLUMN_INFO> Expressions;
 
-  private:
+private:
   // disallow copy
   ObEqualSet(const ObEqualSet& other);
   ObEqualSet& operator=(const ObEqualSet& other);
   // function members
-  private:
+private:
   // data members
   Expressions exprs_;
   common::ObBitSet<common::OB_ROW_MAX_COLUMNS_COUNT> flags_;  // column flag

@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprBool : public ObLogicalExprOperator {
-  public:
+public:
   explicit ObExprBool(common::ObIAllocator& alloc);
   virtual ~ObExprBool();
 
@@ -28,7 +28,7 @@ class ObExprBool : public ObLogicalExprOperator {
       ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBool);
 };
 

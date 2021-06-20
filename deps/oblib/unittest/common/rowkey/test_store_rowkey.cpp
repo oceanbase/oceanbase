@@ -18,7 +18,7 @@
 using namespace oceanbase::common;
 
 class TestStoreRowkey : public ::testing::Test {
-  public:
+public:
   static const int OBJ_CNT = 5;
 
   TestStoreRowkey()
@@ -28,12 +28,12 @@ class TestStoreRowkey : public ::testing::Test {
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   TestStoreRowkey(const TestStoreRowkey& other);
   TestStoreRowkey& operator=(const TestStoreRowkey& other);
 
-  protected:
+protected:
   // data memebers
   ObObj obj_array_[OBJ_CNT];
   ObArenaAllocator allocator_;

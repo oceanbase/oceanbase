@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprUtcTimestamp : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprUtcTimestamp(common::ObIAllocator& alloc);
   virtual ~ObExprUtcTimestamp();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -26,13 +26,13 @@ class ObExprUtcTimestamp : public ObFuncExprOperator {
   static int eval_utc_timestamp(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprUtcTimestamp);
 };
 
 class ObExprCurTimestamp : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprCurTimestamp(common::ObIAllocator& alloc);
   virtual ~ObExprCurTimestamp();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -40,13 +40,13 @@ class ObExprCurTimestamp : public ObFuncExprOperator {
   static int eval_cur_timestamp(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCurTimestamp);
 };
 
 class ObExprSysdate : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSysdate(common::ObIAllocator& alloc);
   virtual ~ObExprSysdate();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const override;
@@ -54,13 +54,13 @@ class ObExprSysdate : public ObFuncExprOperator {
   static int eval_sysdate(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprSysdate);
 };
 
 class ObExprCurDate : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprCurDate(common::ObIAllocator& alloc);
   virtual ~ObExprCurDate();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -68,13 +68,13 @@ class ObExprCurDate : public ObFuncExprOperator {
   static int eval_cur_date(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCurDate);
 };
 
 class ObExprCurTime : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprCurTime(common::ObIAllocator& alloc);
   virtual ~ObExprCurTime();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -82,7 +82,7 @@ class ObExprCurTime : public ObFuncExprOperator {
   static int eval_cur_time(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCurTime);
 };

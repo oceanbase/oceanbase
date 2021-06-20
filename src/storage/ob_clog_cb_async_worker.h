@@ -50,7 +50,7 @@ struct ObCLogCallbackAsyncTask {
 
   TO_STRING_KV(K(pg_key_), K(partition_key_), K(log_type_), K(log_id_), K(is_physical_drop_));
 
-  public:
+public:
   common::ObPGKey pg_key_;
   common::ObPartitionKey partition_key_;
   int64_t log_type_;
@@ -59,7 +59,7 @@ struct ObCLogCallbackAsyncTask {
 };
 
 class ObCLogCallbackAsyncWorker : public common::M2SQueueThread {
-  public:
+public:
   ObCLogCallbackAsyncWorker() : is_inited_(false), ptt_svr_(nullptr), free_queue_(), tasks_(nullptr){};
   ~ObCLogCallbackAsyncWorker()
   {
@@ -71,12 +71,12 @@ class ObCLogCallbackAsyncWorker : public common::M2SQueueThread {
   virtual void handle(void* task, void* pdata);
   int push_task(const ObCLogCallbackAsyncTask& task);
 
-  private:
+private:
   int get_task(ObCLogCallbackAsyncTask*& task);
   void free_task(ObCLogCallbackAsyncTask* task);
   DISALLOW_COPY_AND_ASSIGN(ObCLogCallbackAsyncWorker);
 
-  private:
+private:
   static const int64_t LONG_RETRY_INTERVAL = 100 * 1000;  // 100ms
   static const int64_t RETRY_INTERVAL = 2 * 1000;         // 2ms
   static const int64_t MAX_TASK_NUM = common::OB_MAX_PARTITION_NUM_PER_SERVER;

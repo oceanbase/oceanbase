@@ -27,7 +27,7 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObRowGenerate {
-  public:
+public:
   ObRowGenerate();
   ~ObRowGenerate();
   inline int init(
@@ -59,7 +59,7 @@ class ObRowGenerate {
     return schema_;
   }
 
-  private:
+private:
   int generate_one_row(storage::ObStoreRow& row, const int64_t seed,
       const storage::ObRowDml first_dml = storage::T_DML_UNKNOWN, const storage::ObRowDml dml = storage::T_DML_UNKNOWN,
       const int64_t trans_version = 0);
@@ -69,7 +69,7 @@ class ObRowGenerate {
   int get_seed(const common::ObObjType& column_type, const common::ObObj obj, int64_t& seed);
   int generate_urowid_obj(const int64_t rowkey_pos, const int64_t seed, const int64_t value, ObObj& urowid_obj);
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   common::ObArenaAllocator* p_allocator_;
   share::schema::ObTableSchema schema_;

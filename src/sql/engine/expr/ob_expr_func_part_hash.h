@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObTaskExecutorCtx;
 class ObExprFuncPartOldHash : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFuncPartOldHash(common::ObIAllocator& alloc);
   virtual ~ObExprFuncPartOldHash();
   virtual int calc_result_typeN(
@@ -38,7 +38,7 @@ class ObExprFuncPartOldHash : public ObFuncExprOperator {
   static int eval_old_part_hash(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int eval_oracle_old_part_hash(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum, uint64_t seed);
 
-  private:
+private:
   static int eval_vt_old_part_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum,
       ObTaskExecutorCtx& task_exec_ctx, const uint64_t table_id);
   static bool is_oracle_supported_type(const common::ObObjType type);
@@ -50,7 +50,7 @@ class ObExprFuncPartOldHash : public ObFuncExprOperator {
 // call new hash functions, solve partition row skew problem
 class ObTaskExecutorCtx;
 class ObExprFuncPartHash : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFuncPartHash(common::ObIAllocator& alloc);
   virtual ~ObExprFuncPartHash();
   virtual int calc_result_typeN(
@@ -70,12 +70,12 @@ class ObExprFuncPartHash : public ObFuncExprOperator {
   static int eval_part_hash(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int eval_oracle_part_hash(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum, uint64_t seed);
 
-  private:
+private:
   static int eval_vt_part_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum, ObTaskExecutorCtx& task_exec_ctx,
       const uint64_t table_id);
   static bool is_oracle_supported_type(const common::ObObjType type);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncPartHash);
 };

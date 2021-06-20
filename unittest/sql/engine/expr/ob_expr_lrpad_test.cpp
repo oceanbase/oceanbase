@@ -21,18 +21,18 @@ using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
 class ObExprLRpadTest : public ::testing::Test {
-  public:
+public:
   ObExprLRpadTest();
   virtual ~ObExprLRpadTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprLRpadTest(const ObExprLRpadTest& other);
   ObExprLRpadTest& operator=(const ObExprLRpadTest& other);
 
-  private:
+private:
   // data members
 };
 ObExprLRpadTest::ObExprLRpadTest()

@@ -31,7 +31,7 @@ namespace sql {
 class ObPxMultiPartDeleteInput : public ObPxModifyInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMultiPartDeleteInput() = default;
   virtual ~ObPxMultiPartDeleteInput() = default;
   virtual inline ObPhyOperatorType get_phy_op_type() const
@@ -43,12 +43,12 @@ class ObPxMultiPartDeleteInput : public ObPxModifyInput {
 class ObPxMultiPartDelete : public ObDMLDataReader, public ObDMLDataWriter, public ObTableModify {
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   class ObPxMultiPartDeleteCtx;
 
   /**ObPDMLRowIteratorWrapper**/
   class ObPDMLRowIteratorWrapper : public common::ObNewRowIterator {
-    public:
+  public:
     ObPDMLRowIteratorWrapper(ObPxMultiPartDeleteCtx& op_ctx)
         : op_ctx_(op_ctx), iter_(nullptr), delete_projector_(nullptr), delete_projector_size_(0), delete_row_()
     {}
@@ -72,10 +72,10 @@ class ObPxMultiPartDelete : public ObDMLDataReader, public ObDMLDataWriter, publ
     void reset() override
     {}
 
-    private:
+  private:
     int project_row(const ObNewRow& input_row, ObNewRow& output_row) const;
 
-    private:
+  private:
     ObPxMultiPartDeleteCtx& op_ctx_;
     ObPDMLRowIterator* iter_;
     int32_t* delete_projector_;
@@ -84,7 +84,7 @@ class ObPxMultiPartDelete : public ObDMLDataReader, public ObDMLDataWriter, publ
   };
   /**ObPxMultiPartDeleteCtx**/
   class ObPxMultiPartDeleteCtx : public ObTableModifyCtx {
-    public:
+  public:
     ObPxMultiPartDeleteCtx(ObExecContext& ctx)
         : ObTableModifyCtx(ctx), data_driver_(op_monitor_info_), row_iter_wrapper_(*this)
     {}
@@ -94,11 +94,11 @@ class ObPxMultiPartDelete : public ObDMLDataReader, public ObDMLDataWriter, publ
     ObPDMLRowIteratorWrapper row_iter_wrapper_;
   };
 
-  public:
+public:
   explicit ObPxMultiPartDelete(common::ObIAllocator& alloc);
   ~ObPxMultiPartDelete();
 
-  public:
+public:
   virtual int create_operator_input(ObExecContext& ctx) const override;
   virtual bool has_foreign_key() const override
   {
@@ -134,11 +134,11 @@ class ObPxMultiPartDelete : public ObDMLDataReader, public ObDMLDataWriter, publ
   }
   int register_to_datahub(ObExecContext& ctx) const override;
 
-  private:
+private:
   int fill_dml_base_param(uint64_t index_tid, ObSQLSessionInfo& my_session, const ObPhysicalPlan& my_phy_plan,
       const ObPhysicalPlanCtx& my_plan_ctx, storage::ObDMLBaseParam& dml_param) const;
 
-  private:
+private:
   ObDMLRowDesc row_desc_;
   ObDMLTableDesc table_desc_;
   int32_t* delete_projector_;

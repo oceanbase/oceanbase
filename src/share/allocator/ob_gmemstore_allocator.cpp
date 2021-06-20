@@ -93,7 +93,9 @@ void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
       hlist_.set_active(handle);
     }
   }
-  if (OB_FAIL(ObTenantManager::get_instance().check_tenant_out_of_memstore_limit(tenant_id, is_out_of_mem))) {
+  if (handle.mt_.is_inner_table()) {
+    // inner table memory not limited by memstore
+  } else if (OB_FAIL(ObTenantManager::get_instance().check_tenant_out_of_memstore_limit(tenant_id, is_out_of_mem))) {
     COMMON_LOG(ERROR, "fail to check tenant out of mem limit", K(ret), K(tenant_id));
     is_out_of_mem = true;
   } else if (is_out_of_mem && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {

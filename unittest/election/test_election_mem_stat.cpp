@@ -22,7 +22,7 @@ namespace unittest {
 using namespace common;
 using namespace election;
 class TestObElectionMemStat : public ::testing::Test {
-  public:
+public:
   TestObElectionMemStat()
   {}
   virtual ~TestObElectionMemStat()
@@ -32,7 +32,7 @@ class TestObElectionMemStat : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  public:
+public:
   ObElectionMemStat mem_stat_;
 };
 

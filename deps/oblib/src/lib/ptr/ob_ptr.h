@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 class ObRefCount {
-  public:
+public:
   ObRefCount() : ref_count_(0)
   {}
   virtual ~ObRefCount()
@@ -44,7 +44,7 @@ class ObRefCount {
 };
 
 class ObForceVFPTToTop {
-  public:
+public:
   ObForceVFPTToTop()
   {}
   virtual ~ObForceVFPTToTop()
@@ -54,7 +54,7 @@ class ObForceVFPTToTop {
 // class ObRefCountObj
 // prototypical class for reference counting
 class ObRefCountObj : public ObForceVFPTToTop {
-  public:
+public:
   ObRefCountObj() : refcount_(0)
   {}
   virtual ~ObRefCountObj()
@@ -103,7 +103,7 @@ inline int64_t ObRefCountObj::refcount() const
 // class ObPtr
 template <class T>
 class ObPtr {
-  public:
+public:
   explicit ObPtr(T* p = NULL);
   ObPtr(const ObPtr<T>&);
   ~ObPtr();

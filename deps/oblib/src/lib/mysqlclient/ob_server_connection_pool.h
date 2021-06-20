@@ -23,14 +23,14 @@ namespace common {
 namespace sqlclient {
 class ObMySQLConnectionPool;
 class ObServerConnectionPool {
-  public:
+public:
   ObServerConnectionPool();
   ~ObServerConnectionPool();
   int acquire(ObMySQLConnection*& connection);
   int release(ObMySQLConnection* connection, const bool succ);
   uint64_t get_busy_count(void) const;
 
-  public:
+public:
   int init(ObMySQLConnectionPool* root, const common::ObAddr& server, int64_t max_allowed_conn_count);
   int destroy();
   void reset();
@@ -50,7 +50,7 @@ class ObServerConnectionPool {
       const ObString& db_pass, const ObString& db_name, ObMySQLConnectionPool* root, int64_t max_allowed_conn_count);
   uint64_t get_dblink_id() const;
 
-  private:
+private:
   volatile uint64_t free_conn_count_;
   volatile uint64_t busy_conn_count_;
   ObConnectionAllocator<ObMySQLConnection> connection_pool_;

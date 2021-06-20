@@ -22,7 +22,7 @@
 #include "sql/engine/test_engine_util.h"
 
 class TestSetOperatorFactory {
-  public:
+public:
   TestSetOperatorFactory()
   {}
   ~TestSetOperatorFactory()
@@ -101,7 +101,7 @@ class TestSetOperatorFactory {
     return physical_plan_;
   }
 
-  private:
+private:
   static ObPhysicalPlan physical_plan_;
   static ObFakeTable fake_table1_;
   static ObFakeTable fake_table2_;

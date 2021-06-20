@@ -62,7 +62,7 @@ class ObLogEventScheduler;
 class ObRemoteLogQueryEngine;
 
 class ObCandidateInfo {
-  public:
+public:
   ObCandidateInfo()
   {
     reset();
@@ -70,7 +70,7 @@ class ObCandidateInfo {
   ~ObCandidateInfo()
   {}
 
-  public:
+public:
   void reset();
   common::ObRole get_role() const
   {
@@ -177,7 +177,7 @@ class ObCandidateInfo {
     memstore_percent_ = memstore_percent;
   }
 
-  private:
+private:
   common::ObRole role_;
   bool is_tenant_active_;
   bool is_dest_splitting_;
@@ -194,33 +194,33 @@ class ObCandidateInfo {
 };
 
 class ObCursorArrayCache {
-  public:
+public:
   ObCursorArrayCache()
   {}
   ~ObCursorArrayCache()
   {}
 
-  public:
+public:
   int init();
 
-  public:
+public:
   static const int64_t CURSOR_ARRAY_SIZE = 20;
   uint64_t cursor_start_log_id_[SCAN_THREAD_CNT];
   uint64_t cursor_end_log_id_[SCAN_THREAD_CNT];
   ObLogCursorExt cursor_array_[SCAN_THREAD_CNT][CURSOR_ARRAY_SIZE];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCursorArrayCache);
 };
 
 class ObIPartitionLogService : public ObILogFlushCb, public election::ObIElectionCallback {
-  public:
+public:
   ObIPartitionLogService()
   {}
   virtual ~ObIPartitionLogService()
   {}
 
-  public:
+public:
   virtual int init(ObILogEngine* log_engine, ObLogReplayEngineWrapper* replay_engine,
       ObIFetchLogEngine* fetch_log_engine, election::ObIElectionMgr* election_mgr,
       storage::ObPartitionService* partition_service, ObILogCallbackEngine* cb_engine,
@@ -485,14 +485,14 @@ class ObIPartitionLogService : public ObILogFlushCb, public election::ObIElectio
 };
 
 class ObPartitionLogService : public ObIPartitionLogService {
-  public:
+public:
   ObPartitionLogService();
   virtual ~ObPartitionLogService()
   {
     destroy();
   }
 
-  public:
+public:
   virtual int init(ObILogEngine* log_engine, ObLogReplayEngineWrapper* replay_engine,
       ObIFetchLogEngine* fetch_log_engine, election::ObIElectionMgr* election_mgr,
       storage::ObPartitionService* partition_service, ObILogCallbackEngine* cb_engine,
@@ -504,241 +504,250 @@ class ObPartitionLogService : public ObIPartitionLogService {
       archive::ObArchiveMgr* archive_mgr, archive::ObArchiveRestoreEngine* archive_restore_engine,
       const enum ObCreatePlsType& create_pls_type) override;
 
-  virtual int get_log_id_timestamp(const int64_t base_timestamp, ObLogMeta& log_meta);
-  virtual int submit_aggre_log(ObAggreBuffer* buffer, const int64_t base_timestamp);
+  virtual int get_log_id_timestamp(const int64_t base_timestamp, ObLogMeta& log_meta) override;
+  virtual int submit_aggre_log(ObAggreBuffer* buffer, const int64_t base_timestamp) override;
   virtual int submit_log(const char* buff, const int64_t size, const int64_t base_timestamp, ObISubmitLogCb* cb,
-      const bool is_trans_log, uint64_t& log_id, int64_t& log_timestamp);
-  virtual int add_member(const common::ObMember& member, const int64_t quorum, obrpc::ObMCLogInfo& log_info);
-  virtual int remove_member(const common::ObMember& member, const int64_t quorum, obrpc::ObMCLogInfo& log_info);
+      const bool is_trans_log, uint64_t& log_id, int64_t& log_timestamp) override;
+  virtual int add_member(const common::ObMember& member, const int64_t quorum, obrpc::ObMCLogInfo& log_info) override;
+  virtual int remove_member(
+      const common::ObMember& member, const int64_t quorum, obrpc::ObMCLogInfo& log_info) override;
   virtual int change_quorum(const common::ObMemberList& curr_member_list, const int64_t curr_quorum,
-      const int64_t new_quorum, obrpc::ObMCLogInfo& log_info);
-  virtual int is_member_change_done(const obrpc::ObMCLogInfo& log_info);
+      const int64_t new_quorum, obrpc::ObMCLogInfo& log_info) override;
+  virtual int is_member_change_done(const obrpc::ObMCLogInfo& log_info) override;
   virtual int get_base_storage_info(
       common::ObBaseStorageInfo& base_storage_info, uint64_t& sw_last_replay_log_id) override;
-  virtual common::ObPartitionKey get_partition_key() const;
-  virtual int get_saved_base_storage_info(common::ObBaseStorageInfo& base_storage_info) const;
-  virtual int get_leader(common::ObAddr& addr) const;
-  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const;
-  virtual int change_leader(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows);
-  virtual int change_restore_leader(const common::ObAddr& leader);
-  virtual int check_and_set_restore_progress();
-  virtual int set_restore_fetch_log_finished(ObArchiveFetchLogResult fetch_log_result);
-  virtual int process_restore_takeover_msg(const int64_t send_ts);
-  virtual int try_update_next_replay_log_ts_in_restore(const int64_t new_ts);
-  virtual int get_role(common::ObRole& role) const;
-  virtual int get_role_for_partition_table(common::ObRole& role) const;
-  virtual int get_role_unsafe(int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const;
-  virtual int get_role_unlock(int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const;
+  virtual common::ObPartitionKey get_partition_key() const override;
+  virtual int get_saved_base_storage_info(common::ObBaseStorageInfo& base_storage_info) const override;
+  virtual int get_leader(common::ObAddr& addr) const override;
+  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const override;
+  virtual int change_leader(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows) override;
+  virtual int change_restore_leader(const common::ObAddr& leader) override;
+  virtual int check_and_set_restore_progress() override;
+  virtual int set_restore_fetch_log_finished(ObArchiveFetchLogResult fetch_log_result) override;
+  virtual int process_restore_takeover_msg(const int64_t send_ts) override;
+  virtual int try_update_next_replay_log_ts_in_restore(const int64_t new_ts) override;
+  virtual int get_role(common::ObRole& role) const override;
+  virtual int get_role_for_partition_table(common::ObRole& role) const override;
+  virtual int get_role_unsafe(int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const override;
+  virtual int get_role_unlock(int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const override;
   virtual int get_role_for_partition_table_unlock(
       int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const;
-  virtual int get_role_and_last_leader_active_time(common::ObRole& role, int64_t& timestamp) const;
-  virtual int get_role_and_leader_epoch(common::ObRole& role, int64_t& leader_epoch);
-  virtual int get_role_and_leader_epoch(common::ObRole& role, int64_t& leader_epoch, int64_t& takeover_time);
-  virtual int set_election_leader(const common::ObAddr& leader, const int64_t lease_start);
-  virtual int get_leader_curr_member_list(common::ObMemberList& member_list) const;
-  virtual int get_curr_member_list(common::ObMemberList& member_list) const;
-  virtual int get_curr_member_list_for_report(common::ObMemberList& member_list) const;
-  virtual int try_get_curr_member_list(common::ObMemberList& member_list) const;
-  virtual int get_replica_num(int64_t& replica_num) const;
-  virtual int try_get_replica_num(int64_t& replica_num) const;
+  virtual int get_role_and_last_leader_active_time(common::ObRole& role, int64_t& timestamp) const override;
+  virtual int get_role_and_leader_epoch(common::ObRole& role, int64_t& leader_epoch) override;
+  virtual int get_role_and_leader_epoch(common::ObRole& role, int64_t& leader_epoch, int64_t& takeover_time) override;
+  virtual int set_election_leader(const common::ObAddr& leader, const int64_t lease_start) override;
+  virtual int get_leader_curr_member_list(common::ObMemberList& member_list) const override;
+  virtual int get_curr_member_list(common::ObMemberList& member_list) const override;
+  virtual int get_curr_member_list_for_report(common::ObMemberList& member_list) const override;
+  virtual int try_get_curr_member_list(common::ObMemberList& member_list) const override;
+  virtual int get_replica_num(int64_t& replica_num) const override;
+  virtual int try_get_replica_num(int64_t& replica_num) const override;
   virtual int receive_log(const ObLogEntry& log_entry, const common::ObAddr& server, const int64_t cluster_id,
-      const common::ObProposalID& proposal_id, const ObPushLogMode push_mode, const ReceiveLogType type);
+      const common::ObProposalID& proposal_id, const ObPushLogMode push_mode, const ReceiveLogType type) override;
   virtual int receive_renew_ms_log(const ObLogEntry& log_entry, const ObAddr& server, const int64_t cluster_id,
-      const ObProposalID& proposal_id, const ReceiveLogType type);
-  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_batch_committed);
-  virtual int ack_log(const common::ObAddr& server, const uint64_t log_id, const common::ObProposalID& proposal_id);
+      const ObProposalID& proposal_id, const ReceiveLogType type) override;
+  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_batch_committed) override;
+  virtual int ack_log(
+      const common::ObAddr& server, const uint64_t log_id, const common::ObProposalID& proposal_id) override;
   virtual int standby_ack_log(
-      const ObAddr& server, const int64_t cluster_id, const uint64_t log_id, const ObProposalID& proposal_id);
-  virtual int fake_ack_log(const ObAddr& server, const uint64_t log_id, const ObProposalID& proposal_id);
+      const ObAddr& server, const int64_t cluster_id, const uint64_t log_id, const ObProposalID& proposal_id) override;
+  virtual int fake_ack_log(const ObAddr& server, const uint64_t log_id, const ObProposalID& proposal_id) override;
   virtual int ack_renew_ms_log(const ObAddr& server, const uint64_t log_id, const int64_t submit_timestamp,
       const ObProposalID& ms_proposal_id) override;
-  virtual int fake_receive_log(const ObAddr& server, const uint64_t log_id, const ObProposalID& proposal_id);
+  virtual int fake_receive_log(const ObAddr& server, const uint64_t log_id, const ObProposalID& proposal_id) override;
   virtual int get_log(const common::ObAddr& server, const uint64_t log_id, const int64_t log_num,
       const ObFetchLogType fetch_type, const common::ObProposalID& proposal_id, const int64_t cluster_id,
-      const common::ObReplicaType replica_type, const int64_t network_limit, const uint64_t max_confirmed_log_id);
+      const common::ObReplicaType replica_type, const int64_t network_limit,
+      const uint64_t max_confirmed_log_id) override;
   virtual int async_get_log(const common::ObAddr& server, const int64_t cluster_id, const uint64_t start_log_id,
       const uint64_t end_log_id, const ObFetchLogType fetch_type, const common::ObProposalID& proposal_id,
-      const int64_t network_limit);
+      const int64_t network_limit) override;
   virtual int get_max_log_id(
-      const common::ObAddr& server, const int64_t cluster_id, const common::ObProposalID& proposal_id);
+      const common::ObAddr& server, const int64_t cluster_id, const common::ObProposalID& proposal_id) override;
   virtual int handle_standby_prepare_req(
-      const ObAddr& server, const int64_t cluster_id, const ObProposalID& proposal_id);
+      const ObAddr& server, const int64_t cluster_id, const ObProposalID& proposal_id) override;
   virtual int handle_standby_prepare_resp(const ObAddr& server, const ObProposalID& proposal_id,
-      const uint64_t ms_log_id, const int64_t membership_version, const ObMemberList& member_list);
-  virtual int handle_query_sync_start_id_req(const ObAddr& server, const int64_t cluster_id, const int64_t send_ts);
-  virtual int handle_sync_start_id_resp(
-      const ObAddr& server, const int64_t cluster_id, const int64_t original_send_ts, const uint64_t sync_start_id);
+      const uint64_t ms_log_id, const int64_t membership_version, const ObMemberList& member_list) override;
+  virtual int handle_query_sync_start_id_req(
+      const ObAddr& server, const int64_t cluster_id, const int64_t send_ts) override;
+  virtual int handle_sync_start_id_resp(const ObAddr& server, const int64_t cluster_id, const int64_t original_send_ts,
+      const uint64_t sync_start_id) override;
   virtual int receive_max_log_id(const common::ObAddr& server, const uint64_t max_log_id,
-      const ObProposalID& proposal_id, const int64_t max_log_ts);
+      const ObProposalID& proposal_id, const int64_t max_log_ts) override;
   virtual int receive_confirmed_info(const common::ObAddr& server, const int64_t src_cluster_id, const uint64_t log_id,
-      const ObConfirmedInfo& confirmed_info, const bool batch_committed);
+      const ObConfirmedInfo& confirmed_info, const bool batch_committed) override;
   virtual int receive_renew_ms_log_confirmed_info(const common::ObAddr& server, const uint64_t log_id,
       const common::ObProposalID& ms_proposal_id, const ObConfirmedInfo& confirmed_info) override;
-  virtual int append_disk_log(
-      const ObLogEntry& log, const ObLogCursor& log_cursor, const int64_t accum_checksum, const bool batch_committed);
-  virtual int is_offline(bool& is_offline);
-  virtual int stop_election();
-  virtual int set_offline();
+  virtual int append_disk_log(const ObLogEntry& log, const ObLogCursor& log_cursor, const int64_t accum_checksum,
+      const bool batch_committed) override;
+  virtual int is_offline(bool& is_offline) override;
+  virtual int stop_election() override;
+  virtual int set_offline() override;
   virtual int set_online(
       const common::ObBaseStorageInfo& base_storage_info, const common::ObVersion& memstore_version) override;
-  virtual int on_election_role_change();
-  virtual int set_scan_disk_log_finished();
-  virtual int switch_state();
-  virtual int switch_state(bool& need_retry);
-  virtual int check_mc_and_sliding_window_state();
-  virtual int leader_send_max_log_info();
-  virtual int leader_keepalive(const int64_t keepalive_interval);
-  virtual int sync_log_archive_progress();
-  virtual int get_log_archive_status(ObPGLogArchiveStatus& status);
-  virtual int check_cascading_state();
-  virtual int archive_checkpoint(const int64_t interval);
-  virtual int set_next_index_log_id(const uint64_t log_id, const int64_t accum_checksum);
+  virtual int on_election_role_change() override;
+  virtual int set_scan_disk_log_finished() override;
+  virtual int switch_state() override;
+  virtual int switch_state(bool& need_retry) override;
+  virtual int check_mc_and_sliding_window_state() override;
+  virtual int leader_send_max_log_info() override;
+  virtual int leader_keepalive(const int64_t keepalive_interval) override;
+  virtual int sync_log_archive_progress() override;
+  virtual int get_log_archive_status(ObPGLogArchiveStatus& status) override;
+  virtual int check_cascading_state() override;
+  virtual int archive_checkpoint(const int64_t interval) override;
+  virtual int set_next_index_log_id(const uint64_t log_id, const int64_t accum_checksum) override;
   virtual int is_in_sync(bool& is_sync) const override;
   virtual int is_log_sync_with_leader(bool& is_sync) const override;
-  virtual int is_log_sync_with_primary(const int64_t switchover_epoch, bool& is_sync) const;
-  virtual int is_need_rebuild(bool& need_rebuild) const;
-  virtual bool is_leader_active() const;
+  virtual int is_log_sync_with_primary(const int64_t switchover_epoch, bool& is_sync) const override;
+  virtual int is_need_rebuild(bool& need_rebuild) const override;
+  virtual bool is_leader_active() const override;
   virtual int check_self_is_election_leader_() const;
-  virtual int get_next_replay_log_info(uint64_t& next_replay_log_id, int64_t& next_replay_log_timestamp);
-  virtual int get_follower_log_delay(int64_t& log_delay);
+  virtual int get_next_replay_log_info(uint64_t& next_replay_log_id, int64_t& next_replay_log_timestamp) override;
+  virtual int get_follower_log_delay(int64_t& log_delay) override;
   virtual int process_keepalive_msg(const common::ObAddr& server, const int64_t cluster_id, const uint64_t next_log_id,
-      const int64_t next_log_ts_lb, const uint64_t deliver_cnt);
-  virtual int process_archive_checkpoint(const uint64_t next_log_id, const int64_t next_log_ts);
-  virtual int get_restore_leader_info(bool& is_restore_leader, int64_t& leader_takeover_ts);
+      const int64_t next_log_ts_lb, const uint64_t deliver_cnt) override;
+  virtual int process_archive_checkpoint(const uint64_t next_log_id, const int64_t next_log_ts) override;
+  virtual int get_restore_leader_info(bool& is_restore_leader, int64_t& leader_takeover_ts) override;
   virtual int process_leader_max_log_msg(const common::ObAddr& server, const int64_t switchover_epoch,
-      const uint64_t leader_max_log_id, const int64_t leader_next_log_ts);
+      const uint64_t leader_max_log_id, const int64_t leader_next_log_ts) override;
   virtual int process_sync_log_archive_progress_msg(
-      const common::ObAddr& server, const int64_t cluster_id, const ObPGLogArchiveStatus& status);
+      const common::ObAddr& server, const int64_t cluster_id, const ObPGLogArchiveStatus& status) override;
   virtual int notify_log_missing(const common::ObAddr& src_server, const uint64_t start_log_id,
-      const bool is_in_member_list, const int32_t msg_type);
+      const bool is_in_member_list, const int32_t msg_type) override;
   virtual int fetch_register_server(const common::ObAddr& server, const common::ObReplicaType replica_type,
       const int64_t next_replay_log_ts, const bool is_request_leader, const bool is_need_force_register,
-      const common::ObRegion& region, const int64_t cluster_id, const common::ObIDC& idc);
+      const common::ObRegion& region, const int64_t cluster_id, const common::ObIDC& idc) override;
   virtual int fetch_register_server_resp_v2(const common::ObAddr& sender, const bool is_assign_parent_succeed,
-      const share::ObCascadMemberList& candidate_list, const int32_t msg_type);
+      const share::ObCascadMemberList& candidate_list, const int32_t msg_type) override;
   virtual int replace_sick_child(
-      const common::ObAddr& sender, const int64_t cluster_id, const common::ObAddr& sick_child);
+      const common::ObAddr& sender, const int64_t cluster_id, const common::ObAddr& sick_child) override;
   virtual int get_curr_leader_and_memberlist(common::ObAddr& leader, common::ObRole& role,
-      common::ObMemberList& curr_member_list, common::ObChildReplicaList& children_list) const;
-  virtual int migrate_set_base_storage_info(const common::ObBaseStorageInfo& base_storage_info);
-  virtual int restore_replayed_log(const common::ObBaseStorageInfo& base_storage_info);
-  inline virtual uint64_t get_last_replay_log_id() const
+      common::ObMemberList& curr_member_list, common::ObChildReplicaList& children_list) const override;
+  virtual int migrate_set_base_storage_info(const common::ObBaseStorageInfo& base_storage_info) override;
+  virtual int restore_replayed_log(const common::ObBaseStorageInfo& base_storage_info) override;
+  inline virtual uint64_t get_last_replay_log_id() const override
   {
     return saved_base_storage_info_.get_last_replay_log_id();
   }
-  virtual void get_last_replay_log(uint64_t& log_id, int64_t& ts);
-  virtual int64_t get_last_submit_timestamp() const;
-  virtual int remove_election();
-  virtual int standby_update_protection_level();
-  virtual int get_standby_leader_protection_level(uint32_t& protection_level);
-  virtual int primary_process_protect_mode_switch();
-  virtual int64_t get_membership_timestamp() const;
-  virtual int try_replay(const bool need_async, bool& is_replayed, bool& is_replay_failed);
-  virtual bool is_svr_in_member_list(const ObAddr& server) const;
-  virtual int get_dst_leader_candidate(common::ObMemberList& member_list) const;
-  virtual int get_max_data_version(ObVersion& max_data_version) const;
-  virtual int set_follower_active();
-  virtual uint64_t get_last_slide_log_id();
-  virtual uint64_t get_start_log_id();
-  virtual uint64_t get_start_log_id_unsafe();
-  virtual int get_log_id_range(uint64_t& start_log_id, int64_t& start_ts, uint64_t& end_log_id, int64_t& end_ts);
-  virtual int get_sw_max_log_id_info(uint64_t& sw_max_log_id, int64_t& sw_max_log_ts);
-  int get_sw_max_log_id(uint64_t& sw_max_log_id);
-  virtual ObClogVirtualStat* alloc_clog_virtual_stat();
-  virtual int revert_clog_virtual_stat(ObClogVirtualStat* virtual_stat);
-  virtual int force_set_as_single_replica();
-  virtual int force_set_replica_num(const int64_t replica_num);
-  virtual int force_set_parent(const common::ObAddr& new_parent);
-  virtual int force_reset_parent();
-  virtual int force_set_server_list(const obrpc::ObServerList& server_list, const int64_t replica_num);
-  virtual int renew_ms_log_flush_cb(const storage::ObMsInfoTask& task);
+  virtual void get_last_replay_log(uint64_t& log_id, int64_t& ts) override;
+  virtual int64_t get_last_submit_timestamp() const override;
+  virtual int remove_election() override;
+  virtual int standby_update_protection_level() override;
+  virtual int get_standby_leader_protection_level(uint32_t& protection_level) override;
+  virtual int primary_process_protect_mode_switch() override;
+  virtual int64_t get_membership_timestamp() const override;
+  virtual int try_replay(const bool need_async, bool& is_replayed, bool& is_replay_failed) override;
+  virtual bool is_svr_in_member_list(const ObAddr& server) const override;
+  virtual int get_dst_leader_candidate(common::ObMemberList& member_list) const override;
+  virtual int get_max_data_version(ObVersion& max_data_version) const override;
+  virtual int set_follower_active() override;
+  virtual uint64_t get_last_slide_log_id() override;
+  virtual uint64_t get_start_log_id() override;
+  virtual uint64_t get_start_log_id_unsafe() override;
+  virtual int get_log_id_range(
+      uint64_t& start_log_id, int64_t& start_ts, uint64_t& end_log_id, int64_t& end_ts) override;
+  virtual int get_sw_max_log_id_info(uint64_t& sw_max_log_id, int64_t& sw_max_log_ts) override;
+  int get_sw_max_log_id(uint64_t& sw_max_log_id) override;
+  virtual ObClogVirtualStat* alloc_clog_virtual_stat() override;
+  virtual int revert_clog_virtual_stat(ObClogVirtualStat* virtual_stat) override;
+  virtual int force_set_as_single_replica() override;
+  virtual int force_set_replica_num(const int64_t replica_num) override;
+  virtual int force_set_parent(const common::ObAddr& new_parent) override;
+  virtual int force_reset_parent() override;
+  virtual int force_set_server_list(const obrpc::ObServerList& server_list, const int64_t replica_num) override;
+  virtual int renew_ms_log_flush_cb(const storage::ObMsInfoTask& task) override;
   virtual int try_update_leader_from_loc_cache() override;
-  virtual int flush_cb(const ObLogFlushCbArg& arg);
-  virtual int on_get_election_priority(election::ObElectionPriority& priority);
-  virtual int on_change_leader_retry(const common::ObAddr& server, ObTsWindows& changing_leader_windows);
-  virtual int get_next_timestamp(const uint64_t last_log_id, int64_t& res_ts);
-  virtual int get_next_served_log_info_for_leader(uint64_t& next_served_log_id, int64_t& next_served_log_ts);
-  virtual uint64_t get_next_index_log_id() const
+  virtual int flush_cb(const ObLogFlushCbArg& arg) override;
+  virtual int on_get_election_priority(election::ObElectionPriority& priority) override;
+  virtual int on_change_leader_retry(const common::ObAddr& server, ObTsWindows& changing_leader_windows) override;
+  virtual int get_next_timestamp(const uint64_t last_log_id, int64_t& res_ts) override;
+  virtual int get_next_served_log_info_for_leader(uint64_t& next_served_log_id, int64_t& next_served_log_ts) override;
+  virtual uint64_t get_next_index_log_id() const override
   {
     return sw_.get_next_index_log_id();
   }
 
-  virtual int64_t get_scan_confirmed_log_cnt() const
+  virtual int64_t get_scan_confirmed_log_cnt() const override
   {
     return ATOMIC_LOAD(&scan_confirmed_log_cnt_);
   }
-  virtual int get_pls_epoch(int64_t& pls_epoch) const;
-  virtual int allow_gc(bool& allowed);
+  virtual int get_pls_epoch(int64_t& pls_epoch) const override;
+  virtual int allow_gc(bool& allowed) override;
   virtual int query_max_flushed_ilog_id(uint64_t& ret_max_ilog_id) override;
-  virtual void set_zone_priority(const uint64_t zone_priority);
-  virtual int set_region(const common::ObRegion& region);
-  virtual int set_idc(const common::ObIDC& idc);
+  virtual void set_zone_priority(const uint64_t zone_priority) override;
+  virtual int set_region(const common::ObRegion& region) override;
+  virtual int set_idc(const common::ObIDC& idc) override;
   virtual const common::ObRegion& get_region() const;
   virtual const common::ObIDC& get_idc() const;
-  virtual enum ObReplicaType get_replica_type();
-  virtual int set_replica_type(const enum ObReplicaType replica_type);
-  virtual int check_is_normal_partition(bool& is_normal_partition) const;
+  virtual enum ObReplicaType get_replica_type() override;
+  virtual int set_replica_type(const enum ObReplicaType replica_type) override;
+  virtual int check_is_normal_partition(bool& is_normal_partition) const override;
 
-  public:
-  virtual bool need_skip_when_check_start_service() const;
-  virtual int broadcast_info();
-  virtual int update_broadcast_info(
-      const common::ObAddr& server, const common::ObReplicaType& replica_type, const uint64_t max_confirmed_log_id);
-  virtual int get_recyclable_log_id(uint64_t& log_id) const;
-  virtual int is_valid_member(const common::ObAddr& addr, bool& is_valid) const;
-  virtual bool has_valid_next_replay_log_ts() const;
-  virtual bool has_valid_member_list() const;
+public:
+  virtual bool need_skip_when_check_start_service() const override;
+  virtual int broadcast_info() override;
+  virtual int update_broadcast_info(const common::ObAddr& server, const common::ObReplicaType& replica_type,
+      const uint64_t max_confirmed_log_id) override;
+  virtual int get_recyclable_log_id(uint64_t& log_id) const override;
+  virtual int is_valid_member(const common::ObAddr& addr, bool& is_valid) const override;
+  virtual bool has_valid_next_replay_log_ts() const override;
+  virtual bool has_valid_member_list() const override;
   virtual int process_check_rebuild_req(
-      const common::ObAddr& server, const uint64_t start_log_id, const int64_t cluster_id);
+      const common::ObAddr& server, const uint64_t start_log_id, const int64_t cluster_id) override;
   virtual void get_max_majority_log(uint64_t& log_id, int64_t& log_ts) const override;
   virtual uint64_t get_max_confirmed_log_id() const override;
 
-  public:
+public:
   //==================== batch change member begin ====================
   virtual int pre_change_member(const int64_t quorum, const bool is_add_member, int64_t& mc_timestamp,
-      ObMemberList& member_list, ObProposalID& proposal_id);
-  virtual int set_member_changing();
-  virtual int reset_member_changing();
-  virtual int wait_log_confirmed(const int64_t begin_time, const int64_t max_wait_time);
+      ObMemberList& member_list, ObProposalID& proposal_id) override;
+  virtual int set_member_changing() override;
+  virtual int reset_member_changing() override;
+  virtual int wait_log_confirmed(const int64_t begin_time, const int64_t max_wait_time) override;
   virtual int batch_change_member(const common::ObMember& member, const int64_t quorum, const int64_t mc_timestamp,
-      const common::ObProposalID& proposal_id, const bool is_add_member, obrpc::ObMCLogInfo& mc_log_info);
-  virtual int get_partition_max_log_id(uint64_t& partition_max_log_id);
+      const common::ObProposalID& proposal_id, const bool is_add_member, obrpc::ObMCLogInfo& mc_log_info) override;
+  virtual int get_partition_max_log_id(uint64_t& partition_max_log_id) override;
   //==================== batch change member end ====================
 
   //=================== one phase commit begin ================
-  virtual int get_candidate_info(ObCandidateInfo& info);
+  virtual int get_candidate_info(ObCandidateInfo& info) override;
 
-  virtual int query_confirmed_log(const uint64_t log_id, transaction::ObTransID& trans_id, int64_t& submit_timestamp);
-  virtual int backfill_log(
-      const ObLogInfo& log_info, const ObLogCursor& log_cursor, const bool is_leader, ObISubmitLogCb* submit_cb);
-  virtual int backfill_confirmed(const ObLogInfo& log_info, const bool batch_first_participant);
-  virtual int resubmit_log(const ObLogInfo& log_info, ObISubmitLogCb* submit_cb);
-  virtual int backfill_nop_log(const ObLogMeta& log_meta);
+  virtual int query_confirmed_log(
+      const uint64_t log_id, transaction::ObTransID& trans_id, int64_t& submit_timestamp) override;
+  virtual int backfill_log(const ObLogInfo& log_info, const ObLogCursor& log_cursor, const bool is_leader,
+      ObISubmitLogCb* submit_cb) override;
+  virtual int backfill_confirmed(const ObLogInfo& log_info, const bool batch_first_participant) override;
+  virtual int resubmit_log(const ObLogInfo& log_info, ObISubmitLogCb* submit_cb) override;
+  virtual int backfill_nop_log(const ObLogMeta& log_meta) override;
   //=================== one phase commit end ================
-  virtual bool need_add_event_task();
-  virtual void reset_has_event_task();
-  virtual int check_can_receive_batch_log(const uint64_t log_id);
-  virtual int update_max_flushed_ilog_id(const uint64_t log_id);
-  virtual int get_cursor_with_cache(const int64_t scan_thread_index, const uint64_t log_id, ObLogCursorExt& log_cursor);
-  virtual int reset_has_pop_task();
+  virtual bool need_add_event_task() override;
+  virtual void reset_has_event_task() override;
+  virtual int check_can_receive_batch_log(const uint64_t log_id) override;
+  virtual int update_max_flushed_ilog_id(const uint64_t log_id) override;
+  virtual int get_cursor_with_cache(
+      const int64_t scan_thread_index, const uint64_t log_id, ObLogCursorExt& log_cursor) override;
+  virtual int reset_has_pop_task() override;
   virtual int set_member_list(const ObMemberList& member_list, const int64_t replica_num,
-      const common::ObAddr& assigned_leader, const int64_t lease_start);
-  int get_last_archived_log_id(const int64_t incarnartion, const int64_t archive_round, uint64_t& last_archived_log_id);
-  virtual int try_freeze_aggre_buffer();
-  int set_archive_restore_state(const int16_t archive_restore_state);
+      const common::ObAddr& assigned_leader, const int64_t lease_start) override;
+  int get_last_archived_log_id(
+      const int64_t incarnartion, const int64_t archive_round, uint64_t& last_archived_log_id) override;
+  virtual int try_freeze_aggre_buffer() override;
+  int set_archive_restore_state(const int16_t archive_restore_state) override;
   /*return values:
    * OB_SUCCESS
    * OB_EAGAIN: start log has slide out, need retry
    * other code
    * */
-  virtual int check_if_start_log_task_empty(bool& is_empty);
-  bool is_archive_restoring() const;
-  common::ObAddr get_restore_leader() const;
-  virtual int restore_leader_try_confirm_log();
-  virtual bool is_standby_restore_state() const;
-  virtual int check_and_try_leader_revoke(const election::ObElection::RevokeType& revoke_type);
 
-  private:
+  virtual int check_if_start_log_task_empty(bool& is_empty) override;
+  bool is_archive_restoring() const override;
+  common::ObAddr get_restore_leader() const override;
+  virtual int restore_leader_try_confirm_log() override;
+  virtual bool is_standby_restore_state() const override;
+  virtual int check_and_try_leader_revoke(const election::ObElection::RevokeType& revoke_type) override;
+
+private:
   enum { DEFAULT_TIMEOUT = 10 * 1000 * 1000 };
   virtual void destroy();
   int majority_cb_(const uint64_t log_id);
@@ -778,13 +787,14 @@ class ObPartitionLogService : public ObIPartitionLogService {
   int64_t get_zone_priority() const;
   int response_sliding_window_info_(const common::ObAddr& server, const bool is_leader);
   int process_replica_type_change_();
-  int process_reject_msg(const common::ObAddr& server, const int32_t msg_type, const int64_t timestamp);
+  int process_reject_msg(const common::ObAddr& server, const int32_t msg_type, const int64_t timestamp) override;
   int process_reregister_msg(
-      const common::ObAddr& src_server, const share::ObCascadMember& new_leader, const int64_t send_ts);
-  int process_restore_alive_msg(const common::ObAddr& server, const uint64_t start_log_id);
-  int process_restore_alive_req(const common::ObAddr& server, const int64_t dst_cluster_id, const int64_t send_ts);
-  int process_restore_alive_resp(const common::ObAddr& server, const int64_t send_ts);
-  int process_restore_log_finish_msg(const common::ObAddr& src_server, const uint64_t log_id);
+      const common::ObAddr& src_server, const share::ObCascadMember& new_leader, const int64_t send_ts) override;
+  int process_restore_alive_msg(const common::ObAddr& server, const uint64_t start_log_id) override;
+  int process_restore_alive_req(
+      const common::ObAddr& server, const int64_t dst_cluster_id, const int64_t send_ts) override;
+  int process_restore_alive_resp(const common::ObAddr& server, const int64_t send_ts) override;
+  int process_restore_log_finish_msg(const common::ObAddr& src_server, const uint64_t log_id) override;
   int resp_sw_info_when_get_log_(const common::ObAddr& server, const int64_t cluster_id);
   int internal_fetch_log_(const uint64_t start_log_id, const uint64_t end_log_id, const ObFetchLogType& fetch_type,
       const ObProposalID& proposal_id, const common::ObAddr& server, const int64_t cluster_id, const uint32_t log_attr,
@@ -845,7 +855,7 @@ class ObPartitionLogService : public ObIPartitionLogService {
   bool is_tenant_out_of_memory_() const;
   int get_role_and_leader_epoch_unlock_(common::ObRole& role, int64_t& leader_epoch, int64_t& takeover_time);
 
-  private:
+private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
   typedef RWLock::WLockGuard WLockGuard;

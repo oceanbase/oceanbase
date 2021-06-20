@@ -25,7 +25,7 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObShowProcesslist : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObShowProcesslist();
   virtual ~ObShowProcesslist();
   inline void set_session_mgr(sql::ObSQLSessionMgr* session_mgr)
@@ -35,7 +35,7 @@ class ObShowProcesslist : public common::ObVirtualTableScannerIterator {
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   enum SESSION_INFO_COLUMN {
     ID = OB_APP_MIN_COLUMN_ID,
     USER,
@@ -59,7 +59,7 @@ class ObShowProcesslist : public common::ObVirtualTableScannerIterator {
     SSL_CIPHER
   };
   class FillScanner {
-    public:
+  public:
     FillScanner() : allocator_(NULL), scanner_(NULL), cur_row_(NULL), my_session_(NULL), output_column_ids_()
     {}
     virtual ~FillScanner()
@@ -70,10 +70,10 @@ class ObShowProcesslist : public common::ObVirtualTableScannerIterator {
         share::schema::ObSchemaGetterGuard* schema_guard);
     inline void reset();
 
-    public:
+  public:
     bool has_process_privilege();
 
-    private:
+  private:
     ObIAllocator* allocator_;
     common::ObScanner* scanner_;
     common::ObNewRow* cur_row_;

@@ -30,7 +30,7 @@ using namespace common;
 const int64_t BUFF_SIZE = 10240;
 
 class TestSchemaService : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

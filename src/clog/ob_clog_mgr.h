@@ -80,73 +80,73 @@ struct CLogMgrConfig {
 };
 
 class ObCheckLogFileCollectTask : public common::ObTimerTask {
-  public:
+public:
   ObCheckLogFileCollectTask() : clog_mgr_(NULL), is_inited_(false)
   {}
   virtual ~ObCheckLogFileCollectTask()
   {}
 
-  public:
+public:
   int init(ObICLogMgr* clog_mgr);
   virtual void runTimerTask();
 
-  private:
+private:
   ObICLogMgr* clog_mgr_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCheckLogFileCollectTask);
 };
 
 class ObCheckpointLogReplicaTask : public common::ObTimerTask {
-  public:
+public:
   ObCheckpointLogReplicaTask() : partition_service_(NULL), is_inited_(false)
   {}
   virtual ~ObCheckpointLogReplicaTask()
   {}
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service);
   virtual void runTimerTask();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCheckpointLogReplicaTask);
 };
 
 class ObCheckCLogDiskFullTask : public common::ObTimerTask {
-  public:
+public:
   ObCheckCLogDiskFullTask() : partition_service_(NULL), is_inited_(false)
   {}
   virtual ~ObCheckCLogDiskFullTask()
   {}
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service);
   void runTimerTask() final;
 
-  private:
+private:
   int do_run_timer_task_();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCheckCLogDiskFullTask);
 };
 
 class ObICLogMgr : public election::ObIElectionGroupPriorityGetter {
-  public:
+public:
   ObICLogMgr()
   {}
   virtual ~ObICLogMgr()
   {}
 
-  public:
+public:
   virtual int init(storage::ObPartitionService* partition_service, ObLogReplayEngineWrapper* replay_engine,
       election::ObIElectionMgr* election_mgr, const common::ObAddr& self_addr, obrpc::ObBatchRpc* batch_rpc,
       obrpc::ObLogRpcProxy* rpc, common::ObMySQLProxy* sql_proxy, const CLogMgrConfig& config) = 0;
@@ -303,11 +303,11 @@ class ObICLogMgr : public election::ObIElectionGroupPriorityGetter {
 };
 
 class ObCLogMgr : public ObICLogMgr {
-  public:
+public:
   ObCLogMgr();
   virtual ~ObCLogMgr();
 
-  public:
+public:
   virtual int init(storage::ObPartitionService* partition_service, ObLogReplayEngineWrapper* replay_engine,
       election::ObIElectionMgr* election_mgr, const common::ObAddr& self_addr, obrpc::ObBatchRpc* batch_rpc,
       obrpc::ObLogRpcProxy* rpc, common::ObMySQLProxy* sql_proxy, const CLogMgrConfig& config);
@@ -370,7 +370,7 @@ class ObCLogMgr : public ObICLogMgr {
   virtual int get_ilog_using_disk_space(int64_t& using_space) const override;
 
   //===================== transaction one phase commit begin ================
-  public:
+public:
   virtual int batch_submit_log(const transaction::ObTransID& trans_id, const common::ObPartitionArray& partition_array,
       const ObLogInfoArray& log_info_array, const ObISubmitLogCbArray& cb_array);
   virtual int check_can_batch_submit(const common::ObPartitionArray& partition_array, bool& can_batch);
@@ -409,7 +409,7 @@ class ObCLogMgr : public ObICLogMgr {
       const common::ObAddrIArray& dst_server_list, common::ObSArray<common::ObAddrSArray>& candidate_mlist_array,
       common::ObSArray<obrpc::CandidateStatusList>& status_array) const;
   //===================== batch change member begin ================
-  public:
+public:
   virtual int batch_add_member(const obrpc::ObChangeMemberArgs& ctx_array, obrpc::ObChangeMemberCtxs& return_ctx_array);
   virtual int batch_remove_member(
       const obrpc::ObChangeMemberArgs& ctx_array, obrpc::ObChangeMemberCtxs& return_ctx_array);
@@ -440,12 +440,12 @@ class ObCLogMgr : public ObICLogMgr {
   int get_archive_pg_map(archive::PGArchiveMap*& map);
   bool is_server_archive_stop(const int64_t incarnation, const int64_t archive_round);
 
-  public:
+public:
   // clog callback thread num
   static int64_t CLOG_CB_THREAD_COUNT;
   static int64_t MINI_MODE_CLOG_CB_THREAD_COUNT;
 
-  private:
+private:
   static const int64_t OB_ARRAY_COUNT = 16;
   typedef common::ObSEArray<int64_t, OB_ARRAY_COUNT> McTimestampArray;
   typedef common::ObSEArray<common::ObMemberList, OB_ARRAY_COUNT> MemberListArray;
@@ -524,7 +524,7 @@ class ObCLogMgr : public ObICLogMgr {
       const int64_t follower_max_gap, ReturnMap& ret_map);
   int get_partition_max_log_id_(const common::ObPartitionKey& partiton_key, uint64_t& partition_max_log_id);
   //===================== batch change member end ================
-  private:
+private:
   int create_partition_(const common::ObPartitionKey& partition_key, const int64_t replica_num,
       const common::ObMemberList& member_list, const common::ObVersion& freeze_version,
       const common::ObReplicaType replica_type, const common::ObReplicaProperty replia_property,
@@ -532,7 +532,7 @@ class ObCLogMgr : public ObICLogMgr {
       const bool need_skip_mlist_check, ObIPartitionLogService* pls);
   int query_max_ilog_id_(const common::ObPartitionKey& pkey, uint64_t& ret_max_file_id);
   //===================== transaction one phase commit begin ================
-  private:
+private:
   int check_can_batch_submit_(const common::ObPartitionArray& partition_array, bool& can_batch);
   bool check_batch_submit_arguments_(const transaction::ObTransID& trans_id,
       const common::ObPartitionArray& partition_array, const ObLogInfoArray& log_info_array,
@@ -564,7 +564,7 @@ class ObCLogMgr : public ObICLogMgr {
   //===================== transaction one phase commit end ================
   int check_svr_in_member_list_(const ObPartitionKey& pkey, const ObAddr& server, bool& is_in_member_list) const;
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   CLogMgrConfig clog_mgr_config_;
@@ -597,7 +597,7 @@ class ObCLogMgr : public ObICLogMgr {
   ObCheckpointLogReplicaTask checkpoint_log_replica_task_;
   ObCheckCLogDiskFullTask check_clog_disk_full_task_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCLogMgr);
 };
 

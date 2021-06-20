@@ -27,7 +27,7 @@ class ObTableSchema;
 class ObUDF : public ObSchema {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   enum UDFType { UDF_TYPE_UNINITIAL, FUNCTION, AGGREGATE };
 
   enum UDFRetType {
@@ -39,7 +39,7 @@ class ObUDF : public ObSchema {
     ROW,
   };
 
-  public:
+public:
   ObUDF()
       : ObSchema(),
         tenant_id_(common::OB_INVALID_ID),
@@ -148,7 +148,7 @@ class ObUDF : public ObSchema {
   }
 
   // other
-  int64_t get_convert_size() const;
+  int64_t get_convert_size() const override;
   virtual void reset() override;
   bool is_normal_udf() const
   {
@@ -161,7 +161,7 @@ class ObUDF : public ObSchema {
 
   TO_STRING_KV(K_(tenant_id), K_(udf_id), K_(name), K_(ret), K_(dl), K_(type), K_(schema_version));
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t udf_id_;
   common::ObString name_;
@@ -176,7 +176,7 @@ class ObUDF : public ObSchema {
 class ObUDFMeta {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObUDFMeta()
       : tenant_id_(common::OB_INVALID_ID),
         name_(),

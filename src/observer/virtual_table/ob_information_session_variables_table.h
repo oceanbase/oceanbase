@@ -32,7 +32,7 @@ class ObInfoSchemaSessionVariablesTable : public common::ObVirtualTableScannerIt
     VARIABLE_VALUE,
   };
 
-  public:
+public:
   ObInfoSchemaSessionVariablesTable();
   virtual ~ObInfoSchemaSessionVariablesTable();
 
@@ -44,10 +44,10 @@ class ObInfoSchemaSessionVariablesTable : public common::ObVirtualTableScannerIt
     sys_variable_schema_ = sys_variable_schema;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaSessionVariablesTable);
 
-  private:
+private:
   const share::schema::ObSysVariableSchema* sys_variable_schema_;
 };
 }  // namespace observer

@@ -143,7 +143,7 @@ struct ObPartMigrationRes {
 };
 
 class ObRestoreInfo {
-  public:
+public:
   typedef common::hash::ObHashMap<uint64_t, common::ObArray<blocksstable::ObSSTablePair>*,
       common::hash::NoPthreadDefendMode>
       SSTableInfoMap;
@@ -163,7 +163,7 @@ class ObRestoreInfo {
   }
   TO_STRING_KV(K_(arg));
 
-  private:
+private:
   bool is_inited_;
   share::ObRestoreArgs arg_;
   SSTableInfoMap backup_sstable_info_map_;
@@ -278,7 +278,7 @@ class ObPartitionService : public share::ObIPSCb,
                            public common::ObIDataAccessService,
                            public ObPartitionMetaRedoModule,
                            public common::ObTableStatDataService {
-  public:
+public:
   static const int64_t MC_WAIT_INTERVAL =
       200 * 1000;  // 200ms the interval of checking the completion of member change log syncing
   static const int64_t MC_SLEEP_TIME = 100000;                        // 100ms
@@ -304,12 +304,12 @@ class ObPartitionService : public share::ObIPSCb,
   static const int64_t TENANT_PART_NUM_THRESHOLD = 1000;
   static constexpr const char RPScanIteratorLabel[] = "RPScanIterator";
 
-  public:
+public:
   ObPartitionService();
   virtual ~ObPartitionService();
   static OB_INLINE ObPartitionService& get_instance();
 
-  public:
+public:
   virtual int init(const blocksstable::ObStorageEnv& env, const common::ObAddr& self_addr,
       ObPartitionComponentFactory* cp_fty, share::schema::ObMultiVersionSchemaService* schema_service,
       share::ObIPartitionLocationCache* location_cache, share::ObRsMgr* rs_mgr, storage::ObIPartitionReport* rs_cb,
@@ -838,9 +838,9 @@ class ObPartitionService : public share::ObIPSCb,
   // @brief: used for revoke all partition
   int try_revoke_all_leader(const election::ObElection::RevokeType& revoke_type);
 
-  private:
+private:
   class ObStoreCtxGuard {
-    public:
+  public:
     ObStoreCtxGuard() : is_inited_(false), trans_desc_(NULL), pkey_(), ctx_(), txs_(NULL), init_ts_(0)
     {}
     virtual ~ObStoreCtxGuard()
@@ -870,7 +870,7 @@ class ObPartitionService : public share::ObIPSCb,
         transaction::ObTransService& txs);
     ObStoreCtx& get_store_ctx();
 
-    private:
+  private:
     bool is_inited_;
     transaction::ObTransDesc* trans_desc_;
     common::ObPartitionKey pkey_;
@@ -888,11 +888,11 @@ class ObPartitionService : public share::ObIPSCb,
     TO_STRING_KV(K_(in_tran_service), K_(in_election), K_(in_replay_engine));
   };
 
-  protected:
+protected:
   virtual int init_partition_group(ObIPartitionGroup& pg, const common::ObPartitionKey& pkey) override;
   virtual int post_replay_remove_pg_partition(const ObChangePartitionLogEntry& log_entry) override;
 
-  private:
+private:
   int check_can_physical_flashback_();
   bool is_tenant_active_(const uint64_t tenant_id) const;
   int check_init(void* cp, const char* cp_name) const;
@@ -1040,13 +1040,13 @@ class ObPartitionService : public share::ObIPSCb,
       const int64_t cluster_id, hash::ObHashSet<ObMigrateSrcInfo>& src_set,
       common::ObIArray<ObMigrateSrcInfo>& src_array);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObPartitionService);
 
-  private:
+private:
   class ReloadLocalityTask : public common::ObTimerTask {
-    public:
+  public:
     ReloadLocalityTask();
     virtual ~ReloadLocalityTask()
     {}
@@ -1054,44 +1054,44 @@ class ObPartitionService : public share::ObIPSCb,
     virtual void runTimerTask();
     void destroy();
 
-    private:
+  private:
     bool is_inited_;
     ObPartitionService* ptt_svr_;
   };
 
   class PurgeRetireMemstoreTask : public common::ObTimerTask {
-    public:
+  public:
     PurgeRetireMemstoreTask();
     virtual ~PurgeRetireMemstoreTask()
     {}
 
-    public:
+  public:
     int init();
     void destroy();
     virtual void runTimerTask();
 
-    private:
+  private:
     bool is_inited_;
   };
 
   class ClogRequiredMinorFreezeTask : public common::ObTimerTask {
-    public:
+  public:
     ClogRequiredMinorFreezeTask();
     virtual ~ClogRequiredMinorFreezeTask()
     {}
 
-    public:
+  public:
     int init(clog::ObICLogMgr* clog_mgr);
     void destroy();
     virtual void runTimerTask();
 
-    private:
+  private:
     bool is_inited_;
     clog::ObICLogMgr* clog_mgr_;
   };
 
   class ObRefreshLocalityTask : public common::IObDedupTask {
-    public:
+  public:
     explicit ObRefreshLocalityTask(ObPartitionService* partition_service);
     virtual ~ObRefreshLocalityTask();
     virtual int64_t hash() const;
@@ -1104,7 +1104,7 @@ class ObPartitionService : public share::ObIPSCb,
     }
     virtual int process();
 
-    private:
+  private:
     ObPartitionService* partition_service_;
   };
 
@@ -1113,7 +1113,7 @@ class ObPartitionService : public share::ObIPSCb,
     int64_t size_;
   };
   class PrintHashedFreezeFunctor {
-    public:
+  public:
     PrintHashedFreezeFunctor()
     {}
     bool operator()(const common::ObPartitionKey& pkey, ObIPSFreezeCb* cb)
@@ -1125,7 +1125,7 @@ class ObPartitionService : public share::ObIPSCb,
     }
   };
 
-  private:
+private:
   friend class ObPartitionIterator;
   static const int64_t BITS_PER_BITSETWORD = 32;
   static const int64_t BITSETWORD_SHIFT_NUM = 5;

@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace sql {
 typedef int (*AllocFunc)(common::ObIAllocator& alloc, ObExprOperator*& phy_op);
 class ObExprOperatorFactory {
-  public:
+public:
   explicit ObExprOperatorFactory(common::ObIAllocator& alloc) : alloc_(alloc), next_expr_id_(NULL)
   {}
   ~ObExprOperatorFactory()
@@ -46,11 +46,11 @@ class ObExprOperatorFactory {
     ObExprOperatorType type_;
   };
 
-  private:
+private:
   template <typename ClassT>
   static int alloc(common::ObIAllocator& alloc, ObExprOperator*& phy_op);
 
-  private:
+private:
   static NameType NAME_TYPES[EXPR_OP_NUM];
   static NameType NAME_TYPES_ORCL[EXPR_OP_NUM];
   common::ObIAllocator& alloc_;

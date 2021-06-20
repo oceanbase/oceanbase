@@ -26,7 +26,7 @@ namespace sql {
 class ObSelectInto::ObSelectIntoCtx : public ObPhyOperatorCtx {
   friend class ObSelectInto;
 
-  public:
+public:
   explicit ObSelectIntoCtx(ObExecContext& ctx)
       : ObPhyOperatorCtx(ctx), top_limit_cnt_(INT64_MAX), file_appender_(), is_first_(true)
   {}
@@ -45,7 +45,7 @@ class ObSelectInto::ObSelectIntoCtx : public ObPhyOperatorCtx {
     file_appender_.close();
   }
 
-  private:
+private:
   int64_t top_limit_cnt_;
   ObFileAppender file_appender_;
   bool is_first_;

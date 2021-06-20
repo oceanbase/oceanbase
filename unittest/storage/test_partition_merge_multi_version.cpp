@@ -58,7 +58,7 @@ namespace storage {
 
 typedef compaction::ObIPartitionMergeFuser::MERGE_ITER_ARRAY MERGE_ITER_ARRAY;
 class TestMultiVersionMerge : public ObMultiVersionSSTableTest {
-  public:
+public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
   TestMultiVersionMerge() : ObMultiVersionSSTableTest("test_multi_version_merge")
   {}

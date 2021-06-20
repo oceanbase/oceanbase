@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace memtable {
 class ObMTTraceLog {
-  public:
+public:
   enum { TRACE_LOG_BUF_SIZE = 16L * 1024L };
   ObMTTraceLog() : start_log_ts_(0), last_log_ts_(0), pos_(0)
   {}
@@ -71,7 +71,7 @@ class ObMTTraceLog {
     return buf_;
   }
 
-  private:
+private:
   void try_fill_start_ts()
   {
     if (0 == pos_) {
@@ -117,7 +117,7 @@ class ObMTTraceLog {
     return err;
   }
 
-  private:
+private:
   common::ObSpinLock lock_;
   int64_t start_log_ts_;
   int64_t last_log_ts_;

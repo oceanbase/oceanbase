@@ -33,11 +33,11 @@ class ObMultiVersionSchemaService;
 
 namespace rootserver {
 class ObGlobalMaxDecidedTransVersionMgr : public ObRsReentrantThread {
-  public:
+public:
   ObGlobalMaxDecidedTransVersionMgr();
   virtual ~ObGlobalMaxDecidedTransVersionMgr();
 
-  public:
+public:
   int init(obrpc::ObSrvRpcProxy* rpc_proxy, share::ObPartitionTableOperator* pt_operator,
       share::schema::ObMultiVersionSchemaService* schema_service, const common::ObAddr& self_addr);
   virtual void run3() override;
@@ -50,7 +50,7 @@ class ObGlobalMaxDecidedTransVersionMgr : public ObRsReentrantThread {
   }
   int get_global_max_decided_trans_version(int64_t& trans_version) const;
 
-  private:
+private:
   class InsertPartitionFunctor;
   class QueryPartitionFunctor;
   typedef common::ObLinearHashMap<common::ObAddr, common::ObPartitionArray> ServerPartitionMap;
@@ -70,7 +70,7 @@ class ObGlobalMaxDecidedTransVersionMgr : public ObRsReentrantThread {
   int handle_each_partition_(ServerPartitionMap& server_partition_map);
   bool cluster_version_before_2000_() const;
 
-  private:
+private:
   bool is_inited_;
   obrpc::ObSrvRpcProxy* rpc_proxy_;
   share::ObPartitionTableOperator* pt_operator_;
@@ -80,7 +80,7 @@ class ObGlobalMaxDecidedTransVersionMgr : public ObRsReentrantThread {
   int64_t start_ts_;
   common::ObPartitionKey contributor_pkey_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGlobalMaxDecidedTransVersionMgr);
 };
 

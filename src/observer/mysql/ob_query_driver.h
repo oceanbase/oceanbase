@@ -32,7 +32,7 @@ class ObGlobalContext;
 class ObMySQLResultSet;
 class ObQueryRetryCtrl;
 class ObQueryDriver {
-  public:
+public:
   ObQueryDriver(const ObGlobalContext& gctx, const sql::ObSqlCtx& ctx, sql::ObSQLSessionInfo& session,
       ObQueryRetryCtrl& retry_ctrl, ObIMPPacketSender& sender)
       : gctx_(gctx), ctx_(ctx), session_(session), retry_ctrl_(retry_ctrl), sender_(sender)
@@ -51,14 +51,14 @@ class ObQueryDriver {
   int convert_lob_locator_to_longtext(common::ObObj& value, sql::ObResultSet& result);
   int convert_lob_value_charset(common::ObObj& value, sql::ObResultSet& result);
 
-  private:
+private:
   int convert_field_charset(common::ObIAllocator& allocator, const common::ObCollationType& from_collation,
       const common::ObCollationType& dest_collation, const common::ObString& from_string,
       common::ObString& dest_string);
   int like_match(const char* str, int64_t length_str, int64_t i, const char* pattern, int64_t length_pat, int64_t j,
       bool& is_match);
 
-  protected:
+protected:
   /* variables */
   const ObGlobalContext& gctx_;
   const sql::ObSqlCtx& ctx_;

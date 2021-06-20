@@ -29,7 +29,7 @@ class ObStandardGroupChecker {
     int64_t dependent_column_cnt_;
   };
 
-  public:
+public:
   ObStandardGroupChecker() : has_group_(false)
   {}
   ~ObStandardGroupChecker()
@@ -48,11 +48,11 @@ class ObStandardGroupChecker {
   int add_unsettled_expr(const ObRawExpr* expr);
   int check_only_full_group_by();
 
-  private:
+private:
   int check_unsettled_expr(const ObRawExpr* unsettled_expr, const ObColumnRefRawExpr& undefined_column);
   int check_unsettled_column(const ObRawExpr* unsettled_column, const ObColumnRefRawExpr*& undefined_column);
 
-  private:
+private:
   static const int64_t SETTLED_COLUMN_BUCKETS = 64;
   bool has_group_;
   // all unsettled exprs that needed be check whether meet the only full group by semantic constraints in current stmt

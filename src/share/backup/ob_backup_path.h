@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace share {
 
 struct ObBackupPath final {
-  public:
+public:
   ObBackupPath();
   ~ObBackupPath();
   void reset();
@@ -55,7 +55,7 @@ struct ObBackupPath final {
   uint64_t hash() const;
   TO_STRING_KV(K_(cur_pos), K_(path));
 
-  private:
+private:
   int64_t cur_pos_;
   char path_[OB_MAX_BACKUP_PATH_LENGTH];
 };
@@ -145,14 +145,14 @@ struct ObBackupPathUtil {
 };
 
 class ObBackupMountFile final {
-  public:
+public:
   static int get_mount_file_path(
       const ObLogArchiveBackupInfo& backup_info, ObClusterBackupDest& cluster_dest, share::ObBackupPath& path);
   static int create_mount_file(const ObLogArchiveBackupInfo& info);
   static int check_mount_file(const ObLogArchiveBackupInfo& info);
   static int need_check_mount_file(const ObLogArchiveBackupInfo& info, bool& need_check);
 
-  private:
+private:
   ObBackupMountFile();
   DISALLOW_COPY_AND_ASSIGN(ObBackupMountFile);
 };

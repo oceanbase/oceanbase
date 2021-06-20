@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace observer {
 // mysql mode system table access agent for oracle tenant.
 class ObAgentVirtualTable : public ObAgentTableBase {
-  public:
+public:
   ObAgentVirtualTable();
   virtual ~ObAgentVirtualTable();
 
@@ -30,7 +30,7 @@ class ObAgentVirtualTable : public ObAgentTableBase {
   virtual int do_open() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   virtual int set_convert_func(convert_func_t& func, const share::schema::ObColumnSchemaV2& col,
       const share::schema::ObColumnSchemaV2& base_col) override;
 
@@ -40,7 +40,7 @@ class ObAgentVirtualTable : public ObAgentTableBase {
 
   int should_add_tenant_condition(bool& need, const uint64_t tenant_id) const;
 
-  private:
+private:
   // id of simple agent tenant before switching to system tenant.
   uint64_t general_tenant_id_;
   bool only_sys_data_;

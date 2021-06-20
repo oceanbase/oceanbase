@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTransformFullOuterJoin : public ObTransformRule {
-  public:
+public:
   explicit ObTransformFullOuterJoin(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
   virtual ~ObTransformFullOuterJoin()
@@ -30,7 +30,7 @@ class ObTransformFullOuterJoin : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   virtual bool need_rewrite(const common::ObIArray<ObParentDMLStmt>& parent_stmts, const ObDMLStmt& stmt) override;
 
   int transform_full_outer_join(ObDMLStmt*& stmt, bool& trans_happened);

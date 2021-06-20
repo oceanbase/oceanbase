@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace storage {
 class MockObIPartitionStorage : public ObIPartitionStorage {
-  public:
+public:
   virtual ~MockObIPartitionStorage()
   {}
   MOCK_METHOD5(init,

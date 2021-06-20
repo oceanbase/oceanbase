@@ -39,7 +39,7 @@ class ObILeaderCoordinator;
 class ObFreezeInfoManager;
 class ObRebalanceTaskMgr;
 class ObIStatusChangeCallback {
-  public:
+public:
   virtual int wakeup_balancer() = 0;
   virtual int wakeup_daily_merger() = 0;
   // FIXME(): make it suitable for different task type, this is just a sample iterface
@@ -49,11 +49,11 @@ class ObIStatusChangeCallback {
   virtual int on_offline_server(const common::ObAddr& server) = 0;
 };
 class ObIServerChangeCallback {
-  public:
+public:
   virtual int on_server_change() = 0;
 };
 class ObServerManager : public share::ObIServerTrace {
-  public:
+public:
   typedef common::ObIArray<common::ObAddr> ObIServerArray;
   typedef common::ObArray<common::ObAddr> ObServerArray;
   typedef common::ObArray<share::ObServerStatus> ObServerStatusArray;
@@ -155,7 +155,7 @@ class ObServerManager : public share::ObIServerTrace {
   bool have_server_deleting() const;
   int check_all_server_active(bool& all_active) const;
 
-  protected:
+protected:
   int construct_not_empty_server_set(common::hash::ObHashSet<common::ObAddr>& not_empty_server_set);
   // update server status by lease_request;
   int process_report_status_change(const share::ObLeaseRequest& lease_request, share::ObServerStatus& server_status);
@@ -178,7 +178,7 @@ class ObServerManager : public share::ObIServerTrace {
   virtual int start_server(const common::ObAddr& server, const common::ObZone& zone);
   virtual int stop_server(const common::ObAddr& server, const common::ObZone& zone);
 
-  protected:
+protected:
   bool inited_;
   bool has_build_;  // has been loaded from __all_server table
 
@@ -206,19 +206,19 @@ ObIStatusChangeCallback& ObServerManager::get_status_change_callback() const
 }
 
 class ObHeartbeatChecker : public ObRsReentrantThread {
-  public:
+public:
   ObHeartbeatChecker();
   int init(ObServerManager& server_manager);
   virtual ~ObHeartbeatChecker();
 
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  int64_t get_schedule_interval() const;
+  int64_t get_schedule_interval() const override;
 
-  private:
+private:
   static const int64_t CHECK_INTERVAL_US = 100 * 1000L;  // 100ms
   bool inited_;
   ObServerManager* server_manager_;

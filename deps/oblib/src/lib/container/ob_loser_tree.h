@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 template <typename T, typename CompareFunctor, int64_t MAX_PLAYER_CNT>
 class ObLoserTree {
-  public:
+public:
   explicit ObLoserTree(CompareFunctor& cmp);
   virtual ~ObLoserTree() = default;
 
@@ -45,11 +45,11 @@ class ObLoserTree {
     return is_unique_champion_;
   }
 
-  protected:
+protected:
   enum class ReplayType { NO_CHANGE = 0, LOSER_CHANGE = 1, WINNER_CHANGE = 2, BOTH_CHANGE = 3 };
 
   struct MatchResult {
-    public:
+  public:
     MatchResult()
     {
       reset();
@@ -102,12 +102,12 @@ class ObLoserTree {
     return 2 * index + 2;
   }
 
-  private:
+private:
   ObLoserTree() = delete;
   ObLoserTree(const ObLoserTree&) = delete;
   void operator=(const ObLoserTree&) = delete;
 
-  protected:
+protected:
   static const int64_t INVALID_IDX = -1;
 
   bool is_inited_;

@@ -36,7 +36,7 @@ struct ObScanMergeLoserTreeItem {
 };
 
 class ObScanMergeLoserTreeCmp {
-  public:
+public:
   typedef common::ObFixedArray<ObRowkeyObjComparer*, common::ObIAllocator> RowkeyCmpFuncArray;
   ObScanMergeLoserTreeCmp()
       : cmp_funcs_(), rowkey_size_(0), error_(common::OB_SUCCESS), reverse_(false), is_inited_(false)
@@ -53,7 +53,7 @@ class ObScanMergeLoserTreeCmp {
   static int compare_rowkey(const ObStoreRow& l_row, const ObStoreRow& r_row, const int64_t& rowkey_size,
       RowkeyCmpFuncArray& cmp_funcs, int32_t& cmp_result);
 
-  private:
+private:
   template <typename T>
   int make_rowkey_cmp_funcs(const int64_t rowkey_size, const ObColDescIArray& col_descs, ObIAllocator& allocator);
 
@@ -67,7 +67,7 @@ class ObScanMergeLoserTreeCmp {
 typedef common::ObLoserTree<ObScanMergeLoserTreeItem, ObScanMergeLoserTreeCmp, common::MAX_TABLE_CNT_IN_STORAGE>
     ObScanMergeLoserTreeBase;
 class ObScanMergeLoserTree : public ObScanMergeLoserTreeBase {
-  public:
+public:
   ObScanMergeLoserTree(ObScanMergeLoserTreeCmp& cmp)
       : ObScanMergeLoserTreeBase(cmp), has_king_(false), is_king_eq_champion_(false), king_()
   {}
@@ -100,11 +100,11 @@ class ObScanMergeLoserTree : public ObScanMergeLoserTreeBase {
     return has_king_ ? !is_king_eq_champion_ : is_unique_champion_;
   }
 
-  protected:
+protected:
   virtual int duel(ObScanMergeLoserTreeItem& offender, ObScanMergeLoserTreeItem& defender, const int64_t match_idx,
       bool& is_offender_win) override;
 
-  private:
+private:
   // optimization for only the top item get pop. Usually, the next row from same iter will still be
   // the max/min row. So it can be cached in king_ without rebuilding the whole tree
   bool has_king_;

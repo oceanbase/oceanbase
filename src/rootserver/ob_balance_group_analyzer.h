@@ -41,7 +41,7 @@ class ITenantStatFinder;
 
 // Prefix_prefix_..._prefix_number_suffix
 class TablePrefixKey {
-  public:
+public:
   TablePrefixKey() : prefix_(), suffix_(), digit_length_(0)
   {}
 
@@ -60,7 +60,7 @@ class TablePrefixKey {
 };
 
 class TablePrefixValue {
-  public:
+public:
   uint64_t tablegroup_id_;
   uint64_t table_id_;
   const share::schema::ObTableSchema* schema_;
@@ -68,7 +68,7 @@ class TablePrefixValue {
 };
 
 class DistributionUtil {
-  public:
+public:
   static int check_and_set(const uint64_t id, common::hash::ObHashSet<uint64_t>& processed_tids);
 };
 
@@ -76,7 +76,7 @@ typedef common::ObArray<int64_t, common::ObIAllocator&> ShardGroup;
 typedef common::hash::ObHashMap<TablePrefixKey, common::ObIArray<TablePrefixValue>*> ShardGroupPrefixMap;
 
 class ShardGroupAnalyzer {
-  public:
+public:
   ShardGroupAnalyzer(share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder,
       common::ObIAllocator& allocator, common::hash::ObHashSet<uint64_t>& processed_tids)
       : schema_guard_(schema_guard),
@@ -93,7 +93,7 @@ class ShardGroupAnalyzer {
   //       only the primary table in the table group is taken as a representative and stored in tids
   int next(common::ObIArray<const share::schema::ObTableSchema*>& schemas);
 
-  private:
+private:
   int build_prefix_map(uint64_t tenant_id, ShardGroupPrefixMap& prefix_map);
   int build_shardgroup(ShardGroupPrefixMap& prefix_map);
   int build_shardgroups(
@@ -103,7 +103,7 @@ class ShardGroupAnalyzer {
   int extract_table_name_prefix(const common::ObString& table, TablePrefixKey& prefix_info);
   int build_prefix_key(const share::schema::ObTableSchema& table, TablePrefixKey& prefix_key);
 
-  private:
+private:
   share::schema::ObSchemaGetterGuard& schema_guard_;
   ITenantStatFinder& stat_finder_;
   common::ObIAllocator& allocator_;
@@ -114,7 +114,7 @@ class ShardGroupAnalyzer {
 };
 
 class TableGroupAnalyzer {
-  public:
+public:
   TableGroupAnalyzer(share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder,
       common::ObIAllocator& allocator, common::hash::ObHashSet<uint64_t>& processed_tids)
       : schema_guard_(schema_guard),
@@ -127,12 +127,12 @@ class TableGroupAnalyzer {
   int analysis(const uint64_t tenant_id);
   int next(const share::schema::ObPartitionSchema*& leader_schema);
 
-  private:
+private:
   int pick_sample_table_schema(const common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& table_schemas,
       const share::schema::ObSimpleTableSchemaV2*& sample_table_schema, bool& tg_processed);
   int check_table_already_processed(const uint64_t partition_entity_id, bool& table_processed);
 
-  private:
+private:
   share::schema::ObSchemaGetterGuard& schema_guard_;
   ITenantStatFinder& stat_finder_;
   common::ObIAllocator& allocator_;
@@ -142,7 +142,7 @@ class TableGroupAnalyzer {
 };
 
 class PartitionTableAnalyzer {
-  public:
+public:
   PartitionTableAnalyzer(share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder,
       common::ObIAllocator& allocator, common::hash::ObHashSet<uint64_t>& processed_tids)
       : schema_guard_(schema_guard),
@@ -155,7 +155,7 @@ class PartitionTableAnalyzer {
   int analysis(const uint64_t tenant_id);
   int next(const share::schema::ObTableSchema*& table_schema);
 
-  private:
+private:
   share::schema::ObSchemaGetterGuard& schema_guard_;
   ITenantStatFinder& stat_finder_;
   common::ObIAllocator& allocator_;
@@ -165,7 +165,7 @@ class PartitionTableAnalyzer {
 };
 
 class NonPartitionTableAnalyzer {
-  public:
+public:
   NonPartitionTableAnalyzer(share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder,
       common::ObIAllocator& allocator, common::hash::ObHashSet<uint64_t>& processed_tids)
       : schema_guard_(schema_guard),
@@ -178,10 +178,10 @@ class NonPartitionTableAnalyzer {
   int analysis(const uint64_t tenant_id);
   int next(common::ObIArray<const share::schema::ObPartitionSchema*>& schemas);
 
-  private:
+private:
   typedef common::ObArray<const share::schema::ObPartitionSchema*> NonPartitionArray;
 
-  private:
+private:
   share::schema::ObSchemaGetterGuard& schema_guard_;
   ITenantStatFinder& stat_finder_;
   common::ObIAllocator& allocator_;

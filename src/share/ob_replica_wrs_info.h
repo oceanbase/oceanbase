@@ -23,14 +23,14 @@ namespace share {
 struct ObReplicaWrsInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObReplicaWrsInfo();
   ObReplicaWrsInfo(const common::ObPartitionKey& pkey, const int64_t wrs, const int32_t pstate,
       const int32_t replica_type, const int32_t replica_status);
 
   TO_STRING_KV(K_(pkey), K_(weak_read_timestamp), K_(part_state), K_(replica_type), K_(replica_status));
 
-  public:
+public:
   common::ObPartitionKey pkey_;
   int64_t weak_read_timestamp_;
 

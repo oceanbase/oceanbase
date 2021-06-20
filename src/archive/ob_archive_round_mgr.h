@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace archive {
 class ObArchiveRoundMgr {
-  public:
+public:
   ObArchiveRoundMgr();
   ~ObArchiveRoundMgr();
 
@@ -35,7 +35,7 @@ class ObArchiveRoundMgr {
     LOG_ARCHIVE_MAX
   };
 
-  public:
+public:
   int init();
   void destroy();
   int64_t get_current_archive_round()
@@ -87,7 +87,7 @@ class ObArchiveRoundMgr {
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
 
-  public:
+public:
   // true afterall partitions archive kickoff log, then archive data
   bool add_pg_finish_;
 
@@ -108,7 +108,7 @@ class ObArchiveRoundMgr {
   LogArchiveStatus log_archive_status_;
   RWLock rwlock_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObArchiveRoundMgr);
 };
 }  // namespace archive

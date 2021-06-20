@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprHextoraw : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprHextoraw(common::ObIAllocator& alloc);
   virtual ~ObExprHextoraw();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
@@ -27,7 +27,7 @@ class ObExprHextoraw : public ObStringExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_hextoraw_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprHextoraw);
 };
 

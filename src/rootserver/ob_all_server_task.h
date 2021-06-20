@@ -30,7 +30,7 @@ namespace rootserver {
 class ObServerManager;
 class ObRebalanceTaskMgr;
 class ObAllServerTask : public share::ObAsyncTask {
-  public:
+public:
   ObAllServerTask(ObServerManager& server_manager, ObRebalanceTaskMgr& rebalance_task_mgr, const common::ObAddr& server,
       bool with_rootserver);
   virtual ~ObAllServerTask();
@@ -39,7 +39,7 @@ class ObAllServerTask : public share::ObAsyncTask {
   int64_t get_deep_copy_size() const;
   share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-  private:
+private:
   ObServerManager& server_manager_;
   ObRebalanceTaskMgr& rebalance_task_mgr_;
   common::ObAddr server_;

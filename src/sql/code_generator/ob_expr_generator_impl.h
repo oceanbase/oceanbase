@@ -39,7 +39,7 @@ class ObExprDllUdf;
 typedef common::ObSEArray<ObIterExprOperator*, 2> PhyIterExprDesc;
 
 class ObExprGeneratorImpl : public ObExprGenerator, public ObRawExprVisitor {
-  public:
+public:
   ObExprGeneratorImpl(int16_t cur_regexp_op_count, int16_t cur_like_op_count, uint32_t* next_expr_id,
       ObColumnIndexProvider& column_idx_provider);
 
@@ -66,7 +66,7 @@ class ObExprGeneratorImpl : public ObExprGenerator, public ObRawExprVisitor {
   int gen_fast_column_conv_expr(ObRawExpr& raw_expr);
   int gen_fast_expr(ObRawExpr& raw_expr);
 
-  private:
+private:
   /// interface of ObRawExprVisitor
   virtual int visit(ObConstRawExpr& expr);
   virtual int visit(ObVarRawExpr& expr);
@@ -83,9 +83,9 @@ class ObExprGeneratorImpl : public ObExprGenerator, public ObRawExprVisitor {
   virtual int visit(ObPseudoColumnRawExpr& expr);
   virtual bool skip_child(ObRawExpr& expr);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprGeneratorImpl);
   int visit_simple_op(ObNonTerminalRawExpr& expr);
@@ -113,10 +113,10 @@ class ObExprGeneratorImpl : public ObExprGenerator, public ObRawExprVisitor {
   // visit child of %raw_expr and add visited child to %visited_exprs
   int infix_visit_child(ObRawExpr& raw_expr, common::ObIArray<ObRawExpr*>& visited_exprs);
 
-  private:
+private:
   int set_need_cast(ObNonTerminalRawExpr& expr, bool& need_cast);
 
-  private:
+private:
   // data members
   ObSqlExpression* sql_expr_;  // generated postfix expression
   int16_t cur_regexp_op_count_;

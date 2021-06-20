@@ -24,21 +24,21 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class TestRawExprCanonicalizer : public ::testing::Test {
-  public:
+public:
   TestRawExprCanonicalizer();
   virtual ~TestRawExprCanonicalizer();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRawExprCanonicalizer);
 
-  protected:
+protected:
   // function members
   void canon(const char* expr, const char*& canon_expr);
 
-  protected:
+protected:
   // data members
 };
 

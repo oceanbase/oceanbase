@@ -84,7 +84,7 @@ struct ObBaseLogBufferCtrl {
 };
 
 class ObBaseLogBufferMgr {
-  public:
+public:
   static ObBaseLogBufferMgr& get_instance();
   void destroy();
   /**
@@ -94,7 +94,7 @@ class ObBaseLogBufferMgr {
    */
   int get_buffer(const char* buf_file_path, ObBaseLogBufferCtrl*& log_ctrl);
 
-  private:
+private:
   ObBaseLogBufferMgr();
   virtual ~ObBaseLogBufferMgr();
   int get_abs_dir(const char* log_dir, const char*& abs_log_dir);

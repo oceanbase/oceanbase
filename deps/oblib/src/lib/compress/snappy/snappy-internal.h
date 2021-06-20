@@ -37,7 +37,7 @@ namespace snappy {
 namespace internal {
 
 class WorkingMemory {
-  public:
+public:
   WorkingMemory() : large_table_(NULL)
   {}
   ~WorkingMemory()
@@ -50,7 +50,7 @@ class WorkingMemory {
   // the base of the hash table.
   uint16* GetHashTable(size_t input_size, int* table_size);
 
-  private:
+private:
   uint16 small_table_[1 << 10];  // 2KB
   uint16* large_table_;          // Allocated only when needed
 

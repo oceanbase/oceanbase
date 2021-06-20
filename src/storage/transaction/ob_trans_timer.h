@@ -36,7 +36,7 @@ class ObTransService;
 namespace transaction {
 
 class ObITimeoutTask : public common::ObTimeWheelTask {
-  public:
+public:
   ObITimeoutTask() : is_registered_(false), is_running_(false), delay_(0)
   {}
   virtual ~ObITimeoutTask()
@@ -49,7 +49,7 @@ class ObITimeoutTask : public common::ObTimeWheelTask {
     common::ObTimeWheelTask::reset();
   }
 
-  public:
+public:
   void set_registered(const bool is_registered)
   {
     is_registered_ = is_registered;
@@ -71,14 +71,14 @@ class ObITimeoutTask : public common::ObTimeWheelTask {
     delay_ = delay;
   }
 
-  protected:
+protected:
   bool is_registered_;
   bool is_running_;
   int64_t delay_;
 };
 
 class ObITransTimer {
-  public:
+public:
   ObITransTimer()
   {}
   virtual ~ObITransTimer()
@@ -89,13 +89,13 @@ class ObITransTimer {
   virtual int wait() = 0;
   virtual void destroy() = 0;
 
-  public:
+public:
   virtual int register_timeout_task(ObITimeoutTask& task, const int64_t delay) = 0;
   virtual int unregister_timeout_task(ObITimeoutTask& task) = 0;
 };
 
 class ObTransTimeoutTask : public ObITimeoutTask {
-  public:
+public:
   ObTransTimeoutTask() : is_inited_(false), ctx_(NULL)
   {}
   virtual ~ObTransTimeoutTask()
@@ -104,21 +104,21 @@ class ObTransTimeoutTask : public ObITimeoutTask {
   void destroy();
   void reset();
 
-  public:
+public:
   void runTimerTask();
   uint64_t hash() const;
 
-  public:
+public:
   TO_STRING_KV(K_(is_inited), K_(is_registered), K_(is_running), K_(delay), KP_(ctx), K_(bucket_idx), K_(run_ticket),
       K_(is_scheduled), KP_(prev), KP_(next));
 
-  private:
+private:
   bool is_inited_;
   ObTransCtx* ctx_;
 };
 
 class ObPrepareChangingLeaderTask : public ObITimeoutTask {
-  public:
+public:
   ObPrepareChangingLeaderTask()
       : is_inited_(false), expected_ts_(0), txs_(NULL), pkey_(), proposal_leader_(), round_(1), cnt_(0)
   {}
@@ -143,13 +143,13 @@ class ObPrepareChangingLeaderTask : public ObITimeoutTask {
     reset();
   }
 
-  public:
+public:
   void runTimerTask();
   uint64_t hash() const;
   int run();
   TO_STRING_KV(K_(is_inited), K_(expected_ts), KP_(txs), K_(pkey), K_(proposal_leader), K_(round), K_(cnt));
 
-  private:
+private:
   bool is_inited_;
   int64_t expected_ts_;
   ObTransService* txs_;
@@ -160,7 +160,7 @@ class ObPrepareChangingLeaderTask : public ObITimeoutTask {
 };
 
 class ObTransTimer : public ObITransTimer {
-  public:
+public:
   ObTransTimer() : is_inited_(false), is_running_(false)
   {}
   virtual ~ObTransTimer()
@@ -171,14 +171,14 @@ class ObTransTimer : public ObITransTimer {
   virtual int wait();
   virtual void destroy();
 
-  public:
+public:
   virtual int register_timeout_task(ObITimeoutTask& task, const int64_t delay);
   virtual int unregister_timeout_task(ObITimeoutTask& task);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransTimer);
 
-  protected:
+protected:
   // schedule timeout task precision. us
   static const int64_t TRANS_TIMEOUT_TASK_PRECISION_US = 5000;
   static const int64_t THREAD_NUM = 4;
@@ -189,14 +189,14 @@ class ObTransTimer : public ObITransTimer {
 };
 
 class ObDupTableLeaseTimer : public ObTransTimer {
-  public:
+public:
   ObDupTableLeaseTimer()
   {}
   virtual ~ObDupTableLeaseTimer()
   {}
   int init();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDupTableLeaseTimer);
 };
 

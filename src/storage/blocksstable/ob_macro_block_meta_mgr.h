@@ -74,7 +74,7 @@ struct ObMajorMacroBlockKey {
 
 class ObMacroBlockMetaMgr;
 class ObMacroBlockMetaHandle {
-  public:
+public:
   ObMacroBlockMetaHandle();
   virtual ~ObMacroBlockMetaHandle();
   ObMacroBlockMetaHandle(const ObMacroBlockMetaHandle& other);
@@ -86,7 +86,7 @@ class ObMacroBlockMetaHandle {
   }
   TO_STRING_KV(KP_(meta_ctrl));
 
-  private:
+private:
   friend class ObMacroBlockMetaMgr;
   ObMacroBlockMetaCtrl* meta_ctrl_;
 };
@@ -106,14 +106,14 @@ struct ObMacroBlockMetaLogEntry : public ObIBaseStorageLogEntry {
 };
 
 class ObMacroBlockMetaMgrGCTask : public common::ObTimerTask {
-  public:
+public:
   ObMacroBlockMetaMgrGCTask();
   virtual ~ObMacroBlockMetaMgrGCTask();
   virtual void runTimerTask();
 };
 
 class ObMacroBlockMetaMgr : public ObIRedoModule {
-  public:
+public:
   typedef common::hash::ObHashMap<ObMajorMacroBlockKey, MacroBlockId, common::hash::ReadWriteDefendMode> MajorKeyMap;
   static ObMacroBlockMetaMgr& get_instance();
   int init(const int64_t max_block_cnt);
@@ -125,7 +125,7 @@ class ObMacroBlockMetaMgr : public ObIRedoModule {
   virtual int parse(const int64_t subcmd, const char* buf, const int64_t len, FILE* stream) override;
   virtual int enable_write_log() override;
 
-  private:
+private:
   friend class ObMacroBlockMetaHandle;
   friend class ObMacroBlockMetaMgrGCTask;
   friend class ObMacroMetaBlockReader;

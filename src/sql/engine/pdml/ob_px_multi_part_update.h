@@ -31,7 +31,7 @@ namespace sql {
 class ObPxMultiPartUpdateInput : public ObPxModifyInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   virtual inline ObPhyOperatorType get_phy_op_type() const
   {
     return PHY_PX_MULTI_PART_UPDATE;
@@ -44,11 +44,11 @@ class ObPxMultiPartUpdate : public ObDMLDataReader,
                             public ObDMLRowChecker {
   OB_UNIS_VERSION(1);
 
-  public:
-  private:
+public:
+private:
   class ObPxMultiPartUpdateCtx;
   class ObPDMLRowIteratorWrapper : public common::ObNewRowIterator {
-    public:
+  public:
     ObPDMLRowIteratorWrapper(ObPxMultiPartUpdateCtx& op_ctx)
         : op_ctx_(op_ctx),
           iter_(nullptr),
@@ -81,10 +81,10 @@ class ObPxMultiPartUpdate : public ObDMLDataReader,
     void reset() override
     {}
 
-    private:
+  private:
     int project_old_and_new_row(const ObNewRow& full_row, ObNewRow& old_row, ObNewRow& new_row) const;
 
-    private:
+  private:
     ObPxMultiPartUpdateCtx& op_ctx_;
     ObPDMLRowIterator* iter_;
     int32_t* old_projector_;
@@ -102,7 +102,7 @@ class ObPxMultiPartUpdate : public ObDMLDataReader,
   };
 
   class ObPxMultiPartUpdateCtx : public ObTableModifyCtx {
-    public:
+  public:
     ObPxMultiPartUpdateCtx(ObExecContext& ctx)
         : ObTableModifyCtx(ctx), data_driver_(op_monitor_info_), row_iter_wrapper_(*this)
     {}
@@ -116,11 +116,11 @@ class ObPxMultiPartUpdate : public ObDMLDataReader,
     ObPDMLRowIteratorWrapper row_iter_wrapper_;
   };
 
-  public:
+public:
   explicit ObPxMultiPartUpdate(common::ObIAllocator& alloc);
   ~ObPxMultiPartUpdate();
 
-  public:
+public:
   virtual int create_operator_input(ObExecContext& ctx) const override;
   virtual bool is_pdml_operator() const
   {
@@ -158,12 +158,12 @@ class ObPxMultiPartUpdate : public ObDMLDataReader,
     return table_desc_;
   }
 
-  private:
+private:
   int fill_dml_base_param(uint64_t index_tid, ObSQLSessionInfo& my_session, const ObPhysicalPlan& my_phy_plan,
       const ObPhysicalPlanCtx& my_plan_ctx, storage::ObDMLBaseParam& dml_param) const;
   int on_process_new_row(ObExecContext& ctx, const common::ObNewRow& new_row) const;
 
-  private:
+private:
   /* functions */
 
   /* variables */

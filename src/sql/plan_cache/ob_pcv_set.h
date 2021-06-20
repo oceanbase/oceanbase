@@ -52,7 +52,7 @@ class ObPCVSet {
     TO_STRING_KV(K_(param_idxs), K_(is_last))
   };
 
-  public:
+public:
   ObPCVSet(ObPlanCache* plan_cache)
       : is_inited_(false),
         plan_cache_(plan_cache),
@@ -132,7 +132,7 @@ class ObPCVSet {
 
   TO_STRING_KV(K_(is_inited), K_(ref_count), K_(min_merged_version));
 
-  private:
+private:
   static const int64_t MAX_PCV_SET_PLAN_NUM = 200;
   int create_pcv_and_add_plan(ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx,
       const common::ObIArray<PCVSchemaObj>& schema_array, ObPlanCacheValue*& value);
@@ -158,7 +158,7 @@ class ObPCVSet {
   int set_raw_param_info_if_needed(ObCacheObject* cache_obj);
   int check_raw_param_for_dup_col(ObPlanCacheCtx& pc_ctx, bool& contain_dup_col);
 
-  private:
+private:
   bool is_inited_;
   ObPlanCache* plan_cache_;
   common::ObIAllocator* pc_alloc_;

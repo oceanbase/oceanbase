@@ -23,13 +23,13 @@ using namespace transaction;
 using namespace storage;
 namespace unittest {
 class TestObTransLog : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
   {}
 
-  public:
+public:
   static const char* LOCAL_IP;
   static const int32_t PORT = 8080;
   static const ObAddr::VER IP_TYPE = ObAddr::IPV4;
@@ -42,7 +42,7 @@ const char* TestObTransLog::LOCAL_IP = "127.0.0.1";
 const int64_t TIME_OUT = 1;
 
 class FakeObTransLog : public ObTransLog {
-  public:
+public:
   virtual int replace_tenant_id(const uint64_t tenant_id) override
   {
     (void)ObTransLog::inner_replace_tenant_id(tenant_id);

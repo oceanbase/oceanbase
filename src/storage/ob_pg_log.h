@@ -29,7 +29,7 @@ namespace storage {
 class ObOfflinePartitionLog : public ObNonTransLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObOfflinePartitionLog()
   {
     reset();
@@ -41,7 +41,7 @@ class ObOfflinePartitionLog : public ObNonTransLog {
   int init(const int64_t log_type, const bool is_physical_drop);
   void reset();
 
-  public:
+public:
   int64_t get_log_type() const
   {
     return log_type_;
@@ -62,10 +62,10 @@ class ObOfflinePartitionLog : public ObNonTransLog {
   }
   VIRTUAL_TO_STRING_KV(K_(log_type), K_(is_physical_drop), K_(cluster_id));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOfflinePartitionLog);
 
-  protected:
+protected:
   bool is_inited_;
   int64_t log_type_;
   bool is_physical_drop_;
@@ -75,7 +75,7 @@ class ObOfflinePartitionLog : public ObNonTransLog {
 class ObAddPartitionToPGLog : public ObNonTransLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAddPartitionToPGLog()
   {
     reset();
@@ -85,7 +85,7 @@ class ObAddPartitionToPGLog : public ObNonTransLog {
   int init(const int64_t log_type, const obrpc::ObCreatePartitionArg& arg);
   void reset();
 
-  public:
+public:
   int64_t get_log_type() const
   {
     return log_type_;
@@ -106,10 +106,10 @@ class ObAddPartitionToPGLog : public ObNonTransLog {
   }
   VIRTUAL_TO_STRING_KV(K_(log_type), K_(arg));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAddPartitionToPGLog);
 
-  protected:
+protected:
   bool is_inited_;
   int64_t log_type_;
   obrpc::ObCreatePartitionArg arg_;
@@ -118,7 +118,7 @@ class ObAddPartitionToPGLog : public ObNonTransLog {
 class ObRemovePartitionFromPGLog : public ObNonTransLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRemovePartitionFromPGLog()
   {
     reset();
@@ -128,7 +128,7 @@ class ObRemovePartitionFromPGLog : public ObNonTransLog {
   int init(const int64_t log_type, const ObPGKey& pg_key, const ObPartitionKey& pkey);
   void reset();
 
-  public:
+public:
   int64_t get_log_type() const
   {
     return log_type_;
@@ -145,10 +145,10 @@ class ObRemovePartitionFromPGLog : public ObNonTransLog {
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
   VIRTUAL_TO_STRING_KV(K_(log_type), K_(pg_key), K_(partition_key));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRemovePartitionFromPGLog);
 
-  protected:
+protected:
   bool is_inited_;
   int64_t log_type_;
   common::ObPGKey pg_key_;
@@ -158,7 +158,7 @@ class ObRemovePartitionFromPGLog : public ObNonTransLog {
 class ObPGSchemaChangeLog : public ObNonTransLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPGSchemaChangeLog()
   {
     reset();
@@ -169,7 +169,7 @@ class ObPGSchemaChangeLog : public ObNonTransLog {
       const int64_t schema_version, const uint64_t index_id);
   void reset();
 
-  public:
+public:
   int64_t get_log_type() const
   {
     return log_type_;
@@ -194,10 +194,10 @@ class ObPGSchemaChangeLog : public ObNonTransLog {
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
   VIRTUAL_TO_STRING_KV(K_(log_type), K_(pg_key), K_(pkey), K_(schema_version), K_(index_id));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPGSchemaChangeLog);
 
-  protected:
+protected:
   bool is_inited_;
   int64_t log_type_;
   common::ObPGKey pg_key_;
@@ -215,7 +215,7 @@ enum ObPGWriteLogState {
 };
 
 class ObAddPartitionToPGLogCb : public clog::ObISubmitLogCb {
-  public:
+public:
   ObAddPartitionToPGLogCb()
   {
     reset();
@@ -250,7 +250,7 @@ class ObAddPartitionToPGLogCb : public clog::ObISubmitLogCb {
   virtual bool is_valid() const;
   VIRTUAL_TO_STRING_KV(K_(log_type), K_(pg_key), K_(partition_key), K_(write_clog_state));
 
-  private:
+private:
   bool is_inited_;
   int64_t log_type_;
   common::ObPGKey pg_key_;
@@ -264,7 +264,7 @@ class ObAddPartitionToPGLogCb : public clog::ObISubmitLogCb {
 };
 
 class ObRemovePartitionFromPGLogCb : public clog::ObISubmitLogCb {
-  public:
+public:
   ObRemovePartitionFromPGLogCb()
   {
     reset();
@@ -295,7 +295,7 @@ class ObRemovePartitionFromPGLogCb : public clog::ObISubmitLogCb {
   virtual bool is_valid() const;
   VIRTUAL_TO_STRING_KV(K_(log_type), K_(pg_key), K_(partition_key));
 
-  private:
+private:
   bool is_inited_;
   int64_t log_type_;
   common::ObPGKey pg_key_;
@@ -305,7 +305,7 @@ class ObRemovePartitionFromPGLogCb : public clog::ObISubmitLogCb {
 };
 
 class ObSchemaChangeClogCb : public clog::ObISubmitLogCb {
-  public:
+public:
   ObSchemaChangeClogCb()
   {
     reset();
@@ -340,7 +340,7 @@ class ObSchemaChangeClogCb : public clog::ObISubmitLogCb {
   virtual bool is_valid() const;
   VIRTUAL_TO_STRING_KV(K_(log_type), K_(pg_key), K_(partition_key), K_(write_clog_state));
 
-  private:
+private:
   bool is_inited_;
   int64_t log_type_;
   common::ObPGKey pg_key_;
@@ -354,7 +354,7 @@ class ObSchemaChangeClogCb : public clog::ObISubmitLogCb {
 };
 
 class ObOfflinePartitionCb : public clog::ObISubmitLogCb {
-  public:
+public:
   ObOfflinePartitionCb() : is_inited_(false), is_physical_drop_(false), cb_async_worker_(nullptr)
   {}
   virtual ~ObOfflinePartitionCb()
@@ -369,7 +369,7 @@ class ObOfflinePartitionCb : public clog::ObISubmitLogCb {
       const uint64_t log_id, const int64_t version, const bool batch_committed, const bool batch_last_succeed);
   int on_finished(const common::ObPGKey& pg_key, const uint64_t log_id);
 
-  private:
+private:
   bool is_inited_;
   bool is_physical_drop_;
   ObCLogCallbackAsyncWorker* cb_async_worker_;

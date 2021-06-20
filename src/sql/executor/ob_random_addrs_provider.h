@@ -19,14 +19,14 @@
 namespace oceanbase {
 namespace sql {
 class ObRandomAddrsProvider : public ObAddrsProvider {
-  public:
+public:
   ObRandomAddrsProvider();
   virtual ~ObRandomAddrsProvider();
 
   virtual int select_servers(int64_t select_count, common::ObIArray<common::ObAddr>& servers);
   VIRTUAL_TO_STRING_KV(K_(servers));
 
-  private:
+private:
   common::ObSEArray<common::ObAddr, 32> servers_;
   DISALLOW_COPY_AND_ASSIGN(ObRandomAddrsProvider);
 };

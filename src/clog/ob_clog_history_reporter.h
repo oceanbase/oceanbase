@@ -29,11 +29,11 @@ class ObMySQLProxy;
 }  // namespace common
 namespace clog {
 class ObClogHistoryReporter : public lib::TGRunnable {
-  public:
+public:
   static const int64_t THREAD_NUM = 3;
   static const int64_t MINI_MODE_THREAD_NUM = 1;
 
-  private:
+private:
   // ObConcurrentFIFOAllocator
   static const int64_t TOTAL_LIMIT = 512L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 512L * 1024L;
@@ -53,7 +53,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
   // PartitionQueueTask array max number
   static const int64_t QUEUE_TASK_NUM_LIMIT = 1024;
 
-  public:
+public:
   ObClogHistoryReporter()
       : task_num_limit_(0),
         thread_counter_(0),
@@ -75,13 +75,13 @@ class ObClogHistoryReporter : public lib::TGRunnable {
     destroy();
   }
 
-  public:
+public:
   int init(common::ObMySQLProxy* sql_proxy, const common::ObAddr& addr);
   void stop();
   void wait();
   void destroy();
 
-  public:
+public:
   static ObClogHistoryReporter& get_instance();
   static bool is_related_table(uint64_t tenant_id, uint64_t table_id);
   void online(const common::ObPartitionKey& pkey, const uint64_t start_log_id, const int64_t start_log_timestamp);
@@ -90,7 +90,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
   void delete_server_record(const common::ObAddr& delete_addr);
   virtual void handle(void* task);
 
-  private:
+private:
   int init_thread_pool_(const int64_t task_num_limit);
   void destroy_thread_pool_();
   int push_work_queue_(void* task, const int64_t timeout);
@@ -105,7 +105,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
 
   void run1() final;
 
-  private:
+private:
   enum QueueTaskType {
     UNKNOWN_TASK,
     PARTITION_TASK,  // PartitionQueueTask
@@ -364,11 +364,11 @@ class ObClogHistoryReporter : public lib::TGRunnable {
     TO_STRING_KV(K_(delete_addr));
   };
 
-  private:
+private:
   // If the task_map_ has corresponding partition's task,online_op/offline_op
   // will be inserted to the tail of the task.
   class InsertTaskTailFunctor {
-    public:
+  public:
     explicit InsertTaskTailFunctor(PartitionOp& op) : err_(common::OB_SUCCESS), op_(op)
     {}
     bool operator()(const common::ObPartitionKey& pkey, PartitionQueueTask& task);
@@ -378,14 +378,14 @@ class ObClogHistoryReporter : public lib::TGRunnable {
     }
     TO_STRING_KV(K_(err), K_(op));
 
-    private:
+  private:
     int err_;
     PartitionOp& op_;
   };
   // If task fails, and the task_map_ has corresponding partition's other task, it will be inserted to the head of the
   // task.
   class InsertTaskHeadFunctor {
-    public:
+  public:
     explicit InsertTaskHeadFunctor(PartitionQueueTask& task) : err_(common::OB_SUCCESS), task_(task)
     {}
     bool operator()(const common::ObPartitionKey& pkey, PartitionQueueTask& task);
@@ -395,13 +395,13 @@ class ObClogHistoryReporter : public lib::TGRunnable {
     }
     TO_STRING_KV(K_(err), K_(task));
 
-    private:
+  private:
     int err_;
     PartitionQueueTask& task_;
   };
   // for hashmap remove_if, push task into the queue of the thread pool
   class PushTaskFunctor {
-    public:
+  public:
     explicit PushTaskFunctor(ObClogHistoryReporter& host) : err_(common::OB_SUCCESS), host_(host)
     {}
     // return true: task_map_ will delete current item immediately, return false: task_map_ will go on traversing.
@@ -412,23 +412,23 @@ class ObClogHistoryReporter : public lib::TGRunnable {
     }
     TO_STRING_KV(K(err_));
 
-    private:
+  private:
     int err_;
     ObClogHistoryReporter& host_;
   };
   // for hashmap destory
   class DestoryTaskFunctor {
-    public:
+  public:
     explicit DestoryTaskFunctor(ObClogHistoryReporter& host) : count_(0), host_(host)
     {}
     bool operator()(const common::ObPartitionKey& pkey, PartitionQueueTask& task);
 
-    private:
+  private:
     int count_;
     ObClogHistoryReporter& host_;
   };
 
-  private:
+private:
   int alloc_queue_task_(const QueueTaskType queue_task_type, IQueueTask*& queue_task);
   int free_queue_task_(IQueueTask* queue_task);
 
@@ -465,7 +465,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
 
   void print_stat();
 
-  private:
+private:
   // thread pool
   int64_t task_num_limit_;
   int64_t thread_counter_;
@@ -480,10 +480,10 @@ class ObClogHistoryReporter : public lib::TGRunnable {
   };
   ThreadConf thread_conf_array_[MAX_THREAD_NUM];
 
-  private:
+private:
   typedef common::ObList<PartitionQueueTask, common::ObConcurrentFIFOAllocator> TaskList;
 
-  private:
+private:
   common::ObLinearHashMap<common::ObPartitionKey, PartitionQueueTask> task_map_;
   volatile int64_t partition_task_count_ CACHE_ALIGNED;
   common::ObConcurrentFIFOAllocator local_allocator_;
@@ -493,7 +493,7 @@ class ObClogHistoryReporter : public lib::TGRunnable {
   char* sql_str_[MAX_THREAD_NUM];
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObClogHistoryReporter);
 };
 

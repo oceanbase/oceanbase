@@ -24,11 +24,11 @@ namespace sql {
 class ObTempTableTransformation : public ObMultiChildrenPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class ObTempTableTransformationCtx : public ObPhyOperatorCtx {
     friend class ObTempTableTransformation;
 
-    public:
+  public:
     explicit ObTempTableTransformationCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
     {}
     virtual ~ObTempTableTransformationCtx()
@@ -39,7 +39,7 @@ class ObTempTableTransformation : public ObMultiChildrenPhyOperator {
     }
   };
 
-  public:
+public:
   explicit ObTempTableTransformation(common::ObIAllocator& alloc) : ObMultiChildrenPhyOperator(alloc)
   {}
   ~ObTempTableTransformation()

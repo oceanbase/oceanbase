@@ -28,10 +28,10 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxReceiveOpInput : public ObPxExchangeOpInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxReceiveOpInput(ObExecContext& ctx, const ObOpSpec& spec)
       : ObPxExchangeOpInput(ctx, spec), child_dfo_id_(common::OB_INVALID_ID), ch_provider_ptr_(0)
   {}
@@ -59,7 +59,7 @@ class ObPxReceiveOpInput : public ObPxExchangeOpInput {
     return ch_provider_ptr_;
   }
 
-  protected:
+protected:
   int64_t child_dfo_id_;
   uint64_t ch_provider_ptr_;
 };
@@ -67,7 +67,7 @@ class ObPxReceiveOpInput : public ObPxExchangeOpInput {
 class ObPxReceiveSpec : public ObReceiveSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxReceiveSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   ~ObPxReceiveSpec()
   {}
@@ -76,7 +76,7 @@ class ObPxReceiveSpec : public ObReceiveSpec {
 };
 
 class ObPxReceiveOp : public ObReceiveOp {
-  public:
+public:
   ObPxReceiveOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObPxReceiveOp()
   {}
@@ -124,7 +124,7 @@ class ObPxReceiveOp : public ObReceiveOp {
 
   int64_t get_sqc_id();
 
-  public:
+public:
   void reset_for_rescan()
   {
     iter_end_ = false;
@@ -148,7 +148,7 @@ class ObPxReceiveOp : public ObReceiveOp {
     return ts_;
   }
 
-  protected:
+protected:
   ObPxTaskChSet task_ch_set_;
   bool iter_end_;
   bool channel_linked_;
@@ -166,10 +166,10 @@ class ObPxReceiveOp : public ObReceiveOp {
 };
 
 class ObPxFifoReceiveOpInput : public ObPxReceiveOpInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxFifoReceiveOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxReceiveOpInput(ctx, spec)
   {}
   virtual ~ObPxFifoReceiveOpInput()
@@ -179,7 +179,7 @@ class ObPxFifoReceiveOpInput : public ObPxReceiveOpInput {
 class ObPxFifoReceiveSpec : public ObPxReceiveSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxFifoReceiveSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObPxReceiveSpec(alloc, type)
   {}
   ~ObPxFifoReceiveSpec()
@@ -187,12 +187,12 @@ class ObPxFifoReceiveSpec : public ObPxReceiveSpec {
 };
 
 class ObPxFifoReceiveOp : public ObPxReceiveOp {
-  public:
+public:
   ObPxFifoReceiveOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObPxFifoReceiveOp()
   {}
 
-  protected:
+protected:
   virtual void destroy()
   {
     ObPxReceiveOp::destroy();
@@ -202,10 +202,10 @@ class ObPxFifoReceiveOp : public ObPxReceiveOp {
   virtual int inner_get_next_row();
   virtual int try_link_channel() override;
 
-  private:
+private:
   int get_one_row_from_channels(int64_t timeout_us);
 
-  private:
+private:
   ObPxInterruptP interrupt_proc_;
 };
 

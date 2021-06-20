@@ -23,9 +23,9 @@ namespace sql {
 class ObHashSetOperator : public ObSetOperator {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class HashCols {
-    public:
+  public:
     explicit HashCols() : row_(NULL), col_collation_(NULL)
     {}
     ~HashCols()
@@ -34,13 +34,13 @@ class ObHashSetOperator : public ObSetOperator {
     uint64_t hash() const;
     bool operator==(const HashCols& other) const;
 
-    public:
+  public:
     const common::ObNewRow* row_;
     const common::ObIArray<common::ObCollationType>* col_collation_;
   };
 
   class ObHashSetOperatorCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     static const int64_t MIN_BUCKET_COUNT = 10000;
     static const int64_t MAX_BUCKET_COUNT = 500000;
     static const int64_t HASH_SET_BUCKET_RATIO = 10;
@@ -69,11 +69,11 @@ class ObHashSetOperator : public ObSetOperator {
     int is_left_has_row(ObExecContext& ctx, bool& left_has_row);
     int get_left_row(ObExecContext& ctx, const common::ObNewRow*& cur_row);
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObHashSetOperatorCtx);
     friend class ObHashSetOperator;
 
-    protected:
+  protected:
     // used by intersect and except
     bool first_get_left_;
     bool has_got_part_;
@@ -85,13 +85,13 @@ class ObHashSetOperator : public ObSetOperator {
     ObBasicHashPartInfrastructure<HashPartCols, ObPartStoredRow> hp_infras_;
   };
 
-  public:
+public:
   explicit ObHashSetOperator(common::ObIAllocator& alloc);
   ~ObHashSetOperator();
 
   virtual int rescan(ObExecContext& ctx) const;
 
-  protected:
+protected:
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
 
   int build_hash_table(ObExecContext& ctx, bool from_child) const;
@@ -100,7 +100,7 @@ class ObHashSetOperator : public ObSetOperator {
   virtual int inner_close(ObExecContext& ctx) const;
   virtual int init_hash_partition_infras(ObExecContext& ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHashSetOperator);
 };
 

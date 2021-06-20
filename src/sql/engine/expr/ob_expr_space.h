@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprSpace : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSpace(common::ObIAllocator& alloc);
   virtual ~ObExprSpace(){};
 
@@ -29,7 +29,7 @@ class ObExprSpace : public ObFuncExprOperator {
 
   static int eval_space(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSpace);
 };
 

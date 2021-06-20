@@ -23,7 +23,7 @@
 namespace oceanbase {
 namespace blocksstable {
 class ObMicroBlockIndexInfo : public common::ObIKVCacheKey {
-  public:
+public:
   ObMicroBlockIndexInfo();
   ObMicroBlockIndexInfo(const MacroBlockId& block_id, const uint64_t table_id, const int64_t file_id);
   virtual ~ObMicroBlockIndexInfo();
@@ -44,7 +44,7 @@ class ObMicroBlockIndexInfo : public common::ObIKVCacheKey {
   void set(const MacroBlockId& block_id, const uint64_t table_id, const int64_t file_id);
   TO_STRING_KV(K_(block_id), K_(table_id));
 
-  private:
+private:
   MacroBlockId block_id_;
   uint64_t table_id_;
   int64_t file_id_;
@@ -53,7 +53,7 @@ class ObMicroBlockIndexInfo : public common::ObIKVCacheKey {
 class ObMicroBlockIndexCache;
 
 class ObMicroBlockIndexBufferHandle {
-  public:
+public:
   ObMicroBlockIndexBufferHandle() : index_mgr_(NULL)
   {}
   ~ObMicroBlockIndexBufferHandle()
@@ -73,14 +73,14 @@ class ObMicroBlockIndexBufferHandle {
   }
   TO_STRING_KV(K_(handle), KP_(index_mgr));
 
-  private:
+private:
   friend class ObMicroBlockIndexCache;
   common::ObKVCacheHandle handle_;
   const ObMicroBlockIndexMgr* index_mgr_;
 };
 
 class ObMicroBlockIndexCache : public common::ObKVCache<ObMicroBlockIndexInfo, ObMicroBlockIndexMgr> {
-  public:
+public:
   ObMicroBlockIndexCache();
   virtual ~ObMicroBlockIndexCache();
   int init(const char* cache_name, const int64_t priority = 1);
@@ -104,9 +104,9 @@ class ObMicroBlockIndexCache : public common::ObKVCache<ObMicroBlockIndexInfo, O
   int cal_macro_purged_row_count(
       const uint64_t table_id, const ObMacroBlockCtx& macro_block_ctx, int64_t& purged_row_count);
 
-  private:
+private:
   class ObMicroBlockIndexIOCallback : public common::ObIOCallback {
-    public:
+  public:
     ObMicroBlockIndexIOCallback();
     virtual ~ObMicroBlockIndexIOCallback();
     virtual int64_t size() const;
@@ -116,10 +116,10 @@ class ObMicroBlockIndexCache : public common::ObKVCache<ObMicroBlockIndexInfo, O
     virtual const char* get_data();
     TO_STRING_KV(K_(key), KP_(buffer), K_(offset), K_(buf_size), KP_(cache), KP_(idx_mgr));
 
-    private:
+  private:
     int put_cache_and_fetch(const ObFullMacroBlockMeta& meta, ObMicroBlockIndexTransformer& transformer);
 
-    private:
+  private:
     friend class ObMicroBlockIndexCache;
     ObMicroBlockIndexInfo key_;
     char* buffer_;
@@ -138,7 +138,7 @@ class ObMicroBlockIndexCache : public common::ObKVCache<ObMicroBlockIndexInfo, O
       ObMicroBlockIndexTransformer& transformer, const ObMicroBlockIndexMgr*& index_mgr,
       common::ObKVCacheHandle& handle, const bool is_prewarm);
 
-  private:
+private:
   common::ObConcurrentFIFOAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockIndexCache);
 };

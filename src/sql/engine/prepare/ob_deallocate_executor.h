@@ -23,14 +23,14 @@ class ObExecContext;
 class ObDeallocateStmt;
 
 class ObDeallocateExecutor {
-  public:
+public:
   ObDeallocateExecutor()
   {}
   virtual ~ObDeallocateExecutor()
   {}
   int execute(ObExecContext& ctx, ObDeallocateStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDeallocateExecutor);
 };
 

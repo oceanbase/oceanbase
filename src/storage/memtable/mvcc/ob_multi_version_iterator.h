@@ -29,11 +29,11 @@ namespace memtable {
 
 class ObIMvccCtx;
 class ObMultiVersionValueIterator : public ObIMvccValueIterator {
-  public:
+public:
   ObMultiVersionValueIterator();
   virtual ~ObMultiVersionValueIterator();
-  // for iterating multi version row or uncommited transaction row
-  public:
+  // for iterating multi version row or uncommitted transaction row
+public:
   int init(const ObIMvccCtx& ctx, const transaction::ObTransSnapInfo& snapshot_info, const ObMemtableKey* key,
       ObMvccRow* value, transaction::ObTransStateTableGuard& trans_table_guard);
   virtual int get_next_node(const void*& tnode);
@@ -84,7 +84,7 @@ class ObMultiVersionValueIterator : public ObIMvccValueIterator {
   TO_STRING_KV(K_(value), KPC_(version_iter), KPC_(multi_version_iter), K_(max_committed_trans_version),
       K_(cur_trans_version), K_(is_node_compacted), K_(merge_log_ts), K_(iter_mode));
 
-  private:
+private:
   int get_trans_status_with_log_ts(const int64_t log_ts, ObMvccTransNode* trans_node,
       transaction::ObTransTableStatusType& status, int64_t& trans_version_at_merge_log_ts);
   int get_status_of_curr_trans_node(
@@ -96,7 +96,7 @@ class ObMultiVersionValueIterator : public ObIMvccValueIterator {
   int should_ignore_cur_node(const ObMvccTransNode& node, bool& ignore_flag);
   DISALLOW_COPY_AND_ASSIGN(ObMultiVersionValueIterator);
 
-  private:
+private:
   bool is_inited_;
   ObMvccRow* value_;
   ObMvccTransNode* version_iter_;
@@ -115,20 +115,20 @@ class ObMultiVersionValueIterator : public ObIMvccValueIterator {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class ObMultiVersionRowIterator {
-  public:
+public:
   ObMultiVersionRowIterator();
   ~ObMultiVersionRowIterator();
 
-  public:
+public:
   int init(ObQueryEngine& query_engine, const ObIMvccCtx& ctx, const transaction::ObTransSnapInfo& snapshot_info,
       const ObMvccScanRange& range, transaction::ObTransStateTableGuard& trans_table_guard);
   int get_next_row(const ObMemtableKey*& key, ObMultiVersionValueIterator*& value_iter);
   void reset();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiVersionRowIterator);
 
-  private:
+private:
   bool is_inited_;
   const ObIMvccCtx* ctx_;
   transaction::ObTransSnapInfo snapshot_info_;

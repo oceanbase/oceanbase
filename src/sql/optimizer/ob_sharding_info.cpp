@@ -282,9 +282,10 @@ int ObShardingInfo::is_compatible_partition_key(const common::ObIArray<ObRawExpr
   return ret;
 }
 
-int ObShardingInfo::check_if_match_partition_wise(ObLogPlan& log_plan, const EqualSets& equal_sets,
-    const common::ObIArray<ObRawExpr*>& left_keys, const common::ObIArray<ObRawExpr*>& right_keys,
-    const ObShardingInfo& left_sharding, const ObShardingInfo& right_sharding, bool& is_partition_wise)
+int ObShardingInfo::check_if_match_partition_wise(ObLogPlan& log_plan __attribute__((unused)),
+    const EqualSets& equal_sets, const common::ObIArray<ObRawExpr*>& left_keys,
+    const common::ObIArray<ObRawExpr*>& right_keys, const ObShardingInfo& left_sharding,
+    const ObShardingInfo& right_sharding, bool& is_partition_wise)
 {
   int ret = OB_SUCCESS;
   bool is_key_covered = false;
@@ -384,8 +385,8 @@ int ObShardingInfo::check_if_match_repart(const EqualSets& equal_sets, const ObI
   return ret;
 }
 
-int ObShardingInfo::is_physically_equal_partitioned(ObLogPlan& log_plan, const ObShardingInfo& left_sharding,
-    const ObShardingInfo& right_sharding, bool& is_physical_equal)
+int ObShardingInfo::is_physically_equal_partitioned(ObLogPlan& log_plan __attribute__((unused)),
+    const ObShardingInfo& left_sharding, const ObShardingInfo& right_sharding, bool& is_physical_equal)
 {
   int ret = OB_SUCCESS;
   ret = is_physically_equal_partitioned(left_sharding, right_sharding, is_physical_equal);

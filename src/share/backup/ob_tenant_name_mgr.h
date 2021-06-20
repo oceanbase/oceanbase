@@ -33,13 +33,13 @@ class ObMultiVersionSchemaService;
 
 // only manager tenant name and id mapping
 class ObTenantNameSimpleMgr final {
-  public:
+public:
   const int64_t TENANT_NAME_SIMPLE_MGR_VERSION = 1;
   struct ObTenantIdItem final {
     static const uint8_t VERSION = 1;
     OB_UNIS_VERSION(VERSION);
 
-    public:
+  public:
     ObTenantIdItem();
     uint64_t tenant_id_;
     int64_t timestamp_;
@@ -54,7 +54,7 @@ class ObTenantNameSimpleMgr final {
     static const uint8_t VERSION = 1;
     OB_UNIS_VERSION(VERSION);
 
-    public:
+  public:
     static const int64_t DEFAULT_TENANT_ID_ITEM_COUNT = 1;  // most tenant won't use rename
     ObTenantNameInfo();
     ~ObTenantNameInfo();
@@ -71,7 +71,7 @@ class ObTenantNameSimpleMgr final {
     static const uint8_t VERSION = 1;
     OB_UNIS_VERSION(VERSION);
 
-    public:
+  public:
     ObTenantNameMeta();
     void reset();
     int64_t schema_version_;  // 0 for not ready
@@ -100,12 +100,12 @@ class ObTenantNameSimpleMgr final {
   int get_infos(ObTenantNameMeta& meta, common::ObIArray<const ObTenantNameInfo*>& infos) const;
   int get_tenant_ids(hash::ObHashSet<uint64_t>& tenant_id_set);
 
-  private:
+private:
   int get_info_(const common::ObString& tenant_name, ObTenantNameInfo*& info);
   int write_buf_(char* buf, const int64_t buf_size, int64_t& pos) const;
   int alloc_tenant_name_info_(const common::ObString& tenant_name, ObTenantNameInfo*& info);
 
-  private:
+private:
   bool is_inited_;
   ObTenantNameMeta meta_;
   TenantNameHashMap tenant_name_infos_;
@@ -115,7 +115,7 @@ class ObTenantNameSimpleMgr final {
 
 // deal with schema
 class ObTenantNameMgr final {
-  public:
+public:
   ObTenantNameMgr();
   ~ObTenantNameMgr();
 
@@ -125,13 +125,13 @@ class ObTenantNameMgr final {
   int do_update(const bool is_force);
   int get_tenant_ids(common::ObIArray<uint64_t>& tenant_ids, int64_t& last_update_ts);
 
-  private:
+private:
   int update_backup_simple_mgr_(const int64_t schema_version);
   int add_new_tenant_name_(const int64_t schema_version, ObTenantNameSimpleMgr& new_mgr);
   ObTenantNameSimpleMgr* get_next_mgr_();
   int get_backup_tenant_ids_from_schema_(share::schema::ObSchemaGetterGuard& schema_guard);
 
-  private:
+private:
   bool is_inited_;
   oceanbase::common::ObMySQLProxy* sql_proxy_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

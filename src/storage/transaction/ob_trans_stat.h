@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace transaction {
 class ObTransStat {
-  public:
+public:
   ObTransStat() : participants_(common::ObModIds::OB_TRANS_PARTITION_ARRAY, common::OB_MALLOC_NORMAL_BLOCK_SIZE)
   {
     reset();
@@ -155,7 +155,7 @@ class ObTransStat {
       K_(ctx_addr), K_(prev_trans_arr), K_(next_trans_arr), K_(prev_trans_commit_count), K_(ctx_id),
       K_(pending_log_size), K_(flushed_log_size));
 
-  private:
+private:
   bool is_inited_;
   common::ObAddr addr_;
   ObTransID trans_id_;
@@ -190,7 +190,7 @@ class ObTransStat {
 };
 
 class ObTransLockStat {
-  public:
+public:
   ObTransLockStat()
   {
     reset();
@@ -241,7 +241,7 @@ class ObTransLockStat {
   TO_STRING_KV(K_(addr), K_(tenant_id), K_(partition), K_(memtable_key), K_(session_id), K_(proxy_session_id),
       K_(trans_id), K_(ctx_create_time), K_(expired_time));
 
-  private:
+private:
   bool is_inited_;
   common::ObAddr addr_;
   uint64_t tenant_id_;
@@ -255,7 +255,7 @@ class ObTransLockStat {
 };
 
 class ObTransResultInfoStat {
-  public:
+public:
   ObTransResultInfoStat()
   {
     reset();
@@ -292,7 +292,7 @@ class ObTransResultInfoStat {
 
   TO_STRING_KV(K_(state), K_(commit_version), K_(min_log_id), K_(trans_id), K_(partition), K_(addr));
 
-  private:
+private:
   bool is_inited_;
   int state_;
   int64_t commit_version_;
@@ -303,7 +303,7 @@ class ObTransResultInfoStat {
 };
 
 class ObDuplicatePartitionStat {
-  public:
+public:
   ObDuplicatePartitionStat()
   {
     reset();
@@ -341,7 +341,7 @@ class ObDuplicatePartitionStat {
   }
   TO_STRING_KV(K_(addr), K_(partition), K_(cur_log_id), K_(is_master), K_(lease_list));
 
-  private:
+private:
   common::ObAddr addr_;
   common::ObPartitionKey partition_;
   uint64_t cur_log_id_;

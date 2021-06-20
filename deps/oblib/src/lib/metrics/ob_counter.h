@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 class ObSimpleCounter {
-  public:
+public:
   ObSimpleCounter() : value_(0)
   {}
   ~ObSimpleCounter() = default;
@@ -45,13 +45,13 @@ class ObSimpleCounter {
     cur_value = ATOMIC_AAF(&value_, delta);
     return true;
   }  // for DCHash
-  private:
+private:
   int64_t value_;
 };
 
 template <int64_t SLOT_NUM, typename SlotPicker>
 class ObCounter {
-  public:
+public:
   ObCounter()
   {
     memset(items_, 0, sizeof(items_));
@@ -87,7 +87,7 @@ class ObCounter {
     return sum;
   }
 
-  private:
+private:
   struct Item {
     int64_t value_;
   } __attribute__((aligned(16)));

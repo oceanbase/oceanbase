@@ -27,7 +27,7 @@ class ObExpr;
 typedef ::oceanbase::common::ObSEArray<ObExpr*, 2> ExprArray;
 // The interface of OceanBase raw expression structure.
 class ObExpr {
-  public:
+public:
   enum ExprClass {
     EXPR_INVALID_CLASS = 0,
     EXPR_CONST,
@@ -167,7 +167,7 @@ class ObExpr {
 
   TO_STRING_KV(K_(type), K_(expr_class));
 
-  protected:
+protected:
   ObItemType type_;
   ExprClass expr_class_;
   sql::ObExprResType result_type_;

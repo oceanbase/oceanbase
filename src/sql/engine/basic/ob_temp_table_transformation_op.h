@@ -29,10 +29,10 @@ namespace oceanbase {
 namespace sql {
 class ObExecContext;
 class ObTempTableTransformationOpSpec : public ObOpSpec {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTempTableTransformationOpSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObOpSpec(alloc, type)
   {}
   virtual ~ObTempTableTransformationOpSpec()
@@ -41,7 +41,7 @@ class ObTempTableTransformationOpSpec : public ObOpSpec {
 };
 
 class ObTempTableTransformationOp : public ObOperator {
-  public:
+public:
   ObTempTableTransformationOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input)
   {}

@@ -29,7 +29,7 @@ class ObSchemaGetterGuard;
 namespace common {
 
 class ObSMRow : public obmysql::ObMySQLRow {
-  public:
+public:
   ObSMRow(obmysql::MYSQL_PROTOCOL_TYPE type, const ObNewRow& obrow, const ObDataTypeCastParams& dtc_params,
       const ColumnsFieldIArray* fields = NULL, share::schema::ObSchemaGetterGuard* schema_guard = NULL,
       uint64_t tenant = common::OB_INVALID_ID);
@@ -37,11 +37,11 @@ class ObSMRow : public obmysql::ObMySQLRow {
   virtual ~ObSMRow()
   {}
 
-  protected:
+protected:
   virtual int64_t get_cells_cnt() const;
   virtual int encode_cell(int64_t idx, char* buf, int64_t len, int64_t& pos, char* bitmap) const;
 
-  private:
+private:
   const ObNewRow& obrow_;
   const ObDataTypeCastParams dtc_params_;
   const ColumnsFieldIArray* fields_;

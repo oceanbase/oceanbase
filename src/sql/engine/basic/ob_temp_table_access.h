@@ -32,7 +32,7 @@ class ObTempTableAccessInput : public ObIPhyOperatorInput {
   friend class ObTempTableAccess;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTempTableAccessInput();
   virtual ~ObTempTableAccessInput();
   virtual void reset() override;
@@ -43,11 +43,11 @@ class ObTempTableAccessInput : public ObIPhyOperatorInput {
   int check_closed_finish(bool& is_end);
   int assign_ids(common::ObIArray<uint64_t>& interm_res_ids);
 
-  protected:
+protected:
   common::ObIAllocator* deserialize_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTempTableAccessInput);
 
-  public:
+public:
   uint64_t closed_count_;
   uint64_t unfinished_count_ptr_;
   common::ObSEArray<uint64_t, 8> interm_result_ids_;
@@ -56,11 +56,11 @@ class ObTempTableAccessInput : public ObIPhyOperatorInput {
 class ObTempTableAccess : public ObNoChildrenPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class ObTempTableAccessCtx : public ObPhyOperatorCtx {
     friend class ObTempTableAccess;
 
-    public:
+  public:
     explicit ObTempTableAccessCtx(ObExecContext& ctx)
         : ObPhyOperatorCtx(ctx), row_store_(NULL), tta_input_(NULL), is_started_(false)
     {}
@@ -72,14 +72,14 @@ class ObTempTableAccess : public ObNoChildrenPhyOperator {
     }
     int locate_interm_result(dtl::ObDTLIntermResultKey& dtl_int_key);
 
-    private:
+  private:
     ObChunkRowStore* row_store_;
     ObChunkRowStore::Iterator row_store_it_;
     ObTempTableAccessInput* tta_input_;
     bool is_started_;
   };
 
-  public:
+public:
   ObTempTableAccess(common::ObIAllocator& alloc)
       : ObNoChildrenPhyOperator(alloc),
         output_indexs_(alloc),
@@ -138,7 +138,7 @@ class ObTempTableAccess : public ObNoChildrenPhyOperator {
 
   DISALLOW_COPY_AND_ASSIGN(ObTempTableAccess);
 
-  private:
+private:
   common::ObFixedArray<int64_t, common::ObIAllocator> output_indexs_;
   uint64_t temp_table_id_;
   bool is_distributed_;

@@ -27,14 +27,14 @@ class ObPartitionComponentFactory;
 class ObOldSSTable;
 
 class ObTableMgrGCTask : public common::ObTimerTask {
-  public:
+public:
   ObTableMgrGCTask();
   virtual ~ObTableMgrGCTask();
   virtual void runTimerTask() override;
 };
 
 class ObTableMgr : public blocksstable::ObIRedoModule {
-  public:
+public:
   static const int64_t DEFAULT_HASH_MAP_BUCKETS_COUNT = 100000;  // 10w
   static const int64_t GC_INTERVAL_US = 60 * 1000 * 1000;
   struct CompletedTableNode;
@@ -44,7 +44,7 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   typedef common::hash::ObPreAllocLinkHashMap<uint64_t, ObITable, AllTableNode, ObTableProtector> AllTableMap;
 
   struct CompletedTableNode : public common::hash::ObPreAllocLinkHashNode<ObITable::TableKey, ObITable> {
-    public:
+  public:
     explicit CompletedTableNode(ObITable& item) : ObPreAllocLinkHashNode(item), next_(NULL)
     {}
     virtual ~CompletedTableNode()
@@ -64,20 +64,20 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   };
 
   class CompletedTableGetFunctor : public CompletedTableMap::GetFunctor {
-    public:
+  public:
     explicit CompletedTableGetFunctor(ObTableHandle& handle) : handle_(handle)
     {}
     virtual ~CompletedTableGetFunctor()
     {}
     virtual int operator()(ObITable& table) override;
 
-    private:
+  private:
     ObTableHandle& handle_;
     DISALLOW_COPY_AND_ASSIGN(CompletedTableGetFunctor);
   };
 
   class UnneedCompletedTableFinder : public CompletedTableMap::ForeachFunctor {
-    public:
+  public:
     UnneedCompletedTableFinder();
     virtual ~UnneedCompletedTableFinder();
     int init(const int64_t max_batch_count);
@@ -92,7 +92,7 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
       return is_full_;
     }
 
-    private:
+  private:
     bool is_inited_;
     int64_t max_batch_count_;
     bool is_full_;
@@ -124,7 +124,7 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   };
 
   class UnneedAllTableFinder : public AllTableMap::ForeachFunctor {
-    public:
+  public:
     UnneedAllTableFinder()
     {}
     virtual ~UnneedAllTableFinder()
@@ -135,13 +135,13 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
       return del_tables_;
     }
 
-    private:
+  private:
     common::ObArray<ObITable*> del_tables_;
     DISALLOW_COPY_AND_ASSIGN(UnneedAllTableFinder);
   };
 
   class AllTableEraseChecker : public AllTableMap::EraseChecker {
-    public:
+  public:
     virtual int operator()(ObITable& table) override;
   };
 
@@ -167,7 +167,7 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   int free_all_sstables();
   int get_all_tables(ObTablesHandle& handle);
 
-  private:
+private:
   ObTableMgr();
   virtual ~ObTableMgr();
   int complete_memtable(memtable::ObMemtable* memtable, const int64_t snapshot_version, const int64_t freeze_log_ts);
@@ -197,7 +197,7 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   int lock_multi_bucket_lock(common::ObMultiBucketLockGuard& guard, common::ObIArray<ObITable*>& tables);
   void free_all_tables();
 
-  private:
+private:
   bool is_inited_;
   CompletedTableMap completed_table_map_;
   AllTableMap all_table_map_;

@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDropTableStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObDropTableStmt(common::ObIAllocator* name_pool);
   ObDropTableStmt();
   virtual ~ObDropTableStmt();
@@ -52,7 +52,7 @@ class ObDropTableStmt : public ObDDLStmt {
 
   TO_STRING_KV(K_(stmt_type), K_(drop_table_arg));
 
-  private:
+private:
   obrpc::ObDropTableArg drop_table_arg_;
   bool is_view_stmt_;
   DISALLOW_COPY_AND_ASSIGN(ObDropTableStmt);

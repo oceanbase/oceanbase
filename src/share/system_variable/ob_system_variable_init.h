@@ -74,7 +74,7 @@ struct ObSysVarFromJson {
 };
 
 class ObSysVariables {
-  public:
+public:
   static int64_t get_all_sys_var_count();
   static ObSysVarClassType get_sys_var_id(int64_t i);
   static common::ObString get_name(int64_t i);
@@ -96,7 +96,7 @@ class ObSysVariables {
 };
 
 class ObSysVarsToIdxMap {
-  public:
+public:
   static int64_t get_store_idx(int64_t var_id);
   static bool has_invalid_sys_var_id();
 };

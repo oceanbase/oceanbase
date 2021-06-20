@@ -21,7 +21,7 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObInformationParametersTable : public common::ObVirtualTableScannerIterator {
-  private:
+private:
   enum InformationParametersTableColumns {
     SPECIFIC_CATALOG = 16,
     SPECIFIC_SCHEMA,
@@ -41,7 +41,7 @@ class ObInformationParametersTable : public common::ObVirtualTableScannerIterato
     ROUTINE_TYPE
   };
 
-  public:
+public:
   ObInformationParametersTable();
   virtual ~ObInformationParametersTable();
 
@@ -52,11 +52,11 @@ class ObInformationParametersTable : public common::ObVirtualTableScannerIterato
     tenant_id_ = tenant_id;
   }
 
-  private:
-  private:
+private:
+private:
   uint64_t tenant_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObInformationParametersTable);
 };
 }  // namespace observer

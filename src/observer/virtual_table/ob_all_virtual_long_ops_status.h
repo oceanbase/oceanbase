@@ -21,16 +21,16 @@ namespace oceanbase {
 namespace observer {
 
 class ObAllVirtualLongOpsStatus : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualLongOpsStatus();
   virtual ~ObAllVirtualLongOpsStatus() = default;
   int init();
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   int convert_stat_to_row(const storage::ObILongOpsStat& stat, common::ObNewRow*& row);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualLongOpsStatus);
   bool is_inited_;
   storage::ObLongOpsMonitorIterator iter_;

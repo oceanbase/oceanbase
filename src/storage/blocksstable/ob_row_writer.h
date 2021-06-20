@@ -29,7 +29,7 @@ namespace blocksstable {
 class ObRowHeader;
 
 class ObRowWriter {
-  public:
+public:
   ObRowWriter();
   virtual ~ObRowWriter();
   int write(const common::ObNewRow& row, char* buf, const int64_t buf_size, const common::ObRowStoreType row_store_type,
@@ -43,7 +43,7 @@ class ObRowWriter {
       const int64_t buf_size, int64_t& pos, int64_t& rowkey_start_pos, int64_t& rowkey_end_pos,
       const bool only_row_key = false);
 
-  private:
+private:
   struct NumberAllocator {
     char* buf_;
     int64_t buf_size_;
@@ -65,7 +65,7 @@ class ObRowWriter {
     }
   };
 
-  private:
+private:
   inline int write_oracle_timestamp(
       const common::ObOTimestampData& ot_data, const common::ObOTimestampMetaAttrType otmat);
   int write_text_store(const common::ObObj& obj);
@@ -89,7 +89,7 @@ class ObRowWriter {
   OB_INLINE int write_char(const common::ObObj& obj, const storage::ObDataStoreType& meta_type,
       const common::ObString& char_value, const int64_t max_length);
 
-  private:
+private:
   char* buf_;
   int64_t buf_size_;
   int64_t start_pos_;

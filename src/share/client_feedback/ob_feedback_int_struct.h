@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace share {
 
 class ObFeedbackIntStruct : public ObAbstractFeedbackObject<ObFeedbackIntStruct> {
-  public:
+public:
   ObFeedbackIntStruct(ObFeedbackElementType type) : ObAbstractFeedbackObject<ObFeedbackIntStruct>(type), int_value_(0)
   {}
   virtual ~ObFeedbackIntStruct()
@@ -53,7 +53,7 @@ class ObFeedbackIntStruct : public ObAbstractFeedbackObject<ObFeedbackIntStruct>
 
   TO_STRING_KV("type", get_feedback_element_type_str(type_), K_(int_value));
 
-  protected:
+protected:
   int64_t int_value_;
 };
 
@@ -64,7 +64,7 @@ inline bool ObFeedbackIntStruct::is_valid_obj() const
 
 #define INT_FB_STRUCT(name, type)           \
   class name : public ObFeedbackIntStruct { \
-    public:                                 \
+  public:                                   \
     name() : ObFeedbackIntStruct(type)      \
     {}                                      \
     virtual ~name()                         \

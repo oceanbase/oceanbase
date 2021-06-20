@@ -460,7 +460,7 @@ int ObArchiveSender::handle(ObArchiveSendTaskStatus& task_status, SendTaskArray&
                    unused_archived_checkpoint_ts,
                    unused_clog_epoch_id,
                    unused_accum_checksum))) {
-      ARCHIVE_LOG(WARN, "faild to get_max_archived_info", KR(ret), KPC(pg_archive_task));
+      ARCHIVE_LOG(WARN, "failed to get_max_archived_info", KR(ret), KPC(pg_archive_task));
     } else if (OB_FAIL(check_can_send_task_(
                    epoch, incarnation, archive_round, max_archived_log_id, max_archived_log_ts, array))) {
       ARCHIVE_LOG(WARN, "check_can_send_task_ can't send this task", KR(ret), KPC(pg_archive_task));

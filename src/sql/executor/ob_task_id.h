@@ -22,7 +22,7 @@ namespace sql {
 class ObTaskID final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTaskID(const ObJobID& ob_job_id, uint64_t task_id) : ob_job_id_(ob_job_id), task_id_(task_id), task_cnt_(0)
   {}
   ObTaskID() : ob_job_id_(), task_id_(common::OB_INVALID_ID), task_cnt_(0)
@@ -131,7 +131,7 @@ class ObTaskID final {
   TO_STRING_KV(N_OB_JOB_ID, ob_job_id_, N_TASK_ID, task_id_, K_(task_cnt));
   TO_YSON_KV(OB_ID(job_id), ob_job_id_, OB_ID(task_id), task_id_);
 
-  private:
+private:
   /* variables */
   ObJobID ob_job_id_;
   uint64_t task_id_;

@@ -30,10 +30,10 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxMSCoordOpInput : public ObPxReceiveOpInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMSCoordOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxReceiveOpInput(ctx, spec)
   {}
   virtual ~ObPxMSCoordOpInput()
@@ -43,7 +43,7 @@ class ObPxMSCoordOpInput : public ObPxReceiveOpInput {
 class ObPxMSCoordSpec : public ObPxCoordSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMSCoordSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObPxCoordSpec(alloc, type), all_exprs_(alloc), sort_collations_(alloc), sort_cmp_funs_(alloc)
   {}
@@ -55,23 +55,23 @@ class ObPxMSCoordSpec : public ObPxCoordSpec {
 };
 
 class ObPxMSCoordOp : public ObPxCoordOp {
-  public:
+public:
   ObPxMSCoordOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObPxMSCoordOp()
   {}
 
-  public:
+public:
   class ObPxMSCoordOpEventListener : public ObIPxCoordEventListener {
-    public:
+  public:
     ObPxMSCoordOpEventListener(ObPxMSCoordOp& px_coord_op) : px_coord_op_(px_coord_op)
     {}
     int on_root_data_channel_setup();
 
-    private:
+  private:
     ObPxMSCoordOp& px_coord_op_;
   };
   class ObMsgReceiveFilter : public dtl::ObIDltChannelLoopPred {
-    public:
+  public:
     ObMsgReceiveFilter(ObRowHeap<ObMaxDatumRowCompare, ObChunkDatumStore::LastStoredRow<>>& heap)
         : data_ch_idx_start_(-1), data_ch_idx_end_(-1), heap_(heap)
     {}
@@ -93,13 +93,13 @@ class ObPxMSCoordOp : public ObPxCoordOp {
       return data_ch_idx_start_;
     }
 
-    private:
+  private:
     int64_t data_ch_idx_start_;
     int64_t data_ch_idx_end_;
     ObRowHeap<ObMaxDatumRowCompare, ObChunkDatumStore::LastStoredRow<>>& heap_;
   };
 
-  public:
+public:
   virtual int inner_open() override;
   virtual void destroy() override;
   virtual int inner_close() override;
@@ -111,13 +111,13 @@ class ObPxMSCoordOp : public ObPxCoordOp {
   }
   int init_row_heap(int64_t n_ways);
 
-  private:
+private:
   virtual int free_allocator();
   int next_row(bool& wait_next_msg);
   virtual int setup_loop_proc() override;
   int init_store_rows(int64_t n_ways);
 
-  private:
+private:
   ObPxMSCoordOpEventListener listener_;
   ObSerialDfoScheduler serial_scheduler_;
   ObParallelDfoScheduler parallel_scheduler_;

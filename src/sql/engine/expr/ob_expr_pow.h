@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprPow : public ObExprOperator {
-  public:
+public:
   explicit ObExprPow(common::ObIAllocator& alloc);
   virtual ~ObExprPow(){};
 
@@ -33,7 +33,7 @@ class ObExprPow : public ObExprOperator {
   static int safe_set_double(common::ObDatum& datum, double value);
   static int calc_pow_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprPow) const;
 };
 }  // namespace sql

@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObSetPasswordResolver : public ObDCLResolver {
-  public:
+public:
   explicit ObSetPasswordResolver(ObResolverParams& params);
   virtual ~ObSetPasswordResolver();
 
@@ -27,11 +27,11 @@ class ObSetPasswordResolver : public ObDCLResolver {
 
   static bool is_valid_mysql41_passwd(const common::ObString& str);
 
-  private:
+private:
   int resolve_oracle_password_strength(
       common::ObString& user_name, common::ObString& hostname, common::ObString& password);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSetPasswordResolver);
 };

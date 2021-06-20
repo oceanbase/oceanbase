@@ -109,7 +109,7 @@ struct ObLogReqContext {
 };
 
 class ObINetReq : public obrpc::ObIFill {
-  public:
+public:
   ObINetReq()
   {}
   virtual ~ObINetReq()
@@ -137,7 +137,7 @@ enum ObPushLogMode {
 struct ObPushLogReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPushLogReq(common::ObProposalID proposal_id, const char* buf, int64_t len, int32_t push_mode)
       : proposal_id_(proposal_id), buf_(buf), len_(len), push_mode_(push_mode)
   {}
@@ -156,7 +156,7 @@ struct ObPushLogReq : public ObINetReq {
 struct ObPushMsLogReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPushMsLogReq(common::ObProposalID proposal_id, const char* buf, int64_t len)
       : proposal_id_(proposal_id), buf_(buf), len_(len)
   {}
@@ -174,7 +174,7 @@ struct ObPushMsLogReq : public ObINetReq {
 struct ObFetchLogReqV2 : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFetchLogReqV2()
       : start_id_(0),
         end_limit_(0),
@@ -214,7 +214,7 @@ struct ObFetchLogReqV2 : public ObINetReq {
 struct ObAckLogReqV2 : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAckLogReqV2(uint64_t log_id, common::ObProposalID proposal_id) : log_id_(log_id), proposal_id_(proposal_id)
   {}
   ObAckLogReqV2() : log_id_(0), proposal_id_()
@@ -230,7 +230,7 @@ struct ObAckLogReqV2 : public ObINetReq {
 struct ObStandbyAckLogReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStandbyAckLogReq() : log_id_(common::OB_INVALID_ID), proposal_id_()
   {}
   ObStandbyAckLogReq(uint64_t log_id, common::ObProposalID proposal_id) : log_id_(log_id), proposal_id_(proposal_id)
@@ -246,7 +246,7 @@ struct ObStandbyAckLogReq : public ObINetReq {
 struct ObStandbyQuerySyncStartIdReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStandbyQuerySyncStartIdReq() : send_ts_(common::OB_INVALID_TIMESTAMP)
   {}
   explicit ObStandbyQuerySyncStartIdReq(const int64_t timestamp) : send_ts_(timestamp)
@@ -261,7 +261,7 @@ struct ObStandbyQuerySyncStartIdReq : public ObINetReq {
 struct ObStandbyQuerySyncStartIdResp : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStandbyQuerySyncStartIdResp()
       : original_send_ts_(common::OB_INVALID_TIMESTAMP), sync_start_id_(common::OB_INVALID_ID)
   {}
@@ -279,7 +279,7 @@ struct ObStandbyQuerySyncStartIdResp : public ObINetReq {
 struct ObRenewMsLogAckReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRenewMsLogAckReq(uint64_t log_id, int64_t submit_timestamp, common::ObProposalID proposal_id)
       : log_id_(log_id), submit_timestamp_(submit_timestamp), proposal_id_(proposal_id)
   {}
@@ -297,7 +297,7 @@ struct ObRenewMsLogAckReq : public ObINetReq {
 struct ObFakeAckReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFakeAckReq(uint64_t log_id, common::ObProposalID proposal_id) : log_id_(log_id), proposal_id_(proposal_id)
   {}
   ObFakeAckReq() : log_id_(0), proposal_id_()
@@ -313,7 +313,7 @@ struct ObFakeAckReq : public ObINetReq {
 struct ObFakePushLogReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFakePushLogReq(uint64_t log_id, common::ObProposalID proposal_id) : log_id_(log_id), proposal_id_(proposal_id)
   {}
   ObFakePushLogReq() : log_id_(0), proposal_id_()
@@ -329,7 +329,7 @@ struct ObFakePushLogReq : public ObINetReq {
 struct ObPrepareReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObPrepareReq(common::ObProposalID proposal_id) : proposal_id_(proposal_id)
   {}
   ObPrepareReq() : proposal_id_()
@@ -344,7 +344,7 @@ struct ObPrepareReq : public ObINetReq {
 struct ObPrepareRespV2 : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPrepareRespV2(common::ObProposalID proposal_id, int64_t max_log_id, int64_t max_log_ts)
       : proposal_id_(proposal_id), max_log_id_(max_log_id), max_log_ts_(max_log_ts)
   {}
@@ -361,7 +361,7 @@ struct ObPrepareRespV2 : public ObINetReq {
 struct ObStandbyPrepareReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObStandbyPrepareReq(common::ObProposalID proposal_id) : ms_proposal_id_(proposal_id)
   {}
   ObStandbyPrepareReq() : ms_proposal_id_()
@@ -376,7 +376,7 @@ struct ObStandbyPrepareReq : public ObINetReq {
 struct ObStandbyPrepareResp : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObStandbyPrepareResp(common::ObProposalID proposal_id, uint64_t ms_log_id, int64_t membership_version)
       : ms_proposal_id_(proposal_id), ms_log_id_(ms_log_id), membership_version_(membership_version)
   {}
@@ -399,7 +399,7 @@ struct ObStandbyPrepareResp : public ObINetReq {
 struct ObConfirmedInfoReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObConfirmedInfoReq(const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool batch_committed)
   {
     log_id_ = log_id;
@@ -419,7 +419,7 @@ struct ObConfirmedInfoReq : public ObINetReq {
 struct ObRenewMsLogConfirmedInfoReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRenewMsLogConfirmedInfoReq(
       const uint64_t log_id, const common::ObProposalID& ms_proposal_id, const ObConfirmedInfo& confirmed_info)
   {
@@ -440,7 +440,7 @@ struct ObRenewMsLogConfirmedInfoReq : public ObINetReq {
 struct ObLogKeepaliveMsg : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogKeepaliveMsg(const uint64_t next_log_id, const int64_t next_log_ts_lb, const uint64_t deliver_cnt)
       : next_log_id_(next_log_id), next_log_ts_lb_(next_log_ts_lb), deliver_cnt_(deliver_cnt)
   {}
@@ -457,7 +457,7 @@ struct ObLogKeepaliveMsg : public ObINetReq {
 struct ObRestoreAliveMsg : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRestoreAliveMsg(const uint64_t start_log_id) : start_log_id_(start_log_id)
   {}
   ObRestoreAliveMsg() : start_log_id_(0)
@@ -472,7 +472,7 @@ struct ObRestoreAliveMsg : public ObINetReq {
 struct ObRestoreAliveReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRestoreAliveReq(const int64_t send_ts) : send_ts_(send_ts)
   {}
   ObRestoreAliveReq() : send_ts_(0)
@@ -487,7 +487,7 @@ struct ObRestoreAliveReq : public ObINetReq {
 struct ObRestoreAliveResp : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRestoreAliveResp(const int64_t send_ts) : send_ts_(send_ts)
   {}
   ObRestoreAliveResp() : send_ts_(0)
@@ -502,7 +502,7 @@ struct ObRestoreAliveResp : public ObINetReq {
 struct ObRestoreTakeoverMsg : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRestoreTakeoverMsg() : send_ts_(common::OB_INVALID_TIMESTAMP)
   {}
   ObRestoreTakeoverMsg(const int64_t send_ts) : send_ts_(send_ts)
@@ -522,7 +522,7 @@ enum ObLogMissingMsgType {
 struct ObNotifyLogMissingReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObNotifyLogMissingReq(const uint64_t start_log_id, const bool is_in_member_list, const int32_t msg_type)
       : start_log_id_(start_log_id), is_in_member_list_(is_in_member_list), msg_type_(msg_type)
   {}
@@ -539,7 +539,7 @@ struct ObNotifyLogMissingReq : public ObINetReq {
 struct ObFetchRegisterServerRespV2 : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFetchRegisterServerRespV2() : is_assign_parent_succeed_(false), candidate_list_(), msg_type_(0)
   {}
   explicit ObFetchRegisterServerRespV2(bool is_assign_parent_succeed, const int32_t msg_type)
@@ -558,7 +558,7 @@ struct ObFetchRegisterServerRespV2 : public ObINetReq {
 struct ObFetchRegisterServerReqV2 : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFetchRegisterServerReqV2()
       : replica_type_(common::REPLICA_TYPE_MAX),
         next_replay_log_ts_(common::OB_INVALID_TIMESTAMP),
@@ -605,7 +605,7 @@ struct ObFetchRegisterServerReqV2 : public ObINetReq {
 struct ObRejectMsgReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRejectMsgReq() : msg_type_(0), timestamp_(common::OB_INVALID_TIMESTAMP)
   {}
   explicit ObRejectMsgReq(const int32_t msg_type, const int64_t timestamp) : msg_type_(msg_type), timestamp_(timestamp)
@@ -621,7 +621,7 @@ struct ObRejectMsgReq : public ObINetReq {
 struct ObRestoreLogFinishMsg : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRestoreLogFinishMsg() : log_id_(common::OB_INVALID_ID)
   {}
   explicit ObRestoreLogFinishMsg(const uint64_t log_id) : log_id_(log_id)
@@ -636,7 +636,7 @@ struct ObRestoreLogFinishMsg : public ObINetReq {
 struct ObReregisterMsg : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObReregisterMsg() : send_ts_(common::OB_INVALID_TIMESTAMP), new_leader_()
   {}
   explicit ObReregisterMsg(const int64_t timestamp, const share::ObCascadMember& new_leader)
@@ -653,7 +653,7 @@ struct ObReregisterMsg : public ObINetReq {
 struct ObBroadcastInfoReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBroadcastInfoReq(const common::ObReplicaType& replica_type, const uint64_t max_confirmed_log_id)
       : replica_type_(replica_type), max_confirmed_log_id_(max_confirmed_log_id)
   {}
@@ -670,7 +670,7 @@ struct ObBroadcastInfoReq : public ObINetReq {
 class ObBatchPushLogReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBatchPushLogReq()
   {
     reset();
@@ -684,19 +684,19 @@ class ObBatchPushLogReq : public ObINetReq {
   void reset();
   TO_STRING_KV(K(trans_id_), K(partition_array_), K(log_info_array_));
 
-  public:
+public:
   transaction::ObTransID trans_id_;
   common::ObPartitionArray partition_array_;
   ObLogInfoArray log_info_array_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchPushLogReq);
 };
 
 class ObBatchAckLogReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBatchAckLogReq()
   {
     reset();
@@ -709,18 +709,18 @@ class ObBatchAckLogReq : public ObINetReq {
   void reset();
   TO_STRING_KV(K(trans_id_), K(batch_ack_array_));
 
-  public:
+public:
   transaction::ObTransID trans_id_;
   ObBatchAckArray batch_ack_array_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchAckLogReq);
 };
 
 struct ObReplaceSickChildReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObReplaceSickChildReq() : sick_child_(), cluster_id_(common::OB_INVALID_CLUSTER_ID)
   {}
   explicit ObReplaceSickChildReq(const common::ObAddr& sick_child)
@@ -740,7 +740,7 @@ struct ObReplaceSickChildReq : public ObINetReq {
 struct ObLeaderMaxLogMsg : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLeaderMaxLogMsg() : switchover_epoch_(-1), leader_max_log_id_(0), leader_next_log_ts_(-1)
   {}
   ObLeaderMaxLogMsg(const int64_t switchover_epoch, const uint64_t leader_max_log_id, const int64_t leader_next_log_ts)
@@ -759,7 +759,7 @@ struct ObLeaderMaxLogMsg : public ObINetReq {
 struct ObCheckRebuildReq : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckRebuildReq() : start_id_(0)
   {}
 
@@ -775,7 +775,7 @@ struct ObCheckRebuildReq : public ObINetReq {
 struct ObSyncLogArchiveProgressMsg : public ObINetReq {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSyncLogArchiveProgressMsg(const ObPGLogArchiveStatus& status) : status_(status)
   {}
   ObSyncLogArchiveProgressMsg() : status_()

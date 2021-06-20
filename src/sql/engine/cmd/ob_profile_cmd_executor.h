@@ -26,15 +26,15 @@ namespace sql {
 class ObExecContext;
 class ObUserProfileStmt;
 class ObProfileDDLExecutor {
-  public:
+public:
   ObProfileDDLExecutor()
   {}
   virtual ~ObProfileDDLExecutor()
   {}
   int execute(ObExecContext& ctx, ObUserProfileStmt& stmt);
 
-  private:
-  private:
+private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObProfileDDLExecutor);
 };
 

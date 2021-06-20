@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObSSTableGarbageCollector : public lib::ThreadPool {
-  public:
+public:
   ObSSTableGarbageCollector();
   virtual ~ObSSTableGarbageCollector();
   int init(transaction::ObTransService* trans_service);
@@ -29,7 +29,7 @@ class ObSSTableGarbageCollector : public lib::ThreadPool {
   void destroy();
   void run1() override;
 
-  private:
+private:
   static const int64_t SSTABLE_GC_INTERVAL = 30 * 1000 * 1000L;
   transaction::ObTransService* trans_service_;
   bool is_inited_;

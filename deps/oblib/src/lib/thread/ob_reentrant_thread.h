@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace share {
 
 class ObReentrantThread : public lib::ThreadPool {
-  public:
+public:
   ObReentrantThread();
   virtual ~ObReentrantThread();
 
@@ -46,7 +46,7 @@ class ObReentrantThread : public lib::ThreadPool {
     return thread_name_;
   }
 
-  protected:
+protected:
   // run thread interface, return void
   virtual void run2() = 0;
 
@@ -74,13 +74,13 @@ class ObReentrantThread : public lib::ThreadPool {
     return cond_;
   }
 
-  private:
+private:
   void run1() final;
 
-  protected:
+protected:
   volatile bool stop_;
 
-  private:
+private:
   volatile bool created_;
   int64_t running_cnt_;
   int64_t blocking_runnign_cnt_;

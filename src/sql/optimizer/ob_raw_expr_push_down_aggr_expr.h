@@ -24,7 +24,7 @@ class ObStmt;
  *  during output expr allocation.
  */
 class ObRawExprPushDownAggrExpr : public ObRawExprVisitor {
-  public:
+public:
   ObRawExprPushDownAggrExpr(const ObSQLSessionInfo* session_info, ObRawExprFactory& expr_factory)
       : session_info_(session_info), expr_factory_(expr_factory), push_down_avg_expr_(NULL)
   {}
@@ -60,7 +60,7 @@ class ObRawExprPushDownAggrExpr : public ObRawExprVisitor {
     return new_exprs_.count();
   }
 
-  private:
+private:
   const ObSQLSessionInfo* session_info_;
   ObRawExprFactory& expr_factory_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> new_exprs_;

@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace election {
 class ObElectionEventHistory {
-  public:
+public:
   ObElectionEventHistory()
   {
     reset();
@@ -35,7 +35,7 @@ class ObElectionEventHistory {
     reset();
   }
 
-  public:
+public:
   int64_t get_timestamp() const
   {
     return timestamp_;
@@ -60,7 +60,7 @@ class ObElectionEventHistory {
   const char* get_event_info_cstr() const;
   TO_STRING_KV(K_(partition), K_(addr), K_(current_leader), K_(event_type));
 
-  public:
+public:
   enum EventType {
     EVENT_MIN = 0,
     L_TAKEOVER_ASSIGN,
@@ -80,7 +80,7 @@ class ObElectionEventHistory {
     return (etype >= EVENT_MIN && etype <= EVENT_MAX);
   }
 
-  public:
+public:
   int64_t timestamp_;
   common::ObPartitionKey partition_;
   common::ObAddr addr_;
@@ -91,7 +91,7 @@ class ObElectionEventHistory {
 class ObElectionEventHistoryArray {
   typedef ObElectionEventHistory::EventType EventType;
 
-  public:
+public:
   ObElectionEventHistoryArray() : array_(NULL), self_(), is_inited_(false), idx_(0)
   {}
   ~ObElectionEventHistoryArray()
@@ -101,7 +101,7 @@ class ObElectionEventHistoryArray {
   void destroy();
   int init(const common::ObAddr& self);
 
-  public:
+public:
   int32_t get_event_cursor() const
   {
     return ATOMIC_LOAD(&idx_);
@@ -110,15 +110,15 @@ class ObElectionEventHistoryArray {
       const common::ObPartitionKey& pkey, const common::ObAddr& current_leader, const EventType etype);
   int get_prev_event_history(const int64_t now, int32_t& idx, ObElectionEventHistory& event_history) const;
 
-  public:
+public:
   static const int64_t OB_ELECT_EVENT_ITEM_NUM = 50000 * 5;  // 5w partitions, 5 records each
-  private:
+private:
   ObElectionEventHistory* array_;
   common::ObAddr self_;
   bool is_inited_;
   int32_t idx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObElectionEventHistoryArray);
 };
 

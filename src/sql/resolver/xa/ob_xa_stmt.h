@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObXaStmt : public ObStmt, public ObICmd {
-  public:
+public:
   explicit ObXaStmt(const stmt::StmtType stmt_type)
       : ObStmt(stmt_type), xid_string_(), gtrid_string_(), bqual_string_(), format_id_(1), flags_(0)
   {}
@@ -91,13 +91,13 @@ class ObXaStmt : public ObStmt, public ObICmd {
   TO_STRING_KV(
       N_STMT_TYPE, ((int)stmt_type_), K_(xid_string), K_(gtrid_string), K_(bqual_string), K_(format_id), K_(flags));
 
-  public:
+public:
   static const int32_t MAX_XID_LENGTH = 128;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXaStmt);
 
-  private:
+private:
   char xid_buffer_[MAX_XID_LENGTH];
   common::ObString xid_string_;
   common::ObString gtrid_string_;
@@ -107,31 +107,31 @@ class ObXaStmt : public ObStmt, public ObICmd {
 };
 
 class ObXaStartStmt : public ObXaStmt {
-  public:
+public:
   explicit ObXaStartStmt() : ObXaStmt(stmt::T_XA_START)
   {}
 };
 
 class ObXaEndStmt : public ObXaStmt {
-  public:
+public:
   explicit ObXaEndStmt() : ObXaStmt(stmt::T_XA_END)
   {}
 };
 
 class ObXaPrepareStmt : public ObXaStmt {
-  public:
+public:
   explicit ObXaPrepareStmt() : ObXaStmt(stmt::T_XA_PREPARE)
   {}
 };
 
 class ObXaCommitStmt : public ObXaStmt {
-  public:
+public:
   explicit ObXaCommitStmt() : ObXaStmt(stmt::T_XA_COMMIT)
   {}
 };
 
 class ObXaRollBackStmt : public ObXaStmt {
-  public:
+public:
   explicit ObXaRollBackStmt() : ObXaStmt(stmt::T_XA_ROLLBACK)
   {}
 };

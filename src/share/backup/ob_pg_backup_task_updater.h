@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace share {
 
 class ObPGBackupTaskUpdater {
-  public:
+public:
   ObPGBackupTaskUpdater();
   virtual ~ObPGBackupTaskUpdater() = default;
   int init(common::ObISQLClient& sql_proxy);
@@ -55,7 +55,7 @@ class ObPGBackupTaskUpdater {
       ObPGBackupTaskInfo& pg_task_info);
   int update_status_and_result_and_statics(const common::ObIArray<ObPGBackupTaskInfo>& pg_task_info_array);
 
-  private:
+private:
   static const int64_t MAX_BATCH_COUNT = 1024;
   bool is_inited_;
   common::ObISQLClient* sql_proxy_;

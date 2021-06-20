@@ -35,19 +35,19 @@ enum ObSequenceArg {
 };
 
 struct ObSequenceValueAllocator : public common::ObDataBuffer {
-  public:
+public:
   ObSequenceValueAllocator() : ObDataBuffer(static_cast<char*>(buf_), common::number::ObNumber::MAX_BYTE_LEN)
   {}
   ~ObSequenceValueAllocator() = default;
 
-  private:
+private:
   char buf_[common::number::ObNumber::MAX_BYTE_LEN];
 };
 
 struct ObSequenceValue {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSequenceValue();
   ObSequenceValue(int64_t init_val);
   int assign(const ObSequenceValue& other);
@@ -64,13 +64,13 @@ struct ObSequenceValue {
   }
   TO_STRING_KV("val", val_.format());
 
-  private:
+private:
   char buf_[common::number::ObNumber::MAX_BYTE_LEN];
   common::number::ObNumber val_;
 };
 
 struct ObSequenceMaxMinInitializer {
-  public:
+public:
   ObSequenceMaxMinInitializer();
 
   // Oracle defaults to 28 integers of 9s and 27 negatives of 9s
@@ -97,10 +97,10 @@ struct ObSequenceMaxMinInitializer {
 class ObSequenceOption {
   OB_UNIS_VERSION(2);
 
-  public:
+public:
   static const int64_t NO_CACHE = 1;
 
-  public:
+public:
   ObSequenceOption()
       : increment_by_(static_cast<int64_t>(1)),
         start_with_(static_cast<int64_t>(0)),
@@ -305,7 +305,7 @@ class ObSequenceOption {
 
   TO_STRING_KV(K_(increment_by), K_(start_with), K_(maxvalue), K_(minvalue), K_(cache), K_(cycle), K_(order));
 
-  private:
+private:
   ObSequenceValue increment_by_;
   ObSequenceValue start_with_;
   ObSequenceValue maxvalue_;

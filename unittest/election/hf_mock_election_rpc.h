@@ -28,7 +28,7 @@ using namespace common;
 namespace unittest {
 
 class ElectionMsgTask {
-  public:
+public:
   ElectionMsgTask()
   {
     reset();
@@ -42,24 +42,24 @@ class ElectionMsgTask {
     send_ts_ = 0;
   }
 
-  public:
+public:
   ObAddr sender_;
   ObElectionMsgBuffer msgbuf_;
   int64_t send_ts_;
 };
 
 class ElectionMsgTaskFactory {
-  public:
+public:
   static ElectionMsgTask* alloc();
   static void release(ElectionMsgTask* task);
 
-  private:
+private:
   static int64_t alloc_count_;
   static int64_t release_count_;
 };
 
 class MockElectionRpc : public ObIElectionRpc, public common::ObSimpleThreadPool {
-  public:
+public:
   MockElectionRpc() : is_inited_(false), election_mgr_(NULL), handle_cnt_(0), handle_time_(0)
   {}
   virtual ~MockElectionRpc()
@@ -108,11 +108,11 @@ class MockElectionRpc : public ObIElectionRpc, public common::ObSimpleThreadPool
 
   void handle(void* task);
 
-  private:
+private:
   const int64_t RPC_THREAD_NUM = 2;
   const int64_t RPC_TASK_LIMIT = 10000;
 
-  private:
+private:
   bool is_inited_;
   ObAddr self_;
   ObIElectionMgr* election_mgr_;

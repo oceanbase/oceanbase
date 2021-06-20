@@ -27,7 +27,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::observer;
 
 class TestMergeExcept : public ObMergeExcept {
-  public:
+public:
   TestMergeExcept() : ObMergeExcept(alloc_)
   {}
   ~TestMergeExcept()
@@ -35,18 +35,18 @@ class TestMergeExcept : public ObMergeExcept {
 };
 
 class TestMergeExceptTest : public ::testing::Test {
-  public:
+public:
   TestMergeExceptTest();
   virtual ~TestMergeExceptTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   TestMergeExceptTest(const TestMergeExceptTest& other);
   TestMergeExceptTest& operator=(const TestMergeExceptTest& other);
 
-  private:
+private:
   // data members
 };
 TestMergeExceptTest::TestMergeExceptTest()

@@ -30,10 +30,10 @@ class ObMultiVersionSchemaService;
 namespace omt {
 
 class ObTenantTimezoneMgr {
-  private:
+private:
   template <class Key, class Value, int num>
   class __ObTimezoneContainer : public common::hash::ObHashMap<Key, Value*> {
-    public:
+  public:
     __ObTimezoneContainer()
     {
       this->create(num, oceanbase::common::ObModIds::OB_HASH_BUCKET_TIME_ZONE_INFO_MAP, "HasNodTzInfM");
@@ -41,12 +41,12 @@ class ObTenantTimezoneMgr {
     virtual ~__ObTimezoneContainer()
     {}
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(__ObTimezoneContainer);
   };
   // Obtain all_tenant_ids regularly and update the timezone_map in mgr.
   class UpdateAllTenantTask : public common::ObTimerTask {
-    public:
+  public:
     UpdateAllTenantTask(ObTenantTimezoneMgr* tenant_tz_mgr) : tenant_tz_mgr_(tenant_tz_mgr)
     {}
     virtual ~UpdateAllTenantTask()
@@ -60,7 +60,7 @@ class ObTenantTimezoneMgr {
     const uint64_t SLEEP_USECONDS = 5000000;
   };
   class DeleteTenantTZTask : public common::ObTimerTask {
-    public:
+  public:
     DeleteTenantTZTask(ObTenantTimezoneMgr* tenant_tz_mgr) : tenant_tz_mgr_(tenant_tz_mgr)
     {}
     int init(ObTenantTimezoneMgr* tz_mgr);
@@ -74,7 +74,7 @@ class ObTenantTimezoneMgr {
   friend UpdateAllTenantTask;
   friend DeleteTenantTZTask;
 
-  public:
+public:
   using TenantTimezoneMap = __ObTimezoneContainer<uint64_t, ObTenantTimezone, common::OB_MAX_SERVER_TENANT_CNT>;
   typedef int (*tenant_timezone_map_getter)(const uint64_t tenant_id, common::ObTZMapWrap& timezone_wrap);
 
@@ -122,7 +122,7 @@ class ObTenantTimezoneMgr {
   }
   void destroy();
 
-  private:
+private:
   int get_tenant_timezone_inner(
       const uint64_t tenant_id, common::ObTZMapWrap& timezone_wrap, common::ObTimeZoneInfoManager*& tz_info_mgr);
   // static function of calling instance().get_tenant_timezone_map(). For init tenant_tz_map_getter_
@@ -130,7 +130,7 @@ class ObTenantTimezoneMgr {
 
   static int get_tenant_timezone_default(const uint64_t tenant_id, common::ObTZMapWrap& timezone_wrap);
 
-  private:
+private:
   ObTenantTimezoneMgr();
   common::ObArenaAllocator allocator_;
   bool is_inited_;
@@ -147,7 +147,7 @@ class ObTenantTimezoneMgr {
   // tenants which have been dropped, waiting for ref_count = 0 and delete them.
   common::ObList<ObTenantTimezone*, common::ObArenaAllocator> drop_tenant_tz_;
 
-  public:
+public:
   // tenant timezone getter, observer and liboblog init it during start up.
   tenant_timezone_map_getter tenant_tz_map_getter_;
 };

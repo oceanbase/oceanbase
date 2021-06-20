@@ -24,7 +24,7 @@ namespace unittest {
 
 typedef common::ObLinkHashMap<ObPGKey, ObPGArchiveTask> PGArchiveMap;
 class Works {
-  public:
+public:
   Works() : flag_(false), map_(), queue_()
   {}
   ~Works()
@@ -32,7 +32,7 @@ class Works {
     flag_ = false;
   }
 
-  public:
+public:
   bool flag_;
   PGArchiveMap map_;
   ObSpLinkQueue queue_;

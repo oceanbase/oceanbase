@@ -21,10 +21,10 @@
 namespace oceanbase {
 namespace sql {
 class ObPhyPlanMonitorInfo final {
-  public:
+public:
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   const static int OPERATOR_LOCAL_COUNT = 8;
   explicit ObPhyPlanMonitorInfo(common::ObConcurrentFIFOAllocator& allocator);
   virtual void destroy()
@@ -107,10 +107,10 @@ class ObPhyPlanMonitorInfo final {
     return scheduler_addr_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPhyPlanMonitorInfo);
 
-  private:
+private:
   common::ObConcurrentFIFOAllocator& allocator_;
   int64_t request_id_;
   common::ObAddr scheduler_addr_;

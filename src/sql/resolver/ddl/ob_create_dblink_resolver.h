@@ -25,12 +25,12 @@ class ObCreateDbLinkResolver : public ObDDLResolver {
   static const int64_t OPT_CLUSTER = 5;
   static const int64_t DBLINK_NODE_COUNT = 6;
 
-  public:
+public:
   explicit ObCreateDbLinkResolver(ObResolverParams& params);
   virtual ~ObCreateDbLinkResolver();
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateDbLinkResolver);
 };

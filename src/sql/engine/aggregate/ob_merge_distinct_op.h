@@ -23,12 +23,12 @@ namespace sql {
 class ObMergeDistinctSpec : public ObDistinctSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMergeDistinctSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 };
 
 class ObMergeDistinctOp : public ObOperator {
-  public:
+public:
   ObMergeDistinctOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;
@@ -38,7 +38,7 @@ class ObMergeDistinctOp : public ObOperator {
   virtual void destroy() override;
 
   class Compare {
-    public:
+  public:
     Compare() : eval_ctx_(nullptr), cmp_funcs_(nullptr), ret_code_(common::OB_SUCCESS)
     {}
 
@@ -49,7 +49,7 @@ class ObMergeDistinctOp : public ObOperator {
     int ret_code_;
   };
 
-  private:
+private:
   typedef ObChunkDatumStore::LastStoredRow<ObChunkDatumStore::StoredRow> LastStoreRow;
   bool first_got_row_;
   common::ObArenaAllocator alloc_;

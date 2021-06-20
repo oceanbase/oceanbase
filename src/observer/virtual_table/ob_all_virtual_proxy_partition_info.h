@@ -74,7 +74,7 @@ class ObAllVirtualProxyPartitionInfo : public ObAllVirtualProxyBaseIterator {
     SPARE6,
   };
 
-  public:
+public:
   ObAllVirtualProxyPartitionInfo();
   virtual ~ObAllVirtualProxyPartitionInfo();
 
@@ -83,14 +83,14 @@ class ObAllVirtualProxyPartitionInfo : public ObAllVirtualProxyBaseIterator {
 
   int fill_cells(const share::schema::ObTableSchema& table_schema);
 
-  private:
+private:
   int gen_proxy_part_pruning_str(const share::schema::ObTableSchema& table_schema,
       const share::schema::ObColumnSchemaV2* column_schema, common::ObString& proxy_check_partition_str);
 
   int build_check_str_to_raw_expr(const common::ObString& check_expr_str,
       const share::schema::ObTableSchema& table_schema, sql::ObRawExpr*& check_expr);
 
-  private:
+private:
   int64_t next_table_idx_;
   int64_t next_part_key_idx_;
   common::ObSEArray<const share::schema::ObTableSchema*, 1> table_schemas_;

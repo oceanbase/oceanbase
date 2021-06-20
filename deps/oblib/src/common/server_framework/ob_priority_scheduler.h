@@ -38,7 +38,7 @@ inline v4si v4si_gt0(v4si x_)
   return is_gt0;
 }
 class ObPriorityScheduler {
-  public:
+public:
   ObPriorityScheduler()
   {
     v4si quota = {1, 1, 1, 1};
@@ -50,7 +50,7 @@ class ObPriorityScheduler {
   ~ObPriorityScheduler()
   {}
 
-  public:
+public:
   void set_quota(v4si quota) __attribute__((always_inline))
   {
     quota_ = quota;

@@ -32,7 +32,7 @@ class ObUniqueCheckingTask;
 class ObReportIndexStatusTask;
 
 class ObBuildIndexDag : public share::ObIDag {
-  public:
+public:
   ObBuildIndexDag();
   virtual ~ObBuildIndexDag();
   int init(const ObPartitionKey& pkey, storage::ObPartitionService* partition_service);
@@ -73,7 +73,7 @@ class ObBuildIndexDag : public share::ObIDag {
     return static_cast<int64_t>(compat_mode_);
   }
 
-  private:
+private:
   bool is_inited_;
   ObPartitionKey pkey_;
   compaction::ObBuildIndexParam param_;
@@ -87,13 +87,13 @@ class ObBuildIndexDag : public share::ObIDag {
 };
 
 class ObIndexPrepareTask : public share::ObITask {
-  public:
+public:
   ObIndexPrepareTask();
   virtual ~ObIndexPrepareTask();
   int init(compaction::ObBuildIndexParam& param, compaction::ObBuildIndexContext* context);
   virtual int process();
 
-  private:
+private:
   int generate_report_index_status_task(ObBuildIndexDag* dag, ObUniqueCheckingTask* checking_task);
   int generate_compact_task(ObBuildIndexDag* dag, ObIndexMergeTask* merge_task, ObCompactToLatestTask*& compact_task);
   int generate_unique_checking_task(
@@ -103,7 +103,7 @@ class ObIndexPrepareTask : public share::ObITask {
   int generate_local_sort_tasks(ObBuildIndexDag* dag, ObIndexLocalSortTask*& local_sort_task);
   int add_monitor_info(ObBuildIndexDag* dag);
 
-  private:
+private:
   bool is_inited_;
   compaction::ObBuildIndexParam* param_;
   compaction::ObBuildIndexContext* context_;
@@ -111,16 +111,16 @@ class ObIndexPrepareTask : public share::ObITask {
 };
 
 class ObIndexLocalSortTask : public share::ObITask {
-  public:
+public:
   ObIndexLocalSortTask();
   virtual ~ObIndexLocalSortTask();
   int init(const int64_t task_id, compaction::ObBuildIndexParam& param, compaction::ObBuildIndexContext* context);
   virtual int process();
 
-  private:
+private:
   virtual int generate_next_task(share::ObITask*& next_task);
 
-  private:
+private:
   static const int64_t RETRY_INTERVAL = 100 * 1000;  // 100ms
   bool is_inited_;
   int64_t task_id_;
@@ -131,13 +131,13 @@ class ObIndexLocalSortTask : public share::ObITask {
 };
 
 class ObIndexMergeTask : public share::ObITask {
-  public:
+public:
   ObIndexMergeTask();
   virtual ~ObIndexMergeTask();
   int init(compaction::ObBuildIndexParam& param, compaction::ObBuildIndexContext* context);
   virtual int process();
 
-  private:
+private:
   int merge_local_sort_index(const compaction::ObBuildIndexParam& param,
       const ObIArray<ObExternalSort<ObStoreRow, ObStoreRowComparer>*>& local_sorters,
       ObExternalSort<ObStoreRow, ObStoreRowComparer>& merge_sorter, compaction::ObBuildIndexContext* context,
@@ -148,7 +148,7 @@ class ObIndexMergeTask : public share::ObITask {
   int add_new_index_sstable(const compaction::ObBuildIndexParam& param, blocksstable::ObMacroBlockWriter* writer,
       const int64_t* column_checksum, ObTableHandle& new_sstable);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexMergeTask);
   bool is_inited_;
   compaction::ObBuildIndexParam* param_;
@@ -160,7 +160,7 @@ class ObIndexMergeTask : public share::ObITask {
 };
 
 class ObCompactToLatestTask : public share::ObITask {
-  public:
+public:
   ObCompactToLatestTask();
   virtual ~ObCompactToLatestTask();
   int init(const common::ObPartitionKey& pkey, const compaction::ObBuildIndexParam& param,
@@ -168,7 +168,7 @@ class ObCompactToLatestTask : public share::ObITask {
   virtual int process();
   static int wait_compact_to_latest(const ObPartitionKey& pkey, const uint64_t index_id);
 
-  private:
+private:
   static const int64_t RETRY_INTERVAL = 100 * 1000;  // 100ms
   DISALLOW_COPY_AND_ASSIGN(ObCompactToLatestTask);
   bool is_inited_;
@@ -178,7 +178,7 @@ class ObCompactToLatestTask : public share::ObITask {
 };
 
 class ObUniqueIndexChecker {
-  public:
+public:
   ObUniqueIndexChecker();
   virtual ~ObUniqueIndexChecker() = default;
   int init(ObPartitionService* part_service, const common::ObPartitionKey& pkey,
@@ -188,9 +188,9 @@ class ObUniqueIndexChecker {
   int check_local_index(share::ObIDag* dag, ObPartitionStorage* storage, const int64_t snapshot_version);
   int check_global_index(share::ObIDag* dag, ObPartitionStorage* storage);
 
-  private:
+private:
   struct ObScanTableParam {
-    public:
+  public:
     ObScanTableParam()
         : data_table_schema_(NULL),
           index_schema_(NULL),
@@ -229,7 +229,7 @@ class ObUniqueIndexChecker {
   int try_get_read_tables(
       const uint64_t table_id, const int64_t snapshot_version, share::ObIDag* dag, ObTablesHandle& tables_handle);
 
-  private:
+private:
   static const int64_t RETRY_INTERVAL = 10 * 1000L;
   bool is_inited_;
   ObPartitionService* part_service_;
@@ -242,13 +242,13 @@ class ObUniqueIndexChecker {
 };
 
 class ObUniqueCheckingTask : public share::ObITask {
-  public:
+public:
   ObUniqueCheckingTask();
   virtual ~ObUniqueCheckingTask();
   int init(const compaction::ObBuildIndexParam& param, compaction::ObBuildIndexContext* context);
   virtual int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUniqueCheckingTask);
   bool is_inited_;
   const compaction::ObBuildIndexParam* param_;
@@ -257,7 +257,7 @@ class ObUniqueCheckingTask : public share::ObITask {
 };
 
 class ObReportIndexStatusTask : public share::ObITask {
-  public:
+public:
   ObReportIndexStatusTask();
   virtual ~ObReportIndexStatusTask();
   int init(
@@ -266,7 +266,7 @@ class ObReportIndexStatusTask : public share::ObITask {
   static int report_index_status(const common::ObPartitionKey& pkey, const compaction::ObBuildIndexParam& param,
       compaction::ObBuildIndexContext* context, bool& need_retry);
 
-  private:
+private:
   bool is_inited_;
   ObPartitionKey pkey_;
   const compaction::ObBuildIndexParam* param_;
@@ -275,22 +275,22 @@ class ObReportIndexStatusTask : public share::ObITask {
 };
 
 class ObIUniqueCheckingCompleteCallback {
-  public:
+public:
   virtual int operator()(const int ret_code) = 0;
 };
 
 class ObGlobalUniqueIndexCallback : public ObIUniqueCheckingCompleteCallback {
-  public:
+public:
   ObGlobalUniqueIndexCallback(const common::ObPartitionKey& pkey, const uint64_t index_id);
   int operator()(const int ret_code) override;
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   uint64_t index_id_;
 };
 
 class ObLocalUniqueIndexCallback : public ObIUniqueCheckingCompleteCallback {
-  public:
+public:
   ObLocalUniqueIndexCallback();
   int operator()(const int ret_code) override;
 };
@@ -300,7 +300,7 @@ class ObLocalUniqueIndexCallback : public ObIUniqueCheckingCompleteCallback {
  * ROOTSERVICE the result of the unique key checking result
  */
 class ObUniqueCheckingDag : public share::ObIDag {
-  public:
+public:
   ObUniqueCheckingDag();
   virtual ~ObUniqueCheckingDag();
   int init(const common::ObPartitionKey& pkey, ObPartitionService* part_service,
@@ -346,7 +346,7 @@ class ObUniqueCheckingDag : public share::ObIDag {
     return static_cast<int64_t>(compat_mode_);
   }
 
-  private:
+private:
   bool is_inited_;
   ObPartitionService* part_service_;
   common::ObPartitionKey pkey_;
@@ -362,16 +362,16 @@ class ObUniqueCheckingDag : public share::ObIDag {
 };
 
 class ObUniqueCheckingPrepareTask : public share::ObITask {
-  public:
+public:
   ObUniqueCheckingPrepareTask();
   virtual ~ObUniqueCheckingPrepareTask() = default;
   int init(ObIUniqueCheckingCompleteCallback* callback);
   virtual int process() override;
 
-  private:
+private:
   int generate_unique_checking_task(ObUniqueCheckingDag* dag);
 
-  private:
+private:
   bool is_inited_;
   const share::schema::ObTableSchema* index_schema_;
   const share::schema::ObTableSchema* data_table_schema_;
@@ -379,14 +379,14 @@ class ObUniqueCheckingPrepareTask : public share::ObITask {
 };
 
 class ObSimpleUniqueCheckingTask : public share::ObITask {
-  public:
+public:
   ObSimpleUniqueCheckingTask();
   virtual ~ObSimpleUniqueCheckingTask() = default;
   int init(const share::schema::ObTableSchema* data_table_schema, const share::schema::ObTableSchema* index_schema,
       ObIUniqueCheckingCompleteCallback* callback);
   virtual int process() override;
 
-  private:
+private:
   bool is_inited_;
   ObUniqueIndexChecker unique_checker_;
   const share::schema::ObTableSchema* index_schema_;

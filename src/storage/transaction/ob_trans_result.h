@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace transaction {
 
 class ObTransCond {
-  public:
+public:
   ObTransCond()
   {
     reset();
@@ -31,7 +31,7 @@ class ObTransCond {
   {}
   void reset();
 
-  public:
+public:
   // when SQL submit or abort transaction, it must wait transaction response for some time.
   // safer to call wait(wait_time_us, result)
   int wait(const int64_t wait_time_us, int& result);
@@ -43,10 +43,10 @@ class ObTransCond {
 
   static void usleep(const int64_t us);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransCond);
 
-  private:
+private:
   bool finished_;
   mutable tbutil::Monitor<tbutil::Mutex> monitor_;
   int result_;

@@ -31,16 +31,16 @@ class ObCommitLogEnv;
 class ObIndexLogEnv;
 class ObLogCache;
 class ObILogEngine {
-  public:
+public:
   typedef ObDiskBufferTask FlushTask;
 
-  public:
+public:
   ObILogEngine()
   {}
   virtual ~ObILogEngine()
   {}
 
-  public:
+public:
   virtual ObIRawLogIterator* alloc_raw_log_iterator(
       const file_id_t start_file_id, const file_id_t end_file_id, const offset_t offset, const int64_t timeout) = 0;
   virtual void revert_raw_log_iterator(ObIRawLogIterator* iter) = 0;
@@ -199,7 +199,7 @@ class ObILogEngine {
 };
 
 class ObILogNetTask {
-  public:
+public:
   virtual ~ObILogNetTask()
   {}
   virtual const char* get_data_buffer() const = 0;
@@ -208,7 +208,7 @@ class ObILogNetTask {
 };
 
 class ObLogNetTask : public ObILogNetTask {
-  public:
+public:
   ObLogNetTask(common::ObProposalID proposal_id, const char* buff, int64_t data_len)
       : proposal_id_(proposal_id), buff_(buff), data_len_(data_len)
   {}
@@ -225,12 +225,12 @@ class ObLogNetTask : public ObILogNetTask {
     return data_len_;
   }
 
-  private:
+private:
   common::ObProposalID proposal_id_;
   const char* buff_;
   int64_t data_len_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogNetTask);
 };
 }  // end namespace clog

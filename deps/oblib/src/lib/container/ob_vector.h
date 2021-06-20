@@ -20,7 +20,7 @@ namespace common {
 
 template <typename T>
 struct ob_vector_traits {
-  public:
+public:
   typedef T& pointee_type;
   typedef T value_type;
   typedef const T& const_value_type;
@@ -31,7 +31,7 @@ struct ob_vector_traits {
 
 template <typename T>
 struct ob_vector_traits<T*> {
-  public:
+public:
   typedef T pointee_type;
   typedef T* value_type;
   typedef const T* const_value_type;
@@ -72,7 +72,7 @@ struct ob_vector_traits<double> {
 
 template <typename T, typename Allocator = PageArena<T> >
 class ObVector {
-  public:
+public:
   typedef typename ob_vector_traits<T>::pointee_type pointee_type;
   typedef typename ob_vector_traits<T>::value_type value_type;
   typedef typename ob_vector_traits<T>::const_value_type const_value_type;
@@ -80,7 +80,7 @@ class ObVector {
   typedef typename ob_vector_traits<T>::const_iterator const_iterator;
   typedef typename ob_vector_traits<T>::difference_type difference_type;
 
-  public:
+public:
   explicit ObVector(Allocator* alloc = NULL, const lib::ObLabel& label = ObModIds::OB_MOD_DO_NOT_USE_ME);
   explicit ObVector(int64_t size, Allocator* alloc = NULL, const lib::ObLabel& label = ObModIds::OB_MOD_DO_NOT_USE_ME);
   virtual ~ObVector();
@@ -88,7 +88,7 @@ class ObVector {
   ObVector<T, Allocator>& operator=(const ObVector<T, Allocator>& other);
   explicit ObVector(const ObVector<T, Allocator>& other);
 
-  public:
+public:
   int32_t size() const
   {
     return static_cast<int32_t>(mem_end_ - mem_begin_);
@@ -102,7 +102,7 @@ class ObVector {
     return static_cast<int64_t>(mem_end_of_storage_ - mem_end_);
   }
 
-  public:
+public:
   iterator begin() const
   {
     return mem_begin_;
@@ -151,7 +151,7 @@ class ObVector {
     return at(index);
   }
 
-  public:
+public:
   int push_back(const_value_type value);
   int insert(iterator pos, const_value_type value);
   int replace(iterator pos, const_value_type value, value_type& replaced_value);
@@ -177,18 +177,18 @@ class ObVector {
   }
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   void destroy();
   int expand(int64_t size);
 
-  private:
+private:
   iterator alloc_array(const int64_t size);
 
   static iterator fill(iterator ptr, const_value_type value);
   static iterator copy(iterator dest, const_iterator begin, const_iterator end);
   static iterator move(iterator dest, const_iterator begin, const_iterator end);
 
-  protected:
+protected:
   iterator mem_begin_;
   iterator mem_end_;
   iterator mem_end_of_storage_;
@@ -198,7 +198,7 @@ class ObVector {
 
 template <typename T, typename Allocator = PageArena<T> >
 class ObSortedVector {
-  public:
+public:
   typedef Allocator allocator_type;
   typedef ObVector<T, Allocator> vector_type;
   typedef typename vector_type::iterator iterator;
@@ -207,7 +207,7 @@ class ObSortedVector {
   typedef typename vector_type::const_value_type const_value_type;
   typedef typename vector_type::difference_type difference_type;
 
-  public:
+public:
   ObSortedVector()
   {}
   explicit ObSortedVector(
@@ -243,7 +243,7 @@ class ObSortedVector {
     }
   }
 
-  public:
+public:
   inline int32_t size() const
   {
     return vector_.size();
@@ -285,7 +285,7 @@ class ObSortedVector {
     return vector_.to_string(buf, buf_len);
   }
 
-  public:
+public:
   inline iterator begin() const
   {
     return vector_.begin();
@@ -303,7 +303,7 @@ class ObSortedVector {
     return vector_.get_allocator();
   }
 
-  public:
+public:
   inline bool at(const int64_t index, value_type& v) const
   {
     return vector_.at(index, v);
@@ -319,7 +319,7 @@ class ObSortedVector {
     return at(static_cast<int64_t>(index));
   }
 
-  public:
+public:
   template <typename Compare>
   int insert(const_value_type value, iterator& insert_pos, Compare compare);
   /**
@@ -350,7 +350,7 @@ class ObSortedVector {
   template <typename Compare>
   void sort(Compare compare);
 
-  private:
+private:
   ObVector<T, Allocator> vector_;
 };
 

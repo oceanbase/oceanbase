@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObOptimizeTableStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObOptimizeTableStmt(common::ObIAllocator* name_pool);
   ObOptimizeTableStmt();
   virtual ~ObOptimizeTableStmt() = default;
@@ -51,13 +51,13 @@ class ObOptimizeTableStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(optimize_table_arg));
 
-  private:
+private:
   obrpc::ObOptimizeTableArg optimize_table_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObOptimizeTableStmt);
 };
 
 class ObOptimizeTenantStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObOptimizeTenantStmt(common::ObIAllocator* name_pool);
   ObOptimizeTenantStmt();
   virtual ~ObOptimizeTenantStmt() = default;
@@ -79,13 +79,13 @@ class ObOptimizeTenantStmt : public ObDDLStmt {
     return optimize_tenant_arg_;
   }
 
-  private:
+private:
   obrpc::ObOptimizeTenantArg optimize_tenant_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObOptimizeTenantStmt);
 };
 
 class ObOptimizeAllStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObOptimizeAllStmt(common::ObIAllocator* name_pool);
   ObOptimizeAllStmt();
   virtual ~ObOptimizeAllStmt() = default;
@@ -106,7 +106,7 @@ class ObOptimizeAllStmt : public ObDDLStmt {
     return optimize_all_arg_;
   }
 
-  private:
+private:
   obrpc::ObOptimizeAllArg optimize_all_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObOptimizeAllStmt);
 };

@@ -26,7 +26,7 @@ class JoinedTable;
 namespace sql {
 class ObPhysicalPlan;
 class ObTransformSimplify : public ObTransformRule {
-  public:
+public:
   explicit ObTransformSimplify(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
   virtual ~ObTransformSimplify()
@@ -34,7 +34,7 @@ class ObTransformSimplify : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   int having_filter_can_be_pushed_down(
       const ObRawExpr* having_filter, const ObSelectStmt& select_stmt, const bool has_rownum, bool& can_be);
   int replace_is_null_condition(ObDMLStmt* stmt, bool& trans_happened);
@@ -164,7 +164,7 @@ class ObTransformSimplify : public ObTransformRule {
   int create_view_with_left_table(ObDMLStmt* stmt, JoinedTable* joined_table);
   int push_down_on_condition(ObDMLStmt* stmt, JoinedTable* join_table, ObIArray<ObRawExpr*>& conds);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformSimplify);
 };
 

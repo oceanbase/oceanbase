@@ -37,7 +37,7 @@ using namespace storage;
 namespace blocksstable {
 
 class TestDataFilePrepareUtil {
-  public:
+public:
   TestDataFilePrepareUtil();
   virtual ~TestDataFilePrepareUtil()
   {
@@ -57,7 +57,7 @@ class TestDataFilePrepareUtil {
     return OB_FILE_SYSTEM;
   }
 
-  private:
+private:
   static const int64_t SLOG_MAX_SIZE = 64 * 1024 * 1024;
   bool is_inited_;
   char data_dir_[OB_MAX_FILE_NAME_LENGTH];
@@ -76,7 +76,7 @@ class TestDataFilePrepareUtil {
 };
 
 class TestDataFilePrepare : public ::testing::Test {
-  public:
+public:
   TestDataFilePrepare(
       const char* test_name, const int64_t macro_block_size = 64 * 1024, const int64_t macro_block_count = 100);
   virtual ~TestDataFilePrepare();
@@ -93,7 +93,7 @@ class TestDataFilePrepare : public ::testing::Test {
   }
   const ObStorageFileHandle& get_storage_file_handle();
 
-  protected:
+protected:
   static const int64_t TENANT_ID = 1;
   static const int64_t TABLE_ID = 3001;
   TestDataFilePrepareUtil util_;

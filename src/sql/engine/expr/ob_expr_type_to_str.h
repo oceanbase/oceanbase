@@ -25,7 +25,7 @@ class ObExprResType;
 class ObExprTypeToStr : public ObFuncExprOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObExprTypeToStr(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
       : ObFuncExprOperator(alloc, type, name, param_num, dimension), alloc_(alloc), str_values_(alloc)
@@ -52,17 +52,17 @@ class ObExprTypeToStr : public ObFuncExprOperator {
   virtual int deep_copy_str_values(const common::ObIArray<common::ObString>& str_values);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const = 0;
 
-  protected:
+protected:
   int deep_copy_str(const common::ObString& src_str, char* dest_buf, int64_t buf_len, int64_t& pos) const;
 
-  public:
+public:
   static const int64_t EFFECTIVE_COUNT = 64;
 
-  protected:
+protected:
   common::ObIAllocator& alloc_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> str_values_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTypeToStr) const;
 };
@@ -76,7 +76,7 @@ inline void ObExprTypeToStr::reset()
 struct ObEnumSetInfo : public ObIExprExtraInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObEnumSetInfo(common::ObIAllocator& alloc, ObExprOperatorType type)
       : ObIExprExtraInfo(alloc, type), cast_mode_(0), str_values_(alloc)
   {}
@@ -102,7 +102,7 @@ struct ObEnumSetInfo : public ObIExprExtraInfo {
 };
 
 class ObExprSetToStr : public ObExprTypeToStr {
-  public:
+public:
   explicit ObExprSetToStr(common::ObIAllocator& alloc);
   virtual ~ObExprSetToStr();
   virtual int calc(
@@ -110,13 +110,13 @@ class ObExprSetToStr : public ObExprTypeToStr {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_str_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprSetToStr) const;
 };
 
 class ObExprEnumToStr : public ObExprTypeToStr {
-  public:
+public:
   explicit ObExprEnumToStr(common::ObIAllocator& alloc);
   virtual ~ObExprEnumToStr();
   virtual int calc(
@@ -124,13 +124,13 @@ class ObExprEnumToStr : public ObExprTypeToStr {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_str_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprEnumToStr) const;
 };
 
 class ObExprSetToInnerType : public ObExprTypeToStr {
-  public:
+public:
   explicit ObExprSetToInnerType(common::ObIAllocator& alloc);
   virtual ~ObExprSetToInnerType();
   virtual int calc_result_type2(
@@ -140,13 +140,13 @@ class ObExprSetToInnerType : public ObExprTypeToStr {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_inner_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprSetToInnerType) const;
 };
 
 class ObExprEnumToInnerType : public ObExprTypeToStr {
-  public:
+public:
   explicit ObExprEnumToInnerType(common::ObIAllocator& alloc);
   virtual ~ObExprEnumToInnerType();
   virtual int calc_result_type2(
@@ -156,7 +156,7 @@ class ObExprEnumToInnerType : public ObExprTypeToStr {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_to_inner_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprEnumToInnerType) const;
 };

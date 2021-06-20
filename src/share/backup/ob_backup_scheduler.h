@@ -25,7 +25,7 @@ namespace oceanbase {
 namespace share {
 
 class ObBackupScheduler {
-  public:
+public:
   ObBackupScheduler();
   virtual ~ObBackupScheduler();
   int init(const obrpc::ObBackupDatabaseArg& arg, schema::ObMultiVersionSchemaService& schema_service,
@@ -33,7 +33,7 @@ class ObBackupScheduler {
       rootserver::ObFreezeInfoManager& freeze_info_manager, rootserver::ObRestorePointService& restore_point_service);
   int start_schedule_backup();
 
-  private:
+private:
   int get_tenant_ids(common::ObIArray<uint64_t>& tenant_ids);
   int check_can_backup(const common::ObIArray<ObBaseBackupInfoStruct>& infos);
   int schedule_backup(const common::ObIArray<uint64_t>& tenant_ids, ObBackupInfoManager& info_manager);
@@ -61,7 +61,7 @@ class ObBackupScheduler {
   int create_backup_point(const uint64_t tenant_id);
   int check_log_archive_status();
 
-  private:
+private:
   static const int64_t MAX_TENANT_BUCKET = 1024;
   bool is_inited_;
   obrpc::ObBackupDatabaseArg arg_;

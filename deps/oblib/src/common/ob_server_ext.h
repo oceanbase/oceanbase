@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObServerExt {
-  public:
+public:
   friend class ObOcmInstance;
   ObServerExt();
   ~ObServerExt();
@@ -34,7 +34,7 @@ class ObServerExt {
   ObAddr& get_server();
   int deep_copy(const ObServerExt& server_ext);
 
-  private:
+private:
   char hostname_[OB_MAX_HOST_NAME_LENGTH];
   ObAddr server_;
   int64_t magic_num_;

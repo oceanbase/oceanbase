@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace lib {
 
 class Runnable {
-  public:
+public:
   virtual void run() = 0;
 };
 
@@ -34,12 +34,12 @@ class CoSched;
 class CoRoutine : public Runnable {
   friend class CoMainRoutine;
 
-  public:
+public:
   static constexpr uint64_t DEFAULT_STACK_MEM_TENANT_ID = 500;
   typedef int (*CoRoutineCBFunc)(CoRoutine&);
   static CoRoutineCBFunc co_cb_;
 
-  public:
+public:
   enum class RunStatus {
     BORN,
     RUNNABLE,
@@ -177,7 +177,7 @@ class CoRoutine : public Runnable {
   // \brief Wait for routine finish.
   void join();
 
-  public:
+public:
   bool operator==(const CoRoutine& rhs) const
   {
     return this == &rhs;
@@ -187,13 +187,13 @@ class CoRoutine : public Runnable {
     return !operator==(rhs);
   }
 
-  private:
+private:
   // These functions are called whenever a routine becomes/leaves
   // corresponding status.
   virtual void on_status_change(RunStatus /*prev_status*/, RunStatus /*curr_status*/)
   {}
 
-  private:
+private:
   // This constructor is used to create main routine which doesn't
   // have successor routine so that when it exits from its runnable
   // function, the thread exits.
@@ -203,7 +203,7 @@ class CoRoutine : public Runnable {
 
   static void __start(boost::context::detail::transfer_t from);
 
-  private:
+private:
   CoIdx idx_;
   int64_t id_;
   CoCtx cc_;
@@ -225,7 +225,7 @@ class CoRoutine : public Runnable {
 // routine, Main routine use the thread's context to run itself, such
 // as stack space, signals and registers.
 class CoMainRoutine : public CoRoutine {
-  public:
+public:
   explicit CoMainRoutine(CoSched& sched) : CoRoutine(sched)
   {}
   // Caution!!!

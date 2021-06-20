@@ -17,12 +17,12 @@
 namespace oceanbase {
 namespace sql {
 class ObExprMergingFrozenTime : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprMergingFrozenTime(common::ObIAllocator& alloc);
   virtual ~ObExprMergingFrozenTime();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMergingFrozenTime);
 };
 }  // namespace sql

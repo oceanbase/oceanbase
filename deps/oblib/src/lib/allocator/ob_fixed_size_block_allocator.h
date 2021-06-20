@@ -34,7 +34,7 @@ struct ObFixedSizeBufAllocInfo {
 // caller can acquire and release the pre divided block buffer.
 template <int64_t SIZE>
 class ObFixedSizeBlockAllocator {
-  public:
+public:
   virtual ~ObFixedSizeBlockAllocator();
   int init(const int64_t block_num, const lib::ObLabel& label = ObModIds::OB_FIXED_SIZE_BLOCK_ALLOCATOR);
   void destroy();
@@ -56,16 +56,16 @@ class ObFixedSizeBlockAllocator {
     return max_block_num_;
   }
 
-  private:
+private:
   ObFixedSizeBlockAllocator();
   int init_max_block_num();
   int expand(const int64_t block_num);
   bool contains_internal(void* ptr) const;
 
-  public:
+public:
   static const int64_t MAX_MEMORY_ALLOCATION = OB_MAX_SYS_BKGD_THREAD_NUM * 6 * OB_DEFAULT_MACRO_BLOCK_SIZE;
 
-  private:
+private:
   static const int64_t MAX_MEMORY_IN_MINI_MODE = 128 * 1024 * 1024;  // 128MB
 
   bool is_inited_;
@@ -87,7 +87,7 @@ template <int64_t SIZE>
 class ObFixedSizeBlockMemoryContext {
   static constexpr int INIT_BLOCK_NUM = 8;
 
-  public:
+public:
   ObFixedSizeBlockMemoryContext();
   virtual ~ObFixedSizeBlockMemoryContext();
 
@@ -107,7 +107,7 @@ class ObFixedSizeBlockMemoryContext {
   }
   int64_t get_used_block_num();
 
-  private:
+private:
   bool is_inited_;
   int64_t used_block_num_;
   ObFixedSizeBlockAllocator<SIZE>& fsb_allocator_;

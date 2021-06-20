@@ -42,7 +42,7 @@ namespace rootserver {
 class ObServerManager;
 
 class ObAllReplicaTask : public common::ObVirtualTableProjector {
-  public:
+public:
   ObAllReplicaTask();
   virtual ~ObAllReplicaTask();
 
@@ -55,10 +55,10 @@ class ObAllReplicaTask : public common::ObVirtualTableProjector {
 
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  protected:
+protected:
   virtual int get_condition(uint64_t& specific_tenant_id);
 
-  private:
+private:
   int get_full_row(const share::schema::ObTableSchema* table, ObReplicaTask& task, common::ObIArray<Column>& columns);
   bool inited_;
   TenantBalanceStat tenant_stat_;
@@ -70,19 +70,19 @@ class ObAllReplicaTask : public common::ObVirtualTableProjector {
   ObArenaAllocator arena_allocator_;
   int64_t index_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllReplicaTask);
 };
 
 class ObAllReplicaTaskI1 : public ObAllReplicaTask {
-  public:
+public:
   ObAllReplicaTaskI1();
   virtual ~ObAllReplicaTaskI1();
 
-  protected:
+protected:
   virtual int get_condition(uint64_t& specific_tenant_id) override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllReplicaTaskI1);
 };
 

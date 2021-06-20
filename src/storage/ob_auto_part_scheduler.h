@@ -36,24 +36,24 @@ class ObPartitionService;
 class ObIPartitionGroup;
 class ObSSTable;
 class ObAutoPartScheduler : public share::ObThreadPool {
-  public:
+public:
   ObAutoPartScheduler();
   virtual ~ObAutoPartScheduler();
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service, share::schema::ObMultiVersionSchemaService* schema_service);
   int start();
   void stop();
   void wait();
   void destroy();
 
-  public:
+public:
   void run1();
 
-  private:
+private:
   typedef common::ObSEArray<common::ObRowkey, 1024> RowkeyArray;
 
-  private:
+private:
   void do_work_();
   // execute partition slipt including condition check, notifying rs execute split
   void handle_partition_(storage::ObIPartitionGroup* partition);
@@ -82,12 +82,12 @@ class ObAutoPartScheduler : public share::ObThreadPool {
       RowkeyArray& rowkey_array, common::ObIAllocator& allocator);
 
   const static int64_t DO_WORK_INTERVAL = 10 * 1000 * 1000;  // 10s
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* partition_service_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAutoPartScheduler);
 };
 }  // namespace storage

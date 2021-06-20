@@ -25,7 +25,7 @@ namespace sql {
 class ObMultiPartLock::ObMultiPartLockCtx : public ObTableModifyCtx, public ObMultiDMLCtx {
   friend class ObMultiPartLock;
 
-  public:
+public:
   explicit ObMultiPartLockCtx(ObExecContext& ctx)
       : ObTableModifyCtx(ctx), ObMultiDMLCtx(ctx.get_allocator()), got_row_(false)
   {}
@@ -46,7 +46,7 @@ class ObMultiPartLock::ObMultiPartLockCtx : public ObTableModifyCtx, public ObMu
     ObMultiDMLCtx::destroy_ctx();
   }
 
-  private:
+private:
   bool got_row_;
 };
 

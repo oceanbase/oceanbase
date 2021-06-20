@@ -23,7 +23,7 @@ namespace storage {
 class ObSSTableMergeCtx;
 
 class ObParallelMergeCtx {
-  public:
+public:
   enum ParallelMergeType {
     PARALLEL_MAJOR = 0,
     PARALLEL_MINI = 1,
@@ -44,7 +44,7 @@ class ObParallelMergeCtx {
       const int64_t parallel_idx, common::ObExtStoreRange& merge_range, common::ObIAllocator& allocator);
   TO_STRING_KV(K_(parallel_type), K_(range_array), K_(first_sstable), K_(concurrent_cnt), K_(is_inited));
 
-  private:
+private:
   static const int64_t MIN_PARALLEL_MINI_MINOR_MERGE_THREASHOLD = 2;
   static const int64_t MIN_PARALLEL_MERGE_BLOCKS = 32;
   static const int64_t PARALLEL_MERGE_TARGET_TASK_CNT = 20;
@@ -56,7 +56,7 @@ class ObParallelMergeCtx {
   int calc_mini_minor_parallel_degree(
       const int64_t tablet_size, const int64_t total_size, const int64_t sstable_count, int64_t& parallel_degree);
 
-  private:
+private:
   ParallelMergeType parallel_type_;
   common::ObSEArray<common::ObExtStoreRange, 16> range_array_;
   ObSSTable* first_sstable_;

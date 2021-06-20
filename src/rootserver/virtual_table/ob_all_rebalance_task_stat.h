@@ -28,14 +28,14 @@ class ObRebalanceTask;
 class ObRebalanceTaskMgr;
 
 class ObAllRebalanceTaskStat : public common::ObVirtualTableProjector {
-  public:
+public:
   ObAllRebalanceTaskStat();
   virtual ~ObAllRebalanceTaskStat();
 
   int init(share::schema::ObMultiVersionSchemaService& schema_service, ObRebalanceTaskMgr& rebalance_task_mgr);
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   struct Display {
     void reset();
     uint64_t tenant_id_;
@@ -60,12 +60,12 @@ class ObAllRebalanceTaskStat : public common::ObVirtualTableProjector {
   int get_full_row(const share::schema::ObTableSchema* table, const ObRebalanceTask& task_stat,
       const ObRebalanceTaskInfo& task_info, common::ObIArray<Column>& columns);
 
-  private:
+private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   ObRebalanceTaskMgr* rebalance_task_mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllRebalanceTaskStat);
 };
 }  // end namespace rootserver

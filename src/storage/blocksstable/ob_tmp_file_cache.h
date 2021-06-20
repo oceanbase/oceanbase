@@ -29,7 +29,7 @@ class ObTmpMacroBlock;
 class ObTmpFileExtent;
 
 class ObTmpPageCacheKey : public common::ObIKVCacheKey {
-  public:
+public:
   ObTmpPageCacheKey();
   ObTmpPageCacheKey(const int64_t block_id, const int64_t page_id, const uint64_t tenant_id);
   virtual ~ObTmpPageCacheKey();
@@ -45,14 +45,14 @@ class ObTmpPageCacheKey : public common::ObIKVCacheKey {
   }
   TO_STRING_KV(K_(block_id), K_(page_id), K_(tenant_id));
 
-  private:
+private:
   int64_t block_id_;
   int64_t page_id_;
   uint64_t tenant_id_;
 };
 
 class ObTmpPageCacheValue : public common::ObIKVCacheValue {
-  public:
+public:
   explicit ObTmpPageCacheValue(char* buf);
   virtual ~ObTmpPageCacheValue();
   virtual int64_t size() const override;
@@ -71,14 +71,14 @@ class ObTmpPageCacheValue : public common::ObIKVCacheValue {
   }
   TO_STRING_KV(K_(size));
 
-  private:
+private:
   char* buf_;
   int64_t size_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpPageCacheValue);
 };
 
 struct ObTmpPageValueHandle {
-  public:
+public:
   ObTmpPageValueHandle() : value_(NULL), handle_()
   {}
   virtual ~ObTmpPageValueHandle() = default;
@@ -93,7 +93,7 @@ struct ObTmpPageValueHandle {
 };
 
 struct ObTmpPageIOInfo {
-  public:
+public:
   ObTmpPageIOInfo() : key_(), offset_(0), size_(0)
   {}
   virtual ~ObTmpPageIOInfo()
@@ -106,7 +106,7 @@ struct ObTmpPageIOInfo {
 };
 
 class ObTmpPageCache : public common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCacheValue> {
-  public:
+public:
   typedef common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCacheValue> BasePageCache;
   static ObTmpPageCache& get_instance();
   int init(const char* cache_name, const int64_t priority, const ObStorageFileHandle& file_handle);
@@ -120,18 +120,18 @@ class ObTmpPageCache : public common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCach
   int put_page(const ObTmpPageCacheKey& key, const ObTmpPageCacheValue& value);
   void destroy();
 
-  public:
+public:
   class ObITmpPageIOCallback : public common::ObIOCallback {
-    public:
+  public:
     ObITmpPageIOCallback();
     virtual ~ObITmpPageIOCallback();
     virtual int alloc_io_buf(char*& io_buf, int64_t& io_buf_size, int64_t& aligned_offset) override;
 
-    protected:
+  protected:
     friend class ObTmpPageCache;
     virtual int process_page(const ObTmpPageCacheKey& key, const ObTmpPageCacheValue& value);
 
-    protected:
+  protected:
     BasePageCache* cache_;
     common::ObIAllocator* allocator_;
     int64_t offset_;    // offset in block
@@ -141,7 +141,7 @@ class ObTmpPageCache : public common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCach
     char* data_buf_;  // actual data buffer
   };
   class ObTmpPageIOCallback : public ObITmpPageIOCallback {
-    public:
+  public:
     ObTmpPageIOCallback();
     virtual ~ObTmpPageIOCallback();
     virtual int64_t size() const override;
@@ -150,12 +150,12 @@ class ObTmpPageCache : public common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCach
     virtual const char* get_data() override;
     TO_STRING_KV(KP_(data_buf));
 
-    private:
+  private:
     friend class ObTmpPageCache;
     ObTmpPageCacheKey key_;
   };
   class ObTmpMultiPageIOCallback : public ObITmpPageIOCallback {
-    public:
+  public:
     ObTmpMultiPageIOCallback();
     virtual ~ObTmpMultiPageIOCallback();
     virtual int64_t size() const override;
@@ -164,24 +164,24 @@ class ObTmpPageCache : public common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCach
     virtual const char* get_data() override;
     TO_STRING_KV(KP_(data_buf));
 
-    private:
+  private:
     friend class ObTmpPageCache;
     common::ObIArray<ObTmpPageIOInfo>* page_io_infos_;
   };
 
-  private:
+private:
   ObTmpPageCache();
   virtual ~ObTmpPageCache();
   int read_io(const ObTmpBlockIOInfo& io_info, ObITmpPageIOCallback& callback, ObMacroBlockHandle& handle);
 
-  private:
+private:
   common::ObConcurrentFIFOAllocator allocator_;
   ObStorageFileHandle file_handle_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpPageCache);
 };
 
 class ObTmpBlockCacheKey : public common::ObIKVCacheKey {
-  public:
+public:
   ObTmpBlockCacheKey(const int64_t block_id, const uint64_t tenant_id);
   virtual ~ObTmpBlockCacheKey()
   {}
@@ -200,7 +200,7 @@ class ObTmpBlockCacheKey : public common::ObIKVCacheKey {
   }
   TO_STRING_KV(K_(block_id), K_(tenant_id));
 
-  private:
+private:
   int64_t block_id_;
   uint64_t tenant_id_;
   friend class ObTmpBlockCache;
@@ -208,7 +208,7 @@ class ObTmpBlockCacheKey : public common::ObIKVCacheKey {
 };
 
 class ObTmpBlockCacheValue : public common::ObIKVCacheValue {
-  public:
+public:
   explicit ObTmpBlockCacheValue(char* buf);
   virtual ~ObTmpBlockCacheValue()
   {}
@@ -224,14 +224,14 @@ class ObTmpBlockCacheValue : public common::ObIKVCacheValue {
   }
   TO_STRING_KV(K_(size));
 
-  private:
+private:
   char* buf_;
   int64_t size_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpBlockCacheValue);
 };
 
 struct ObTmpBlockValueHandle {
-  public:
+public:
   ObTmpBlockValueHandle() : value_(NULL), inst_handle_(), kvpair_(NULL), handle_()
   {}
   virtual ~ObTmpBlockValueHandle() = default;
@@ -250,7 +250,7 @@ struct ObTmpBlockValueHandle {
 };
 
 class ObTmpBlockCache : public common::ObKVCache<ObTmpBlockCacheKey, ObTmpBlockCacheValue> {
-  public:
+public:
   static ObTmpBlockCache& get_instance();
   int init(const char* cache_name, const int64_t priority);
   int get_block(const ObTmpBlockCacheKey& key, ObTmpBlockValueHandle& handle);
@@ -258,7 +258,7 @@ class ObTmpBlockCache : public common::ObKVCache<ObTmpBlockCacheKey, ObTmpBlockC
   int put_block(const ObTmpBlockCacheKey& key, ObTmpBlockValueHandle& handle);
   void destory();
 
-  private:
+private:
   ObTmpBlockCache()
   {}
   virtual ~ObTmpBlockCache()
@@ -268,7 +268,7 @@ class ObTmpBlockCache : public common::ObKVCache<ObTmpBlockCacheKey, ObTmpBlockC
 };
 
 class ObTmpTenantMemBlockManager {
-  public:
+public:
   ObTmpTenantMemBlockManager();
   virtual ~ObTmpTenantMemBlockManager();
   int init(const uint64_t tenant_id, common::ObIAllocator& allocator, const ObStorageFileHandle& file_handle,
@@ -288,7 +288,7 @@ class ObTmpTenantMemBlockManager {
   }
   int free_extent(const int64_t free_page_nums, const ObTmpMacroBlock* t_mblk);
 
-  private:
+private:
   int get_macro_block(const int64_t dir_id, const uint64_t tenant_id, const int64_t page_nums, ObTmpMacroBlock*& t_mblk,
       common::ObIArray<ObTmpMacroBlock*>& free_blocks);
   int wash(const uint64_t tenant_id, int64_t block_nums, common::ObIArray<ObTmpMacroBlock*>& free_blocks);
@@ -299,7 +299,7 @@ class ObTmpTenantMemBlockManager {
   int build_macro_meta(const uint64_t tenant_id, ObFullMacroBlockMeta& meta);
   int64_t get_tenant_mem_block_num();
 
-  private:
+private:
   // 1/256, only one free block each 256 block.
   static constexpr double DEFAULT_MIN_FREE_BLOCK_RATIO = 0.00390625;
   static const uint64_t DEFAULT_BUCKET_NUM = 1543L;

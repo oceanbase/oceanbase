@@ -20,14 +20,14 @@ namespace oceanbase {
 namespace sql {
 class ObSQLSessionInfo;
 class ObRawExprCtxCatAnalyzer {
-  public:
+public:
   ObRawExprCtxCatAnalyzer(ObRawExprFactory& expr_factory, ObSQLSessionInfo* session_info)
       : expr_factory_(expr_factory), session_info_(session_info)
   {}
   //  int splite_search_keywords(ObFunMatchAgainst &expr);
   int create_fulltext_filter(ObFunMatchAgainst& expr);
 
-  private:
+private:
   ObRawExprFactory& expr_factory_;
   ObSQLSessionInfo* session_info_;
 };

@@ -25,7 +25,7 @@ namespace oceanbase {
 namespace share {
 
 class ObBackupFileLockMgr {
-  public:
+public:
   ObBackupFileLockMgr();
   virtual ~ObBackupFileLockMgr();
   static ObBackupFileLockMgr& get_instance();
@@ -35,11 +35,11 @@ class ObBackupFileLockMgr {
   int try_lock(const ObBackupPath& path);
   int unlock(const ObBackupPath& path);
 
-  private:
+private:
   int low_try_lock(const ObBackupPath& path, const int64_t max_spin_cnt, uint64_t& spin_cnt);
   int wait(const ObBackupPath& path, const int64_t abs_timeout_us);
 
-  private:
+private:
   static const int64_t MAX_BUCKET_NUM = 1024;
   static const int64_t MAX_SPIN_TIMES = 1024;
   static const int64_t MAX_YIELD_CNT = 2;
@@ -50,7 +50,7 @@ class ObBackupFileLockMgr {
 };
 
 class ObBackupFileSpinLock {
-  public:
+public:
   ObBackupFileSpinLock();
   ~ObBackupFileSpinLock();
   int init(const ObBackupPath& path);
@@ -63,13 +63,13 @@ class ObBackupFileSpinLock {
     return path_;
   }
 
-  private:
+private:
   // data members
   bool is_inited_;
   bool is_locked_;
   ObBackupPath path_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupFileSpinLock);
 };
 

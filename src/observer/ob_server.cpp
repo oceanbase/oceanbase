@@ -1059,7 +1059,7 @@ int ObServer::init_io()
       } else {
         // allow load benchmark fail
         if (OB_FAIL(ObIOBenchmark::get_instance().init("etc"))) {
-          LOG_ERROR("init io benchmark fail, ", K(ret));
+          LOG_WARN("init io benchmark fail, ", K(ret));
         }
         ret = OB_SUCCESS;
       }

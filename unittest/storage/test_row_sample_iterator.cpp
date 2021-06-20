@@ -20,7 +20,7 @@ using namespace common;
 using namespace storage;
 namespace unittest {
 class TestObRowSampleIterator : public ::testing::Test {
-  public:
+public:
   void check_result(const char* input, const char* output, const SampleInfo& sample_info);
   void check_iters(ObQueryRowIterator& iter1, ObQueryRowIterator& iter2);
 };

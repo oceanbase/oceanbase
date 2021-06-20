@@ -23,10 +23,10 @@ class ObPxRootDfoAction;
 class ObPxMsgProc;
 
 class ObDfoSchedulerBasic {
-  public:
+public:
   ObDfoSchedulerBasic(ObPxCoordInfo& coord_info, ObPxRootDfoAction& root_dfo_action, ObIPxCoordEventListener& listener);
 
-  public:
+public:
   virtual int dispatch_dtl_data_channel_info(ObExecContext& ctx, ObDfo& child, ObDfo& parent) const = 0;
   virtual int try_schedule_next_dfo(ObExecContext& ctx) const = 0;
   virtual int schedule_dfo_for_temp_table(ObExecContext& exec_ctx, ObDfo& child) const;
@@ -39,10 +39,10 @@ class ObDfoSchedulerBasic {
   virtual int dispatch_root_dfo_channel_info(ObExecContext& ctx, ObDfo& child, ObDfo& parent) const;
   int get_tenant_id(ObExecContext& ctx, uint64_t& tenant_id) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDfoSchedulerBasic);
 
-  protected:
+protected:
   ObPxCoordInfo& coord_info_;
   ObPxRootDfoAction& root_dfo_action_;
   ObIPxCoordEventListener& listener_;
@@ -50,26 +50,26 @@ class ObDfoSchedulerBasic {
 };
 
 class ObSerialDfoScheduler : public ObDfoSchedulerBasic {
-  public:
+public:
   using ObDfoSchedulerBasic::ObDfoSchedulerBasic;
 
   virtual int init_all_dfo_channel(ObExecContext& ctx) const;
   virtual int dispatch_dtl_data_channel_info(ObExecContext& ctx, ObDfo& child, ObDfo& parent) const;
   virtual int try_schedule_next_dfo(ObExecContext& ctx) const;
 
-  private:
+private:
   int build_transmit_recieve_channel(ObExecContext& ctx, ObDfo* dfo) const;
   int init_dfo_channel(ObExecContext& ctx, ObDfo* child, ObDfo* parent) const;
   int init_data_xchg_ch(ObExecContext& ctx, ObDfo* dfo) const;
   int dispatch_sqcs(ObExecContext& exec_ctx, ObDfo& dfo, ObArray<ObPxSqcMeta*>& sqcs) const;
   int do_schedule_dfo(ObExecContext& ctx, ObDfo& dfo) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSerialDfoScheduler);
 };
 
 class ObParallelDfoScheduler : public ObDfoSchedulerBasic {
-  public:
+public:
   ObParallelDfoScheduler(ObPxCoordInfo& coord_info, ObPxRootDfoAction& root_dfo_action,
       ObIPxCoordEventListener& listener, ObPxMsgProc& proc)
       : ObDfoSchedulerBasic(coord_info, root_dfo_action, listener), proc_(proc)
@@ -77,7 +77,7 @@ class ObParallelDfoScheduler : public ObDfoSchedulerBasic {
   virtual int dispatch_dtl_data_channel_info(ObExecContext& ctx, ObDfo& child, ObDfo& parent) const;
   virtual int try_schedule_next_dfo(ObExecContext& ctx) const;
 
-  private:
+private:
   int dispatch_transmit_channel_info(ObExecContext& ctx, ObDfo& child, ObDfo& parent) const;
   int dispatch_receive_channel_info(ObExecContext& ctx, ObDfo& child, ObDfo& parent) const;
   int do_schedule_dfo(ObExecContext& exec_ctx, ObDfo& dfo, bool& need_retry) const;
@@ -96,10 +96,10 @@ class ObParallelDfoScheduler : public ObDfoSchedulerBasic {
   int schedule_pair(ObExecContext& exec_ctx, ObDfo& child, ObDfo& parent) const;
   int wait_for_dfo_finish(ObDfoMgr& dfo_mgr) const;
 
-  private:
+private:
   ObPxMsgProc& proc_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDfoScheduler);
 };
 

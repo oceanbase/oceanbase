@@ -24,7 +24,7 @@ class ObMvccRow;
 namespace storage {
 
 class ObRangePurgerBase {
-  public:
+public:
   typedef memtable::ObMemtableScanIterator Iter;
   typedef memtable::ObMemtableKey Key;
   typedef memtable::ObMvccRow Value;
@@ -53,7 +53,7 @@ class ObRangePurgerBase {
     val_ = NULL;
   }
 
-  private:
+private:
   Iter* iter_;
   int64_t range_pos_;
   bool is_last_inmem_;
@@ -62,7 +62,7 @@ class ObRangePurgerBase {
 };
 
 class ObRangePurger {
-  public:
+public:
   typedef common::ObIArray<ObITable*> Stores;
   ObRangePurger() : has_partial_read_(false), memstore_cnt_(0)
   {}
@@ -81,7 +81,7 @@ class ObRangePurger {
   void try_purge(int64_t range_pos, int iter_idx, bool is_del, bool read_elr_data);
   void skip_range(int idx);
 
-  private:
+private:
   bool has_partial_read_;
   int memstore_cnt_;
   ObRangePurgerBase purger_[common::MAX_MEMSTORE_CNT_IN_STORAGE];

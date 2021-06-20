@@ -27,7 +27,7 @@ namespace obrpc {
 class ObRpcProxy;
 
 class ObNetClient {
-  public:
+public:
   ObNetClient();
   virtual ~ObNetClient();
 
@@ -36,16 +36,16 @@ class ObNetClient {
   void destroy();
   int get_proxy(ObRpcProxy& proxy);
 
-  private:
+private:
   int init_(const rpc::frame::ObNetOptions opts);
 
-  private:
+private:
   bool inited_;
   rpc::frame::ObNetEasy net_;
   ObRpcNetHandler pkt_handler_;
   rpc::frame::ObReqTransport* transport_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNetClient);
 };  // end of class ObNetClient
 

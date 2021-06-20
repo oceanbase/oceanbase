@@ -46,7 +46,7 @@ enum ObConfigItemType {
 };
 
 class ObConfigItem {
-  public:
+public:
   ObConfigItem();
   virtual ~ObConfigItem();
 
@@ -211,7 +211,7 @@ class ObConfigItem {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_UNKNOWN;
   }
 
-  protected:
+protected:
   // use current value to do input operation
   virtual bool set(const char* str) = 0;
 
@@ -227,13 +227,13 @@ class ObConfigItem {
   char info_str_[OB_MAX_CONFIG_INFO_LEN];
   common::ObLatch lock_;
 
-  private:
+private:
   ObParameterAttr attr_;
   // DISALLOW_COPY_AND_ASSIGN(ObConfigItem);
 };
 
 class ObConfigIntListItem : public ObConfigItem {
-  public:
+public:
   ObConfigIntListItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
       const char* info, const ObParameterAttr attr = ObParameterAttr());
   virtual ~ObConfigIntListItem()
@@ -268,7 +268,7 @@ class ObConfigIntListItem : public ObConfigItem {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_INTLIST;
   }
 
-  protected:
+protected:
   // use current value to do input operation
   bool set(const char* str);
 
@@ -288,12 +288,12 @@ class ObConfigIntListItem : public ObConfigItem {
 
   struct ObInnerConfigIntListItem value_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigIntListItem);
 };
 
 class ObConfigStrListItem : public ObConfigItem {
-  public:
+public:
   ObConfigStrListItem();
   ObConfigStrListItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
       const char* info, const ObParameterAttr attr = ObParameterAttr());
@@ -339,7 +339,7 @@ class ObConfigStrListItem : public ObConfigItem {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_STRLIST;
   }
 
-  public:
+public:
   static const int64_t MAX_INDEX_SIZE = 64;
   struct ObInnerConfigStrListItem {
     ObInnerConfigStrListItem() : valid_(false), size_(0), rwlock_()
@@ -390,16 +390,16 @@ class ObConfigStrListItem : public ObConfigItem {
 
   struct ObInnerConfigStrListItem value_;
 
-  protected:
+protected:
   // use current value to do input operation
   bool set(const char* str);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigStrListItem);
 };
 
 class ObConfigIntegralItem : public ObConfigItem {
-  public:
+public:
   ObConfigIntegralItem() : value_(0)
   {}
   virtual ~ObConfigIntegralItem()
@@ -449,12 +449,12 @@ class ObConfigIntegralItem : public ObConfigItem {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_INTEGRAL;
   }
 
-  protected:
+protected:
   // use current value to do input operation
   bool set(const char* str);
   virtual int64_t parse(const char* str, bool& valid) const = 0;
 
-  private:
+private:
   int64_t value_;
   // DISALLOW_COPY_AND_ASSIGN(ObConfigIntegralItem);
 };
@@ -469,7 +469,7 @@ inline bool ObConfigIntegralItem::set(const char* str)
 }
 
 class ObConfigDoubleItem : public ObConfigItem {
-  public:
+public:
   ObConfigDoubleItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
       const char* range, const char* info, const ObParameterAttr attr = ObParameterAttr());
   ObConfigDoubleItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
@@ -523,12 +523,12 @@ class ObConfigDoubleItem : public ObConfigItem {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_DOUBLE;
   }
 
-  protected:
+protected:
   // use current value to do input operation
   bool set(const char* str);
   double parse(const char* str, bool& valid) const;
 
-  private:
+private:
   double value_;
   // DISALLOW_COPY_AND_ASSIGN(ObConfigDoubleItem);
 };
@@ -552,7 +552,7 @@ inline bool ObConfigDoubleItem::set(const char* str)
 }
 
 class ObConfigCapacityItem : public ObConfigIntegralItem {
-  public:
+public:
   ObConfigCapacityItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
       const char* range, const char* info, const ObParameterAttr attr = ObParameterAttr());
   ObConfigCapacityItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
@@ -562,10 +562,10 @@ class ObConfigCapacityItem : public ObConfigIntegralItem {
 
   ObConfigCapacityItem& operator=(int64_t value);
 
-  protected:
+protected:
   int64_t parse(const char* str, bool& valid) const;
 
-  private:
+private:
   // DISALLOW_COPY_AND_ASSIGN(ObConfigCapacityItem);
 };
 inline ObConfigCapacityItem& ObConfigCapacityItem::operator=(int64_t value)
@@ -579,7 +579,7 @@ inline ObConfigCapacityItem& ObConfigCapacityItem::operator=(int64_t value)
 }
 
 class ObConfigTimeItem : public ObConfigIntegralItem {
-  public:
+public:
   ObConfigTimeItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
       const char* range, const char* info, const ObParameterAttr attr = ObParameterAttr());
   ObConfigTimeItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
@@ -588,7 +588,7 @@ class ObConfigTimeItem : public ObConfigIntegralItem {
   {}
   ObConfigTimeItem& operator=(int64_t value);
 
-  protected:
+protected:
   int64_t parse(const char* str, bool& valid) const;
 };
 inline ObConfigTimeItem& ObConfigTimeItem::operator=(int64_t value)
@@ -602,7 +602,7 @@ inline ObConfigTimeItem& ObConfigTimeItem::operator=(int64_t value)
 }
 
 class ObConfigIntItem : public ObConfigIntegralItem {
-  public:
+public:
   ObConfigIntItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
       const char* range, const char* info, const ObParameterAttr attr = ObParameterAttr());
   ObConfigIntItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
@@ -611,10 +611,10 @@ class ObConfigIntItem : public ObConfigIntegralItem {
   {}
   ObConfigIntItem& operator=(int64_t value);
 
-  protected:
+protected:
   int64_t parse(const char* str, bool& valid) const;
 
-  private:
+private:
   // DISALLOW_COPY_AND_ASSIGN(ObConfigIntItem);
 };
 inline ObConfigIntItem& ObConfigIntItem::operator=(int64_t value)
@@ -628,7 +628,7 @@ inline ObConfigIntItem& ObConfigIntItem::operator=(int64_t value)
 }
 
 class ObConfigMomentItem : public ObConfigItem {
-  public:
+public:
   ObConfigMomentItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
       const char* info, const ObParameterAttr attr = ObParameterAttr());
   virtual ~ObConfigMomentItem()
@@ -654,7 +654,7 @@ class ObConfigMomentItem : public ObConfigItem {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_MOMENT;
   }
 
-  public:
+public:
   static const int64_t MAX_INDEX_SIZE = 64;
   struct ObInnerConfigMomentItem {
     ObInnerConfigMomentItem() : disable_(true), hour_(-1), minute_(-1)
@@ -667,13 +667,13 @@ class ObConfigMomentItem : public ObConfigItem {
     int minute_;
   };
 
-  private:
+private:
   struct ObInnerConfigMomentItem value_;
   // DISALLOW_COPY_AND_ASSIGN(ObConfigMomentItem);
 };
 
 class ObConfigBoolItem : public ObConfigItem {
-  public:
+public:
   ObConfigBoolItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
       const char* info, const ObParameterAttr attr = ObParameterAttr());
   virtual ~ObConfigBoolItem()
@@ -694,18 +694,18 @@ class ObConfigBoolItem : public ObConfigItem {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_BOOL;
   }
 
-  protected:
+protected:
   // use current value to do input operation
   bool set(const char* str);
   bool parse(const char* str, bool& valid) const;
 
-  private:
+private:
   bool value_;
   // DISALLOW_COPY_AND_ASSIGN(ObConfigBoolItem);
 };
 
 class ObConfigStringItem : public ObConfigItem {
-  public:
+public:
   ObConfigStringItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name, const char* def,
       const char* info, const ObParameterAttr attr = ObParameterAttr());
   virtual ~ObConfigStringItem()
@@ -733,7 +733,7 @@ class ObConfigStringItem : public ObConfigItem {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_STRING;
   }
 
-  protected:
+protected:
   // use current value to do input operation
   bool set(const char* str)
   {
@@ -741,7 +741,7 @@ class ObConfigStringItem : public ObConfigItem {
     return true;
   }
 
-  private:
+private:
   // DISALLOW_COPY_AND_ASSIGN(ObConfigStringItem);
 };
 
@@ -749,7 +749,7 @@ class ObConfigStringItem : public ObConfigItem {
 // or "MANDATORY COMPRESSION = lz4_1.0"
 
 class ObConfigLogArchiveOptionsItem : public ObConfigItem {
-  public:
+public:
   ObConfigLogArchiveOptionsItem()
   {}
   ObConfigLogArchiveOptionsItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
@@ -797,7 +797,7 @@ class ObConfigLogArchiveOptionsItem : public ObConfigItem {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_LOGARCHIVEOPT;
   }
 
-  public:
+public:
   struct ObInnerConfigLogArchiveOptionsItem {
     ObInnerConfigLogArchiveOptionsItem()
         : valid_(false),
@@ -842,7 +842,7 @@ class ObConfigLogArchiveOptionsItem : public ObConfigItem {
     int set_default_encryption_algorithm();
     bool is_encryption_meta_valid() const;
 
-    public:
+  public:
     bool valid_;
     bool is_mandatory_;
     bool is_compress_enabled_;
@@ -851,24 +851,24 @@ class ObConfigLogArchiveOptionsItem : public ObConfigItem {
     share::ObAesOpMode encryption_algorithm_;
   };
 
-  public:
+public:
   static int64_t get_keywords_idx(const char* str, bool& is_key);
   static int64_t get_compression_option_idx(const char* str);
   static bool is_key_keyword(int64_t idx);
   static int format_option_str(const char* src, int64_t src_len, char* dest, int64_t dest_len);
   static bool is_valid_isolate_option(const int64_t idx);
 
-  public:
+public:
   struct ObInnerConfigLogArchiveOptionsItem value_;
 
-  protected:
+protected:
   // use current value to do input operation
   bool set(const char* str);
 
   void process_isolated_option_(const int64_t idx);
   void process_kv_option_(const int64_t key_idx, const char* value);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigLogArchiveOptionsItem);
 };
 

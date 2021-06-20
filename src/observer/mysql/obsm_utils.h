@@ -31,7 +31,7 @@ class ObSchemaGetterGuard;
 namespace common {
 class ObField;
 class ObSMUtils {
-  public:
+public:
   /**
    *
    * @param [in] obj: need to serialize cell

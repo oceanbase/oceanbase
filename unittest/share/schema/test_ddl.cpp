@@ -123,7 +123,7 @@ static uint64_t& TID = FakePartPropertyGetter::TID();
 static int64_t& PID = FakePartPropertyGetter::PID();
 
 class ObFakeCB : public ObIStatusChangeCallback {
-  public:
+public:
   ObFakeCB()
   {}
   int wakeup_balancer()
@@ -151,7 +151,7 @@ class ObFakeCB : public ObIStatusChangeCallback {
   }
 };
 class MockLocalityManager : public ObILocalityManager {
-  public:
+public:
   struct ServerInfo {
     ServerInfo() : server_(), is_local_(false)
     {}
@@ -185,7 +185,7 @@ class MockLocalityManager : public ObILocalityManager {
 };
 
 class ObFakeServerChangeCB : public ObIServerChangeCallback {
-  public:
+public:
   ObFakeServerChangeCB()
   {}
   virtual ~ObFakeServerChangeCB()
@@ -204,17 +204,17 @@ class ObFakeServerChangeCB : public ObIServerChangeCallback {
   }
 
 class TestDDL : public ::testing::Test {
-  public:
+public:
   TestDDL();
   virtual ~TestDDL();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestDDL);
 
-  protected:
+protected:
   // function members
   void fill_tenant_schema(const uint64_t tenant_id, const char* tenant_name, ObTenantSchema& tenant_schema);
   int create_tenant(ObMySQLTransaction& trans, const uint64_t tenant_id);
@@ -261,7 +261,7 @@ class TestDDL : public ::testing::Test {
   void do_print_tenant_schema(const uint64_t tenant_id, std::ofstream& of_tenant);
   void do_print_schema(ObStmt* stmt, std::ofstream& of_tmp);
 
-  protected:
+protected:
   // table id
   // uint64_t next_user_table_id_;
   hash::ObHashMap<uint64_t, uint64_t> next_user_table_id_map_;

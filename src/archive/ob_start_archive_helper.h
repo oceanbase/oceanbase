@@ -27,7 +27,7 @@ namespace archive {
 class ObArchiveLogWrapper;
 class ObArchiveMgr;
 struct ObMaxArchivedLogInfo {
-  public:
+public:
   ObMaxArchivedLogInfo()
   {
     reset();
@@ -40,7 +40,7 @@ struct ObMaxArchivedLogInfo {
   TO_STRING_KV(K_(max_log_id_archived), K_(max_checkpoint_ts_archived), K_(max_log_submit_ts_archived),
       K_(clog_epoch_id), K_(accum_checksum));
 
-  public:
+public:
   uint64_t max_log_id_archived_;        // max archived log id
   int64_t max_checkpoint_ts_archived_;  // max archived checkpoint ts
   int64_t max_log_submit_ts_archived_;  // max archived log ts
@@ -51,14 +51,14 @@ struct ObMaxArchivedLogInfo {
 class StartArchiveHelper {
   static const int64_t MAX_FILE_PATH = OB_MAX_ARCHIVE_PATH_LENGTH;
 
-  public:
+public:
   StartArchiveHelper(const common::ObPGKey& pg_key, const int64_t timestamp, const int64_t incarnation,
       const int64_t archive_round, const int64_t epoch, const int64_t takeover_ts, const bool compatible,
       const int64_t start_archive_ts, common::ObString& uri, common::ObString& storage_info,
       ObArchiveLogWrapper& log_wrapper, ObArchiveMgr& archive_mgr);
   ~StartArchiveHelper();
 
-  public:
+public:
   bool is_valid();
   int handle();
   bool check_query_info_ready();
@@ -68,7 +68,7 @@ class StartArchiveHelper {
       K(min_log_id_unrecorded_), K(min_log_ts_unrecorded_), K(max_log_id_unrecorded_), K(max_checkpoint_ts_unrecorded_),
       K(max_log_submit_ts_unrecorded_), K(exist_log_));
 
-  private:
+private:
   int handle_pg_start_archive_();
   int confirm_start_log_exist_();
   int locate_pg_start_ilog_id_();
@@ -100,7 +100,7 @@ class StartArchiveHelper {
   int decide_start_log_id_on_beginning_();
   int decide_start_log_id_on_doing_();
 
-  public:
+public:
   bool success_;
   common::ObPGKey pg_key_;
   bool need_kickoff_log_;

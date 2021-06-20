@@ -17,18 +17,18 @@ using namespace oceanbase::common;
 
 #include <gtest/gtest.h>
 class ObExprGreaterThanTest : public ::testing::Test {
-  public:
+public:
   ObExprGreaterThanTest();
   virtual ~ObExprGreaterThanTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprGreaterThanTest(const ObExprGreaterThanTest& other);
   ObExprGreaterThanTest& operator=(const ObExprGreaterThanTest& other);
 
-  protected:
+protected:
   // data members
 };
 

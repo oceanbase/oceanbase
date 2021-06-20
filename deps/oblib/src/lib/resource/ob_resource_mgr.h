@@ -25,7 +25,7 @@
 namespace oceanbase {
 namespace lib {
 class ObTenantMemoryMgr {
-  public:
+public:
   static const int64_t LARGE_REQUEST_EXTRA_MB_COUNT = 2;
   static const int64_t ALIGN_SIZE = static_cast<int64_t>(AChunkMgr::ALIGN_SIZE);
 
@@ -96,7 +96,7 @@ class ObTenantMemoryMgr {
     return update_hold(size, common::ObCtxIds::CO_STACK, common::ObModIds::OB_CORO, reach_ctx_limit);
   }
 
-  private:
+private:
   void update_cache_hold(const int64_t size);
   bool update_hold(const int64_t size, const uint64_t ctx_id, const lib::ObLabel& label, bool& reach_ctx_limit);
   bool update_ctx_hold(const uint64_t ctx_id, const int64_t size);
@@ -125,7 +125,7 @@ struct ObTenantResourceMgr : public common::ObLink {
 
 class ObResourceMgr;
 class ObTenantResourceMgrHandle {
-  public:
+public:
   ObTenantResourceMgrHandle();
   virtual ~ObTenantResourceMgrHandle();
 
@@ -137,13 +137,13 @@ class ObTenantResourceMgrHandle {
   const ObTenantResourceMgr* get_mgr() const;
   const ObTenantMemoryMgr* get_memory_mgr() const;
 
-  private:
+private:
   ObResourceMgr* resource_mgr_;
   ObTenantResourceMgr* tenant_resource_mgr_;
 };
 
 class ObTenantResourceMgrList {
-  public:
+public:
   ObTenantResourceMgrList() : inited_(false), mutex_(), header_(NULL), chunk_(NULL)
   {}
   virtual ~ObTenantResourceMgrList()
@@ -154,7 +154,7 @@ class ObTenantResourceMgrList {
   int push(ObTenantResourceMgr* tenant_resource_mgr);
   int pop(ObTenantResourceMgr*& tenant_resource_mgr);
 
-  private:
+private:
   bool inited_;
   ObMutex mutex_;
   ObTenantResourceMgr* header_;
@@ -164,7 +164,7 @@ class ObTenantResourceMgrList {
 class ObResourceMgr {
   friend class ObTenantResourceMgrHandle;
 
-  public:
+public:
   ObResourceMgr();
   virtual ~ObResourceMgr();
 
@@ -176,7 +176,7 @@ class ObResourceMgr {
   // will create resource mgr if not exist
   int get_tenant_resource_mgr(const uint64_t tenant_id, ObTenantResourceMgrHandle& handle);
 
-  private:
+private:
   static const int64_t MAX_TENANT_COUNT = 12289;  // prime number
   void inc_ref(ObTenantResourceMgr* tenant_resource_mgr);
   void dec_ref(ObTenantResourceMgr* tenant_resource_mgr);

@@ -25,7 +25,7 @@ using namespace common;
 
 /* Simple stopwatch */
 class StopWatch {
-  public:
+public:
   StopWatch() : run_(false)
   {}
   void start()
@@ -63,7 +63,7 @@ class StopWatch {
     return (long int)(T.tv_sec - S_.tv_sec) * 1000000 + (long int)(T.tv_usec - S_.tv_usec);
   }
 
-  private:
+private:
   bool run_;
   timeval S_, E_;
 };

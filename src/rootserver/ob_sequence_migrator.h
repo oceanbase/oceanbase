@@ -28,7 +28,7 @@ class ObMultiVersionSchemaService;
 
 namespace rootserver {
 class ObSequenceMigrator {
-  public:
+public:
   ObSequenceMigrator();
   virtual ~ObSequenceMigrator();
 
@@ -46,14 +46,14 @@ class ObSequenceMigrator {
   void start();
   int stop();
 
-  private:
+private:
   int check_stop();
   int set_migrate_mark();
 
   int migrate();
   int do_migrate(const uint64_t tenant_id);
 
-  private:
+private:
   bool inited_;
   bool stopped_;
   bool migrate_;
@@ -61,7 +61,7 @@ class ObSequenceMigrator {
   common::ObMySQLProxy* sql_proxy_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSequenceMigrator);
 };
 

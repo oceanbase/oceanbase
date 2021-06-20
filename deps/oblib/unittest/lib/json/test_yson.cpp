@@ -19,19 +19,19 @@ using namespace oceanbase::common;
 using namespace oceanbase::yson;
 
 class TestYson : public ::testing::Test {
-  public:
+public:
   TestYson();
   virtual ~TestYson();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestYson);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 
@@ -52,7 +52,7 @@ struct ClassWithToYson {
   TO_STRING_KV("0", val1_, "1", val2_, "2", val3_, "3", val4_, "4", val5_);
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int64_t val1_;
   int32_t val2_;
   bool val3_;

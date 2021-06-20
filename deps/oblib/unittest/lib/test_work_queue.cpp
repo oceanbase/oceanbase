@@ -15,19 +15,19 @@
 #include "lib/utility/ob_test_util.h"
 using namespace oceanbase::common;
 class TestWorkQueue : public ::testing::Test {
-  public:
+public:
   TestWorkQueue();
   virtual ~TestWorkQueue();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestWorkQueue);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 
@@ -55,7 +55,7 @@ TEST_F(TestWorkQueue, init)
 }
 
 class ATimerTask : public ObAsyncTimerTask {
-  public:
+public:
   ATimerTask(ObWorkQueue& queue, bool fail_it = false) : ObAsyncTimerTask(queue), fail_it_(fail_it)
   {
     set_retry_interval(0);
@@ -99,13 +99,13 @@ class ATimerTask : public ObAsyncTimerTask {
     process_count_ = 0;
   }
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ATimerTask);
   // function members
-  private:
+private:
   // data members
   static int64_t process_count_;
   bool fail_it_;

@@ -20,7 +20,7 @@ namespace jit {
 namespace expr {
 
 class ObCaseOpExpr : virtual public ObExpr {
-  public:
+public:
   ObCaseOpExpr()
   {
     set_expr_class(EXPR_CASE_OPERATOR);

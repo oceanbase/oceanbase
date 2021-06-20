@@ -22,7 +22,7 @@ class ObServerManager;
 class ObEmptyServerChecker;
 
 class ObServerChecker {
-  public:
+public:
   ObServerChecker();
   virtual ~ObServerChecker()
   {}
@@ -32,15 +32,15 @@ class ObServerChecker {
   int try_delete_server();
   int try_notify_empty_server_checker();
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObServerChecker);
   // function members
   int reuse_replica_count_mgr();
 
-  private:
+private:
   // data members
   bool inited_;
   ObServerManager* server_mgr_;

@@ -24,7 +24,7 @@ class ObTaskInfo;
 class ObNestedLoopJoin : public ObBasicNestedLoopJoin {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   enum ObJoinState { JS_JOIN_END = 0, JS_READ_LEFT, JS_READ_RIGHT, JS_STATE_COUNT };
   enum ObFuncType { FT_ITER_GOING = 0, FT_ITER_END, FT_TYPE_COUNT };
   struct ObBatchIndexJoinCtx {
@@ -37,7 +37,7 @@ class ObNestedLoopJoin : public ObBasicNestedLoopJoin {
   class ObNestedLoopJoinCtx : public ObBasicNestedLoopJoinCtx {
     friend class ObNestedLoopJoin;
 
-    public:
+  public:
     ObNestedLoopJoinCtx(ObExecContext& ctx)
         : ObBasicNestedLoopJoinCtx(ctx), state_(JS_READ_LEFT), batch_join_ctx_(), is_left_end_(false)
     //  connect_by_pump_()
@@ -51,14 +51,14 @@ class ObNestedLoopJoin : public ObBasicNestedLoopJoin {
       ObBasicNestedLoopJoinCtx::destroy();
     }
 
-    private:
+  private:
     ObJoinState state_;
     ObBatchIndexJoinCtx batch_join_ctx_;
     bool is_left_end_;
     //    ObConnectByPump connect_by_pump_;
   };
 
-  public:
+public:
   explicit ObNestedLoopJoin(common::ObIAllocator& alloc);
   virtual ~ObNestedLoopJoin();
   virtual void reset();
@@ -91,7 +91,7 @@ class ObNestedLoopJoin : public ObBasicNestedLoopJoin {
     cache_limit_ = cache_limit;
   }
 
-  private:
+private:
   // state operation and transfer function type.
   typedef int (ObNestedLoopJoin::*state_operation_func_type)(ObNestedLoopJoinCtx& join_ctx) const;
   typedef int (ObNestedLoopJoin::*state_function_func_type)(
@@ -126,7 +126,7 @@ class ObNestedLoopJoin : public ObBasicNestedLoopJoin {
   // nested loop join with index seek, batch
   int batch_index_join_get_next(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
 
-  private:
+private:
   int bij_fill_left_rows(ObExecContext& exec_ctx) const;
   int bij_join_rows(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
 

@@ -23,12 +23,12 @@ namespace sql {
 class ObMergeSetSpec : public ObSetSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMergeSetSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 };
 
 class ObMergeSetOp : public ObOperator {
-  public:
+public:
   ObMergeSetOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;
@@ -36,7 +36,7 @@ class ObMergeSetOp : public ObOperator {
   virtual int rescan() override;
   virtual void destroy() override;
   class Compare {
-    public:
+  public:
     Compare() : sort_collations_(nullptr), cmp_funcs_(nullptr), ret_code_(common::OB_SUCCESS)
     {}
     int init(const common::ObIArray<ObSortFieldCollation>* sort_collations,
@@ -50,7 +50,7 @@ class ObMergeSetOp : public ObOperator {
     int ret_code_;
   };
 
-  protected:
+protected:
   int do_strict_distinct(ObOperator& child_op, const common::ObIArray<ObExpr*>& compare_row,
       const common::ObIArray<ObExpr*>*& row, int& cmp);
   template <typename T>
@@ -68,7 +68,7 @@ class ObMergeSetOp : public ObOperator {
     need_skip_init_row_ = need_skip_init_row;
   }
 
-  protected:
+protected:
   common::ObArenaAllocator alloc_;
   ObChunkDatumStore::LastStoredRow<> last_row_;
   Compare cmp_;

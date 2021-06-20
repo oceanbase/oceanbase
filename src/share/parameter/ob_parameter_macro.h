@@ -36,7 +36,7 @@
 // TODO: use parameter instead of config
 #define _DEF_PARAMETER_EASY(param, scope, name, args...)                                                    \
   class ObConfig##param##Item##_##name : public common::ObConfig##param##Item {                             \
-    public:                                                                                                 \
+  public:                                                                                                   \
     ObConfig##param##Item##_##name() : common::ObConfig##param##Item(local_container(), scope, #name, args) \
     {}                                                                                                      \
     template <class T>                                                                                      \
@@ -49,7 +49,7 @@
 
 #define _DEF_PARAMETER_RANGE_EASY(param, scope, name, args...)                                              \
   class ObConfig##param##Item##_##name : public common::ObConfig##param##Item {                             \
-    public:                                                                                                 \
+  public:                                                                                                   \
     ObConfig##param##Item##_##name() : common::ObConfig##param##Item(local_container(), scope, #name, args) \
     {}                                                                                                      \
     template <class T>                                                                                      \
@@ -62,7 +62,7 @@
 
 #define _DEF_PARAMETER_CHECKER_EASY(param, scope, name, def, checker, args...)                                   \
   class ObConfig##param##Item##_##name : public common::ObConfig##param##Item {                                  \
-    public:                                                                                                      \
+  public:                                                                                                        \
     ObConfig##param##Item##_##name() : common::ObConfig##param##Item(local_container(), scope, #name, def, args) \
     {                                                                                                            \
       add_checker(new (std::nothrow) checker());                                                                 \

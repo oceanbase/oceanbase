@@ -1065,12 +1065,12 @@ struct ObGetAllPlanIdOp {
   int set_key_array(common::ObIArray<uint64_t>* key_array);
   int operator()(common::hash::HashMapPair<ObCacheObjID, ObCacheObject*>& entry);
 
-  public:
+public:
   common::ObIArray<uint64_t>* key_array_;
 };
 
 struct ObPhyLocationGetter {
-  public:
+public:
   // used for getting plan
   static int get_phy_locations(const ObIArray<ObTableLocation>& table_locations, const ObPlanCacheCtx& pc_ctx,
       share::ObIPartitionLocationCache& location_cache, ObIArray<ObPhyTableLocationInfo>& phy_location_infos,

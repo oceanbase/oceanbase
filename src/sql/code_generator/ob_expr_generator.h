@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprGenerator {
-  public:
+public:
   ObExprGenerator()
   {}
   virtual ~ObExprGenerator()
@@ -28,7 +28,7 @@ class ObExprGenerator {
   virtual int generate(ObRawExpr& raw_expr, ObSqlExpression& out_expr) = 0;
   virtual int generate(ObRawExpr& raw_expr, ObIterExprOperator*& out_expr) = 0;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprGenerator);
 };

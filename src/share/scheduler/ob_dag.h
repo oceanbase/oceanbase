@@ -29,7 +29,7 @@ class ObTenantThreadPool;
 class ObDagWorkerNew;
 
 class ObITaskNew : public common::ObDLinkBase<ObITaskNew> {
-  public:
+public:
   enum ObITaskNewStatus {
     TASK_STATUS_INITING = 0,
     TASK_STATUS_WAITING = 1,
@@ -50,7 +50,7 @@ class ObITaskNew : public common::ObDLinkBase<ObITaskNew> {
     THIS_TASK_PAUSE = 1,
   };
 
-  public:
+public:
   explicit ObITaskNew(const int64_t type_id);
   virtual ~ObITaskNew();
   int do_work();
@@ -94,7 +94,7 @@ class ObITaskNew : public common::ObDLinkBase<ObITaskNew> {
   }
   VIRTUAL_TO_STRING_KV(KP(this), K_(type_id), K_(status), K_(dag), KP_(worker), K_(next_task));
 
-  private:
+private:
   friend class ObIDagNew;
   friend class ObTenantThreadPool;
   static const int64_t DEFAULT_CHILDREN_NUM = 8;
@@ -106,7 +106,7 @@ class ObITaskNew : public common::ObDLinkBase<ObITaskNew> {
   }
   virtual int process() = 0;
 
-  private:
+private:
   int generate_next_task();
   bool judge_delay_penalty();
   const common::ObIArray<ObITaskNew*>& get_child_tasks() const
@@ -170,10 +170,10 @@ class ObITaskNew : public common::ObDLinkBase<ObITaskNew> {
   }
   int finish_task();
 
-  protected:
+protected:
   ObIDagNew* dag_;
 
-  private:
+private:
   int64_t type_id_;
   lib::ObMutex lock_;
   ObITaskNewStatus status_;
@@ -187,7 +187,7 @@ class ObITaskNew : public common::ObDLinkBase<ObITaskNew> {
   common::ObSEArray<ObITaskNew*, DEFAULT_CHILDREN_NUM> children_;
 };
 class ObIDagNew : public common::ObDLinkBase<ObIDagNew> {
-  public:
+public:
   // priority from high to low
   enum ObIDagNewPriority {
     DAG_PRIO_0 = 0,
@@ -246,17 +246,17 @@ class ObIDagNew : public common::ObDLinkBase<ObIDagNew> {
   }
   VIRTUAL_TO_STRING_KV(KP(this), K_(type_id), K_(id), K_(dag_ret), K_(dag_status), K_(start_time));
 
-  public:
+public:
   virtual int64_t hash() const = 0;
   virtual int64_t get_tenant_id() const = 0;
   virtual int fill_comment(char* buf, const int64_t buf_len) const = 0;
   virtual int64_t get_compat_mode() const = 0;
   virtual bool operator==(const ObIDagNew& other) const = 0;
 
-  protected:
+protected:
   int dag_ret_;
 
-  private:
+private:
   typedef common::ObDList<ObITaskNew> TaskList;  // cycled list
   static const int64_t DEFAULT_TASK_NUM = 32;
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;
@@ -272,7 +272,7 @@ class ObIDagNew : public common::ObDLinkBase<ObIDagNew> {
     RUNNABLE = 1,
   };
 
-  private:
+private:
   int finish_task(ObITaskNew& task);
   bool is_valid();
   int init(const int64_t total = TOTAL_LIMIT, const int64_t hold = HOLD_LIMIT, const int64_t page_size = PAGE_SIZE);
@@ -320,7 +320,7 @@ class ObIDagNew : public common::ObDLinkBase<ObIDagNew> {
   }
   int set_dag_id(const ObDagId& dag_id);
 
-  private:
+private:
   common::ObConcurrentFIFOAllocator allocator_;
   bool is_inited_;
   ObIDagNewPriority priority_;

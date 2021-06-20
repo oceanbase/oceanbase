@@ -32,7 +32,7 @@ using lib::ObTenantCtxAllocator;
 using oceanbase::common::default_memattr;
 
 class ObPageManager : public lib::IBlockMgr {
-  public:
+public:
   constexpr static int DEFAULT_CHUNK_CACHE_CNT = 2;
   constexpr static int MINI_MODE_CHUNK_CACHE_CNT = 0;
   RBNODE(ObPageManager, rblink);
@@ -46,11 +46,11 @@ class ObPageManager : public lib::IBlockMgr {
     return ret;
   }
 
-  private:
+private:
   friend class ObPageManagerCenter;
   friend class Thread;
 
-  public:
+public:
   ObPageManager();
   ~ObPageManager();
   static ObPageManager* thread_local_instance()
@@ -97,12 +97,12 @@ class ObPageManager : public lib::IBlockMgr {
     tl_instance_ = &instance;
   }
 
-  private:
+private:
   int init();
   static __thread ObPageManager* tl_instance_;
   static int64_t global_id_;
 
-  private:
+private:
   int64_t id_;
   lib::ObMemAttr attr_;
   lib::BlockSet bs_;
@@ -114,18 +114,18 @@ class ObPageManager : public lib::IBlockMgr {
 };
 
 class ObPageManagerCenter {
-  public:
+public:
   static ObPageManagerCenter& get_instance();
   int register_pm(ObPageManager& pm);
   void unregister_pm(ObPageManager& pm);
   bool has_register(ObPageManager& pm) const;
   int print_tenant_stat(int64_t tenant_id, char* buf, int64_t len, int64_t& pos);
 
-  private:
+private:
   ObPageManagerCenter();
   int print_tenant_stat(int64_t tenant_id, int64_t& sum_used, int64_t& sum_hold, char* buf, int64_t len, int64_t& pos);
 
-  private:
+private:
   lib::ObMutex mutex_;
   container::ObRbTree<ObPageManager, container::ObDummyCompHelper<ObPageManager>> rb_tree_;
 };

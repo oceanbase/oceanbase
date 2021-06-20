@@ -25,7 +25,7 @@ class ObZoneInfo;
 class ObGlobalInfo;
 
 class ObZoneTableOperation {
-  public:
+public:
   static int update_info_item(
       common::ObISQLClient& sql_client, const common::ObZone& zone, const ObZoneInfoItem& item, bool insert = false);
 
@@ -42,7 +42,7 @@ class ObZoneTableOperation {
   static int remove_zone_info(common::ObISQLClient& sql_client, const common::ObZone& zone);
   static int select_gc_timestamp_for_update(common::ObISQLClient& sql_client, int64_t& gc_timestmp);
 
-  private:
+private:
   template <typename T>
   static int set_info_item(const char* name, const int64_t value, const char* info_str, T& info);
   template <typename T>

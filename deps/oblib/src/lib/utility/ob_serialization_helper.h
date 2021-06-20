@@ -49,7 +49,7 @@ struct DefaultItemEncode {
     return encoded_length_item_enum(item, BoolType<__is_enum(T)>());
   }
 
-  private:
+private:
   // for class, struct, union
   static int encode_item_enum(char* buf, const int64_t buf_len, int64_t& pos, const T& item, FalseType)
   {

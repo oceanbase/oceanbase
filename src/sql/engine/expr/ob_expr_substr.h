@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprSubstr : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprSubstr(common::ObIAllocator& alloc);
   virtual ~ObExprSubstr();
   virtual int calc_result2(common::ObObj& result, const common::ObObj& text, const common::ObObj& start_pos,
@@ -41,7 +41,7 @@ class ObExprSubstr : public ObStringExprOperator {
 
   static int eval_substr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   int calc_result_length(
       ObExprResType* types_array, int64_t param_num, common::ObCollationType cs_type, int64_t& res_len) const;
   int calc_result2_for_mysql(common::ObObj& result, const common::ObObj& text, const common::ObObj& start_pos,

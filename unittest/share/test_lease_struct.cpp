@@ -39,7 +39,7 @@ void try_reset(T&, const FalseType&)
 }
 
 class TestLeaseStruct : public ::testing::Test {
-  protected:
+protected:
   template <typename T>
   T* alloc(void)
   {

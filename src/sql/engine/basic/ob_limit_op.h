@@ -22,7 +22,7 @@ namespace sql {
 class ObLimitSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObLimitSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(limit_expr), K_(offset_expr), K_(percent_expr), K_(calc_found_rows),
@@ -40,7 +40,7 @@ class ObLimitSpec : public ObOpSpec {
 };
 
 class ObLimitOp : public ObOperator {
-  public:
+public:
   ObLimitOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;
@@ -56,11 +56,11 @@ class ObLimitOp : public ObOperator {
   static int get_int_val(ObExpr* expr, ObEvalCtx& eval_ctx, int64_t& val, bool& is_null_value);
   static int get_double_val(ObExpr* expr, ObEvalCtx& eval_ctx, double& val);
 
-  private:
+private:
   int convert_limit_percent();
   int is_row_order_by_item_value_equal(bool& is_equal);
 
-  private:
+private:
   int64_t limit_;
   int64_t offset_;
   int64_t input_cnt_;

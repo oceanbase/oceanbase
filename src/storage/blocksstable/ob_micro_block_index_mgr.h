@@ -95,7 +95,7 @@ struct ObMicroBlockIndex {
   }
   TO_STRING_KV(K_(data_offset), K_(endkey_offset));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockIndex);
 };
 
@@ -109,19 +109,19 @@ struct ObMicroIndexNode {
   bool is_valid() const;
   TO_STRING_KV(K_(obj), K_(first_micro_index), K_(first_child_index), K_(child_num));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMicroIndexNode);
 };
 
 class ObMicroBlockIndexMgr : public common::ObIKVCacheValue {
-  public:
+public:
   struct MemMicroIndexItem {
     int32_t data_offset_;
     MemMicroIndexItem() : data_offset_(0)
     {}
     TO_STRING_KV(K_(data_offset));
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(MemMicroIndexItem);
   };
   typedef const MemMicroIndexItem* const_cursor;
@@ -134,13 +134,13 @@ class ObMicroBlockIndexMgr : public common::ObIKVCacheValue {
     bool is_valid() const;
     TO_STRING_KV(K_(start), K_(end));
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(Bound);
   };
 
-  private:
+private:
   class Compare {
-    public:
+  public:
     OB_INLINE bool operator()(const ObMicroIndexNode& node, const int64_t micro_block_index);
   };
   struct SearchContext {
@@ -152,7 +152,7 @@ class ObMicroBlockIndexMgr : public common::ObIKVCacheValue {
     TO_STRING_KV(K_(begin_node), K_(end_node), K_(father_node), K_(next_node), K_(column_idx));
   };
 
-  public:
+public:
   ObMicroBlockIndexMgr();
   virtual ~ObMicroBlockIndexMgr()
   {}
@@ -177,7 +177,7 @@ class ObMicroBlockIndexMgr : public common::ObIKVCacheValue {
   // calculate row count can be purged in this macro block
   int cal_macro_purged_row_count(int64_t& purged_row_count) const;
 
-  private:
+private:
   void get_bound(Bound& bound) const;
   int get_iterator_bound(const Bound& bound, const common::ObStoreRange& range, const bool is_left_border,
       const bool is_right_border, const_cursor& start, const_cursor& end,
@@ -198,7 +198,7 @@ class ObMicroBlockIndexMgr : public common::ObIKVCacheValue {
       bool& is_equal, const common::ObIArray<storage::ObRowkeyObjComparer*>* cmp_funcs,
       int64_t* first_column_node_offset = nullptr) const;
 
-  private:
+private:
   MemMicroIndexItem* index_array_;
   ObMicroIndexNode* node_array_;
   char* extra_space_base_;  // reserved space for deep copy string and number
@@ -218,7 +218,7 @@ class ObMicroBlockIndexMgr : public common::ObIKVCacheValue {
   bool is_inited_;
   int32_t row_count_;        // macro block row count
   int32_t row_count_delta_;  // row_count_delta of this macro block
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockIndexMgr);
 };
 }  // end namespace blocksstable

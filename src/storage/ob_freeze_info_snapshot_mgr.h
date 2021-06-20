@@ -34,7 +34,7 @@ namespace storage {
 struct ObFrozenStatus;
 
 class ObFreezeInfoSnapshotMgr {
-  public:
+public:
   struct FreezeInfoLite {
     int64_t freeze_version;
     int64_t freeze_ts;
@@ -182,7 +182,7 @@ class ObFreezeInfoSnapshotMgr {
   ObFreezeInfoSnapshotMgr();
   virtual ~ObFreezeInfoSnapshotMgr();
 
-  private:
+private:
   typedef common::RWLock::RLockGuard RLockGuard;
   typedef common::RWLock::WLockGuard WLockGuard;
 
@@ -213,7 +213,7 @@ class ObFreezeInfoSnapshotMgr {
 
   class SchemaCache;
   class SchemaQuerySet {
-    public:
+  public:
     explicit SchemaQuerySet(SchemaCache& schema_cache);
     ~SchemaQuerySet()
     {}
@@ -222,7 +222,7 @@ class ObFreezeInfoSnapshotMgr {
     int submit_async_schema_query(const uint64_t tenant_id, const int64_t freeze_version);
     int update_schema_cache();
 
-    private:
+  private:
     struct SchemaQuery {
       SchemaQuery() : tenant_id_(0), freeze_version_(0)
       {}
@@ -258,7 +258,7 @@ class ObFreezeInfoSnapshotMgr {
   };
 
   class ReloadTask : public common::ObTimerTask {
-    public:
+  public:
     ReloadTask(ObFreezeInfoSnapshotMgr& mgr, SchemaQuerySet& schema_query_set);
     virtual ~ReloadTask()
     {}
@@ -266,7 +266,7 @@ class ObFreezeInfoSnapshotMgr {
     virtual void runTimerTask();
     int try_update_info();
 
-    private:
+  private:
     int get_global_info_compat_below_220(int64_t& snapshot_gc_ts, common::ObIArray<SchemaPair>& gc_schema_version);
     int get_global_info(int64_t& snapshot_gc_ts, common::ObIArray<SchemaPair>& gc_schema_version);
     int get_freeze_info(int64_t& min_major_version, common::ObIArray<FreezeInfoLite>& freeze_info);
@@ -284,7 +284,7 @@ class ObFreezeInfoSnapshotMgr {
 
   // LRU cache of schema information for different tenant major version
   class SchemaCache {
-    public:
+  public:
     typedef common::ObSpinLockGuard SpinLockGuard;
 
     explicit SchemaCache(SchemaQuerySet& schema_query_set);
@@ -300,7 +300,7 @@ class ObFreezeInfoSnapshotMgr {
 
     int update_schema_version(const uint64_t tenant_id, const int64_t freeze_version);
 
-    private:
+  private:
     // dlink list
     struct schema_node {
       // key
@@ -342,10 +342,10 @@ class ObFreezeInfoSnapshotMgr {
     virtual int fetch_freeze_schema(const uint64_t tenant_id, const int64_t freeze_version, int64_t& schema_version,
         common::ObIArray<SchemaPair>& freeze_schema);
 
-    public:  // for ut only
+  public:  // for ut only
     int update_freeze_schema(const uint64_t tenant_id, const int64_t freeze_version, const int64_t schema_version);
 
-    private:
+  private:
     int update_freeze_schema(const int64_t freeze_version, common::ObIArray<SchemaPair>& freeze_schema);
 
     common::ObSpinLock lock_;
@@ -374,9 +374,9 @@ class ObFreezeInfoSnapshotMgr {
   int64_t snapshot_gc_ts_;
   common::hash::ObHashMap<uint64_t, GCSnapshotInfo> gc_snapshot_info_[2];
 
-  protected:
+protected:
   SchemaCache schema_cache_;  // query schema version based on tenant id and major freeze version
-  private:
+private:
   common::ObSEArray<FreezeInfoLite, 32> info_list_[2];         // lite one doesnot contain schema_version
   common::ObSEArray<share::ObSnapshotInfo, 32> snapshots_[2];  // snapshots_ matains multi_version_start for index and
                                                                // others
@@ -388,14 +388,14 @@ class ObFreezeInfoSnapshotMgr {
 };
 
 class ObFreezeInfoMgrWrapper {
-  public:
+public:
   static ObFreezeInfoSnapshotMgr& get_instance(const uint64_t table_id = common::OB_INVALID_ID);
   static int init(common::ObISQLClient& local_proxy, common::ObISQLClient& remote_proxy);
   static int start();
   static void wait();
   static void stop();
 
-  private:
+private:
   static ObFreezeInfoSnapshotMgr local_mgr_;
   static ObFreezeInfoSnapshotMgr remote_mgr_;
 };

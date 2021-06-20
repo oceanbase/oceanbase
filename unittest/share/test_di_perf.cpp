@@ -46,16 +46,16 @@ using namespace share::schema;
 namespace observer {
 
 class MockObAllVirtualSysStat : public oceanbase::observer::ObAllVirtualSysStat {
-  public:
+public:
   virtual int get_next_row(common::ObNewRow*& row);
 };
 
 class MockObAllLatch : public oceanbase::observer::ObAllLatch {
-  public:
+public:
   virtual int get_next_row(common::ObNewRow*& row);
   virtual int set_ip(common::ObAddr* addr);
 
-  private:
+private:
   common::ObString ipstr_;
   int32_t port_;
 };
@@ -320,7 +320,7 @@ int MockObAllLatch::get_next_row(ObNewRow*& row)
 }
 
 class TestDIPerf : public ::testing::Test {
-  public:
+public:
   TestDIPerf();
   virtual ~TestDIPerf()
   {}
@@ -328,7 +328,7 @@ class TestDIPerf : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   DBInitializer db_initer_;
   ObSchemaServiceSQLImpl schema_service_;
   ObMultiVersionSchemaService multi_schema_service_;

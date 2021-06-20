@@ -26,7 +26,7 @@ using namespace ::testing;
 namespace oceanbase {
 namespace common {
 class TestDiskError : public ::testing::Test {
-  public:
+public:
   TestDiskError()
   {}
   virtual ~TestDiskError()
@@ -41,7 +41,7 @@ class TestDiskError : public ::testing::Test {
   virtual void set_no_wait();
   virtual void set_io_size(const int64_t disk_index, const int64_t io_size);
 
-  protected:
+protected:
   static const int64_t DISK_CNT = 2;
   int64_t file_size_;
   char file_names_[DISK_CNT][128];

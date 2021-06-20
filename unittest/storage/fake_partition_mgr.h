@@ -26,7 +26,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObFakePartitionStorage : public ObIPartitionStorage {
-  public:
+public:
   ObFakePartitionStorage();
   virtual ~ObFakePartitionStorage();
 
@@ -210,7 +210,7 @@ class ObFakePartitionStorage : public ObIPartitionStorage {
     return NULL;
   }
 
-  private:
+private:
   common::ObPartitionKey partition_key_;
   uint64_t merged_version_;
   enum ObPartitionStorageStatus state_;
@@ -219,7 +219,7 @@ class ObFakePartitionStorage : public ObIPartitionStorage {
 };
 
 class ObFakePartition : public ObIPartition {
-  public:
+public:
   ObFakePartition();
   virtual ~ObFakePartition()
   {}
@@ -316,7 +316,7 @@ class ObFakePartition : public ObIPartition {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   common::ObPartitionKey partition_key_;
   ObFakePartitionStorage storage_;
 
@@ -327,7 +327,7 @@ class ObFakePartition : public ObIPartition {
 };
 
 class ObMajorFreezeTask : public share::ObAsyncTask {
-  public:
+public:
   ObMajorFreezeTask(ObIMajorFreezeCb* cb, const common::ObPartitionKey& partition_key, const int64_t cmd,
       const int64_t frozen_version, const int64_t frozen_timestamp, const int err);
   virtual ~ObMajorFreezeTask()
@@ -340,7 +340,7 @@ class ObMajorFreezeTask : public share::ObAsyncTask {
   }
   virtual share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-  private:
+private:
   ObIMajorFreezeCb* cb_;
   common::ObPartitionKey partition_key_;
   int64_t cmd_;
@@ -350,9 +350,9 @@ class ObMajorFreezeTask : public share::ObAsyncTask {
 };
 
 class ObFakePartitionMgr : public ObIPartitionMgr {
-  public:
+public:
   class ObFakePartitionIter : public ObIPartitionIter {
-    public:
+  public:
     ObFakePartitionIter(ObFakePartitionMgr& pt_mgr) : index_(0), pt_mgr_(pt_mgr)
     {}
     virtual ~ObFakePartitionIter()
@@ -366,7 +366,7 @@ class ObFakePartitionMgr : public ObIPartitionMgr {
     // make iterator work even delete partition during iteration
     void fit_delete(const int64_t index);
 
-    private:
+  private:
     int64_t index_;
     ObFakePartitionMgr& pt_mgr_;
   };
@@ -425,7 +425,7 @@ class ObFakePartitionMgr : public ObIPartitionMgr {
     mf_test_mode_ = mode;
   }
 
-  private:
+private:
   int gen_err(const int64_t i);
 
   ObFakePartitionIter partition_iter_;

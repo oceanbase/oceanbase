@@ -20,11 +20,11 @@ namespace oceanbase {
 namespace sql {
 class ObPhysicalPlanCtx;
 class ObExprExtract : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprExtract(common::ObIAllocator& alloc);
   virtual ~ObExprExtract();
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& date_unit, ObExprResType& date, common::ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result_type2(ObExprResType& type, ObExprResType& date_unit, ObExprResType& date,
+      common::ObExprTypeCtx& type_ctx) const override;
   template <typename T>
   static int calc(T& result, const int64_t date_unit, const T& date, common::ObObjType date_type,
       const common::ObCastMode cast_mode, const common::ObTimeZoneInfo* tz_info, const int64_t cur_ts_value);
@@ -32,12 +32,12 @@ class ObExprExtract : public ObFuncExprOperator {
   static int calc_oracle(T& result, const int64_t date_unit, const T& date, common::ObObjType type,
       const ObSQLSessionInfo* session, common::ObIAllocator* calc_buf);
   virtual int calc_result2(common::ObObj& result, const common::ObObj& date_unit, const common::ObObj& date,
-      common::ObExprCtx& expr_ctx) const;
+      common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_extract_oracle(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int calc_extract_mysql(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   int set_result_type_oracle(
       common::ObExprTypeCtx& type_ctx, const ObExprResType& date_unit, ObExprResType& res_type) const;
   // disallow copy

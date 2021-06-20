@@ -27,7 +27,7 @@ class ObLogRpcProxy;
 struct ObLogRpcProxyBuffer {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogRpcProxyBuffer() : pcode_(0), data_(NULL), len_(0)
   {}
   ObLogRpcProxyBuffer(int pcode, const char* data, int64_t len) : pcode_(pcode), data_(data), len_(len)
@@ -45,7 +45,7 @@ struct ObLogRpcProxyBuffer {
 };
 
 class ObLogRpcProxy : public clog::ObILogRpc, public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObLogRpcProxy);
   static const int64_t MAX_PROCESS_HANDLER_TIME = 100 * 1000;
 
@@ -60,7 +60,7 @@ class ObLogRpcProxy : public clog::ObILogRpc, public obrpc::ObRpcProxy {
 
   int post(const common::ObAddr& server, int pcode, const char* data, int64_t len);
 
-  private:
+private:
   bool cluster_version_before_1472_() const;
 };
 

@@ -31,7 +31,7 @@ class ObTmpPageCache;
 typedef common::ObSEArray<ObTmpFileExtent*, common::OB_DEFAULT_SE_ARRAY_COUNT> ExtentArray;
 
 struct ObTmpFileArea {
-  public:
+public:
   ObTmpFileArea(const int64_t start_page_id, const int64_t page_nums)
       : start_page_id_(start_page_id), page_nums_(page_nums), next_(NULL)
   {}
@@ -48,7 +48,7 @@ struct ObTmpFileArea {
 };
 
 class ObTmpFilePageBuddy {
-  public:
+public:
   ObTmpFilePageBuddy();
   virtual ~ObTmpFilePageBuddy();
   int init(common::ObIAllocator& allocator);
@@ -67,7 +67,7 @@ class ObTmpFilePageBuddy {
   bool is_empty() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   void free_align(const int32_t start_page_id, const int32_t page_nums, ObTmpFileArea*& area);
   ObTmpFileArea* find_buddy(const int32_t page_nums, const int32_t start_page_id);
   static int get_max_page_nums()
@@ -84,7 +84,7 @@ class ObTmpFilePageBuddy {
 };
 
 struct ObTmpBlockIOInfo {
-  public:
+public:
   ObTmpBlockIOInfo() : block_id_(0), offset_(0), size_(0), tenant_id_(0), macro_block_id_(0), buf_(NULL), io_desc_()
   {}
   ObTmpBlockIOInfo(const int64_t block_id, const int64_t offset, const int64_t size, const uint64_t tenant_id,
@@ -108,7 +108,7 @@ struct ObTmpBlockIOInfo {
 };
 
 class ObTmpMacroBlock {
-  public:
+public:
   ObTmpMacroBlock();
   virtual ~ObTmpMacroBlock();
   int init(const int64_t block_id, const int64_t dir_id, const uint64_t tenant_id, common::ObIAllocator& allocator);
@@ -205,7 +205,7 @@ class ObTmpMacroBlock {
   TO_STRING_KV(K_(block_id), K_(dir_id), K_(tenant_id), K_(free_page_nums), K_(macro_block_handle), KP_(buffer),
       K_(page_buddy), K_(io_desc), K_(is_disked), K_(is_inited));
 
-  private:
+private:
   static const int64_t DEFAULT_PAGE_SIZE;
   int64_t block_id_;
   int64_t dir_id_;
@@ -225,7 +225,7 @@ class ObTmpMacroBlock {
 };
 
 class ObTmpTenantMacroBlockManager {
-  public:
+public:
   ObTmpTenantMacroBlockManager();
   virtual ~ObTmpTenantMacroBlockManager();
   int init(common::ObIAllocator& allocator);
@@ -244,10 +244,10 @@ class ObTmpTenantMacroBlockManager {
   int get_disk_macro_block_list(common::ObIArray<MacroBlockId>& macro_id_list);
   void print_block_usage();
 
-  private:
+private:
   int64_t get_next_blk_id();
 
-  private:
+private:
   static const uint64_t MBLK_HASH_BUCKET_NUM = 10243L;
   typedef common::hash::ObHashMap<int64_t, ObTmpMacroBlock*, common::hash::SpinReadWriteDefendMode> TmpMacroBlockMap;
   int64_t mblk_page_nums_;
@@ -260,7 +260,7 @@ class ObTmpTenantMacroBlockManager {
 };
 
 class ObTmpTenantFileStore {
-  public:
+public:
   ObTmpTenantFileStore();
   virtual ~ObTmpTenantFileStore();
   int init(const uint64_t tenant_id, const ObStorageFileHandle& file_handle);
@@ -280,7 +280,7 @@ class ObTmpTenantFileStore {
     return tmp_block_manager_.get_block_size();
   }
 
-  private:
+private:
   int read_page(ObTmpMacroBlock* block, ObTmpBlockIOInfo& io_info, ObTmpFileIOHandle& handle);
   int free_extent(ObTmpFileExtent* extent);
   int free_extent(const int64_t block_id, const int32_t start_page_id, const int32_t page_nums);
@@ -288,7 +288,7 @@ class ObTmpTenantFileStore {
   int alloc_macro_block(const int64_t dir_id, const uint64_t tenant_id, ObTmpMacroBlock*& t_mblk);
   int wait_write_io_finish_if_need();
 
-  private:
+private:
   static const uint64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
   static const uint64_t HOLD_LIMIT = 8 * 1024L * 1024L;
   static const uint64_t BLOCK_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE;
@@ -306,7 +306,7 @@ class ObTmpTenantFileStore {
 };
 
 class ObTmpFileStore {
-  public:
+public:
   typedef common::hash::HashMapPair<uint64_t, int64_t> TenantTmpBlockCntPair;
 
   static ObTmpFileStore& get_instance();
@@ -331,12 +331,12 @@ class ObTmpFileStore {
     return OB_FILE_SYSTEM.get_macro_block_size() - ObTmpMacroBlock::get_default_page_size();
   }
 
-  private:
+private:
   ObTmpFileStore();
   virtual ~ObTmpFileStore();
   int get_store(const uint64_t tenant_id, ObTmpTenantFileStore*& store);
 
-  private:
+private:
   static const uint64_t STORE_HASH_BUCKET_NUM = 1543L;
   static const int64_t TOTAL_LIMIT = 512L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;

@@ -24,17 +24,17 @@ using namespace common;
 using namespace share::schema;
 
 class TestCoreTableProxy : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   int insert_data(const char* table, int64_t cnt);
 
   void verify_data(ObCoreTableProxy& kv);
 
-  protected:
+protected:
   schema::DBInitializer initer_;
 };
 

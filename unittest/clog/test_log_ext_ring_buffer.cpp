@@ -25,12 +25,12 @@ namespace oceanbase {
 namespace unittest {
 
 class Runnable {
-  public:
+public:
   virtual ~Runnable()
   {}
   virtual void routine() = 0;
 
-  public:
+public:
   void run()
   {
     pthread_create(&thread_, NULL, pthread_routine_, this);
@@ -40,7 +40,7 @@ class Runnable {
     pthread_join(thread_, NULL);
   }
 
-  private:
+private:
   static void* pthread_routine_(void* arg)
   {
     Runnable* runnable = static_cast<Runnable*>(arg);
@@ -51,7 +51,7 @@ class Runnable {
 };
 
 class Data : public clog::ObILogExtRingBufferData {
-  public:
+public:
   virtual ~Data()
   {}
   virtual void destroy()
@@ -75,7 +75,7 @@ class Data : public clog::ObILogExtRingBufferData {
 };
 
 class SetRunnable : public Runnable {
-  public:
+public:
   virtual void routine()
   {
     for (int64_t idx = 0; idx < cnt_; ++idx) {
@@ -89,7 +89,7 @@ class SetRunnable : public Runnable {
   int64_t cnt_;
 };
 class PopRunnable : public Runnable {
-  public:
+public:
   virtual void routine()
   {
     // int64_t begin_sn = -1;

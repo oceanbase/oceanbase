@@ -22,13 +22,13 @@ class ObQueryRefRawExpr;
 class ObSelectStmt;
 
 class ObTransformAnyAll : public ObTransformRule {
-  public:
+public:
   explicit ObTransformAnyAll(ObTransformerCtx* ctx);
   virtual ~ObTransformAnyAll();
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   int transform_any_all(ObDMLStmt* stmt, bool& trans_happened);
 
   int try_transform_any_all(ObDMLStmt* stmt, ObRawExpr*& expr, bool& trans_happened);

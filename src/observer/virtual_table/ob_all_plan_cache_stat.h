@@ -40,7 +40,7 @@ enum ObPlanCacheStatType {
 };
 
 class ObAllPlanCacheBase : public common::ObVirtualTableIterator {
-  public:
+public:
   ObAllPlanCacheBase();
   virtual ~ObAllPlanCacheBase();
   inline void set_plan_cache_manager(sql::ObPlanCacheManager* pcm)
@@ -52,7 +52,7 @@ class ObAllPlanCacheBase : public common::ObVirtualTableIterator {
   // deriative class specific
   virtual int inner_get_next_row() = 0;
 
-  protected:
+protected:
   sql::ObPlanCacheManager* pcm_;
   common::ObSEArray<uint64_t, 16> tenant_id_array_;
   int64_t tenant_id_array_idx_;
@@ -60,7 +60,7 @@ class ObAllPlanCacheBase : public common::ObVirtualTableIterator {
 };
 
 class ObAllPlanCacheStat : public ObAllPlanCacheBase {
-  public:
+public:
   ObAllPlanCacheStat()
   {}
   virtual ~ObAllPlanCacheStat()
@@ -71,12 +71,12 @@ class ObAllPlanCacheStat : public ObAllPlanCacheBase {
     return get_row_from_tenants();
   }
 
-  protected:
+protected:
   int get_row_from_tenants();
   int fill_cells(sql::ObPlanCache& plan_cache);
   virtual int get_all_tenant_ids(common::ObIArray<uint64_t>& tenant_ids);
 
-  private:
+private:
   enum {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
@@ -124,23 +124,23 @@ class ObAllPlanCacheStat : public ObAllPlanCacheBase {
     PCV_EXPIRE_BY_MEM
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllPlanCacheStat);
 };  // end of class ObAllPlanCacheStat
 
 class ObAllPlanCacheStatI1 : public ObAllPlanCacheStat {
 
-  public:
+public:
   ObAllPlanCacheStatI1()
   {}
   virtual ~ObAllPlanCacheStatI1()
   {}
 
-  protected:
+protected:
   int set_tenant_ids(const common::ObIArray<common::ObNewRange>& ranges);
   virtual int get_all_tenant_ids(common::ObIArray<uint64_t>& tenant_ids);
 
-  private:
+private:
   common::ObSEArray<uint64_t, 16> tenant_ids_;
   DISALLOW_COPY_AND_ASSIGN(ObAllPlanCacheStatI1);
 };

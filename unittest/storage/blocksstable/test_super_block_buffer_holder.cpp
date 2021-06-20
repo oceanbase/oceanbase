@@ -19,7 +19,7 @@ using namespace oceanbase::blocksstable;
 namespace oceanbase {
 namespace unittest {
 class TestSuperBlockBufferHolder : public ::testing::Test {
-  public:
+public:
   TestSuperBlockBufferHolder(){};
   virtual ~TestSuperBlockBufferHolder(){};
   virtual void SetUp(){};
@@ -27,7 +27,7 @@ class TestSuperBlockBufferHolder : public ::testing::Test {
 
   static void format_super_block(ObSuperBlockV1& super_block);
 
-  private:
+private:
   // disallow copy
   TestSuperBlockBufferHolder(const TestSuperBlockBufferHolder& other);
   TestSuperBlockBufferHolder& operator=(const TestSuperBlockBufferHolder& other);

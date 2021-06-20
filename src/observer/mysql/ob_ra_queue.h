@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 class ObRaQueue {
-  public:
+public:
   const uint64_t LOCK = ~0LL;
   enum { N_REF = 1024 };
   struct Ref {
@@ -165,7 +165,7 @@ class ObRaQueue {
     }
   }
 
-  private:
+private:
   void wait_ref_clear(int64_t seq)
   {
     while (0 != ATOMIC_LOAD(ref_ + seq % N_REF)) {
@@ -203,7 +203,7 @@ class ObRaQueue {
     return x % capacity_;
   }
 
-  private:
+private:
   uint64_t push_ CACHE_ALIGNED;
   uint64_t pop_ CACHE_ALIGNED;
   uint64_t capacity_ CACHE_ALIGNED;

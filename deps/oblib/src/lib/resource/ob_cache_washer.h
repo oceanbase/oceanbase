@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace lib {
 
 class ObICacheWasher {
-  public:
+public:
   struct ObCacheMemBlock {
     ObCacheMemBlock() : next_(NULL)
     {}

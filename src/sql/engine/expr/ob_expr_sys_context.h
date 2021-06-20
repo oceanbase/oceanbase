@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprSysContext : public ObFuncExprOperator {
-  public:
+public:
   ObExprSysContext();
   explicit ObExprSysContext(common::ObIAllocator& alloc);
   virtual ~ObExprSysContext();
@@ -76,7 +76,7 @@ class ObExprSysContext : public ObFuncExprOperator {
   static int eval_sys_context(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
   virtual int cg_expr(ObExprCGCtx& ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   static int get_calc_fun(const common::ObString& ns_str, const common::ObString& para_str, calc_fun& fun);
   static int get_userenv_fun(const common::ObString& para_str, calc_fun& fun);
   static UserEnvParameter userenv_parameters_[];

@@ -42,18 +42,18 @@ class ObMemList {
     MemBlock* next;
   };
 
-  public:
+public:
   explicit ObMemList(const int32_t fixed_size);
   ~ObMemList();
 
-  public:
+public:
   void* get();
   void put(void* ptr, const int32_t max_free_num);
   int64_t inc_ref_cnt();
   int64_t dec_ref_cnt();
   int64_t get_ref_cnt();
 
-  private:
+private:
   MemAllocator alloc_;
   MemBlock* header_;
   int32_t size_;
@@ -64,24 +64,24 @@ class ObMemList {
 class ObThreadMempool {
   static const pthread_key_t INVALID_THREAD_KEY = INT32_MAX;
 
-  public:
+public:
   static const int32_t DEFAULT_MAX_FREE_NUM = 0;
 
-  public:
+public:
   ObThreadMempool();
   ~ObThreadMempool();
 
-  public:
+public:
   int init(const int32_t fixed_size, const int32_t max_free_num);
   int destroy();
   void* alloc();
   void free(void* ptr);
   void set_max_free_num(const int32_t max_free_num);
 
-  private:
+private:
   static void destroy_thread_data_(void* ptr);
 
-  private:
+private:
   pthread_key_t key_;
   int32_t fixed_size_;
   int32_t max_free_num_;

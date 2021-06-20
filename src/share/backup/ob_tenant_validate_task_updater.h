@@ -24,7 +24,7 @@ class ObISQLClient;
 namespace share {
 
 class ObTenantValidateTaskUpdater {
-  public:
+public:
   ObTenantValidateTaskUpdater();
   virtual ~ObTenantValidateTaskUpdater() = default;
 
@@ -48,17 +48,17 @@ class ObTenantValidateTaskUpdater {
   int update_task(const ObTenantValidateTaskInfo& src_task_info, const ObTenantValidateTaskInfo& dst_task_info);
   int remove_task(const int64_t job_id, const uint64_t task_tenant_id, const int64_t incarnation);
 
-  private:
+private:
   bool is_inited_;
   bool is_dropped_tenant_;
   common::ObISQLClient* sql_proxy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantValidateTaskUpdater);
 };
 
 class ObTenantValidateHistoryUpdater {
-  public:
+public:
   ObTenantValidateHistoryUpdater();
   virtual ~ObTenantValidateHistoryUpdater() = default;
 
@@ -71,11 +71,11 @@ class ObTenantValidateHistoryUpdater {
   int remove_task(
       const int64_t job_id, const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id);
 
-  private:
+private:
   bool is_inited_;
   common::ObISQLClient* sql_proxy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantValidateHistoryUpdater);
 };
 

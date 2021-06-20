@@ -320,7 +320,7 @@ inline bool is_physical_split_finished(const ObPartitionSplitStateEnum state)
 class ObPartitionSplitSourceLog : public ObNonTransLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartitionSplitSourceLog() : schema_version_(0), spp_(), slave_read_ts_(0)
   {}
   ~ObPartitionSplitSourceLog()
@@ -342,7 +342,7 @@ class ObPartitionSplitSourceLog : public ObNonTransLog {
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
   TO_STRING_KV(K_(schema_version), K_(slave_read_ts), K_(spp));
 
-  private:
+private:
   int64_t schema_version_;
   share::ObSplitPartitionPair spp_;
   // record the current slave read timestamp on the split leader,
@@ -353,7 +353,7 @@ class ObPartitionSplitSourceLog : public ObNonTransLog {
 class ObPartitionSplitDestLog : public ObNonTransLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartitionSplitDestLog() : split_version_(0), schema_version_(0), source_log_id_(0), source_log_ts_(0), spp_()
   {}
   ~ObPartitionSplitDestLog()
@@ -384,7 +384,7 @@ class ObPartitionSplitDestLog : public ObNonTransLog {
   virtual int replace_tenant_id(const uint64_t new_tenant_id) override;
   TO_STRING_KV(K_(split_version), K_(schema_version), K_(source_log_id), K_(source_log_ts), K_(spp));
 
-  private:
+private:
   int64_t split_version_;
   int64_t schema_version_;
   int64_t source_log_id_;
@@ -395,14 +395,14 @@ class ObPartitionSplitDestLog : public ObNonTransLog {
 class ObPartitionSplitState {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartitionSplitState() : state_(UNKNOWN_SPLIT_STATE), save_state_(UNKNOWN_SPLIT_STATE), pkey_()
   {}
   ~ObPartitionSplitState()
   {}
   int init(const common::ObPartitionKey& pkey);
 
-  public:
+public:
   int set_partition_key(const common::ObPartitionKey& pkey);
   int switch_state(const ObPartitionSplitAction& action);
   int restore_state();
@@ -417,7 +417,7 @@ class ObPartitionSplitState {
   }
   TO_STRING_KV(K_(pkey), "state", to_state_str(state_), "save_state", to_state_str(save_state_));
 
-  private:
+private:
   ObPartitionSplitStateEnum state_;
   // do not need serialize
   ObPartitionSplitStateEnum save_state_;
@@ -425,7 +425,7 @@ class ObPartitionSplitState {
 };
 
 class ObSplitLogCb : public clog::ObISubmitLogCb {
-  public:
+public:
   ObSplitLogCb() : partition_service_(NULL), log_type_(OB_LOG_UNKNOWN)
   {}
   virtual ~ObSplitLogCb()
@@ -436,16 +436,16 @@ class ObSplitLogCb : public clog::ObISubmitLogCb {
   int on_finished(const common::ObPartitionKey& pkey, const uint64_t log_id);
   TO_STRING_KV(KP(this), KP_(partition_service), K_(log_type));
 
-  private:
+private:
   ObPartitionService* partition_service_;
   ObStorageLogType log_type_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSplitLogCb);
 };
 
 class ObSplitLogCbFactory {
-  public:
+public:
   static ObSplitLogCb* alloc();
   static void release(ObSplitLogCb* cb);
 };
@@ -453,7 +453,7 @@ class ObSplitLogCbFactory {
 class ObPartitionSplitInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartitionSplitInfo()
   {
     reset();
@@ -470,7 +470,7 @@ class ObPartitionSplitInfo {
   }
   bool is_valid() const;
 
-  public:
+public:
   void set_split_version(const int64_t split_version)
   {
     split_version_ = split_version;
@@ -518,7 +518,7 @@ class ObPartitionSplitInfo {
   TO_STRING_KV(K_(split_version), K_(schema_version), K_(source_log_id), K_(source_log_ts), K_(partition_pair),
       K_(split_type), K_(receive_split_ts));
 
-  public:
+public:
   static const int64_t UNKNWON_SPLIT_TYPE = -1;
   static const int64_t SPLIT_SOURCE_PARTITION = 0;
   static const int64_t SPLIT_DEST_PARTITION = 1;
@@ -527,7 +527,7 @@ class ObPartitionSplitInfo {
     return SPLIT_SOURCE_PARTITION == split_type || SPLIT_DEST_PARTITION == split_type;
   }
 
-  private:
+private:
   int64_t schema_version_;
   share::ObSplitPartitionPair partition_pair_;
   int64_t split_type_;
@@ -536,19 +536,19 @@ class ObPartitionSplitInfo {
   int64_t source_log_ts_;
   int64_t receive_split_ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionSplitInfo);
 };
 
 template <typename Type>
 class ObSplitProgressTemplate {
-  public:
+public:
   ObSplitProgressTemplate() : obj_(), progress_(share::UNKNOWN_SPLIT_PROGRESS)
   {}
   ~ObSplitProgressTemplate()
   {}
 
-  public:
+public:
   Type obj_;
   int progress_;
   TO_STRING_KV(K_(obj), K_(progress));
@@ -558,13 +558,13 @@ typedef ObSplitProgressTemplate<common::ObAddr> ObReplicaSplitProgress;
 
 template <typename Type>
 class ObSplitProgressArray {
-  public:
+public:
   ObSplitProgressArray() : is_inited_(false)
   {}
   ~ObSplitProgressArray()
   {}
 
-  public:
+public:
   int init(const common::ObIArray<Type>& obj_array)
   {
     int ret = common::OB_SUCCESS;
@@ -695,10 +695,10 @@ class ObSplitProgressArray {
     return progress_array_;
   }
 
-  public:
+public:
   TO_STRING_KV(K_(is_inited), K_(progress_array));
 
-  private:
+private:
   bool is_inited_;
   common::ObSArray<ObSplitProgressTemplate<Type> > progress_array_;
 };

@@ -44,13 +44,13 @@ static const int64_t OB_DEFAULT_MC_LOG_INFO_COUNT = 16;
 typedef common::ObSEArray<obrpc::ObMCLogInfo, OB_DEFAULT_MC_LOG_INFO_COUNT> ObMCLogInfoArray;
 
 class ObILogMembershipMgr {
-  public:
+public:
   ObILogMembershipMgr()
   {}
   virtual ~ObILogMembershipMgr()
   {}
 
-  public:
+public:
   virtual bool is_state_changed() = 0;
   virtual int switch_state() = 0;
   virtual int add_member(const common::ObMember& member, const int64_t quorum, obrpc::ObMCLogInfo& log_info) = 0;
@@ -91,11 +91,11 @@ class ObILogMembershipMgr {
 };
 
 class ObLogMembershipMgr : public ObILogMembershipMgr, public ObISubmitLogCb {
-  public:
+public:
   ObLogMembershipMgr();
   virtual ~ObLogMembershipMgr();
 
-  public:
+public:
   // When creating Partition,membership_timestamp is 0,membership_log_id is 0
   // When observer is restarted, the value is obtained from BaseStorageInfo
   int init(const common::ObMemberList& member_list, const int64_t membership_timestamp,
@@ -105,50 +105,51 @@ class ObLogMembershipMgr : public ObILogMembershipMgr, public ObISubmitLogCb {
       const common::ObPartitionKey& partition_key, ObILogSWForMS* sw, ObLogMembershipTaskMgr* ms_task_mgr,
       ObILogStateMgrForMS* state_mgr, ObLogCascadingMgr* cascading_mgr, ObILogCallbackEngine* cb_engine,
       storage::ObPartitionService* partition_service, common::ObILogAllocator* alloc_mgr);
-  virtual bool is_state_changed();
-  virtual int switch_state();
-  virtual int add_member(const common::ObMember& member, const int64_t quorum, obrpc::ObMCLogInfo& log_info);
-  virtual int remove_member(const common::ObMember& member, const int64_t quorum, obrpc::ObMCLogInfo& log_info);
+  virtual bool is_state_changed() override;
+  virtual int switch_state() override;
+  virtual int add_member(const common::ObMember& member, const int64_t quorum, obrpc::ObMCLogInfo& log_info) override;
+  virtual int remove_member(
+      const common::ObMember& member, const int64_t quorum, obrpc::ObMCLogInfo& log_info) override;
   virtual int change_quorum(const common::ObMemberList& curr_member_list, const int64_t curr_quorum,
-      const int64_t new_quorum, obrpc::ObMCLogInfo& log_info);
-  virtual int64_t get_replica_num() const;
-  virtual common::ObReplicaType get_replica_type() const;
+      const int64_t new_quorum, obrpc::ObMCLogInfo& log_info) override;
+  virtual int64_t get_replica_num() const override;
+  virtual common::ObReplicaType get_replica_type() const override;
   virtual common::ObReplicaProperty get_replica_property() const override;
-  virtual const common::ObMemberList& get_curr_member_list() const;
+  virtual const common::ObMemberList& get_curr_member_list() const override;
   virtual int receive_log(const ObLogEntry& log_entry, const common::ObAddr& server, const int64_t cluster_id,
-      const ReceiveLogType rl_type);
+      const ReceiveLogType rl_type) override;
   virtual int receive_recovery_log(const ObLogEntry& log_entry, const bool is_confirmed, const int64_t accum_checksum,
-      const bool is_batch_committed);
+      const bool is_batch_committed) override;
   virtual int append_disk_log(const ObLogEntry& log_entry, const ObLogCursor& log_cursor, const int64_t accum_checksum,
-      const bool batch_committed);
+      const bool batch_committed) override;
   virtual int force_set_member_list(const common::ObMemberList& member_list, const int64_t replica_num);
   virtual int set_membership_info(const common::ObMemberList& member_list, const int64_t membership_timestamp,
       const uint64_t membership_log_id, const int64_t replica_num, const common::ObProposalID& ms_proposal_id);
-  virtual int64_t get_timestamp() const;
-  virtual uint64_t get_log_id() const
+  virtual int64_t get_timestamp() const override;
+  virtual uint64_t get_log_id() const override
   {
     return membership_log_id_;
   }
-  virtual void reset_status();
-  virtual int write_start_membership(const ObLogType& log_type);
+  virtual void reset_status() override;
+  virtual int write_start_membership(const ObLogType& log_type) override;
   virtual int on_success(const common::ObPartitionKey& partition_key, const clog::ObLogType log_type,
-      const uint64_t log_id, const int64_t version, const bool batch_committed, const bool batch_last_succeed);
+      const uint64_t log_id, const int64_t version, const bool batch_committed, const bool batch_last_succeed) override;
   bool is_inited() const
   {
     return is_inited_;
   }
-  virtual bool is_state_init() const;
-  virtual void reset_follower_pending_entry();
+  virtual bool is_state_init() const override;
+  virtual void reset_follower_pending_entry() override;
   virtual void submit_success_cb_task(const ObLogType& log_type, const uint64_t log_id, const char* log_buf,
-      const int64_t log_buf_len, const common::ObProposalID& proposal_id);
-  virtual void reconfirm_update_status(const ObLogEntry& log_entry);
-  virtual int force_set_as_single_replica();
-  virtual int force_set_replica_num(const int64_t replica_num);
+      const int64_t log_buf_len, const common::ObProposalID& proposal_id) override;
+  virtual void reconfirm_update_status(const ObLogEntry& log_entry) override;
+  virtual int force_set_as_single_replica() override;
+  virtual int force_set_replica_num(const int64_t replica_num) override;
   // Only keep members existing in server_list in member_list
   // Used to force a member list
   virtual int force_set_server_list(const obrpc::ObServerList& server_list, const int64_t replica_num);
   void destroy();
-  virtual int set_replica_type(const enum ObReplicaType replica_type);
+  virtual int set_replica_type(const enum ObReplicaType replica_type) override;
   virtual int change_member_list_to_self(const int64_t new_membership_version) override;
   common::ObProposalID get_ms_proposal_id() const override
   {
@@ -156,12 +157,12 @@ class ObLogMembershipMgr : public ObILogMembershipMgr, public ObISubmitLogCb {
   }
   int update_ms_proposal_id(const common::ObProposalID& ms_proposal_id) override;
   int check_follower_has_pending_entry(bool& has_pending);
-  int get_curr_ms_log_body(ObLogEntryHeader& log_entry_header, char* buffer, const int64_t buf_len) const;
-  int reset_renew_ms_log_task();
-  bool is_renew_ms_log_majority_success() const;
-  int check_renew_ms_log_sync_state() const;
+  int get_curr_ms_log_body(ObLogEntryHeader& log_entry_header, char* buffer, const int64_t buf_len) const override;
+  int reset_renew_ms_log_task() override;
+  bool is_renew_ms_log_majority_success() const override;
+  int check_renew_ms_log_sync_state() const override;
 
-  private:
+private:
   enum ObMsState {
     MS_INIT,
     MS_PENDING,
@@ -208,7 +209,7 @@ class ObLogMembershipMgr : public ObILogMembershipMgr, public ObISubmitLogCb {
   bool need_skip_apply_ms_log_(const ObMembershipLog& ms_log) const;
   int try_check_cluster_state_();
 
-  private:
+private:
   bool is_inited_;
   bool need_check_cluster_type_;
 

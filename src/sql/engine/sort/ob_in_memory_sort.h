@@ -25,7 +25,7 @@
 namespace oceanbase {
 namespace sql {
 class ObInMemorySort : public ObBaseSort {
-  public:
+public:
   ObInMemorySort();
   virtual ~ObInMemorySort();
   virtual void reset();
@@ -52,12 +52,12 @@ class ObInMemorySort : public ObBaseSort {
   }
   TO_STRING_KV(K_(sort_array_pos));
 
-  private:
+private:
   // types
   struct StaticComparer;
   struct Comparer;
 
-  private:
+private:
   // data members
   common::ObArenaAllocator allocator_;
   common::ObRowStore row_store_;

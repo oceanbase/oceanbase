@@ -19,12 +19,12 @@ namespace oceanbase {
 namespace sql {
 
 class ObXaRollBackResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObXaRollBackResolver(ObResolverParams& params);
   virtual ~ObXaRollBackResolver();
   virtual int resolve(const ParseNode& parse_node);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXaRollBackResolver);
 };
 

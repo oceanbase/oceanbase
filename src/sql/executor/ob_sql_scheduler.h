@@ -20,7 +20,7 @@ namespace sql {
 class ObPhysicalPlan;
 class ObExecContext;
 class ObSqlScheduler {
-  public:
+public:
   ObSqlScheduler()
   {}
   virtual ~ObSqlScheduler()
@@ -28,7 +28,7 @@ class ObSqlScheduler {
 
   virtual int schedule(ObExecContext& ctx, ObPhysicalPlan* phy_plan) = 0;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlScheduler);
 }; /* end class */
 

@@ -19,10 +19,10 @@ namespace oceanbase {
 namespace common {
 // thread-safe
 class ObMeter {
-  public:
+public:
   static const int64_t PER_SEC = 1000000LL;  // PER SECOND
   static const int64_t PER_USEC = 1LL;       // PER uSECOND
-  public:
+public:
   ObMeter();
   ~ObMeter()
   {}
@@ -32,11 +32,11 @@ class ObMeter {
   double get_rate(int64_t rate_unit = PER_SEC);
   uint64_t get_value() const;
 
-  private:
+private:
   void tick_if_necessary();
   void legacy_tick_if_necessary();
 
-  private:
+private:
   // types and constants
   // parameters reference http://blog.csdn.net/maray/article/details/73104923
   static const int64_t TICK_INTERVAL_IN_SEC = 10 * 60;
@@ -46,7 +46,7 @@ class ObMeter {
   static const int64_t LEGACY_TICK_INTERVAL_IN_SEC = 5;
   static const int64_t LEGACY_TICK_INTERVAL_IN_USEC = LEGACY_TICK_INTERVAL_IN_SEC * 1000000LL;
   static const int64_t LEGACY_WINDOW_IN_SEC = 15 * 60;  // 15 min
-  private:
+private:
   uint64_t value_;  // atomic
   int64_t start_ts_;
   int64_t last_tick_;         // atomic

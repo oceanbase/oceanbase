@@ -25,7 +25,7 @@ class ObTaskInfo;
 // it will be directly optimized without the process of splitting the job,
 // which is equivalent to the size of this class. Some functions will not be called
 class ObLocalIdentityTaskSpliter : public ObTaskSpliter {
-  public:
+public:
   ObLocalIdentityTaskSpliter();
   virtual ~ObLocalIdentityTaskSpliter();
   virtual int get_next_task(ObTaskInfo*& task);
@@ -34,11 +34,11 @@ class ObLocalIdentityTaskSpliter : public ObTaskSpliter {
     return ObTaskSpliter::LOCAL_IDENTITY_SPLIT;
   }
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLocalIdentityTaskSpliter);
 
-  private:
+private:
   ObTaskInfo* task_;
 };
 }  // namespace sql

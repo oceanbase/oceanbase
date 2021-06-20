@@ -22,13 +22,13 @@ namespace common {
 // Link cell for singly-linked list of objects of type T.
 template <class T>
 class SLink {
-  public:
+public:
   T* next_;
   SLink() : next_(NULL){};
 };
 #define SLINK(c, f)                                       \
   class Link##_##f : public oceanbase::common::SLink<c> { \
-    public:                                               \
+  public:                                                 \
     static c*& next_link(c* e)                            \
     {                                                     \
       return e->f.next_;                                  \
@@ -41,7 +41,7 @@ class SLink {
   oceanbase::common::SLink<c> f
 #define SLINKM(c, m, f)                                      \
   class Link##_##m##f : public oceanbase::common::SLink<c> { \
-    public:                                                  \
+  public:                                                    \
     static c*& next_link(c* e)                               \
     {                                                        \
       return e->m.f.next_;                                   \
@@ -57,7 +57,7 @@ struct Link : public SLink<T> {
 };
 #define LINK(c, f)                                       \
   class Link##_##f : public oceanbase::common::Link<c> { \
-    public:                                              \
+  public:                                                \
     static c*& next_link(c* e)                           \
     {                                                    \
       return e->f.next_;                                 \
@@ -78,7 +78,7 @@ struct Link : public SLink<T> {
   oceanbase::common::Link<c> f
 #define LINKM(c, m, f)                                      \
   class Link##_##m##f : public oceanbase::common::Link<c> { \
-    public:                                                 \
+  public:                                                   \
     static c*& next_link(c* e)                              \
     {                                                       \
       return e->m.f.next_;                                  \
@@ -90,7 +90,7 @@ struct Link : public SLink<T> {
   };
 #define LINK_FORWARD_DECLARATION(c, f)                         \
   class Link##_##c##_##f : public oceanbase::common::Link<c> { \
-    public:                                                    \
+  public:                                                      \
     static c*& next_link(c* e);                                \
     static c*& prev_link(c* e);                                \
   };
@@ -107,7 +107,7 @@ struct Link : public SLink<T> {
 // List descriptor for singly-linked list of objects of type T.
 template <class T, class L = typename T::Link_link_>
 class SLL {
-  public:
+public:
   T* head_;
   bool empty() const
   {
@@ -260,7 +260,7 @@ inline void DLL<T, L>::insert(T* e, T* after)
 // List descriptor for queue of objects of type T.
 template <class T, class L = typename T::Link_link_>
 class Queue : public DLL<T, L> {
-  public:
+public:
   using DLL<T, L>::head_;
   T* tail_;
   void push(T* e);

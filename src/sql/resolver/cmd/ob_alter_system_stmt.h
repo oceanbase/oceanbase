@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObFreezeStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObFreezeStmt()
       : ObSystemCmdStmt(stmt::T_FREEZE),
         major_freeze_(false),
@@ -74,7 +74,7 @@ class ObFreezeStmt : public ObSystemCmdStmt {
   TO_STRING_KV(
       N_STMT_TYPE, ((int)stmt_type_), K_(major_freeze), K(opt_server_list_), K(opt_tenant_ids_), K(opt_partition_key_));
 
-  private:
+private:
   bool major_freeze_;
   // for major_freeze, it is ignore server list
   // for minor_freeze, it is candidate server list
@@ -88,7 +88,7 @@ class ObFreezeStmt : public ObSystemCmdStmt {
 };
 
 class ObFlushCacheStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObFlushCacheStmt() : ObSystemCmdStmt(stmt::T_FLUSH_CACHE), flush_cache_arg_(), is_global_(false)
   {}
   virtual ~ObFlushCacheStmt()
@@ -100,7 +100,7 @@ class ObFlushCacheStmt : public ObSystemCmdStmt {
 };
 
 class ObLoadBaselineStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObLoadBaselineStmt() : ObSystemCmdStmt(stmt::T_LOAD_BASELINE), load_baseline_arg_()
   {}
   virtual ~ObLoadBaselineStmt()
@@ -111,7 +111,7 @@ class ObLoadBaselineStmt : public ObSystemCmdStmt {
 };
 
 class ObFlushKVCacheStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObFlushKVCacheStmt() : ObSystemCmdStmt(stmt::T_FLUSH_KVCACHE)
   {}
   virtual ~ObFlushKVCacheStmt()
@@ -123,7 +123,7 @@ class ObFlushKVCacheStmt : public ObSystemCmdStmt {
 };
 
 class ObFlushIlogCacheStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObFlushIlogCacheStmt() : ObSystemCmdStmt(stmt::T_FLUSH_ILOGCACHE), file_id_(0)
   {}
   virtual ~ObFlushIlogCacheStmt()
@@ -134,7 +134,7 @@ class ObFlushIlogCacheStmt : public ObSystemCmdStmt {
 };
 
 class ObFlushDagWarningsStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObFlushDagWarningsStmt() : ObSystemCmdStmt(stmt::T_FLUSH_DAG_WARNINGS)
   {}
   virtual ~ObFlushDagWarningsStmt()
@@ -143,7 +143,7 @@ class ObFlushDagWarningsStmt : public ObSystemCmdStmt {
 };
 
 class ObAdminServerStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObAdminServerStmt() : ObSystemCmdStmt(stmt::T_ADMIN_SERVER), op_(obrpc::ObAdminServerArg::ADD)
   {}
 
@@ -174,14 +174,14 @@ class ObAdminServerStmt : public ObSystemCmdStmt {
     op_ = op;
   }
 
-  private:
+private:
   obrpc::ObAdminServerArg::AdminServerOp op_;
   obrpc::ObServerList server_list_;
   common::ObZone zone_;
 };
 
 class ObAdminZoneStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObAdminZoneStmt() : ObSystemCmdStmt(stmt::T_ADMIN_ZONE), arg_()
   {}
 
@@ -271,12 +271,12 @@ class ObAdminZoneStmt : public ObSystemCmdStmt {
     return arg_;
   }
 
-  private:
+private:
   obrpc::ObAdminZoneArg arg_;
 };
 
 class ObSwitchReplicaRoleStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObSwitchReplicaRoleStmt() : ObSystemCmdStmt(stmt::T_SWITCH_REPLICA_ROLE)
   {}
   virtual ~ObSwitchReplicaRoleStmt()
@@ -289,12 +289,12 @@ class ObSwitchReplicaRoleStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminSwitchReplicaRoleArg rpc_arg_;
 };
 
 class ObSwitchRSRoleStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObSwitchRSRoleStmt() : ObSystemCmdStmt(stmt::T_SWITCH_RS_ROLE)
   {}
   virtual ~ObSwitchRSRoleStmt()
@@ -307,12 +307,12 @@ class ObSwitchRSRoleStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminSwitchRSRoleArg rpc_arg_;
 };
 
 class ObChangeReplicaStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObChangeReplicaStmt() : ObSystemCmdStmt(stmt::T_CHANGE_REPLICA)
   {}
   virtual ~ObChangeReplicaStmt()
@@ -325,12 +325,12 @@ class ObChangeReplicaStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminChangeReplicaArg rpc_arg_;
 };
 
 class ObDropReplicaStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObDropReplicaStmt() : ObSystemCmdStmt(stmt::T_DROP_REPLICA)
   {}
   virtual ~ObDropReplicaStmt()
@@ -343,12 +343,12 @@ class ObDropReplicaStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminDropReplicaArg rpc_arg_;
 };
 
 class ObMigrateReplicaStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObMigrateReplicaStmt() : ObSystemCmdStmt(stmt::T_MIGRATE_REPLICA)
   {}
   virtual ~ObMigrateReplicaStmt()
@@ -361,12 +361,12 @@ class ObMigrateReplicaStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminMigrateReplicaArg rpc_arg_;
 };
 
 class ObReportReplicaStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObReportReplicaStmt() : ObSystemCmdStmt(stmt::T_REPORT_REPLICA)
   {}
   virtual ~ObReportReplicaStmt()
@@ -379,12 +379,12 @@ class ObReportReplicaStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminReportReplicaArg rpc_arg_;
 };
 
 class ObRecycleReplicaStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObRecycleReplicaStmt() : ObSystemCmdStmt(stmt::T_RECYCLE_REPLICA)
   {}
   virtual ~ObRecycleReplicaStmt()
@@ -397,12 +397,12 @@ class ObRecycleReplicaStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminRecycleReplicaArg rpc_arg_;
 };
 
 class ObAdminMergeStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObAdminMergeStmt() : ObSystemCmdStmt(stmt::T_ADMIN_MERGE)
   {}
   virtual ~ObAdminMergeStmt()
@@ -415,12 +415,12 @@ class ObAdminMergeStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminMergeArg rpc_arg_;
 };
 
 class ObClearRoottableStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObClearRoottableStmt() : ObSystemCmdStmt(stmt::T_CLEAR_ROOT_TABLE)
   {}
   virtual ~ObClearRoottableStmt()
@@ -433,12 +433,12 @@ class ObClearRoottableStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminClearRoottableArg rpc_arg_;
 };
 
 class ObRefreshSchemaStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObRefreshSchemaStmt() : ObSystemCmdStmt(stmt::T_REFRESH_SCHEMA)
   {}
   virtual ~ObRefreshSchemaStmt()
@@ -451,12 +451,12 @@ class ObRefreshSchemaStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminRefreshSchemaArg rpc_arg_;
 };
 
 class ObRefreshMemStatStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObRefreshMemStatStmt() : ObSystemCmdStmt(stmt::T_REFRESH_MEMORY_STAT)
   {}
   virtual ~ObRefreshMemStatStmt()
@@ -469,12 +469,12 @@ class ObRefreshMemStatStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminRefreshMemStatArg rpc_arg_;
 };
 
 class ObSetConfigStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObSetConfigStmt() : ObSystemCmdStmt(stmt::T_ALTER_SYSTEM_SET_PARAMETER)
   {}
   virtual ~ObSetConfigStmt()
@@ -487,12 +487,12 @@ class ObSetConfigStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminSetConfigArg rpc_arg_;
 };
 
 class ObSetTPStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObSetTPStmt() : ObSystemCmdStmt(stmt::T_ALTER_SYSTEM_SETTP)
   {}
   virtual ~ObSetTPStmt()
@@ -505,12 +505,12 @@ class ObSetTPStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminSetTPArg rpc_arg_;
 };
 
 class ObMigrateUnitStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObMigrateUnitStmt() : ObSystemCmdStmt(stmt::T_MIGRATE_UNIT)
   {}
   virtual ~ObMigrateUnitStmt()
@@ -523,12 +523,12 @@ class ObMigrateUnitStmt : public ObSystemCmdStmt {
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 
-  private:
+private:
   obrpc::ObAdminMigrateUnitArg rpc_arg_;
 };
 
 class ObClearLocationCacheStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObClearLocationCacheStmt() : ObSystemCmdStmt(stmt::T_CLEAR_LOCATION_CACHE)
   {}
   virtual ~ObClearLocationCacheStmt()
@@ -539,12 +539,12 @@ class ObClearLocationCacheStmt : public ObSystemCmdStmt {
     return rpc_arg_;
   }
 
-  private:
+private:
   obrpc::ObAdminClearLocationCacheArg rpc_arg_;
 };
 
 class ObReloadGtsStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObReloadGtsStmt() : ObSystemCmdStmt(stmt::T_RELOAD_GTS)
   {}
   virtual ~ObReloadGtsStmt()
@@ -552,7 +552,7 @@ class ObReloadGtsStmt : public ObSystemCmdStmt {
 };
 
 class ObReloadUnitStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObReloadUnitStmt() : ObSystemCmdStmt(stmt::T_RELOAD_UNIT)
   {}
   virtual ~ObReloadUnitStmt()
@@ -560,7 +560,7 @@ class ObReloadUnitStmt : public ObSystemCmdStmt {
 };
 
 class ObReloadServerStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObReloadServerStmt() : ObSystemCmdStmt(stmt::T_RELOAD_SERVER)
   {}
   virtual ~ObReloadServerStmt()
@@ -568,7 +568,7 @@ class ObReloadServerStmt : public ObSystemCmdStmt {
 };
 
 class ObReloadZoneStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObReloadZoneStmt() : ObSystemCmdStmt(stmt::T_RELOAD_ZONE)
   {}
   virtual ~ObReloadZoneStmt()
@@ -576,7 +576,7 @@ class ObReloadZoneStmt : public ObSystemCmdStmt {
 };
 
 class ObClearMergeErrorStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObClearMergeErrorStmt() : ObSystemCmdStmt(stmt::T_CLEAR_MERGE_ERROR)
   {}
   virtual ~ObClearMergeErrorStmt()
@@ -584,7 +584,7 @@ class ObClearMergeErrorStmt : public ObSystemCmdStmt {
 };
 
 class ObUpgradeVirtualSchemaStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObUpgradeVirtualSchemaStmt() : ObSystemCmdStmt(stmt::T_UPGRADE_VIRTUAL_SCHEMA)
   {}
   virtual ~ObUpgradeVirtualSchemaStmt()
@@ -592,7 +592,7 @@ class ObUpgradeVirtualSchemaStmt : public ObSystemCmdStmt {
 };
 
 class ObAdminUpgradeCmdStmt : public ObSystemCmdStmt {
-  public:
+public:
   enum AdminUpgradeOp {
     BEGIN = 1,
     END = 2,
@@ -611,12 +611,12 @@ class ObAdminUpgradeCmdStmt : public ObSystemCmdStmt {
     op_ = op;
   }
 
-  private:
+private:
   AdminUpgradeOp op_;
 };
 
 class ObAdminRollingUpgradeCmdStmt : public ObSystemCmdStmt {
-  public:
+public:
   enum AdminUpgradeOp {
     BEGIN = 1,
     END = 2,
@@ -635,12 +635,12 @@ class ObAdminRollingUpgradeCmdStmt : public ObSystemCmdStmt {
     op_ = op;
   }
 
-  private:
+private:
   AdminUpgradeOp op_;
 };
 
 class ObRestoreTenantStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObRestoreTenantStmt() : ObSystemCmdStmt(stmt::T_RESTORE_TENANT), rpc_arg_()
   {}
   virtual ~ObRestoreTenantStmt()
@@ -651,12 +651,12 @@ class ObRestoreTenantStmt : public ObSystemCmdStmt {
     return rpc_arg_;
   }
 
-  private:
+private:
   obrpc::ObRestoreTenantArg rpc_arg_;
 };
 
 class ObPhysicalRestoreTenantStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObPhysicalRestoreTenantStmt() : ObSystemCmdStmt(stmt::T_PHYSICAL_RESTORE_TENANT), rpc_arg_()
   {}
   virtual ~ObPhysicalRestoreTenantStmt()
@@ -667,12 +667,12 @@ class ObPhysicalRestoreTenantStmt : public ObSystemCmdStmt {
     return rpc_arg_;
   }
 
-  private:
+private:
   obrpc::ObPhysicalRestoreTenantArg rpc_arg_;
 };
 
 class ObRunJobStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObRunJobStmt() : ObSystemCmdStmt(stmt::T_RUN_JOB)
   {}
   virtual ~ObRunJobStmt()
@@ -683,12 +683,12 @@ class ObRunJobStmt : public ObSystemCmdStmt {
     return rpc_arg_;
   }
 
-  private:
+private:
   obrpc::ObRunJobArg rpc_arg_;
 };
 
 class ObRunUpgradeJobStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObRunUpgradeJobStmt() : ObSystemCmdStmt(stmt::T_ADMIN_RUN_UPGRADE_JOB)
   {}
   virtual ~ObRunUpgradeJobStmt()
@@ -699,12 +699,12 @@ class ObRunUpgradeJobStmt : public ObSystemCmdStmt {
     return rpc_arg_;
   }
 
-  private:
+private:
   obrpc::ObUpgradeJobArg rpc_arg_;
 };
 
 class ObStopUpgradeJobStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObStopUpgradeJobStmt() : ObSystemCmdStmt(stmt::T_ADMIN_STOP_UPGRADE_JOB)
   {}
   virtual ~ObStopUpgradeJobStmt()
@@ -715,12 +715,12 @@ class ObStopUpgradeJobStmt : public ObSystemCmdStmt {
     return rpc_arg_;
   }
 
-  private:
+private:
   obrpc::ObUpgradeJobArg rpc_arg_;
 };
 
 class ObRefreshTimeZoneInfoStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObRefreshTimeZoneInfoStmt() : ObSystemCmdStmt(stmt::T_REFRESH_TIME_ZONE_INFO), tenant_id_(OB_INVALID_TENANT_ID)
   {}
   virtual ~ObRefreshTimeZoneInfoStmt()
@@ -739,7 +739,7 @@ class ObRefreshTimeZoneInfoStmt : public ObSystemCmdStmt {
 };
 
 class ObCancelTaskStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObCancelTaskStmt() : ObSystemCmdStmt(stmt::T_CANCEL_TASK), task_type_(share::MAX_SYS_TASK_TYPE), task_id_()
   {}
   virtual ~ObCancelTaskStmt()
@@ -766,13 +766,13 @@ class ObCancelTaskStmt : public ObSystemCmdStmt {
     return ret;
   }
 
-  private:
+private:
   share::ObSysTaskType task_type_;
   common::ObString task_id_;
 };
 
 class ObSetDiskValidStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObSetDiskValidStmt() : ObSystemCmdStmt(stmt::T_SET_DISK_VALID), server_()
   {}
   virtual ~ObSetDiskValidStmt()
@@ -783,7 +783,7 @@ class ObSetDiskValidStmt : public ObSystemCmdStmt {
 };
 
 class ObAddDiskStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObAddDiskStmt() : ObSystemCmdStmt(stmt::T_ALTER_DISKGROUP_ADD_DISK)
   {}
   virtual ~ObAddDiskStmt()
@@ -794,7 +794,7 @@ class ObAddDiskStmt : public ObSystemCmdStmt {
 };
 
 class ObDropDiskStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObDropDiskStmt() : ObSystemCmdStmt(stmt::T_ALTER_DISKGROUP_DROP_DISK)
   {}
   virtual ~ObDropDiskStmt()
@@ -805,7 +805,7 @@ class ObDropDiskStmt : public ObSystemCmdStmt {
 };
 
 class ObEnableSqlThrottleStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObEnableSqlThrottleStmt()
       : ObSystemCmdStmt(stmt::T_ENABLE_SQL_THROTTLE),
         priority_(99),
@@ -877,7 +877,7 @@ class ObEnableSqlThrottleStmt : public ObSystemCmdStmt {
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(priority), K_(rt), K_(io), K_(network), K_(cpu), K_(logical_reads),
       K_(queue_time));
 
-  private:
+private:
   int64_t priority_;
   double rt_;
   int64_t io_;
@@ -888,13 +888,13 @@ class ObEnableSqlThrottleStmt : public ObSystemCmdStmt {
 };
 
 class ObDisableSqlThrottleStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObDisableSqlThrottleStmt() : ObSystemCmdStmt(stmt::T_DISABLE_SQL_THROTTLE)
   {}
 };
 
 class ObChangeTenantStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObChangeTenantStmt() : ObSystemCmdStmt(stmt::T_CHANGE_TENANT), tenant_id_(OB_INVALID_TENANT_ID)
   {}
   virtual ~ObChangeTenantStmt()
@@ -913,7 +913,7 @@ class ObChangeTenantStmt : public ObSystemCmdStmt {
 };
 
 class ObArchiveLogStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObArchiveLogStmt() : ObSystemCmdStmt(stmt::T_ARCHIVE_LOG), enable_(true)
   {}
   virtual ~ObArchiveLogStmt()
@@ -928,12 +928,12 @@ class ObArchiveLogStmt : public ObSystemCmdStmt {
   }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(enable));
 
-  private:
+private:
   bool enable_;
 };
 
 class ObBackupDatabaseStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObBackupDatabaseStmt() : ObSystemCmdStmt(stmt::T_BACKUP_DATABASE), tenant_id_(OB_INVALID_ID), incremental_(false)
   {}
   virtual ~ObBackupDatabaseStmt()
@@ -962,13 +962,13 @@ class ObBackupDatabaseStmt : public ObSystemCmdStmt {
   }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(incremental));
 
-  private:
+private:
   uint64_t tenant_id_;
   bool incremental_;
 };
 
 class ObBackupManageStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObBackupManageStmt()
       : ObSystemCmdStmt(stmt::T_BACKUP_MANAGE),
         tenant_id_(OB_INVALID_ID),
@@ -1006,14 +1006,14 @@ class ObBackupManageStmt : public ObSystemCmdStmt {
   }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(type), K_(value));
 
-  private:
+private:
   uint64_t tenant_id_;
   obrpc::ObBackupManageArg::Type type_;
   int64_t value_;
 };
 
 class ObBackupSetEncryptionStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObBackupSetEncryptionStmt();
   virtual ~ObBackupSetEncryptionStmt()
   {}
@@ -1029,14 +1029,14 @@ class ObBackupSetEncryptionStmt : public ObSystemCmdStmt {
   TO_STRING_KV(
       N_STMT_TYPE, ((int)stmt_type_), "mode", share::ObBackupEncryptionMode::to_str(mode_), K_(encrypted_passwd));
 
-  private:
+private:
   share::ObBackupEncryptionMode::EncryptionMode mode_;
   char passwd_buf_[OB_MAX_PASSWORD_LENGTH];
   ObString encrypted_passwd_;
 };
 
 class ObBackupSetDecryptionStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObBackupSetDecryptionStmt();
   virtual ~ObBackupSetDecryptionStmt()
   {}
@@ -1047,7 +1047,7 @@ class ObBackupSetDecryptionStmt : public ObSystemCmdStmt {
   int add_passwd(const ObString& passwd);
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(pos), K_(passwd_array));
 
-  private:
+private:
   char passwd_array_[OB_MAX_PASSWORD_ARRAY_LENGTH];
   int64_t pos_;
 };

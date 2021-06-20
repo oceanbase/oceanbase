@@ -20,18 +20,18 @@ class ObJob;
 class ObTaskInfo;
 class ObExecContext;
 class ObTaskExecutor {
-  public:
+public:
   ObTaskExecutor();
   virtual ~ObTaskExecutor();
   virtual int execute(ObExecContext& query_ctx, ObJob* job, ObTaskInfo* task_info) = 0;
   inline virtual void reset()
   {}
 
-  protected:
+protected:
   int build_task_op_input(ObExecContext& query_ctx, ObTaskInfo& task_info, const ObPhyOperator& root_op);
   int should_skip_failed_tasks(ObTaskInfo& task_info, bool& skip_failed_tasks) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTaskExecutor);
 };
 }  // namespace sql

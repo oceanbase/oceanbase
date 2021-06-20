@@ -52,24 +52,24 @@ struct ObPreAllocLinkHashNode {
 
 template <class KEY, class ITEM, class NODE, class ITEM_PROTECTOR>
 class ObPreAllocLinkHashMap {
-  public:
+public:
   class ForeachFunctor {
-    public:
+  public:
     virtual int operator()(ITEM& item, bool& is_full) = 0;
   };
 
   class EraseChecker {
-    public:
+  public:
     virtual int operator()(ITEM& item) = 0;
   };
 
   class GetFunctor {
-    public:
+  public:
     virtual int operator()(ITEM& item) = 0;
   };
 
   class Iterator {
-    public:
+  public:
     explicit Iterator(ObPreAllocLinkHashMap& map) : items_(), item_idx_(0), bucket_pos_(0), map_(map)
     {}
     virtual ~Iterator()
@@ -110,7 +110,7 @@ class ObPreAllocLinkHashMap {
       return ret;
     }
 
-    private:
+  private:
     void release_items()
     {
       for (int64_t i = 0; i < items_.count(); ++i) {
@@ -366,7 +366,7 @@ class ObPreAllocLinkHashMap {
     return ret;
   }
 
-  private:
+private:
   bool is_inited_;
   mutable common::ObBucketLock buckets_lock_;
   uint64_t count_;

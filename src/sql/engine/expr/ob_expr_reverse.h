@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprReverse : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprReverse(common::ObIAllocator& alloc);
   virtual ~ObExprReverse();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
@@ -27,7 +27,7 @@ class ObExprReverse : public ObStringExprOperator {
   static int do_reverse(const common::ObString& input_str, const common::ObCollationType& cs_type,
       common::ObIAllocator* allocator, common::ObString& res_str);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprReverse);
 };
 

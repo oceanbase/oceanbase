@@ -19,7 +19,7 @@ namespace oceanbase {
 
 namespace transaction {
 class WaitTransEndTask : public ObTransTask {
-  public:
+public:
   WaitTransEndTask()
   {
     reset();
@@ -44,14 +44,14 @@ class WaitTransEndTask : public ObTransTask {
   }
   TO_STRING_KV(K_(partition), K_(trans_id));
 
-  private:
+private:
   ObTransID trans_id_;
   common::ObPartitionKey partition_;
   DISALLOW_COPY_AND_ASSIGN(WaitTransEndTask);
 };
 
 class CallbackTransTask : public ObTransTask {
-  public:
+public:
   CallbackTransTask() : ObTransTask(ObTransRetryTaskType::UNKNOWN)
   {
     reset();
@@ -85,7 +85,7 @@ class CallbackTransTask : public ObTransTask {
   }
   TO_STRING_KV(K_(partition), K_(trans_id), K_(prev_trans_id), K_(status));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   ObTransID trans_id_;
   ObTransID prev_trans_id_;

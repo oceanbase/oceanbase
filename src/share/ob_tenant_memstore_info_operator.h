@@ -24,7 +24,7 @@ class ObMySQLProxy;
 namespace share {
 class ObResourcePool;
 class ObTenantMemstoreInfoOperator {
-  public:
+public:
   struct TenantServerMemInfo {
     TenantServerMemInfo()
         : tenant_id_(common::OB_INVALID_ID),
@@ -58,7 +58,7 @@ class ObTenantMemstoreInfoOperator {
   int get(const uint64_t tenant_id, const common::ObIArray<common::ObAddr>& servers,
       common::ObIArray<TenantServerMemInfo>& mem_infos);
 
-  private:
+private:
   common::ObMySQLProxy& proxy_;
 };
 }  // end namespace share

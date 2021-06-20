@@ -21,19 +21,19 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 class TestRestoreURIParser : public ::testing::Test {
-  public:
+public:
   TestRestoreURIParser();
   virtual ~TestRestoreURIParser();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRestoreURIParser);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 

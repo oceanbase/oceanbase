@@ -32,7 +32,7 @@ class ObTransStat;
 }  // namespace transaction
 namespace observer {
 class ObGVTransStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   explicit ObGVTransStat(transaction::ObTransService* trans_service) : trans_service_(trans_service)
   {}
   virtual ~ObGVTransStat()
@@ -40,16 +40,16 @@ class ObGVTransStat : public common::ObVirtualTableScannerIterator {
     destroy();
   }
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
   virtual void destroy();
 
-  private:
+private:
   int prepare_start_to_read_();
   int get_next_trans_info_(transaction::ObTransStat& trans_stat);
 
-  private:
+private:
   enum {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
@@ -99,12 +99,12 @@ class ObGVTransStat : public common::ObVirtualTableScannerIterator {
   char prev_trans_info_buffer_[OB_MAX_BUFFER_SIZE];
   char next_trans_info_buffer_[OB_MAX_BUFFER_SIZE];
 
-  private:
+private:
   transaction::ObTransService* trans_service_;
   transaction::ObPartitionIterator partition_iter_;
   transaction::ObTransStatIterator trans_stat_iter_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGVTransStat);
 };
 

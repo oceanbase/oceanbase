@@ -21,7 +21,7 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObMySQLProcTable : public common::ObVirtualTableScannerIterator {
-  private:
+private:
   enum MySQLProcTableColumns {
     DB = 16,
     NAME,
@@ -45,7 +45,7 @@ class ObMySQLProcTable : public common::ObVirtualTableScannerIterator {
     BODY_UTF8,
   };
 
-  public:
+public:
   ObMySQLProcTable();
   virtual ~ObMySQLProcTable();
 
@@ -56,10 +56,10 @@ class ObMySQLProcTable : public common::ObVirtualTableScannerIterator {
     tenant_id_ = tenant_id;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLProcTable);
 };
 }  // namespace observer

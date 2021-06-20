@@ -21,7 +21,7 @@ namespace oceanbase {
 using namespace common;
 namespace sql {
 class ObSubPlanFilter::ObSubPlanIterator : public ObNewRowIterator {
-  public:
+public:
   ObSubPlanIterator(ObExecContext& ctx, const ObPhyOperator& op)
       : ObNewRowIterator(),
         ctx_(ctx),
@@ -139,7 +139,7 @@ class ObSubPlanFilter::ObSubPlanIterator : public ObNewRowIterator {
     return ret;
   }
 
-  private:
+private:
   ObExecContext& ctx_;
   const ObPhyOperator& op_;
   bool onetime_plan_;
@@ -169,7 +169,7 @@ class ObSubPlanFilter::ObSubPlanFilterCtx : public ObPhyOperatorCtx {
     ObPhyOperatorCtx::destroy_base();
   }
 
-  private:
+private:
   ObSEArray<ObNewRowIterator*, 16> subplan_iters_;
   friend class ObSubPlanFilter;
 };

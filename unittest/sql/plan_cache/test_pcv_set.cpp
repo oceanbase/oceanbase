@@ -83,7 +83,7 @@ void generate_plan(TestSqlCtx& test_sql_ctx, const char* query, ParamStore& para
 }
 
 class TestPCVSet : public ::testing::Test {
-  public:
+public:
   TestPCVSet()
   {}
   virtual ~TestPCVSet()
@@ -93,7 +93,7 @@ class TestPCVSet : public ::testing::Test {
   void TearDown()
   {}
 
-  private:
+private:
   // disallow copy
   TestPCVSet(const TestPCVSet& other);
   TestPCVSet& operator=(const TestPCVSet& other);

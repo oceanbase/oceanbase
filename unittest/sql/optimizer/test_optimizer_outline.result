@@ -3003,17 +3003,15 @@ SQL: select t20.c1 from t20 join t0 where t0.c1 in (select t7.c1 from t7 join t8
 ========================================================
 |ID|OPERATOR                     |NAME |EST. ROWS|COST |
 --------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN   |     |10000    |17490|
-|1 | MERGE SEMI JOIN             |     |100      |10301|
-|2 |  SORT                       |     |100      |198  |
-|3 |   TABLE SCAN                |t0   |100      |90   |
-|4 |  SUBPLAN SCAN               |VIEW1|10000    |8650 |
-|5 |   NESTED-LOOP JOIN CARTESIAN|     |10000    |7270 |
-|6 |    TABLE SCAN               |t7   |100      |88   |
-|7 |    MATERIAL                 |     |100      |106  |
-|8 |     TABLE SCAN              |t8   |100      |88   |
-|9 | MATERIAL                    |     |100      |113  |
-|10|  TABLE SCAN                 |t20  |100      |95   |
+|0 |NESTED-LOOP JOIN CARTESIAN   |     |10000    |10934|
+|1 | NESTED-LOOP SEMI JOIN       |     |100      |3745 |
+|2 |  TABLE SCAN                 |t0   |100      |90   |
+|3 |  SUBPLAN SCAN               |VIEW1|1        |36   |
+|4 |   NESTED-LOOP JOIN CARTESIAN|     |1        |36   |
+|5 |    TABLE GET                |t7   |1        |36   |
+|6 |    TABLE SCAN               |t8   |100      |88   |
+|7 | MATERIAL                    |     |100      |113  |
+|8 |  TABLE SCAN                 |t20  |100      |95   |
 ========================================================
 
 Outputs & filters: 
@@ -3021,21 +3019,19 @@ Outputs & filters:
   0 - output([t20.c1]), filter(nil), 
       conds(nil), nl_params_(nil)
   1 - output([1]), filter(nil), 
-      equal_conds([t0.c1 = VIEW1.c1]), other_conds(nil)
-  2 - output([t0.c1]), filter(nil), sort_keys([t0.c1, ASC])
-  3 - output([t0.c1]), filter(nil), 
+      conds(nil), nl_params_([t0.c1])
+  2 - output([t0.c1]), filter(nil), 
       access([t0.c1]), partitions(p0)
-  4 - output([VIEW1.c1]), filter(nil), 
+  3 - output([1]), filter(nil), 
       access([VIEW1.c1])
-  5 - output([t7.c1]), filter(nil), 
+  4 - output([t7.c1]), filter(nil), 
       conds(nil), nl_params_(nil)
-  6 - output([t7.c1]), filter(nil), 
+  5 - output([t7.c1]), filter(nil), 
       access([t7.c1]), partitions(p0)
-  7 - output([1]), filter(nil)
-  8 - output([1]), filter(nil), 
+  6 - output([1]), filter(nil), 
       access([t8.c1]), partitions(p0)
-  9 - output([t20.c1]), filter(nil)
-  10 - output([t20.c1]), filter(nil), 
+  7 - output([t20.c1]), filter(nil)
+  8 - output([t20.c1]), filter(nil), 
       access([t20.c1]), partitions(p0)
 
 Outline Data:
@@ -3045,11 +3041,12 @@ Outline Data:
       LEADING(@"SEL$1" (("opt.t0"@"SEL$1" "VIEW1"@"SEL$1" )"opt.t20"@"SEL$1" ))
       USE_NL(@"SEL$1" ("opt.t20"@"SEL$1" ))
       USE_NL_MATERIALIZATION(@"SEL$1" ("opt.t20"@"SEL$1" ))
-      USE_MERGE(@"SEL$1" ("VIEW1"@"SEL$1" ))
+      USE_NL(@"SEL$1" ("VIEW1"@"SEL$1" ))
+      NO_USE_NL_MATERIALIZATION(@"SEL$1" ("VIEW1"@"SEL$1" ))
       FULL(@"SEL$1" "opt.t0"@"SEL$1")
       LEADING(@"SEL$2" ("opt.t7"@"SEL$2" "opt.t8"@"SEL$2" ))
       USE_NL(@"SEL$2" ("opt.t8"@"SEL$2" ))
-      USE_NL_MATERIALIZATION(@"SEL$2" ("opt.t8"@"SEL$2" ))
+      NO_USE_NL_MATERIALIZATION(@"SEL$2" ("opt.t8"@"SEL$2" ))
       FULL(@"SEL$2" "opt.t7"@"SEL$2")
       FULL(@"SEL$2" "opt.t8"@"SEL$2")
       FULL(@"SEL$1" "opt.t20"@"SEL$1")

@@ -21,7 +21,7 @@ namespace sql {
 
 // iterator subquery rows
 class ObSubQueryIterator {
-  public:
+public:
   explicit ObSubQueryIterator(ObOperator& op);
   ~ObSubQueryIterator()
   {}
@@ -55,7 +55,7 @@ class ObSubQueryIterator {
 
   TO_STRING_KV(K(onetime_plan_), K(init_plan_), K(inited_));
 
-  private:
+private:
   ObOperator& op_;
   bool onetime_plan_;
   bool init_plan_;
@@ -69,7 +69,7 @@ class ObSubQueryIterator {
 class ObSubPlanFilterSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObSubPlanFilterSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   DECLARE_VIRTUAL_TO_STRING;
@@ -88,7 +88,7 @@ class ObSubPlanFilterSpec : public ObOpSpec {
 };
 
 class ObSubPlanFilterOp : public ObOperator {
-  public:
+public:
   typedef ObSubQueryIterator Iterator;
 
   ObSubPlanFilterOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
@@ -109,7 +109,7 @@ class ObSubPlanFilterOp : public ObOperator {
     return subplan_iters_;
   }
 
-  private:
+private:
   int set_param_null();
   void destroy_subplan_iters();
   void destroy_update_set_mem()
@@ -124,7 +124,7 @@ class ObSubPlanFilterOp : public ObOperator {
   int prepare_onetime_exprs();
   int handle_update_set();
 
-  private:
+private:
   common::ObSEArray<Iterator*, 16> subplan_iters_;
   lib::MemoryContext* update_set_mem_;
 };

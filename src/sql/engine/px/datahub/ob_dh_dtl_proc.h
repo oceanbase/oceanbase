@@ -28,7 +28,7 @@ class ObIPxCoordMsgProc;
 
 template <typename PieceMsg>
 class ObPieceMsgP : public dtl::ObDtlPacketProc<PieceMsg> {
-  public:
+public:
   ObPieceMsgP(ObExecContext& ctx, ObIPxCoordMsgProc& msg_proc) : ctx_(ctx), msg_proc_(msg_proc)
   {}
   virtual ~ObPieceMsgP() = default;
@@ -37,7 +37,7 @@ class ObPieceMsgP : public dtl::ObDtlPacketProc<PieceMsg> {
     return msg_proc_.on_piece_msg(ctx_, pkt);
   }
 
-  private:
+private:
   ObExecContext& ctx_;
   ObIPxCoordMsgProc& msg_proc_;
 };
@@ -45,7 +45,7 @@ class ObPieceMsgP : public dtl::ObDtlPacketProc<PieceMsg> {
 ////////////////////////////  FOR SQC ////////////////////////////
 template <typename WholeMsg>
 class ObWholeMsgP : public dtl::ObDtlPacketProc<WholeMsg> {
-  public:
+public:
   ObWholeMsgP(ObIPxSubCoordMsgProc& msg_proc) : msg_proc_(msg_proc)
   {}
   virtual ~ObWholeMsgP() = default;
@@ -54,7 +54,7 @@ class ObWholeMsgP : public dtl::ObDtlPacketProc<WholeMsg> {
     return msg_proc_.on_whole_msg(pkt);
   }
 
-  private:
+private:
   ObIPxSubCoordMsgProc& msg_proc_;
 };
 

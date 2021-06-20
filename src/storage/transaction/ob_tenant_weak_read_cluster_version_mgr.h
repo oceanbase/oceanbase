@@ -30,11 +30,11 @@ class ObTenantWeakReadClusterVersionMgr {
   /// be a problem with the server, and there is no need to send the request.
   static const int64_t MAX_SERVER_ALIVE_HEARTBEAT_INTERVAL = 10 * 1000 * 1000L;
 
-  public:
+public:
   ObTenantWeakReadClusterVersionMgr();
   ~ObTenantWeakReadClusterVersionMgr();
 
-  public:
+public:
   void reset(const uint64_t tenant_id);
 
   /// update server version
@@ -47,17 +47,17 @@ class ObTenantWeakReadClusterVersionMgr {
       const int64_t total_part_count, const int64_t generate_tstamp, bool& is_new_server);
 
   /// get min server version which not smaller than base_version
-  /// if no statisfied server version, return base_version
+  /// if no satisfied server version, return base_version
   int64_t get_version(const int64_t base_version, int64_t& skip_server_count, const bool need_print_server_info) const;
 
   // get server count in cluster master cached registered servers
   int64_t get_server_count() const;
 
-  private:
+private:
   class ServerInfo;
   bool find_match_server(int64_t& pre_count, const common::ObAddr& addr, ServerInfo*& psi);
 
-  private:
+private:
   // Spin Lock
   typedef common::ObByteLock SpinLock;
   typedef common::ObByteLockGuard SpinLockGuard;
@@ -91,7 +91,7 @@ class ObTenantWeakReadClusterVersionMgr {
 
   typedef common::ObSEArray<ServerInfo, 16> ServerArray;
 
-  private:
+private:
   uint64_t tenant_id_;
   ServerArray svr_array_;
   RWLock rwlock_;

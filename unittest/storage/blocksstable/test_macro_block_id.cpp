@@ -22,7 +22,7 @@ using namespace blocksstable;
 
 namespace unittest {
 class TestMacroBlockId : public ::testing::Test {
-  public:
+public:
   TestMacroBlockId() = default;
   void SetUp()
   {}

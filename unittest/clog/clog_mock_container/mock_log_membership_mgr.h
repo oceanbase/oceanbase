@@ -32,13 +32,13 @@ class ObLogEntry;
 class ObLogEntryHeader;
 
 class MockObLogMembershipMgr : public ObILogMembershipMgr, public ObISubmitLogCb {
-  public:
+public:
   MockObLogMembershipMgr()
   {}
   virtual ~MockObLogMembershipMgr()
   {}
 
-  public:
+public:
   int init(const common::ObMemberList& member_list, const int64_t membership_timestamp,
       const uint64_t membership_log_id, const int64_t replica_num, const common::ObAddr& self,
       const common::ObPartitionKey& partition_key, ObILogSWForMS* sw, ObILogStateMgrForMS* state_mgr,
@@ -287,7 +287,7 @@ class MockObLogMembershipMgr : public ObILogMembershipMgr, public ObISubmitLogCb
     return OB_SUCCESS;
   }
 
-  private:
+private:
   common::ObMemberList member_list_;
   common::ObProposalID ms_proposal_id_;
 };

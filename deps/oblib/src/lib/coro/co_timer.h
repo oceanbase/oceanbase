@@ -20,13 +20,13 @@ namespace oceanbase {
 namespace lib {
 
 class CoTimer : public CoTimerQueue::Node {
-  public:
+public:
   CoTimer(int64_t expires) : CoTimerQueue::Node(expires)
   {}
 };
 
 class CoTimerSleeper : public CoTimer {
-  public:
+public:
   CoTimerSleeper(CoRoutine& routine, int64_t expires) : CoTimer(expires), routine_(&routine)
   {}
   CoRoutine* routine_;

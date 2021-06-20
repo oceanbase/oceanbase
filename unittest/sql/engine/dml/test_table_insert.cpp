@@ -23,7 +23,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::observer;
 
 class ObTableInsertTest : public ::testing::Test {
-  public:
+public:
   ObTableInsertTest();
   virtual ~ObTableInsertTest();
   virtual void SetUp();
@@ -32,12 +32,12 @@ class ObTableInsertTest : public ::testing::Test {
   int create_const_expr(ObObj& obj, ObSqlExpression*& expr);
   int create_expr_values(ObExprValues*& expr_values);
 
-  private:
+private:
   // disallow copy
   ObTableInsertTest(const ObTableInsertTest& other);
   ObTableInsertTest& operator=(const ObTableInsertTest& other);
 
-  protected:
+protected:
   // data members
   ObPhysicalPlan physical_plan_;
 };

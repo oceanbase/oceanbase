@@ -214,7 +214,7 @@ class ObPLogItem;
   }
 
 //@class ObLogIdLevelMap
-//@brief stroe the level of each par-module and sub-module. The key is module ID.
+//@brief store the level of each par-module and sub-module. The key is module ID.
 //       To be used for SQL hint, this class should be POD-type.
 struct ObLogIdLevelMap {
   static const uint64_t MAX_PAR_MOD_SIZE = OB_LOG_MAX_PAR_MOD_SIZE;
@@ -255,7 +255,7 @@ struct ObLogIdLevelMap {
 //@class ObLogIdLevelMap
 //@brief stroe the ID of each par-module and sub-module. The key is module's name.
 class ObLogNameIdMap {
-  public:
+public:
   static const uint64_t MAX_PAR_MOD_SIZE = OB_LOG_MAX_PAR_MOD_SIZE;
   static const uint64_t MAX_SUB_MOD_SIZE = OB_LOG_MAX_SUB_MOD_SIZE;
 
@@ -276,7 +276,7 @@ class ObLogNameIdMap {
   //@brief Get sub-module's name by module's ID.
   int get_sub_mod_name(const uint64_t par_mod_id, const uint64_t sub_mod_id, const char*& mod_name) const;
 
-  private:
+private:
   // name_id_map_[i][0] par-module's name, name_id_map_[i][i](i>1) sub-module's name
   const char* name_id_map_[MAX_PAR_MOD_SIZE][MAX_SUB_MOD_SIZE + 1];
 };
@@ -289,7 +289,7 @@ int process_thread_log_id_level_map(const char* str, const int32_t str_length);
 
 //@class ObThreadLogLevelUtils
 class ObThreadLogLevelUtils {
-  public:
+public:
   //@brief Set pointer to default value NULL.
   static void init();
   //@brief Set the pointer to the session's id_level_map.
@@ -312,7 +312,7 @@ class ObThreadLogLevelUtils {
 };
 
 class ObThreadFlags {
-  public:
+public:
   enum {
     RS_FLAG = 0,
   };
@@ -362,7 +362,7 @@ class ObThreadFlags {
 };
 
 class ObRSThreadFlag {
-  public:
+public:
   ObRSThreadFlag()
   {
     ObThreadFlags::set_rs_flag();
@@ -385,7 +385,7 @@ struct ObPLogWriterCfg : public ObBaseLogWriterCfg {
 };
 
 class ObBasebLogPrint {
-  public:
+public:
   ObBasebLogPrint()
   {}
   virtual ~ObBasebLogPrint()
@@ -402,10 +402,10 @@ class ObBasebLogPrint {
 // This class is changed from the class 'CLogger' in tblog.h which was written by the God
 // named DuoLong.
 class ObLogger : public ObBaseLogWriter {
-  private:
+private:
   static constexpr int LOG_ITEM_SIZE = sizeof(ObPLogItem);
 
-  public:
+public:
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256 * 1024 * 1024;  // default max log file size
   // check whether disk storing log-file has no space every 2s
   // Only max_file_size_ > 0, this is effective.
@@ -457,7 +457,7 @@ class ObLogger : public ObBaseLogWriter {
     char file_name_[ObPLogFileStruct::MAX_LOG_FILE_NAME_SIZE];
   };
 
-  private:
+private:
   struct LogBuffer {
     LogBuffer() : pos_(0), trace_mode_(false)
     {
@@ -517,16 +517,16 @@ class ObLogger : public ObBaseLogWriter {
     int8_t level_;
   };
 
-  public:
+public:
   ObLogger();
   virtual ~ObLogger();
   virtual int init(const ObBaseLogWriterCfg& log_cfg);
   virtual void destroy();
 
-  protected:
+protected:
   virtual void process_log_items(ObIBaseLogItem** items, const int64_t item_cnt, int64_t& finish_cnt);
 
-  public:
+public:
   bool is_async_log_used() const
   {
     return (enable_async_log() && OB_LIKELY(is_inited()) && !has_stoped());
@@ -759,8 +759,8 @@ class ObLogger : public ObBaseLogWriter {
   //@param[in] flag Whether redirect the stdout and stderr to the descriptor of the log-file.
   // FALSE:redirect TRUE:no redirect.
   //@param[in] open_wf whether create warning log-file to store warning buffer.
-  //@param[in] finename of rootservice log-file's name.
-  //@param[in] finename of election log-file's name.
+  //@param[in] filename of rootservice log-file's name.
+  //@param[in] filename of election log-file's name.
   void set_file_name(const char* filename, const bool no_redirect_flag = false, const bool open_wf = false,
       const char* rs_filename = NULL, const char* elec_filename = NULL);
 
@@ -897,7 +897,7 @@ class ObLogger : public ObBaseLogWriter {
     return guard;
   }
 
-  private:
+private:
   //@brief If version <= 0, return true.
   // If version > 0, return version > level_version_ and if true, update level_version_.
   bool check_and_set_level_version(int64_t version);
@@ -937,10 +937,10 @@ class ObLogger : public ObBaseLogWriter {
   //@brief Rename the log to a filename with fmt. And open a new file with the old, then add old file to file_list.
   //@param[in] filename the old filename to rotate.
   //@param[in] whether redirect, FALSE:redirect TRUE:no redirect
-  //@param[out] after retated log, open new file_fd
-  //@param[out] after retated wf log, open new wf_file_fd
-  //@param[out] add retated log file name to file list
-  //@param[out] add retated wf log file name to file list
+  //@param[out] after rotated log, open new file_fd
+  //@param[out] after rotated wf log, open new wf_file_fd
+  //@param[out] add rotated log file name to file list
+  //@param[out] add rotated wf log file name to file list
   void rotate_log(const char* filename, const ObPLogFDType fd_type, const bool redirect_flag, int32_t& fd,
       int32_t& wf_fd, std::deque<std::string>& file_list, std::deque<std::string>& wf_file_list);
 
@@ -964,9 +964,9 @@ class ObLogger : public ObBaseLogWriter {
   void free_log_item(ObPLogItem* log_item);
   void inc_dropped_log_count(const int32_t level);
 
-  private:
+private:
   static const char* const errstr_[];
-  // default log rate limiter if there's no tl_log_limiger
+  // default log rate limiter if there's no tl_log_limiter
   static ::oceanbase::lib::ObRateLimiter* default_log_limiter_;
   static RLOCAL(lib::ObRateLimiter*, tl_log_limiter_);
   static constexpr int N_LIMITER = 4096;
@@ -1004,8 +1004,8 @@ class ObLogger : public ObBaseLogWriter {
   bool force_check_;         // whether check log-file at each message logging.
   bool redirect_flag_;       // whether redirect, TRUE: redirect FALSE: no redirect.
   bool open_wf_flag_;        // whether open warning log-file.
-  bool enable_wf_flag_;      // whether write waring log to wf log-file.
-  bool rec_old_file_flag_;   // whether recorde old file.
+  bool enable_wf_flag_;      // whether write warning log to wf log-file.
+  bool rec_old_file_flag_;   // whether record old file.
   volatile bool can_print_;  // when disk has no space, logger control
 
   bool enable_async_log_;  // if false, use sync way logging
@@ -1031,7 +1031,7 @@ inline ObLogger& ObLogger::get_logger()
 }
 
 class ObLoggerTraceMode {
-  public:
+public:
   ObLoggerTraceMode()
   {
     OB_LOGGER.set_trace_mode(true);

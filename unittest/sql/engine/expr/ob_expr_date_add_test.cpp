@@ -20,18 +20,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObExprDateaddTest : public ::testing::Test {
-  public:
+public:
   ObExprDateaddTest();
   virtual ~ObExprDateaddTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprDateaddTest(const ObExprDateaddTest& other);
   ObExprDateaddTest& operator=(const ObExprDateaddTest& other);
 
-  private:
+private:
   // data members
 };
 

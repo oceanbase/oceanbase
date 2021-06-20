@@ -2661,7 +2661,8 @@ int ObGlobalIndexBuilder::on_build_single_replica_reply(const uint64_t index_tab
         // error from sql module, for instance:numeric_overflow, do not retry any more
         task->build_single_replica_stat_ = BSRT_FAILED;
         LOG_WARN("Detected sql error, stop retrying", K(ret_code));
-      } else if (ObIDDLTask::error_need_retry(ret_code)) {
+      } else if (ObIDDLTask::error_need_retry(ret_code) || OB_ENTRY_EXIST == ret_code ||
+                 OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code) {
         task->build_single_replica_stat_ = BSRT_INVALID_SNAPSHOT;
         LOG_INFO("ddl error need retry", K(ret_code), K(*task));
       } else {

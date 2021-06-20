@@ -248,7 +248,7 @@ TEST(ObFeedbackManager, common)
 
 class ObForwardCompatibilityFeedbackPartitionLocation
     : public ObAbstractFeedbackObject<ObForwardCompatibilityFeedbackPartitionLocation> {
-  public:
+public:
   ObForwardCompatibilityFeedbackPartitionLocation()
       : ObAbstractFeedbackObject<ObForwardCompatibilityFeedbackPartitionLocation>(PARTITION_LOCATION_FB_ELE)
   {}
@@ -256,7 +256,7 @@ class ObForwardCompatibilityFeedbackPartitionLocation
   {}
   FB_OBJ_DEFINE_METHOD;
 
-  public:
+public:
   uint64_t table_id_;
   int64_t partition_id_;
 };
@@ -312,7 +312,7 @@ TEST(ObFeedbackPartitionLocation, forward_compatibility)
 
 class ObBackwardCompatibilityFeedbackPartitionLocation
     : public ObAbstractFeedbackObject<ObBackwardCompatibilityFeedbackPartitionLocation> {
-  public:
+public:
   ObBackwardCompatibilityFeedbackPartitionLocation()
       : ObAbstractFeedbackObject<ObBackwardCompatibilityFeedbackPartitionLocation>(PARTITION_LOCATION_FB_ELE)
   {}
@@ -320,7 +320,7 @@ class ObBackwardCompatibilityFeedbackPartitionLocation
   {}
   FB_OBJ_DEFINE_METHOD;
 
-  public:
+public:
   typedef common::ObSEArray<ObFeedbackReplicaLocation, 5> ObTestFeedbackReplicaLocationArray;
   uint64_t table_id_;
   int64_t partition_id_;

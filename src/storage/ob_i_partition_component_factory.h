@@ -81,7 +81,7 @@ class ObPhyRestoreMacroIndexStore;
 class ObPhyRestoreMacroIndexStoreV2;
 
 class ObIPartitionComponentFactory {
-  public:
+public:
   virtual ~ObIPartitionComponentFactory()
   {}
   virtual ObIPartitionGroup* get_partition(const uint64_t tenant_id) = 0;

@@ -22,7 +22,7 @@ namespace sql {
 class ObDistinctSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDistinctSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(distinct_exprs), K_(is_block_mode), K_(cmp_funcs));

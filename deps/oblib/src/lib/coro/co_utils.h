@@ -33,13 +33,13 @@ CoIdx alloc_coidx();
 void free_coidx(CoIdx coidx);
 
 class CoSpinLock {
-  public:
+public:
   CoSpinLock();
   void lock();
   bool trylock();
   void unlock();
 
-  private:
+private:
   volatile int v_;
 };
 

@@ -28,7 +28,7 @@ namespace share {
 class ObClusterInfo;
 
 class ObMultiClusterUtil {
-  public:
+public:
   ObMultiClusterUtil()
   {}
   virtual ~ObMultiClusterUtil()
@@ -78,7 +78,7 @@ struct ObTenantFlashbackSCN {
 
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int64_t tenant_id_;
   int64_t inner_scn_;
   int64_t user_scn_;

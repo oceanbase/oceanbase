@@ -154,14 +154,14 @@ struct ObStreamItem {
   TO_STRING_KV(K(pkey_), K(next_log_id_), K(fetch_progress_ts_), K(last_slide_log_id_), K(fetch_rpc_id_),
       K(need_fetch_status_), K(next_cursor_), K(cursor_array_size_));
 
-  private:
+private:
   uint64_t get_last_slide_log_id_(const ObPartitionKey& pkey, storage::ObPartitionService& part_service);
 };
 
 typedef common::ObSEArray<ObStreamItem*, 64> ObStreamItemArray;
 
 class ObStream {
-  public:
+public:
   ObStream()
       : processing_(false),
         liboblog_instance_id_(),
@@ -243,11 +243,11 @@ class ObStream {
   DECLARE_TO_STRING;
   void print_basic_info(const int64_t stream_idx, const obrpc::ObStreamSeq& stream_seq) const;
 
-  public:
+public:
   // maximum number of files to be cached
   static const int64_t MAX_CACHED_FILE_COUNT = 10;
 
-  public:
+public:
   struct LiboblogInstanceId {
     common::ObAddr addr_;
     uint64_t peer_pid_;
@@ -269,10 +269,10 @@ class ObStream {
     TO_STRING_KV(K(addr_), K(peer_pid_));
   };
 
-  private:
+private:
   static const bool PRINT_STREAM_VERBOSE = false;
 
-  private:
+private:
   // The Stream information maintained by the server does not allow concurrent modification. Use this mark to check.
   bool processing_;
   // LiboblogInstanceId is only used for debugging, since may be multiple liboblogs pulling the same cluster.

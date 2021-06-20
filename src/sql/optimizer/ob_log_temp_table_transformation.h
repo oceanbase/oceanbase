@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogTempTableTransformation : public ObLogicalOperator {
-  public:
+public:
   ObLogTempTableTransformation(ObLogPlan& plan);
   virtual ~ObLogTempTableTransformation();
 

@@ -34,7 +34,7 @@ class ObDMLSqlSplicer;
 namespace rootserver {
 
 class ObSchemaMapSerializer {
-  public:
+public:
   static int serialize(common::ObIAllocator& allocator, const common::ObIArray<share::ObSchemaIdPair>& id_pair,
       common::ObString& schema_map_str);
 
@@ -42,7 +42,7 @@ class ObSchemaMapSerializer {
 };
 
 class ObRestoreTableOperator {
-  public:
+public:
   ObRestoreTableOperator();
   virtual ~ObRestoreTableOperator() = default;
   int init(common::ObISQLClient* sql_client);
@@ -70,7 +70,7 @@ class ObRestoreTableOperator {
   // recycle task
   int recycle_job(int64_t job_id, int64_t status);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRestoreTableOperator);
   // function members
@@ -83,7 +83,7 @@ class ObRestoreTableOperator {
   int record_job_in_history(int64_t job_id);
   int fill_dml_splicer(share::ObDMLSqlSplicer& dml, const RestoreJob& job_info);
 
-  private:
+private:
   // data members
   bool inited_;
   common::ObISQLClient* sql_client_;

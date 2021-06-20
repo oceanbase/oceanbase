@@ -27,18 +27,18 @@ using namespace common::hash;
 namespace share {
 
 class MockObLocationCache : public ObIPartitionLocationCache {
-  public:
+public:
   MockObLocationCache()
   {}
   virtual ~MockObLocationCache()
   {}
   int init();
 
-  public:
+public:
   int add(const ObPartitionKey& partition, const ObAddr& leader);
   int add_overwrite(const ObPartitionKey& partition, const ObAddr& leader);
 
-  public:
+public:
   virtual ObIPartitionLocationCache::PartitionLocationCacheType get_type() const
   {
     return static_cast<ObIPartitionLocationCache::PartitionLocationCacheType>(PART_LOC_CACHE_TYPE_NORMAL);
@@ -128,10 +128,10 @@ class MockObLocationCache : public ObIPartitionLocationCache {
     return common::OB_INVALID_ID;
   }
 
-  private:
+private:
   static const int64_t BUCKET_NUM = 137;
 
-  private:
+private:
   ObHashMap<ObPartitionKey, ObAddr> partition_addr_map_;
 };
 

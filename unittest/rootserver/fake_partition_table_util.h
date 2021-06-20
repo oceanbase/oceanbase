@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace rootserver {
 class FakePartitionTableUtil : public ObPartitionTableUtil {
-  public:
+public:
   FakePartitionTableUtil(ObZoneManager& cm) : cm_(cm)
   {}
 
@@ -52,7 +52,7 @@ class FakePartitionTableUtil : public ObPartitionTableUtil {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   ObZoneManager& cm_;
 };
 

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace obsys {
 class CThreadCond {
-  public:
+public:
   CThreadCond()
   {
     cond_.init();
@@ -54,12 +54,12 @@ class CThreadCond {
     cond_.broadcast();
   }
 
-  private:
+private:
   oceanbase::common::ObThreadCond cond_;
 };
 
 class CCondGuard {
-  public:
+public:
   explicit CCondGuard(CThreadCond* cond)
   {
     cond_ = NULL;
@@ -76,7 +76,7 @@ class CCondGuard {
     }
   }
 
-  private:
+private:
   CThreadCond* cond_;
 };
 

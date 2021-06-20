@@ -25,7 +25,7 @@ namespace sql {
 class ObPxSqcHandler;
 
 class ObInitSqcP : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<obrpc::OB_PX_ASYNC_INIT_SQC>> {
-  public:
+public:
   ObInitSqcP(const observer::ObGlobalContext& gctx)
       : gctx_(gctx),
         exec_ctx_(gctx.session_mgr_),
@@ -39,10 +39,10 @@ class ObInitSqcP : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<obrpc
   virtual int process() final;
   virtual int after_process() final;
 
-  private:
+private:
   int startup_normal_sqc(ObPxSqcHandler& sqc_handler);
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
   sql::ObDesExecContext exec_ctx_;
   sql::ObPhysicalPlan phy_plan_;
@@ -51,7 +51,7 @@ class ObInitSqcP : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<obrpc
 };
 
 class ObInitTaskP : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<obrpc::OB_PX_INIT_TASK>> {
-  public:
+public:
   ObInitTaskP(const observer::ObGlobalContext& gctx)
       : gctx_(gctx), exec_ctx_(gctx.session_mgr_), phy_plan_(), des_allocator_(ObModIds::OB_SQL_PX)
   {}
@@ -60,7 +60,7 @@ class ObInitTaskP : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<obrp
   virtual int process() final;
   virtual int after_process() final;
 
-  private:
+private:
   // xxx
   const observer::ObGlobalContext& gctx_;
   sql::ObDesExecContext exec_ctx_;
@@ -71,7 +71,7 @@ class ObInitTaskP : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<obrp
 };
 
 class ObInitFastSqcP : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<obrpc::OB_PX_FAST_INIT_SQC>> {
-  public:
+public:
   ObInitFastSqcP(const observer::ObGlobalContext& gctx)
       : gctx_(gctx),
         exec_ctx_(gctx.session_mgr_),
@@ -84,10 +84,10 @@ class ObInitFastSqcP : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<o
   virtual void destroy() final;
   virtual int process() final;
 
-  private:
+private:
   int startup_normal_sqc(ObPxSqcHandler& sqc_handler);
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
   sql::ObDesExecContext exec_ctx_;
   sql::ObPhysicalPlan phy_plan_;
@@ -96,18 +96,18 @@ class ObInitFastSqcP : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<o
 };
 
 class ObFastInitSqcReportQCMessageCall {
-  public:
+public:
   ObFastInitSqcReportQCMessageCall(ObPxSqcMeta* sqc) : sqc_(sqc)
   {}
   ~ObFastInitSqcReportQCMessageCall() = default;
   void operator()(hash::HashMapPair<ObInterruptibleTaskID, ObInterruptCheckerNode*>& entry);
 
-  private:
+private:
   ObPxSqcMeta* sqc_;
 };
 
 class ObDealWithRpcTimeoutCall {
-  public:
+public:
   ObDealWithRpcTimeoutCall(
       common::ObAddr addr, ObQueryRetryInfo* retry_info, int64_t timeout_ts, common::ObCurTraceId::TraceId& trace_id)
       : addr_(addr), retry_info_(retry_info), timeout_ts_(timeout_ts), trace_id_(trace_id), ret_(common::OB_TIMEOUT)
@@ -116,7 +116,7 @@ class ObDealWithRpcTimeoutCall {
   void operator()(hash::HashMapPair<ObInterruptibleTaskID, ObInterruptCheckerNode*>& entry);
   void deal_with_rpc_timeout_err();
 
-  public:
+public:
   common::ObAddr addr_;
   ObQueryRetryInfo* retry_info_;
   int64_t timeout_ts_;
@@ -125,7 +125,7 @@ class ObDealWithRpcTimeoutCall {
 };
 
 class ObFastInitSqcCB : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_FAST_INIT_SQC> {
-  public:
+public:
   ObFastInitSqcCB(const common::ObAddr& server, const common::ObCurTraceId::TraceId& trace_id,
       ObQueryRetryInfo* retry_info, int64_t timeout_ts, ObInterruptibleTaskID tid, ObPxSqcMeta* sqc)
       : addr_(server), retry_info_(retry_info), timeout_ts_(timeout_ts), interrupt_id_(tid), sqc_(sqc)
@@ -135,7 +135,7 @@ class ObFastInitSqcCB : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_FAST_IN
   virtual ~ObFastInitSqcCB()
   {}
 
-  public:
+public:
   virtual int process();
   virtual void on_invalid()
   {}
@@ -156,7 +156,7 @@ class ObFastInitSqcCB : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_FAST_IN
   int deal_with_rpc_timeout_err_safely();
   void interrupt_qc(int err);
 
-  private:
+private:
   common::ObAddr addr_;
   ObQueryRetryInfo* retry_info_;
   int64_t timeout_ts_;

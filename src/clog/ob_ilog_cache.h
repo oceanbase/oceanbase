@@ -93,7 +93,7 @@ struct ObIlogPerFileCacheWrapper {
 
 // value in map
 class ObIlogPerFileCacheNode {
-  public:
+public:
   ObIlogPerFileCacheNode();
   ~ObIlogPerFileCacheNode();
   bool is_valid() const
@@ -143,7 +143,7 @@ class ObIlogPerFileCacheNode {
   }
   TO_STRING_KV("node_status", ATOMIC_LOAD(&node_status_), KP_(cache_wrapper), KP(wrapper_allocator_), K_(seq));
 
-  private:
+private:
   void destroy_wrapper();
   static int64_t alloc_seq()
   {
@@ -151,7 +151,7 @@ class ObIlogPerFileCacheNode {
     return ATOMIC_AAF(&s_seq, 1);
   }
 
-  private:
+private:
   NodeStatus node_status_;
   int64_t seq_;
   ObIlogPerFileCacheWrapper* cache_wrapper_;
@@ -206,9 +206,9 @@ struct NodeItem {
 typedef common::ObSEArray<NodeItem, 128> NodeItemArray;
 
 class ObIlogCache {
-  private:
+private:
   class NodeReadyMarker {
-    public:
+  public:
     explicit NodeReadyMarker(const int64_t seq) : err_(common::OB_SUCCESS), owner_seq_(seq), owner_match_(true)
     {}
     bool operator()(const file_id_t file_id, ObIlogPerFileCacheNode& node);
@@ -222,7 +222,7 @@ class ObIlogCache {
     }
     TO_STRING_KV(K(err_), K(owner_seq_), K(owner_match_));
 
-    private:
+  private:
     int err_;
     int64_t owner_seq_;
     bool owner_match_;             // for debug
@@ -230,7 +230,7 @@ class ObIlogCache {
   };
 
   class GetNodeFunctor {
-    public:
+  public:
     GetNodeFunctor() : err_(common::OB_SUCCESS)
     {}
     bool operator()(const file_id_t file_id, ObIlogPerFileCacheNode& node);
@@ -244,13 +244,13 @@ class ObIlogCache {
     }
     TO_STRING_KV(K(err_));
 
-    private:
+  private:
     int err_;
     ObIlogPerFileCacheNode node_;
   };
 
   class EraseNodeFunctor {
-    public:
+  public:
     EraseNodeFunctor() : err_(common::OB_SUCCESS)
     {}
     bool operator()(const file_id_t file_id, ObIlogPerFileCacheNode& node);
@@ -260,12 +260,12 @@ class ObIlogCache {
     }
     TO_STRING_KV(K(err_));
 
-    private:
+  private:
     int err_;
   };
 
   class VictimPicker {
-    public:
+  public:
     VictimPicker()
         : err_(common::OB_SUCCESS),
           count_(0),
@@ -291,9 +291,9 @@ class ObIlogCache {
     }
     TO_STRING_KV(K(err_), K(count_), K(victim_), K(min_access_ts_));
 
-    private:
+  private:
     static const int64_t LARGE_ENOUGH_TIMESTAMP = 5000000000000000;  // 2128-06-11 16:53:20
-    private:
+  private:
     int err_;
     int count_;
     file_id_t victim_;
@@ -301,7 +301,7 @@ class ObIlogCache {
   };
 
   class ExpiredNodesPicker {
-    public:
+  public:
     explicit ExpiredNodesPicker(FileIdArray& expired_file_id_arr)
         : err_(common::OB_SUCCESS), expired_file_id_arr_(expired_file_id_arr)
     {}
@@ -316,15 +316,15 @@ class ObIlogCache {
     }
     TO_STRING_KV(K(err_), K(expired_file_id_arr_));
 
-    private:
+  private:
     static const int64_t EXPIRED_INVTERVAL = 600L * 1000L * 1000L;  // 10 min
-    private:
+  private:
     int err_;
     FileIdArray& expired_file_id_arr_;
   };
 
   class AllFileIdGetter {
-    public:
+  public:
     explicit AllFileIdGetter(FileIdArray& all_file_id_arr) : err_(common::OB_SUCCESS), all_file_id_arr_(all_file_id_arr)
     {}
     bool operator()(const file_id_t file_id, ObIlogPerFileCacheNode& node);
@@ -334,13 +334,13 @@ class ObIlogCache {
     }
     TO_STRING_KV(K(err_), K(all_file_id_arr_));
 
-    private:
+  private:
     int err_;
     FileIdArray& all_file_id_arr_;
   };
 
   class RemoveNodeFunctor {
-    public:
+  public:
     RemoveNodeFunctor() : count_(0)
     {}
     ~RemoveNodeFunctor()
@@ -349,7 +349,7 @@ class ObIlogCache {
     }
     bool operator()(const file_id_t file_id, ObIlogPerFileCacheNode& node);
 
-    private:
+  private:
     int count_;
   };
 
@@ -375,7 +375,7 @@ class ObIlogCache {
   };
 
   class NodeReporter {
-    public:
+  public:
     NodeReporter() : arr_()
     {}
     ~NodeReporter()
@@ -391,11 +391,11 @@ class ObIlogCache {
     }
     DECLARE_TO_STRING;
 
-    private:
+  private:
     NodeItemArray arr_;
   };
 
-  public:
+public:
   ObIlogCache() : is_inited_(false), wrapper_allocator_(), node_map_(), config_(), statistic_(), pf_cache_builder_(NULL)
   {}
   int init(const ObIlogCacheConfig& config, ObIlogPerFileCacheBuilder* pf_cache_builder);
@@ -414,7 +414,7 @@ class ObIlogCache {
       const uint64_t min_log_id, const uint64_t max_log_id, const offset_t start_offset_index, uint64_t& target_log_id,
       int64_t& target_log_timestamp);
 
-  private:
+private:
   int do_locate_by_timestamp_(const file_id_t file_id, const common::ObPartitionKey& pkey, const int64_t start_ts,
       const uint64_t min_log_id, const uint64_t max_log_id, const offset_t start_offset_index, uint64_t& target_log_id,
       int64_t& target_log_timestamp, ObIlogStorageQueryCost& csr_cost);
@@ -440,10 +440,10 @@ class ObIlogCache {
   int get_expired_arr(FileIdArray& file_id_arr);
   int get_all_file_id_arr(FileIdArray& all_file_id_arr);
 
-  private:
+private:
   static const file_id_t PRELOAD_AHEAD = 5;
 
-  private:
+private:
   bool is_inited_;
   common::ObSmallAllocator wrapper_allocator_;
   common::ObLinearHashMap<FileIdType, ObIlogPerFileCacheNode> node_map_;

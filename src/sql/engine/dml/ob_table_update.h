@@ -19,7 +19,7 @@ namespace sql {
 class ObTableUpdateInput : public ObTableModifyInput {
   friend class ObTableUpdate;
 
-  public:
+public:
   ObTableUpdateInput() : ObTableModifyInput()
   {}
   virtual ~ObTableUpdateInput()
@@ -29,16 +29,16 @@ class ObTableUpdateInput : public ObTableModifyInput {
     return PHY_UPDATE;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableUpdateInput);
 };
 
 class ObTableUpdate : public ObTableModify {
-  public:
+public:
   class ObTableUpdateCtx : public ObTableModifyCtx {
     friend class ObTableUpdate;
 
-    public:
+  public:
     explicit ObTableUpdateCtx(ObExecContext& ctx)
         : ObTableModifyCtx(ctx),
           full_row_(),
@@ -89,7 +89,7 @@ class ObTableUpdate : public ObTableModify {
     }
     friend class ObTableUpdate;
 
-    protected:
+  protected:
     common::ObNewRow full_row_;
     common::ObNewRow new_row_;
     common::ObNewRow old_row_;
@@ -109,7 +109,7 @@ class ObTableUpdate : public ObTableModify {
 
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObTableUpdate(common::ObIAllocator& alloc);
   virtual ~ObTableUpdate();
 
@@ -155,7 +155,7 @@ class ObTableUpdate : public ObTableModify {
     return ObSqlExpressionUtil::add_expr_to_list(new_spk_exprs_, expr);
   }
 
-  protected:
+protected:
   /**
    * @brief called by my_get_next_row(), get a row from the child operator or row_store
    * @param ctx[in], execute context
@@ -184,10 +184,10 @@ class ObTableUpdate : public ObTableModify {
   int build_lock_row(ObTableUpdateCtx& update_ctx, const common::ObNewRow& old_row) const;
   int do_table_update(ObExecContext& ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableUpdate);
 
-  protected:
+protected:
   common::ObFixedArray<uint64_t, common::ObIAllocator> updated_column_ids_;
   common::ObFixedArray<ColumnContent, common::ObIAllocator> updated_column_infos_;
   bool is_global_index_;

@@ -23,7 +23,7 @@
 namespace oceanbase {
 namespace share {
 struct ObPGPartitionMTUpdateItem {
-  public:
+public:
   ObPGPartitionMTUpdateItem()
   {
     reset();
@@ -53,7 +53,7 @@ struct ObPGPartitionMTUpdateItem {
 };
 
 class ObPGPartitionMTUpdateOperator {
-  public:
+public:
   ObPGPartitionMTUpdateOperator() = default;
   virtual ~ObPGPartitionMTUpdateOperator() = default;
   static int batch_update(const common::ObIArray<ObPGPartitionMTUpdateItem>& items, common::ObMySQLProxy& proxy);
@@ -67,7 +67,7 @@ class ObPGPartitionMTUpdateOperator {
   static int check_table_checksum(
       const uint64_t data_table_id, const uint64_t index_id, common::ObMySQLProxy& sql_proxy, bool& is_checksum_valid);
 
-  private:
+private:
   static int fill_one_item_(const ObPGPartitionMTUpdateItem& item, share::ObDMLSqlSplicer& dml);
   static int remove_one_item_(const ObPGPartitionMTUpdateItem& item, common::ObMySQLProxy& sql_proxy);
   static int get_checksum(const common::ObSqlString& sql, common::ObIArray<ObPGPartitionMTUpdateItem>& items,

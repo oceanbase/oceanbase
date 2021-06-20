@@ -26,7 +26,7 @@ struct ObPartitionKey;
 class ObColumnStatValueHandle;
 class ObTableStat;
 class ObColumnStatDataService {
-  public:
+public:
   virtual ~ObColumnStatDataService()
   {}
   virtual int get_column_stat(const ObColumnStat::Key& key, const bool force_new, ObColumnStatValueHandle& handle) = 0;
@@ -42,14 +42,14 @@ class ObColumnStatDataService {
 };
 
 class ObTableStatDataService {
-  public:
+public:
   virtual ~ObTableStatDataService()
   {}
   virtual int get_table_stat(const ObPartitionKey& key, ObTableStat& tstat) = 0;
 };
 
 class ObStatManager {
-  public:
+public:
   ObStatManager();
   virtual ~ObStatManager();
 
@@ -58,7 +58,7 @@ class ObStatManager {
   static ObStatManager& get_instance();
   static const ObTableStat& get_default_table_stat();
 
-  public:
+public:
   int update_column_stat(const ObColumnStat& cstat);
   /**
    * item in column_stats must not NULL, or will return OB_ERR_UNEXPECTED
@@ -76,10 +76,10 @@ class ObStatManager {
   int erase_table_stat(const common::ObPartitionKey& pkey);
   int erase_column_stat(const common::ObPartitionKey& pkey, const int64_t column_id);
 
-  private:
+private:
   int get_column_stat(const ObColumnStat::Key& key, ObColumnStatValueHandle& handle);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStatManager);
   ObColumnStatDataService* column_stat_service_;
   ObTableStatDataService* table_stat_service_;

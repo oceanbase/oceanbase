@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLockUserStmt : public ObDDLStmt {
-  public:
+public:
   ObLockUserStmt();
   explicit ObLockUserStmt(common::ObIAllocator* name_pool);
   virtual ~ObLockUserStmt();
@@ -53,13 +53,13 @@ class ObLockUserStmt : public ObDDLStmt {
     return true;
   }
 
-  private:
+private:
   // data members
   uint64_t tenant_id_;
   common::ObStrings user_;  // user1,host1; usr2,host2;...
   bool locked_;
   obrpc::ObLockUserArg lock_user_arg_;  // for returning exec_tenant_id_
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLockUserStmt);
 };
 }  // end namespace sql

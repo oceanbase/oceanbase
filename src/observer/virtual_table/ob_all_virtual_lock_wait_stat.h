@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualLockWaitStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualLockWaitStat() : node_iter_(NULL)
   {}
   virtual ~ObAllVirtualLockWaitStat()
@@ -27,15 +27,15 @@ class ObAllVirtualLockWaitStat : public common::ObVirtualTableScannerIterator {
     reset();
   }
 
-  public:
+public:
   virtual int inner_open();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   int make_this_ready_to_read();
 
-  private:
+private:
   enum {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -57,7 +57,7 @@ class ObAllVirtualLockWaitStat : public common::ObVirtualTableScannerIterator {
   rpc::ObLockWaitNode cur_node_;
   rpc::ObLockWaitNode* node_iter_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualLockWaitStat);
 };
 

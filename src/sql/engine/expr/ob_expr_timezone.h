@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprBaseTimezone : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprBaseTimezone(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, const bool is_sessiontimezone);
   virtual ~ObExprBaseTimezone()
@@ -26,15 +26,15 @@ class ObExprBaseTimezone : public ObFuncExprOperator {
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const = 0;
 
-  private:
+private:
   bool is_sessiontimezone_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBaseTimezone);
 };
 
 class ObExprSessiontimezone : public ObExprBaseTimezone {
-  public:
+public:
   explicit ObExprSessiontimezone(common::ObIAllocator& alloc);
   virtual ~ObExprSessiontimezone()
   {}
@@ -42,12 +42,12 @@ class ObExprSessiontimezone : public ObExprBaseTimezone {
   static int eval_session_timezone(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSessiontimezone);
 };
 
 class ObExprDbtimezone : public ObExprBaseTimezone {
-  public:
+public:
   explicit ObExprDbtimezone(common::ObIAllocator& alloc);
   virtual ~ObExprDbtimezone()
   {}
@@ -55,7 +55,7 @@ class ObExprDbtimezone : public ObExprBaseTimezone {
   static int eval_db_timezone(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDbtimezone);
 };
 

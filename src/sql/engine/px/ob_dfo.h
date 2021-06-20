@@ -46,7 +46,7 @@ class ObSqcTaskMgr;
 class ObPxSqcHandler;
 
 class ObPxTaskMeta {
-  public:
+public:
   ObPxTaskMeta()
       : exec_addr_(),
         sqc_id_(common::OB_INVALID_INDEX),
@@ -88,7 +88,7 @@ class ObPxTaskMeta {
   }
   TO_STRING_KV(K_(exec_addr), K_(sqc_id), K_(task_id));
 
-  private:
+private:
   common::ObAddr exec_addr_;
   int64_t sqc_id_;
   int64_t task_id_;
@@ -99,11 +99,11 @@ class ObPxTaskMeta {
 class ObPxSqcMeta {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   struct PartitionIdValue {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     PartitionIdValue() : partition_id_(0), location_idx_(0), value_begin_idx_(0), value_count_(0)
     {}
     int64_t partition_id_;
@@ -113,7 +113,7 @@ class ObPxSqcMeta {
     TO_STRING_KV(K_(partition_id), K_(location_idx), K_(value_begin_idx), K_(value_count));
   };
 
-  public:
+public:
   ObPxSqcMeta()
       : execution_id_(common::OB_INVALID_ID),
         qc_id_(common::OB_INVALID_ID),
@@ -437,7 +437,7 @@ class ObPxSqcMeta {
       K_(px_int_id), K_(is_fulltree), K_(is_rpc_worker), K_(transmit_use_interm_result), K_(recieve_use_interm_result),
       K(interm_result_ids_));
 
-  private:
+private:
   uint64_t execution_id_;
   uint64_t qc_id_;
   int64_t sqc_id_;
@@ -481,10 +481,10 @@ class ObDfo {
   friend class ObDfoMgr;
   using TaskFilterFunc = std::function<bool(const ObPxTaskChSet&)>;
 
-  public:
+public:
   static const int64_t MAX_DFO_ID = INT32_MAX;
 
-  public:
+public:
   ObDfo(common::ObIAllocator& allocator)
       : allocator_(allocator),
         execution_id_(common::OB_INVALID_ID),
@@ -900,13 +900,13 @@ class ObDfo {
       K_(has_scan), K_(sqcs), KP_(depend_sibling), KP_(parent), "child", get_child_count(), K_(slave_mapping_type),
       K_(dist_method));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDfo);
 
-  private:
+private:
   int calc_total_task_count();
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   uint64_t execution_id_;
   uint64_t qc_id_;
@@ -954,7 +954,7 @@ class ObDfo {
 struct ObPxRpcInitSqcArgs {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxRpcInitSqcArgs()
       : sqc_(),
         exec_ctx_(NULL),
@@ -982,7 +982,7 @@ struct ObPxRpcInitSqcArgs {
   }
   TO_STRING_KV(K_(sqc));
 
-  public:
+public:
   ObPxSqcMeta sqc_;
   ObExecContext* exec_ctx_;
   const ObPhysicalPlan* ser_phy_plan_;
@@ -1000,7 +1000,7 @@ struct ObPxRpcInitSqcArgs {
 class ObPxTask {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxTask()
       : qc_id_(common::OB_INVALID_ID),
         dfo_id_(0),
@@ -1042,7 +1042,7 @@ class ObPxTask {
     return *this;
   }
 
-  public:
+public:
   TO_STRING_KV(K_(qc_id), K_(dfo_id), K_(sqc_id), K_(task_id), K_(execution_id), K_(sqc_ch_info), K_(task_ch_info),
       K_(sqc_addr), K_(exec_addr), K_(qc_addr), K_(rc), K_(task_co_id), K_(px_int_id), K_(is_fulltree),
       K_(affected_rows), K_(dml_row_info));
@@ -1199,11 +1199,11 @@ class ObPxTask {
     return affected_rows_;
   }
 
-  public:
+public:
   // if less than 0, rc is set. task default ret is 1
   static const int64_t TASK_DEFAULT_RET_VALUE = 1;
 
-  public:
+public:
   uint64_t qc_id_;
   int64_t dfo_id_;
   int64_t sqc_id_;
@@ -1229,7 +1229,7 @@ class ObPxTask {
 class ObPxRpcInitTaskArgs {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxRpcInitTaskArgs()
       : task_(),
         exec_ctx_(NULL),
@@ -1293,7 +1293,7 @@ class ObPxRpcInitTaskArgs {
   }
   TO_STRING_KV(K_(task));
 
-  public:
+public:
   ObPxTask task_;
   ObExecContext* exec_ctx_;
   const ObPhysicalPlan* ser_phy_plan_;
@@ -1309,31 +1309,31 @@ class ObPxRpcInitTaskArgs {
 struct ObPxRpcInitTaskResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxRpcInitTaskResponse() : task_co_id_(0)
   {}
   TO_STRING_KV(K_(task_co_id));
 
-  public:
+public:
   uint64_t task_co_id_;
 };
 
 struct ObPxRpcInitSqcResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxRpcInitSqcResponse() : rc_(common::OB_NOT_INIT), reserved_thread_count_(0), partitions_info_()
   {}
   TO_STRING_KV(K_(rc), K_(reserved_thread_count));
 
-  public:
+public:
   int rc_;
   int64_t reserved_thread_count_;
   ObSEArray<ObPxPartitionInfo, 8> partitions_info_;
 };
 
 class ObPxWorkerEnvArgs {
-  public:
+public:
   ObPxWorkerEnvArgs()
       : trace_id_(nullptr),
         log_level_(OB_LOG_LEVEL_NONE),
@@ -1406,7 +1406,7 @@ class ObPxWorkerEnvArgs {
     return group_id_;
   }
 
-  private:
+private:
   const uint64_t* trace_id_;
   uint8_t log_level_;
   bool is_oracle_mode_;
@@ -1416,7 +1416,7 @@ class ObPxWorkerEnvArgs {
 };
 
 class ObExecCtxDfoRootOpGuard {
-  public:
+public:
   ObExecCtxDfoRootOpGuard(ObExecContext* exec_ctx, const ObPhyOperator* op)
   {
     exec_ctx_ = NULL;
@@ -1434,7 +1434,7 @@ class ObExecCtxDfoRootOpGuard {
     }
   }
 
-  private:
+private:
   ObExecContext* exec_ctx_;
   const ObPhyOperator* op_;
   DISALLOW_COPY_AND_ASSIGN(ObExecCtxDfoRootOpGuard);

@@ -21,7 +21,7 @@ namespace sql {
 class ObCountSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObCountSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(rownum_limit), K_(anti_monotone_filters));
 
@@ -30,7 +30,7 @@ class ObCountSpec : public ObOpSpec {
 };
 
 class ObCountOp : public ObOperator {
-  public:
+public:
   ObCountOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;
@@ -52,12 +52,12 @@ class ObCountOp : public ObOperator {
     return cur_rownum_;
   }
 
-  private:
+private:
   // reset default value of %cur_rownum_ && %rownum_limit_
   void reset_default();
   int get_rownum_limit();
 
-  private:
+private:
   int64_t cur_rownum_;
   int64_t rownum_limit_;
 };

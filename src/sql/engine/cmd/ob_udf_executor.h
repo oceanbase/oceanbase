@@ -28,7 +28,7 @@ class ObExecContext;
 class ObRawExpr;
 class ObCreateFuncStmt;
 class ObCreateFuncExecutor {
-  public:
+public:
   const static int OB_DEFAULT_ARRAY_SIZE = 16;
   ObCreateFuncExecutor()
   {}
@@ -36,20 +36,20 @@ class ObCreateFuncExecutor {
   {}
   int execute(ObExecContext& ctx, ObCreateFuncStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateFuncExecutor);
 };
 
 class ObDropFuncStmt;
 class ObDropFuncExecutor {
-  public:
+public:
   ObDropFuncExecutor()
   {}
   virtual ~ObDropFuncExecutor()
   {}
   int execute(ObExecContext& ctx, ObDropFuncStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDropFuncExecutor);
 };
 }  // namespace sql

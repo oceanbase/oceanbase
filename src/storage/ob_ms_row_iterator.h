@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObMSRowIterator : public ObIStoreRowIterator {
-  public:
+public:
   ObMSRowIterator();
   ~ObMSRowIterator();
   int init(ObTablesHandle& tables_handle, const share::schema::ObTableSchema& table_schema, ObExtStoreRange& range,
@@ -32,12 +32,12 @@ class ObMSRowIterator : public ObIStoreRowIterator {
   void reuse();
   int get_next_row(const storage::ObStoreRow*& store_row);
 
-  private:
+private:
   int init_merge_param(ObTablesHandle& tables_handle, const share::schema::ObTableSchema& table_schema,
       const ObVersionRange& version_range);
   int inner_get_next();
 
-  private:
+private:
   bool is_inited_;
   common::ObArenaAllocator allocator_;
   compaction::ObIPartitionMergeFuser::MERGE_ITER_ARRAY macro_row_iters_;  // Store all macro_row_iter corresponding to

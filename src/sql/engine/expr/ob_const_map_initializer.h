@@ -29,7 +29,7 @@ namespace sql {
 
 template <typename MyClass>
 class ObConstMap {
-  public:
+public:
   typedef int (*InitFunction)(MyClass& member);
 
   explicit ObConstMap(InitFunction init_f) : is_inited_(false), init_f_(init_f)
@@ -52,7 +52,7 @@ class ObConstMap {
     return member_;
   }
 
-  protected:
+protected:
   bool is_inited_;
   InitFunction init_f_;
   MyClass member_;

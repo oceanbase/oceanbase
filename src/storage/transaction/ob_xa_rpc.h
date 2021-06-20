@@ -33,7 +33,7 @@ static const int64_t OB_XA_RPC_TIMEOUT = 5000000;
 class ObXAPrepareRPCRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObXAPrepareRPCRequest()
   {}
   ~ObXAPrepareRPCRequest()
@@ -57,7 +57,7 @@ class ObXAPrepareRPCRequest {
   }
   TO_STRING_KV(K_(trans_id), K_(xid), K_(stmt_timeout));
 
-  private:
+private:
   transaction::ObTransID trans_id_;
   transaction::ObXATransID xid_;
   int64_t stmt_timeout_;
@@ -66,7 +66,7 @@ class ObXAPrepareRPCRequest {
 class ObXAEndTransRPCRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObXAEndTransRPCRequest()
   {}
   ~ObXAEndTransRPCRequest()
@@ -99,7 +99,7 @@ class ObXAEndTransRPCRequest {
   }
   TO_STRING_KV(K_(trans_id), K_(xid), K_(is_rollback), K_(is_terminated));
 
-  private:
+private:
   transaction::ObTransID trans_id_;
   transaction::ObXATransID xid_;
   bool is_rollback_;
@@ -110,7 +110,7 @@ class ObXAEndTransRPCRequest {
 class ObXASyncStatusRPCRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObXASyncStatusRPCRequest()
   {}
   ~ObXASyncStatusRPCRequest()
@@ -160,7 +160,7 @@ class ObXASyncStatusRPCRequest {
   TO_STRING_KV(K_(trans_id), K_(xid), K_(sender), K_(is_new_branch), K_(is_stmt_pull), K_(is_tightly_coupled),
       K_(pull_trans_desc), K_(timeout_seconds));
 
-  private:
+private:
   transaction::ObTransID trans_id_;
   transaction::ObXATransID xid_;
   common::ObAddr sender_;
@@ -175,7 +175,7 @@ class ObXASyncStatusRPCRequest {
 class ObXASyncStatusRPCResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObXASyncStatusRPCResponse()
   {}
   ~ObXASyncStatusRPCResponse()
@@ -195,7 +195,7 @@ class ObXASyncStatusRPCResponse {
   }
   TO_STRING_KV(K_(trans_desc), K_(is_stmt_pull));
 
-  private:
+private:
   transaction::ObTransDesc trans_desc_;
   bool is_stmt_pull_;
 };
@@ -203,7 +203,7 @@ class ObXASyncStatusRPCResponse {
 class ObXAMergeStatusRPCRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObXAMergeStatusRPCRequest()
   {}
   ~ObXAMergeStatusRPCRequest()
@@ -236,7 +236,7 @@ class ObXAMergeStatusRPCRequest {
   }
   TO_STRING_KV(K_(trans_desc), K_(is_stmt_push), K_(is_tightly_coupled), K_(xid), K_(seq_no));
 
-  private:
+private:
   transaction::ObTransDesc trans_desc_;
   bool is_stmt_push_;
   bool is_tightly_coupled_;
@@ -247,7 +247,7 @@ class ObXAMergeStatusRPCRequest {
 class ObXAHbRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObXAHbRequest()
   {}
   ~ObXAHbRequest()
@@ -271,7 +271,7 @@ class ObXAHbRequest {
   }
   TO_STRING_KV(K_(trans_id), K_(xid), K_(sender));
 
-  private:
+private:
   transaction::ObTransID trans_id_;
   transaction::ObXATransID xid_;
   common::ObAddr sender_;
@@ -296,7 +296,7 @@ private:
 };*/
 
 class ObXARpcProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObXARpcProxy);
   RPC_AP(PR1 xa_prepare, OB_XA_PREPARE, (ObXAPrepareRPCRequest), Int64);
   RPC_AP(PR1 xa_end_trans, OB_XA_END_TRANS, (ObXAEndTransRPCRequest), Int64);
@@ -308,113 +308,113 @@ class ObXARpcProxy : public ObRpcProxy {
 };
 
 class ObXAPrepareP : public ObRpcProcessor<ObXARpcProxy::ObRpc<OB_XA_PREPARE>> {
-  public:
+public:
   explicit ObXAPrepareP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXAPrepareP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 class ObXAEndTransP : public ObRpcProcessor<ObXARpcProxy::ObRpc<OB_XA_END_TRANS>> {
-  public:
+public:
   explicit ObXAEndTransP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXAEndTransP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 class ObXASyncStatusP : public ObRpcProcessor<ObXARpcProxy::ObRpc<OB_XA_SYNC_STATUS>> {
-  public:
+public:
   explicit ObXASyncStatusP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXASyncStatusP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 class ObXASyncStatusResponseP : public ObRpcProcessor<ObXARpcProxy::ObRpc<OB_XA_SYNC_STATUS_RESPONSE>> {
-  public:
+public:
   explicit ObXASyncStatusResponseP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXASyncStatusResponseP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 class ObXAMergeStatusP : public ObRpcProcessor<ObXARpcProxy::ObRpc<OB_XA_MERGE_STATUS>> {
-  public:
+public:
   explicit ObXAMergeStatusP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXAMergeStatusP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 class ObXAHbReqP : public ObRpcProcessor<ObXARpcProxy::ObRpc<OB_XA_HB_REQ>> {
-  public:
+public:
   explicit ObXAHbReqP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXAHbReqP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 class ObXAHbRespP : public ObRpcProcessor<ObXARpcProxy::ObRpc<OB_XA_HB_RESP>> {
-  public:
+public:
   explicit ObXAHbRespP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObXAHbRespP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 template <ObRpcPacketCode PC>
 class ObXARPCCB : public ObXARpcProxy::AsyncCB<PC> {
-  public:
+public:
   ObXARPCCB() : is_inited_(false), cond_(NULL)
   {}
   ~ObXARPCCB()
@@ -482,7 +482,7 @@ class ObXARPCCB : public ObXARpcProxy::AsyncCB<PC> {
     }
   }
 
-  private:
+private:
   bool is_inited_;
   transaction::ObTransCond* cond_;
 };
@@ -494,7 +494,7 @@ using namespace obrpc;
 namespace transaction {
 
 class ObIXARpc {
-  public:
+public:
   ObIXARpc()
   {}
   virtual ~ObIXARpc()
@@ -504,7 +504,7 @@ class ObIXARpc {
   virtual int wait() = 0;
   virtual void destroy() = 0;
 
-  public:
+public:
   virtual int xa_prepare(const uint64_t tenant_id, const common::ObAddr& server, const ObXAPrepareRPCRequest& req,
       ObXARPCCB<OB_XA_PREPARE>& cb) = 0;
   virtual int xa_end_trans(const uint64_t tenant_id, const common::ObAddr& server, const ObXAEndTransRPCRequest& req,
@@ -522,7 +522,7 @@ class ObIXARpc {
 };
 
 class ObXARpc : public ObIXARpc {
-  public:
+public:
   ObXARpc() : is_inited_(false), is_running_(false), rpc_proxy_(NULL)
   {}
   ~ObXARpc()
@@ -535,7 +535,7 @@ class ObXARpc : public ObIXARpc {
   int wait();
   void destroy();
 
-  public:
+public:
   int xa_prepare(const uint64_t tenant_id, const common::ObAddr& server, const ObXAPrepareRPCRequest& req,
       ObXARPCCB<OB_XA_PREPARE>& cb);
   int xa_end_trans(const uint64_t tenant_id, const common::ObAddr& server, const ObXAEndTransRPCRequest& req,
@@ -551,7 +551,7 @@ class ObXARpc : public ObIXARpc {
   int xa_hb_resp(
       const uint64_t tenant_id, const common::ObAddr& server, const ObXAHbResponse& resp, ObXARPCCB<OB_XA_HB_RESP>* cb);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   ObXARpcProxy* rpc_proxy_;

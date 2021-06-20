@@ -95,7 +95,7 @@ class ObTenantBase {
   template <class T>
   struct Identity {};
 
-  public:
+public:
   explicit ObTenantBase(const int64_t id);
 
   int init();
@@ -122,11 +122,11 @@ class ObTenantBase {
     return obj;
   }
 
-  private:
+private:
   ObTenantBase();
 
 #define MEMBER(TYPE, IDX)                                                         \
-  public:                                                                         \
+public:                                                                           \
   typedef int (*init_m##IDX##_func_name)(TYPE&);                                  \
   typedef void (*destory_m##IDX##_func_name)(TYPE&);                              \
   static void mtl_bind_init_and_destory_func(                                     \
@@ -136,7 +136,7 @@ class ObTenantBase {
     destory_m##IDX##_func = destory_func;                                         \
   }                                                                               \
                                                                                   \
-  private:                                                                        \
+private:                                                                          \
   TYPE inner_get(Identity<TYPE>)                                                  \
   {                                                                               \
     return m##IDX##_;                                                             \
@@ -147,10 +147,10 @@ class ObTenantBase {
 
   LST_DO2(MEMBER, (), MTL_MEMBERS);
 
-  protected:
+protected:
   virtual int unlock(common::ObLDHandle& handle) = 0;
 
-  protected:
+protected:
   // tenant id
   const uint64_t id_;
   bool inited_;

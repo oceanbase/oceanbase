@@ -46,17 +46,17 @@ struct ObStoreFormatItem {
 };
 
 class ObStoreFormat {
-  public:
+public:
   static const ObStoreFormatType STORE_FORMAT_MYSQL_START = OB_STORE_FORMAT_REDUNDANT_MYSQL;
   static const ObStoreFormatType STORE_FORMAT_MYSQL_DEFAULT = OB_STORE_FORMAT_COMPACT_MYSQL;
   static const ObStoreFormatType STORE_FORMAT_ORACLE_START = OB_STORE_FORMAT_NOCOMPRESS_ORACLE;
   static const ObStoreFormatType STORE_FORMAT_ORACLE_DEFAULT = OB_STORE_FORMAT_OLTP_ORACLE;
 
-  private:
+private:
   ObStoreFormat(){};
   virtual ~ObStoreFormat(){};
 
-  public:
+public:
   static inline bool is_row_store_type_valid(const ObRowStoreType type)
   {
     return type == FLAT_ROW_STORE || type == SPARSE_ROW_STORE;
@@ -111,7 +111,7 @@ class ObStoreFormat {
   static int find_store_format_type(
       const ObString& store_format, const bool is_oracle_mode, ObStoreFormatType& store_format_type);
 
-  private:
+private:
   static const ObStoreFormatItem store_format_items[OB_STORE_FORMAT_MAX];
   static const char* row_store_name[MAX_ROW_STORE];
 };

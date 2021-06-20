@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObSearchMethodOp {
-  public:
+public:
   typedef struct _BreadthFirstSearchTreeNode {
     _BreadthFirstSearchTreeNode() : child_num_(0), stored_row_(nullptr), children_(nullptr), parent_(nullptr)
     {}
@@ -97,14 +97,14 @@ class ObSearchMethodOp {
       return bret;
     }
 
-    private:
+  private:
     const common::ObIArray<ObSortFieldCollation>& sort_collations_;
     const common::ObIArray<ObExpr*>& exprs_;
     int* err_;
   };
 
   class ObCycleHash {
-    public:
+  public:
     ObCycleHash() : row_(NULL), hash_col_idx_(NULL), exprs_(NULL), hash_val_(0)
     {}
     ObCycleHash(const ObChunkDatumStore::StoredRow* row, const common::ObIArray<uint64_t>* hash_col_idx,
@@ -125,7 +125,7 @@ class ObSearchMethodOp {
     uint64_t inner_hash() const;
     bool operator==(const ObCycleHash& other) const;
 
-    public:
+  public:
     const ObChunkDatumStore::StoredRow* row_;
     const common::ObIArray<uint64_t>* hash_col_idx_;
     const common::ObIArray<ObExpr*>* exprs_;
@@ -136,7 +136,7 @@ class ObSearchMethodOp {
   // initial size of hash table for loop search
   static const int64_t CTE_SET_NUM = 1 << 5l;
 
-  public:
+public:
   explicit ObSearchMethodOp(common::ObIAllocator& allocator, const ExprFixedArray& left_output,
       const common::ObIArray<ObSortFieldCollation>& sort_collations, const common::ObIArray<uint64_t>& cycle_by_columns)
       : allocator_(allocator),
@@ -163,7 +163,7 @@ class ObSearchMethodOp {
   }
   const static int64_t ROW_EXTRA_SIZE = 0;
 
-  protected:
+protected:
   // hard code seed, 24bit max prime number
   static const int64_t HASH_SEED = 16777213;
   common::ObIAllocator& allocator_;
@@ -177,7 +177,7 @@ class ObSearchMethodOp {
 class ObDepthFisrtSearchOp : public ObSearchMethodOp {
   typedef common::hash::ObHashSet<ObCycleHash, common::hash::NoPthreadDefendMode> RowMap;
 
-  public:
+public:
   ObDepthFisrtSearchOp(common::ObIAllocator& allocator, const ExprFixedArray& left_output,
       const common::ObIArray<ObSortFieldCollation>& sort_collations, const common::ObIArray<uint64_t>& cycle_by_columns)
       : ObSearchMethodOp(allocator, left_output, sort_collations, cycle_by_columns),
@@ -206,10 +206,10 @@ class ObDepthFisrtSearchOp : public ObSearchMethodOp {
   int get_next_non_cycle_node(
       common::ObList<ObTreeNode, common::ObIAllocator>& result_output, ObTreeNode& node) override;
 
-  private:
+private:
   int is_depth_cycle_node(ObTreeNode& node);
 
-  private:
+private:
   RowMap hash_filter_rows_;
   common::ObSEArray<uint64_t, 32> hash_col_idx_;
   // record level of current row in the tree.
@@ -219,7 +219,7 @@ class ObDepthFisrtSearchOp : public ObSearchMethodOp {
 };
 
 class ObBreadthFisrtSearchOp : public ObSearchMethodOp {
-  public:
+public:
   ObBreadthFisrtSearchOp(common::ObIAllocator& allocator, const ExprFixedArray& left_output,
       const common::ObIArray<ObSortFieldCollation>& sort_collations, const common::ObIArray<uint64_t>& cycle_by_columns)
       : ObSearchMethodOp(allocator, left_output, sort_collations, cycle_by_columns),
@@ -242,12 +242,12 @@ class ObBreadthFisrtSearchOp : public ObSearchMethodOp {
       common::ObList<ObTreeNode, common::ObIAllocator>& result_output, ObTreeNode& node) override;
   int update_parent_node(ObTreeNode& node);
 
-  private:
+private:
   int init_new_nodes(ObBFSTreeNode* last_bstnode, int64_t child_num);
   int is_breadth_cycle_node(ObTreeNode& node);
   int add_new_level();
 
-  private:
+private:
   ObBFSTreeNode bst_root_;
   /**
    *            A

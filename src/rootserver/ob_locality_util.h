@@ -49,7 +49,7 @@ namespace rootserver {
  *   b flush table/tablegroup/table schema locally
  */
 class ObLocalityDistribution {
-  public:
+public:
   ObLocalityDistribution() : zone_set_replica_dist_array_(), is_inited_(false), can_output_normalized_locality_(false)
   {
     reset();
@@ -57,7 +57,7 @@ class ObLocalityDistribution {
   virtual ~ObLocalityDistribution()
   {}
 
-  public:
+public:
   int init();
   void reset();
   int parse_multiple_zone(const common::ObString& locality, const common::ObIArray<common::ObZone>& zone_list,
@@ -74,17 +74,17 @@ class ObLocalityDistribution {
   int get_zone_replica_num(const common::ObZone& zone, share::ObReplicaNumSet& replica_num_set);
   int get_zone_replica_num(const common::ObZone& zone, share::ObZoneReplicaAttrSet& zone_replica_num_set);
 
-  public:
+public:
   static const int64_t ALL_SERVER_CNT = INT64_MAX;
 
-  private:
+private:
   typedef int32_t ReplicaTypeID;
   static const int32_t FULL_REPLICA = 0;
   static const int32_t LOGONLY_REPLICA = 1;
   static const int32_t READONLY_REPLICA = 2;
   static const int32_t REPLICA_TYPE_MAX = 3;
 
-  private:
+private:
   static const int64_t MAX_BUCKET_NUM = 2 * common::MAX_ZONE_NUM;
   static const int64_t INVALID_CURSOR = -1;
   static const int64_t INVALID_COUNT = -1;
@@ -103,21 +103,21 @@ class ObLocalityDistribution {
 
   static const int64_t MAX_MEMSTORE_PERCENT = 100;
 
-  private:
+private:
   // use to save the replica distribution for zone set
   // zone set is accumulated using a zone array zone_set_
   class ZoneSetReplicaDist {
-    public:
+  public:
     bool operator<(const ZoneSetReplicaDist& that);
 
-    public:
+  public:
     ZoneSetReplicaDist() : zone_set_(), all_replica_attr_array_()
     {
       reset();
     }
     ~ZoneSetReplicaDist()
     {}  // no one shall derive from this
-    public:
+  public:
     typedef common::ObSEArray<share::ReplicaAttr, 7, common::ObNullAllocator> ReplicaAttrArray;
     int assign(const ZoneSetReplicaDist& that);
     void reset();
@@ -162,7 +162,7 @@ class ObLocalityDistribution {
       return zone_set_;
     }
 
-    public:
+  public:
     int format_to_locality_str(char* buf, int64_t buf_len, int64_t& pos) const;
     bool need_format_to_locality_str() const;
     int try_set_specific_replica_dist(
@@ -173,14 +173,14 @@ class ObLocalityDistribution {
         "logonly_replica_attr", all_replica_attr_array_[LOGONLY_REPLICA], "readonly_replica_attr",
         all_replica_attr_array_[READONLY_REPLICA]);
 
-    private:
+  private:
     bool specific_replica_need_format(const ReplicaTypeID replica_type) const;
     int replica_type_to_str(const ReplicaTypeID replica_type, const char*& replica_type_str) const;
     int format_specific_replica(
         const ReplicaTypeID replica_type, char* buf, int64_t buf_len, int64_t& pos, bool& start_format) const;
     int format_zone_set(char* buf, int64_t buf_len, int64_t& pos) const;
 
-    private:
+  private:
     // zone_set_ is a array with the maximum elements of seven
     common::ObSEArray<common::ObZone, 7, common::ObNullAllocator> zone_set_;
     ReplicaAttrArray all_replica_attr_array_[REPLICA_TYPE_MAX];
@@ -188,17 +188,17 @@ class ObLocalityDistribution {
   class RawLocalityIter {
     // we call "F{2},L@zone1" a sub_locality of the locality "F{2},L@zone1, F{1},L{1}@zone2"
     // and we call 'F{2}' a replica_arrangement of the sub_locality
-    public:
+  public:
     RawLocalityIter(const common::ObString& locality)
         : locality_(locality), locality_str_(), locality_str_len_(0), pos_(0), output_cnt_(0)
     {}
     ~RawLocalityIter()
     {}  // no one shall derive from this
-    public:
+  public:
     int init();
     int get_next_zone_set_replica_dist(ZoneSetReplicaDist& zone_replica_dist);
 
-    private:
+  private:
     static const char AT_TOKEN = '@';
     static const char BLANK_TOKEN = ' ';
     static const char LEFT_BRACE_TOKEN = '{';
@@ -209,7 +209,7 @@ class ObLocalityDistribution {
     static const char LEFT_BRACKET_TOKEN = '[';
     static const char RIGHT_BRACKET_TOKEN = ']';
 
-    private:
+  private:
     void jump_over_blanks(int64_t& cursor, int64_t end);
     void inc_cursor(int64_t& cursor);
     int check_iter_end(int64_t pre_pos);
@@ -233,7 +233,7 @@ class ObLocalityDistribution {
     int get_zone_set_without_bracket(int64_t& cursor, const int64_t end, ZoneSetReplicaDist& zone_set_replica_dist);
     int get_single_zone_name(int64_t& cursor, const int64_t end, ZoneSetReplicaDist& zone_set_replica_dist);
 
-    private:
+  private:
     const common::ObString& locality_;
     char locality_str_[common::MAX_LOCALITY_LENGTH + 1];
     int64_t locality_str_len_;
@@ -241,7 +241,7 @@ class ObLocalityDistribution {
     int64_t output_cnt_;
   };
 
-  private:
+private:
   int check_zone_set_legal(const common::ObIArray<common::ObZone>& zone_set,
       const common::ObIArray<common::ObZone>& zone_list, bool& is_legal);
   int check_zone_name_duplicate(const ZoneSetReplicaDist& zone_set_replica_dist,
@@ -253,7 +253,7 @@ class ObLocalityDistribution {
   int convert_zone_list(
       const common::ObIArray<common::ObString>& zone_list_input, common::ObIArray<common::ObZone>& zone_list_output);
 
-  private:
+private:
   common::ObArray<ZoneSetReplicaDist> zone_set_replica_dist_array_;
   bool is_inited_;
   bool can_output_normalized_locality_;

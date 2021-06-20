@@ -31,7 +31,7 @@ class ObTokenCalcer {
   friend class TTC;
   //  Tenant of Token Cacler
   class TTC {
-    public:
+  public:
     void prepare(ObTenant* tenant);
     void revise_min_max_tokens(int64_t& avail_tokens);
 
@@ -63,11 +63,11 @@ class ObTokenCalcer {
 
     DECLARE_TO_STRING;
 
-    private:
+  private:
     double min_slice() const;
     double max_slice() const;
 
-    private:
+  private:
     ObTenant* tenant_;
     double weight_;
     int64_t min_tokens_;
@@ -77,11 +77,11 @@ class ObTokenCalcer {
   };
   using TTCVec = TTC[MAX_TENANT_COUNT];
 
-  public:
+public:
   explicit ObTokenCalcer(ObMultiTenant& omt);
   int calculate();
 
-  private:
+private:
   // Prepare tenants who's tokens should be calculated. It includes
   // two steps, filter out legal tenants and calculate min/max tokens
   // this round for tenant.
@@ -122,7 +122,7 @@ class ObTokenCalcer {
   // number of tokens, target tokens larger than max or less than min.
   bool adjust_tenants(double& total_weights, int64_t& total_tokens, int64_t& offset);
 
-  private:
+private:
   ObMultiTenant& omt_;
   // Number of tenants that participate in the reassignment of tokens.
   int64_t nttc_;

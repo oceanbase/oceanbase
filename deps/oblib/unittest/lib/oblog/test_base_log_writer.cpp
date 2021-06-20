@@ -19,7 +19,7 @@ using namespace ::oblib;
 namespace oceanbase {
 namespace common {
 class ObTLogItem : public ObIBaseLogItem {
-  public:
+public:
   ObTLogItem()
   {}
   virtual ~ObTLogItem()
@@ -43,14 +43,14 @@ class ObTLogItem : public ObIBaseLogItem {
 };
 
 class ObTLogWriter : public ObBaseLogWriter {
-  public:
+public:
   ObTLogWriter() : process_cnt_(0)
   {}
   virtual ~ObTLogWriter()
   {}
   int64_t process_cnt_;
 
-  protected:
+protected:
   virtual void process_log_items(ObIBaseLogItem** items, const int64_t item_cnt, int64_t& finish_cnt);
 };
 

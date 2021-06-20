@@ -35,7 +35,7 @@ class ObVTableScanParam;
 class ObVirtualTableIterator : public ObNewRowIterator {
   static const int64_t VT_COLUMN_COUNT = 64;
 
-  public:
+public:
   ObVirtualTableIterator()
       : allocator_(NULL),
         output_column_ids_(),
@@ -53,7 +53,7 @@ class ObVirtualTableIterator : public ObNewRowIterator {
   {}
   virtual ~ObVirtualTableIterator()
   {}
-  virtual void reset();
+  virtual void reset() override;
   inline void set_allocator(common::ObIAllocator* allocator);
   inline void set_reserved_column_cnt(int64_t count);
   inline int set_output_column_ids(const common::ObIArray<uint64_t>& column_ids);
@@ -70,7 +70,7 @@ class ObVirtualTableIterator : public ObNewRowIterator {
   {
     return common::OB_SUCCESS;
   };
-  virtual int get_next_row(common::ObNewRow*& row);
+  virtual int get_next_row(common::ObNewRow*& row) override;
   virtual int inner_get_next_row(common::ObNewRow*& row) = 0;
   virtual int get_next_row() override;  // interface for static typing engine.
   virtual int close();
@@ -104,7 +104,7 @@ class ObVirtualTableIterator : public ObNewRowIterator {
   }
   VIRTUAL_TO_STRING_KV(K_(output_column_ids));
 
-  private:
+private:
   int init_convert_ctx();
   int convert_key_ranges();
   int get_key_cols(common::ObIArray<const share::schema::ObColumnSchemaV2*>& key_cols);
@@ -115,7 +115,7 @@ class ObVirtualTableIterator : public ObNewRowIterator {
   int convert_output_row(ObNewRow*& cur_row);
   int get_all_columns_schema();
 
-  protected:
+protected:
   common::ObIAllocator* allocator_;
   common::ObSEArray<uint64_t, VT_COLUMN_COUNT> output_column_ids_;
   int64_t reserved_column_cnt_;
@@ -128,7 +128,7 @@ class ObVirtualTableIterator : public ObNewRowIterator {
   common::ObSEArray<common::ObNewRange, 16> key_ranges_;
   common::ObSEArray<common::ObNewRange, 16> saved_key_ranges_;
 
-  private:
+private:
   common::ObArenaAllocator convert_alloc_;
   common::ObCastCtx cast_ctx_;
   common::ObNewRow convert_row_;
@@ -136,7 +136,7 @@ class ObVirtualTableIterator : public ObNewRowIterator {
   common::ObSEArray<const share::schema::ObColumnSchemaV2*, 16> cols_schema_;
   const ObVTableScanParam* scan_param_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObVirtualTableIterator);
 };
 

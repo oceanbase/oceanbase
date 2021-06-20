@@ -22,13 +22,13 @@ using namespace oceanbase::lib;
 namespace oceanbase {
 namespace unittest {
 class TestRecoveryDataMgr : public TestDataFilePrepare {
-  public:
+public:
   TestRecoveryDataMgr();
   virtual ~TestRecoveryDataMgr() = default;
   virtual void SetUp() override;
   virtual void TearDown() override;
 
-  private:
+private:
   int prepare_pg_meta(const int64_t replay_log_ts, const int64_t publish_version, ObPartitionGroupMeta& meta);
   int prepare_pgpartition_store_meta(ObPGPartitionStoreMeta& partition_store_meta);
   int generate_table_key(const ObITable::TableType& type, common::ObVersionRange& trans_version_range,
@@ -39,7 +39,7 @@ class TestRecoveryDataMgr : public TestDataFilePrepare {
       const int64_t major_version, const uint64_t table_id, const int64_t schema_version, ObTableHandle& handle,
       const ObLogTsRange& log_ts_range);
 
-  private:
+private:
   ObPartitionKey pg_key_;
   common::ObArenaAllocator allocator_;
 };

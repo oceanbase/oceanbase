@@ -158,7 +158,7 @@ struct ObSystemAdminCtx {
 };
 
 class ObSystemAdminUtil {
-  public:
+public:
   const static int64_t WAIT_LEADER_SWITCH_TIMEOUT_US = 10 * 1000 * 1000;  // 10s
   const static int64_t WAIT_LEADER_SWITCH_INTERVAL_US = 300 * 1000;       // 300ms
 
@@ -176,15 +176,15 @@ class ObSystemAdminUtil {
       const common::ObZone& zone, const share::ObPartitionInfo& partition, share::ObPartitionReplica*& replica,
       const ObRebalanceTaskType& task_type);
 
-  protected:
+protected:
   const ObSystemAdminCtx& ctx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSystemAdminUtil);
 };
 
 class ObAdminSwitchReplicaRole : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminSwitchReplicaRole(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminSwitchReplicaRole()
@@ -192,7 +192,7 @@ class ObAdminSwitchReplicaRole : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObAdminSwitchReplicaRoleArg& arg);
 
-  private:
+private:
   static const int64_t TENANT_BUCKET_NUM = 1000;
 
   static int alloc_tenant_id_set(common::hash::ObHashSet<uint64_t>& tenant_id_set);
@@ -212,12 +212,12 @@ class ObAdminSwitchReplicaRole : public ObSystemAdminUtil {
   int switch_replica_by_server(const common::ObAddr& server, const uint64_t& tenant_id, const common::ObRole role);
   int switch_replica_by_zone(const common::ObZone& zone, const uint64_t& tenant_id, const common::ObRole role);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminSwitchReplicaRole);
 };
 
 class ObAdminChangeReplica : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminChangeReplica(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminChangeReplica()
@@ -225,7 +225,7 @@ class ObAdminChangeReplica : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObAdminChangeReplicaArg& arg);
 
-  private:
+private:
   int build_task(const obrpc::ObAdminChangeReplicaArg& arg, const share::ObPartitionInfo& info,
       ObTypeTransformTask& task, bool force_cmd);
   int check_parameters(const obrpc::ObAdminChangeReplicaArg& arg, const share::ObPartitionInfo& info);
@@ -234,7 +234,7 @@ class ObAdminChangeReplica : public ObSystemAdminUtil {
 };
 
 class ObAdminDropReplica : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminDropReplica(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminDropReplica()
@@ -242,7 +242,7 @@ class ObAdminDropReplica : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObAdminDropReplicaArg& arg);
 
-  private:
+private:
   int before_process(const obrpc::ObAdminDropReplicaArg& arg, const share::ObPartitionInfo& info);
   int build_task(const obrpc::ObAdminDropReplicaArg& arg, const share::ObPartitionInfo& info,
       const share::ObPartitionReplica* replica, bool force_cmd);
@@ -252,12 +252,12 @@ class ObAdminDropReplica : public ObSystemAdminUtil {
       const OnlineReplica& remove_member, const common::ObPartitionKey& key, bool force_cmd);
   int wait_remove_member_finish(const obrpc::ObAdminDropReplicaArg& arg, const OnlineReplica& remove_member);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminDropReplica);
 };
 
 class ObAdminMigrateReplica : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminMigrateReplica(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminMigrateReplica()
@@ -265,16 +265,16 @@ class ObAdminMigrateReplica : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObAdminMigrateReplicaArg& arg);
 
-  private:
+private:
   int build_task(const obrpc::ObAdminMigrateReplicaArg& arg, const share::ObPartitionInfo& info, bool force_cmd);
   int check_parameters(const obrpc::ObAdminMigrateReplicaArg& arg, const share::ObPartitionInfo& info);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminMigrateReplica);
 };
 
 class ObAdminCallServer : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminCallServer(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminCallServer()
@@ -284,12 +284,12 @@ class ObAdminCallServer : public ObSystemAdminUtil {
 
   virtual int call_server(const common::ObAddr& server) = 0;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminCallServer);
 };
 
 class ObAdminReportReplica : public ObAdminCallServer {
-  public:
+public:
   explicit ObAdminReportReplica(const ObSystemAdminCtx& ctx) : ObAdminCallServer(ctx)
   {}
   virtual ~ObAdminReportReplica()
@@ -299,12 +299,12 @@ class ObAdminReportReplica : public ObAdminCallServer {
 
   virtual int call_server(const common::ObAddr& server);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminReportReplica);
 };
 
 class ObAdminRecycleReplica : public ObAdminCallServer {
-  public:
+public:
   explicit ObAdminRecycleReplica(const ObSystemAdminCtx& ctx) : ObAdminCallServer(ctx)
   {}
   virtual ~ObAdminRecycleReplica()
@@ -314,12 +314,12 @@ class ObAdminRecycleReplica : public ObAdminCallServer {
 
   virtual int call_server(const common::ObAddr& server);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminRecycleReplica);
 };
 
 class ObAdminClearLocationCache : public ObAdminCallServer {
-  public:
+public:
   explicit ObAdminClearLocationCache(const ObSystemAdminCtx& ctx) : ObAdminCallServer(ctx)
   {}
   virtual ~ObAdminClearLocationCache()
@@ -329,12 +329,12 @@ class ObAdminClearLocationCache : public ObAdminCallServer {
 
   virtual int call_server(const common::ObAddr& server);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminClearLocationCache);
 };
 
 class ObAdminReloadGts : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminReloadGts(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminReloadGts()
@@ -342,12 +342,12 @@ class ObAdminReloadGts : public ObSystemAdminUtil {
 
   int execute();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminReloadGts);
 };
 
 class ObAdminRefreshMemStat : public ObAdminCallServer {
-  public:
+public:
   explicit ObAdminRefreshMemStat(const ObSystemAdminCtx& ctx) : ObAdminCallServer(ctx)
   {}
   virtual ~ObAdminRefreshMemStat()
@@ -356,12 +356,12 @@ class ObAdminRefreshMemStat : public ObAdminCallServer {
   int execute(const obrpc::ObAdminRefreshMemStatArg& arg);
   virtual int call_server(const common::ObAddr& server);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminRefreshMemStat);
 };
 
 class ObAdminReloadUnit : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminReloadUnit(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminReloadUnit()
@@ -369,12 +369,12 @@ class ObAdminReloadUnit : public ObSystemAdminUtil {
 
   int execute();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminReloadUnit);
 };
 
 class ObAdminReloadServer : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminReloadServer(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminReloadServer()
@@ -382,12 +382,12 @@ class ObAdminReloadServer : public ObSystemAdminUtil {
 
   int execute();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminReloadServer);
 };
 
 class ObAdminReloadZone : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminReloadZone(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminReloadZone()
@@ -395,12 +395,12 @@ class ObAdminReloadZone : public ObSystemAdminUtil {
 
   int execute();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminReloadZone);
 };
 
 class ObAdminClearMergeError : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminClearMergeError(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminClearMergeError()
@@ -408,12 +408,12 @@ class ObAdminClearMergeError : public ObSystemAdminUtil {
 
   int execute();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminClearMergeError);
 };
 
 class ObAdminMerge : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminMerge(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminMerge()
@@ -421,12 +421,12 @@ class ObAdminMerge : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObAdminMergeArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminMerge);
 };
 
 class ObAdminClearRoottable : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminClearRoottable(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminClearRoottable()
@@ -434,12 +434,12 @@ class ObAdminClearRoottable : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObAdminClearRoottableArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminClearRoottable);
 };
 
 class ObAdminRefreshSchema : public ObAdminCallServer {
-  public:
+public:
   explicit ObAdminRefreshSchema(const ObSystemAdminCtx& ctx)
       : ObAdminCallServer(ctx), schema_version_(0), schema_info_()
   {}
@@ -450,16 +450,16 @@ class ObAdminRefreshSchema : public ObAdminCallServer {
 
   virtual int call_server(const common::ObAddr& server);
 
-  private:
+private:
   int64_t schema_version_;
   share::schema::ObRefreshSchemaInfo schema_info_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminRefreshSchema);
 };
 
 class ObAdminSetConfig : public ObSystemAdminUtil {
-  public:
+public:
   static const uint64_t OB_PARAMETER_SEED_ID = UINT64_MAX;
   explicit ObAdminSetConfig(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
@@ -468,20 +468,20 @@ class ObAdminSetConfig : public ObSystemAdminUtil {
 
   int execute(obrpc::ObAdminSetConfigArg& arg);
 
-  private:
+private:
   class ObServerConfigChecker : public common::ObServerConfig {};
   class ObTenantConfigChecker : public omt::ObTenantConfig {};
 
-  private:
+private:
   int verify_config(obrpc::ObAdminSetConfigArg& arg);
   int update_config(obrpc::ObAdminSetConfigArg& arg, int64_t new_version);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminSetConfig);
 };
 
 class ObAdminMigrateUnit : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminMigrateUnit(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminMigrateUnit()
@@ -489,12 +489,12 @@ class ObAdminMigrateUnit : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObAdminMigrateUnitArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminMigrateUnit);
 };
 
 class ObAdminSchemaSplitExecutor : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminSchemaSplitExecutor(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminSchemaSplitExecutor()
@@ -502,12 +502,12 @@ class ObAdminSchemaSplitExecutor : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObRunJobArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminSchemaSplitExecutor);
 };
 
 class ObAdminUpgradeVirtualSchema : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminUpgradeVirtualSchema(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminUpgradeVirtualSchema()
@@ -516,15 +516,15 @@ class ObAdminUpgradeVirtualSchema : public ObSystemAdminUtil {
   int execute();
   int execute(const share::schema::ObSchemaOperation& operation);
 
-  private:
+private:
   int upgrade(share::schema::ObTableSchema& table);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminUpgradeVirtualSchema);
 };
 
 class ObAdminUpgradeCmd : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminUpgradeCmd(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminUpgradeCmd()
@@ -532,12 +532,12 @@ class ObAdminUpgradeCmd : public ObSystemAdminUtil {
 
   int execute(const obrpc::Bool& upgrade);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminUpgradeCmd);
 };
 
 class ObAdminRollingUpgradeCmd : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminRollingUpgradeCmd(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminRollingUpgradeCmd()
@@ -545,7 +545,7 @@ class ObAdminRollingUpgradeCmd : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObAdminRollingUpgradeArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminRollingUpgradeCmd);
 };
 
@@ -577,7 +577,7 @@ class ObAdminRollingUpgradeCmd : public ObSystemAdminUtil {
 DECLARE_ENUM(ObInnerJob, inner_job, OB_INNER_JOB_DEF);
 
 class ObAdminRunJob : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminRunJob(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminRunJob()
@@ -585,12 +585,12 @@ class ObAdminRunJob : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObRunJobArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminRunJob);
 };
 
 class ObAdminCheckPartitionTable : public ObAdminCallServer {
-  public:
+public:
   explicit ObAdminCheckPartitionTable(const ObSystemAdminCtx& ctx) : ObAdminCallServer(ctx)
   {}
   virtual ~ObAdminCheckPartitionTable()
@@ -600,12 +600,12 @@ class ObAdminCheckPartitionTable : public ObAdminCallServer {
 
   virtual int call_server(const common::ObAddr& server);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminCheckPartitionTable);
 };
 
 class ObAdminRootInspection : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminRootInspection(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminRootInspection()
@@ -613,12 +613,12 @@ class ObAdminRootInspection : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObRunJobArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminRootInspection);
 };
 
 class ObAdminStatisticPrimaryZoneEntityCount : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminStatisticPrimaryZoneEntityCount(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminStatisticPrimaryZoneEntityCount()
@@ -626,12 +626,12 @@ class ObAdminStatisticPrimaryZoneEntityCount : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObRunJobArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminStatisticPrimaryZoneEntityCount);
 };
 
 class ObAdminCreateHaGtsUtil : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminCreateHaGtsUtil(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminCreateHaGtsUtil()
@@ -639,12 +639,12 @@ class ObAdminCreateHaGtsUtil : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObRunJobArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminCreateHaGtsUtil);
 };
 
 class ObAdminCreateInnerSchema : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminCreateInnerSchema(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminCreateInnerSchema()
@@ -652,12 +652,12 @@ class ObAdminCreateInnerSchema : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObRunJobArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminCreateInnerSchema);
 };
 
 class ObAdminSchemaRevise : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminSchemaRevise(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminSchemaRevise()
@@ -665,46 +665,46 @@ class ObAdminSchemaRevise : public ObSystemAdminUtil {
 
   int execute(const obrpc::ObRunJobArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminSchemaRevise);
 };
 
 class ObTenantServerAdminUtil : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObTenantServerAdminUtil(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
 
   int get_all_servers(common::ObIArray<ObAddr>& servers);
   int get_tenant_servers(const uint64_t tenant_id, common::ObIArray<ObAddr>& servers);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantServerAdminUtil);
 };
 
 class ObAdminUpgradeStorageFormatVersionExecutor : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminUpgradeStorageFormatVersionExecutor(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminUpgradeStorageFormatVersionExecutor() = default;
   int execute(const obrpc::ObRunJobArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminUpgradeStorageFormatVersionExecutor);
 };
 
 class ObAdminUpdateTableSchemaVersion : public ObSystemAdminUtil {
-  public:
+public:
   explicit ObAdminUpdateTableSchemaVersion(const ObSystemAdminCtx& ctx) : ObSystemAdminUtil(ctx)
   {}
   virtual ~ObAdminUpdateTableSchemaVersion() = default;
   int execute(const obrpc::ObRunJobArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminUpdateTableSchemaVersion);
 };
 
 class ObAdminFlushCache : public ObTenantServerAdminUtil {
-  public:
+public:
   explicit ObAdminFlushCache(const ObSystemAdminCtx& ctx) : ObTenantServerAdminUtil(ctx)
   {}
   virtual ~ObAdminFlushCache()
@@ -714,12 +714,12 @@ class ObAdminFlushCache : public ObTenantServerAdminUtil {
 
   int execute(const obrpc::ObAdminFlushCacheArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminFlushCache);
 };
 
 class ObAdminLoadBaseline : public ObTenantServerAdminUtil {
-  public:
+public:
   explicit ObAdminLoadBaseline(const ObSystemAdminCtx& ctx) : ObTenantServerAdminUtil(ctx)
   {}
   virtual ~ObAdminLoadBaseline()
@@ -729,12 +729,12 @@ class ObAdminLoadBaseline : public ObTenantServerAdminUtil {
 
   int execute(const obrpc::ObAdminLoadBaselineArg& arg);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminLoadBaseline);
 };
 
 class ObAdminSetTP : public ObAdminCallServer {
-  public:
+public:
   explicit ObAdminSetTP(const ObSystemAdminCtx& ctx, obrpc::ObAdminSetTPArg arg) : ObAdminCallServer(ctx), arg_(arg)
   {}
   virtual ~ObAdminSetTP()
@@ -743,7 +743,7 @@ class ObAdminSetTP : public ObAdminCallServer {
   int execute(const obrpc::ObAdminSetTPArg& arg);
   virtual int call_server(const common::ObAddr& server);
 
-  private:
+private:
   obrpc::ObAdminSetTPArg arg_;
   DISALLOW_COPY_AND_ASSIGN(ObAdminSetTP);
 };

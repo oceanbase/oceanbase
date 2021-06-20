@@ -669,7 +669,7 @@ int ObSql::handle_ps_prepare(const ObString& stmt, ObSqlCtx& context, ObResultSe
     ObSchemaGetterGuard* schema_guard = context.schema_guard_;
 
 #ifndef NDEBUG
-    LOG_INFO("Begin to handle prepare stmtement", K(session.get_sessid()), K(stmt));
+    LOG_INFO("Begin to handle prepare statement", K(session.get_sessid()), K(stmt));
 #endif
 
     if (OB_ISNULL(ps_cache) || OB_ISNULL(pctx) || OB_ISNULL(schema_guard)) {
@@ -878,7 +878,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id, const stmt::StmtTy
         const ObString& sql = ps_info->get_ps_sql();
         context.cur_sql_ = sql;
 #ifndef NDEBUG
-        LOG_INFO("Begin to handle execute stmtement", K(session.get_sessid()), K(sql));
+        LOG_INFO("Begin to handle execute statement", K(session.get_sessid()), K(sql));
 #endif
         if (OB_FAIL(session.store_query_string(sql))) {
           LOG_WARN("store query string fail", K(ret));
@@ -3427,7 +3427,7 @@ int ObSql::calc_pre_calculable_exprs(const ObDMLStmt& stmt, const ObIArray<ObHid
                FALSE_IT(phy_plan_ctx->set_cur_time(ObTimeUtility::current_time(), *(exec_ctx.get_my_session())))) {
       // do nothing
     } else if (OB_FAIL(ObCacheObject::pre_calculation(is_ignore_stmt, *pre_calc_frame, exec_ctx))) {
-      LOG_WARN("failde to pre calculate exprs", K(ret));
+      LOG_WARN("failed to pre calculate exprs", K(ret));
     } else if (OB_UNLIKELY(!phy_plan.get_pre_calc_frames().add_last(pre_calc_frame))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to add list element", K(ret));

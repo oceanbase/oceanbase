@@ -60,16 +60,16 @@ namespace test {
 test::TestTransUtils::CmdLineParam param;
 
 class TestRewrite : public TestOptimizerUtils {
-  public:
+public:
   TestRewrite();
   virtual ~TestRewrite();
 
-  private:
+private:
   void virtual SetUp();
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRewrite);
 
-  protected:
+protected:
   // function members
   int parse_resolve_transform(std::ofstream& of_result, ObTransformerImpl& trans_util, ObString& sql, ObDMLStmt*& stmt,
       ObLogPlan*& logical_plan, bool do_transform, bool do_gen_plan, ObIAllocator* allocator);
@@ -89,13 +89,13 @@ class TestRewrite : public TestOptimizerUtils {
   int optimize(ObDMLStmt*& stmt, ObLogPlan*& logical_plan);
   bool do_loop_test;
 
-  protected:
+protected:
   ObTransformerCtx ctx_;
   ObSchemaChecker schema_checker_;
 };
 
 class TestStackCheck : public TestOptimizerUtils {
-  public:
+public:
   TestStackCheck()
   {
     memset(schema_file_path_, '\0', 128);

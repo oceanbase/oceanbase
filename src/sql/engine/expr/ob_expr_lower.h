@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprLowerUpper : public ObStringExprOperator {
-  public:
+public:
   static const char SEPARATOR_IN_NLS_SORT_PARAM = '=';
   ObExprLowerUpper(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num);
   virtual ~ObExprLowerUpper()
@@ -38,19 +38,19 @@ class ObExprLowerUpper : public ObStringExprOperator {
   int cg_expr_common(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   int cg_expr_nls_common(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  protected:
+protected:
   virtual int calc(const common::ObCollationType cs_type, char* src, int32_t src_len, char* dest, int32_t det_len,
       int32_t& out_len) const = 0;
   virtual int32_t get_case_mutiply(const common::ObCollationType cs_type) const = 0;
 
-  private:
+private:
   int calc(common::ObObj& result, const common::ObString& text, common::ObCollationType cs_type,
       common::ObIAllocator& calc_buf) const;
   DISALLOW_COPY_AND_ASSIGN(ObExprLowerUpper);
 };
 
 class ObExprLower : public ObExprLowerUpper {
-  public:
+public:
   explicit ObExprLower(common::ObIAllocator& alloc);
   virtual ~ObExprLower()
   {}
@@ -60,12 +60,12 @@ class ObExprLower : public ObExprLowerUpper {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_lower(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLower);
 };
 
 class ObExprUpper : public ObExprLowerUpper {
-  public:
+public:
   explicit ObExprUpper(common::ObIAllocator& alloc);
   virtual ~ObExprUpper()
   {}
@@ -75,12 +75,12 @@ class ObExprUpper : public ObExprLowerUpper {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_upper(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUpper);
 };
 
 class ObExprNlsLower : public ObExprLowerUpper {
-  public:
+public:
   explicit ObExprNlsLower(common::ObIAllocator& alloc);
   virtual ~ObExprNlsLower()
   {}
@@ -90,12 +90,12 @@ class ObExprNlsLower : public ObExprLowerUpper {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_lower(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprNlsLower);
 };
 
 class ObExprNlsUpper : public ObExprLowerUpper {
-  public:
+public:
   explicit ObExprNlsUpper(common::ObIAllocator& alloc);
   virtual ~ObExprNlsUpper()
   {}
@@ -105,7 +105,7 @@ class ObExprNlsUpper : public ObExprLowerUpper {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_upper(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprNlsUpper);
 };
 

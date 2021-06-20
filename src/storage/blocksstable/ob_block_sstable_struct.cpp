@@ -2719,7 +2719,7 @@ void ObMacroBlockMarkerStatus::reuse()
   lob_data_block_count_ = 0;
   second_index_count_ = 0;
   lob_second_index_count_ = 0;
-  bloomfiter_count_ = 0;
+  bloomfilter_count_ = 0;
   hold_count_ = 0;
   pending_free_count_ = 0;
   free_count_ = 0;

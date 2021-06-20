@@ -76,9 +76,9 @@ struct ObPoolArenaHead {
 typedef ObCacheLineSegregatedArray<ObPoolArenaHead> ObPoolArenaArray;
 
 class ObServerObjectPoolRegistry {
-  public:
+public:
   class ArenaIterator {
-    public:
+  public:
     bool is_end()
     {
       return pool_idx_ >= ObServerObjectPoolRegistry::pool_num_;
@@ -139,15 +139,15 @@ class ObServerObjectPoolRegistry {
       return ret;
     }
 
-    public:
+  public:
     TO_STRING_KV(K_(pool_idx), K_(arena_idx));
 
-    private:
+  private:
     int64_t pool_idx_;
     int64_t arena_idx_;
   };
 
-  public:
+public:
   static int alloc_iterator(ArenaIterator& iter)
   {
     int ret = OB_SUCCESS;
@@ -180,7 +180,7 @@ class ObServerObjectPoolRegistry {
     return ret;
   }
 
-  private:
+private:
   struct PoolPair {
     const char* type_name;
     ObPoolArenaArray* array;
@@ -197,7 +197,7 @@ class ObServerObjectPoolRegistry {
  */
 template <class T>
 class ObServerObjectPool {
-  public:
+public:
   static ObServerObjectPool& get_instance()
   {
     static ObServerObjectPool instance_;
@@ -280,7 +280,7 @@ class ObServerObjectPool {
     }
   }
 
-  private:
+private:
   /**
    * Roughly allocate 16 available objects to each entry during Pool construction
    * The memory is directly ob_malloc out of the total size at one time
@@ -346,7 +346,7 @@ class ObServerObjectPool {
   ~ObServerObjectPool()
   {}
 
-  private:
+private:
   struct Meta {
     Meta* next;
     int64_t arena_id;

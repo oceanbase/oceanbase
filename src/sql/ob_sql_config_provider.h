@@ -16,14 +16,14 @@
 namespace oceanbase {
 namespace sql {
 class ObSQLConfigProvider {
-  public:
+public:
   ObSQLConfigProvider(){};
   virtual ~ObSQLConfigProvider(){};
 
   virtual bool is_read_only() const = 0;
   virtual int64_t get_nlj_cache_limit() const = 0;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSQLConfigProvider);
 };

@@ -27,7 +27,7 @@ namespace frame {
 using common::ObAddr;
 
 class ObReqQueue {
-  public:
+public:
   static const int LIGHTY_QUEUE_SIZE = (1 << 18);
   ObReqQueue(int queue_capacity = LIGHTY_QUEUE_SIZE);
 
@@ -45,12 +45,12 @@ class ObReqQueue {
     return queue_.size();
   }
 
-  private:
+private:
   int process_task(void* task);
 
   DISALLOW_COPY_AND_ASSIGN(ObReqQueue);
 
-  protected:
+protected:
   bool wait_finish_;
   bool stop_;
 
@@ -63,7 +63,7 @@ class ObReqQueue {
 };
 
 class ObReqQueueThread : public ObReqQueue {
-  public:
+public:
   ObReqQueueThread() : thread_(*this)
   {}
   lib::ThreadPool& get_thread()
@@ -71,9 +71,9 @@ class ObReqQueueThread : public ObReqQueue {
     return thread_;
   }
 
-  private:
+private:
   class Thread : public lib::ThreadPool {
-    public:
+  public:
     Thread(ObReqQueue& queue) : queue_(queue)
     {}
     void run1()

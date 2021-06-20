@@ -46,7 +46,7 @@ namespace oceanbase {
 namespace sql {
 class ObPCMemPctConf;
 class ObPartitionHitInfo {
-  public:
+public:
   ObPartitionHitInfo() : value_(true), freeze_(false)
   {}
   ~ObPartitionHitInfo()
@@ -70,7 +70,7 @@ class ObPartitionHitInfo {
     freeze_ = false;
   }
 
-  private:
+private:
   bool value_;
   bool freeze_;
 };
@@ -128,7 +128,7 @@ enum ObSessionRetryStatus {
 class ObBasicSessionInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   // 256KB ~= 4 * OB_COMMON_MEM_BLOCK_SIZE
   static const int64_t APPROX_MEM_USAGE_PER_SESSION = 256 * 1024L;
   static const uint64_t VALID_PROXY_SESSID = 0;
@@ -152,7 +152,7 @@ class ObBasicSessionInfo {
   class TableStmtType {
     OB_UNIS_VERSION_V(1);
 
-    public:
+  public:
     TableStmtType() : table_id_(common::OB_INVALID_ID), stmt_type_(stmt::T_NONE)
     {}
     virtual ~TableStmtType()
@@ -167,7 +167,7 @@ class ObBasicSessionInfo {
     }
     TO_STRING_KV(K(table_id_), K(stmt_type_));
 
-    public:
+  public:
     uint64_t table_id_;
     stmt::StmtType stmt_type_;
   };
@@ -175,7 +175,7 @@ class ObBasicSessionInfo {
   static const int64_t MIN_CUR_QUERY_LEN = 512;
   static const int64_t MAX_CUR_QUERY_LEN = 16 * 1024;
   class TransFlags {
-    public:
+  public:
     TransFlags() : flags_(0)
     {}
     virtual ~TransFlags()
@@ -261,7 +261,7 @@ class ObBasicSessionInfo {
       return flags_;
     }
 
-    private:
+  private:
     inline void set_flag(bool value, uint64_t flag)
     {
       if (value) {
@@ -272,7 +272,7 @@ class ObBasicSessionInfo {
       return;
     }
 
-    private:
+  private:
     static const uint64_t IS_IN_TRANSACTION = 1ULL << 0;
     static const uint64_t HAS_EXEC_WRITE_STMT = 1ULL << 1;
     static const uint64_t HAS_SET_TRANS_VAR = 1ULL << 2;  // has executed set transaction stmt.
@@ -293,7 +293,7 @@ class ObBasicSessionInfo {
   // common members with different operations in TransSavedValue or StmtSavedValue.
   // you need follow this principle when adding new members in future.
   class BaseSavedValue {
-    public:
+  public:
     BaseSavedValue()
     {
       reset();
@@ -313,7 +313,7 @@ class ObBasicSessionInfo {
       need_serial_exec_ = false;
     }
 
-    public:
+  public:
     ObPhysicalPlan* cur_phy_plan_;
     char cur_query_[MAX_CUR_QUERY_LEN];
     volatile int64_t cur_query_len_;
@@ -327,11 +327,11 @@ class ObBasicSessionInfo {
     bool is_foreign_key_check_exist_;
     bool need_serial_exec_;
 
-    public:
+  public:
   };
   // for switch stmt.
   class StmtSavedValue : public BaseSavedValue {
-    public:
+  public:
     StmtSavedValue()
     {
       reset();
@@ -345,7 +345,7 @@ class ObBasicSessionInfo {
       in_transaction_ = false;
     }
 
-    public:
+  public:
     transaction::ObTransDesc trans_desc_;
     TransResult trans_result_;
     int64_t cur_query_start_time_;
@@ -353,7 +353,7 @@ class ObBasicSessionInfo {
   };
   // for switch trans.
   class TransSavedValue : public BaseSavedValue {
-    public:
+  public:
     TransSavedValue()
     {
       reset();
@@ -367,14 +367,14 @@ class ObBasicSessionInfo {
       nested_count_ = -1;
     }
 
-    public:
+  public:
     transaction::ObTransDesc trans_desc_;
     TransFlags trans_flags_;
     TransResult trans_result_;
     int64_t nested_count_;
   };
 
-  public:
+public:
   ObBasicSessionInfo();
   virtual ~ObBasicSessionInfo();
 
@@ -989,7 +989,7 @@ class ObBasicSessionInfo {
   class SysVarIncInfo {
     OB_UNIS_VERSION_V(1);
 
-    public:
+  public:
     SysVarIncInfo();
     virtual ~SysVarIncInfo();
     int add_sys_var_id(share::ObSysVarClassType sys_var_id);
@@ -1001,7 +1001,7 @@ class ObBasicSessionInfo {
     int reset();
     TO_STRING_KV(K(all_sys_var_ids_));
 
-    private:
+  private:
     SysVarIds all_sys_var_ids_;
   };
   int load_all_sys_vars_default();
@@ -1544,7 +1544,7 @@ class ObBasicSessionInfo {
   }
   int load_default_sys_variable(int64_t var_idx);
 
-  protected:
+protected:
   int process_session_variable(
       share::ObSysVarClassType var, const common::ObObj& value, bool is_inc, const bool check_timezone_valid = true);
   int process_session_variable_fast();
@@ -1566,14 +1566,14 @@ class ObBasicSessionInfo {
   int trans_restore_session(TransSavedValue& saved_value);
   // ^^^^^^
 
-  protected:
+protected:
   // because the OB_MALLOC_NORMAL_BLOCK_SIZE block in ObPool has a BlockHeader(8 Bytes),
   // so the total mem avail is (OB_MALLOC_NORMAL_BLOCK_SIZE - 8), if we divide it by (4 * 1204),
   // the last (4 * 1024 - 8) is wasted.
   // and if we divide it by (4 * 1024 - 8), almost all mem can be used.
   static const int64_t SMALL_BLOCK_SIZE = 4 * 1024LL - 8;
 
-  private:
+private:
   // these reset_xxx() functions below should be called inner only, you should
   // call reset_tx_variable() when you need reset a session object.
   void reset_tx_read_only();
@@ -1616,7 +1616,7 @@ class ObBasicSessionInfo {
   inline int store_query_string_(const ObString& stmt);
   inline int set_session_state_(ObSQLSessionState state);
 
-  protected:
+protected:
   // the following members need concurrency control
   struct MultiThreadData {
     const static int64_t DEFAULT_MAX_PACKET_SIZE = 1048576;
@@ -1706,12 +1706,12 @@ class ObBasicSessionInfo {
     ObSessionRetryStatus is_in_retry_;
   };
 
-  private:
+private:
   // cache some system variables for performance.
   class SysVarsCacheData {
     OB_UNIS_VERSION_V(1);
 
-    public:
+  public:
     SysVarsCacheData()
         : auto_increment_increment_(0),
           sql_throttle_current_priority_(100),
@@ -1852,7 +1852,7 @@ class ObBasicSessionInfo {
         K_(sql_select_limit), K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),
         K_(is_result_accurate), K_(_ob_use_parallel_execution), K_(character_set_results), K_(ob_pl_block_timeout));
 
-    public:
+  public:
     static const int64_t MAX_NLS_FORMAT_STR_LEN = 256;
 
     // need NOT serialization.
@@ -1896,7 +1896,7 @@ class ObBasicSessionInfo {
     ObString ob_trace_info_;
     char trace_info_buf_[OB_TRACE_BUFFER_SIZE];
 
-    private:
+  private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
 
@@ -1945,13 +1945,13 @@ class ObBasicSessionInfo {
   }
 
   class SysVarsCache {
-    public:
+  public:
     SysVarsCache() : inc_flags_(0)
     {}
     ~SysVarsCache()
     {}
 
-    public:
+  public:
     void reset()
     {
       base_data_.reset();
@@ -2019,7 +2019,7 @@ class ObBasicSessionInfo {
       is_inc = inc_autocommit_;
     }
 
-    public:
+  public:
     SysVarsCacheData base_data_;
     SysVarsCacheData inc_data_;
     union {
@@ -2065,7 +2065,7 @@ class ObBasicSessionInfo {
     };
   };
 
-  private:
+private:
   int64_t get_ser_version(uint64_t tenant_id, uint64_t eff_tenant_id) const;
   static const int64_t PRE_SER_VERSION = 0;
   static const int64_t CUR_SER_VERSION = 1;
@@ -2106,14 +2106,14 @@ class ObBasicSessionInfo {
   common::ObSEArray<TableStmtType, 1> cur_stmt_tables_;
   char ssl_cipher_buff_[64];
 
-  protected:
+protected:
   common::ObSmallBlockAllocator<> block_allocator_;
   common::ObSmallBlockAllocator<> ps_session_info_allocator_;
   common::ObStringBuf name_pool_;           // for variables names and statement names
   common::ObStringBuf base_sys_var_alloc_;  // for variables names and statement names
   TransFlags trans_flags_;
 
-  private:
+private:
   common::ObWrapperAllocator bucket_allocator_wrapper_;
   ObSessionValMap user_var_val_map_;                                            // user variables
   share::ObBasicSysVar* sys_vars_[share::ObSysVarFactory::ALL_SYS_VARS_COUNT];  // system variables
@@ -2165,18 +2165,18 @@ class ObBasicSessionInfo {
   // used to determine whether it is a retry query.
   common::ObCurTraceId::TraceId last_query_trace_id_;
 
-  protected:
+protected:
   // this should be used by subclass, so need be protected
   MultiThreadData thread_data_;
   // nested session and sql execute for foreign key, trigger, pl udf, and so on.
   // inited to -1, set to 0 for main query, inc / dec for nested query.
   int64_t nested_count_;
 
-  private:
+private:
   // local cache of system variables for performance.
   SysVarsCache sys_vars_cache_;
 
-  private:
+private:
   int64_t safe_weak_read_snapshot_;
   int64_t weak_read_snapshot_source_;
 
@@ -2201,7 +2201,7 @@ class ObBasicSessionInfo {
   uint64_t exec_min_cluster_version_;
   stmt::StmtType stmt_type_;
 
-  private:
+private:
   // used for all_virtual_processlist.
   int64_t thread_id_;
   // indicate whether user password is expired, is set when session is established.
@@ -2350,7 +2350,7 @@ inline int ObBasicSessionInfo::set_partition_location_feedback(const share::ObFB
 
 // object execute environment.
 class ObExecEnv {
-  public:
+public:
   enum ExecEnvType {
     SQL_MODE = 0,
     CHARSET_CLIENT,
@@ -2404,10 +2404,10 @@ class ObExecEnv {
     return collation_database_;
   }
 
-  private:
+private:
   static int get_exec_env(const ObString& exec_env, ExecEnvType type, ObString& value);
 
-  private:
+private:
   ObSQLMode sql_mode_;
   ObCollationType charset_client_;
   ObCollationType collation_connection_;

@@ -21,7 +21,7 @@ class ObSQLSessionInfo;
 
 /// the interface of this module
 class ObResolver {
-  public:
+public:
   enum IsPrepared { IS_PREPARED_STMT, IS_NOT_PREPARED_STMT };
 
   explicit ObResolver(ObResolverParams& params);
@@ -34,18 +34,18 @@ class ObResolver {
     return params_;
   }
 
-  private:
+private:
   template <typename ResolverType>
   int stmt_resolver_func(ObResolverParams& params, const ParseNode& parse_tree, ObStmt*& stmt);
 
   template <typename SelectResolverType>
   int select_stmt_resolver_func(ObResolverParams& params, const ParseNode& parse_tree, ObStmt*& stmt);
 
-  private:
+private:
   // data members
   ObResolverParams params_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObResolver);
 };

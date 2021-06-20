@@ -23,11 +23,11 @@
 namespace oceanbase {
 namespace common {
 class ObMember {
-  public:
+public:
   ObMember();
   ObMember(const common::ObAddr& server, const int64_t timestamp);
 
-  public:
+public:
   const common::ObAddr& get_server() const;
   int64_t get_timestamp() const;
   virtual void reset();
@@ -42,7 +42,7 @@ class ObMember {
   TO_YSON_KV(Y_(server), OB_ID(t), timestamp_, Y_(flag));
   OB_UNIS_VERSION(1);
 
-  protected:
+protected:
   common::ObAddr server_;
   int64_t timestamp_;
   int64_t flag_;
@@ -65,7 +65,7 @@ inline bool operator<(const ObMember& lhs, const ObMember& rhs)
 }
 
 class ObReplicaMember : public ObMember {
-  public:
+public:
   ObReplicaMember() : ObMember(), replica_type_(REPLICA_TYPE_FULL), region_(DEFAULT_REGION_NAME), memstore_percent_(100)
   {}
   ObReplicaMember(const common::ObAddr& server, const int64_t timestamp)
@@ -93,7 +93,7 @@ class ObReplicaMember : public ObMember {
       : ObMember(server, timestamp), replica_type_(replica_type), region_(region), memstore_percent_(memstore_percent)
   {}
 
-  public:
+public:
   common::ObReplicaType get_replica_type() const;
   int set_replica_type(const common::ObReplicaType replica_type);
   const common::ObRegion& get_region() const;
@@ -115,7 +115,7 @@ class ObReplicaMember : public ObMember {
   TO_STRING_KV(K_(server), K_(timestamp), K_(flag), K_(replica_type), K_(region), K_(memstore_percent));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   common::ObReplicaType replica_type_;
   common::ObRegion region_;
   int64_t memstore_percent_;

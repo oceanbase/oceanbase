@@ -42,7 +42,7 @@ namespace transaction {
 class ObSlaveTransCtx : public ObDistTransCtx {
   friend class IterateTransStatFunctor;
 
-  public:
+public:
   ObSlaveTransCtx() : ObDistTransCtx("slave_participant", ObTransCtxType::SLAVE_PARTICIPANT), mt_ctx_()
   {
     reset();
@@ -115,7 +115,7 @@ class ObSlaveTransCtx : public ObDistTransCtx {
   INHERIT_TO_STRING_KV(
       "ObDistTransCtx", ObDistTransCtx, K_(snapshot_version), K_(stmt_info), K_(session_id), K_(proxy_session_id));
 
-  private:
+private:
   int trans_end_(const bool commit, const int64_t commit_version);
   int trans_clear_();
   int do_clear_();
@@ -137,13 +137,13 @@ class ObSlaveTransCtx : public ObDistTransCtx {
   int post_ask_scheduler_status_msg_();
   DISALLOW_COPY_AND_ASSIGN(ObSlaveTransCtx);
 
-  private:
+private:
   // 0x0078746374726170 means reset partctx
   static const int64_t PART_CTX_MAGIC_NUM = 0x0078746374726170;
   static const int64_t REPLAY_PRINT_TRACE_THRESHOLD = 10 * 1000;  // 10 ms
   static const int64_t OP_LOCAL_NUM = 16;
 
-  private:
+private:
   bool is_inited_;
   memtable::ObMemtableCtx mt_ctx_;
   memtable::ObIMemtableCtxFactory* mt_ctx_factory_;

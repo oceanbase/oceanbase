@@ -596,7 +596,7 @@ int ObIlogAccessor::check_partition_ilog_can_be_purged(const common::ObPartition
 }
 
 class ObIlogStorage::PurgeCheckFunctor {
-  public:
+public:
   PurgeCheckFunctor(ObIlogStorage* host, int64_t max_decided_trans_version, file_id_t file_id)
       : host_(host), max_decided_trans_version_(max_decided_trans_version), file_id_(file_id), can_purge_(true)
   {}
@@ -604,7 +604,7 @@ class ObIlogStorage::PurgeCheckFunctor {
   ~PurgeCheckFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObPartitionKey& partition_key, const IndexInfoBlockEntry& index_info_block_entry)
   {
     int ret = OB_SUCCESS;
@@ -634,13 +634,13 @@ class ObIlogStorage::PurgeCheckFunctor {
     return can_purge_;
   }
 
-  private:
+private:
   ObIlogStorage* host_;
   int64_t max_decided_trans_version_;
   file_id_t file_id_;
   bool can_purge_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(PurgeCheckFunctor);
 };
 

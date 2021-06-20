@@ -22,14 +22,14 @@ using common::ObString;
 
 namespace observer {
 class ObServerUtils {
-  public:
+public:
   // Get the server's ipstr.
   // @param [in] allocator.
   // @param [out] server's ip str.
   // @return the error code.
   static int get_server_ip(ObIAllocator* allocator, ObString& ipstr);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObServerUtils);
 };
 }  // namespace observer

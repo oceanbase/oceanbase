@@ -24,7 +24,7 @@ class ObSSTable;
 namespace observer {
 
 class ObAllVirtualDagWarningHistory : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   enum COLUMN_ID_LIST {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -44,10 +44,10 @@ class ObAllVirtualDagWarningHistory : public common::ObVirtualTableScannerIterat
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  protected:
+protected:
   int fill_cells(storage::ObDagWarningInfo& dag_warning_info);
 
-  private:
+private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   char task_id_buf_[common::OB_TRACE_STAT_BUFFER_SIZE];
   storage::ObDagWarningInfo dag_warning_info_;

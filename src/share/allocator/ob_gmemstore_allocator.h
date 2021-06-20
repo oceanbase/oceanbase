@@ -32,7 +32,7 @@ struct FrozenMemstoreInfoLogger {
   int64_t pos_;
 };
 class ObGMemstoreAllocator {
-  public:
+public:
   typedef ObSpinLock Lock;
   typedef ObSpinLockGuard LockGuard;
   typedef ObGMemstoreAllocator GAlloc;
@@ -42,7 +42,7 @@ class ObGMemstoreAllocator {
   typedef Arena::Handle ArenaHandle;
 
   class AllocHandle : public ListHandle, public ObIAllocator {
-    public:
+  public:
     memtable::ObMemtable& mt_;
     GAlloc* host_;
     ArenaHandle arena_handle_;
@@ -118,17 +118,17 @@ class ObGMemstoreAllocator {
     }
     INHERIT_TO_STRING_KV("ListHandle", ListHandle, KP_(host), K_(arena_handle), K_(last_freeze_timestamp));
 
-    private:
+  private:
     int64_t last_freeze_timestamp_;
   };
 
-  public:
+public:
   ObGMemstoreAllocator() : hlist_(), arena_(), last_freeze_timestamp_(0)
   {}
   ~ObGMemstoreAllocator()
   {}
 
-  public:
+public:
   int init(uint64_t tenant_id)
   {
     update_last_freeze_timestamp();
@@ -150,7 +150,7 @@ class ObGMemstoreAllocator {
     return ret;
   }
 
-  public:
+public:
   int64_t get_mem_active_memstore_used()
   {
     int64_t hazard = hlist_.hazard();
@@ -169,7 +169,7 @@ class ObGMemstoreAllocator {
     }
   }
 
-  public:
+public:
   int set_memstore_threshold(uint64_t tenant_id);
   bool need_do_writing_throttle() const
   {
@@ -192,11 +192,11 @@ class ObGMemstoreAllocator {
     ATOMIC_STORE(&last_freeze_timestamp_, ObTimeUtility::current_time());
   }
 
-  private:
+private:
   int64_t nway_per_group();
   int set_memstore_threshold_without_lock(uint64_t tenant_id);
 
-  private:
+private:
   Lock lock_;
   HandleList hlist_;
   Arena arena_;

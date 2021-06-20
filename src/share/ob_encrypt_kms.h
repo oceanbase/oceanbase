@@ -34,13 +34,13 @@ struct ObKmsResult {
 };
 
 class ObKmsClient {
-  public:
+public:
   ObKmsClient()
   {}
   virtual ~ObKmsClient()
   {}
 
-  public:
+public:
   virtual int init(const char* kms_info, int64_t kms_len);
   virtual int check_param_valid();
   common::ObString get_root_ca() const
@@ -51,18 +51,18 @@ class ObKmsClient {
 };
 
 class ObSSLClient : public ObKmsClient {
-  public:
+public:
   ObSSLClient() : ObKmsClient(), private_key_(), public_cert_()
   {}
   virtual ~ObSSLClient(){};
 
-  public:
+public:
   bool is_bkmi_mode() const
   {
     return false;
   }
 
-  public:
+public:
   ObKmsResult private_key_;  // private
   ObKmsResult public_cert_;
 };

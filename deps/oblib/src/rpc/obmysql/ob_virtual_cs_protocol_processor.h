@@ -24,7 +24,7 @@ class ObPacket;
 namespace obmysql {
 class ObMySQLHandler;
 class ObVirtualCSProtocolProcessor {
-  public:
+public:
   ObVirtualCSProtocolProcessor(ObMySQLHandler& handler) : handler_(handler)
   {}
   virtual ~ObVirtualCSProtocolProcessor()
@@ -33,10 +33,10 @@ class ObVirtualCSProtocolProcessor {
   virtual int decode(easy_message_t* m, rpc::ObPacket*& pkt) = 0;
   virtual int process(easy_request_t* r, bool& need_read_more) = 0;
 
-  protected:
+protected:
   inline int set_next_read_len(easy_message_t* m, const int64_t fallback_len, const int64_t next_read_len);
 
-  protected:
+protected:
   ObMySQLHandler& handler_;
 };
 

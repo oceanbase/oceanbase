@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace storage {
 class MockObMacroBlockIterator : public ObMacroBlockIterator {
-  public:
+public:
   MockObMacroBlockIterator()
   {}
   virtual ~MockObMacroBlockIterator()
@@ -25,7 +25,7 @@ class MockObMacroBlockIterator : public ObMacroBlockIterator {
 };
 
 class MockObSSTable : public ObSSTable {
-  public:
+public:
   MockObSSTable()
   {}
   virtual ~MockObSSTable()

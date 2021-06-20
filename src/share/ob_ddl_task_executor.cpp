@@ -173,17 +173,24 @@ ObDDLTaskExecutor::~ObDDLTaskExecutor()
 
 void ObDDLTaskExecutor::stop()
 {
-  TG_STOP(tg_id_);
+  if (tg_id_ >= 0) {
+    TG_STOP(tg_id_);
+  }
 }
 
 void ObDDLTaskExecutor::wait()
 {
-  TG_WAIT(tg_id_);
+  if (tg_id_ >= 0) {
+    TG_WAIT(tg_id_);
+  }
 }
 
 void ObDDLTaskExecutor::destroy()
 {
-  TG_DESTROY(tg_id_);
+  if (tg_id_ >= 0) {
+    TG_DESTROY(tg_id_);
+    tg_id_ = -1;
+  }
   task_queue_.destroy();
   is_inited_ = false;
   cond_.destroy();

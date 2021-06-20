@@ -34,14 +34,14 @@ class ObRawExprFactory;
 class ObSQLSessionInfo;
 
 class ObConstraintProcess {
-  public:
+public:
   ObConstraintProcess(common::ObIAllocator& allocator, ObRawExprFactory* expr_factory, ObSQLSessionInfo* session_info)
       : allocator_(allocator), expr_factory_(expr_factory), session_info_(session_info)
   {}
 
   int after_transform(ObDMLStmt*& stmt, share::schema::ObSchemaGetterGuard& schema_guard);
 
-  private:
+private:
   int resolve_related_part_exprs(const ObRawExpr* expr, ObDMLStmt*& stmt,
       const share::schema::ObTableSchema& table_schema, common::ObIArray<ObRawExpr*>& related_part_exprs);
   int resolve_constraint_column_expr(ObResolverParams& params, uint64_t table_id, ObDMLStmt*& stmt,
@@ -49,7 +49,7 @@ class ObConstraintProcess {
   int resolve_constraint_column_expr(ObResolverParams& params, uint64_t table_id, ObDMLStmt*& stmt,
       const common::ObString& expr_str, ObRawExpr*& expr, bool& is_success);
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   ObRawExprFactory* expr_factory_;
   ObSQLSessionInfo* session_info_;

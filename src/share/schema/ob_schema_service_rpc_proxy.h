@@ -32,7 +32,7 @@ class ObMultiVersionSchemaService;
 }  // namespace share
 namespace obrpc {
 class ObSchemaServiceRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObSchemaServiceRpcProxy);
   //  RPC_S(PR5 get_latest_schema_version, OB_GET_LATEST_SCHEMA_VERSION, obrpc::Int64);
   RPC_SS(PR5 get_all_schema, OB_GET_ALL_SCHEMA, (ObGetAllSchemaArg), common::ObDataBuffer);
@@ -61,7 +61,7 @@ private:
 struct ObAllSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAllSchema()
   {}
   DECLARE_TO_STRING;
@@ -77,21 +77,21 @@ struct ObAllSchema {
 };
 
 class ObGetAllSchemaP : public ObRpcProcessor<obrpc::ObSchemaServiceRpcProxy::ObRpc<OB_GET_ALL_SCHEMA> > {
-  public:
+public:
   explicit ObGetAllSchemaP(share::schema::ObMultiVersionSchemaService* schema_service);
   virtual ~ObGetAllSchemaP();
 
-  protected:
+protected:
   virtual int before_process();
   virtual int process();
   virtual int after_process();
 
-  private:
+private:
   share::schema::ObMultiVersionSchemaService* schema_service_;
   char* buf_;
   int64_t buf_len_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGetAllSchemaP);
 };
 

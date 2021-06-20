@@ -30,7 +30,7 @@ using common::ObFIFOAllocator;
 using common::ObIAllocator;
 
 class ObWorker : public lib::Worker {
-  public:
+public:
   enum RunStatus { RS_RUN, RS_WAIT, RS_PAUSED };
   enum Status { WS_WAIT, WS_NOWAIT, WS_FREQUENT, WS_INVALID, WS_OUT_OF_THROTTLE };
   using lib::Worker::CompatMode;
@@ -133,16 +133,16 @@ class ObWorker : public lib::Worker {
     set_sql_throttle_current_priority(100);
   }
 
-  public:
+public:
   // static variables
   static ObWorker& self();
 
-  protected:
+protected:
   volatile RunStatus run_status_;
   int64_t st_current_priority_;
   sql::ObSQLSessionInfo* session_;
 
-  private:
+private:
   int64_t timeout_ts_;
   uint64_t rpc_tenant_id_;
 
@@ -217,7 +217,7 @@ inline bool ObWorker::get_disable_wait_flag() const
 #define THIS_WORKER oceanbase::share::ObWorker::self()
 
 class DisableSchedInterGuard {
-  public:
+public:
   DisableSchedInterGuard()
   {
     last_flag_ = THIS_WORKER.get_disable_wait_flag();
@@ -228,12 +228,12 @@ class DisableSchedInterGuard {
     THIS_WORKER.set_disable_wait_flag(last_flag_);
   }
 
-  private:
+private:
   bool last_flag_;
 };
 
 class CompatModeGuard {
-  public:
+public:
   CompatModeGuard(ObWorker::CompatMode mode)
   {
     last_compat_mode_ = THIS_WORKER.get_compatibility_mode();
@@ -245,7 +245,7 @@ class CompatModeGuard {
     THIS_WORKER.set_compatibility_mode(last_compat_mode_);
   }
 
-  private:
+private:
   ObWorker::CompatMode last_compat_mode_;
 };
 

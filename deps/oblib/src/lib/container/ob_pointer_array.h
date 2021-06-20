@@ -27,7 +27,7 @@ namespace oceanbase {
 namespace common {
 template <typename T, int64_t SIZE>
 class ObPointerArray {
-  public:
+public:
   ObPointerArray()
   {
     memset(array_, 0, sizeof(array_));
@@ -42,7 +42,7 @@ class ObPointerArray {
     }
   };
 
-  public:
+public:
   T* operator[](const int64_t index)
   {
     T* ret = NULL;
@@ -58,7 +58,7 @@ class ObPointerArray {
     return ret;
   };
 
-  private:
+private:
   T* array_[SIZE];
   PageArena<char> allocator_;
 };

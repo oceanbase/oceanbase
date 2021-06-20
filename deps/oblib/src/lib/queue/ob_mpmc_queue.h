@@ -200,7 +200,7 @@ struct ObTurnSequencer {
     return static_cast<uint8_t>(ATOMIC_LOAD(&state_) >> TURN_SHIFT_NUM);
   }
 
-  private:
+private:
   // Returns the bitmask to pass futex_wait or futex_wake when communicating
   // about the specified turn
   int futex_channel(uint32_t turn) const
@@ -230,7 +230,7 @@ struct ObTurnSequencer {
     return ts;
   }
 
-  private:
+private:
   // TURN_SHIFT_NUM counts the bits that are stolen to record the delta
   // between the current turn and the maximum waiter. It needs to be big
   // enough to record wait deltas of 0 to 32 inclusive.  Waiters more
@@ -302,7 +302,7 @@ struct ObSingleElementQueue {
     return sequencer_.is_turn(turn * 2 + 1);
   }
 
-  private:
+private:
   // Even turns are pushes, odd turns are pops
   ObTurnSequencer sequencer_;
   void* data_;
@@ -310,7 +310,7 @@ struct ObSingleElementQueue {
 
 template <class Derived>
 class ObMPMCQueueBase {
-  public:
+public:
   typedef ObSingleElementQueue Slot;
 
   ObMPMCQueueBase()
@@ -598,7 +598,7 @@ class ObMPMCQueueBase {
     return ret;
   }
 
-  protected:
+protected:
   // We assign tickets in increasing order, but we don't want to
   // access neighboring elements of slots_ because that will lead to
   // false sharing (multiple cores accessing the same cache line even
@@ -829,7 +829,7 @@ class ObMPMCQueueBase {
     slots[idx(ticket, cap, stride)].dequeue(turn(ticket, cap), pop_spin_cutoff_, 0 == (ticket % ADAPTATION_FREQ), elem);
   }
 
-  protected:
+protected:
   // Once every ADAPTATION_FREQ we will spin longer, to try to estimate
   // the proper spin backoff
   static const int64_t ADAPTATION_FREQ = INT64_MAX;
@@ -945,7 +945,7 @@ class ObMPMCQueueBase {
 // two sentinels after it receives it (by requeuing 2 the shutdown can
 // complete in O(log P) time instead of O(P)).
 class ObFixedMPMCQueue : public ObMPMCQueueBase<ObFixedMPMCQueue> {
-  public:
+public:
   typedef ObSingleElementQueue Slot;
   ObFixedMPMCQueue() : ObMPMCQueueBase<ObFixedMPMCQueue>()
   {}
@@ -974,7 +974,7 @@ class ObFixedMPMCQueue : public ObMPMCQueueBase<ObFixedMPMCQueue> {
     return ret;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFixedMPMCQueue);
 };
 
@@ -1040,7 +1040,7 @@ class ObDynamicMPMCQueue : public ObMPMCQueueBase<ObDynamicMPMCQueue> {
     int64_t stride_;
   };
 
-  public:
+public:
   explicit ObDynamicMPMCQueue() : ObMPMCQueueBase<ObDynamicMPMCQueue>(), dmult_(0), closed_(NULL), label_(nullptr)
   {}
 
@@ -1152,7 +1152,7 @@ class ObDynamicMPMCQueue : public ObMPMCQueueBase<ObDynamicMPMCQueue> {
     dequeue_with_ticket_base(ticket - offset, slots, cap, stride, elem);
   }
 
-  private:
+private:
   bool try_obtain_ready_push_ticket(uint64_t& ticket, Slot*& slots, int64_t& cap, int64_t& stride)
   {
     bool ret = false;
@@ -1412,7 +1412,7 @@ class ObDynamicMPMCQueue : public ObMPMCQueueBase<ObDynamicMPMCQueue> {
     // A closed array with offset <= ticket should have been found
   }
 
-  private:
+private:
   static const int64_t SEQLOCK_BITS = 6;
   static const int64_t DEFAULT_MIN_DYNAMIC_CAPACITY = 1024;
   static const int64_t DEFAULT_EXPANSION_MULTIPLIER = 2;

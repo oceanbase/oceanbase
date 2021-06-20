@@ -22,11 +22,11 @@ namespace election {
 class ObElectionGroupMgr;
 
 class ObElectionGCThread : public share::ObThreadPool {
-  public:
+public:
   ObElectionGCThread();
   ~ObElectionGCThread();
 
-  public:
+public:
   int init(ObElectionGroupMgr* eg_mgr);
   int start();
   void stop();
@@ -34,17 +34,17 @@ class ObElectionGCThread : public share::ObThreadPool {
   void destroy();
   void run1();
 
-  private:
+private:
   int exec_gc_loop_();
 
-  private:
+private:
   static const int32_t ELECT_GC_INTERVAL = 60 * 1000 * 1000;
 
-  private:
+private:
   ObElectionGroupMgr* eg_mgr_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObElectionGCThread);
 };
 }  // namespace election

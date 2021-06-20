@@ -25,7 +25,7 @@ class ObStorageFile;
 namespace storage {
 
 struct ObTenantFileKey final {
-  public:
+public:
   ObTenantFileKey() : tenant_id_(common::OB_INVALID_ID), file_id_(0)
   {}
   ObTenantFileKey(const uint64_t tenant_id, const int64_t file_id) : tenant_id_(tenant_id), file_id_(file_id)
@@ -54,7 +54,7 @@ enum ObTenantFileStatus {
 };
 
 struct ObTenantFileSuperBlock final {
-  public:
+public:
   static const int64_t TENANT_FILE_SUPER_BLOCK_VERSION_V1 = 1;
   ObTenantFileSuperBlock();
   ~ObTenantFileSuperBlock() = default;
@@ -71,7 +71,7 @@ struct ObTenantFileSuperBlock final {
   TO_STRING_KV(K_(macro_meta_entry), K_(pg_meta_entry), K_(status));
   OB_UNIS_VERSION(TENANT_FILE_SUPER_BLOCK_VERSION_V1);
 
-  public:
+public:
   blocksstable::ObSuperBlockMetaEntry macro_meta_entry_;
   blocksstable::ObSuperBlockMetaEntry pg_meta_entry_;
   ObTenantFileStatus status_;
@@ -79,7 +79,7 @@ struct ObTenantFileSuperBlock final {
 };
 
 struct ObTenantFileInfo : public blocksstable::ObISuperBlock {
-  public:
+public:
   ObTenantFileInfo() : tenant_key_(), tenant_file_super_block_(), pg_map_()
   {}
   virtual ~ObTenantFileInfo()
@@ -135,7 +135,7 @@ struct ObTenantFileInfo : public blocksstable::ObISuperBlock {
 };
 
 class ObMetaBlockListHandle final {
-  public:
+public:
   ObMetaBlockListHandle();
   ~ObMetaBlockListHandle();
   int add_macro_blocks(const common::ObIArray<blocksstable::MacroBlockId>& block_list, const bool need_switch_handle);
@@ -148,18 +148,18 @@ class ObMetaBlockListHandle final {
   }
   void set_storage_file(blocksstable::ObStorageFile* file);
 
-  private:
+private:
   void switch_handle();
   void reset_new_handle();
 
-  private:
+private:
   static const int64_t META_BLOCK_HANDLE_CNT = 2;
   blocksstable::ObMacroBlocksHandle meta_handles_[META_BLOCK_HANDLE_CNT];
   int64_t cur_handle_pos_;
 };
 
 struct ObTenantFileValue final {
-  public:
+public:
   static const int64_t MAX_REF_CNT_PER_FILE = 1000;
   static const int64_t META_HANDLE_CNT = 2;
   ObTenantFileValue()
@@ -180,7 +180,7 @@ struct ObTenantFileValue final {
 };
 
 class ObTenantFileFilter final {
-  public:
+public:
   ObTenantFileFilter();
   ~ObTenantFileFilter() = default;
   void reset();
@@ -190,7 +190,7 @@ class ObTenantFileFilter final {
 };
 
 class ObTenantFileCheckpointEntry final {
-  public:
+public:
   ObTenantFileCheckpointEntry();
   ~ObTenantFileCheckpointEntry();
   void reset();

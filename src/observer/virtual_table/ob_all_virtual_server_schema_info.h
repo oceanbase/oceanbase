@@ -21,19 +21,19 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualServerSchemaInfo : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   explicit ObAllVirtualServerSchemaInfo(share::schema::ObMultiVersionSchemaService& schema_service)
       : schema_service_(schema_service), tenant_ids_(), idx_(0)
   {}
   virtual ~ObAllVirtualServerSchemaInfo()
   {}
 
-  public:
+public:
   virtual int inner_open();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   void destroy();
 
-  private:
+private:
   const static int64_t DEFAULT_TENANT_NUM = 10;
   char ip_buffer_[OB_MAX_SERVER_ADDR_SIZE];
   share::schema::ObMultiVersionSchemaService& schema_service_;

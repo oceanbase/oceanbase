@@ -18,7 +18,7 @@ namespace oceanbase {
 using namespace common;
 namespace sql {
 class ObUnpivot::ObUnpivotCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObUnpivotCtx(ObExecContext& ctx)
       : ObPhyOperatorCtx(ctx), last_input_row_(NULL), is_end_(false), curr_part_idx_(common::OB_INVALID_INDEX)
   {}
@@ -34,7 +34,7 @@ class ObUnpivot::ObUnpivotCtx : public ObPhyOperatorCtx {
   }
   friend class ObUnpivot;
 
-  public:
+public:
   const ObNewRow* last_input_row_;
   bool is_end_;
   int64_t curr_part_idx_;

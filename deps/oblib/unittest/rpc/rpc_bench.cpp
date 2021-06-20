@@ -40,7 +40,7 @@ int io_count = 1;
 int worker_count = 1;
 
 class TestProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(TestProxy);
 
   RPC_S(@PR5 test, OB_TEST_PCODE);
@@ -53,7 +53,7 @@ int64_t total_count = 0;
 int64_t total_send_count = 0;
 
 class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
-  public:
+public:
   int process()
   {
     int ret = OB_SUCCESS;
@@ -69,7 +69,7 @@ class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
 };
 
 class QHandler : public ObiReqQHandler {
-  public:
+public:
   bool handlePacketQueue(ObRequest* req, void* args)
   {
     UNUSED(args);
@@ -91,7 +91,7 @@ class QHandler : public ObiReqQHandler {
 };
 
 class ObTestDeliver : public rpc::frame::ObReqQDeliver {
-  public:
+public:
   ObTestDeliver() : ObReqQDeliver(qhandler_)
   {}
 
@@ -130,13 +130,13 @@ class ObTestDeliver : public rpc::frame::ObReqQDeliver {
 
   void stop(){};
 
-  private:
+private:
   ObReqQueueThread queue_;
   QHandler qhandler_;
 };
 
 class Client : public CoKThread {
-  public:
+public:
   Client(const TestProxy& proxy, int th_cnt, ObAddr dst, uint32_t sleep_time)
       : CoKThread(th_cnt), proxy_(proxy), dst_(dst), sleep_time_(sleep_time)
   {}
@@ -150,7 +150,7 @@ class Client : public CoKThread {
     }
   }
 
-  private:
+private:
   const TestProxy& proxy_;
   const ObAddr dst_;
   const uint32_t sleep_time_;

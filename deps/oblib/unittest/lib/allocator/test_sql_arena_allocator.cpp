@@ -19,19 +19,19 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
 class TestSQLArenaAllocator : public ::testing::Test {
-  public:
+public:
   TestSQLArenaAllocator();
   virtual ~TestSQLArenaAllocator();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestSQLArenaAllocator);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 

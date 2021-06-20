@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace unittest {
 class ObTransMsgException {
-  public:
+public:
   ObTransMsgException()
       : inited_(false),
         request_abort_(false),
@@ -63,7 +63,7 @@ class ObTransMsgException {
   TO_STRING_KV(K_(request_abort), K_(start_request_abort_time), K_(end_request_abort_time), K_(response_abort),
       K_(start_response_abort_time), K_(end_response_abort_time));
 
-  public:
+public:
   bool inited_;
   bool request_abort_;
   bool response_abort_;
@@ -75,7 +75,7 @@ class ObTransMsgException {
 };
 
 class ObTransRpcExecption {
-  public:
+public:
   ObTransRpcExecption()
   {
     reset();
@@ -89,7 +89,7 @@ class ObTransRpcExecption {
       const int64_t end_request_abort_time, const bool response_abort, const int64_t start_response_abort_time,
       const int64_t end_response_abort_time);
 
-  public:
+public:
   ObTransMsgException commit_msg_exp_;
   ObTransMsgException abort_msg_exp_;
   ObTransMsgException stmt_create_ctx_msg_exp_;

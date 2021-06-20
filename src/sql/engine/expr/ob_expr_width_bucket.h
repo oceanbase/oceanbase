@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprWidthBucket : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprWidthBucket(common::ObIAllocator& alloc);
   virtual ~ObExprWidthBucket()
   {}

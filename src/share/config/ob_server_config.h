@@ -52,7 +52,7 @@ const char* const CLOG_DISK_USAGE_LIMIT_PERCENTAGE = "clog_disk_usage_limit_perc
 const char* const CLOG_DISK_UTILIZATION_THRESHOLD = "clog_disk_utilization_threshold";
 
 class ObServerConfig : public ObCommonConfig {
-  public:
+public:
   int init(const ObSystemConfig& config);
   static ObServerConfig& get_instance();
 
@@ -152,11 +152,11 @@ class ObServerConfig : public ObCommonConfig {
   int deserialize_with_compat(const char* buf, const int64_t data_len, int64_t& pos);
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int64_t disk_actual_space_;
   ObAddr self_addr_;
 
-  public:
+public:
 ///////////////////////////////////////////////////////////////////////////////
 // use MACRO 'OB_CLUSTER_PARAMETER' to define new cluster parameters
 // in ob_parameter_seed.ipp:
@@ -166,14 +166,14 @@ class ObServerConfig : public ObCommonConfig {
 #include "share/parameter/ob_parameter_seed.ipp"
 #undef OB_CLUSTER_PARAMETER
 
-  protected:
+protected:
   ObServerConfig();
   virtual ~ObServerConfig();
   const ObSystemConfig* system_config_;
   static const int16_t OB_CONFIG_MAGIC = static_cast<int16_t>(0XBCDE);
   static const int16_t OB_CONFIG_VERSION = 1;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObServerConfig);
 };
 }  // namespace common

@@ -224,7 +224,7 @@ int ObLobLocator::get_rowid(ObString& rowid) const
     COMMON_LOG(WARN, "ObLobLocator with compat mode does not support rowid ", K(ret), K(*this));
   } else if (payload_offset_ <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(WARN, "Unexcepted payload offset to get rowid", K(ret), K(*this));
+    COMMON_LOG(WARN, "Unexpected payload offset to get rowid", K(ret), K(*this));
   } else {
     rowid = ObString(payload_offset_, data_);
   }

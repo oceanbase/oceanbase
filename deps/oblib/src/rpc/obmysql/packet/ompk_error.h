@@ -20,11 +20,11 @@ namespace oceanbase {
 namespace obmysql {
 
 class OMPKError : public ObMySQLPacket {
-  public:
+public:
   static const uint64_t SQLSTATE_SIZE = 5;
   static const uint8_t MARKER = '#';
 
-  public:
+public:
   OMPKError();
   virtual ~OMPKError();
 
@@ -57,8 +57,8 @@ class OMPKError : public ObMySQLPacket {
   }
   virtual int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
-  private:
+private:
+private:
   DISALLOW_COPY_AND_ASSIGN(OMPKError);
   uint8_t field_count_;  // always 0xff
   uint16_t errcode_;

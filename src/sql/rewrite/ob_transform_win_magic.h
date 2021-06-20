@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 struct ObStmtMapInfo;
 class ObTransformWinMagic : public ObTransformRule {
-  public:
+public:
   ObTransformWinMagic(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
 
@@ -31,10 +31,10 @@ class ObTransformWinMagic : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  protected:
+protected:
   virtual int adjust_transform_types(uint64_t& transform_types) override;
 
-  private:
+private:
   int check_subquery_validity(ObDMLStmt* stmt, ObQueryRefRawExpr* query_ref, ObStmtMapInfo& map_info, bool& is_valid);
 
   int check_aggr_expr_validity(ObSelectStmt& subquery, bool& is_valid);

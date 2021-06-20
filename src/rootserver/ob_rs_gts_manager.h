@@ -36,7 +36,7 @@ class ObUnitManager;
 class ObServerManager;
 
 class RsGtsInstance {
-  public:
+public:
   RsGtsInstance() : gts_id_(common::OB_INVALID_ID), gts_name_(), region_(), tenant_id_array_()
   {}
   virtual ~RsGtsInstance()
@@ -44,7 +44,7 @@ class RsGtsInstance {
   void reset();
   int assign(const RsGtsInstance& other);
 
-  public:
+public:
   uint64_t get_gts_id() const
   {
     return gts_id_;
@@ -78,23 +78,23 @@ class RsGtsInstance {
 
   TO_STRING_KV(K_(gts_id), K_(gts_name), K_(region), K_(tenant_id_array));
 
-  private:
+private:
   uint64_t gts_id_;
   common::ObGtsName gts_name_;
   common::ObRegion region_;
   // record all tenants served by this gts instance
   common::ObArray<uint64_t> tenant_id_array_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(RsGtsInstance);
 };
 
 class ObRsGtsManager {
-  public:
+public:
   ObRsGtsManager();
   virtual ~ObRsGtsManager();
 
-  public:
+public:
   int init(common::ObMySQLProxy* sql_proxy, rootserver::ObZoneManager* zone_mgr, rootserver::ObUnitManager* unit_mgr,
       rootserver::ObServerManager* server_mgr);
   int load();
@@ -105,7 +105,7 @@ class ObRsGtsManager {
   int upgrade_cluster_create_ha_gts_util();
   int check_tenant_ha_gts_exist(const uint64_t tenant_id, bool& ha_gts_exist);
 
-  private:
+private:
   int check_inner_stat();
   int pick_gts_instance_id(const common::ObRegion& primary_region, uint64_t& gts_id);
   int load_gts_instance(const common::ObIArray<common::ObGtsInfo>& gts_info_array);
@@ -119,7 +119,7 @@ class ObRsGtsManager {
       const common::ObAddr& standby_server, common::ObGtsInfo& gts_info);
   int fetch_new_ha_gts_id(uint64_t& new_gts_id);
 
-  private:
+private:
   typedef common::hash::ObHashMap<uint64_t, RsGtsInstance*, common::hash::NoPthreadDefendMode> GtsInstanceMap;
   typedef common::hash::ObHashMap<uint64_t, uint64_t, common::hash::NoPthreadDefendMode> TenantGtsMap;
   typedef common::hash::ObHashMap<common::ObRegion, common::ObSEArray<uint64_t, 7>*,  // gts_id array
@@ -128,7 +128,7 @@ class ObRsGtsManager {
   const int64_t MAX_GTS_INSTANCE_CNT = common::OB_DEFAULT_TENANT_COUNT;
   const int64_t MAX_TENANT_CNT = common::OB_DEFAULT_TENANT_COUNT;
 
-  private:
+private:
   common::SpinRWLock lock_;
   rootserver::ObZoneManager* zone_mgr_;
   rootserver::ObUnitManager* unit_mgr_;

@@ -29,7 +29,7 @@ namespace obsys {
  */
 class CThreadMutex {
 
-  public:
+public:
   /*
    * Constructor
    */
@@ -75,7 +75,7 @@ class CThreadMutex {
     pthread_mutex_unlock(&_mutex);
   }
 
-  protected:
+protected:
   pthread_mutex_t _mutex;
 };
 
@@ -83,7 +83,7 @@ class CThreadMutex {
  * @brief Thread guard
  */
 class CThreadGuard {
-  public:
+public:
   CThreadGuard(CThreadMutex* mutex)
   {
     _mutex = NULL;
@@ -99,7 +99,7 @@ class CThreadGuard {
     }
   }
 
-  private:
+private:
   CThreadMutex* _mutex;
 };
 

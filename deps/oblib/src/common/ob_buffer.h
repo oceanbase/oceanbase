@@ -70,18 +70,18 @@ struct ObAlignedAllocator {
 
 template <class Alloc = DfltBufferAlloc<> >
 class base_buffer {
-  public:
+public:
   static const int64_t DEFAULT_CAPACITY = BUFSIZ;
   static const bool USE_EXCEPTION = true;
   static const bool NO_EXCEPTION = false;
 
-  protected:
+protected:
   int64_t capacity_;
   int64_t length_;
   int64_t base_;
   Alloc alloc_;
 
-  protected:
+protected:
   int64_t min(int64_t a, int64_t b) const
   {
     return a < b ? a : b;
@@ -140,7 +140,7 @@ class base_buffer {
     return len;
   }
 
-  public:
+public:
   base_buffer() : capacity_(0), length_(0), base_(0)
   {
     init_capacity_(DEFAULT_CAPACITY);
@@ -157,7 +157,7 @@ class base_buffer {
     length_ = 0;
   }
 
-  public:
+public:
   virtual char* ptre() = 0;
   virtual const char* ptre() const = 0;
   virtual char* ptr() = 0;
@@ -230,7 +230,7 @@ class base_buffer {
     return ObDataBuffer(ptr(), capacity());
   }
 
-  public:
+public:
   int64_t compare(const char* str, int64_t len) const
   {
     int64_t r = MEMCMP(ptr(), str, min(length(), len));
@@ -252,7 +252,7 @@ class base_buffer {
     return compare(rbuf.ptr(), rbuf.length());
   }
 
-  public:
+public:
   int append(const char* str, int64_t len)
   {
     if (0 == str || len < 0) {
@@ -469,7 +469,7 @@ class base_buffer {
     }
   }
 
-  public:
+public:
   int assign(const char* str, int64_t len)
   {
     if (0 == str || len < 0) {
@@ -606,13 +606,13 @@ class base_buffer {
     return appende(h);
   }
 
-  public:
+public:
   template <class charT>
   class iterator_base {
-    private:
+  private:
     charT* cur_;
 
-    public:
+  public:
     explicit iterator_base(charT* p)
     {
       cur_ = p;
@@ -716,13 +716,13 @@ class base_buffer {
 
 template <class Alloc = DfltBufferAlloc<> >
 class base_normal_buffer : public base_buffer<Alloc> {
-  protected:
+protected:
   char* ptr_;
 
-  public:
+public:
   typedef base_buffer<Alloc> Parent;
 
-  protected:
+protected:
   virtual int reset_size_(bool exception, int64_t size, bool retain_data)
   {
     if (0 == ptr_) {
@@ -765,7 +765,7 @@ class base_normal_buffer : public base_buffer<Alloc> {
     }
   }
 
-  public:
+public:
   base_normal_buffer() : base_buffer<Alloc>()
   {
     preset_();
@@ -784,7 +784,7 @@ class base_normal_buffer : public base_buffer<Alloc> {
     Parent::length_ = 0;
   }
 
-  public:
+public:
   virtual char* ptre()
   {
     return ptr_ + Parent::base_;
@@ -805,13 +805,13 @@ class base_normal_buffer : public base_buffer<Alloc> {
 
 template <int N = 256, class Alloc = DfltBufferAlloc<> >
 class sbuffer : public base_buffer<Alloc> {
-  protected:
+protected:
   char buff_[N];
 
-  public:
+public:
   typedef base_buffer<Alloc> Parent;
 
-  protected:
+protected:
   virtual int reset_size_(bool exception, int64_t size, bool retain_data)
   {
     (void)size;
@@ -823,13 +823,13 @@ class sbuffer : public base_buffer<Alloc> {
     }
   }
 
-  public:
+public:
   sbuffer() : base_buffer<Alloc>(N)
   {}
   virtual ~sbuffer()
   {}
 
-  public:
+public:
   virtual char* ptre()
   {
     return buff_ + Parent::base_;

@@ -66,7 +66,7 @@ enum LeaseRequestServerStatus {
 struct ObServerResourceInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   double cpu_;
   int64_t mem_in_use_;  // in KB
   int64_t mem_total_;
@@ -92,7 +92,7 @@ struct ObServerResourceInfo {
 struct ObLeaseRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t LEASE_VERSION = 1;
   // Server lease length, 50s
   static const int64_t SERVICE_LEASE = 40 * 1000000;
@@ -131,7 +131,7 @@ struct ObLeaseRequest {
 struct ObLeaseResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t LEASE_VERSION = 1;
   int64_t version_;
   int64_t lease_expire_time_;
@@ -168,32 +168,32 @@ struct ObLeaseResponse {
 struct ObInZoneHbRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObInZoneHbRequest() : server_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(server));
 
-  public:
+public:
   common::ObAddr server_;
 };
 
 struct ObInZoneHbResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObInZoneHbResponse() : in_zone_hb_expire_time_(-1)
   {}
 
-  public:
+public:
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(in_zone_hb_expire_time));
 
-  public:
+public:
   int64_t in_zone_hb_expire_time_;
 };
 

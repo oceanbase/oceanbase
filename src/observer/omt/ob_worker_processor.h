@@ -30,7 +30,7 @@ class ObReqTranslator;
 namespace omt {
 
 class ObIWorkerProcessor {
-  public:
+public:
   virtual ~ObIWorkerProcessor()
   {}
 
@@ -50,7 +50,7 @@ class ObFakeWorkerProcessor : public ObIWorkerProcessor {
 };
 
 class ObWorkerProcessor : public ObIWorkerProcessor {
-  public:
+public:
   ObWorkerProcessor(rpc::frame::ObReqTranslator& xlator, const common::ObAddr& myaddr);
 
   virtual void th_created();
@@ -58,10 +58,10 @@ class ObWorkerProcessor : public ObIWorkerProcessor {
 
   virtual int process(rpc::ObRequest& req);
 
-  private:
+private:
   int process_one(rpc::ObRequest& req, int& process_ret);
 
-  private:
+private:
   rpc::frame::ObReqTranslator& translator_;
   const common::ObAddr& myaddr_;
 };  // end of class ObWorkerProcessor

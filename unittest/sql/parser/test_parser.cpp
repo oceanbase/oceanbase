@@ -23,17 +23,17 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 namespace test {
 class TestParser : public TestSqlUtils, public ::testing::Test {
-  public:
+public:
   TestParser();
   virtual ~TestParser();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestParser);
 
-  protected:
+protected:
   // function members
   void do_parse(const char* query_str, std::ofstream& of_result, int64_t expect_error = OB_SUCCESS);
   void print_parse_tree(const char* query_str, std::ofstream& of_result, int64_t expect_error = OB_SUCCESS);
@@ -41,7 +41,7 @@ class TestParser : public TestSqlUtils, public ::testing::Test {
   void do_filter_hint(const char* query_str, std::ofstream& of_result, int64_t expect_error = OB_SUCCESS);
   bool pretreat_cmd(std::string line, int64_t& expect_error);
 
-  protected:
+protected:
   // data members
   ObArenaAllocator allocator_;
 };

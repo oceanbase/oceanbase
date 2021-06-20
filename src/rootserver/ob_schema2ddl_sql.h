@@ -28,13 +28,13 @@ namespace rootserver {
 
 // Convert table schema to create table sql for creating table in mysql server.
 class ObSchema2DDLSql {
-  public:
+public:
   ObSchema2DDLSql();
   virtual ~ObSchema2DDLSql();
 
   static int convert(const share::schema::ObTableSchema& table_schema, char* sql_buf, const int64_t buf_size);
 
-  private:
+private:
   static int type2str(const share::schema::ObColumnSchemaV2& column_schema, char* buf, const int64_t buf_size);
 };
 }  // namespace rootserver

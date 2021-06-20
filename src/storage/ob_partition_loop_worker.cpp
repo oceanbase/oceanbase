@@ -193,17 +193,20 @@ int ObPartitionLoopWorker::generate_weak_read_timestamp(const int64_t max_stale_
   DEBUG_SYNC(BLOCK_WEAK_READ_TIMESTAMP);
   DEBUG_SYNC(SYNC_PG_AND_REPLAY_ENGINE_DEADLOCK);
 
+  bool is_restore = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "partition is not initialized", K(ret), K(pkey_));
+  } else if (FALSE_IT(is_restore = (partition_->get_pg_storage().is_restore()))) {
   } else if (OB_FAIL(gen_readable_info_(readable_info))) {
     // no need to caculate timestamp when partition is rebuilding
     if (OB_STATE_NOT_MATCH != ret && OB_PARTITION_NOT_EXIST != ret) {
       STORAGE_LOG(WARN, "fail to gen readble info", K(ret), K(pkey_));
     }
   } else if (!readable_info.is_valid()) {
-    if (partition_->get_pg_storage().is_restore()) {
+    if (is_restore) {
       // ignore pg in restore
+      ret = OB_STATE_NOT_MATCH;
       if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
         STORAGE_LOG(WARN, "partition is in restore, just ignore", K(ret), K_(pkey), K(readable_info));
       }

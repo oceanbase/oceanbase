@@ -248,7 +248,7 @@ struct ObExecTimestamp {
 };
 
 class ObSchedInfo {
-  public:
+public:
   ObSchedInfo() : sched_info_(NULL), sched_info_len_(0)
   {}
   void reset()
@@ -291,7 +291,7 @@ class ObSchedInfo {
     return sched_info_len_;
   }
 
-  private:
+private:
   char* sched_info_;
   int64_t sched_info_len_;
 };

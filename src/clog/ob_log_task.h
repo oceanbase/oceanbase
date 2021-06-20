@@ -30,7 +30,7 @@ namespace clog {
 class ObISubmitLogCb;
 class ObILogTaskCallBack;
 class ObLogSimpleBitMap {
-  public:
+public:
   ObLogSimpleBitMap() : val_(0)
   {}
   ~ObLogSimpleBitMap()
@@ -45,7 +45,7 @@ class ObLogSimpleBitMap {
   bool test_and_set(const int64_t idx);
   TO_STRING_KV(K_(val));
 
-  private:
+private:
   uint16_t val_;
 };
 
@@ -69,7 +69,7 @@ class ObLogTask : public ObILogExtRingBufferData {
     ALREADY_SEND_TO_STANDBY = 15,  // whether it has been send to standby cluster
   };
 
-  public:
+public:
   ObLogTask();
   virtual ~ObLogTask();
   int init(ObISubmitLogCb* submit_cb, const int64_t replica_num, const bool need_replay);
@@ -142,6 +142,7 @@ class ObLogTask : public ObILogExtRingBufferData {
   char* get_log_buf() const;
   int32_t get_log_buf_len() const;
   int64_t get_generation_timestamp() const;
+  int64_t get_next_replay_log_ts() const;
   int64_t get_submit_timestamp() const;
   int64_t get_data_checksum() const;
   int64_t get_epoch_id() const;
@@ -153,18 +154,18 @@ class ObLogTask : public ObILogExtRingBufferData {
   // int report_trace();
 
   TO_STRING_KV(K(log_type_), K(proposal_id_), K(log_buf_len_), K_(generation_timestamp), K(submit_timestamp_),
-      K_(data_checksum), K(epoch_id_), K(accum_checksum_), K_(state_map), K_(ack_list), KP_(submit_cb),
-      K_(majority_cnt), K_(log_cursor));
+      K(next_replay_log_ts_), K_(data_checksum), K(epoch_id_), K(accum_checksum_), K_(state_map), K_(ack_list),
+      KP_(submit_cb), K_(majority_cnt), K_(log_cursor));
 
-  public:
+public:
   virtual void destroy();
   virtual bool can_be_removed();
   virtual bool can_overwrite(const ObILogExtRingBufferData* log_task);
 
-  private:
+private:
   int log_deep_copy_to_(const ObLogEntry& log_entry, const bool need_copy);
 
-  private:
+private:
   // The first 4 variables are sorted in order to save space overhead caused by alignment
   //
   // 1 bytes
@@ -185,6 +186,10 @@ class ObLogTask : public ObILogExtRingBufferData {
   int64_t generation_timestamp_;
   // 8 bytes
   int64_t submit_timestamp_;
+  // 8 bytes, used for record next_replay_log_ts of total log_entry:
+  // for unencrypted OB_LOG_AGGR log: next_replay_log_ts is min_log_submit_ts of all aggregated logs
+  // for other logs: equal with submit_timestamp_
+  int64_t next_replay_log_ts_;
   // ObConfirmedInfo, 16 bytes
   int64_t epoch_id_;
   int64_t data_checksum_;

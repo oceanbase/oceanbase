@@ -21,13 +21,13 @@
 namespace oceanbase {
 namespace blocksstable {
 class ObIMicroBlockRowFetcher {
-  public:
+public:
   ObIMicroBlockRowFetcher();
   virtual ~ObIMicroBlockRowFetcher();
   virtual int init(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
       const storage::ObSSTable* sstable);
 
-  protected:
+protected:
   int prepare_reader(const ObFullMacroBlockMeta& macro_meta);
   const storage::ObTableIterParam* param_;
   storage::ObTableAccessContext* context_;
@@ -41,7 +41,7 @@ class ObIMicroBlockRowFetcher {
 };
 
 class ObMicroBlockRowGetter : public ObIMicroBlockRowFetcher {
-  public:
+public:
   ObMicroBlockRowGetter();
   virtual ~ObMicroBlockRowGetter();
   virtual int init(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
@@ -53,7 +53,7 @@ class ObMicroBlockRowGetter : public ObIMicroBlockRowFetcher {
       const ObRowCacheValue& value, const storage::ObStoreRow*& row);
   int get_not_exist_row(const common::ObStoreRowkey& rowkey, const storage::ObStoreRow*& row);
 
-  private:
+private:
   int project_row(const ObStoreRowkey& rowkey, const ObRowCacheValue& value, const ObColumnMap& column_map,
       const storage::ObStoreRow*& row);
   int project_cache_row(const ObStoreRowkey& rowkey, const ObRowCacheValue& value, const ObColumnMap& column_map,
@@ -61,7 +61,7 @@ class ObMicroBlockRowGetter : public ObIMicroBlockRowFetcher {
   int project_cache_sparse_row(const ObStoreRowkey& rowkey, const ObRowCacheValue& value, const ObColumnMap& column_map,
       const storage::ObStoreRow*& row);
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   ObColumnMap column_map_;
   storage::ObStoreRow row_;

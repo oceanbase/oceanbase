@@ -29,12 +29,12 @@ class ObTimeUtility2 {
   using ObString = common::ObString;
   enum ObHourFlag { HOUR_UNUSE, HOUR_AM, HOUR_PM };
 
-  public:
+public:
   enum DecimalDigts { DIGTS_INSENSITIVE, DIGTS_SENSITIVE };
   static const char* STD_TS_FORMAT_WITH_USEC;
   static const char* STD_TS_FORMAT_WITHOUT_USEC;
 
-  public:
+public:
   // call mktime() to make seconds from strcut tm, and check seconds whether valid
   static int make_second(struct tm& t, time_t& second);
   static int timestamp_to_usec(struct tm& base_tm, int64_t base_usec, int64_t& result_usec);
@@ -69,7 +69,7 @@ class ObTimeUtility2 {
   static bool is_leap_year(int year);
   static int64_t timediff(const struct timeval& tv1, const struct timeval& tv2);
 
-  private:
+private:
   static bool is_valid_year(int year);
   static bool is_valid_month(int month);
   // day of the month
@@ -94,14 +94,14 @@ class ObTimeUtility2 {
    */
   static bool check_in_next_critical_week(int yday, int wday, int year, uint8_t flag_mask);
 
-  private:
+private:
   static const char* mday_name_[31];
   static const char* weekday_name_[7];
   static const char* weekday_abbr_name_[7];
   static const char* month_name_[12];
   static const char* month_abbr_name_[12];
 
-  private:
+private:
   ObTimeUtility2() = delete;
 };
 

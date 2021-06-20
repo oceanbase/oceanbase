@@ -24,7 +24,7 @@ namespace common {
 class ObMemstoreAllocatorMgr;
 class ObActiveList;
 class ObFifoArena {
-  public:
+public:
   static int64_t total_hold_;
   struct Page;
   struct Ref {
@@ -159,7 +159,7 @@ class ObFifoArena {
     int64_t allocated_;
   };
 
-  public:
+public:
   enum {
     MAX_CACHED_GROUP_COUNT = 16,
     MAX_CACHED_PAGE_COUNT = MAX_CACHED_GROUP_COUNT * Handle::MAX_NWAY,
@@ -183,7 +183,7 @@ class ObFifoArena {
     reset();
   }
 
-  public:
+public:
   int init(uint64_t tenant_id);
   void reset();
   void update_nway_per_group(int64_t nway);
@@ -211,7 +211,7 @@ class ObFifoArena {
   void set_memstore_threshold(int64_t memstore_threshold);
   bool need_do_writing_throttle() const;
 
-  private:
+private:
   ObQSync& get_qs()
   {
     static ObQSync s_qs;
@@ -227,7 +227,7 @@ class ObFifoArena {
   }
 
   struct ObWriteThrottleInfo {
-    public:
+  public:
     ObWriteThrottleInfo()
     {
       reset();
@@ -241,7 +241,7 @@ class ObFifoArena {
     TO_STRING_KV(K(decay_factor_), K(alloc_duration_), K(trigger_percentage_), K(memstore_threshold_),
         K(period_throttled_count_), K(period_throttled_time_), K(total_throttled_count_), K(total_throttled_time_));
 
-    public:
+  public:
     // control info
     double decay_factor_;
     int64_t alloc_duration_;
@@ -254,7 +254,7 @@ class ObFifoArena {
     int64_t total_throttled_time_;
   };
 
-  private:
+private:
   void release_ref(Ref* ref);
   Page* alloc_page(int64_t size);
   void free_page(Page* ptr);
@@ -267,7 +267,7 @@ class ObFifoArena {
   int64_t get_writing_throttling_trigger_percentage_() const;
   int64_t get_writing_throttling_maximum_duration_() const;
 
-  private:
+private:
   static const int64_t MAX_WAIT_INTERVAL = 20 * 1000 * 1000;  // 20s
   static const int64_t MEM_SLICE_SIZE = 2 * 1024 * 1024;      // Bytes per usecond
   static const int64_t MIN_INTERVAL = 20000;

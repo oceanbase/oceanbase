@@ -65,7 +65,7 @@ typedef common::ObSimpleIterator<ObElectionEventHistory, common::ObModIds::OB_EL
     ObElectionEventHistoryIterator;
 
 class ObIElectionMgr : public transaction::ObITimestampService {
-  public:
+public:
   ObIElectionMgr()
   {}
   virtual ~ObIElectionMgr()
@@ -80,7 +80,7 @@ class ObIElectionMgr : public transaction::ObITimestampService {
   virtual int wait() = 0;
   virtual int stop() = 0;
 
-  public:
+public:
   // add partition
   virtual int add_partition(const common::ObPartitionKey& partition, const int64_t replica_num,
       ObIElectionCallback* election_cb, ObIElection*& election) = 0;
@@ -94,10 +94,10 @@ class ObIElectionMgr : public transaction::ObITimestampService {
   virtual int revoke_all(const uint32_t revoke_type) = 0;
   virtual int move_out_election_group(const ObPartitionKey& partition, const ObElectionGroupId& eg_id) = 0;
 
-  public:
+public:
   virtual int handle_election_msg(const ObElectionMsgBuffer& msgbuf, obrpc::ObElectionRpcResult& result) = 0;
 
-  public:
+public:
   virtual int set_candidate(const common::ObPartitionKey& partition, const int64_t replica_num,
       const common::ObMemberList& curr_mlist, const int64_t membership_version) = 0;
   // get current candidate
@@ -117,7 +117,7 @@ class ObIElectionMgr : public transaction::ObITimestampService {
 };
 
 class ObElectionFactory {
-  public:
+public:
   static ObIElection* alloc(const uint64_t tenant_id);
   static void release(ObIElection* e);
   static int64_t alloc_count_;
@@ -125,7 +125,7 @@ class ObElectionFactory {
 };
 
 class ElectionAllocHandle {
-  public:
+public:
   typedef common::LinkHashNode<common::ObPartitionKey> Node;
   static int64_t TOTAL_RELEASE_COUNT;  // for unittest
 
@@ -154,7 +154,7 @@ class ElectionAllocHandle {
 
 template <typename T, int64_t CACHE_NUM>
 class ObPointerCache {
-  public:
+public:
   ObPointerCache()
   {
     reset();
@@ -193,12 +193,12 @@ class ObPointerCache {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   T* cache_[CACHE_NUM];
 };
 
 class ObElectionMgr : public ObIElectionMgr {
-  public:
+public:
   // typedef common::ObConcurrentHashMap<common::ObPartitionKey, ObIElection *> ElectionMap;
   static int64_t TOTAL_ADD_COUNT;
   static int64_t TOTAL_REMOVE_COUNT;
@@ -225,7 +225,7 @@ class ObElectionMgr : public ObIElectionMgr {
   int wait();
   int stop();
 
-  public:
+public:
   int add_partition(const common::ObPartitionKey& partition, const int64_t replica_num,
       ObIElectionCallback* election_cb, ObIElection*& election);
   int remove_partition(const common::ObPartitionKey& partition);
@@ -235,12 +235,12 @@ class ObElectionMgr : public ObIElectionMgr {
   int leader_revoke(const common::ObPartitionKey& partition, const uint32_t revoke_type);
   int revoke_all(const uint32_t revoke_type);
 
-  public:
+public:
   int handle_election_group_req(int msg_type, const char* buf, int64_t limit);
   int handle_election_req(int msg_type, common::ObPartitionKey& pkey, const char* buf, int64_t limit);
   int handle_election_msg(const ObElectionMsgBuffer& msgbuf, obrpc::ObElectionRpcResult& result);
 
-  public:
+public:
   int set_candidate(const common::ObPartitionKey& partition, const int64_t replica_num,
       const common::ObMemberList& curr_mlist, const int64_t membership_version);
   int get_curr_candidate(const common::ObPartitionKey& partition, common::ObMemberList& mlist) const;
@@ -262,13 +262,13 @@ class ObElectionMgr : public ObIElectionMgr {
   // int get_election(const common::ObPartitionKey &partition, ObIElection *&election) const;
   void revert_election(const ObIElection* election) const;
 
-  private:
+private:
   static const int64_t TIMER_THREAD_COUNT = 6;
   // precision of time wheel is 1000us
   static const int64_t TIME_WHEEL_PRECISION_US = 1000;
   static const int64_t CACHE_NUM = 17313;
 
-  private:
+private:
   ObIElection* get_election_(const common::ObPartitionKey& partition) const;
   void revert_election_(const ObIElection* election) const;
   template <typename Fn>
@@ -289,16 +289,16 @@ class ObElectionMgr : public ObIElectionMgr {
   int handle_election_msg_unlock_(int msg_type, ObPartitionKey& partition, const char* buf, const int64_t limit,
       int64_t& pos, obrpc::ObElectionRpcResult& result);
 
-  protected:
+protected:
   ObIElectionRpc* rpc_;
 
-  private:
+private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RDLockGuard;
   typedef RWLock::WLockGuard WRLockGuard;
   typedef RWLock::RLockGuardWithTimeout RDLockGuardWithTimeout;
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   ElectionMap election_map_;
@@ -313,27 +313,27 @@ class ObElectionMgr : public ObIElectionMgr {
 };
 
 class IterateElectionFunctor {
-  public:
+public:
   explicit IterateElectionFunctor(ObElectionInfoIterator& election_info_iter) : election_info_iter_(election_info_iter)
   {}
   bool operator()(const common::ObPartitionKey& partition, ObIElection* e);
 
-  private:
+private:
   ObElectionInfoIterator& election_info_iter_;
 };
 
 class RevokeElectionFunctor {
-  public:
+public:
   explicit RevokeElectionFunctor(const uint32_t revoke_type) : revoke_type_(revoke_type)
   {}
   bool operator()(const common::ObPartitionKey& partition, ObIElection* e);
 
-  private:
+private:
   uint32_t revoke_type_;
 };
 
 class GetElectionStatusFunctor {
-  public:
+public:
   explicit GetElectionStatusFunctor() : total_num_(0), inactive_num_(0)
   {}
   bool operator()(const common::ObPartitionKey& partition, ObIElection* e);
@@ -346,7 +346,7 @@ class GetElectionStatusFunctor {
     return inactive_num_;
   }
 
-  private:
+private:
   int64_t total_num_;
   int64_t inactive_num_;
 };

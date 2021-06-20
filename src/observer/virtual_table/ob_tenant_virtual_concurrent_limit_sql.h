@@ -48,7 +48,7 @@ class ObTenantVirtualConcurrentLimitSql : public ObTenantVirtualOutlineBase {
     LIMIT_TARGET = OB_APP_MIN_COLUMN_ID + 9,
   };
 
-  public:
+public:
   ObTenantVirtualConcurrentLimitSql() : ObTenantVirtualOutlineBase(), param_idx_(common::OB_INVALID_INDEX)
   {}
   ~ObTenantVirtualConcurrentLimitSql()
@@ -57,12 +57,12 @@ class ObTenantVirtualConcurrentLimitSql : public ObTenantVirtualOutlineBase {
   virtual int inner_open();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int fill_cells(const share::schema::ObOutlineInfo* outline_info, const share::schema::ObMaxConcurrentParam* param);
   int get_next_concurrent_limit_row(const share::schema::ObOutlineInfo* outline_info, bool& is_iter_end);
   int is_need_output(const share::schema::ObOutlineInfo* outline_info, bool& is_output);
 
-  private:
+private:
   int64_t param_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantVirtualConcurrentLimitSql);
 };

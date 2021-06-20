@@ -56,7 +56,7 @@ int ObCLogBaseFileWriter::init(
     CLOG_LOG(WARN, "already inited", K(ret));
   } else if (OB_ISNULL(log_dir) || OB_ISNULL(shm_path) || OB_ISNULL(file_store)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid param", K(ret), K(log_dir), K(align_size), KP(file_store));
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(log_dir), K(align_size), KP(file_store));
   } else if (OB_FAIL(ObBaseLogBufferMgr::get_instance().get_buffer(shm_path, log_ctrl_))) {
     CLOG_LOG(WARN, "get log buf failed", K(ret), K(log_dir));
   } else {
@@ -255,16 +255,24 @@ int ObCLogBaseFileWriter::append_trailer_entry(const uint32_t info_block_offset)
   ObLogFileTrailer trailer;
   int64_t pos = 0;
   const file_id_t phy_file_id = file_id_ + 1;
-  char* buf = shm_data_buf_;
+  // build trailer from last 512 byte offset (4096-512)
+  int64_t trailer_pos = CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
+  char* buf = shm_data_buf_ + trailer_pos;
   reset_buf();
 
   if (CLOG_TRAILER_OFFSET != file_offset_) {  // Defense code
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "file_offset_ mismatch trailer offset", K(ret));
+    CLOG_LOG(WARN, "file_offset_ mismatch trailer offset", K(ret), K_(file_offset), LITERAL_K(CLOG_TRAILER_OFFSET));
   } else if (OB_FAIL(trailer.build_serialized_trailer(buf, CLOG_TRAILER_SIZE, info_block_offset, phy_file_id, pos))) {
-    CLOG_LOG(WARN, "build_serialized_trailer fail", K(ret), K(info_block_offset), K_(file_id), K(phy_file_id));
+    CLOG_LOG(WARN,
+        "build_serialized_trailer fail",
+        K(ret),
+        LITERAL_K(CLOG_DIO_ALIGN_SIZE),
+        K(info_block_offset),
+        K_(file_id),
+        K(phy_file_id));
   } else {
-    buf_write_pos_ += (uint32_t)CLOG_TRAILER_SIZE;
+    buf_write_pos_ += (uint32_t)CLOG_DIO_ALIGN_SIZE;
   }
 
   return ret;
@@ -275,12 +283,18 @@ int ObCLogBaseFileWriter::flush_trailer_entry()
   int ret = OB_SUCCESS;
   if (CLOG_TRAILER_OFFSET != file_offset_) {  // Defense code
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "file offset mismatch", K_(file_offset), "CLOG_TRAILER_OFFSET", CLOG_TRAILER_OFFSET);
-  } else if (CLOG_TRAILER_SIZE != buf_write_pos_) {
+    CLOG_LOG(WARN, "file offset mismatch", K_(file_offset), LITERAL_K(CLOG_TRAILER_OFFSET));
+  } else if (CLOG_DIO_ALIGN_SIZE != buf_write_pos_) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "buf write position mismatch", K_(buf_write_pos), "CLOG_TRAILER_SIZE", CLOG_TRAILER_SIZE);
-  } else if (OB_FAIL(store_->write(shm_data_buf_, buf_write_pos_, file_offset_))) {
-    CLOG_LOG(ERROR, "write fail", K(ret), K(buf_write_pos_), K_(file_offset), K(errno));
+    CLOG_LOG(WARN, "buf write position mismatch", K_(buf_write_pos), LITERAL_K(CLOG_DIO_ALIGN_SIZE));
+  } else if (OB_FAIL(store_->write(shm_data_buf_, buf_write_pos_, CLOG_TRAILER_ALIGN_WRITE_OFFSET))) {
+    CLOG_LOG(ERROR,
+        "write fail",
+        K(ret),
+        K(buf_write_pos_),
+        K_(file_offset),
+        LITERAL_K(CLOG_TRAILER_ALIGN_WRITE_OFFSET),
+        K(errno));
   }
   return ret;
 }
@@ -381,16 +395,18 @@ int ObCLogBaseFileWriter::append_padding_entry(const uint32_t padding_size)
   return ret;
 }
 
-int ObCLogBaseFileWriter::cache_buf(ObLogCache* log_cache)
+int ObCLogBaseFileWriter::cache_buf(ObLogCache* log_cache, const char* buf, const uint32_t buf_len)
 {
   int ret = OB_SUCCESS;
-  char* buf = shm_data_buf_;
-  if (buf_write_pos_ > 0) {
+  if (OB_ISNULL(buf) || 0 == buf_len) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid args", K(ret), KP(buf), K(buf_len));
+  } else {
     const common::ObAddr addr = GCTX.self_addr_;
-    if (OB_FAIL(log_cache->append_data(addr, buf, file_id_, file_offset_, buf_write_pos_))) {
-      CLOG_LOG(WARN, "fail to cache buf, ", K(ret), K_(file_id), K_(file_offset), K_(buf_write_pos));
+    if (OB_FAIL(log_cache->append_data(addr, buf, file_id_, file_offset_, buf_len))) {
+      CLOG_LOG(WARN, "fail to cache buf, ", K(ret), K_(file_id), K_(file_offset), K(buf_len));
     } else {
-      file_offset_ += buf_write_pos_;
+      file_offset_ += buf_len;
     }
   }
   return ret;
@@ -659,7 +675,7 @@ int ObCLogLocalFileWriter::end_current_file(ObIInfoBlockHandler* info_getter, Ob
       CLOG_LOG(WARN, "fail to add info block", K(ret), K(info_getter));
     } else if (OB_FAIL(flush_buf())) {
       CLOG_LOG(WARN, "fail to flush info block", K(ret));
-    } else if (OB_FAIL(cache_buf(log_cache))) {
+    } else if (OB_FAIL(cache_buf(log_cache, shm_data_buf_, buf_write_pos_))) {
       CLOG_LOG(WARN, "fail to cache info block", K(ret));
     }
   }
@@ -673,16 +689,17 @@ int ObCLogLocalFileWriter::end_current_file(ObIInfoBlockHandler* info_getter, Ob
 
   // - Flush trailer entry to log file
   // - Cache trailer entry to log cache
+  char* trailer_buf = shm_data_buf_ + CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
   if (OB_SUCC(ret)) {
     if (OB_FAIL(append_trailer_entry(info_block_offset))) {
       CLOG_LOG(WARN, "fail to add trailer", K(ret));
     } else if (OB_FAIL(flush_trailer_entry())) {
       CLOG_LOG(WARN, "fail to flush trailer", K(ret));
-    } else if (OB_FAIL(cache_buf(log_cache))) {
-      CLOG_LOG(WARN, "fail to cache trailer", K(ret));
+    } else if (OB_FAIL(cache_buf(log_cache, trailer_buf, CLOG_TRAILER_SIZE))) {
+      CLOG_LOG(WARN, "fail to cache trailer", K(ret), KP(trailer_buf), LITERAL_K(CLOG_TRAILER_SIZE));
     } else if (CLOG_FILE_SIZE != file_offset_) {  // Defense code
       ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "file_offset_ mismatch file size", K(ret));
+      CLOG_LOG(WARN, "file_offset_ mismatch file size", K(ret), K_(file_offset));
     } else {
       tail->advance(file_id_ + 1, 0);
       reset_buf();
@@ -713,7 +730,7 @@ int ObCLogLocalFileWriter::cache_last_padding_entry(ObLogCache* log_cache)
     padding_size = ObPaddingEntry::get_padding_size(file_offset_, align_size_);
     if (OB_FAIL(append_padding_entry(padding_size))) {
       CLOG_LOG(WARN, "inner add padding entry error", K(ret), K(padding_size));
-    } else if (OB_FAIL(cache_buf(log_cache))) {
+    } else if (OB_FAIL(cache_buf(log_cache, shm_data_buf_, buf_write_pos_))) {
       CLOG_LOG(WARN, "fail to cache last padding", K(ret));
     }
   }

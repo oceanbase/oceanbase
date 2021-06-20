@@ -22,7 +22,7 @@ namespace sql {
 // REGISTER_PHY_OPERATOR(ObMergeGroupBy, PHY_MERGE_GROUP_BY);
 
 class ObMergeGroupBy::ObMergeGroupByCtx : public ObGroupByCtx {
-  public:
+public:
   explicit ObMergeGroupByCtx(ObExecContext& exec_ctx)
       : ObGroupByCtx(exec_ctx), last_input_row_(NULL), is_end_(false), cur_output_group_id(-1), first_output_group_id(0)
   {}
@@ -31,10 +31,10 @@ class ObMergeGroupBy::ObMergeGroupByCtx : public ObGroupByCtx {
     ObGroupByCtx::destroy();
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeGroupByCtx);
 
-  private:
+private:
   const ObNewRow* last_input_row_;
   bool is_end_;
   // added to support groupby with rollup

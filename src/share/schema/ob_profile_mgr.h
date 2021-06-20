@@ -22,7 +22,7 @@ namespace share {
 namespace schema {
 
 class ObProfileNameHashKey {
-  public:
+public:
   ObProfileNameHashKey() : tenant_id_(common::OB_INVALID_TENANT_ID)
   {}
   ObProfileNameHashKey(uint64_t tenant_id, common::ObString name) : tenant_id_(tenant_id), name_(name)
@@ -41,7 +41,7 @@ class ObProfileNameHashKey {
     return tenant_id_ == rv.tenant_id_ && name_ == rv.name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObString name_;
 };
@@ -73,7 +73,7 @@ struct ObGetProfileKey<uint64_t, ObProfileSchema*> {
 };
 
 class ObProfileMgr {
-  public:
+public:
   typedef common::ObSortedVector<ObProfileSchema*> ProfileInfos;
   typedef common::hash::ObPointerHashMap<ObProfileNameHashKey, ObProfileSchema*, ObGetProfileKey> ObProfileNameMap;
   typedef common::hash::ObPointerHashMap<uint64_t, ObProfileSchema*, ObGetProfileKey> ObProfileIdMap;
@@ -111,7 +111,7 @@ class ObProfileMgr {
   int get_schema_count(int64_t& schema_count) const;
   int get_schema_statistics(ObSchemaStatisticsInfo& schema_info) const;
 
-  private:
+private:
   bool is_inited_;
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator& allocator_;

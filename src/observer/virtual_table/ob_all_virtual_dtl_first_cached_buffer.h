@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObAllVirtualDtlFirstBufferInfo {
-  public:
+public:
   ObAllVirtualDtlFirstBufferInfo() : tenant_id_(0), channel_id_(0), calced_val_(0), buffer_pool_id_(0), timeout_ts_(0)
   {}
 
@@ -31,7 +31,7 @@ class ObAllVirtualDtlFirstBufferInfo {
 
   TO_STRING_KV(K(tenant_id_), K(channel_id_));
 
-  public:
+public:
   uint64_t tenant_id_;  // 1
   int64_t channel_id_;
   int64_t calced_val_;
@@ -40,7 +40,7 @@ class ObAllVirtualDtlFirstBufferInfo {
 };
 
 class ObAllVirtualDtlFirstCachedBufferIterator {
-  public:
+public:
   ObAllVirtualDtlFirstCachedBufferIterator(common::ObArenaAllocator* iter_allocator);
   virtual ~ObAllVirtualDtlFirstCachedBufferIterator();
 
@@ -57,7 +57,7 @@ class ObAllVirtualDtlFirstCachedBufferIterator {
 
   int get_next_buffer_info(ObAllVirtualDtlFirstBufferInfo& buffer_info);
 
-  private:
+private:
   static const int64_t MAX_BUFFER_CAPCITY = 1000;
   int64_t cur_tenant_idx_;
   int64_t cur_buffer_idx_;
@@ -67,7 +67,7 @@ class ObAllVirtualDtlFirstCachedBufferIterator {
 };
 
 class ObAllVirtualDtlFirstCachedBuffer : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualDtlFirstCachedBuffer();
   virtual ~ObAllVirtualDtlFirstCachedBuffer();
 
@@ -76,10 +76,10 @@ class ObAllVirtualDtlFirstCachedBuffer : public common::ObVirtualTableScannerIte
   int inner_open();
   int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int get_row(ObAllVirtualDtlFirstBufferInfo& buffer_info, common::ObNewRow*& row);
 
-  private:
+private:
   enum STORAGE_COLUMN {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -90,7 +90,7 @@ class ObAllVirtualDtlFirstCachedBuffer : public common::ObVirtualTableScannerIte
     TIMEOUT_TS,
   };
 
-  private:
+private:
   common::ObString ipstr_;
   int32_t port_;
   common::ObArenaAllocator arena_allocator_;

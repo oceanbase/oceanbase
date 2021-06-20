@@ -28,7 +28,7 @@ extern int64_t get_free_quota(const char* path, const int64_t percent, int64_t& 
 namespace unittest {
 
 class ObFormatter {
-  public:
+public:
   ObFormatter(char* buf, int64_t len) : buf_(buf), len_(len), pos_(0)
   {}
   ~ObFormatter()
@@ -52,7 +52,7 @@ class ObFormatter {
     return src;
   }
 
-  private:
+private:
   char* buf_;
   int64_t len_;
   int64_t pos_;
@@ -63,7 +63,7 @@ class ObFormatter {
 #define MAX_FILE_ID 10
 
 class TestObLogFilePool : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     char buf[BUFSIZE];
@@ -89,11 +89,11 @@ class TestObLogFilePool : public ::testing::Test {
     return ret;
   }
 
-  protected:
+protected:
 };
 
 class MyFunc {
-  public:
+public:
   MyFunc()
   {}
   ~MyFunc()

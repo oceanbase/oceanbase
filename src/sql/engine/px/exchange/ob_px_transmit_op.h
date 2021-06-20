@@ -33,7 +33,7 @@ namespace sql {
 class ObPxTransmitOpInput : public ObPxExchangeOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxTransmitOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxExchangeOpInput(ctx, spec), ch_provider_ptr_(0)
   {}
   virtual ~ObPxTransmitOpInput()
@@ -63,7 +63,7 @@ class ObPxTransmitOpInput : public ObPxExchangeOpInput {
 class ObPxTransmitSpec : public ObTransmitSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxTransmitSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   ~ObPxTransmitSpec()
   {}
@@ -83,13 +83,13 @@ class ObPxTransmitSpec : public ObTransmitSpec {
     return partition_id_idx_;
   }
 
-  private:
+private:
   // in pdm, partition_id_exprs position of output_exprs
   int32_t partition_id_idx_;
 };
 
 class ObPxTransmitOp : public ObTransmitOp {
-  public:
+public:
   ObPxTransmitOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObPxTransmitOp()
   {}
@@ -103,7 +103,7 @@ class ObPxTransmitOp : public ObTransmitOp {
   virtual int inner_close() override;
   virtual int inner_get_next_row() override;
 
-  public:
+public:
   int init_channel(ObPxTransmitOpInput& trans_input);
   int init_dfc(dtl::ObDtlDfoKey& key);
 
@@ -116,21 +116,21 @@ class ObPxTransmitOp : public ObTransmitOp {
     return task_channels_;
   }
 
-  protected:
+protected:
   virtual int do_transmit() = 0;
   static int link_ch_sets(
       ObPxTaskChSet& ch_set, common::ObIArray<dtl::ObDtlChannel*>& channels, dtl::ObDtlFlowControl* dfc = nullptr);
   int send_rows(ObSliceIdxCalc& slice_calc);
   int broadcast_rows(ObSliceIdxCalc& slice_calc);
 
-  private:
+private:
   int update_row(int partition_id_column_idx, int64_t partition_id);
   int send_row(int64_t slice_idx, int64_t& time_recorder, int64_t partition_id);
   int send_eof_row();
   int broadcast_eof_row();
   int next_row();
 
-  protected:
+protected:
   common::ObArray<dtl::ObDtlChannel*> task_channels_;
   common::ObArenaAllocator px_row_allocator_;
   ObPxTaskChSet task_ch_set_;

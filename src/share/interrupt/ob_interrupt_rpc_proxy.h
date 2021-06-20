@@ -24,10 +24,10 @@ namespace obrpc {
 struct ObInterruptStackInfo {
   static constexpr int64_t BUF1_SIZE = 128;
 
-  public:
+public:
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObInterruptStackInfo() : pos1_(0)
   {
     buf1_[0] = '\0';
@@ -55,7 +55,7 @@ struct ObInterruptStackInfo {
   }
   TO_STRING_KV("msg", buf1_);
 
-  private:
+private:
   char buf1_[BUF1_SIZE];  // Allow to piggyback text messages up to 128 letters long and end with 0
   int64_t pos1_;          // writable position of buf1_
   // NOTE:
@@ -72,10 +72,10 @@ namespace common {
 // In order to make the diagnosis of interrupts simpler and clearer,
 // Need to add the interrupt number, interrupt source, and auxiliary copy in the interrupt information
 struct ObInterruptCode {
-  public:
+public:
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObInterruptCode() : code_(0), info_()
   {}
   ObInterruptCode(int code) : code_(code), info_()
@@ -96,7 +96,7 @@ namespace obrpc {
 struct ObInterruptMessage {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObInterruptMessage() : first_(0), last_(0), code_(0), info_(){};
   ObInterruptMessage(uint64_t first, uint64_t last, int code) : first_(first), last_(last), code_(code), info_(){};
   ObInterruptMessage(uint64_t first, uint64_t last, common::ObInterruptCode& code)
@@ -111,13 +111,13 @@ struct ObInterruptMessage {
 
 class ObInterruptRpcProxy : public ObRpcProxy {
 
-  public:
+public:
   DEFINE_TO(ObInterruptRpcProxy);
   RPC_AP(PR1 remote_interrupt_call, OB_REMOTE_INTERRUPT_CALL, (ObInterruptMessage));
 };
 
 class ObInterruptProcessor : public ObRpcProcessor<ObInterruptRpcProxy::ObRpc<OB_REMOTE_INTERRUPT_CALL>> {
-  protected:
+protected:
   int process();
 };
 }  // namespace obrpc

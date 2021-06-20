@@ -25,7 +25,7 @@ class ObSSTable;
 }
 namespace blocksstable {
 class ObRowCacheKey : public common::ObIKVCacheKey {
-  public:
+public:
   ObRowCacheKey();
   ObRowCacheKey(const uint64_t table_id, const int64_t file_id, const common::ObStoreRowkey& row_key,
       const int64_t data_version, const storage::ObITable::TableType table_type);
@@ -46,7 +46,7 @@ class ObRowCacheKey : public common::ObIKVCacheKey {
   bool is_valid() const;
   TO_STRING_KV(K_(table_id), K_(file_id), K_(rowkey_size), K_(data_version), K_(table_type), K_(rowkey));
 
-  private:
+private:
   uint64_t table_id_;
   int64_t file_id_;
   int64_t rowkey_size_;
@@ -54,12 +54,12 @@ class ObRowCacheKey : public common::ObIKVCacheKey {
   storage::ObITable::TableType table_type_;
   common::ObStoreRowkey rowkey_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRowCacheKey);
 };
 
 class ObRowCacheValue : public common::ObIKVCacheValue {
-  public:
+public:
   ObRowCacheValue();
   virtual ~ObRowCacheValue();
   int init(const ObFullMacroBlockMeta& macro_meta, const storage::ObStoreRow* row, const MacroBlockId& block_id);
@@ -120,7 +120,7 @@ class ObRowCacheValue : public common::ObIKVCacheValue {
   }
   TO_STRING_KV(KP_(obj_array), K_(size), K_(block_id), KP_(column_ids));
 
-  private:
+private:
   common::ObObj* obj_array_;
   uint16_t* column_ids_;
   int64_t size_;
@@ -151,7 +151,7 @@ struct ObRowValueHandle {
 };
 
 class ObRowCache : public common::ObKVCache<ObRowCacheKey, ObRowCacheValue> {
-  public:
+public:
   ObRowCache();
   virtual ~ObRowCache();
   int get_row(const ObRowCacheKey& key, ObRowValueHandle& handle);

@@ -24,7 +24,7 @@ namespace lib {
 class TmpSpinLock {
   std::atomic_flag locked = ATOMIC_FLAG_INIT;
 
-  public:
+public:
   void lock()
   {
     while (locked.test_and_set(std::memory_order_acquire)) {
@@ -41,7 +41,7 @@ class CoFutex {
   class Node;
   using Queue = common::ObDList<Node>;
 
-  public:
+public:
   CoFutex() : spin_(), v_(), q_(), waiters_(), sys_waiters_()
   {}
 
@@ -63,7 +63,7 @@ class CoFutex {
   // routines up waiting on the futex.
   int wake(int64_t n);
 
-  public:
+public:
   // Force using syscall futex instead of choosing automatically. This
   // method is designed for performance tuning or as a global switch
   // before coroutine getting stable. It must be called at the most
@@ -73,7 +73,7 @@ class CoFutex {
     force_syscall_futex_ = true;
   }
 
-  private:
+private:
   static bool force_syscall_futex_;
 
   TmpSpinLock spin_;
@@ -86,11 +86,11 @@ class CoFutex {
 class CoFutex::Node : public common::ObDLinkBase<CoFutex::Node> {
   friend class CoFutex;
 
-  public:
+public:
   Node(CoRoutine& routine) : routine_(routine)
   {}
 
-  private:
+private:
   CoRoutine& routine_;
 };
 

@@ -30,7 +30,7 @@ class ObIServerTrace;
 class ObIZoneTrace;
 
 class ObIReplicaFilter {
-  public:
+public:
   ObIReplicaFilter()
   {}
   virtual ~ObIReplicaFilter()
@@ -43,7 +43,7 @@ class ObIReplicaFilter {
 };
 
 class ObReplicaFilter : public ObIReplicaFilter, public common::ObDLinkBase<ObReplicaFilter> {
-  public:
+public:
   ObReplicaFilter()
   {}
   virtual ~ObReplicaFilter()
@@ -51,19 +51,19 @@ class ObReplicaFilter : public ObIReplicaFilter, public common::ObDLinkBase<ObRe
 };
 
 class ObVersionReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObVersionReplicaFilter(int64_t data_version) : data_version_(data_version)
   {}
   virtual ~ObVersionReplicaFilter()
   {}
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   int64_t data_version_;
 };
 
 class ObStatusReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObStatusReplicaFilter(const ObReplicaStatus status) : replica_status_(status)
   {}
   virtual ~ObStatusReplicaFilter()
@@ -71,12 +71,12 @@ class ObStatusReplicaFilter : public ObReplicaFilter {
 
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   ObReplicaStatus replica_status_;
 };
 
 class ObPersistentStatusReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObPersistentStatusReplicaFilter(const ObReplicaStatus status) : status_(status)
   {}
   virtual ~ObPersistentStatusReplicaFilter() = default;
@@ -87,24 +87,24 @@ class ObPersistentStatusReplicaFilter : public ObReplicaFilter {
     status_ = status;
   }
 
-  private:
+private:
   ObReplicaStatus status_;
 };
 
 class ObZoneReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObZoneReplicaFilter(const common::ObZone& zone) : zone_(zone)
   {}
   virtual ~ObZoneReplicaFilter()
   {}
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   common::ObZone zone_;
 };
 
 class ObFilterLogReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   ObFilterLogReplicaFilter()
   {}
   virtual ~ObFilterLogReplicaFilter()
@@ -117,7 +117,7 @@ class ObFilterLogReplicaFilter : public ObReplicaFilter {
 };
 
 class ObOnlyFullReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   ObOnlyFullReplicaFilter()
   {}
   virtual ~ObOnlyFullReplicaFilter()
@@ -130,7 +130,7 @@ class ObOnlyFullReplicaFilter : public ObReplicaFilter {
 };
 
 class ObOnlyPaxosReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   ObOnlyPaxosReplicaFilter()
   {}
   virtual ~ObOnlyPaxosReplicaFilter()
@@ -143,7 +143,7 @@ class ObOnlyPaxosReplicaFilter : public ObReplicaFilter {
 };
 
 class ObOnlyUserTableFilter : public ObReplicaFilter {
-  public:
+public:
   ObOnlyUserTableFilter()
   {}
   virtual ~ObOnlyUserTableFilter()
@@ -156,7 +156,7 @@ class ObOnlyUserTableFilter : public ObReplicaFilter {
 };
 
 class ObOnlyInnerTableFilter : public ObReplicaFilter {
-  public:
+public:
   ObOnlyInnerTableFilter()
   {}
   virtual ~ObOnlyInnerTableFilter()
@@ -169,7 +169,7 @@ class ObOnlyInnerTableFilter : public ObReplicaFilter {
 };
 
 class ObOnlyUserTenantFilter : public ObReplicaFilter {
-  public:
+public:
   ObOnlyUserTenantFilter()
   {}
   virtual ~ObOnlyUserTenantFilter()
@@ -182,7 +182,7 @@ class ObOnlyUserTenantFilter : public ObReplicaFilter {
 };
 
 class ObServerReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObServerReplicaFilter(const common::ObAddr& server) : server_(server)
   {}
   virtual ~ObServerReplicaFilter()
@@ -193,12 +193,12 @@ class ObServerReplicaFilter : public ObReplicaFilter {
     return true;
   }
 
-  private:
+private:
   common::ObAddr server_;
 };
 
 class ObValidVersionReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   ObValidVersionReplicaFilter()
   {}
   virtual ~ObValidVersionReplicaFilter()
@@ -207,19 +207,19 @@ class ObValidVersionReplicaFilter : public ObReplicaFilter {
 };
 
 class ObPermanentOfflineFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObPermanentOfflineFilter(const ObIServerTrace* tracker) : tracker_(tracker)
   {}
   virtual ~ObPermanentOfflineFilter()
   {}
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   const ObIServerTrace* tracker_;
 };
 
 class ObOnlyLeaderByElectionFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObOnlyLeaderByElectionFilter()
   {}
   virtual ~ObOnlyLeaderByElectionFilter()
@@ -232,67 +232,67 @@ class ObOnlyLeaderByElectionFilter : public ObReplicaFilter {
 };
 
 class ObServerTraceFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObServerTraceFilter(const ObIServerTrace* tracker) : tracker_(tracker)
   {}
   virtual ~ObServerTraceFilter()
   {}
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   const ObIServerTrace* tracker_;
 };
 
 class ObStoppedServerFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObStoppedServerFilter(const ObIServerTrace* tracker) : tracker_(tracker)
   {}
   virtual ~ObStoppedServerFilter()
   {}
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   const ObIServerTrace* tracker_;
 };
 
 class ObAliveReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObAliveReplicaFilter(const ObIServerTrace* tracker) : tracker_(tracker)
   {}
   virtual ~ObAliveReplicaFilter()
   {}
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   const ObIServerTrace* tracker_;
 };
 
 class ObInServiceReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObInServiceReplicaFilter(const ObIServerTrace* tracker) : tracker_(tracker)
   {}
   virtual ~ObInServiceReplicaFilter()
   {}
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   const ObIServerTrace* tracker_;
 };
 
 class ObBlockServerReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObBlockServerReplicaFilter(const ObIServerTrace* tracker) : tracker_(tracker)
   {}
   virtual ~ObBlockServerReplicaFilter()
   {}
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   const ObIServerTrace* tracker_;
 };
 
 class ObInvalidServerFilter : public ObReplicaFilter {
-  public:
+public:
   ObInvalidServerFilter() : invalid_server_list_()
   {}
   virtual ~ObInvalidServerFilter()
@@ -300,12 +300,12 @@ class ObInvalidServerFilter : public ObReplicaFilter {
   int set_server_list(const common::ObIArray<common::ObAddr>& server_list);
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   common::ObArray<common::ObAddr> invalid_server_list_;
 };
 
 class ObUnitFilter : public ObReplicaFilter {
-  public:
+public:
   ObUnitFilter() : unit_ids_()
   {}
   virtual ~ObUnitFilter()
@@ -313,12 +313,12 @@ class ObUnitFilter : public ObReplicaFilter {
   int set_unit_ids(const common::ObIArray<uint64_t>& unit_ids);
   virtual int check(const ObPartitionReplica& replica, bool& pass) const;
 
-  private:
+private:
   common::ObArray<uint64_t> unit_ids_;
 };
 
 class ObOnlyClusterPrivateTable : public ObReplicaFilter {
-  public:
+public:
   explicit ObOnlyClusterPrivateTable()
   {}
   virtual ~ObOnlyClusterPrivateTable()
@@ -331,7 +331,7 @@ class ObOnlyClusterPrivateTable : public ObReplicaFilter {
 };
 
 class ObFilterSpecialTable : public ObReplicaFilter {
-  public:
+public:
   explicit ObFilterSpecialTable()
   {}
   virtual ~ObFilterSpecialTable()
@@ -344,7 +344,7 @@ class ObFilterSpecialTable : public ObReplicaFilter {
 };
 
 class ObMemberListReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   ObMemberListReplicaFilter()
   {}
   virtual ~ObMemberListReplicaFilter()
@@ -353,7 +353,7 @@ class ObMemberListReplicaFilter : public ObReplicaFilter {
 };
 
 class ObInvalidPaxosReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   ObInvalidPaxosReplicaFilter()
   {}
   virtual ~ObInvalidPaxosReplicaFilter()
@@ -362,7 +362,7 @@ class ObInvalidPaxosReplicaFilter : public ObReplicaFilter {
 };
 
 class ObRebuildReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   ObRebuildReplicaFilter()
   {}
   virtual ~ObRebuildReplicaFilter()
@@ -371,7 +371,7 @@ class ObRebuildReplicaFilter : public ObReplicaFilter {
 };
 
 class ObRestoreReplicaFilter : public ObReplicaFilter {
-  public:
+public:
   ObRestoreReplicaFilter()
   {}
   virtual ~ObRestoreReplicaFilter()
@@ -380,7 +380,7 @@ class ObRestoreReplicaFilter : public ObReplicaFilter {
 };
 
 class ObCutdataStatusFilter : public ObReplicaFilter {
-  public:
+public:
   ObCutdataStatusFilter()
   {}
   virtual ~ObCutdataStatusFilter()
@@ -389,7 +389,7 @@ class ObCutdataStatusFilter : public ObReplicaFilter {
 };
 
 class ObValidReplicaTypeFilter : public ObReplicaFilter {
-  public:
+public:
   ObValidReplicaTypeFilter()
   {}
   virtual ~ObValidReplicaTypeFilter()
@@ -398,7 +398,7 @@ class ObValidReplicaTypeFilter : public ObReplicaFilter {
 };
 
 class ObNotLogOnlyReplicaTypeFilter : public ObReplicaFilter {
-  public:
+public:
   explicit ObNotLogOnlyReplicaTypeFilter()
   {}
   virtual ~ObNotLogOnlyReplicaTypeFilter()
@@ -407,7 +407,7 @@ class ObNotLogOnlyReplicaTypeFilter : public ObReplicaFilter {
 };
 
 class ObReplicaFilterHolder : public ObIReplicaFilter {
-  public:
+public:
   ObReplicaFilterHolder();
   virtual ~ObReplicaFilterHolder();
 
@@ -455,10 +455,10 @@ class ObReplicaFilterHolder : public ObIReplicaFilter {
   int set_only_cutdata_status();
   int set_only_not_logonly_replica();
 
-  private:
+private:
   int build_skip_flag();
 
-  private:
+private:
   bool skip_empty_partition_;
   common::ObDList<ObReplicaFilter> filter_list_;
 
@@ -499,7 +499,7 @@ class ObReplicaFilterHolder : public ObIReplicaFilter {
 };
 
 class ObIPartitionEntityFilter {
-  public:
+public:
   ObIPartitionEntityFilter()
   {}
   virtual ~ObIPartitionEntityFilter()
@@ -509,7 +509,7 @@ class ObIPartitionEntityFilter {
 };
 
 class ObPartitionEntityFilter : public ObIPartitionEntityFilter, public common::ObDLinkBase<ObPartitionEntityFilter> {
-  public:
+public:
   ObPartitionEntityFilter()
   {}
   virtual ~ObPartitionEntityFilter()
@@ -517,7 +517,7 @@ class ObPartitionEntityFilter : public ObIPartitionEntityFilter, public common::
 };
 
 class ObFilterSinglePrimaryZone : public ObPartitionEntityFilter {
-  public:
+public:
   ObFilterSinglePrimaryZone(const ObIZoneTrace* zone_trace) : zone_trace_(zone_trace)
   {}
   virtual ~ObFilterSinglePrimaryZone()
@@ -525,33 +525,33 @@ class ObFilterSinglePrimaryZone : public ObPartitionEntityFilter {
   virtual int check(const share::schema::ObPrimaryZone& primary_zone_info,
       const common::ObIArray<share::ObZoneReplicaAttrSet>& zone_locality, bool& pass) const override;
 
-  private:
+private:
   int get_full_replica_num(
       const common::ObIArray<share::ObZoneReplicaAttrSet>& zone_locality, int64_t& full_replica_num) const;
 
-  private:
+private:
   const ObIZoneTrace* zone_trace_;
 };
 
 class ObPartitionEntityFilterHolder : public ObIPartitionEntityFilter {
-  public:
+public:
   ObPartitionEntityFilterHolder() : ObIPartitionEntityFilter(), filter_list_(), filter_single_primary_zone_(nullptr)
   {}
   virtual ~ObPartitionEntityFilterHolder()
   {}
 
-  public:
+public:
   virtual int check(const share::schema::ObPrimaryZone& primary_zone_info,
       const common::ObIArray<share::ObZoneReplicaAttrSet>& zone_locality, bool& pass) const override;
   int add(ObPartitionEntityFilter& filter);
   void reuse();
   int filter_single_primary_zone(const ObIZoneTrace& zone_trace);
 
-  private:
+private:
   common::ObDList<ObPartitionEntityFilter> filter_list_;
   ObFilterSinglePrimaryZone filter_single_primary_zone_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionEntityFilterHolder);
 };
 }  // end namespace share

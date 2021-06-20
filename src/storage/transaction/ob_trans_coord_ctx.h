@@ -38,7 +38,7 @@ typedef ObSEArray<int64_t, OB_DEFAULT_PARTITION_KEY_COUNT> ObVersionArray;
 
 // coordinator transaction context
 class ObCoordTransCtx : public ObDistTransCtx, public ObTsCbTask {
-  public:
+public:
   ObCoordTransCtx()
       : ObDistTransCtx("coordinator", ObTransCtxType::COORDINATOR),
         partition_log_info_arr_(ObModIds::OB_TRANS_PARTITION_LOG_INFO_ARRAY, OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -59,7 +59,7 @@ class ObCoordTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int construct_context(const ObTransMsg& msg);
   int construct_context(const ObTrxMsgBase& msg, const int64_t msg_type);
 
-  public:
+public:
   int handle_message(const ObTransMsg& msg);
   bool is_inited() const;
   int handle_timeout(const int64_t delay);
@@ -133,13 +133,13 @@ class ObCoordTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int handle_2pc_local_clear_response(const ObPartitionKey& partition);
   /////////Performance optimization for single machine trans (END)////////////
 
-  public:
+public:
   INHERIT_TO_STRING_KV("ObDistTransCtx", ObDistTransCtx, K_(prepare_unknown_count), K_(prepare_error_count),
       K_(batch_commit_trans), K_(have_prev_trans), K_(trans_location_cache), K_(stmt_rollback_info), K_(split_info_arr),
       K_(is_waiting_xa_commit));
   static const int64_t OP_LOCAL_NUM = 16;
 
-  private:
+private:
   int drive_();
   int switch_state_(const int64_t state);
   int update_global_trans_version_(const int64_t trans_version);
@@ -166,7 +166,7 @@ class ObCoordTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int collect_partition_log_info_(const ObPartitionKey& partition, const uint64_t log_id, const int64_t log_timestamp);
   bool can_batch_commit_();
 
-  private:
+private:
   // handle 2pc response from participants
   int handle_2pc_pre_prepare_response_(
       const ObPartitionKey& partition, const int status, const int64_t prepare_log_id, const int64_t prepare_log_ts);
@@ -183,7 +183,7 @@ class ObCoordTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int handle_2pc_local_commit_request_();
   int handle_2pc_local_clear_request_();
 
-  private:
+private:
   // handle trans request from scheduler
   int handle_trans_request_(const ObTransLocationCache& trans_location, const ObStmtRollbackInfo& stmt_rollback_info,
       const bool is_dup_table_trans, const int64_t commit_times, const bool is_rollback);
@@ -220,15 +220,15 @@ class ObCoordTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int xa_drive_after_rollback_();
   void DEBUG_SYNC_slow_txn_during_2pc_commit_phase_for_physical_backup_1055_();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCoordTransCtx);
 
-  private:
+private:
   // 0x78746364726f6f63 means reset coordctx
   static const int64_t COORD_CTX_MAGIC_NUM = 0x78746364726f6f63;
   static const int64_t SAME_LEADER_PARTITION_BATCH_RPC_THRESHOLD = 3;
 
-  private:
+private:
   bool is_inited_;
   // check if response to scheduler or not
   bool already_response_;
@@ -258,7 +258,7 @@ class ObCoordTransCtx : public ObDistTransCtx, public ObTsCbTask {
   ObPartitionArray unconfirmed_participants_;
   ObVersionArray participant_publish_version_array_;
   ObTransSplitInfoArray split_info_arr_;
-  // TRUE by default for xa trans, false is set after receving xa commit
+  // TRUE by default for xa trans, false is set after receiving xa commit
   bool is_waiting_xa_commit_;
   ObTransCtxArray part_ctx_arr_;
   // it is used to store the max commit_log_ts of participants

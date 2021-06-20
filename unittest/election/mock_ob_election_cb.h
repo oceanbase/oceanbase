@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace unittest {
 class MockObElectionCallback : public election::ObIElectionCallback {
-  public:
+public:
   MockObElectionCallback()
   {}
   virtual ~MockObElectionCallback()
@@ -44,7 +44,7 @@ class MockObElectionCallback : public election::ObIElectionCallback {
     return OB_SUCCESS;
   }
 
-  public:
+public:
   ObElectionPriority priority_;
 };
 

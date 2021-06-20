@@ -27,7 +27,7 @@ class ObExecContext;
 class ObSetPasswordStmt;
 
 class ObSetPasswordExecutor {
-  public:
+public:
   ObSetPasswordExecutor();
   virtual ~ObSetPasswordExecutor();
   int execute(ObExecContext& ctx, ObSetPasswordStmt& stmt);

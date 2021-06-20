@@ -21,7 +21,7 @@ using namespace blocksstable;
 using namespace common;
 namespace unittest {
 class TestColumnMap : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
@@ -36,7 +36,7 @@ class TestColumnMap : public ::testing::Test {
       const share::schema::ColumnMap* cols_id_map = nullptr, const ObIArray<int32_t>* projector = nullptr,
       const bool is_multi_version = false);
 
-  public:
+public:
   ObArenaAllocator allocator_;
 };
 

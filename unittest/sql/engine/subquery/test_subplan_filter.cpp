@@ -30,7 +30,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::observer;
 class ObSubPlanFilterTest : public ::testing::Test {
-  public:
+public:
   ObSubPlanFilterTest();
   virtual ~ObSubPlanFilterTest();
   virtual void SetUp();
@@ -42,7 +42,7 @@ class ObSubPlanFilterTest : public ::testing::Test {
   void init_plan(ObExecContext& ctx);
   void init_plan_for_calc(ObExecContext& ctx);
 
-  protected:
+protected:
   ObFakeTable fake_table1_;
   ObFakeTable fake_table2_;
   ObLimit limit_;
@@ -50,12 +50,12 @@ class ObSubPlanFilterTest : public ::testing::Test {
   ObSubPlanFilter subplan_filter_;
   ObPhysicalPlan physical_plan_;
 
-  private:
+private:
   // disallow copy
   ObSubPlanFilterTest(const ObSubPlanFilterTest& other);
   ObSubPlanFilterTest& operator=(const ObSubPlanFilterTest& other);
 
-  private:
+private:
   // data members
 };
 

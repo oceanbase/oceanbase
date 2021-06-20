@@ -26,14 +26,14 @@ class ObBootstrapStmt;
 
 #define DEF_SIMPLE_EXECUTOR(name)                      \
   class name##Executor {                               \
-    public:                                            \
+  public:                                              \
     name##Executor()                                   \
     {}                                                 \
     virtual ~name##Executor()                          \
     {}                                                 \
     int execute(ObExecContext& ctx, name##Stmt& stmt); \
                                                        \
-    private:                                           \
+  private:                                             \
     DISALLOW_COPY_AND_ASSIGN(name##Executor);          \
   }
 
@@ -123,31 +123,31 @@ DEF_SIMPLE_EXECUTOR(ObBackupSetEncryption);
 DEF_SIMPLE_EXECUTOR(ObBackupSetDecryption);
 
 class ObCancelTaskExecutor {
-  public:
+public:
   ObCancelTaskExecutor()
   {}
   virtual ~ObCancelTaskExecutor()
   {}
   int execute(ObExecContext& ctx, ObCancelTaskStmt& stmt);
 
-  private:
+private:
   int parse_task_id(const common::ObString& task_id_str, share::ObTaskId& task_id);
   int fetch_sys_task_info(ObExecContext& ctx, const common::ObString& task_id, common::ObAddr& task_server);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCancelTaskExecutor);
 };
 
 class ObChangeTenantExecutor {
-  public:
+public:
   ObChangeTenantExecutor()
   {}
   virtual ~ObChangeTenantExecutor()
   {}
   int execute(ObExecContext& ctx, ObChangeTenantStmt& stmt);
 
-  private:
-  private:
+private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObChangeTenantExecutor);
 };
 

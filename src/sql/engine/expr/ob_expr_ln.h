@@ -18,20 +18,20 @@
 namespace oceanbase {
 namespace sql {
 class ObExprLn : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprLn(common::ObIAllocator& alloc);
   virtual ~ObExprLn();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // help func
   static int calc_mysql(common::ObObj& reult, double val);
   static int calc_oracle(common::ObObj& result, double val);
   DISALLOW_COPY_AND_ASSIGN(ObExprLn);
 
-  private:
+private:
 };
 }  // namespace sql
 }  // namespace oceanbase

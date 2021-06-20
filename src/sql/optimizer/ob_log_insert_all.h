@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObLogInsertAll : public ObLogInsert {
-  public:
+public:
   ObLogInsertAll(ObLogPlan& plan)
       : ObLogInsert(plan),
         is_multi_table_insert_(false),
@@ -102,12 +102,12 @@ class ObLogInsertAll : public ObLogInsert {
   }
   int remove_const_expr(const common::ObIArray<ObRawExpr*>& old_exprs, common::ObIArray<ObRawExpr*>& new_exprs) const;
 
-  protected:
+protected:
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
   virtual int need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sharding_info, bool& is_needed) override;
   int is_insert_table_id(uint64_t table_id, bool& is_true) const;
 
-  private:
+private:
   bool is_multi_table_insert_;
   bool is_multi_insert_first_;
   bool is_multi_conditions_insert_;

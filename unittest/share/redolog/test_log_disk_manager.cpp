@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace common {
 
 class TestLogDiskMgr : public ::testing::Test {
-  public:
+public:
   TestLogDiskMgr()
   {}
   virtual ~TestLogDiskMgr()
@@ -26,7 +26,7 @@ class TestLogDiskMgr : public ::testing::Test {
   virtual void SetUp();
   virtual void TearDown();
 
-  public:
+public:
   const static int64_t LOG_FILE_SIZE = 4 * 1024 * 1024;
   const static int DIO_WRITE_ALIGN_SIZE = 512;
 

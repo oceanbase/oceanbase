@@ -26,7 +26,7 @@ namespace election {
 class ObElectionPriority {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionPriority()
   {
     reset();
@@ -36,7 +36,7 @@ class ObElectionPriority {
   int init(const bool is_candidate, const int64_t membership_version, const uint64_t log_id, const uint64_t locality);
   void reset();
 
-  public:
+public:
   void set_membership_version(const int64_t ts)
   {
     membership_version_ = ts;
@@ -92,10 +92,10 @@ class ObElectionPriority {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   TO_YSON_KV(Y_(is_candidate), Y_(membership_version), Y_(log_id), Y_(data_version), Y_(locality));
 
-  private:
+private:
   int compare_(const ObElectionPriority& priority, const bool with_locality, const bool with_log_id) const;
 
-  private:
+private:
   const static int64_t SYSTEM_SCORE_CLOG_DISK_ERROR = (1 << 6);
   const static int64_t SYSTEM_SCORE_TENANT_OUT_OF_MEM = (1 << 5);
   const static int64_t SYSTEM_SCORE_DATA_DISK_ERROR = (1 << 4);
@@ -104,7 +104,7 @@ class ObElectionPriority {
   const static int64_t SYSTEM_SCORE_SERVICE_NOT_STARTED = (1 << 1);
   const static int64_t SYSTEM_SCORE_WITHOUT_MEMSTORE = (1 << 0);
 
-  private:
+private:
   bool is_candidate_;
   int64_t membership_version_;
   uint64_t log_id_;

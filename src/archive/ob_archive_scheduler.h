@@ -21,22 +21,22 @@ class ObArCLogSplitEngine;
 class ObArchiveSender;
 class ObArchiveAllocator;
 class ObArchiveScheduler : public share::ObThreadPool {
-  public:
+public:
   ObArchiveScheduler();
   ~ObArchiveScheduler();
 
-  public:
+public:
   int init(ObArchiveAllocator* archive_allocator, ObArCLogSplitEngine* clog_split_eg, ObArchiveSender* sender);
   void destroy();
   int start();
   void stop();
   void wait();
 
-  private:
+private:
   void run1();
   void do_thread_task_();
 
-  private:
+private:
   bool inited_;
   bool stop_flag_;
 

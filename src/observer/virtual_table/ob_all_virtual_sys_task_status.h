@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualSysTaskStatus : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualSysTaskStatus();
   virtual ~ObAllVirtualSysTaskStatus();
 
@@ -30,7 +30,7 @@ class ObAllVirtualSysTaskStatus : public common::ObVirtualTableScannerIterator {
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   share::ObSysStatMgrIter iter_;
   char task_id_[common::OB_TRACE_STAT_BUFFER_SIZE];
   char svr_ip_[common::MAX_IP_ADDR_LENGTH];

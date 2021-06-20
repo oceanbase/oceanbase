@@ -26,7 +26,7 @@ namespace common {
  * FIXME-: reduce some of the log levels once the code stablizes
  */
 class ObStoreRowkey {
-  public:
+public:
   ObStoreRowkey() : key_(), hash_(0)
   {}
   ObStoreRowkey(ObObj* ptr, const int64_t cnt)
@@ -224,7 +224,7 @@ class ObStoreRowkey {
     return key_.compare_prefix(rhs.key_, cmp);
   }
 
-  public:
+public:
   inline bool operator==(const ObStoreRowkey& rhs) const
   {
     return simple_equal(rhs);
@@ -274,13 +274,13 @@ class ObStoreRowkey {
   static ObStoreRowkey MIN_STORE_ROWKEY;
   static ObStoreRowkey MAX_STORE_ROWKEY;
 
-  private:
+private:
   enum MinMaxFlag { MIN, MAX };
   int set_min_max(const ObIArray<ObOrderType>& column_orders, ObIAllocator& allocator, MinMaxFlag min_or_max);
   int is_min_max(const ObIArrayWrap<ObOrderType>& column_orders, const int64_t rowkey_cnt, bool& is_min_max,
       MinMaxFlag min_or_max) const;
 
-  private:
+private:
   ObRowkey key_;  // only used as a container for ObObjs
   mutable uint64_t hash_;
 };
@@ -289,7 +289,7 @@ class ObStoreRowkey {
 // (no need to convert to collation_free multiple times)
 // Only used in the storage layer.
 class ObExtStoreRowkey {
-  public:
+public:
   ObExtStoreRowkey();
   explicit ObExtStoreRowkey(const ObStoreRowkey& store_rowkey);
   ObExtStoreRowkey(const ObStoreRowkey& store_rowkey, const ObStoreRowkey& collation_free_store_rowkey);
@@ -363,7 +363,7 @@ class ObExtStoreRowkey {
   TO_STRING_KV(
       K_(store_rowkey), K_(collation_free_store_rowkey), K_(range_cut_pos), K_(range_check_min), K_(range_array_idx));
 
-  private:
+private:
   ObStoreRowkey store_rowkey_;
   ObStoreRowkey collation_free_store_rowkey_;
   int16_t range_cut_pos_;   // cut-off from min/max object

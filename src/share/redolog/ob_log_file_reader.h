@@ -23,7 +23,7 @@
 namespace oceanbase {
 namespace share {
 struct ObLogReadFdKey final {
-  public:
+public:
   ObLogReadFdKey();
   ~ObLogReadFdKey() = default;
   void reset();
@@ -36,7 +36,7 @@ struct ObLogReadFdKey final {
 };
 
 struct ObLogReadFdCacheItem final {
-  public:
+public:
   ObLogReadFdCacheItem();
   ~ObLogReadFdCacheItem()
   {
@@ -48,7 +48,7 @@ struct ObLogReadFdCacheItem final {
   void reset();
   TO_STRING_KV(K(key_), K(in_map_), K(fd_), K(ref_cnt_), K(timestamp_), KP(prev_), KP(next_));
 
-  public:
+public:
   ObLogReadFdKey key_;
   bool in_map_;
   int fd_;
@@ -59,7 +59,7 @@ struct ObLogReadFdCacheItem final {
 };
 
 class ObLogReadFdHandle final {
-  public:
+public:
   ObLogReadFdHandle() : fd_item_(nullptr), is_local_(false){};
   ~ObLogReadFdHandle()
   {
@@ -74,14 +74,14 @@ class ObLogReadFdHandle final {
   };
   TO_STRING_KV(KP(fd_item_), K(is_local_));
 
-  private:
+private:
   ObLogReadFdCacheItem* fd_item_;
   bool is_local_;  // indicate if the fd_item_ is only used for this handle
   DISALLOW_COPY_AND_ASSIGN(ObLogReadFdHandle);
 };
 
 class ObLogFileReader2 final {
-  public:
+public:
   static ObLogFileReader2& get_instance();
 
   int init();
@@ -93,7 +93,7 @@ class ObLogFileReader2 final {
   int evict_fd(const char* log_dir, const uint32_t file_id);
   static void close_fd(const int fd);
 
-  private:
+private:
   ObLogFileReader2();
   ~ObLogFileReader2();
 
@@ -106,20 +106,20 @@ class ObLogFileReader2 final {
 
   int do_clear_work();
 
-  private:
+private:
   class EvictTask : public common::ObTimerTask {
-    public:
+  public:
     explicit EvictTask(ObLogFileReader2* reader) : reader_(reader)
     {}
     virtual ~EvictTask() = default;
     virtual void runTimerTask();
 
-    private:
+  private:
     ObLogFileReader2* reader_;
     DISALLOW_COPY_AND_ASSIGN(EvictTask);
   };
 
-  private:
+private:
   typedef common::hash::ObHashMap<ObLogReadFdKey, ObLogReadFdCacheItem*, common::hash::NoPthreadDefendMode> FD_MAP;
   static const int64_t MAP_BUCKET_INIT_CNT = 53;
   static const int64_t CACHE_EVICT_TIME_IN_US = 60 * 1000 * 1000;  // 1 minute

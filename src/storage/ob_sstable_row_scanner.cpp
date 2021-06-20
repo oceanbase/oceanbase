@@ -275,7 +275,7 @@ int ObSSTableRowScanner::generate_new_range(const int64_t range_idx, const ObSto
 }
 
 struct GapCompare {
-  public:
+public:
   explicit GapCompare(const bool is_reverse, int& ret, bool* is_equal = NULL)
       : is_reverse_(is_reverse), ret_(ret), is_equal_(is_equal)
   {}
@@ -302,7 +302,7 @@ struct GapCompare {
     return bret;
   }
 
-  private:
+private:
   bool is_reverse_;
   int& ret_;
   bool* is_equal_;

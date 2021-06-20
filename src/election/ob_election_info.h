@@ -24,7 +24,7 @@ namespace oceanbase {
 
 namespace election {
 class ObElectionInfo {
-  public:
+public:
   ObElectionInfo()
   {
     reset();
@@ -39,7 +39,7 @@ class ObElectionInfo {
     reset();
   }
 
-  public:
+public:
   const common::ObAddr& get_self() const
   {
     return self_;
@@ -138,9 +138,9 @@ class ObElectionInfo {
       K_(election_time_offset), K_(active_timestamp), K_(T1_timestamp), K_(leader_epoch), K_(state), K_(role),
       K_(stage), K_(type), K_(change_leader_timestamp), K_(eg_id), K_(last_leader_revoke_time));
 
-  public:
+public:
   class State {
-    public:
+  public:
     static const int32_t INVALID = -1;
     static const int32_t D_IDLE = 0;
     static const int32_t V_IDLE = 1;
@@ -160,7 +160,7 @@ class ObElectionInfo {
     static const int32_t V_SUCCESS = 12;
     static const int32_t MAX = 13;
 
-    public:
+  public:
     static bool is_valid(const int32_t state)
     {
       return state > INVALID && state < MAX;
@@ -176,7 +176,7 @@ class ObElectionInfo {
   };
 
   class Ops {
-    public:
+  public:
     static const int32_t INVALID = -1;
     static const int32_t RESET = 0;
     static const int32_t D_ELECT = 1;
@@ -194,7 +194,7 @@ class ObElectionInfo {
     static const int32_t LEADER_REVOKE = 13;
     static const int32_t MAX = 14;
 
-    public:
+  public:
     static bool is_valid(const int32_t state)
     {
       return state > INVALID && state < MAX;
@@ -202,24 +202,24 @@ class ObElectionInfo {
   };
 
   class StateHelper {
-    public:
+  public:
     explicit StateHelper(int32_t& state) : state_(state)
     {}
     ~StateHelper()
     {}
     int switch_state(const int32_t op);
 
-    private:
+  private:
     int32_t& state_;
   };
 
-  protected:
+protected:
   bool is_self_(const common::ObAddr& addr) const
   {
     return self_ == addr;
   }
 
-  protected:
+protected:
   bool is_running_;
   // mark need change leader or not
   bool need_change_leader_;

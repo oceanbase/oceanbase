@@ -92,7 +92,7 @@ struct SimpleQueue {
   common::ObLink* head_;
   common::ObLink* tail_;
 
-  public:
+public:
   SimpleQueue() : head_(NULL), tail_(NULL)
   {}
   ~SimpleQueue()
@@ -101,7 +101,7 @@ struct SimpleQueue {
     tail_ = NULL;
   }
 
-  public:
+public:
   bool is_empty()
   {
     return NULL == head_ && NULL == tail_;

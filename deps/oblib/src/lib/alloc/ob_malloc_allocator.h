@@ -28,7 +28,7 @@ class ObMallocAllocator : public common::ObIAllocator {
   friend class ObMemoryCutter;
   static const uint64_t PRESERVED_TENANT_COUNT = 10000;
 
-  public:
+public:
   ObMallocAllocator();
   virtual ~ObMallocAllocator();
 
@@ -67,14 +67,14 @@ class ObMallocAllocator : public common::ObIAllocator {
       const uint64_t tenant_id, const uint64_t ctx_id, const int64_t size, const bool reserve = false);
   int get_chunks(AChunk** chunks, int cap, int& cnt);
 
-  private:
+private:
   using InvokeFunc = std::function<int(ObTenantMemoryMgr*)>;
   static int with_resource_handle_invoke(uint64_t tenant_id, InvokeFunc func);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMallocAllocator);
 
-  private:
+private:
   obsys::CRWLock locks_[PRESERVED_TENANT_COUNT];
   ObTenantCtxAllocator* allocators_[PRESERVED_TENANT_COUNT][common::ObCtxIds::MAX_CTX_ID];
   int64_t reserved_;

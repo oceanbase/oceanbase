@@ -29,7 +29,7 @@ namespace sql {
 namespace dtl {
 
 class ObDtlCacheBufferInfo : public common::ObDLinkBase<ObDtlCacheBufferInfo> {
-  public:
+public:
   ObDtlCacheBufferInfo() : buffer_(nullptr), chid_(common::OB_INVALID_ID), ts_(0)
   {}
 
@@ -54,20 +54,20 @@ class ObDtlCacheBufferInfo : public common::ObDLinkBase<ObDtlCacheBufferInfo> {
     return chid_;
   }
 
-  private:
+private:
   ObDtlLinkedBuffer* buffer_;
   int64_t chid_;
   int64_t ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDtlCacheBufferInfo);
 };
 
 // dtl buffer info management
 class ObDtlBufferInfoManager {
-  public:
+public:
   class ObDtlBufferInfoAllocator {
-    public:
+  public:
     ObDtlBufferInfoAllocator() : spin_lock_(), allocator_(), free_list_()
     {}
     ~ObDtlBufferInfoAllocator();
@@ -78,14 +78,14 @@ class ObDtlBufferInfoManager {
     int alloc_buffer_info(int64_t chid, ObDtlCacheBufferInfo*& buffer_info);
     int free_buffer_info(ObDtlCacheBufferInfo* buffer_info);
 
-    private:
+  private:
     static const int64_t MAX_FREE_LIST_SIZE = 8;
     ObSpinLock spin_lock_;
     common::ObFIFOAllocator allocator_;
     ObDList<ObDtlCacheBufferInfo> free_list_;
   };
 
-  public:
+public:
   ObDtlBufferInfoManager(common::ObFIFOAllocator& allocator) : conrrent_allocators_(nullptr), allocator_(allocator)
   {}
   ~ObDtlBufferInfoManager()
@@ -99,14 +99,14 @@ class ObDtlBufferInfoManager {
   int alloc_buffer_info(int64_t chid, ObDtlCacheBufferInfo*& buffer_info);
   int free_buffer_info(ObDtlCacheBufferInfo* buffer_info);
 
-  private:
+private:
   static int64_t get_hash_value(int64_t chid)
   {
     uint64_t val = common::murmurhash(&chid, sizeof(chid), 0);
     return val % ALLOCATOR_CNT;
   }
 
-  private:
+private:
   static const int64_t ALLOCATOR_CNT = 128;
   ObDtlBufferInfoAllocator* conrrent_allocators_;
   common::ObFIFOAllocator& allocator_;
@@ -122,7 +122,7 @@ struct ob_dtl_key_value_fun {
 
 template <class key_type, class value_type>
 class ObDtlFirstBufferHashTableCell {
-  public:
+public:
   ObDtlFirstBufferHashTableCell() : first_buffer_list_()
   {}
   ~ObDtlFirstBufferHashTableCell()
@@ -138,7 +138,7 @@ class ObDtlFirstBufferHashTableCell {
 
   int foreach_refactored(std::function<int(value_type* val)> op);
 
-  private:
+private:
   common::ObDList<value_type> first_buffer_list_;
   ob_dtl_key_value_fun<key_type, value_type> key_fun_;
 };
@@ -242,7 +242,7 @@ int ObDtlFirstBufferHashTableCell<key_type, value_type>::foreach_refactored(std:
 }
 
 class ObDtlFirstBufferConcurrentCell {
-  public:
+public:
   ObDtlFirstBufferConcurrentCell(common::ObIAllocator& allocator) : n_lock_(0), lock_(nullptr), allocator_(allocator)
   {}
   ~ObDtlFirstBufferConcurrentCell()
@@ -255,7 +255,7 @@ class ObDtlFirstBufferConcurrentCell {
 
   ObLatch& get_lock(int32_t idx);
 
-  private:
+private:
   int32_t n_lock_;
   ObLatch* lock_;
   common::ObIAllocator& allocator_;
@@ -263,7 +263,7 @@ class ObDtlFirstBufferConcurrentCell {
 
 template <class key_type, class value_type, class hash_function = common::hash::hash_func<key_type>>
 class ObDtlFirstBufferHashTable {
-  public:
+public:
   ObDtlFirstBufferHashTable(common::ObIAllocator& allocator)
       : bucket_num_(0), n_lock_(0), allocator_(allocator), concurrent_cell_(allocator), bucket_cells_(nullptr)
   {}
@@ -298,7 +298,7 @@ class ObDtlFirstBufferHashTable {
     return bucket_num_;
   }
 
-  private:
+private:
   int64_t bucket_num_;
   int64_t n_lock_;
   common::ObIAllocator& allocator_;
@@ -417,9 +417,9 @@ int ObDtlFirstBufferHashTable<key_type, value_type, hash_function>::foreach_refa
 }
 
 class ObDtlLocalFirstBufferCache : public common::ObDLinkBase<ObDtlLocalFirstBufferCache> {
-  public:
+public:
   class ObDtlBufferClean {
-    public:
+  public:
     ObDtlBufferClean(ObDtlTenantMemManager* tenant_mem_mgr, ObDtlBufferInfoManager* buffer_info_mgr)
         : tenant_mem_mgr_(tenant_mem_mgr), buffer_info_mgr_(buffer_info_mgr)
     {}
@@ -427,12 +427,12 @@ class ObDtlLocalFirstBufferCache : public common::ObDLinkBase<ObDtlLocalFirstBuf
     {}
     int operator()(sql::dtl::ObDtlCacheBufferInfo* cache_buffer);
 
-    private:
+  private:
     ObDtlTenantMemManager* tenant_mem_mgr_;
     ObDtlBufferInfoManager* buffer_info_mgr_;
   };
 
-  public:
+public:
   ObDtlLocalFirstBufferCache(common::ObIAllocator& allocator)
       : pins_(0),
         dfo_key_(),
@@ -556,13 +556,13 @@ class ObDtlLocalFirstBufferCache : public common::ObDLinkBase<ObDtlLocalFirstBuf
     return ret;
   }
 
-  private:
+private:
   OB_INLINE int64_t unpin()
   {
     return ATOMIC_SAF(&pins_, 1);
   }
 
-  private:
+private:
   static const int64_t CONCURRENT_CNT = 2048;
   static const int64_t CHANNEL_HASH_BUCKET_NUM = 64 * 1024;
   static const int64_t MAX_BITSET_CNT = 1024 * 1024;  // 1024 * 1024
@@ -578,7 +578,7 @@ class ObDtlLocalFirstBufferCache : public common::ObDLinkBase<ObDtlLocalFirstBuf
 };
 
 class ObDtlLocalFirstBufferCacheManager {
-  public:
+public:
   ObDtlLocalFirstBufferCacheManager(uint64_t tenant_id, ObDtlTenantMemManager* tenant_mem_mgr);
   ~ObDtlLocalFirstBufferCacheManager();
 
@@ -600,7 +600,7 @@ class ObDtlLocalFirstBufferCacheManager {
     return hash_table_;
   }
 
-  private:
+private:
   static const int64_t CONCURRENT_CNT = 1024;
   static const int64_t BUCKET_NUM = 64 * 1024;
   uint64_t tenant_id_;

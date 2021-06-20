@@ -9476,50 +9476,48 @@ Outputs & filters:
 
 SQL: select * from t4,t4 t5 where t4.c1 in (select t7.c1 from t7,t8); 
 
-=================================================================
-|ID|OPERATOR                      |NAME |EST. ROWS  |COST       |
------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN    |     |15504908587|11299759339|
-|1 | NESTED-LOOP JOIN             |     |155050     |3869186    |
-|2 |  TABLE SCAN                  |t4   |100000     |64066      |
-|3 |  SUBPLAN SCAN                |VIEW2|1          |38         |
-|4 |   LIMIT                      |     |1          |38         |
-|5 |    NESTED-LOOP JOIN CARTESIAN|     |1          |37         |
-|6 |     TABLE GET                |t7   |1          |36         |
-|7 |     TABLE SCAN               |t8   |100000     |59654      |
-|8 | MATERIAL                     |     |100000     |119192     |
-|9 |  TABLE SCAN                  |t5   |100000     |64066      |
-=================================================================
+===============================================================
+|ID|OPERATOR                      |NAME |EST. ROWS |COST      |
+---------------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN    |     |9900000000|7216269494|
+|1 | TABLE SCAN                   |t5   |100000    |64066     |
+|2 | MATERIAL                     |     |99000     |3771257   |
+|3 |  NESTED-LOOP SEMI JOIN       |     |99000     |3716682   |
+|4 |   TABLE SCAN                 |t4   |100000    |64066     |
+|5 |   SUBPLAN SCAN               |VIEW1|1         |36        |
+|6 |    NESTED-LOOP JOIN CARTESIAN|     |1         |36        |
+|7 |     TABLE GET                |t7   |1         |36        |
+|8 |     TABLE SCAN               |t8   |100000    |59654     |
+===============================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t4.c1], [t4.c2], [t4.c3], [t5.c1], [t5.c2], [t5.c3]), filter(nil), 
       conds(nil), nl_params_(nil), batch_join=false
-  1 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
+  1 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil), 
+      access([t5.c1], [t5.c2], [t5.c3]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t5.c1], [t5.c2]), range(MIN,MIN ; MAX,MAX)always true
+  2 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil)
+  3 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       conds(nil), nl_params_([t4.c1]), batch_join=false
-  2 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
+  4 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0), 
       is_index_back=false, 
       range_key([t4.c1], [t4.c2]), range(MIN,MIN ; MAX,MAX)always true
-  3 - output([1]), filter(nil), 
-      access([VIEW2.VIEW1.c1])
-  4 - output([t7.c1]), filter(nil), limit(1), offset(nil)
-  5 - output([t7.c1]), filter(nil), 
-      conds(nil), nl_params_(nil), batch_join=true
+  5 - output([1]), filter(nil), 
+      access([VIEW1.c1])
   6 - output([t7.c1]), filter(nil), 
+      conds(nil), nl_params_(nil), batch_join=true
+  7 - output([t7.c1]), filter(nil), 
       access([t7.c1]), partitions(p0), 
       is_index_back=false, 
       range_key([t7.c1]), range(MIN ; MAX)always true, 
       range_cond([? = t7.c1])
-  7 - output([1]), filter(nil), 
+  8 - output([1]), filter(nil), 
       access([t8.c1]), partitions(p0), 
       is_index_back=false, 
       range_key([t8.c1]), range(MIN ; MAX)always true
-  8 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil)
-  9 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil), 
-      access([t5.c1], [t5.c2], [t5.c3]), partitions(p0), 
-      is_index_back=false, 
-      range_key([t5.c1], [t5.c2]), range(MIN,MIN ; MAX,MAX)always true
 
 *************** Case 273(end)  ************** 
 

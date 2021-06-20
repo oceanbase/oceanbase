@@ -18,13 +18,13 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprToMultiByte : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprToMultiByte(common::ObIAllocator& alloc);
   virtual ~ObExprToMultiByte();
   int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToMultiByte);
 };
 

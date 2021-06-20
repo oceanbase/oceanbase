@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprToTemporalBase : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprToTemporalBase(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name);
   virtual ~ObExprToTemporalBase()
   {}
@@ -34,7 +34,7 @@ class ObExprToTemporalBase : public ObFuncExprOperator {
   // engine3.0
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToTemporalBase);
 };
 

@@ -21,7 +21,7 @@ namespace storage {
 class ObPGMemtableMgr;
 
 class ObMultiVersionTableStore {
-  public:
+public:
   typedef common::hash::ObHashSet<int64_t, common::hash::NoPthreadDefendMode> TableSet;
   static const int64_t MAX_KETP_VERSION_SHIFT_NUM = 4L;
   static const int64_t MAX_KETP_VERSION_NUM = 1LL << MAX_KETP_VERSION_SHIFT_NUM;
@@ -115,7 +115,7 @@ class ObMultiVersionTableStore {
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   struct ObGCSSTableInfo final {
     ObSSTable* sstable_;
     int64_t retired_ts_;
@@ -134,7 +134,7 @@ class ObMultiVersionTableStore {
   int add_gc_minor_sstable(const int64_t gc_ts, ObSSTable* table, const int64_t max_deferred_gc_count);
   int add_complement_minor_sstable_if_needed_(AddTableParam& param, ObTableStore& store);
 
-  private:
+private:
   bool is_inited_;
   common::ObPartitionKey pkey_;
   uint64_t table_id_;

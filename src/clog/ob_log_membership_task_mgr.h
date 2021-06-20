@@ -71,7 +71,7 @@ struct RenewMsLogTask {
 };
 
 class ObLogMembershipTaskMgr {
-  public:
+public:
   ObLogMembershipTaskMgr();
   virtual ~ObLogMembershipTaskMgr()
   {
@@ -83,7 +83,7 @@ class ObLogMembershipTaskMgr {
       const common::ObPartitionKey& key);
   void destroy();
 
-  public:
+public:
   int submit_log(const ObRenewMembershipLog& renew_ms_log, const ObLogType& log_type, const char* buff,
       const int64_t size, const uint64_t log_id, const int64_t log_timestamp, const bool is_trans_log,
       ObISubmitLogCb* cb);
@@ -106,7 +106,7 @@ class ObLogMembershipTaskMgr {
   virtual int check_renew_ms_log_sync_state() const;
   int reset_renew_ms_log_task();
 
-  private:
+private:
   int submit_renew_ms_log_(const ObRenewMembershipLog& renew_ms_log, const ObLogEntryHeader& header, const char* buff,
       ObISubmitLogCb* cb, const bool need_replay, const bool send_slave, const common::ObAddr& server,
       const int64_t cluster_id);
@@ -133,7 +133,7 @@ class ObLogMembershipTaskMgr {
   int submit_confirmed_info_(const uint64_t log_id, const ObProposalID& ms_proposal_id,
       const ObConfirmedInfo& confirmed_info, const bool is_leader);
 
-  private:
+private:
   ObILogEngine* log_engine_;
   ObILogStateMgrForSW* state_mgr_;
   ObILogMembershipMgr* mm_;
@@ -151,7 +151,7 @@ class ObLogMembershipTaskMgr {
   RenewMsLogTask cur_renew_ms_task_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogMembershipTaskMgr);
 };
 }  // namespace clog

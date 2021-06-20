@@ -19,20 +19,20 @@
 namespace oceanbase {
 namespace clog {
 class MockObLogReplayEngineWrapper : public ObLogReplayEngineWrapper {
-  public:
+public:
   MockObLogReplayEngineWrapper()
   {}
   virtual ~MockObLogReplayEngineWrapper()
   {}
 
-  public:
+public:
   int init(replayengine::ObILogReplayEngine* log_replay_engine)
   {
     UNUSED(log_replay_engine);
     return OB_SUCCESS;
   }
 
-  public:
+public:
   int submit_replay_task(const common::ObPartitionKey& partition_key, const ObLogEntry& log_entry)
   {
     UNUSED(partition_key);

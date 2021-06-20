@@ -20,7 +20,7 @@ namespace sql {
 class ObJobID final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObJobID(const ObExecutionID& ob_execution_id, uint64_t job_id)
       : ob_execution_id_(ob_execution_id), job_id_(job_id), root_op_id_(0)
   {}
@@ -112,7 +112,7 @@ class ObJobID final {
   TO_STRING_KV(N_OB_EXECUTION_ID, ob_execution_id_, N_JOB_ID, job_id_);
   DECLARE_TO_YSON_KV;
 
-  private:
+private:
   /* variables */
   ObExecutionID ob_execution_id_;
   uint64_t job_id_;

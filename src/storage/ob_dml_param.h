@@ -47,7 +47,7 @@ class ObIPartitionGroupGuard;
 // 1. Save datum pointer of expression, locate datum once for each expression.
 // 2. Project number, string, integer (OBJ_DATUM_8BYTE_DATA) by groups, to reduce type detection.
 class ObRow2ExprsProjector {
-  public:
+public:
   explicit ObRow2ExprsProjector(common::ObIAllocator& alloc)
       : other_idx_(0),
         has_virtual_(false),
@@ -71,7 +71,7 @@ class ObRow2ExprsProjector {
     return has_virtual_;
   }
 
-  private:
+private:
   struct Item {
     int32_t obj_idx_;
     int32_t expr_idx_;
@@ -123,7 +123,7 @@ class ObRow2ExprsProjector {
 };
 
 class ObTableScanParam : public common::ObVTableScanParam {
-  public:
+public:
   ObTableScanParam()
       : common::ObVTableScanParam(),
         trans_desc_(NULL),
@@ -157,7 +157,7 @@ class ObTableScanParam : public common::ObVTableScanParam {
   virtual ~ObTableScanParam()
   {}
 
-  public:
+public:
   transaction::ObTransDesc* trans_desc_;  // transaction handle
   const share::schema::ObTableParam* table_param_;
   common::ObArenaAllocator* allocator_;
@@ -180,10 +180,10 @@ class ObTableScanParam : public common::ObVTableScanParam {
     return column_orders_;
   }
 
-  private:
+private:
   virtual int init_rowkey_column_orders();
   // TO_STRING_KV(N_TRANS_DESC, trans_desc_);
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableScanParam);
 };
 

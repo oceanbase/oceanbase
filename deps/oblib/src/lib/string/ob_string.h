@@ -32,10 +32,10 @@ extern uint64_t murmurhash(const void* data, int32_t len, uint64_t hash);
  * @data_length_ : actual data length of %ptr_
  */
 class ObString final {
-  public:
+public:
   typedef int32_t obstr_size_t;
 
-  public:
+public:
   ObString() : buffer_size_(0), data_length_(0), ptr_(NULL)
   {}
 
@@ -633,7 +633,7 @@ class ObString final {
     return offsetof(ObString, ptr_) * 8;
   }
 
-  private:
+private:
   obstr_size_t buffer_size_;
   obstr_size_t data_length_;
   char* ptr_;

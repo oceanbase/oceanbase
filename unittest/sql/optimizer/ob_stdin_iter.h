@@ -34,7 +34,7 @@ using namespace sql;
 namespace common {
 
 class ObMockIterWithLimit : public ObNewRowIterator {
-  public:
+public:
   ObMockIterWithLimit() : need_row_count_(0), got_row_count_(0){};
   virtual ~ObMockIterWithLimit(){};
 
@@ -53,7 +53,7 @@ class ObMockIterWithLimit : public ObNewRowIterator {
     return need_row_count_ == got_row_count_;
   }
 
-  protected:
+protected:
   void advance_iter()
   {
     ++got_row_count_;
@@ -91,7 +91,7 @@ class ObMockIterWithLimit : public ObNewRowIterator {
 
 #define DECLARE_RANDOM_CELL_GEN(type)                             \
   class RANDOM_CELL_GEN_CLASS_NAME(type) : public RandomCellGen { \
-    public:                                                       \
+  public:                                                         \
     RANDOM_CELL_GEN_CLASS_NAME(type)()                            \
     {                                                             \
       type_ = AT_(type);                                          \
@@ -111,16 +111,16 @@ class ObMockIterWithLimit : public ObNewRowIterator {
   }
 
 class ObStdinIter : public ObMockIterWithLimit {
-  public:
+public:
   enum EOFBehavior { TERMINATE, REWIND, RANDOM };
 
-  private:
+private:
   EOFBehavior on_eof_;
   int64_t get_count_;
   bool pure_random_;
 
   class IRandomCellGen {
-    public:
+  public:
     virtual ObObj gen(ObIAllocator& buf, int64_t seed) = 0;
     void set_max(ObObj max)
     {
@@ -136,7 +136,7 @@ class ObStdinIter : public ObMockIterWithLimit {
   };
 
   class RandomCellGen : public IRandomCellGen {
-    public:
+  public:
     RandomCellGen()
         : type_(ObNullType), acc_(NULL), need_random(false), length(0), common_prefix_len(10), my_buf(NULL){};
     virtual ObObj gen(ObIAllocator& buf, int64_t seed) = 0;
@@ -185,7 +185,7 @@ class ObStdinIter : public ObMockIterWithLimit {
   char str_main_buf_[STR_MAIN_BUF_SIZE];
   int64_t str_main_buf_ptr;
 
-  public:
+public:
   ObStdinIter(ObIAllocator& buf)
       : on_eof_(TERMINATE),
         time_consumed_(0),
@@ -287,14 +287,14 @@ class ObStdinIter : public ObMockIterWithLimit {
 };
 static ObArenaAllocator alloc_;
 class MyMockOperator : public ObPhyOperator {
-  public:
+public:
   mutable int64_t time_;
 
   class MyMockCtx : public ObPhyOperatorCtx {
 
     friend class MyMockOperator;
 
-    public:
+  public:
     MyMockCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
     {
       UNUSED(ctx);

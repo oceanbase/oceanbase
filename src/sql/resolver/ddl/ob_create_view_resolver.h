@@ -35,13 +35,13 @@ class ObCreateViewResolver : public ObDDLResolver {
   static const int64_t WITH_OPT_NODE = 6;
   static const int64_t ROOT_NUM_CHILD = 7;
 
-  public:
+public:
   explicit ObCreateViewResolver(ObResolverParams& params);
   virtual ~ObCreateViewResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int resolve_column_list(ParseNode* view_columns_node, common::ObIArray<common::ObString>& column_list);
   int check_select_stmt_col_name(SelectItem& select_item, ObArray<int64_t>& index_array, int64_t pos,
       common::hash::ObHashSet<ObString>& view_col_names);
@@ -54,7 +54,7 @@ class ObCreateViewResolver : public ObDDLResolver {
   int stmt_print(
       const ObSelectStmt* stmt, common::ObIArray<common::ObString>* column_list, common::ObString& expanded_view);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateViewResolver);
 };
 }  // namespace sql

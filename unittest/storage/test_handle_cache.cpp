@@ -24,7 +24,7 @@ namespace unittest {
 class TestHandleCache : public ::testing::Test {};
 
 class TestKey {
-  public:
+public:
   TestKey()
   {}
   TestKey(const int key) : key_(key)
@@ -47,7 +47,7 @@ class TestKey {
 };
 
 class TestHandle {
-  public:
+public:
   void reset()
   {}
   int v_;

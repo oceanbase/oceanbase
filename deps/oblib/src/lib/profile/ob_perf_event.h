@@ -46,7 +46,7 @@ struct ObPerfConfig {
 };
 
 class ObPerfEventRecorder : public ObSeqEventRecorder<ObTimestampEvent, 500, 8> {
-  public:
+public:
   ObPerfEventRecorder() : sampling_counter_(0), cat_id_(0)
   {
     STATIC_ASSERT(sizeof(ObTimestampEvent) == 16, "sizeof(ObTimestampEvent)=16");
@@ -78,7 +78,7 @@ class ObPerfEventRecorder : public ObSeqEventRecorder<ObTimestampEvent, 500, 8> 
     return cat_id_;
   }
 
-  private:
+private:
   int64_t sampling_counter_;
   uint64_t cat_id_;  // category id
 };
@@ -90,7 +90,7 @@ inline ObPerfEventRecorder* get_perf_recorder()
 
 // binary output of perf data
 class ObPerfWriter {
-  public:
+public:
   ObPerfWriter() : fd_(-1)
   {}
   ~ObPerfWriter()
@@ -106,10 +106,10 @@ class ObPerfWriter {
     return fd_ != -1;
   }
 
-  public:
+public:
   static char PERF_MAGIC[8];
 
-  private:
+private:
   int fd_;
 };
 // get the global perf_writer
@@ -125,7 +125,7 @@ inline ObPerfWriter* get_perf_writer()
 
 // binary input of perf data
 class ObPerfReader {
-  public:
+public:
   ObPerfReader() : fd_(-1)
   {}
   ~ObPerfReader()
@@ -137,7 +137,7 @@ class ObPerfReader {
   int close();
   int read(ObPerfEventRecorder& rec);
 
-  private:
+private:
   int fd_;
 };
 

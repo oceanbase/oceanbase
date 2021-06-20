@@ -162,17 +162,17 @@ struct ObRsJobInfo {
       K_(database_name), K_(table_id), K_(table_name), K_(partition_id), K_(svr_addr), K_(unit_id), K_(rs_addr),
       K_(sql_text), K_(extra_info), K_(resource_pool_id));
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
 };
 
 class ObRsJobTableOperator {
-  public:
+public:
   static const char* get_job_type_str(ObRsJobType job_type);
   static ObRsJobType get_job_type(const common::ObString& job_type_str);
   static ObRsJobStatus get_job_status(const common::ObString& job_status_str);
 
-  public:
+public:
   ObRsJobTableOperator();
   virtual ~ObRsJobTableOperator() = default;
   int init(common::ObMySQLProxy* sql_client, const common::ObAddr& rs_addr);
@@ -207,12 +207,12 @@ class ObRsJobTableOperator {
     return sql_client_;
   }
 
-  private:
+private:
   // types and constants
   static const char* const TABLE_NAME;
   static const int64_t MAX_ROW_COUNT = 100000;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRsJobTableOperator);
   // function members
@@ -223,7 +223,7 @@ class ObRsJobTableOperator {
   int delete_rows_if_necessary();
   int delete_rows();
 
-  private:
+private:
   // data members
   bool inited_;
   int64_t max_job_id_;
@@ -234,7 +234,7 @@ class ObRsJobTableOperator {
 };
 
 class ObRsJobTableOperatorSingleton {
-  public:
+public:
   static ObRsJobTableOperator& get_instance();
 };
 

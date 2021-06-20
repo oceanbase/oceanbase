@@ -23,7 +23,7 @@ class ObAddr;
 namespace clog {
 // count | partition_id pcode len content | partition_id pcode len content | ...
 class ObBatchPacketCodec {
-  public:
+public:
   static int64_t get_batch_header_size();
   static int64_t get_packet_header_size();
   static int encode_batch_header(char* buf, const int64_t len, int64_t& pos, const int64_t timestamp,

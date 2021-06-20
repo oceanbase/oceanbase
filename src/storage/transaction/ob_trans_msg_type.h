@@ -73,7 +73,7 @@ enum ObTransMsgType {
 const int32_t OB_TRX_NEW_MSG_TYPE_BASE = 1000;
 
 class ObTransMsgTypeChecker {
-  public:
+public:
   static bool is_valid_msg_type(const int64_t msg_type)
   {
     return ((0 <= msg_type && 16 >= msg_type) || (96 <= msg_type && 111 >= msg_type) ||
@@ -98,7 +98,7 @@ class ObTransMsgTypeChecker {
     return (msg_type >= OB_TRANS_2PC_LOG_ID_REQUEST && msg_type <= OB_TRANS_2PC_PRE_COMMIT_RESPONSE);
   }
 
-  private:
+private:
   ObTransMsgTypeChecker()
   {}
   ~ObTransMsgTypeChecker()

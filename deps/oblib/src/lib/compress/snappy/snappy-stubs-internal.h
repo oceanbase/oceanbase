@@ -85,7 +85,7 @@ static const int64 kint64max = static_cast<int64>(0x7FFFFFFFFFFFFFFFLL);
 #define VLOG(level) true ? (void)0 : snappy::LogMessageVoidify() & snappy::LogMessage()
 
 class LogMessage {
-  public:
+public:
   LogMessage()
   {}
   ~LogMessage()
@@ -112,7 +112,7 @@ class LogMessage {
   PREDICT_TRUE(condition) ? (void)0 : snappy::LogMessageVoidify() & snappy::LogMessageCrash()
 
 class LogMessageCrash : public LogMessage {
-  public:
+public:
   LogMessageCrash()
   {}
   ~LogMessageCrash()
@@ -127,7 +127,7 @@ class LogMessageCrash : public LogMessage {
 // is not used" and "statement has no effect".
 
 class LogMessageVoidify {
-  public:
+public:
   LogMessageVoidify()
   {}
   // This has to be an operator with a precedence lower than << but
@@ -253,7 +253,7 @@ inline void UNALIGNED_STORE64(void* p, uint64 v)
 //  Load unaligned values stored in little endian converting to host order:
 //    x = LittleEndian.Load16(p);
 class LittleEndian {
-  public:
+public:
   // Conversion functions.
 #ifdef WORDS_BIGENDIAN
 
@@ -331,7 +331,7 @@ class LittleEndian {
 
 // Some bit-manipulation functions.
 class Bits {
-  public:
+public:
   // Return floor(log2(n)) for positive integer n.  Returns -1 iff n == 0.
   static int Log2Floor(uint32 n);
 
@@ -341,7 +341,7 @@ class Bits {
   static int FindLSBSetNonZero(uint32 n);
   static int FindLSBSetNonZero64(uint64 n);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(Bits);
 };
 
@@ -412,7 +412,7 @@ inline int Bits::FindLSBSetNonZero64(uint64 n)
 
 // Variable-length integer encoding.
 class Varint {
-  public:
+public:
   // Maximum lengths of varint encoding of uint32.
   static const int kMax32 = 5;
 

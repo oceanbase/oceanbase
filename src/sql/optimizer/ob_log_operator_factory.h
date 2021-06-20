@@ -148,7 +148,7 @@ inline const char* JoinAlgo_to_hint_str(JoinAlgo algo)
 }
 class ObLogPlan;
 class ObLogOperatorFactory {
-  public:
+public:
   explicit ObLogOperatorFactory(common::ObIAllocator& allocator);
   ~ObLogOperatorFactory()
   {
@@ -157,7 +157,7 @@ class ObLogOperatorFactory {
   ObLogicalOperator* allocate(ObLogPlan& plan, log_op_def::ObLogOpType type);
   void destory();
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   common::ObObjStore<ObLogicalOperator*, common::ObIAllocator&> op_store_;
 };

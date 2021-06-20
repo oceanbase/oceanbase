@@ -24,11 +24,11 @@ namespace observer {
 // Before coming into this class, all information about this
 // connection maybe invalid.
 class ObMPDisconnect : public rpc::frame::ObReqProcessor {
-  public:
+public:
   explicit ObMPDisconnect(const sql::ObFreeSessionCtx& ctx);
   virtual ~ObMPDisconnect();
 
-  protected:
+protected:
   virtual int deserialize()
   {
     return common::OB_SUCCESS;
@@ -50,10 +50,10 @@ class ObMPDisconnect : public rpc::frame::ObReqProcessor {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   int kill_unfinished_session(uint32_t version, uint32_t sessid);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPDisconnect);
   sql::ObFreeSessionCtx ctx_;
 };  // end of class ObMPDisconnect

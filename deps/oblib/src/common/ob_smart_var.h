@@ -50,7 +50,7 @@ extern void* smart_alloc(const int64_t, const char*);
 extern void smart_free(void*);
 
 class _SBase {
-  public:
+public:
   _SBase(const int ret, const bool from_heap) : ret_(ret), from_heap_(from_heap)
   {}
   int ret_;
@@ -59,7 +59,7 @@ class _SBase {
 
 template <typename T, bool large, bool direct_heap = false>
 class _S : public _SBase {
-  public:
+public:
   static int precheck(bool& from_heap, bool& by_vla)
   {
     int ret = OB_SUCCESS;
@@ -72,7 +72,7 @@ class _S : public _SBase {
     return ret;
   }
 
-  public:
+public:
   template <typename... Args>
   _S(const int ret, const bool from_heap, Args&&... args) : _SBase(ret, from_heap), v_(nullptr)
   {
@@ -110,7 +110,7 @@ template <typename T, int N, bool direct_heap>
 class _S<T[N], true, direct_heap> : public _SBase {
   typedef T Array[N];
 
-  public:
+public:
   static int precheck(bool& from_heap, bool& by_vla)
   {
     int ret = OB_SUCCESS;
@@ -123,7 +123,7 @@ class _S<T[N], true, direct_heap> : public _SBase {
     return ret;
   }
 
-  public:
+public:
   _S(const int ret, const bool from_heap) : _SBase(ret, from_heap), v_(nullptr)
   {
     if (OB_SUCCESS == ret_) {
@@ -160,7 +160,7 @@ class _S<T[N], true, direct_heap> : public _SBase {
 
 template <typename T>
 class _S<T, false> : public _SBase {
-  public:
+public:
   static int precheck(bool& from_heap, bool& by_vla)
   {
     from_heap = false;
@@ -168,7 +168,7 @@ class _S<T, false> : public _SBase {
     return OB_SUCCESS;
   }
 
-  public:
+public:
   template <typename... Args>
   _S(const int ret, const bool from_heap, Args&&... args) : _SBase(ret, from_heap), obj_(args...), v_(&obj_)
   {}
@@ -184,7 +184,7 @@ template <typename T, int N>
 class _S<T[N], false> : public _SBase {
   typedef T Array[N];
 
-  public:
+public:
   static int precheck(bool& from_heap, bool& by_vla)
   {
     from_heap = false;
@@ -192,7 +192,7 @@ class _S<T[N], false> : public _SBase {
     return OB_SUCCESS;
   }
 
-  public:
+public:
   _S(const int ret, const bool from_heap) : _SBase(ret, from_heap), v_(&array_[0])
   {}
   Array& get()

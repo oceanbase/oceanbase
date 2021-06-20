@@ -21,7 +21,7 @@ namespace sql {
 class ObMergeStmt : public ObInsertStmt {
   typedef common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> RawExprArray;
 
-  public:
+public:
   ObMergeStmt();
   int deep_copy_stmt_struct(
       ObStmtFactory& stmt_factory, ObRawExprFactory& expr_factory, const ObDMLStmt& other) override;
@@ -104,10 +104,10 @@ class ObMergeStmt : public ObInsertStmt {
       const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs) override;
   DECLARE_VIRTUAL_TO_STRING;
 
-  protected:
+protected:
   virtual int inner_get_relation_exprs(RelExprCheckerBase& expr_checker);
 
-  private:
+private:
   uint64_t source_table_id_;
   uint64_t target_table_id_;
   RawExprArray match_condition_exprs_;

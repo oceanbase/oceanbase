@@ -19,11 +19,11 @@
 namespace oceanbase {
 namespace common {
 class ObRegex {
-  public:
+public:
   ObRegex();
   virtual ~ObRegex();
 
-  public:
+public:
   int init(const char* pattern, int flags);
   int match(const char* text, int flags, bool& is_match);
   void destroy();
@@ -36,13 +36,13 @@ class ObRegex {
     return static_cast<int64_t>(nmatch_);
   }
 
-  private:
+private:
   bool init_;
   regmatch_t* match_;
   regex_t reg_;
   size_t nmatch_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRegex);
 };
 }  // namespace common

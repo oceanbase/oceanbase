@@ -25,13 +25,13 @@ class ObTaskInfo;
 class ObPhyOperator;
 
 class ObTaskResultIter {
-  public:
+public:
   enum IterType {
     IT_ROOT,
     IT_DISTRIBUTED,
   };
 
-  public:
+public:
   explicit ObTaskResultIter(IterType iter_tyep);
   virtual ~ObTaskResultIter();
   virtual int get_next_task_result(ObTaskResult& task_result) = 0;
@@ -41,19 +41,19 @@ class ObTaskResultIter {
     return iter_type_;
   }
 
-  protected:
+protected:
   IterType iter_type_;
 };
 
 class ObRootTaskResultIter : public ObTaskResultIter {
-  public:
+public:
   ObRootTaskResultIter(ObExecContext& exec_ctx, uint64_t exec_id, uint64_t child_op_id, int64_t ts_timeout);
   virtual ~ObRootTaskResultIter();
   virtual int get_next_task_result(ObTaskResult& task_result);
   virtual int check_status();
   int init();
 
-  private:
+private:
   ObExecContext& exec_ctx_;
   uint64_t exec_id_;
   ObDistributedSchedulerManager::ObDistributedSchedulerHolder scheduler_holder_;
@@ -63,13 +63,13 @@ class ObRootTaskResultIter : public ObTaskResultIter {
 };
 
 class ObDistributedTaskResultIter : public ObTaskResultIter {
-  public:
+public:
   explicit ObDistributedTaskResultIter(const ObIArray<ObTaskResultBuf>& task_results);
   virtual ~ObDistributedTaskResultIter();
   virtual int get_next_task_result(ObTaskResult& task_result);
   virtual int check_status();
 
-  private:
+private:
   const ObIArray<ObTaskResultBuf>& task_results_;
   int64_t cur_idx_;
 };
@@ -90,7 +90,7 @@ class ObDistributedTaskResultIter : public ObTaskResultIter {
 class ObDistributedReceiveInput : public ObIPhyOperatorInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDistributedReceiveInput();
   virtual ~ObDistributedReceiveInput();
   virtual void reset() override;
@@ -108,13 +108,13 @@ class ObDistributedReceiveInput : public ObIPhyOperatorInput {
     child_job_id_ = child_job_id;
   }
 
-  private:
+private:
   common::ObSEArray<ObTaskResultBuf, 8> child_task_results_;
   uint64_t child_job_id_;  // need serialized, but only used for init child_task_results.
 };
 
 class ObIDataSource {
-  public:
+public:
   ObIDataSource();
   virtual ~ObIDataSource();
 
@@ -124,7 +124,7 @@ class ObIDataSource {
   virtual int close() = 0;
   TO_STRING_KV(K_(inited), K_(cur_scanner));
 
-  protected:
+protected:
   virtual int fetch_next_scanner() = 0;
 
   common::ObScanner cur_scanner_;
@@ -139,12 +139,12 @@ class ObIDataSource {
 // Fetch interm result using stream RPC (occupy one peer thread).
 // Only for compatibility, can be removed after all cluster upgrade to 2.1.0
 class ObStreamDataSource : public ObIDataSource {
-  public:
+public:
   ObStreamDataSource();
   ~ObStreamDataSource();
   virtual int close() override;
 
-  private:
+private:
   virtual int fetch_next_scanner() override;
   /*
    * ObExecutorRpcImpl::task_fetch_interm_result() => FetchIntermResultStreamHandle
@@ -159,13 +159,13 @@ class ObStreamDataSource : public ObIDataSource {
 
 // Fetch interm result using normal RPC, specify interm item index every time.
 class ObSpecifyDataSource : public ObIDataSource {
-  public:
+public:
   ObSpecifyDataSource();
   ~ObSpecifyDataSource();
 
   virtual int close() override;
 
-  private:
+private:
   virtual int fetch_next_scanner() override;
 
   int64_t fetch_index_;
@@ -173,19 +173,19 @@ class ObSpecifyDataSource : public ObIDataSource {
 };
 
 class ObAsyncReceive : public ObReceive {
-  protected:
+protected:
   class ObAsyncReceiveCtx : public ObReceiveCtx {
     friend class ObAsyncReceive;
     friend class ObFifoReceiveV2;
 
-    public:
+  public:
     explicit ObAsyncReceiveCtx(ObExecContext& exec_ctx);
     virtual ~ObAsyncReceiveCtx();
     virtual void destroy();
     int init_root_iter(uint64_t child_op_id);
     int init_distributed_iter(const ObIArray<ObTaskResultBuf>& task_results);
 
-    protected:
+  protected:
     ObTaskResultIter* task_result_iter_;
     int64_t found_rows_;
     int64_t affected_rows_;
@@ -194,7 +194,7 @@ class ObAsyncReceive : public ObReceive {
     bool iter_end_;
   };
 
-  public:
+public:
   explicit ObAsyncReceive(common::ObIAllocator& alloc);
   virtual ~ObAsyncReceive();
   void set_in_root_job(bool in_root_job)
@@ -206,7 +206,7 @@ class ObAsyncReceive : public ObReceive {
     return in_root_job_;
   }
 
-  protected:
+protected:
   virtual int create_operator_input(ObExecContext& exec_ctx) const;
   virtual int create_op_ctx(ObExecContext& exec_ctx, ObAsyncReceiveCtx*& op_ctx) const = 0;
   virtual int init_op_ctx(ObExecContext& exec_ctx) const;
@@ -216,56 +216,56 @@ class ObAsyncReceive : public ObReceive {
 
   int create_data_source(ObExecContext& exec_ctx, ObIDataSource*& data_source) const;
 
-  protected:
+protected:
   bool in_root_job_;
 };
 
 class ObSerialReceive : public ObAsyncReceive {
-  protected:
+protected:
   class ObSerialReceiveCtx : public ObAsyncReceiveCtx {
     friend class ObSerialReceive;
 
-    public:
+  public:
     explicit ObSerialReceiveCtx(ObExecContext& exec_ctx);
     virtual ~ObSerialReceiveCtx();
     virtual void destroy();
 
-    protected:
+  protected:
     ObIDataSource* data_source_;
   };
 
-  public:
+public:
   explicit ObSerialReceive(common::ObIAllocator& alloc);
   virtual ~ObSerialReceive();
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& exec_ctx) const;
   virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
   virtual int inner_close(ObExecContext& exec_ctx) const;
 };
 
 class ObParallelReceive : public ObAsyncReceive {
-  protected:
+protected:
   class ObParallelReceiveCtx : public ObAsyncReceiveCtx {
     friend class ObParallelReceive;
     friend class ObMergeSortReceive;
 
-    public:
+  public:
     explicit ObParallelReceiveCtx(ObExecContext& exec_ctx);
     virtual ~ObParallelReceiveCtx();
     virtual void destroy();
 
-    protected:
+  protected:
     common::ObSEArray<ObIDataSource*, 8> data_sources_;
     common::ObSEArray<common::ObNewRow, 8> child_rows_;
     common::ObSEArray<int64_t, 8> row_idxs_;
   };
 
-  public:
+public:
   explicit ObParallelReceive(common::ObIAllocator& alloc);
   virtual ~ObParallelReceive();
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& exec_ctx) const;
   virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const = 0;
   virtual int inner_close(ObExecContext& exec_ctx) const;
@@ -275,17 +275,17 @@ class ObParallelReceive : public ObAsyncReceive {
 class ObFifoReceiveV2 : public ObSerialReceive {
   typedef ObSerialReceiveCtx ObFifoReceiveCtx;
 
-  public:
+public:
   explicit ObFifoReceiveV2(common::ObIAllocator& alloc);
   virtual ~ObFifoReceiveV2();
 
-  protected:
+protected:
   virtual int create_op_ctx(ObExecContext& exec_ctx, ObAsyncReceiveCtx*& op_ctx) const;
 };
 
 class ObTaskOrderReceive : public ObSerialReceive {
   struct ObTaskComparer {
-    public:
+  public:
     ObTaskComparer();
     virtual ~ObTaskComparer();
     bool operator()(const ObTaskResult& task1, const ObTaskResult& task2);
@@ -293,26 +293,26 @@ class ObTaskOrderReceive : public ObSerialReceive {
   class ObTaskOrderReceiveCtx : public ObSerialReceiveCtx {
     friend class ObTaskOrderReceive;
 
-    public:
+  public:
     explicit ObTaskOrderReceiveCtx(ObExecContext& exec_ctx);
     virtual ~ObTaskOrderReceiveCtx();
     virtual void destroy();
 
-    protected:
+  protected:
     common::ObSEArray<ObTaskResult, 8> task_results_;
     ObTaskComparer task_comparer_;
     uint64_t cur_task_id_;
   };
 
-  public:
+public:
   explicit ObTaskOrderReceive(common::ObIAllocator& alloc);
   virtual ~ObTaskOrderReceive();
 
-  protected:
+protected:
   virtual int create_op_ctx(ObExecContext& exec_ctx, ObAsyncReceiveCtx*& op_ctx) const;
   virtual int get_next_task_result(ObAsyncReceiveCtx& op_ctx, ObTaskResult& task_result) const;
 
-  private:
+private:
   int get_next_task_result_root(ObAsyncReceiveCtx& op_ctx, ObTaskResult& task_result) const;
   int get_next_task_result_distributed(ObAsyncReceiveCtx& op_ctx, ObTaskResult& task_result) const;
 };
@@ -320,9 +320,9 @@ class ObTaskOrderReceive : public ObSerialReceive {
 class ObMergeSortReceive : public ObParallelReceive, public ObSortableTrait {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   struct ObRowComparer {
-    public:
+  public:
     ObRowComparer();
     virtual ~ObRowComparer();
     void init(const common::ObIArray<ObSortColumn>& columns, const common::ObIArray<ObNewRow>& rows);
@@ -332,7 +332,7 @@ class ObMergeSortReceive : public ObParallelReceive, public ObSortableTrait {
       return ret_;
     }
 
-    private:
+  private:
     const common::ObIArray<ObSortColumn>* columns_;
     const common::ObIArray<ObNewRow>* rows_;
     int ret_;
@@ -340,20 +340,20 @@ class ObMergeSortReceive : public ObParallelReceive, public ObSortableTrait {
   class ObMergeSortReceiveCtx : public ObParallelReceiveCtx {
     friend class ObMergeSortReceive;
 
-    public:
+  public:
     explicit ObMergeSortReceiveCtx(ObExecContext& exec_ctx);
     virtual ~ObMergeSortReceiveCtx();
 
-    private:
+  private:
     ObRowComparer row_comparer_;
     int64_t last_row_idx_;
   };
 
-  public:
+public:
   explicit ObMergeSortReceive(common::ObIAllocator& alloc);
   virtual ~ObMergeSortReceive();
 
-  protected:
+protected:
   virtual int create_op_ctx(ObExecContext& exec_ctx, ObAsyncReceiveCtx*& op_ctx) const;
   virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
 };
@@ -362,7 +362,7 @@ class ObFifoReceiveInput : public ObReceiveInput {
   friend class ObFifoReceive;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObFifoReceiveInput(){};
   virtual ~ObFifoReceiveInput()
   {}
@@ -373,7 +373,7 @@ class ObFifoReceiveInput : public ObReceiveInput {
 
 class ObDistributedScheduler;
 class ObFifoReceive : public ObReceive, public ObSortableTrait {
-  private:
+private:
   struct MergeRowComparer;
   struct MergeSortHandle {
     MergeSortHandle()
@@ -413,7 +413,7 @@ class ObFifoReceive : public ObReceive, public ObSortableTrait {
   class ObFifoReceiveCtx : public ObReceiveCtx {
     friend class ObFifoReceive;
 
-    public:
+  public:
     explicit ObFifoReceiveCtx(ObExecContext& ctx);
     virtual ~ObFifoReceiveCtx();
     virtual void destroy()
@@ -431,7 +431,7 @@ class ObFifoReceive : public ObReceive, public ObSortableTrait {
       ObReceiveCtx::destroy();
     }
 
-    private:
+  private:
     int64_t found_rows_;
     FetchIntermResultStreamHandle stream_handler_;
     FetchResultStreamHandle old_stream_handler_;
@@ -451,13 +451,13 @@ class ObFifoReceive : public ObReceive, public ObSortableTrait {
     common::ObSEArray<ObSortRow, 8> heap_sort_rows_;
   };
 
-  public:
+public:
   explicit ObFifoReceive(common::ObIAllocator& aloc);
   virtual ~ObFifoReceive();
   virtual int create_operator_input(ObExecContext& ctx) const;
   virtual int rescan(ObExecContext& ctx) const;
 
-  private:
+private:
   /* functions */
   virtual int inner_open(ObExecContext& ctx) const;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
@@ -501,7 +501,7 @@ class ObFifoReceive : public ObReceive, public ObSortableTrait {
   int push_a_row_into_heap(ObFifoReceiveCtx& fifo_receive_ctx, ObSortRow& row) const;
   TO_STRING_KV(N_ORDER_BY, sort_columns_);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFifoReceive);
 };
 }  // namespace sql

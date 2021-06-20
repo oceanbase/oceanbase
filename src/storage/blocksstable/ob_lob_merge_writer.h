@@ -25,7 +25,7 @@ class ObSSTable;
 namespace blocksstable {
 
 class ObLobMergeWriter {
-  public:
+public:
   ObLobMergeWriter();
   virtual ~ObLobMergeWriter();
   void reset();
@@ -40,7 +40,7 @@ class ObLobMergeWriter {
   }
   TO_STRING_KV(K_(orig_lob_macro_blocks), K_(block_write_ctx), K_(macro_start_seq), K_(use_old_macro_block_count));
 
-  private:
+private:
   static const int64_t DEFAULT_MACRO_BLOCK_NUM = 256;
   typedef common::ObSEArray<MacroBlockId, DEFAULT_MACRO_BLOCK_NUM> MacroBlockArray;
   typedef common::ObSEArray<ObMacroBlockMeta*, DEFAULT_MACRO_BLOCK_NUM> MacroBlockMetaArray;
@@ -57,7 +57,7 @@ class ObLobMergeWriter {
     const storage::ObStoreRow& row_;
   };
 
-  private:
+private:
   bool is_valid() const;
   int find_cand_lob_cols(const storage::ObStoreRow& row, ObIArray<int64_t>& lob_col_idxs, int64_t& row_size);
   int write_lob_obj(const common::ObStoreRowkey& rowkey, const int64_t column_id, const ObObj& src_obj, ObObj& dst_obj);
@@ -66,7 +66,7 @@ class ObLobMergeWriter {
       const common::ObStoreRowkey& rowkey, const int64_t column_id, bool& check_ret);
   int copy_row_(const storage::ObStoreRow& row);
 
-  private:
+private:
   MacroBlockInfoArray orig_lob_macro_blocks_;
   ObMacroBlocksWriteCtx block_write_ctx_;  // TODO(): fix lob for ofs
   ObLobDataWriter lob_writer_;

@@ -35,7 +35,7 @@ int ObBatchPacketCodec::encode_batch_header(char* buf, const int64_t len, int64_
   int64_t new_pos = pos;
   if (OB_ISNULL(buf) || len <= 0 || pos < 0 || OB_INVALID_TIMESTAMP == timestamp || !server.is_valid() || count < 0) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "incalid argument", KP(buf), K(len), K(pos), K(timestamp), K(server), K(count));
+    CLOG_LOG(WARN, "invalid argument", KP(buf), K(len), K(pos), K(timestamp), K(server), K(count));
   } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, timestamp))) {
   } else if (OB_FAIL(serialization::encode_i32(buf, len, new_pos, count))) {
   } else if (OB_FAIL(server.serialize(buf, len, new_pos))) {

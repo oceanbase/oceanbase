@@ -50,7 +50,7 @@ class ObElectionGroupInfo;
 class ObElectionGroupCache;
 
 class ObIElectionGroup : public common::LinkHashValue<election::ObElectionGroupId> {
-  public:
+public:
   ObIElectionGroup()
   {}
   virtual ~ObIElectionGroup()
@@ -67,7 +67,7 @@ class ObIElectionGroup : public common::LinkHashValue<election::ObElectionGroupI
   virtual int start() = 0;
   virtual int stop() = 0;
 
-  public:
+public:
   virtual bool is_need_check_eg_version(const int64_t msg_eg_version) const = 0;
   virtual int check_eg_version(const int64_t msg_eg_version, const common::ObPartitionArray& partition_array,
       common::ObPartitionArray& pending_move_out_array, common::ObPartitionArray& pending_move_in_array) = 0;
@@ -88,7 +88,7 @@ class ObIElectionGroup : public common::LinkHashValue<election::ObElectionGroupI
   virtual int handle_prepare_destroy_msg(
       const ObElectionMsg& msg, const int64_t msg_eg_version, obrpc::ObElectionRpcResult& result) = 0;
 
-  public:
+public:
   virtual const common::ObAddr& get_curr_leader() const = 0;
   virtual const ObElectionRole& get_role() const = 0;
   virtual int64_t get_replica_num() const = 0;
@@ -112,7 +112,7 @@ class ObIElectionGroup : public common::LinkHashValue<election::ObElectionGroupI
 };
 
 class ObElectionGroup : public ObIElectionGroup, public ObIElectionTimerP {
-  public:
+public:
   ObElectionGroup()
       : lock_(common::ObLatchIds::ELECTION_GROUP_LOCK),
         tlog_(true, common::ObLatchIds::ELECTION_GROUP_TRACE_RECORDER_LOCK)
@@ -191,7 +191,7 @@ class ObElectionGroup : public ObIElectionGroup, public ObIElectionTimerP {
     return T1_timestamp_;
   }
 
-  public:
+public:
   uint64_t hash() const
   {
     return eg_id_.hash();
@@ -231,7 +231,7 @@ class ObElectionGroup : public ObIElectionGroup, public ObIElectionTimerP {
       leader_lease_.second, Y_(active_timestamp), Y_(T1_timestamp), Y_(state), Y_(role), Y_(replica_num),
       Y_(unconfirmed_leader), Y_(takeover_t1_timestamp), Y_(vote_period), Y_(lease_time));
 
-  private:
+private:
   void flush_trace_buf_();
   bool lease_expired_too_long_(const int64_t cur_ts) const;
   int try_start_();
@@ -264,8 +264,8 @@ class ObElectionGroup : public ObIElectionGroup, public ObIElectionTimerP {
   bool run_time_out_of_range_(const int64_t cur_ts, const int64_t expect_ts) const;
   bool vote_run_time_out_of_range_(const int64_t cur_ts, const int64_t expect_ts) const;
   int get_eg_centralized_candidate_(common::ObAddr& cur_leader, common::ObAddr& new_leader);
-  int try_centrialized_voting_(const int64_t lease_time);
-  int check_centrialized_majority_();
+  int try_centralized_voting_(const int64_t lease_time);
+  int check_centralized_majority_();
   void set_unconfirmed_leader_(const common::ObAddr& unconfirmed_leader);
   int set_unconfirmed_leader_lease_(const int64_t start, const int64_t end);
   bool unconfirmed_leader_lease_is_expired_(const int64_t cur_ts) const;
@@ -298,7 +298,7 @@ class ObElectionGroup : public ObIElectionGroup, public ObIElectionTimerP {
   bool part_leader_lease_is_expired_unlock_(const int64_t part_cur_ts, const common::ObPartitionKey& pkey,
       const int64_t target_idx, int64_t& out_lease_end) const;
 
-  private:
+private:
 #if defined(__x86_64__)
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
@@ -308,7 +308,7 @@ class ObElectionGroup : public ObIElectionGroup, public ObIElectionTimerP {
   typedef common::RWLock::WLockGuard WLockGuard;
   mutable common::RWLock lock_;
 #endif
-  private:
+private:
   common::ObTraceEventRecorder tlog_;
   bool is_inited_;
   bool is_running_;

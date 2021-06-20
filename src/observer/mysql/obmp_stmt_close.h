@@ -20,16 +20,16 @@ namespace oceanbase {
 namespace observer {
 
 class ObMPStmtClose : public ObMPBase {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_STMT_CLOSE;
 
-  public:
+public:
   explicit ObMPStmtClose(const ObGlobalContext& gctx) : ObMPBase(gctx), stmt_id_(common::OB_INVALID_STMT_ID)
   {}
   virtual ~ObMPStmtClose()
   {}
 
-  protected:
+protected:
   int deserialize();
   int process();
 
@@ -43,10 +43,10 @@ class ObMPStmtClose : public ObMPBase {
     return 0 != (stmt_id_ & (1LL << 31));
   }
 
-  private:
+private:
   common::ObPsStmtId stmt_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtClose);
 };
 

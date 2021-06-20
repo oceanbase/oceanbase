@@ -23,7 +23,7 @@ class ObDtlChannel;
 
 // Watcher
 class ObDtlChannelWatcher {
-  public:
+public:
   virtual void notify(ObDtlChannel& chan) = 0;
   virtual void remove_data_list(ObDtlChannel* chan, bool force = false) = 0;
   virtual void add_last_data_list(ObDtlChannel* ch) = 0;

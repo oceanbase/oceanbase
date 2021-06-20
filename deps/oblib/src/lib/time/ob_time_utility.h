@@ -23,14 +23,14 @@
 namespace oceanbase {
 namespace common {
 class ObTimeUtility {
-  public:
+public:
   static int64_t current_time();
   static int64_t fast_current_time();
   static int64_t current_monotonic_time();
   static int64_t current_time_coarse();
   static int64_t current_monotonic_raw_time();
 
-  private:
+private:
   static int64_t current_monotonic_time_();
   ObTimeUtility() = delete;
 };

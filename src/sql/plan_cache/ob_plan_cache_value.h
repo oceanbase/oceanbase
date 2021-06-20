@@ -117,12 +117,12 @@ struct PCVSchemaObj {
 };
 
 class ObPlanCacheValue : public common::ObDLinkBase<ObPlanCacheValue> {
-  public:
+public:
   static const int64_t MAX_SQL_LENGTH = 2048;
   static const int32_t MAX_PLAN_PER_SQL = 8;
   const static int64_t OB_INFLUENCE_PLAN_SYS_VAR_LEN = 512;
 
-  public:
+public:
   ObPlanCacheValue();
   ~ObPlanCacheValue()
   {
@@ -247,7 +247,7 @@ class ObPlanCacheValue : public common::ObDLinkBase<ObPlanCacheValue> {
 
   int lift_tenant_schema_version(int64_t new_schema_version);
 
-  private:
+private:
   // used for add plan
   // check table version, view table version, merged version
   int check_value_version_for_add(
@@ -310,7 +310,7 @@ class ObPlanCacheValue : public common::ObDLinkBase<ObPlanCacheValue> {
   friend class ::test::TestPlanSet_basic_Test;
   friend class ::test::TestPlanCacheValue_basic_Test;
 
-  private:
+private:
   //***********  for match **************
   common::ObSEArray<NotParamInfo, 4> not_param_info_;
   common::ObBitSet<> not_param_index_;

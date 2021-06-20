@@ -25,7 +25,7 @@ namespace sql {
 using namespace common;
 
 class TestEnv : public ::testing::Environment {
-  public:
+public:
   virtual void SetUp() override
   {
     GCONF.enable_sql_operator_dump.set_value("True");
@@ -50,7 +50,7 @@ class TestEnv : public ::testing::Environment {
   ASSERT_FALSE(HasFatalFailure());
 
 class TestRARowStore : public blocksstable::TestDataFilePrepare {
-  public:
+public:
   TestRARowStore() : blocksstable::TestDataFilePrepare("TestDiskIR", 2 << 20, 1000)
   {}
 
@@ -142,7 +142,7 @@ class TestRARowStore : public blocksstable::TestDataFilePrepare {
     ASSERT_EQ(base + cnt, rs_.get_row_cnt());
   }
 
-  protected:
+protected:
   const static int64_t COLS = 3;
   bool enable_big_row_ = false;
   ObObj cells_[COLS];

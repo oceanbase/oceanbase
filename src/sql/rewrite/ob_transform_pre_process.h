@@ -37,7 +37,7 @@ struct MVDesc {
 };
 
 class ObTransformPreProcess : public ObTransformRule {
-  public:
+public:
   explicit ObTransformPreProcess(ObTransformerCtx* ctx)
       : ObTransformRule(ctx, TransMethod::POST_ORDER), mock_table_set_(), origin_table_set_()
   {}
@@ -50,7 +50,7 @@ class ObTransformPreProcess : public ObTransformRule {
   static int transform_expr(
       ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session, ObRawExpr*& expr, bool& trans_happened);
 
-  private:
+private:
   // used for transform in expr to or exprs
   struct DistinctObjMeta {
     ObObjType obj_type_;
@@ -237,7 +237,7 @@ class ObTransformPreProcess : public ObTransformRule {
   int extract_replace_expr_from_select_expr(
       ObRawExpr* expr, ObSelectStmt* select_stmt, ObIArray<ObRawExpr*>& old_exprs);
 
-  private:
+private:
   ObRelIds mock_table_set_;
   ObRelIds origin_table_set_;
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);

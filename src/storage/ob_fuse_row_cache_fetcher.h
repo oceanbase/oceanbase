@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObFuseRowCacheFetcher final {
-  public:
+public:
   ObFuseRowCacheFetcher();
   ~ObFuseRowCacheFetcher() = default;
   int init(const ObTableAccessParam& access_param, ObTableAccessContext& access_ctx);
@@ -28,7 +28,7 @@ class ObFuseRowCacheFetcher final {
   int put_fuse_row_cache(const ObStoreRowkey& rowkey, const int64_t sstable_end_log_ts, ObStoreRow& row,
       blocksstable::ObFuseRowValueHandle& handle);
 
-  private:
+private:
   static const int64_t FUSE_ROW_CACHE_PUT_INTERVAL = 10 * 1000 * 1000;  // 10s
   bool is_inited_;
   const ObTableAccessParam* access_param_;

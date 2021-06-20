@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprNvlUtil {
-  public:
+public:
   static int calc_result_type(
       ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx);
   static int calc_nvl_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
@@ -27,7 +27,7 @@ class ObExprNvlUtil {
 };
 
 class ObExprNvl : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprNvl(common::ObIAllocator& alloc);
   virtual ~ObExprNvl();
 
@@ -38,17 +38,17 @@ class ObExprNvl : public ObFuncExprOperator {
 
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   ObExprNvl(const ObExprNvl& other);
   ObExprNvl& operator=(const ObExprNvl& other);
 
-  protected:
+protected:
   // data members
 };
 
 class ObExprOracleNvl : public ObFuncExprOperator {
-  public:
+public:
   // ObExprNvl();
   explicit ObExprOracleNvl(common::ObIAllocator& alloc);
   virtual ~ObExprOracleNvl();
@@ -63,15 +63,15 @@ class ObExprOracleNvl : public ObFuncExprOperator {
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprOracleNvl);
 
-  protected:
+protected:
   // data members
 };
 
 class ObExprNaNvl : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprNaNvl(common::ObIAllocator& alloc);
   virtual ~ObExprNaNvl();
 
@@ -81,10 +81,10 @@ class ObExprNaNvl : public ObFuncExprOperator {
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprNaNvl);
 
-  protected:
+protected:
   // data members
 };
 

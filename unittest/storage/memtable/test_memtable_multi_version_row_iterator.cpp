@@ -37,7 +37,7 @@ using namespace rpc::frame;
 using namespace compaction;
 namespace memtable {
 class TestMemtableMultiVersionRowIterator : public ::testing::Test {
-  public:
+public:
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 2;
   static const int64_t TEST_COLUMN_CNT = ObExtendType;
   TestMemtableMultiVersionRowIterator();
@@ -48,10 +48,10 @@ class TestMemtableMultiVersionRowIterator : public ::testing::Test {
   void init();
   void init_table_param(const ObTableSchema& schema, const ObColDescIArray& cols);
 
-  private:
+private:
   bool is_inited_;
 
-  protected:
+protected:
   ObTableIterParam table_param_;
   ObTableAccessContext table_access_context_;
   ObArenaAllocator allocator_;

@@ -31,13 +31,13 @@ using namespace memtable;
 
 namespace unittest {
 class TestMicroBlockIndexCache : public TestDataFilePrepare {
-  public:
+public:
   TestMicroBlockIndexCache();
   virtual ~TestMicroBlockIndexCache();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   static const int64_t TEST_TABLE_ID = 3001;
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
   static const int64_t MAX_TEST_COLUMN_CNT = TEST_COLUMN_CNT + 1;

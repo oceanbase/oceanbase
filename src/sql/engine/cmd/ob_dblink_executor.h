@@ -21,26 +21,26 @@ class ObCreateDbLinkStmt;
 class ObDropDbLinkStmt;
 
 class ObCreateDbLinkExecutor {
-  public:
+public:
   ObCreateDbLinkExecutor()
   {}
   virtual ~ObCreateDbLinkExecutor()
   {}
   int execute(ObExecContext& ctx, ObCreateDbLinkStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateDbLinkExecutor);
 };
 
 class ObDropDbLinkExecutor {
-  public:
+public:
   ObDropDbLinkExecutor()
   {}
   virtual ~ObDropDbLinkExecutor()
   {}
   int execute(ObExecContext& ctx, ObDropDbLinkStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDropDbLinkExecutor);
 };
 

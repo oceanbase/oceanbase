@@ -40,7 +40,7 @@ struct ObMemstoreAllocatorInfo {
   common::ObVersion version_;
 };
 class ObAllVirtualTenantMemstoreAllocatorInfo : public common::ObVirtualTableIterator {
-  public:
+public:
   typedef ObMemstoreAllocatorInfo MemstoreInfo;
   ObAllVirtualTenantMemstoreAllocatorInfo();
   virtual ~ObAllVirtualTenantMemstoreAllocatorInfo();
@@ -48,7 +48,7 @@ class ObAllVirtualTenantMemstoreAllocatorInfo : public common::ObVirtualTableIte
   virtual void reset();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   enum COLUMNS {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,

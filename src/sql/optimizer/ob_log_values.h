@@ -23,7 +23,7 @@ namespace sql {
  * ObLogValues is currently being used as 'explain' and 'help' operator.
  */
 class ObLogValues : public ObLogicalOperator {
-  public:
+public:
   static const int64_t MAX_EXPLAIN_BUFFER_SIZE = 1024 * 1024;
   ObLogValues(ObLogPlan& plan)
       : ObLogicalOperator(plan), explain_plan_(NULL), stmt_(NULL), row_store_(plan.get_allocator())
@@ -96,7 +96,7 @@ class ObLogValues : public ObLogicalOperator {
     return ret;
   }
 
-  private:
+private:
   ObLogPlan* explain_plan_;
   ObStmt* stmt_;
   common::ObRowStore row_store_;

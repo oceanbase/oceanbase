@@ -19,13 +19,13 @@ using namespace transaction;
 using namespace common;
 namespace unittest {
 class TestObTransAuditRecordMgr : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
   {}
 
-  public:
+public:
   static const int32_t MAX_MEMORY = 100 * (1 << 20);  // 100MB
   static const uint64_t TENANT_ID = 1000;
 };

@@ -35,7 +35,7 @@ struct ObReadParam {
   TO_STRING_KV(N_FILE_ID, file_id_, N_OFFSET, offset_, N_PARTITION_KEY, partition_key_, N_LOG_ID, log_id_, N_READ_LEN,
       read_len_, N_TIMEOUT, timeout_);
 
-  private:
+private:
   static const int64_t OB_TIMEOUT = 10000000;  // 10s
 };
 
@@ -50,7 +50,7 @@ struct ObReadRes {
 };
 
 struct ObReadBuf {
-  public:
+public:
   ObReadBuf() : buf_(NULL), buf_len_(0)
   {}
   ~ObReadBuf()
@@ -72,13 +72,13 @@ struct ObReadBuf {
   }
   TO_STRING_KV(KP(buf_), K(buf_len_));
 
-  public:
+public:
   char* buf_;
   int64_t buf_len_;
 };
 
 class ObILogDirectReader {
-  public:
+public:
   enum TSIBufferIdx {
     CACHE_IDX = 0,
     IO_IDX = 1,
@@ -86,7 +86,7 @@ class ObILogDirectReader {
     MAX_IDX,
   };
 
-  public:
+public:
   ObILogDirectReader()
   {}
   virtual ~ObILogDirectReader()
@@ -108,7 +108,7 @@ class ObILogDirectReader {
 };
 
 class ObILogInfoBlockReader {
-  public:
+public:
   ObILogInfoBlockReader()
   {}
   virtual ~ObILogInfoBlockReader()
@@ -118,7 +118,7 @@ class ObILogInfoBlockReader {
 };
 
 class ObIRawLogIterator {
-  public:
+public:
   ObIRawLogIterator()
   {}
   virtual ~ObIRawLogIterator()
@@ -128,7 +128,7 @@ class ObIRawLogIterator {
 };
 
 class ObIRawIndexIterator {
-  public:
+public:
   ObIRawIndexIterator()
   {}
   virtual ~ObIRawIndexIterator()
@@ -139,7 +139,7 @@ class ObIRawIndexIterator {
 };
 
 class ObReadBufGuard {
-  public:
+public:
   ObReadBufGuard(const char* label) : read_buf_()
   {
     ObILogDirectReader::alloc_buf(label, read_buf_);
@@ -154,7 +154,7 @@ class ObReadBufGuard {
     return read_buf_;
   }
 
-  private:
+private:
   ObReadBuf read_buf_;
 };
 

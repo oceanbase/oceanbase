@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace storage {
 class ObMigrateLogicRowWriter {
-  public:
+public:
   ObMigrateLogicRowWriter();
   virtual ~ObMigrateLogicRowWriter()
   {}
@@ -35,7 +35,7 @@ class ObMigrateLogicRowWriter {
     return data_checksum_;
   }
 
-  private:
+private:
   bool is_inited_;
   ObILogicRowIterator* iterator_;
   int64_t data_checksum_;

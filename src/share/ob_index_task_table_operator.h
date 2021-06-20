@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace share {
 class ObIndexTaskTableOperator {
 
-  public:
+public:
   ObIndexTaskTableOperator();
   virtual ~ObIndexTaskTableOperator();
   static int get_build_index_server(

@@ -27,7 +27,7 @@ class ObValueRowIterator;
 class ObColMap;
 class ObStoreRow;
 class ObQueryIteratorFactory {
-  public:
+public:
   static ObMultipleScanMerge* get_multi_scan_merge_iter();
   static ObMultipleGetMerge* get_multi_get_merge_iter();
   static ObIndexMerge* get_index_merge_iter();
@@ -42,10 +42,10 @@ class ObQueryIteratorFactory {
   static void free_col_map(ObColMap* col_map);
   static void free_work_row(ObStoreRow* row);
 
-  private:
+private:
   static void print_count();
 
-  private:
+private:
   static int64_t single_row_merge_alloc_count_;
   static int64_t single_row_merge_release_count_;
   static int64_t multi_scan_merge_alloc_count_;

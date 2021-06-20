@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 class ObInsertStmtPrinter : public ObDMLStmtPrinter {
 
-  public:
+public:
   ObInsertStmtPrinter()
   {}
   ObInsertStmtPrinter(
@@ -34,7 +34,7 @@ class ObInsertStmtPrinter : public ObDMLStmtPrinter {
   void init(char* buf, int64_t buf_len, int64_t* pos, ObInsertStmt* stmt);
   virtual int do_print();
 
-  private:
+private:
   int print();
   int print_basic_stmt();
 
@@ -53,7 +53,7 @@ class ObInsertStmtPrinter : public ObDMLStmtPrinter {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObInsertStmtPrinter);
 
-  private:
+private:
   // data members
 };
 

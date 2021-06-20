@@ -37,7 +37,7 @@ using namespace common::sqlclient;
 namespace partition_table {
 
 class ColNames {
-  public:
+public:
   int update(const char* name, const char* new_name);
   int append_name_list(common::ObSqlString& sql);
 
@@ -45,7 +45,7 @@ class ColNames {
 };
 
 class PartitionTableColNames : public ColNames {
-  public:
+public:
   PartitionTableColNames();
   virtual ~PartitionTableColNames()
   {}
@@ -55,7 +55,7 @@ class PartitionTableColNames : public ColNames {
     return cols_;
   }
 
-  protected:
+protected:
   static const int64_t MAX_COL_CNT = 256;
   const char* col_names_[MAX_COL_CNT];
   common::ObArrayHelper<const char*> cols_;
@@ -63,7 +63,7 @@ class PartitionTableColNames : public ColNames {
 
 template <typename T>
 class IndexToIndex : public T {
-  public:
+public:
   int64_t index(const int64_t idx) const
   {
     return idx;
@@ -72,7 +72,7 @@ class IndexToIndex : public T {
 
 template <typename T>
 class IndexToName : public T {
-  public:
+public:
   const char* index(const int64_t idx) const;
 };
 

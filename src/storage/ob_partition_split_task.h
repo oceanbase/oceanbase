@@ -89,7 +89,7 @@ struct ObSSTableSplitCtx {
 };
 
 class ObSSTableSplitDag : public share::ObIDag {
-  public:
+public:
   ObSSTableSplitDag();
   virtual ~ObSSTableSplitDag();
   ObSSTableSplitCtx& get_ctx()
@@ -111,7 +111,7 @@ class ObSSTableSplitDag : public share::ObIDag {
   }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, "param", ctx_);
 
-  private:
+private:
   bool is_inited_;
   share::ObWorker::CompatMode compat_mode_;
   ObSSTableSplitCtx ctx_;
@@ -119,27 +119,27 @@ class ObSSTableSplitDag : public share::ObIDag {
 };
 
 class ObSSTableSplitPrepareTask : public share::ObITask {
-  public:
+public:
   ObSSTableSplitPrepareTask();
   virtual ~ObSSTableSplitPrepareTask()
   {}
   int init();
   virtual int process();
 
-  private:
+private:
   int generate_split_task(const bool has_lob_column);
   int build_split_ctx(ObPartitionStorage& storage, storage::ObSSTableSplitCtx& ctx);
   int get_schemas_to_split(storage::ObSSTableSplitCtx& ctx);
   int cal_split_param(storage::ObSSTableSplitCtx& ctx);
   int build_split_sstable_handle(storage::ObSSTableSplitCtx& ctx);
 
-  private:
+private:
   ObSSTableSplitDag* split_dag_;
   bool is_inited_;
 };
 
 class ObLobSplitHelper {
-  public:
+public:
   enum ObLobSplitHelperStatus { STATUS_INVALID = 0, STATUS_WRITE = 1, STATUS_READ = 2, STATUS_EMPTY = 3 };
   ObLobSplitHelper();
   virtual ~ObLobSplitHelper();
@@ -149,14 +149,14 @@ class ObLobSplitHelper {
   int read_lob_columns(ObStoreRow* store_row);
   int switch_for_read();
 
-  private:
+private:
   OB_INLINE bool is_valid() const
   {
     return status_ != STATUS_INVALID;
   }
   int build_lob_block_id_map();
 
-  private:
+private:
   blocksstable::ObLobMergeWriter lob_writer_;
   blocksstable::ObLobDataReader lob_reader_;
   common::hash::ObCuckooHashMap<common::ObLogicMacroBlockId, blocksstable::MacroBlockId> lob_block_id_map_;
@@ -166,7 +166,7 @@ class ObLobSplitHelper {
 
 // split task for one sstable
 class ObSSTableSplitTask : public share::ObITask {
-  public:
+public:
   ObSSTableSplitTask();
   virtual ~ObSSTableSplitTask();
 
@@ -174,7 +174,7 @@ class ObSSTableSplitTask : public share::ObITask {
   int generate_next_task(ObITask*& next_task);
   virtual int process();
 
-  private:
+private:
   int build_row_iterator(ObSSTableSplitCtx& split_ctx, ObIStoreRowIterator*& row_iter);
   int split_sstable(ObSSTableSplitCtx& split_ctx, ObSSTable* sstable, storage::ObMacroBlockIterator& macro_block_iter);
   int split_sstable(ObSSTableSplitCtx& split_ctx, ObIStoreRowIterator* row_iter);
@@ -190,7 +190,7 @@ class ObSSTableSplitTask : public share::ObITask {
   int init_table_split_param(ObSSTableSplitCtx& split_ctx);
   int terminate_split_iteration(const int64_t partition_id);
 
-  private:
+private:
   static const int64_t DEFAULT_SPLIT_SORT_MEMORY_LIMIT = 64L * 1024L * 1024L;
   ObSSTableSplitDag* split_dag_;
   ObArenaAllocator allocator_;
@@ -223,7 +223,7 @@ class ObSSTableSplitTask : public share::ObITask {
 
 // split finish task for one sstable
 class ObSSTableSplitFinishTask : public share::ObITask {
-  public:
+public:
   ObSSTableSplitFinishTask();
   virtual ~ObSSTableSplitFinishTask();
   int init(const common::ObPartitionKey& dest_pkey, const bool has_lob_column);
@@ -233,7 +233,7 @@ class ObSSTableSplitFinishTask : public share::ObITask {
   int process_range_split();
   int process_row_split();
 
-  private:
+private:
   ObSSTableSplitDag* split_dag_;
   ObSSTableMergeContext split_context_;
   ObArenaAllocator allocator_;
@@ -243,7 +243,7 @@ class ObSSTableSplitFinishTask : public share::ObITask {
 };
 
 class ObSplitRowComparer {
-  public:
+public:
   ObSplitRowComparer(int& comp_ret) : result_code_(comp_ret), column_cnt_(0)
   {}
   virtual ~ObSplitRowComparer()

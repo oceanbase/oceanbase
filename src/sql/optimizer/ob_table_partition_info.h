@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTablePartitionInfo {
-  public:
+public:
   ObTablePartitionInfo()
       : inner_allocator_(common::ObModIds::OB_SQL_TABLE_LOCATION),
         allocator_(inner_allocator_),
@@ -115,10 +115,10 @@ class ObTablePartitionInfo {
   }
   TO_STRING_KV(K_(table_location), K_(phy_tbl_location_info));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTablePartitionInfo);
 
-  private:
+private:
   /**
    * ObTableLocation is the structure we stored to calculate the physical table location,
    * which is represented by ObPhyTableLocation, for a given table(logical) in a given statement.

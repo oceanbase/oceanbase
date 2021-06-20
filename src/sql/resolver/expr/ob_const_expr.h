@@ -23,7 +23,7 @@ namespace expr {
 
 // OceanBase constant expression.
 class ObConstExpr : virtual public ObExpr {
-  public:
+public:
   ObConstExpr()
   {
     set_expr_class(EXPR_CONST);
@@ -34,7 +34,7 @@ class ObConstExpr : virtual public ObExpr {
   common::ObObj& get_value();
   const common::ObObj& get_value() const;
 
-  protected:
+protected:
   common::ObObj value_;
 };
 

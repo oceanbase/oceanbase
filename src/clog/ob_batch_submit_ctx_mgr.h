@@ -33,13 +33,13 @@ class ObPartitionService;
 namespace clog {
 class ObILogEngine;
 class ObIBatchSubmitCtxMgr {
-  public:
+public:
   ObIBatchSubmitCtxMgr()
   {}
   virtual ~ObIBatchSubmitCtxMgr()
   {}
 
-  public:
+public:
   virtual int alloc_ctx(const transaction::ObTransID& trans_id, const common::ObPartitionArray& partition_array,
       const ObLogInfoArray& log_info_array, const ObLogPersistSizeArray& size_array,
       const ObISubmitLogCbArray& cb_array, const common::ObMemberList& member_list, const int64_t replica_num,
@@ -53,7 +53,7 @@ class ObIBatchSubmitCtxMgr {
 };
 
 class ObBatchSubmitCtxMgr : public ObIBatchSubmitCtxMgr, public share::ObThreadPool {
-  public:
+public:
   ObBatchSubmitCtxMgr()
   {
     reset();
@@ -63,7 +63,7 @@ class ObBatchSubmitCtxMgr : public ObIBatchSubmitCtxMgr, public share::ObThreadP
     destroy();
   }
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service, ObILogEngine* log_engine, const common::ObAddr& self);
   int start();
   void stop();
@@ -72,7 +72,7 @@ class ObBatchSubmitCtxMgr : public ObIBatchSubmitCtxMgr, public share::ObThreadP
   void reset();
   void destroy();
 
-  public:
+public:
   virtual int alloc_ctx(const transaction::ObTransID& trans_id, const common::ObPartitionArray& partition_array,
       const ObLogInfoArray& log_info_array, const ObLogPersistSizeArray& size_array,
       const ObISubmitLogCbArray& cb_array, const common::ObMemberList& member_list, const int64_t replica_num,
@@ -86,7 +86,7 @@ class ObBatchSubmitCtxMgr : public ObIBatchSubmitCtxMgr, public share::ObThreadP
 
   void run1();
 
-  private:
+private:
   typedef common::ObLinkHashMap<transaction::ObTransID, ObBatchSubmitCtx, ObBatchSubmitCtxAlloc> CtxMap;
   class RemoveIfFunctor;
   static const int64_t LOOP_INTERVAL = 200 * 1000;  // 200ms
@@ -97,7 +97,7 @@ class ObBatchSubmitCtxMgr : public ObIBatchSubmitCtxMgr, public share::ObThreadP
   ObILogEngine* log_engine_;
   common::ObAddr self_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchSubmitCtxMgr);
 };
 }  // namespace clog

@@ -22,7 +22,7 @@ using namespace oceanbase::lib;
 namespace oceanbase {
 namespace common {
 class TestIOStress : public lib::ThreadPool {
-  public:
+public:
   TestIOStress();
   virtual ~TestIOStress();
   int init(const ObDiskFd& fd, const int64_t file_size, const int32_t user_thread_cnt, const int32_t sys_thread_cnt,
@@ -60,7 +60,7 @@ class TestIOStress : public lib::ThreadPool {
       K(sys_iops_), K(user_io_size_), K(sys_io_size_), K(no_wait_), K(fail_count_), K(succeed_count_), K(user_io_cnt_),
       K(user_io_rt_), K(sys_io_cnt_), K(sys_io_rt_));
 
-  private:
+private:
   ObDiskFd fd_;
   int64_t file_size_;
   int32_t user_thread_cnt_;
@@ -74,7 +74,7 @@ class TestIOStress : public lib::ThreadPool {
   int64_t succeed_count_;
   bool no_wait_;
 
-  public:
+public:
   int64_t user_io_cnt_;
   int64_t user_io_rt_;
   int64_t sys_io_cnt_;

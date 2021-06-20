@@ -43,7 +43,7 @@ enum CheckStmtUniqueFlags {
 };
 
 class ObTransformUtils {
-  private:
+private:
   struct UniqueCheckInfo {
     UniqueCheckInfo()
     {}
@@ -60,7 +60,7 @@ class ObTransformUtils {
     int assign(const UniqueCheckInfo& other);
     void reset();
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(UniqueCheckInfo);
   };
   struct UniqueCheckHelper {
@@ -76,11 +76,11 @@ class ObTransformUtils {
     ObSchemaChecker* schema_checker_;
     ObSQLSessionInfo* session_info_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(UniqueCheckHelper);
   };
 
-  public:
+public:
   static int is_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_correlated);
 
   static int is_direct_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_direct_correlated);
@@ -734,7 +734,7 @@ class ObTransformUtils {
 
   static int replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRawExpr*& expr);
 
-  private:
+private:
   static int create_select_item_for_subquery(
       ObSelectStmt& stmt, ObSelectStmt*& child_stmt, ObIAllocator& alloc, ObIArray<ObRawExpr*>& query_ref_exprs);
 

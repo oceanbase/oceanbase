@@ -1070,7 +1070,7 @@ int ObPartitionTableIdIterator::get_part_num(const uint64_t table_id, int64_t& p
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table_id", KT(table_id), K(ret));
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
-    LOG_WARN("get_schema_gaurd failed", K(ret));
+    LOG_WARN("get_schema_guard failed", K(ret));
   } else if (OB_FAIL(guard.get_table_schema(table_id, table))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_id));
   } else if (NULL == table) {
@@ -1315,7 +1315,7 @@ int ObFullMetaTableIterator::get_part_num(const uint64_t table_id, int64_t& part
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table_id", KT(table_id), K(ret));
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
-    LOG_WARN("get_schema_gaurd failed", K(ret));
+    LOG_WARN("get_schema_guard failed", K(ret));
   } else if (OB_FAIL(guard.get_table_schema(table_id, table))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_id));
   } else if (NULL == table) {

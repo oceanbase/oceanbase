@@ -30,10 +30,10 @@ class ObString;
 typedef common::ObFixedLengthString<32> ObSyncEventName;
 
 struct ObDebugSyncAction {
-  public:
+public:
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDebugSyncAction() : sync_point_(INVALID_DEBUG_SYNC_POINT), timeout_(0), execute_(0), no_clear_()
   {}
   TO_STRING_KV(K_(sync_point), K_(timeout), K_(execute), K_(signal), K_(wait), K_(no_clear), K_(broadcast));
@@ -54,10 +54,10 @@ struct ObDebugSyncAction {
 };
 
 class ObDSActionArray {
-  public:
+public:
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // const action array will always be empty
   explicit ObDSActionArray(const bool is_const = false);
 
@@ -77,7 +77,7 @@ class ObDSActionArray {
   bool is_active(const ObDebugSyncPoint sync_point) const;
   int copy_action(const ObDebugSyncPoint sync_point, ObDebugSyncAction& action) const;
 
-  private:
+private:
   ObDebugSyncAction* action_ptrs_[MAX_DEBUG_SYNC_POINT];
   ObDebugSyncAction actions_[MAX_DEBUG_SYNC_POINT];
   volatile int64_t active_cnt_;
@@ -87,12 +87,12 @@ class ObDSActionArray {
 };
 
 class ObDSActionNode : public ObDLinkBase<ObDSActionNode> {
-  public:
+public:
   ObDebugSyncAction action_;
 };
 
 class ObDSSessionActions {
-  public:
+public:
   ObDSSessionActions() : inited_(false), block_head_(NULL), page_size_(0), allocator_(NULL)
   {}
   virtual ~ObDSSessionActions();
@@ -115,11 +115,11 @@ class ObDSSessionActions {
   int to_thread_local(ObDSActionArray& local) const;
   int get_thread_local_result(const ObDSActionArray& local);
 
-  private:
+private:
   ObDSActionNode* alloc_node();
   void free_node(ObDSActionNode* node);
 
-  private:
+private:
   bool inited_;
   void* block_head_;
   int64_t page_size_;
@@ -132,7 +132,7 @@ class ObDSSessionActions {
 };
 
 class ObDSEventControl {
-  public:
+public:
   const static int64_t MIN_EVENT_CNT = 512;
   const static int64_t MAX_EVENT_CNT =
       MAX_DEBUG_SYNC_POINT <= MIN_EVENT_CNT / 10 ? MIN_EVENT_CNT : MAX_DEBUG_SYNC_POINT * 10;
@@ -160,7 +160,7 @@ class ObDSEventControl {
 
   void stop();
 
-  private:
+private:
   // return NULL for alloc failed
   Event* alloc_event();
   void free_event(Event* e);
@@ -169,7 +169,7 @@ class ObDSEventControl {
   // locate event by name (if not exist create one)
   int locate(const ObSyncEventName& name, Event*& e);
 
-  private:
+private:
   volatile bool stop_;
 
   Event events_[MAX_EVENT_CNT];
@@ -182,7 +182,7 @@ class ObDSEventControl {
 };
 
 class ObDebugSync {
-  public:
+public:
   static ObDebugSync& instance();
 
   void set_rpc_proxy(obrpc::ObCommonRpcProxy* rpc_proxy);
@@ -202,14 +202,14 @@ class ObDebugSync {
 
   void stop();
 
-  private:
+private:
   ObDebugSync() : stop_(false), rpc_proxy_(NULL)
   {}
 
   int parse_action(const ObString& str, ObDebugSyncAction& action, bool& clear, bool& reset);
   static ObString get_token(ObString& str);
 
-  private:
+private:
   volatile bool stop_;
   ObSpinLock lock_;  // protect global action access
   ObDSActionArray global_actions_;

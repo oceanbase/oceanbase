@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprInnerTrim : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprInnerTrim(common::ObIAllocator& alloc);
   virtual ~ObExprInnerTrim();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& trim_type, ObExprResType& trim_pattern,
@@ -28,7 +28,7 @@ class ObExprInnerTrim : public ObStringExprOperator {
 
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprInnerTrim);
 };

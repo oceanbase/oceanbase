@@ -40,7 +40,7 @@ class ObAllVirtualProxyRoute : public ObAllVirtualProxyBaseIterator {
     ROW_KEY_COUNT,
   };
 
-  public:
+public:
   ObAllVirtualProxyRoute();
   virtual ~ObAllVirtualProxyRoute();
 
@@ -49,7 +49,7 @@ class ObAllVirtualProxyRoute : public ObAllVirtualProxyBaseIterator {
 
   int fill_cells();
 
-  private:
+private:
   bool is_iter_end_;
   common::ObString sql_string_;
   common::ObString tenant_name_;

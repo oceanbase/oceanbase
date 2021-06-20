@@ -29,7 +29,7 @@ using namespace obrpc;
 using namespace election;
 
 class MockObElectionProxy : public obrpc::ObElectionRpcProxy {
-  public:
+public:
   DEFINE_TO(MockObElectionProxy);
   virtual int post_election_msg(const oceanbase::election::ObElectionMsgBuffer& msg_buf,
       AsyncCB<(oceanbase::obrpc::ObRpcPacketCode)1537>* async_cb, const oceanbase::obrpc::ObRpcOpts& opts)
@@ -43,7 +43,7 @@ class MockObElectionProxy : public obrpc::ObElectionRpcProxy {
 };
 
 class TestObElectionRpc : public ::testing::Test {
-  public:
+public:
   TestObElectionRpc() : proxy_(&proxy_)
   {}
   virtual ~TestObElectionRpc()
@@ -58,7 +58,7 @@ class TestObElectionRpc : public ::testing::Test {
 
   int init();
 
-  protected:
+protected:
   ObAddr addr_;
   ObElectionRpc rpc_;
   ObElectionMgr mgr_;

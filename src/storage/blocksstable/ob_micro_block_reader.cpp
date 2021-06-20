@@ -644,7 +644,7 @@ int ObMicroBlockReader::base_init(const ObMicroBlockData& block_data)
 
 template <typename ReaderType>
 class PreciseCompare {
-  public:
+public:
   PreciseCompare(int& ret, bool& equal, ReaderType* reader, const char* data_begin, const int32_t* index_data,
       const ObColumnMap* column_map, const int64_t compare_column_count)
       : ret_(ret),
@@ -666,7 +666,7 @@ class PreciseCompare {
     return compare(row_idx, rowkey, false);
   }
 
-  private:
+private:
   inline bool compare(const int64_t row_idx, const ObStoreRowkey& rowkey, const bool lower_bound)
   {
     bool bret = false;
@@ -693,7 +693,7 @@ class PreciseCompare {
     return bret;
   }
 
-  private:
+private:
   int& ret_;
   bool& equal_;
   ReaderType* reader_;

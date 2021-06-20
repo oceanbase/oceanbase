@@ -27,7 +27,7 @@ namespace oceanbase {
 namespace common {
 
 class ObColumnInfo {
-  public:
+public:
   int64_t index_;
   common::ObCollationType cs_type_;
   ObColumnInfo() : index_(common::OB_INVALID_INDEX), cs_type_(common::CS_TYPE_INVALID)
@@ -42,7 +42,7 @@ class ObColumnInfo {
  * @brief: wrap row pointer(an ObObj array) and row size
  */
 class ObNewRow final {
-  public:
+public:
   ObNewRow() : cells_(NULL), count_(0), projector_size_(0), projector_(NULL)
   {}
   ObNewRow(ObObj* cells, int64_t count) : cells_(cells), count_(count), projector_size_(0), projector_(NULL)
@@ -144,7 +144,7 @@ class ObNewRow final {
     return pos;
   }
 
-  public:
+public:
   ObObj* cells_;
   int64_t count_;  // cells count
   int64_t projector_size_;

@@ -118,7 +118,7 @@ DEF_INT(system_trace_level, OB_CLUSTER_PARAMETER, "1", "[0,2]",
     "The default log level for trace log is 1",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(max_string_print_length, OB_CLUSTER_PARAMETER, "500", "[0,]",
-    "truncate very long string when printing to log file. Range:[0,]",
+    "truncate very long string when printing to log file. Range: [0,]",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(sql_audit_memory_limit, OB_CLUSTER_PARAMETER, "3G", "[64M,]",
     "the maximum size of the memory used by SQL audit virtual table "
@@ -300,7 +300,7 @@ DEF_INT(workers_per_cpu_quota, OB_CLUSTER_PARAMETER, "10", "[2,20]",
     "the maximum number of threads that can be scheduled concurrently. Range: [2, 20]",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(large_query_worker_percentage, OB_CLUSTER_PARAMETER, "30", "[0,100]",
-    "the percentage of the workers reserved to serve large query request. "
+    "the percentage of the workers reserved to serve large query requests. "
     "Range: [0, 100] in percentage",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
 DEF_TIME(large_query_threshold, OB_CLUSTER_PARAMETER, "5s", "[1ms,)",
@@ -321,12 +321,12 @@ DEF_BOOL(enable_global_freeze_trigger, OB_CLUSTER_PARAMETER, "False",
     "Value:  True:turned on  False: turned off",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(global_major_freeze_residual_memory, OB_CLUSTER_PARAMETER, "40", "(0, 100)",
-    "post global major freeze when observer memstore free memory(plus memory hold by frozen memstore and blockcache) "
+    "post global major freeze when observer memstore free memory(plus memory held by frozen memstore and blockcache) "
     "reach this limit. Rang:(0, 100)"
     "limit calc by (memory_limit - system_memory) * global_major_freeze_residual_memory/100",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(global_write_halt_residual_memory, OB_CLUSTER_PARAMETER, "30", "(0, 100)",
-    "disable write to memstore when observer memstore free memory(plus memory hold by blockcache) lower than this "
+    "disable write to memstore when observer memstore free memory(plus memory held by blockcache) lower than this "
     "limit, Range: (0, 100)"
     "limit calc by (memory_limit - system_memory) * global_write_halt_residual_memory/100",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -341,7 +341,7 @@ DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "50", "(0, 100)",
     "where MIN_MEMORY is determined when the tenant is created. Range: (0, 100)",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(freeze_trigger_percentage, OB_CLUSTER_PARAMETER, "70", "(0, 100)",
-    "the threshold of the size of the mem store when freeze will be triggered. Rang:(0, 100)",
+    "the threshold of the size of the mem store when freeze will be triggered. Range: (0, 100)",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(writing_throttling_trigger_percentage, OB_TENANT_PARAMETER, "100", "(0, 100]",
@@ -349,7 +349,7 @@ DEF_INT(writing_throttling_trigger_percentage, OB_TENANT_PARAMETER, "100", "(0, 
     "turn off writing limit",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(writing_throttling_maximum_duration, OB_TENANT_PARAMETER, "1h", "[1s, 3d]",
-    "maximum duration of writting throttling(in minutes), max value is 3 days",
+    "maximum duration of writing throttling(in minutes), max value is 3 days",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(plan_cache_high_watermark, OB_CLUSTER_PARAMETER, "2000M",
     "(don't use now) memory usage at which plan cache eviction will be trigger immediately. Range: [0, +∞)",
@@ -363,11 +363,11 @@ DEF_TIME(plan_cache_evict_interval, OB_CLUSTER_PARAMETER, "1s", "[0s,)",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(max_px_worker_count, OB_CLUSTER_PARAMETER, "64", "[0,65535]",
     "maximum parallel execution worker count can be used for all parallel requests. "
-    "Range:[0, 65535]",
+    "Range: [0, 65535]",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(default_progressive_merge_num, OB_TENANT_PARAMETER, "0", "[0,)",
     "default progressive_merge_num when tenant create table"
-    "Range:[0,)",
+    "Range: [0,)",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_parallel_min_message_pool, OB_TENANT_PARAMETER, "400M", "[16M, 8G]",
     "DTL message buffer pool reserve the mininum size after extend the size. Range: [16M,8G]",
@@ -487,7 +487,7 @@ DEF_INT(partition_table_scan_batch_count, OB_CLUSTER_PARAMETER, "999", "(0, 6553
     "the number of partition replication info "
     "that will be read by each request on the partition-related system tables "
     "during procedures such as load-balancing, daily merge, election and etc. "
-    "Range:(0,65536]",
+    "Range: (0,65536]",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_auto_leader_switch, OB_CLUSTER_PARAMETER, "True",
     "specifies whether partition leadership auto-switch is turned on. "
@@ -537,8 +537,8 @@ DEF_INT(resource_soft_limit, OB_CLUSTER_PARAMETER, "50", "(0, 10000]",
     "Used along with resource_hard_limit in unit allocation. "
     "If server utilization is less than resource_soft_limit, a policy of \\'best fit\\' "
     "will be used for unit allocation; "
-    "otherwise, a \\'least load\\'policy will be employed. "
-    "Ultimately,system utilization should not be large than resource_hard_limit. "
+    "otherwise, a \\'least load\\' policy will be employed. "
+    "Ultimately,system utilization should not be larger than resource_hard_limit. "
     "Range: (0,10000] in in",
     ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "(0, 10000]",
@@ -546,7 +546,7 @@ DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "(0, 10000]",
     "If server utilization is less than resource_soft_limit, "
     "a policy of \\'best fit\\' will be used for unit allocation; "
     "otherwise, a \\'least load\\' policy will be employed. "
-    "Ultimately,system utilization should not be large than resource_hard_limit. "
+    "Ultimately,system utilization should not be larger than resource_hard_limit. "
     "Range: (0,10000] in integer",
     ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_rereplication, OB_CLUSTER_PARAMETER, "True",
@@ -669,8 +669,8 @@ DEF_INT(zone_merge_concurrency, OB_CLUSTER_PARAMETER, "0", "[0,]",
 DEF_STR(zone_merge_order, OB_CLUSTER_PARAMETER, "", "the order of zone start merge in daily merge",
     ObParameterAttr(Section::DAILY_MERGE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_merge_by_turn, OB_CLUSTER_PARAMETER, "True",
-    "specifies whether merge task can be performed on different zones "
-    "in a alternating fashion. Value: True:turned on; False: turned off",
+    "specifies whether merge tasks can be performed on different zones "
+    "in an alternating fashion. Value: True:turned on; False: turned off",
     ObParameterAttr(Section::DAILY_MERGE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(zone_merge_timeout, OB_CLUSTER_PARAMETER, "3h", "[1s,)",
     "the time for each zone to finish its merge process before "
@@ -685,10 +685,10 @@ DEF_BOOL(ignore_replica_checksum_error, OB_CLUSTER_PARAMETER, "False",
     "Value: True:ignored; False: not ignored");
 DEF_INT(merger_completion_percentage, OB_CLUSTER_PARAMETER, "100", "[5, 100]",
     "the merged partition count percentage and merged data size percentage "
-    "when MERGE is completed. Range:[5,100]",
+    "when MERGE is completed. Range: [5,100]",
     ObParameterAttr(Section::DAILY_MERGE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(max_kept_major_version_number, OB_CLUSTER_PARAMETER, "2", "[1, 16]",
-    "the maximum number of kept major versions "
+    "the maximum number of kept major versions. "
     "Range: [1, 16] in integer",
     ObParameterAttr(Section::DAILY_MERGE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //// transaction config
@@ -746,7 +746,7 @@ DEF_INT(clog_disk_utilization_threshold, OB_CLUSTER_PARAMETER, "80", "[10, 100)"
 
 DEF_TIME(election_blacklist_interval, OB_CLUSTER_PARAMETER, "1800s", "[0s, 24h]",
     "If leader_revoke, this replica cannot be elected to leader in election_blacklist_interval"
-    "The default value is 1800s. Range:[0s, 24h]",
+    "The default value is 1800s. Range: [0s, 24h]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(gts_refresh_interval, OB_CLUSTER_PARAMETER, "100us", "[10us, 1s]",
     "The time interval to request gts for high availability gts source (abbr: ha_gts_source)"
@@ -824,39 +824,39 @@ DEF_STR(all_server_list, OB_CLUSTER_PARAMETER, "", "all server addr in cluster",
     ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //// cache config
-DEF_INT(clog_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "clog cache priority. Range:[1, )",
+DEF_INT(clog_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "clog cache priority. Range: [1, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(index_clog_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "index clog cache priority. Range:[1, )",
+DEF_INT(index_clog_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "index clog cache priority. Range: [1, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(user_tab_col_stat_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)",
-    "user tab col stat cache priority. Range:[1, )",
+    "user tab col stat cache priority. Range: [1, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(index_cache_priority, OB_CLUSTER_PARAMETER, "10", "[1,)", "index cache priority. Range:[1, )",
+DEF_INT(index_cache_priority, OB_CLUSTER_PARAMETER, "10", "[1,)", "index cache priority. Range: [1, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(index_info_block_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)",
-    "index info block cache priority. Range:[1, )",
+    "index info block cache priority. Range: [1, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(user_block_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "user block cache priority. Range:[1, )",
+DEF_INT(user_block_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "user block cache priority. Range: [1, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(user_row_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "user row cache priority. Range:[1, )",
+DEF_INT(user_row_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "user row cache priority. Range: [1, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(bf_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "bf cache priority. Range:[1, )",
+DEF_INT(bf_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "bf cache priority. Range: [1, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(bf_cache_miss_count_threshold, OB_CLUSTER_PARAMETER, "100", "[0,)",
-    "bf cache miss count threshold, 0 means disable bf cache. Range:[0, )",
+    "bf cache miss count threshold, 0 means disable bf cache. Range: [0, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(fuse_row_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "fuse row cache priority. Range:[1, )",
+DEF_INT(fuse_row_cache_priority, OB_CLUSTER_PARAMETER, "1", "[1,)", "fuse row cache priority. Range: [1, )",
     ObParameterAttr(Section::CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // background limit config
 DEF_INT(sys_bkgd_io_low_percentage, OB_CLUSTER_PARAMETER, "0", "[0,100]",
     "the low disk io percentage of sys io, sys io can use at least low percentage,"
     "when the value is 0, it will automatically set low limit for SATA and SSD disk to "
-    "guarantee at least 128MB disk bandwidth "
+    "guarantee at least 128MB disk bandwidth. "
     "Range: [0,100]",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(sys_bkgd_io_high_percentage, OB_CLUSTER_PARAMETER, "90", "[1,100]",
-    "the high disk io percentage of sys io, sys io can use at most high percentage "
+    "the high disk io percentage of sys io, sys io can use at most high percentage. "
     "Range: [1,100]",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(sys_cpu_limit_trigger, OB_CLUSTER_PARAMETER, "80", "[50,)",
@@ -889,12 +889,12 @@ DEF_INT(_io_callback_thread_count, OB_CLUSTER_PARAMETER, "8", "[1,64]",
     "The number of io callback threads. The default value is 8. Range: [1,64] in integer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_large_query_io_percentage, OB_CLUSTER_PARAMETER, "0", "[0,100]",
-    "the max percentage of io resource for big query. Range: [0,100] in integer. Especially, 0 means unlimited. The "
+    "the max percentage of io resource for big queries. Range: [0,100] in integer. Especially, 0 means unlimited. The "
     "default value is 0.",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_parallel_minor_merge, OB_TENANT_PARAMETER, "False",
-    "specifies whether enable parallel minor merge. "
+    "specifies whether to enable parallel minor merge. "
     "Value: True:turned on;  False: turned off",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(merge_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,256]",
@@ -913,7 +913,7 @@ DEF_INT(merge_stat_sampling_ratio, OB_CLUSTER_PARAMETER, "100", "[0,100]",
     "column stats sampling ratio daily merge. Range: [0,100] in integer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_freeze_times, OB_CLUSTER_PARAMETER, "5", "[0, 65535]",
-    "specifies how many minor freeze should be triggered between two major freeze. Range: [0, 65535]",
+    "specifies how many minor freezes should be triggered between two major freezes. Range: [0, 65535]",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_CLUSTER_PARAMETER, "2", "[0,16]", "minor_compact_trigger, Range: [0,16] in integer",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -924,7 +924,7 @@ DEF_CAP(_private_buffer_size, OB_CLUSTER_PARAMETER, "2M",
     "Range: [0B, total size of memory]",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_fast_commit, OB_CLUSTER_PARAMETER, "False",
-    "whether enable fast commit strategy"
+    "whether to enable fast commit strategy"
     "Value:  True:turned on;  False: turned off",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_sparse_row, OB_CLUSTER_PARAMETER, "False",
@@ -932,7 +932,7 @@ DEF_BOOL(_enable_sparse_row, OB_CLUSTER_PARAMETER, "False",
     "Value:  True:turned on;  False: turned off",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_minor_compaction_amplification_factor, OB_CLUSTER_PARAMETER, "0", "[0,100]",
-    "thre L1 compaction write amplification factor, 0 means default 25, Range: [0,100] in integer",
+    "the L1 compaction write amplification factor, 0 means default 25, Range: [0,100] in integer",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_minor_compaction_interval, OB_CLUSTER_PARAMETER, "0s", "[0s,30m]",
     "the time interval to start next minor compaction, Range: [0s,30m]"
@@ -1042,10 +1042,10 @@ DEF_BOOL(module_test_clog_flush_delay, OB_CLUSTER_PARAMETER, "False",
 
 // TODO : remove
 DEF_CAP(multiblock_read_size, OB_CLUSTER_PARAMETER, "128K", "[0K,2M]",
-    "multiple block batch read size in one read io request. Range:[0K,2M]",
+    "multiple block batch read size in one read io request. Range: [0K,2M]",
     ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(multiblock_read_gap_size, OB_CLUSTER_PARAMETER, "0K", "[0K,2M]",
-    "max gap size in one read io request, gap means blocks that hit in block cache. Range:[0K,2M]",
+    "max gap size in one read io request, gap means blocks that hit in block cache. Range: [0K,2M]",
     ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // TODO : to be remove
@@ -1390,7 +1390,7 @@ DEF_INT(_max_schema_slot_num, OB_CLUSTER_PARAMETER, "128", "[2,8192]",
 DEF_BOOL(_enable_fulltext_index, OB_CLUSTER_PARAMETER, "False", "enable full text index",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT_WITH_CHECKER(_ob_query_rate_limit, OB_TENANT_PARAMETER, "-1", common::ObConfigQueryRateLimitChecker,
-    "the maximun throughput allowed for a tenant per observer instance",
+    "the maximum throughput allowed for a tenant per observer instance",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_xa_gc_timeout, OB_CLUSTER_PARAMETER, "24h", "[1s,)",
     "specifies the threshold value for a xa record to be considered as obsolete",
@@ -1430,3 +1430,7 @@ DEF_TIME(ilog_index_expire_time, OB_CLUSTER_PARAMETER, "7d", "[0s, 60d]",
     "specifies the expire time of ilog_index, can use this parameter to limit the"
     "memory usage of file_id_cache",
     ObParameterAttr(Section::CLOG, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+// auto drop restoring tenant if physical restore fails
+DEF_BOOL(_auto_drop_tenant_if_restore_failed, OB_CLUSTER_PARAMETER, "True",
+    "auto drop restoring tenant if physical restore fails",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

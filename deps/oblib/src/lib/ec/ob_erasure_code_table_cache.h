@@ -74,7 +74,7 @@ struct ObErasureCodeDecodeKey {
 };
 
 class ObECTableCache {
-  public:
+public:
   ObECTableCache();
 
   virtual ~ObECTableCache();
@@ -100,7 +100,7 @@ class ObECTableCache {
   int set_decoding_matrix(
       const ObString& signature, const int64_t data_count, const int64_t parity_count, unsigned char* decoding_matrix);
 
-  private:
+private:
   bool is_inited_;
 
   hash::ObHashMap<ObErasureCodeEncodeKey, unsigned char*> encoding_table_map_;
@@ -111,7 +111,7 @@ class ObECTableCache {
 };
 
 class ObECCacheManager {
-  public:
+public:
   static ObECCacheManager& get_ec_cache_mgr();
 
   int init(const int64_t bucket_size = 1024);
@@ -137,7 +137,7 @@ class ObECCacheManager {
       const common::ObIArray<int64_t>& ready_indexes, const int64_t data_count, const int64_t parity_count,
       unsigned char* decoding_table);
 
-  private:
+private:
   ObECCacheManager();
   virtual ~ObECCacheManager();
   DISALLOW_COPY_AND_ASSIGN(ObECCacheManager);
@@ -160,7 +160,7 @@ class ObECCacheManager {
       const ObIArray<int64_t>& erase_indexes, const int64_t data_block_count, const int64_t parity_block_count,
       unsigned char* decode_matrix);
 
-  private:
+private:
   bool is_inited_;
 
   ObECTableCache cache_;

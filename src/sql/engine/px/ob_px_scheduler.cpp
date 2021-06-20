@@ -46,7 +46,7 @@ namespace sql {
 
 template <typename PieceMsg>
 class ObDhPieceMsgProc {
-  public:
+public:
   ObDhPieceMsgProc() = default;
   ~ObDhPieceMsgProc() = default;
   int on_piece_msg(ObPxCoordInfo& coord_info, ObExecContext& ctx, const PieceMsg& pkt)

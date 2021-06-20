@@ -129,7 +129,7 @@ struct ObDataInFileStruct {
 };
 
 class ObLoadDataHint {
-  public:
+public:
   ObLoadDataHint()
   {
     reset();
@@ -155,13 +155,13 @@ class ObLoadDataHint {
   TO_STRING_KV("Int Hint Item", common::ObArrayWrap<int64_t>(integer_values_, TOTAL_INT_ITEM), "String Hint Item",
       common::ObArrayWrap<ObString>(string_values_, TOTAL_STRING_ITEM));
 
-  private:
+private:
   int64_t integer_values_[TOTAL_INT_ITEM];
   ObString string_values_[TOTAL_STRING_ITEM];
 };
 
 class ObLoadDataStmt : public ObCMDStmt {
-  public:
+public:
   struct FieldOrVarStruct {
     FieldOrVarStruct()
         : field_or_var_name_(), column_id_(OB_INVALID_ID), column_type_(common::ObMaxType), is_table_column_(true)
@@ -232,7 +232,7 @@ class ObLoadDataStmt : public ObCMDStmt {
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(load_args), K_(data_struct_in_file), K_(field_or_var_list),
       K_(assignments), K_(hints), K_(is_default_table_columns));
 
-  private:
+private:
   ObLoadArgument load_args_;
   ObDataInFileStruct data_struct_in_file_;
   common::ObSEArray<FieldOrVarStruct, 4> field_or_var_list_;

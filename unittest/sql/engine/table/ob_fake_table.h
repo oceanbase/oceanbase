@@ -199,9 +199,9 @@ int fill_row(ObNewRow& row, ...)
 }
 static ObArenaAllocator alloc_;
 class ObFakeTable : public ObNoChildrenPhyOperator {
-  private:
+private:
   class ObFakeTableCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     ObFakeTableCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
     {}
     int init(int64_t projector_size)
@@ -226,12 +226,12 @@ class ObFakeTable : public ObNoChildrenPhyOperator {
     int64_t projector_size_;
     int32_t* projector_;
 
-    private:
+  private:
     ObRowStore::Iterator row_store_it_;
     friend class ObFakeTable;
   };
 
-  public:
+public:
   ObFakeTable(ObIAllocator& alloc) : ObNoChildrenPhyOperator(alloc), no_rescan_(false)
   {}
 
@@ -297,7 +297,7 @@ class ObFakeTable : public ObNoChildrenPhyOperator {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   /**
    * @brief create operator context, only child operator can know it's specific operator type,
    * so must be overwrited by child operator,
@@ -350,7 +350,7 @@ class ObFakeTable : public ObNoChildrenPhyOperator {
 
   DISALLOW_COPY_AND_ASSIGN(ObFakeTable);
 
-  private:
+private:
   ObRowStore row_store_;
   bool no_rescan_;
 };

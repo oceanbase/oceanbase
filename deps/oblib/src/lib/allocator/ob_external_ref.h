@@ -19,10 +19,10 @@
 namespace oceanbase {
 namespace common {
 class ObExternalRef {
-  public:
+public:
   enum { REF_LIMIT = OB_MAX_CPU_NUM * 16 };
   class IERefPtr {
-    public:
+  public:
     IERefPtr() : next_(NULL)
     {}
     virtual ~IERefPtr()
@@ -104,7 +104,7 @@ class ObExternalRef {
     }
   }
 
-  private:
+private:
   void* load_ptr(void** paddr)
   {
     return (void*)(((uint64_t)ATOMIC_LOAD(paddr)) & ~1ULL);
@@ -143,7 +143,7 @@ class ObExternalRef {
     return h;
   }
 
-  private:
+private:
   int64_t ref_array_[REF_LIMIT];
 };
 };  // end namespace common

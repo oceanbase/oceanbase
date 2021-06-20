@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObLocale {
-  public:
+public:
   uint decimal_point_;
   uint thousand_sep_;
   const char* grouping_;
@@ -34,7 +34,7 @@ class ObLocale {
 };
 
 class ObExprFormat : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFormat(common::ObIAllocator& alloc);
   virtual ~ObExprFormat();
   virtual int calc_result_typeN(
@@ -44,7 +44,7 @@ class ObExprFormat : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_format_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   int get_origin_param_type(ObExprResType& ori_type) const;
   int convert_num_to_str(
       const common::ObObj* objs_array, common::ObExprCtx& expr_ctx, int64_t scale, common::ObString& num_str) const;

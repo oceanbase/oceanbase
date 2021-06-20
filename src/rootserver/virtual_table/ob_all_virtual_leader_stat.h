@@ -23,7 +23,7 @@ class ObMultiVersionSchemaService;
 }  // namespace share
 namespace rootserver {
 class ObAllVirtualLeaderStat : public common::ObVirtualTableProjector {
-  public:
+public:
   ObAllVirtualLeaderStat()
       : schema_guard_(),
         all_tenants_(),
@@ -44,13 +44,13 @@ class ObAllVirtualLeaderStat : public common::ObVirtualTableProjector {
   virtual ~ObAllVirtualLeaderStat()
   {}
 
-  public:
+public:
   int init(
       rootserver::ObLeaderCoordinator& leader_coordinator, share::schema::ObMultiVersionSchemaService& schema_service);
   virtual int inner_open() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   // get all_virtual_leader_stat's table_schema
   int get_table_schema(uint64_t table_id);
   int get_all_tenant();
@@ -66,9 +66,9 @@ class ObAllVirtualLeaderStat : public common::ObVirtualTableProjector {
   int construct_tenant_partition();
   int do_construct_tenant_partition(uint64_t tenant_id);
 
-  private:
+private:
   static const int64_t MAX_COLUMN_NUM = 32;  // all_virtual_leader_stat column number now will not be greater than 32
-  private:
+private:
   share::schema::ObSchemaGetterGuard schema_guard_;
   common::ObArray<uint64_t> all_tenants_;
   // cur_tenant_idx_ is current idx of all_tenants_;
@@ -88,7 +88,7 @@ class ObAllVirtualLeaderStat : public common::ObVirtualTableProjector {
   common::ObArenaAllocator inner_allocator_;
   bool is_inited_;
 
-  private:
+private:
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualLeaderStat);
 };

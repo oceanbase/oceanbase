@@ -28,13 +28,13 @@ class ObCommonRpcProxy;
 namespace rootserver {
 class ObRootService;
 class ObInnerTableMonitor {
-  public:
+public:
   ObInnerTableMonitor();
   ~ObInnerTableMonitor() = default;
   int init(common::ObMySQLProxy& sql_proxy, obrpc::ObCommonRpcProxy& rpc_proxy, ObRootService& root_service);
   int purge_inner_table_history();
 
-  private:
+private:
   const static int N_PARTITION_FOR_COLUMN_HISTORY = 16;
   const static int N_PARTITION_FOR_TABLE_HISTORY = 16;
   const static int N_PARTITION_FOR_TABLEGROUP_HISTORY = 16;
@@ -46,7 +46,7 @@ class ObInnerTableMonitor {
   const static int N_PARTITION_FOR_DATABASE_PRIVILEGE_HISTORY = 16;
   const static int N_PARTITION_FOR_DDL_OPERATION = 1;
 
-  private:
+private:
   int check_inner_stat() const;
 
   int get_all_tenants_from_stats(common::ObIArray<uint64_t>& tenant_ids);
@@ -66,7 +66,7 @@ class ObInnerTableMonitor {
 
   int check_cancel() const;
 
-  private:
+private:
   bool inited_;
   obrpc::ObCommonRpcProxy* rs_proxy_;
   common::ObMySQLProxy* sql_proxy_;

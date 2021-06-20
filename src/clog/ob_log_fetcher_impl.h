@@ -31,7 +31,7 @@ class ObLogCursorExt;
 }  // namespace clog
 namespace logservice {
 class ObLogFetcherImpl {
-  public:
+public:
   ObLogFetcherImpl() : is_inited_(false), skip_hotcache_(false), log_engine_(NULL), line_cache_(NULL)
   {}
   ~ObLogFetcherImpl()
@@ -49,7 +49,7 @@ class ObLogFetcherImpl {
     }
   }
 
-  protected:
+protected:
   int fetch_decrypted_log_entry_(const common::ObPartitionKey& pkey, const clog::ObLogCursorExt& cursor_ext,
       char* log_buf, const int64_t buf_size, const int64_t end_tstamp, clog::ObReadCost& read_cost,
       bool& fetch_log_from_hot_cache, int64_t& log_entry_size);
@@ -72,7 +72,7 @@ class ObLogFetcherImpl {
   int read_uncompressed_data_from_line_cache_(clog::file_id_t file_id, clog::offset_t offset, int64_t request_size,
       char* buf, int64_t buf_size, int64_t& log_entry_size, const int64_t end_tstamp, clog::ObReadCost& read_cost);
 
-  protected:
+protected:
   bool is_inited_;
   bool skip_hotcache_;  // use for test line cache
   clog::ObILogEngine* log_engine_;

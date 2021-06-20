@@ -21,7 +21,7 @@ namespace sql {
 class ObDirectTransmitOpInput : public ObTransmitOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDirectTransmitOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTransmitOpInput(ctx, spec)
   {}
   virtual ~ObDirectTransmitOpInput(){};
@@ -31,14 +31,14 @@ class ObDirectTransmitOpInput : public ObTransmitOpInput {
     return common::OB_NOT_SUPPORTED;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDirectTransmitOpInput);
 };
 
 class ObDirectTransmitSpec : public ObTransmitSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDirectTransmitSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObTransmitSpec(alloc, type)
   {}
 
@@ -46,7 +46,7 @@ class ObDirectTransmitSpec : public ObTransmitSpec {
 };
 
 class ObDirectTransmitOp : public ObTransmitOp {
-  public:
+public:
   ObDirectTransmitOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTransmitOp(exec_ctx, spec, input)
   {}
@@ -63,7 +63,7 @@ class ObDirectTransmitOp : public ObTransmitOp {
     return common::OB_NOT_SUPPORTED;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDirectTransmitOp);
 };
 

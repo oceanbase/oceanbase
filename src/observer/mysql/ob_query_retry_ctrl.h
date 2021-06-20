@@ -33,13 +33,13 @@ enum ObQueryRetryType {
 };
 
 class ObQueryRetryCtrl {
-  private:
+private:
   enum RetrySleepType {
     RETRY_SLEEP_TYPE_LINEAR,
     RETRY_SLEEP_TYPE_INDEX,
   };
 
-  public:
+public:
   ObQueryRetryCtrl();
   virtual ~ObQueryRetryCtrl();
 
@@ -124,14 +124,14 @@ class ObQueryRetryCtrl {
     in_async_execute_ = in_async_execute;
   }
 
-  private:
+private:
   void try_packet_retry(const sql::ObMultiStmtItem& multi_stmt_item);
   void log_distributed_not_supported_user_error(int err);
   void sleep_before_local_retry(ObQueryRetryCtrl::RetrySleepType retry_sleep_type, int64_t base_sleep_us,
       int64_t retry_times, int64_t timeout_timestamp);
   bool is_isolation_RR_or_SE(int32_t isolation);
 
-  public:
+public:
   // magic
   static const int64_t MAX_SCHEMA_ERROR_LOCAL_RETRY_TIMES = 5;
   static const int64_t MAX_DATA_NOT_READABLE_ERROR_LOCAL_RETRY_TIMES = 1;
@@ -139,7 +139,7 @@ class ObQueryRetryCtrl {
   static const uint32_t WAIT_NEW_MASTER_ELECTED_US = 8 * 1000;
   static const uint32_t WAIT_RETRY_WRITE_DML_US = 1 * 1000;
 
-  private:
+private:
   /* functions */
   /* variables */
   int64_t curr_query_tenant_local_schema_version_;

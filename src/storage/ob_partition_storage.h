@@ -59,7 +59,7 @@ class ObPGStorage;
 class ObTableScanIterator;
 
 class ObStoreRowkeyHashFunc {
-  public:
+public:
   uint64_t operator()(const common::ObStoreRowkey& rowkey, const uint64_t hash)
   {
     return rowkey.murmurhash(hash);
@@ -76,7 +76,7 @@ struct ObColumnChecksumEntry {
 };
 
 class ObStorageWriterGuard {
-  public:
+public:
   int refresh_and_protect_table(ObRelativeTable& relative_table);
   int refresh_and_protect_pg_memtable(ObPGStorage& pg_storage, ObTablesHandle& tables_handle);
 
@@ -112,16 +112,16 @@ class ObStorageWriterGuard {
   ObStorageWriterGuard(const ObStorageWriterGuard&) = delete;
   ObStorageWriterGuard& operator=(const ObStorageWriterGuard&) = delete;
 
-  private:
+private:
   bool need_to_refresh_table(ObTablesHandle& tables_handle);
   bool check_if_need_log();
   void reset();
 
-  private:
+private:
   static const int64_t LOG_INTERVAL_US = 30 * 1000 * 1000;
   static const int64_t GET_TS_INTERVAL = 10 * 1000;
 
-  private:
+private:
   const bool need_control_mem_;
   const bool is_replay_;
   ObPartitionStore* store_;
@@ -179,20 +179,20 @@ class ObPartitionStorage : public ObIPartitionStorage {
   friend class oceanbase::storageperf::ObMultiBlockBench;
   friend class ObPGStorage;
 
-  public:
+public:
   ObPartitionStorage();
   virtual ~ObPartitionStorage();
 
-  inline virtual const share::schema::ObMultiVersionSchemaService* get_schema_service() const
+  inline virtual const share::schema::ObMultiVersionSchemaService* get_schema_service() const override
   {
     return schema_service_;
   }
   virtual int init(const common::ObPartitionKey& pkey, ObIPartitionComponentFactory* cp_fty,
       share::schema::ObMultiVersionSchemaService* schema_service, transaction::ObTransService* txs,
-      ObPGMemtableMgr& pg_memtable_mgr);
+      ObPGMemtableMgr& pg_memtable_mgr) override;
 
-  virtual void destroy();
-  virtual const common::ObPartitionKey& get_partition_key() const
+  virtual void destroy() override;
+  virtual const common::ObPartitionKey& get_partition_key() const override
   {
     return pkey_;
   }
@@ -279,7 +279,6 @@ class ObPartitionStorage : public ObIPartitionStorage {
   // @param affected_rows [out] successfully insert row number
   // @param duplicated_rows [out] the iterator of the rowkey(s) of conflict row(s)
   //
-
   virtual int insert_row(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
       const common::ObIArray<uint64_t>& column_ids, const common::ObNewRow& row);
 
@@ -294,7 +293,7 @@ class ObPartitionStorage : public ObIPartitionStorage {
   // dup_row_iters are iterators of conflict rows, the number of iterators is same with number of checked rows
   virtual int fetch_conflict_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
       const common::ObIArray<uint64_t>& in_column_ids, const common::ObIArray<uint64_t>& out_column_ids,
-      common::ObNewRowIterator& check_row_iter, common::ObIArray<common::ObNewRowIterator*>& dup_row_iters);
+      common::ObNewRowIterator& check_row_iter, common::ObIArray<common::ObNewRowIterator*>& dup_row_iters) override;
   virtual int revert_insert_iter(common::ObNewRowIterator* iter) override;
   //
   // update rows
@@ -345,16 +344,16 @@ class ObPartitionStorage : public ObIPartitionStorage {
   virtual int lock_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param, const int64_t abs_lock_timeout,
       common::ObNewRowIterator* row_iter, ObLockFlag lock_flag, int64_t& affected_rows) override;
   virtual int lock_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param, const int64_t abs_lock_timeout,
-      const common::ObNewRow& row, ObLockFlag lock_flag);
+      const common::ObNewRow& row, ObLockFlag lock_flag) override;
 
-  virtual int get_concurrent_cnt(uint64_t table_id, int64_t schema_version, int64_t& concurrent_cnt);
+  virtual int get_concurrent_cnt(uint64_t table_id, int64_t schema_version, int64_t& concurrent_cnt) override;
 
   virtual int get_batch_rows(const ObTableScanParam& param, const storage::ObBatch& batch, int64_t& logical_row_count,
-      int64_t& physical_row_count, common::ObIArray<common::ObEstRowCountRecord>& est_records);
+      int64_t& physical_row_count, common::ObIArray<common::ObEstRowCountRecord>& est_records) override;
 
-  virtual int get_table_stat(const uint64_t table_id, common::ObTableStat& stat);
+  virtual int get_table_stat(const uint64_t table_id, common::ObTableStat& stat) override;
 
-  virtual int lock(const ObStoreCtx& ctx);
+  virtual int lock(const ObStoreCtx& ctx) override;
 
   virtual void set_merge_status(bool merge_success);
   virtual bool can_schedule_merge();
@@ -451,10 +450,10 @@ class ObPartitionStorage : public ObIPartitionStorage {
 
   int erase_stat_cache();
 
-  public:
+public:
   typedef common::hash::ObHashMap<int64_t, ObColumnChecksumEntry, common::hash::NoPthreadDefendMode> ColumnChecksumMap;
 
-  private:
+private:
   struct RowReshape {
     RowReshape()
         : row_reshape_cells_(NULL),
@@ -479,7 +478,7 @@ class ObPartitionStorage : public ObIPartitionStorage {
   };
 
   struct ObDMLRunningCtx {
-    public:
+  public:
     ObDMLRunningCtx(const ObStoreCtx& store_ctx, const ObDMLBaseParam& dml_param, common::ObIAllocator& allocator,
         const ObRowDml dml_type)
         : store_ctx_(store_ctx),
@@ -505,12 +504,12 @@ class ObPartitionStorage : public ObIPartitionStorage {
     static int prepare_column_desc(
         const common::ObIArray<uint64_t>& column_ids, const ObRelativeTable& table, ObColDescIArray& col_descs);
 
-    private:
+  private:
     void free_work_members();
     int prepare_index_row();
     int prepare_column_info(const common::ObIArray<uint64_t>& column_ids);
 
-    public:
+  public:
     const ObStoreCtx& store_ctx_;
     const ObDMLBaseParam& dml_param_;
     common::ObIAllocator& allocator_;
@@ -522,13 +521,13 @@ class ObPartitionStorage : public ObIPartitionStorage {
     ObStoreRow tbl_row_;
     ObStoreRow* idx_row_;  // not a must, allocate dynamically
 
-    private:
+  private:
     bool is_inited_;
   };
 
   static const int32_t LOCK_WAIT_INTERVAL = 5;  // 5us
 
-  private:
+private:
   int write_index_row(ObRelativeTable& relative_table, const ObStoreCtx& ctx, const ObColDescIArray& idx_columns,
       ObStoreRow& index_row);
   int check_other_columns_in_column_ids(const ObRelativeTables& rel_schema, const share::schema::ColumnMap* col_map,
@@ -628,7 +627,7 @@ class ObPartitionStorage : public ObIPartitionStorage {
   virtual int extract_rowkey(const ObRelativeTable& table, const common::ObStoreRowkey& rowkey, char* buffer,
       const int64_t buffer_len, const common::ObTimeZoneInfo* tz_info = NULL);
 
-  private:
+private:
   int get_depend_table_schema(const share::schema::ObTableSchema* table_schema,
       share::schema::ObSchemaGetterGuard& schema_guard, const share::schema::ObTableSchema*& dep_table_schema);
   int report_checksum(const uint64_t execution_id, const uint64_t task_id,
@@ -695,7 +694,7 @@ class ObPartitionStorage : public ObIPartitionStorage {
   // disallow copy;
   DISALLOW_COPY_AND_ASSIGN(ObPartitionStorage);
 
-  protected:
+protected:
   // data members
   static const int64_t DELAY_SCHEDULE_TIME_UNIT = 1000 * 1000 * 1;  // 1s
   static const int64_t MAGIC_NUM_BEFORE_1461 = -0xABCD;

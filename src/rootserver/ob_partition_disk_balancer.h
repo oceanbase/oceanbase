@@ -35,7 +35,7 @@ namespace rootserver {
 namespace balancer {
 
 class RowDiskBalanceStat {
-  public:
+public:
   struct RowItemDiskStat {
     RowItemDiskStat(int64_t data_size) : key_(0), data_size_(data_size)
     {}
@@ -56,7 +56,7 @@ class RowDiskBalanceStat {
   typedef RowItemDiskStat Stat;
   typedef common::hash::ObReferedMap<int64_t, Stat> UnitLoadMap;
 
-  public:
+public:
   RowDiskBalanceStat(ITenantStatFinder& stat_finder, common::ObZone& zone, SquareIdMap& map, int64_t row_idx)
       : item_disk_info_(),
         total_load_(0),
@@ -79,7 +79,7 @@ class RowDiskBalanceStat {
   int get_total_load(int64_t& load) const;
   TO_STRING_KV(K_(item_disk_info), K_(zone), K_(row_idx), K_(map));
 
-  private:
+private:
   common::ObSEArray<Stat, 16> item_disk_info_;
   Stat total_load_;
   UnitLoadMap unit_load_map_;
@@ -90,7 +90,7 @@ class RowDiskBalanceStat {
 };
 
 class UnitDiskBalanceStat {
-  public:
+public:
   struct UnitItemDiskStat {
     UnitItemDiskStat(UnitStat* unit_stat) : key_(0), unit_stat_(unit_stat)
     {}
@@ -111,7 +111,7 @@ class UnitDiskBalanceStat {
   typedef UnitItemDiskStat Stat;
   typedef common::hash::ObReferedMap<int64_t, Stat> UnitLoadMap;
 
-  public:
+public:
   UnitDiskBalanceStat(IUnitProvider& unit_provider)
       : inited_(false), unit_provider_(unit_provider), unit_load_map_(), avg_load_(0)
   {}
@@ -123,7 +123,7 @@ class UnitDiskBalanceStat {
   int get_max_min_load_unit(UnitStat*& max_u, UnitStat*& min_u);
   void debug_dump();
 
-  private:
+private:
   bool inited_;
   IUnitProvider& unit_provider_;
   UnitLoadMap unit_load_map_;
@@ -132,7 +132,7 @@ class UnitDiskBalanceStat {
 
 // Dynamically adjust disk balance
 class DynamicAverageDiskBalancer : public IdMapBalancer {
-  public:
+public:
   DynamicAverageDiskBalancer(SquareIdMap& map, ITenantStatFinder& stat_finder, IUnitProvider& unit_provider,
       common::ObZone& zone, share::schema::ObSchemaGetterGuard& schema_guard,
       const HashIndexCollection& hash_index_collection)
@@ -147,7 +147,7 @@ class DynamicAverageDiskBalancer : public IdMapBalancer {
 
   virtual int balance() override;
 
-  private:
+private:
   int one_row_balance(
       UnitDiskBalanceStat& unit_stat, UnitStat& max_u, UnitStat& min_u, int64_t row_idx, int64_t& task_cnt);
   int test_and_exchange(UnitDiskBalanceStat& unit_stat, UnitStat& max_u, UnitStat& min_u, RowDiskBalanceStat& row_stat,
@@ -155,7 +155,7 @@ class DynamicAverageDiskBalancer : public IdMapBalancer {
   void exchange(SquareIdMap::Item& a, SquareIdMap::Item& b);
   int update_unit_stat(UnitDiskBalanceStat& unit_stat);
 
-  private:
+private:
   SquareIdMap& map_;
   ITenantStatFinder& stat_finder_;
   UnitDiskBalanceStat unit_stat_;

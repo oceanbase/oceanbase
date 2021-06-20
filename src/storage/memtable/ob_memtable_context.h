@@ -34,7 +34,7 @@ class ObThreadLocalTransCtx;
 namespace memtable {
 
 class MemtableCtxStat {
-  public:
+public:
   MemtableCtxStat() : wlock_retry_(0), tsc_retry_(0)
   {}
   ~MemtableCtxStat()
@@ -61,7 +61,7 @@ class MemtableCtxStat {
     return ATOMIC_LOAD(&tsc_retry_);
   }
 
-  private:
+private:
   int32_t wlock_retry_;
   int32_t tsc_retry_;
 };
@@ -71,7 +71,7 @@ class MemtableCtxStat {
 // BIG_ROW_MID OR BIG_ROW_END
 // 2. For a normal row, the flag is NORMAL_ROW
 class ObTransRowFlag {
-  public:
+public:
   static const uint8_t NORMAL_ROW = 0;
   static const uint8_t BIG_ROW_START = 1;
   static const uint8_t BIG_ROW_MID = 2;
@@ -79,7 +79,7 @@ class ObTransRowFlag {
   static const uint8_t MAX = 4;
   static const uint8_t ENCRYPT = (1 << 3);
 
-  public:
+public:
   static bool is_valid_row_flag(const uint8_t row_flag)
   {
     const uint8_t real_flag = row_flag & (~ENCRYPT);
@@ -125,7 +125,7 @@ class ObTransRowFlag {
 };
 
 class ObQueryAllocator : public common::ObIAllocator {
-  public:
+public:
   explicit ObQueryAllocator() : alloc_count_(0), free_count_(0), alloc_size_(0), is_inited_(false)
   {}
   ~ObQueryAllocator()
@@ -189,7 +189,7 @@ class ObQueryAllocator : public common::ObIAllocator {
     }
   }
 
-  private:
+private:
   ObFIFOAllocator allocator_;
   int64_t alloc_count_;
   int64_t free_count_;
@@ -200,7 +200,7 @@ class ObQueryAllocator : public common::ObIAllocator {
 // The speciaal allocator for ObMemtableCtx, used to allocate callback.
 // The page size is 8K, support concurrency, but at a poor performance.
 class ObMemtableCtxCbAllocator : public common::ObIAllocator {
-  public:
+public:
   explicit ObMemtableCtxCbAllocator() : alloc_count_(0), free_count_(0), alloc_size_(0), is_inited_(false)
   {}
   ~ObMemtableCtxCbAllocator()
@@ -265,7 +265,7 @@ class ObMemtableCtxCbAllocator : public common::ObIAllocator {
     }
   }
 
-  private:
+private:
   ObFIFOAllocator allocator_;
   int64_t alloc_count_;
   int64_t free_count_;
@@ -280,78 +280,79 @@ class ObMemtableCtx : public ObIMemtableCtx {
   static const int64_t SLOW_QUERY_THRESHOULD = 500 * 1000;
   static const int64_t LOG_CONFLICT_INTERVAL = 3 * 1000 * 1000;
 
-  public:
+public:
   static uint32_t UID_FOR_PURGE;
 
-  public:
+public:
   ObMemtableCtx();
   ObMemtableCtx(MemtableIDMap& ctx_map, common::ObIAllocator& allocator);
   virtual ~ObMemtableCtx();
-  virtual void reset();
 
-  public:
+  virtual void reset() override;
+
+public:
   int init(const uint64_t tenant_id, MemtableIDMap& ctx_map, common::ObIAllocator& malloc_allocator);
-  virtual int add_crc(const void* key, ObMvccRow* value, ObMvccTransNode* tnode, const int64_t data_size);
-  virtual int add_crc2(ObMvccRow* value, ObMvccTransNode* tnode, int64_t data_size);
-  virtual int add_crc4(ObMvccRow* value, ObMvccTransNode* tnode, int64_t data_size, const int64_t log_ts);
-  virtual void* callback_alloc(const int64_t size);
-  virtual void callback_free(void* cb);
-  virtual void* arena_alloc(const int64_t size);
-  virtual common::ObIAllocator& get_query_allocator();
-  virtual int wait_trans_version(const uint32_t descriptor, const int64_t version);
+  virtual int add_crc(const void* key, ObMvccRow* value, ObMvccTransNode* tnode, const int64_t data_size) override;
+  virtual int add_crc2(ObMvccRow* value, ObMvccTransNode* tnode, int64_t data_size) override;
+  virtual int add_crc4(ObMvccRow* value, ObMvccTransNode* tnode, int64_t data_size, const int64_t log_ts) override;
+  virtual void* callback_alloc(const int64_t size) override;
+  virtual void callback_free(void* cb) override;
+  virtual void* arena_alloc(const int64_t size) override;
+  virtual common::ObIAllocator& get_query_allocator() override;
+  virtual int wait_trans_version(const uint32_t descriptor, const int64_t version) override;
   virtual int wait_trans_version_v2(
-      const uint32_t descriptor, const int64_t version, const ObMemtableKey* key, const ObMvccRow& row);
+      const uint32_t descriptor, const int64_t version, const ObMemtableKey* key, const ObMvccRow& row) override;
   virtual int try_elr_when_lock_for_write(
-      const uint32_t descriptor, const int64_t version, const ObMemtableKey* key, const ObMvccRow& row);
-  virtual void inc_lock_for_read_retry_count();
-  virtual int row_compact(ObMvccRow* value, const int64_t snapshot_version);
-  virtual const char* log_conflict_ctx(const uint32_t descriptor);
-  virtual int read_lock_yield();
-  virtual int write_lock_yield();
+      const uint32_t descriptor, const int64_t version, const ObMemtableKey* key, const ObMvccRow& row) override;
+  virtual void inc_lock_for_read_retry_count() override;
+  virtual int row_compact(ObMvccRow* value, const int64_t snapshot_version) override;
+  virtual const char* log_conflict_ctx(const uint32_t descriptor) override;
+  virtual int read_lock_yield() override;
+  virtual int write_lock_yield() override;
 
-  virtual int after_link_trans_node(const void* key, ObMvccRow* value);
-  virtual bool has_redo_log() const;
+  virtual int after_link_trans_node(const void* key, ObMvccRow* value) override;
+  virtual bool has_redo_log() const override;
   virtual void update_max_durable_sql_no(const int64_t sql_no) override;
 
-  public:
+public:
   int set_replay_host(ObMemtable* host, const bool for_replay);
   int set_leader_host(ObMemtable* host, const bool for_replay);
   int check_memstore_count(int64_t& count);
-  virtual void set_read_only();
-  virtual void inc_ref();
-  virtual void dec_ref();
-  virtual int write_auth();
-  virtual int write_done();
-  virtual int trans_begin();
+  virtual void set_read_only() override;
+  virtual void inc_ref() override;
+  virtual void dec_ref() override;
+  virtual int write_auth() override;
+  virtual int write_done() override;
+  virtual int trans_begin() override;
   virtual int sub_trans_begin(const int64_t snapshot, const int64_t abs_expired_time,
-      const bool is_safe_snapshot = false, const int64_t trx_lock_timeout = -1);
-  virtual int sub_trans_end(const bool commit);
+      const bool is_safe_snapshot = false, const int64_t trx_lock_timeout = -1) override;
+  virtual int sub_trans_end(const bool commit) override;
   virtual int sub_stmt_begin() override;
   virtual int sub_stmt_end(const bool commit) override;
   virtual int fast_select_trans_begin(
-      const int64_t snapshot, const int64_t abs_expired_time, const int64_t trx_lock_timeout);
-  virtual uint64_t calc_checksum(const int64_t trans_version);
-  virtual uint64_t calc_checksum2(const int64_t trans_version);
+      const int64_t snapshot, const int64_t abs_expired_time, const int64_t trx_lock_timeout) override;
+  virtual uint64_t calc_checksum(const int64_t trans_version) override;
+  virtual uint64_t calc_checksum2(const int64_t trans_version) override;
   virtual uint64_t calc_checksum3();
   virtual uint64_t calc_checksum4();
-  virtual int trans_end(const bool commit, const int64_t trans_version);
-  virtual int trans_clear();
-  virtual int elr_trans_preparing();
-  virtual int trans_kill();
+  virtual int trans_end(const bool commit, const int64_t trans_version) override;
+  virtual int trans_clear() override;
+  virtual int elr_trans_preparing() override;
+  virtual int trans_kill() override;
   // fake kill the trans table even when the transaction may already be committed
   // only used to set the already committed transaction to be aborted
   virtual int fake_kill();
-  virtual int trans_publish();
-  virtual int trans_replay_begin();
-  virtual int trans_replay_end(const bool commit, const int64_t trans_version, const uint64_t checksum = 0);
+  virtual int trans_publish() override;
+  virtual int trans_replay_begin() override;
+  virtual int trans_replay_end(const bool commit, const int64_t trans_version, const uint64_t checksum = 0) override;
   // method called when leader takeover
-  virtual int replay_to_commit();
+  virtual int replay_to_commit() override;
   // method called when leader revoke
-  virtual int commit_to_replay();
+  virtual int commit_to_replay() override;
   virtual int trans_link();
-  virtual int get_trans_status() const;
-  virtual int fill_redo_log(char* buf, const int64_t buf_len, int64_t& buf_pos);
-  virtual int undo_fill_redo_log();  // undo the function fill_redo_log(..)
+  virtual int get_trans_status() const override;
+  virtual int fill_redo_log(char* buf, const int64_t buf_len, int64_t& buf_pos) override;
+  virtual int undo_fill_redo_log() override;  // undo the function fill_redo_log(..)
   // the function apply the side effect of dirty txn and return whether
   // remaining pending callbacks.
   // NB: the fact whether there remains pending callbacks currently is only used
@@ -359,6 +360,7 @@ class ObMemtableCtx : public ObIMemtableCtx {
   void sync_log_succ(const int64_t log_id, const int64_t log_ts);
   void sync_log_succ(const int64_t log_id, const int64_t log_ts, bool& has_pending_cb);
   bool is_slow_query() const;
+
   void set_handle_start_time(const int64_t start_time)
   {
     handle_start_time_ = start_time;
@@ -367,20 +369,20 @@ class ObMemtableCtx : public ObIMemtableCtx {
   {
     return handle_start_time_;
   }
-  virtual void set_trans_ctx(transaction::ObTransCtx* ctx);
-  virtual transaction::ObTransCtx* get_trans_ctx()
+  virtual void set_trans_ctx(transaction::ObTransCtx* ctx) override;
+  virtual transaction::ObTransCtx* get_trans_ctx() override
   {
     return ctx_;
   }
-  virtual bool is_multi_version_range_valid() const
+  virtual bool is_multi_version_range_valid() const override
   {
     return multi_version_range_.is_valid();
   }
-  virtual const ObVersionRange& get_multi_version_range() const
+  virtual const ObVersionRange& get_multi_version_range() const override
   {
     return multi_version_range_;
   }
-  virtual int stmt_data_relocate(const int relocate_data_type, ObMemtable* memtable, bool& relocated);
+  virtual int stmt_data_relocate(const int relocate_data_type, ObMemtable* memtable, bool& relocated) override;
   virtual void inc_relocate_cnt() override
   {
     relocate_cnt_++;
@@ -393,14 +395,14 @@ class ObMemtableCtx : public ObIMemtableCtx {
   {
     return relocate_cnt_;
   }
-  virtual int audit_partition(const enum transaction::ObPartitionAuditOperator op, const int64_t count);
+  virtual int audit_partition(const enum transaction::ObPartitionAuditOperator op, const int64_t count) override;
   int get_memtable_key_arr(transaction::ObMemtableKeyArray& memtable_key_arr);
   uint64_t get_lock_for_read_retry_count() const
   {
     return lock_for_read_retry_count_;
   }
-  virtual void add_trans_mem_total_size(const int64_t size);
-  virtual void set_contain_hotspot_row();
+  virtual void add_trans_mem_total_size(const int64_t size) override;
+  virtual void set_contain_hotspot_row() override;
   MemtableIDMap* get_ctx_map()
   {
     return ctx_map_;
@@ -410,20 +412,20 @@ class ObMemtableCtx : public ObIMemtableCtx {
   {
     return ATOMIC_LOAD(&ref_);
   }
-  uint64_t get_tenant_id() const;
-  bool is_can_elr() const;
-  bool is_elr_prepared() const;
+  uint64_t get_tenant_id() const override;
+  bool is_can_elr() const override;
+  bool is_elr_prepared() const override;
   ObMemtableMutatorIterator* get_memtable_mutator_iter()
   {
     return mutator_iter_;
   }
   ObMemtableMutatorIterator* alloc_memtable_mutator_iter();
-  int set_memtable_for_cur_log(ObIMemtable* memtable);
-  ObIMemtable* get_memtable_for_cur_log()
+  int set_memtable_for_cur_log(ObIMemtable* memtable) override;
+  ObIMemtable* get_memtable_for_cur_log() override
   {
     return memtable_for_cur_log_;
   }
-  void clear_memtable_for_cur_log()
+  void clear_memtable_for_cur_log() override
   {
     if (NULL != memtable_for_cur_log_) {
       memtable_for_cur_log_->dec_pending_lob_count();
@@ -433,7 +435,7 @@ class ObMemtableCtx : public ObIMemtableCtx {
   }
   int set_memtable_for_batch_commit(ObMemtable* memtable);
   int set_memtable_for_elr(ObMemtable* memtable);
-  bool has_read_elr_data() const
+  bool has_read_elr_data() const override
   {
     return read_elr_data_;
   }
@@ -447,15 +449,16 @@ class ObMemtableCtx : public ObIMemtableCtx {
     return trans_mgr_.is_for_replay();
   }
   void half_stmt_commit();
+
   int64_t get_trans_mem_total_size() const
   {
     return trans_mem_total_size_;
   }
-  void add_lock_for_read_elapse(const int64_t elapse)
+  void add_lock_for_read_elapse(const int64_t elapse) override
   {
     lock_for_read_elapse_ += elapse;
   }
-  int64_t get_lock_for_read_elapse() const
+  int64_t get_lock_for_read_elapse() const override
   {
     return lock_for_read_elapse_;
   }
@@ -487,11 +490,11 @@ class ObMemtableCtx : public ObIMemtableCtx {
   }
   void dec_pending_elr_count();
 
-  public:
-  void on_tsc_retry(const ObMemtableKey& key);
-  void on_wlock_retry(const ObMemtableKey& key, const char* conflict_ctx);
-  int insert_prev_trans(const uint32_t ctx_id);
-  virtual int64_t to_string(char* buf, const int64_t buf_len) const;
+public:
+  void on_tsc_retry(const ObMemtableKey& key) override;
+  void on_wlock_retry(const ObMemtableKey& key, const char* conflict_ctx) override;
+  int insert_prev_trans(const uint32_t ctx_id) override;
+  virtual int64_t to_string(char* buf, const int64_t buf_len) const override;
   void set_thread_local_ctx(transaction::ObThreadLocalTransCtx* thread_local_ctx)
   {
     thread_local_ctx_ = thread_local_ctx;
@@ -508,6 +511,7 @@ class ObMemtableCtx : public ObIMemtableCtx {
   {
     trans_table_status_ = trans_table_status;
   }
+
   void set_self_alloc_ctx(const bool is_self_alloc_ctx)
   {
     is_self_alloc_ctx_ = is_self_alloc_ctx;
@@ -516,14 +520,14 @@ class ObMemtableCtx : public ObIMemtableCtx {
   {
     return is_self_alloc_ctx_;
   }
-  transaction::ObTransStateTableGuard* get_trans_table_guard()
+  transaction::ObTransStateTableGuard* get_trans_table_guard() override
   {
     return &trans_table_guard_;
   }
   // mainly used by revert ref
   void reset_trans_table_guard();
 
-  private:
+private:
   int set_host_(ObMemtable* host, const bool for_replay);
   int do_trans_end(const bool commit, const int64_t trans_version, const int end_code);
   int trans_pending();
@@ -555,7 +559,7 @@ class ObMemtableCtx : public ObIMemtableCtx {
     trans_mgr_.inc_flushed_log_size(size);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableCtx);
   common::ObByteLock lock_;
   common::ObByteLock stmt_relocate_lock_;

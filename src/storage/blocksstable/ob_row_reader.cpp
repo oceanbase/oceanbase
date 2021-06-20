@@ -902,14 +902,14 @@ int ObFlatRowReader::read_obj(const ObObjMeta& src_meta, ObIAllocator& allocator
         // not support data alteration
         ObObj ori_obj = obj;
         int64_t cm_mode = CM_NONE;
-        ObObjTypeClass ori_type_calss = ori_obj.get_type_class();
-        if (ObIntTC == ori_type_calss && ObUIntTC == type_class) {
+        ObObjTypeClass ori_type_class = ori_obj.get_type_class();
+        if (ObIntTC == ori_type_class && ObUIntTC == type_class) {
           obj.set_uint(src_meta.get_type(), static_cast<uint64_t>(ori_obj.get_int()));
-        } else if (ObIntTC == ori_type_calss && ObBitTC == type_class) {
+        } else if (ObIntTC == ori_type_class && ObBitTC == type_class) {
           obj.set_bit(static_cast<uint64_t>(ori_obj.get_int()));
-        } else if (ObIntTC == ori_type_calss && ObEnumType == column_type) {
+        } else if (ObIntTC == ori_type_class && ObEnumType == column_type) {
           obj.set_enum(static_cast<uint64_t>(ori_obj.get_int()));
-        } else if (ObIntTC == ori_type_calss && ObSetType == column_type) {
+        } else if (ObIntTC == ori_type_class && ObSetType == column_type) {
           obj.set_set(static_cast<uint64_t>(ori_obj.get_int()));
         } else {
           ObCastCtx cast_ctx(&allocator, NULL, cm_mode, src_meta.get_collation_type());

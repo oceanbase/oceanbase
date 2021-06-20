@@ -27,7 +27,7 @@ namespace common {
 // obj_count_ sub 1. If the "obj_count_" of a MemBlock become 0 after a free action, this MemBlock
 // can be recycled. After expire duration time, a recycled MemBlock can be freed.
 class ObDelayFreeMemBlock : public common::ObDLinkBase<ObDelayFreeMemBlock> {
-  public:
+public:
   explicit ObDelayFreeMemBlock(char* end);
   virtual ~ObDelayFreeMemBlock();
   inline int64_t remain() const;
@@ -40,14 +40,14 @@ class ObDelayFreeMemBlock : public common::ObDLinkBase<ObDelayFreeMemBlock> {
   inline void free(void* ptr);
   inline void reuse();
 
-  private:
+private:
   int64_t free_timestamp_;
   int64_t obj_count_;
   char* end_;
   char* current_;
   char data_[0];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDelayFreeMemBlock);
 };
 
@@ -58,7 +58,7 @@ class ObDelayFreeMemBlock : public common::ObDLinkBase<ObDelayFreeMemBlock> {
 // from free list to working list. If the size of free list exceeds MAX_CACHE_MEMORY_SIZE, the expi-
 // red memblock will be freed.
 class ObDelayFreeAllocator : public ObIAllocator {
-  public:
+public:
   ObDelayFreeAllocator();
   virtual ~ObDelayFreeAllocator();
   int init(const lib::ObLabel& label, const bool is_thread_safe, const int64_t expire_duration_us);
@@ -75,7 +75,7 @@ class ObDelayFreeAllocator : public ObIAllocator {
   inline int64_t get_memory_fragment_size() const;
   inline int64_t get_total_size() const;
 
-  private:
+private:
   struct DataMeta {
     int64_t data_len_;
     ObDelayFreeMemBlock* mem_block_;
@@ -84,12 +84,12 @@ class ObDelayFreeAllocator : public ObIAllocator {
   static const int64_t MEM_BLOCK_DATA_SIZE = MEM_BLOCK_SIZE - sizeof(ObDelayFreeMemBlock);
   static const int64_t MAX_CACHE_MEMORY_SIZE = OB_MALLOC_BIG_BLOCK_SIZE * 32;
 
-  private:
+private:
   ObDelayFreeMemBlock* alloc_block(const int64_t data_size);
   void free_block(ObDelayFreeMemBlock* block);
   void free_list(ObDList<ObDelayFreeMemBlock>& list);
 
-  private:
+private:
   ObDList<ObDelayFreeMemBlock> working_list_;
   ObDList<ObDelayFreeMemBlock> free_list_;
   int64_t cache_memory_size_;
@@ -101,7 +101,7 @@ class ObDelayFreeAllocator : public ObIAllocator {
   lib::ObMutex mutex_;
   bool inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDelayFreeAllocator);
 };
 

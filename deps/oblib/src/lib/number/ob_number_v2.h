@@ -98,14 +98,14 @@ static_assert(sizeof(ObCompactNumber) == sizeof(uint32_t), "wrong compact number
 class ObCalcVector;
 class ObNumber final {
   class IAllocator {
-    public:
+  public:
     virtual ~IAllocator(){};
     virtual uint32_t* alloc(const int64_t num) = 0;
     virtual uint32_t* alloc(const int64_t num, const lib::ObMemAttr& attr) = 0;
   };
   template <class T>
   class TAllocator : public IAllocator {
-    public:
+  public:
     explicit TAllocator(T& allocator) : allocator_(allocator){};
     uint32_t* alloc(const int64_t num)
     {
@@ -116,11 +116,11 @@ class ObNumber final {
       return (uint32_t*)allocator_.alloc(num, attr);
     }
 
-    private:
+  private:
     T& allocator_;
   };
 
-  public:
+public:
   typedef ObNumberDesc Desc;
   static const uint64_t BASE = 1000000000;
   static const uint64_t MAX_VALUED_DIGIT = BASE - 1;
@@ -167,7 +167,7 @@ class ObNumber final {
   static const ObNumber& get_zero();
   static const ObNumber& get_pi();
 
-  public:
+public:
   ObNumber() : d_(), digits_(0)
   {
     d_.sign_ = POSITIVE;
@@ -179,7 +179,7 @@ class ObNumber final {
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  public:
+public:
   // v1: original edition
   // v2: algorithmic optimization edition
   // v3: engineering optimization edition
@@ -436,7 +436,7 @@ class ObNumber final {
   int round_even_number();
   int64_t get_scale() const;
 
-  protected:
+protected:
   int find_point_range_(const char* str, const int64_t length, int64_t& start_idx, int64_t& floating_point,
       int64_t& end_idx, bool& negative, int32_t& warning, int16_t* precision, int16_t* scale);
   int construct_digits_(const char* str, const int64_t start_idx, const int64_t floating_point, const int64_t end_idx,
@@ -508,7 +508,7 @@ class ObNumber final {
   int get_npi_(double n, ObNumber& out, ObIAllocator& alloc, const bool do_rounding = true) const;
   int simple_factorial_for_sincos_(int64_t start, ObIAllocator& allocator, ObNumber& result) const;
 
-  protected:
+protected:
   uint32_t* alloc_(IAllocator& allocator, const int64_t num, const lib::ObMemAttr* attr = NULL);
   int check_precision_(const int64_t precision, const int64_t scale);
   int round_scale_(const int64_t scale, const bool using_floating_scale);
@@ -543,7 +543,7 @@ class ObNumber final {
   inline static int exp_check_(const ObNumber::Desc& desc, const bool is_oracle_mode = false)
       __attribute__((always_inline));
 
-  public:
+public:
   bool is_int64() const;
   int cast_to_int64(int64_t& value) const;
   inline int cast_from_int64(const int64_t value, IAllocator& allocator)
@@ -551,23 +551,23 @@ class ObNumber final {
     return from_integer_(value, allocator);
   }
 
-  public:
+public:
   Desc d_;
 
-  protected:
+protected:
   uint32_t* digits_;
 
-  private:
+private:
   int check_range(bool* is_valid_uint64, bool* is_valid_int64, uint64_t& int_parts, uint64_t& decimal_parts) const;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class StackAllocator {
-  public:
+public:
   StackAllocator() : is_using_(false){};
 
-  public:
+public:
   uint32_t* alloc(const int64_t num)
   {
     uint32_t* ret = NULL;
@@ -583,17 +583,17 @@ class StackAllocator {
     return alloc(num);
   };
 
-  private:
+private:
   uint32_t buffer_[ObNumber::MAX_STORE_LEN];
   bool is_using_;
 };
 
 class ObIntegerBuilder {
-  public:
+public:
   ObIntegerBuilder();
   ~ObIntegerBuilder();
 
-  public:
+public:
   inline int push(const uint8_t d, const bool reduce_zero);
   inline int push_digit(const uint32_t d, const bool reduce_zero);
   inline int64_t get_exp() const;
@@ -602,7 +602,7 @@ class ObIntegerBuilder {
   inline int64_t length() const;
   inline void reset();
 
-  private:
+private:
   int64_t exp_;
   int64_t digit_pos_;
   int64_t digit_idx_;
@@ -610,11 +610,11 @@ class ObIntegerBuilder {
 };
 
 class ObDecimalBuilder {
-  public:
+public:
   ObDecimalBuilder();
   ~ObDecimalBuilder();
 
-  public:
+public:
   inline int push(const uint8_t d, const bool reduce_zero);
   inline int push_digit(const uint32_t d, const bool reduce_zero);
   inline int64_t get_exp() const;
@@ -623,7 +623,7 @@ class ObDecimalBuilder {
   inline int64_t length() const;
   inline void reset();
 
-  private:
+private:
   int64_t exp_;
   int64_t digit_pos_;
   int64_t digit_idx_;
@@ -636,13 +636,13 @@ enum FmtPosition {
 };
 
 class ObNumberBuilder {
-  public:
+public:
   ObNumberBuilder() : number_(), ib_(), db_()
   {}
   ~ObNumberBuilder()
   {}
 
-  public:
+public:
   int build(const char* str, int64_t length, int& warning, ObNumberFmtModel* fmt = NULL, int16_t* precision = NULL,
       int16_t* scale = NULL);
   int build_v2(const char* str, int64_t length, int& warning, ObNumberFmtModel* fmt = NULL, int16_t* precision = NULL,
@@ -651,7 +651,7 @@ class ObNumberBuilder {
   int64_t get_length() const;
   void reset();
 
-  private:
+private:
   int find_point_(const char* str, int64_t& length, int64_t& integer_start, int64_t& integer_end,
       int64_t& decimal_start, bool& negative, bool& integer_zero, bool& decimal_zero, int& warning);
   int find_point_v2_(const char* str, int64_t& length, int64_t& integer_start, int64_t& integer_end,
@@ -695,16 +695,16 @@ class ObNumberBuilder {
   // @return OB_SUCCESS if succeed, other error code if error occurs.
   int hex_to_dec_(const char* hex_str, int32_t hex_len, char* dec_str, int32_t& dec_len) const;
 
-  public:
+public:
   ObNumber number_;
 
-  private:
+private:
   ObIntegerBuilder ib_;
   ObDecimalBuilder db_;
 };
 
 class ObDigitIterator final {
-  public:
+public:
   // A,B.C,D
   // A--head integer
   // B--body integer
@@ -720,7 +720,7 @@ class ObDigitIterator final {
   int get_next_digit(uint32_t& digit, bool& from_integer, bool& last_decimal);
   NextDigitEnum get_next_digit(uint32_t& digit);
 
-  private:
+private:
   int64_t iter_idx_;
   int64_t iter_len_;
   int64_t iter_exp_;
@@ -767,16 +767,16 @@ int ObDigitIterator::get_digit(const int64_t idx, uint32_t& ret_digit) const
 }
 
 class ObCalcVector {
-  public:
+public:
   ObCalcVector();
   ~ObCalcVector();
   ObCalcVector(const ObCalcVector& other);
   ObCalcVector& operator=(const ObCalcVector& other);
 
-  public:
+public:
   int init(const uint32_t desc, uint32_t* digits);
 
-  public:
+public:
   uint64_t at(const int64_t idx) const;
   uint64_t base() const;
   void set_base(const uint64_t base);
@@ -790,7 +790,7 @@ class ObCalcVector {
   int64_t to_string(char* buffer, const int64_t length) const;
   int normalize();
 
-  private:
+private:
   uint64_t base_;
   int64_t length_;
   uint32_t* digits_;
@@ -798,7 +798,7 @@ class ObCalcVector {
 };
 
 class ObTRecover {
-  public:
+public:
   ObTRecover(ObNumber& orig, int cond, int& observer) : orig_(orig), recover_(orig), cond_(cond), observer_(observer)
   {
     memcpy(digits_, orig_.get_digits(), orig_.get_length() * sizeof(uint32_t));
@@ -811,7 +811,7 @@ class ObTRecover {
     }
   };
 
-  private:
+private:
   const ObNumber orig_;
   ObNumber& recover_;
   uint32_t digits_[ObNumber::MAX_CALC_BYTE_LEN];
@@ -824,7 +824,7 @@ class ObTRecover {
 
 class ObDivArray final  // small-eidian storage
 {
-  public:
+public:
   ObDivArray() : len_(0), zero_cnt_(0)
   {}
 
@@ -1268,7 +1268,7 @@ class ObDivArray final  // small-eidian storage
     r.div(d, r);
   }
 
-  public:
+public:
   static const int64_t BASE = 1000000000;
 
   int32_t len_;
@@ -2945,7 +2945,7 @@ class ObNumberCalc {
       }
 
   */
-  public:
+public:
   ObNumberCalc(const ObNumber& init_v, common::ObIAllocator& allocator)
       : last_ret_(common::OB_SUCCESS), allocator_(allocator)
   {
@@ -3012,7 +3012,7 @@ class ObNumberCalc {
     return last_ret_;
   }
 
-  private:
+private:
   int last_ret_;
   ObNumber res_;
   common::ObIAllocator& allocator_;

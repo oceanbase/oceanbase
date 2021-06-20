@@ -34,7 +34,7 @@ typedef common::ObSimpleIterator<ObElectionGroupInfo, common::ObModIds::OB_ELECT
     ObElectionGroupInfoIterator;
 
 class ObElectionGroupFactory {
-  public:
+public:
   static ObIElectionGroup* alloc_election_group(const uint64_t tenant_id);
   static void release_election_group(ObIElectionGroup* eg);
   static int64_t alloc_count_;
@@ -42,7 +42,7 @@ class ObElectionGroupFactory {
 };
 
 class ElectionGroupAllocHandle {
-  public:
+public:
   typedef common::LinkHashNode<ObElectionGroupId> Node;
 
   static ObIElectionGroup* alloc_value()
@@ -68,7 +68,7 @@ class ElectionGroupAllocHandle {
 };
 
 class ObIElectionGroupMgr {
-  public:
+public:
   ObIElectionGroupMgr()
   {}
   virtual ~ObIElectionGroupMgr()
@@ -80,7 +80,7 @@ class ObIElectionGroupMgr {
   virtual int start() = 0;
   virtual int stop() = 0;
 
-  public:
+public:
   virtual ObIElectionGroup* get_election_group(const ObElectionGroupId& eg_id) const = 0;
   virtual int revert_election_group(ObIElectionGroup* election_group) = 0;
   virtual int assign_election_group(const common::ObPartitionKey& pkey, const common::ObAddr& part_leader,
@@ -92,7 +92,7 @@ class ObIElectionGroupMgr {
 };
 
 class ObElectionGroupMgr : public ObIElectionGroupMgr {
-  public:
+public:
   ObElectionGroupMgr()
   {
     reset();
@@ -108,7 +108,7 @@ class ObElectionGroupMgr : public ObIElectionGroupMgr {
   int start();
   int stop();
 
-  public:
+public:
   ObIElectionGroup* get_election_group(const ObElectionGroupId& eg_id) const;
   int get_election_group_cache(ObElectionGroupCache*& cache);  // for now, just for unit test
   int revert_election_group(ObIElectionGroup* election_group);
@@ -121,14 +121,14 @@ class ObElectionGroupMgr : public ObIElectionGroupMgr {
   int iterate_election_group_info(ObElectionGroupInfoIterator& eg_info_iter);
   int exec_gc_loop();
 
-  private:
+private:
   int stop_();
   int create_new_eg_leader_(const ObElectionGroupId& eg_id, const uint64_t tenant_id,
       const common::ObMemberList& member_list, const int64_t replica_num);
   int create_new_eg_follower_(const ObElectionGroupId& eg_id, const uint64_t tenant_id);
   int get_create_time_(int64_t& create_time);
 
-  private:
+private:
   typedef common::DRWLock::WRLockGuard WRLockGuard;
   typedef common::DRWLock::RDLockGuard RDLockGuard;
   template <typename Fn>
@@ -137,7 +137,7 @@ class ObElectionGroupMgr : public ObIElectionGroupMgr {
     return election_group_map_.for_each(fn);
   }
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   common::ObAddr self_;
@@ -151,23 +151,23 @@ class ObElectionGroupMgr : public ObIElectionGroupMgr {
 };
 
 class IterateElectionGroupFunctor {
-  public:
+public:
   explicit IterateElectionGroupFunctor(ObElectionGroupInfoIterator& eg_info_iter) : eg_info_iter_(eg_info_iter)
   {}
   bool operator()(const ObElectionGroupId& eg_id, ObIElectionGroup* eg);
 
-  private:
+private:
   ObElectionGroupInfoIterator& eg_info_iter_;
 };
 
 class EgGCFunctor {
-  public:
+public:
   typedef common::ObSEArray<election::ObElectionGroupId, 64> EgIdArray;
   explicit EgGCFunctor(EgIdArray& gc_candidates) : gc_candidates_(gc_candidates)
   {}
   bool operator()(const ObElectionGroupId& eg_id, ObIElectionGroup* eg);
 
-  private:
+private:
   EgIdArray& gc_candidates_;
 };
 

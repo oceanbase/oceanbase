@@ -28,7 +28,7 @@ class ObDtlChannel;
 class ObDtlDfoKey {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDtlDfoKey() : server_id_(-1), px_sequence_id_(common::OB_INVALID_ID), qc_id_(-1), dfo_id_(common::OB_INVALID_ID)
   {}
   uint64_t hash() const
@@ -68,7 +68,7 @@ class ObDtlDfoKey {
 
   TO_STRING_KV(K_(server_id), K_(px_sequence_id), K_(qc_id), K_(dfo_id));
 
-  public:
+public:
   static const uint64_t PX_SEQ_MASK = 0x8000000000000000;
   int32_t server_id_;
   uint64_t px_sequence_id_;
@@ -79,7 +79,7 @@ class ObDtlDfoKey {
 class ObDtlLinkedBuffer : public common::ObLink {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDtlLinkedBuffer()
       : buf_(),
         size_(),
@@ -325,7 +325,7 @@ class ObDtlLinkedBuffer : public common::ObLink {
     return use_interm_result_;
   }
 
-  private:
+private:
   char* buf_;
   int64_t size_;
   mutable int64_t pos_;

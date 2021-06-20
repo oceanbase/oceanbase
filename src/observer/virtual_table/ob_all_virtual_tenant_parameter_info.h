@@ -23,14 +23,14 @@ namespace oceanbase {
 namespace observer {
 
 class ObAllVirtualTenantParameterInfo : public common::ObVirtualTableIterator {
-  public:
+public:
   ObAllVirtualTenantParameterInfo();
   virtual ~ObAllVirtualTenantParameterInfo();
   virtual int inner_open();
   virtual void reset();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   enum ALL_TENANT_PARAMETER_INFO_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     ZONE,

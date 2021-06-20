@@ -28,7 +28,7 @@ namespace sql {
 struct CalcPartitionIdInfo : public ObIExprExtraInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   CalcPartitionIdInfo(common::ObIAllocator& alloc, ObExprOperatorType type)
       : ObIExprExtraInfo(alloc, type),
         ref_table_id_(common::OB_INVALID_ID),
@@ -54,7 +54,7 @@ struct CalcPartitionIdInfo : public ObIExprExtraInfo {
 
 // return NONE_PARTITION_ID(-1) if part id not found
 class ObExprCalcPartitionId : public ObFuncExprOperator {
-  public:
+public:
   static const int64_t NONE_PARTITION_ID = -1;
   enum OptRouteType { OPT_ROUTE_NONE, OPT_ROUTE_HASH_ONE };
   explicit ObExprCalcPartitionId(common::ObIAllocator& alloc);
@@ -67,7 +67,7 @@ class ObExprCalcPartitionId : public ObFuncExprOperator {
   static int calc_partition_level_two(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
   static int calc_opt_route_hash_one(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   static int init_calc_part_info(
       ObExprCGCtx& expr_cg_ctx, const share::schema::ObTableSchema& table_schema, CalcPartitionIdInfo*& calc_part_info);
   static int build_row(ObEvalCtx& ctx, common::ObIAllocator& allocator, const ObExpr& expr, common::ObNewRow& row);
@@ -78,7 +78,7 @@ class ObExprCalcPartitionId : public ObFuncExprOperator {
   static int enable_opt_route_hash_one(
       const share::schema::ObTableSchema& table_schema, const ObRawExpr& raw_expr, bool& enable_opt_route_hash_one);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCalcPartitionId);
 };
 

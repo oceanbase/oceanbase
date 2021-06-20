@@ -29,14 +29,14 @@ class ObGlobalContext;
 class ObMySQLResultSet;
 class ObQueryRetryCtrl;
 class ObAsyncCmdDriver : public ObQueryDriver {
-  public:
+public:
   ObAsyncCmdDriver(const ObGlobalContext& gctx, const sql::ObSqlCtx& ctx, sql::ObSQLSessionInfo& session,
       ObQueryRetryCtrl& retry_ctrl, ObIMPPacketSender& sender);
   virtual ~ObAsyncCmdDriver();
 
   virtual int response_result(ObMySQLResultSet& result);
 
-  private:
+private:
   /* disallow copy & assign */
   DISALLOW_COPY_AND_ASSIGN(ObAsyncCmdDriver);
 };

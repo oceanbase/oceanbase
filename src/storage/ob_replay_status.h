@@ -52,7 +52,7 @@ enum ObReplayPostBarrierStatus {
 typedef ObReplayPostBarrierStatus PostBarrierStatus;
 // for debug
 class ObReplayTaskInfo {
-  public:
+public:
   ObReplayTaskInfo() : log_id_(common::OB_INVALID_ID), log_type_(OB_LOG_UNKNOWN)
   {}
   ObReplayTaskInfo(uint64_t log_id, ObStorageLogType log_type) : log_id_(log_id), log_type_(log_type)
@@ -80,7 +80,7 @@ class ObReplayTaskInfo {
   }
   TO_STRING_KV(K(log_id_), K(log_type_));
 
-  private:
+private:
   uint64_t log_id_;
   ObStorageLogType log_type_;
 };
@@ -92,7 +92,7 @@ enum ObReplayTaskType {
 };
 
 struct ObReplayTask {
-  public:
+public:
   ObReplayTask()
       : type_(INVALID_LOG_TASK), enqueue_ts_(0), throttled_ts_(OB_INVALID_TIMESTAMP), replay_status_(NULL), fail_info_()
   {}
@@ -101,10 +101,10 @@ struct ObReplayTask {
   void reuse();
   void reset();
 
-  public:
+public:
   // record info after replay failed
   struct FailRoundInfo {
-    public:
+  public:
     FailRoundInfo()
     {
       reset();
@@ -134,7 +134,7 @@ struct ObReplayTask {
     }
     TO_STRING_KV(K(has_encount_fatal_error_), K(table_version_), K(fail_ts_), K(log_id_), K(log_type_), K(ret_code_));
 
-    public:
+  public:
     bool has_encount_fatal_error_;
     int64_t table_version_;
     int64_t fail_ts_;
@@ -215,7 +215,7 @@ struct ObReplayTask {
   }
   VIRTUAL_TO_STRING_KV(K(type_), K(enqueue_ts_), KP(replay_status_), K(fail_info_));
 
-  public:
+public:
   ObReplayTaskType type_;
   int64_t enqueue_ts_;
   int64_t throttled_ts_;  // the lastest time of writing throttle
@@ -226,7 +226,7 @@ struct ObReplayTask {
 };
 
 struct ObSubmitReplayLogTask : public ObReplayTask {
-  public:
+public:
   ObSubmitReplayLogTask()
       : ObReplayTask(),
         storage_log_type_(ObStorageLogType::OB_LOG_UNKNOWN),
@@ -277,21 +277,21 @@ struct ObSubmitReplayLogTask : public ObReplayTask {
       K(get_next_submit_log_id()), K(get_next_submit_log_ts()), K(get_last_slide_out_log_id()),
       K(get_last_slide_out_log_ts()));
 
-  public:
+public:
   ObStorageLogType storage_log_type_;  // recode log_type when failed to check condition before submit
   int64_t accum_checksum_;
   //-----------new added members for decoupling of  replay engine and sliding window---------//
-  // the info of last log that sliding window submiteed
+  // the info of last log that sliding window submitted
   struct types::uint128_t last_slide_out_log_info_;
   // the info of last log that replay engine submit to replay queue
   struct types::uint128_t next_submit_log_info_;
 };
 
 struct ObReplayLogTaskQueue : public ObReplayTask {
-  public:
+public:
   typedef common::ObLink Link;
 
-  public:
+public:
   ObReplayLogTaskQueue() : ref_(0), index_(0)
   {
     type_ = REPLAY_LOG_TASK;
@@ -327,7 +327,7 @@ struct ObReplayLogTaskQueue : public ObReplayTask {
   }
   INHERIT_TO_STRING_KV("ObReplayTask", ObReplayTask, K(ref_), K(index_));
 
-  public:
+public:
   // guarantee the effectiveness of  the object when invoked in function get_min_unreplay_log_id()
   int64_t ref_;
   int64_t index_;
@@ -335,9 +335,9 @@ struct ObReplayLogTaskQueue : public ObReplayTask {
 };
 
 struct ObReplayLogTask : common::ObLink {
-  public:
+public:
   struct RefBuf {
-    public:
+  public:
     RefBuf() : ref_cnt_(0), buf_(NULL)
     {}
     ~RefBuf()
@@ -351,12 +351,12 @@ struct ObReplayLogTask : common::ObLink {
       return ATOMIC_SAF(&ref_cnt_, 1);
     }
 
-    public:
+  public:
     int64_t ref_cnt_;
     void* buf_;
   };
 
-  public:
+public:
   ObReplayLogTask()
   {
     reset();
@@ -395,7 +395,7 @@ struct ObReplayLogTask : common::ObLink {
   }
   int64_t get_trans_inc_no() const;
 
-  public:
+public:
   common::ObPartitionKey pk_;
   ObStorageLogType log_type_;
   int64_t log_submit_timestamp_;
@@ -418,7 +418,7 @@ struct ObReplayLogTaskEx {
 };
 
 struct ObReplayErrInfo {
-  public:
+public:
   ObReplayErrInfo()
   {
     reset();
@@ -442,20 +442,20 @@ struct ObReplayErrInfo {
   }
   TO_STRING_KV(K(task_info_), K(err_ts_), K(err_ret_));
 
-  public:
+public:
   ObReplayTaskInfo task_info_;
   int64_t err_ts_;  // the timestamp that partition encounts fatal error
   int err_ret_;     // the ret code of fatal error
 };
 
 class ObReplayStatus {
-  public:
+public:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
   typedef common::ObSpinLockGuard SpinLockGuard;
   struct CheckCanReplayResult {
-    public:
+  public:
     CheckCanReplayResult(common::ObPartitionKey pkey, ObReplayTaskInfo& task_info);
     CheckCanReplayResult()
     {
@@ -470,7 +470,7 @@ class ObReplayStatus {
     TO_STRING_KV(K(ret_code_), K(is_out_of_memstore_mem_), K(has_barrier_), K(is_pre_barrier_),
         K(need_wait_schema_refresh_), K(pkey_), K(task_info_));
 
-    public:
+  public:
     int ret_code_;
     bool is_out_of_memstore_mem_;
     bool has_barrier_;
@@ -480,13 +480,13 @@ class ObReplayStatus {
     ObReplayTaskInfo task_info_;
   };
 
-  public:
+public:
   ObReplayStatus();
   ~ObReplayStatus();
   int init(const uint64_t tenant_id, replayengine::ObILogReplayEngine* rp_eg_, SafeRef2& safe_ref);
   void destroy();
 
-  public:
+public:
   void reuse();
   void reset();
 
@@ -533,9 +533,8 @@ class ObReplayStatus {
     return submit_log_task_.get_pending_submit_task_count();
   }
   int check_and_submit_task(const common::ObPartitionKey& pkey, const uint64_t log_id, const int64_t log_ts,
-      const bool need_replay, const clog::ObLogType log_type, const int64_t sw_next_replay_log_ts);
+      const bool need_replay, const clog::ObLogType log_type, const int64_t next_replay_log_ts);
   int submit_restore_task(const common::ObPartitionKey& pkey, const uint64_t log_id, const int64_t log_ts);
-
   int push_task(ObReplayLogTask& task, uint64_t task_sign);
   void add_task(ObReplayLogTask& task);
   void remove_task(ObReplayLogTask& task);
@@ -715,7 +714,7 @@ class ObReplayStatus {
       K(total_submitted_task_num_), K(total_replayed_task_num_), K(is_enabled_), K(is_pending_), K(can_receive_log_),
       K(offline_partition_log_id_), K(offline_partition_task_submitted_), K(submit_log_task_));
 
-  private:
+private:
   int check_barrier_(const ObStorageLogType log_type, const common::ObPartitionKey& pkey);
   void check_eagain_too_many_(const ObReplayStatus::CheckCanReplayResult& result);
 
@@ -733,7 +732,7 @@ class ObReplayStatus {
   int push_(ObReplayLogTask& task, uint64_t task_sign);
   bool is_tenant_out_of_memory_() const;
 
-  private:
+private:
   static const int64_t PENDING_COUNT_THRESHOLD = 100;
   static const int64_t EAGAIN_COUNT_THRESHOLD = 50000;
   static const int64_t EAGAIN_INTERVAL_NORMAL_THRESHOLD = 10 * 1000 * 1000LL;    // 10s for normal retry

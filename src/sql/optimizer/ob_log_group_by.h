@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObLogSort;
 class ObLogGroupBy : public ObLogicalOperator {
-  public:
+public:
   ObLogGroupBy(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         group_exprs_(),
@@ -130,7 +130,7 @@ class ObLogGroupBy : public ObLogicalOperator {
   VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(avg_div_exprs),
       K_(approx_count_distinct_estimate_ndv_exprs), K_(algo), K_(distinct_card));
 
-  private:
+private:
   /**
    *  Aggregation functions analysis for child group-by operator
    *
@@ -172,7 +172,7 @@ class ObLogGroupBy : public ObLogicalOperator {
   int child_has_exchange(const ObLogicalOperator* op, bool& find);
   virtual int compute_one_row_info() override;
 
-  private:
+private:
   // the 'group-by' expressions
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> group_exprs_;
   // the rollup expressions

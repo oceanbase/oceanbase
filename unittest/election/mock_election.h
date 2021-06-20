@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace unittest {
 class MockElection : public election::ObIElection {
-  public:
+public:
   virtual int init(const common::ObPartitionKey&, const common::ObAddr&, election::ObIElectionRpc*,
       common::ObTimeWheel*, const int64_t, election::ObIElectionCallback*, election::ObIElectionGroupMgr*,
       election::ObElectionEventHistoryArray*)
@@ -36,7 +36,7 @@ class MockElection : public election::ObIElection {
     return 0;
   }
 
-  public:
+public:
   virtual int handle_devote_prepare(const election::ObElectionMsgDEPrepare&, obrpc::ObElectionRpcResult&)
   {
     return 0;
@@ -70,7 +70,7 @@ class MockElection : public election::ObIElection {
     return 0;
   }
 
-  public:
+public:
   virtual int set_candidate(const int64_t, const common::ObMemberList&, const int64_t)
   {
     return 0;
@@ -134,7 +134,7 @@ class MockElection : public election::ObIElection {
     return 0;
   }
 
-  public:
+public:
   virtual int leader_takeover(const common::ObAddr&, const int64_t, int64_t&)
   {
     return 0;
@@ -156,7 +156,7 @@ class MockElection : public election::ObIElection {
     return 0;
   }
 
-  public:
+public:
   // for election group
   virtual int move_out_election_group(const election::ObElectionGroupId&)
   {
@@ -187,7 +187,7 @@ class MockElection : public election::ObIElection {
     ts_ = ts;
   }
 
-  private:
+private:
   election::lease_t lease_;
   int64_t ts_;
 };

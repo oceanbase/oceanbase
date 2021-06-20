@@ -26,7 +26,7 @@ using namespace oceanbase::memtable;
 using namespace oceanbase::storage;
 
 class ObMtRowIterator : public ObStoreRowIterator {
-  public:
+public:
   ObMtRowIterator() : cursor_(0)
   {}
   ~ObMtRowIterator()
@@ -55,7 +55,7 @@ class ObMtRowIterator : public ObStoreRowIterator {
     rows_.push_back(row);
   }
 
-  private:
+private:
   int64_t cursor_;
   ObSEArray<ObStoreRow, 64> rows_;
 };

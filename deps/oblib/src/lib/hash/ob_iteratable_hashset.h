@@ -28,7 +28,7 @@ class ObIteratableHashSetConstIterator {
   typedef typename HashSet::inner_key_t inner_key_t;
   typedef ObIteratableHashSetConstIterator<HashSet> self_t;
 
-  public:
+public:
   ObIteratableHashSetConstIterator(const HashSet* set, const inner_key_t* cur) : set_(set), cur_(cur)
   {}
   virtual ~ObIteratableHashSetConstIterator()
@@ -61,7 +61,7 @@ class ObIteratableHashSetConstIterator {
     return cur_->get_data();
   }
 
-  private:
+private:
   // data members
   const HashSet* set_;
   const inner_key_t* cur_;
@@ -69,7 +69,7 @@ class ObIteratableHashSetConstIterator {
 
 template <class K, uint64_t N = 1031>
 class ObIteratableHashSet : protected ObPlacementHashSet<ObDLinkNode<K>, N> {
-  public:
+public:
   typedef K* key_pointer_t;
   typedef const K* const_key_pointer_t;
   typedef K& key_ref_t;
@@ -79,7 +79,7 @@ class ObIteratableHashSet : protected ObPlacementHashSet<ObDLinkNode<K>, N> {
   typedef ObIteratableHashSet<K, N> self_t;
   typedef ObIteratableHashSetConstIterator<self_t> const_iterator_t;
 
-  public:
+public:
   ObIteratableHashSet() : parent_t(), list_()
   {}
   virtual ~ObIteratableHashSet()
@@ -151,16 +151,16 @@ class ObIteratableHashSet : protected ObPlacementHashSet<ObDLinkNode<K>, N> {
   }
   DECLARE_TO_STRING;
 
-  private:
+private:
   // types and constants
   template <typename HashSet>
   friend class ObIteratableHashSetConstIterator;
 
-  private:
+private:
   // disallow copy
   ObIteratableHashSet(const ObIteratableHashSet& other);
   // function members
-  protected:
+protected:
   // data members
   ObDList<inner_key_t> list_;
 };

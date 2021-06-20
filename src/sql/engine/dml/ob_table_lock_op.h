@@ -20,7 +20,7 @@ namespace sql {
 class ObTableLockOpInput : public ObTableModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableLockOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableModifyOpInput(ctx, spec)
   {}
   virtual int init(ObTaskInfo& task_info) override
@@ -32,7 +32,7 @@ class ObTableLockOpInput : public ObTableModifyOpInput {
 class ObTableLockSpec : public ObTableModifySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableLockSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   ~ObTableLockSpec();
 
@@ -56,14 +56,14 @@ class ObTableLockSpec : public ObTableModifySpec {
 
   INHERIT_TO_STRING_KV("table_modify_spec", ObTableModifySpec, K_(for_update_wait_us), K_(skip_locked));
 
-  public:
+public:
   // projector for build the lock row
   int64_t for_update_wait_us_;
   bool skip_locked_;  // UNUSED for the current
 };
 
 class ObTableLockOp : public ObTableModifyOp {
-  public:
+public:
   friend class ObTableModifyOp;
 
   ObTableLockOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
@@ -77,13 +77,13 @@ class ObTableLockOp : public ObTableModifyOp {
     return ObTableModifyOp::destroy();
   }
 
-  protected:
+protected:
   int do_table_lock();
   int lock_single_part();
   int lock_multi_part();
   int prepare_lock_row();
 
-  protected:
+protected:
   common::ObNewRow lock_row_;
   storage::ObDMLBaseParam dml_param_;
   common::ObPartitionKey part_key_;

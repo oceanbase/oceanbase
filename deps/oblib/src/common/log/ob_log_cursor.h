@@ -44,7 +44,7 @@ struct ObLogCursor {
 
 ObLogCursor& set_cursor(ObLogCursor& cursor, const int64_t file_id, const int64_t log_id, const int64_t offset);
 class ObAtomicLogCursor {
-  public:
+public:
   ObAtomicLogCursor()
   {}
   ~ObAtomicLogCursor()
@@ -52,7 +52,7 @@ class ObAtomicLogCursor {
   int get_cursor(ObLogCursor& cursor) const;
   int set_cursor(ObLogCursor& cursor);
 
-  private:
+private:
   ObLogCursor log_cursor_;
   mutable common::SpinRWLock cursor_lock_;
 };

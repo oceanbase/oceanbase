@@ -20,7 +20,7 @@ namespace sql {
 class ObMultiChildrenPhyOperator : public ObPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObMultiChildrenPhyOperator(common::ObIAllocator& alloc);
   virtual ~ObMultiChildrenPhyOperator();
   /// multi children
@@ -36,11 +36,11 @@ class ObMultiChildrenPhyOperator : public ObPhyOperator {
   virtual void reuse() override;
   virtual int accept(ObPhyOperatorVisitor& visitor) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMultiChildrenPhyOperator);
 
-  protected:
+protected:
   ObPhyOperator** child_array_;
   int32_t child_num_;
 };

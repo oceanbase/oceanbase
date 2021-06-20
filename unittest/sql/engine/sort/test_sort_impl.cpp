@@ -38,7 +38,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::omt;
 
 class TestSortImpl : public blocksstable::TestDataFilePrepare {
-  public:
+public:
   TestSortImpl() : blocksstable::TestDataFilePrepare("TestDiskIR", 2 << 20, 1000), data_(alloc_)
   {}
   void set_sort_area_size(int64_t size)

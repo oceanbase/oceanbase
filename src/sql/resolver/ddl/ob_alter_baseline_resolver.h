@@ -19,14 +19,14 @@ namespace oceanbase {
 namespace sql {
 
 class ObAlterBaselineResolver : public ObDDLResolver {
-  public:
+public:
   ObAlterBaselineResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
   virtual ~ObAlterBaselineResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterBaselineResolver);
 };
 }  // namespace sql

@@ -19,7 +19,7 @@ using namespace common;
 using namespace clog;
 namespace unittest {
 class TestMockObLogMembershipMgr : public MockObLogMembershipMgr {
-  public:
+public:
   void set_replica_num(const int64_t replica_num)
   {
     replica_num_ = replica_num;
@@ -37,13 +37,13 @@ class TestMockObLogMembershipMgr : public MockObLogMembershipMgr {
     return member_list_;
   }
 
-  private:
+private:
   int64_t replica_num_;
   common::ObMemberList member_list_;
 };
 
 class ObLogBroadcastInfoMgrTest : public testing::Test {
-  public:
+public:
   void SetUp();
   void TearDown();
 

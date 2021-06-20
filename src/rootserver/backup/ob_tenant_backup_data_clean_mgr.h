@@ -145,7 +145,7 @@ struct ObBackupDataCleanStatics {
 };
 
 class ObBackupDataCleanUtil {
-  public:
+public:
   static int get_backup_path_info(const ObBackupDest& backup_dest, const int64_t incarnation, const uint64_t tenant_id,
       const int64_t full_backup_set_id, const int64_t inc_backup_set_id, ObBackupBaseDataPathInfo& path_info);
   static int touch_backup_dir_files(const ObBackupPath& path, const char* storage_info,
@@ -168,37 +168,37 @@ class ObBackupDataCleanUtil {
       const ObBackupPath& path, const char* storage_info, const common::ObStorageType& device_type);
   static int delete_tmp_files(const ObBackupPath& path, const char* storage_info);
 
-  private:
+private:
   static int check_can_delete(const common::ObStorageType& device_type, bool& can_delete);
   static int check_can_touch(const common::ObStorageType& device_type, bool& can_touch);
   static int get_file_id(const ObString& file_name, int64_t& file_id);
 };
 
 class ObTenantBackupDataCleanMgr {
-  public:
+public:
   ObTenantBackupDataCleanMgr();
   virtual ~ObTenantBackupDataCleanMgr();
   int init(const ObBackupDataCleanTenant& clean_tenant, ObBackupDataClean* data_clean);
   int do_clean();
 
-  private:
+private:
   bool is_inited_;
   ObBackupDataCleanTenant clean_tenant_;
   ObBackupDataClean* data_clean_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantBackupDataCleanMgr);
 };
 
 class ObTenantBackupBaseDataCleanTask {
-  public:
+public:
   ObTenantBackupBaseDataCleanTask();
   virtual ~ObTenantBackupBaseDataCleanTask();
   int init(const ObBackupDataCleanTenant& clean_tenant, ObBackupDataClean* data_clean);
   int do_clean();
   int get_clean_statics(ObBackupDataCleanStatics& clean_statics);
 
-  private:
+private:
   int do_inner_clean(
       const ObSimpleBackupDataCleanTenant& simple_clean_tenant, const ObBackupDataCleanElement& clean_element);
   int clean_backup_data(const ObSimpleBackupDataCleanTenant& simple_clean_tenant,
@@ -228,18 +228,18 @@ class ObTenantBackupBaseDataCleanTask {
   int try_clean_full_backup_set_dir(
       const uint64_t tenant_id, const ObBackupDataCleanElement& clean_element, const ObBackupSetId& backup_set_id);
 
-  private:
+private:
   bool is_inited_;
   ObBackupDataCleanTenant clean_tenant_;
   ObBackupDataCleanStatics clean_statics_;
   ObBackupDataClean* data_clean_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantBackupBaseDataCleanTask);
 };
 
 class ObTenantBackupClogDataCleanTask {
-  public:
+public:
   ObTenantBackupClogDataCleanTask();
   virtual ~ObTenantBackupClogDataCleanTask();
   int init(const ObBackupDataCleanTenant& clean_tenant, ObBackupDataClean* data_clean);
@@ -249,7 +249,7 @@ class ObTenantBackupClogDataCleanTask {
       const common::ObStorageType& device_type);
   int get_clean_statics(ObBackupDataCleanStatics& clean_statics);
 
-  private:
+private:
   int do_inner_clean(const ObSimpleBackupDataCleanTenant& simple_clean_tenant,
       const ObBackupDataCleanElement& clean_element, const ObTenantBackupTaskInfo& clog_data_clean_point);
   int clean_clog_data(const ObSimpleBackupDataCleanTenant& simple_clean_tenant,
@@ -273,7 +273,7 @@ class ObTenantBackupClogDataCleanTask {
   int try_clean_clog_data_dir(const ObClusterBackupDest& cluster_backup_dest, const uint64_t tenant_id,
       const int64_t log_archive_round, const char* storage_info, const common::ObStorageType& device_type);
 
-  private:
+private:
   static const int MAX_BUCKET_NUM = 2048;
   bool is_inited_;
   ObBackupDataCleanTenant clean_tenant_;
@@ -281,12 +281,12 @@ class ObTenantBackupClogDataCleanTask {
   ObBackupDataCleanStatics clean_statics_;
   ObBackupDataClean* data_clean_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantBackupClogDataCleanTask);
 };
 
 class ObTableBaseDataCleanMgr {
-  public:
+public:
   ObTableBaseDataCleanMgr();
   virtual ~ObTableBaseDataCleanMgr();
   int init(const int64_t table_id, const ObBackupDataCleanElement& clean_element, const ObBackupSetId& backup_set_id,
@@ -295,11 +295,11 @@ class ObTableBaseDataCleanMgr {
   int do_clean();
   int get_clean_statics(ObBackupDataCleanStatics& clean_statics);
 
-  private:
+private:
   int clean_partition_backup_data(const ObBackupMetaIndex& meta_index);
   int try_clean_backup_table_dir();
 
-  private:
+private:
   bool is_inited_;
   int64_t table_id_;
   ObBackupDataCleanElement clean_element_;
@@ -310,12 +310,12 @@ class ObTableBaseDataCleanMgr {
   ObBackupDataCleanStatics clean_statics_;
   ObBackupDataClean* data_clean_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableBaseDataCleanMgr);
 };
 
 class ObTableClogDataCleanMgr {
-  public:
+public:
   ObTableClogDataCleanMgr();
   virtual ~ObTableClogDataCleanMgr();
   int init(const int64_t table_id, const ObBackupDataCleanElement& clean_element,
@@ -324,12 +324,12 @@ class ObTableClogDataCleanMgr {
   int do_clean();
   int get_clean_statics(ObBackupDataCleanStatics& clean_statics);
 
-  private:
+private:
   int clean_partition_clog_backup_data(const ObBackupMetaIndex& meta_index);
   int try_clean_backup_table_clog_dir();
   int get_partition_meta(const ObBackupMetaIndex& meta_index, storage::ObPartitionGroupMeta& pg_meta);
 
-  private:
+private:
   bool is_inited_;
   int64_t table_id_;
   ObBackupDataCleanElement clean_element_;
@@ -339,12 +339,12 @@ class ObTableClogDataCleanMgr {
   ObBackupDataCleanStatics clean_statics_;
   ObBackupDataClean* data_clean_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableClogDataCleanMgr);
 };
 
 class ObPartitionClogDataCleanMgr {
-  public:
+public:
   ObPartitionClogDataCleanMgr();
   virtual ~ObPartitionClogDataCleanMgr();
   int init(const ObClusterBackupDest& cluster_backup_dest, const ObLogArchiveRound& log_archive_round,
@@ -354,7 +354,7 @@ class ObPartitionClogDataCleanMgr {
   int clean_clog_backup_data();
   int get_clean_statics(ObBackupDataCleanStatics& clean_statics);
 
-  private:
+private:
   int touch_clog_data_();
   int touch_clog_meta_();
   int clean_clog_data_();
@@ -362,7 +362,7 @@ class ObPartitionClogDataCleanMgr {
   int set_need_delete_clog_dir(
       const ObClusterBackupDest& cluster_backup_dest, const ObLogArchiveRound& log_arcvhie_round);
 
-  private:
+private:
   bool is_inited_;
   ObClusterBackupDest cluster_backup_dest_;
   ObLogArchiveRound log_archive_round_;
@@ -375,7 +375,7 @@ class ObPartitionClogDataCleanMgr {
 };
 
 class ObPartitionDataCleanMgr {
-  public:
+public:
   ObPartitionDataCleanMgr();
   virtual ~ObPartitionDataCleanMgr();
   int init(const ObPartitionKey& pkey, const ObBackupDataCleanElement& clean_element,
@@ -383,11 +383,11 @@ class ObPartitionDataCleanMgr {
   int do_clean();
   int get_clean_statics(ObBackupDataCleanStatics& clean_statics);
 
-  private:
+private:
   int touch_backup_data();
   int clean_backup_data();
 
-  private:
+private:
   bool is_inited_;
   ObPartitionKey pkey_;
   ObBackupSetId backup_set_id_;
@@ -396,7 +396,7 @@ class ObPartitionDataCleanMgr {
   ObBackupDataCleanStatics clean_statics_;
   ObBackupDataClean* data_clean_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionDataCleanMgr);
 };
 

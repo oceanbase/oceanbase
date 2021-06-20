@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObTCLStmt : public ObStmt, public ObICmd {
-  public:
+public:
   ObTCLStmt(common::ObIAllocator* name_pool, stmt::StmtType type) : ObStmt(name_pool, type)
   {}
   explicit ObTCLStmt(stmt::StmtType type) : ObStmt(type)
@@ -30,7 +30,7 @@ class ObTCLStmt : public ObStmt, public ObICmd {
     return get_stmt_type();
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTCLStmt);
 };
 }  // namespace sql

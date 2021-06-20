@@ -23,7 +23,7 @@ class ObLogSort : public ObLogicalOperator {
   // for calc pushed down sort cost
   static constexpr double DISTRIBUTED_SORT_COST_RATIO = .8;
 
-  public:
+public:
   ObLogSort(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         sort_keys_(),
@@ -134,14 +134,14 @@ class ObLogSort : public ObLogicalOperator {
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
 
-  protected:
+protected:
   virtual int inner_replace_generated_agg_expr(
       const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*>>& to_replace_exprs);
 
-  private:
+private:
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
 
-  private:
+private:
   common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
   ObRawExpr* topn_count_;
   int64_t minimum_row_count_;

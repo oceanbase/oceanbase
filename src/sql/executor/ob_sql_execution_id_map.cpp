@@ -20,7 +20,7 @@ namespace sql {
 using namespace common;
 
 struct OuterMapOp {
-  public:
+public:
   OuterMapOp(const FetchMod fetch_mod) : scheduler_(NULL), fetch_mod_(fetch_mod)
   {}
 

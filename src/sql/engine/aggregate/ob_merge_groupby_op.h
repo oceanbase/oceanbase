@@ -22,7 +22,7 @@ namespace sql {
 class ObMergeGroupBySpec : public ObGroupBySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMergeGroupBySpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObGroupBySpec(alloc, type),
         group_exprs_(alloc),
@@ -51,11 +51,11 @@ class ObMergeGroupBySpec : public ObGroupBySpec {
   int add_group_expr(ObExpr* expr);
   int add_rollup_expr(ObExpr* expr);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMergeGroupBySpec);
 
-  public:
+public:
   ExprFixedArray group_exprs_;   // group by column
   ExprFixedArray rollup_exprs_;  // rollup column
   common::ObFixedArray<bool, common::ObIAllocator> is_distinct_rollup_expr_;
@@ -64,7 +64,7 @@ class ObMergeGroupBySpec : public ObGroupBySpec {
 
 // The input data has been sorted according to the groupby column
 class ObMergeGroupByOp : public ObGroupByOp {
-  public:
+public:
   ObMergeGroupByOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObGroupByOp(exec_ctx, spec, input),
         is_end_(false),
@@ -87,11 +87,11 @@ class ObMergeGroupByOp : public ObGroupByOp {
   int rollup_and_calc_results(const int64_t group_id, const ObExpr* diff_expr = NULL);
   int rewrite_rollup_column(ObExpr*& diff_expr);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMergeGroupByOp);
 
-  private:
+private:
   bool is_end_;
   // added to support groupby with rollup
   int64_t cur_output_group_id_;

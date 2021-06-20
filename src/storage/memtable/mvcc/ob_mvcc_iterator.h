@@ -84,7 +84,7 @@ struct ObMvccScanRange {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class ObIMvccValueIterator {
-  public:
+public:
   ObIMvccValueIterator()
   {}
   virtual ~ObIMvccValueIterator()
@@ -96,11 +96,11 @@ class ObIMvccValueIterator {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class ObMvccValueIterator : public ObIMvccValueIterator {
-  public:
+public:
   ObMvccValueIterator();
   virtual ~ObMvccValueIterator();
 
-  public:
+public:
   int init(const ObIMvccCtx& ctx, const transaction::ObTransSnapInfo& snapshot_info, const ObMemtableKey* key,
       const ObMvccRow* value, const ObQueryFlag& query_flag, const bool skip_compact);
   bool is_exist();
@@ -118,7 +118,7 @@ class ObMvccValueIterator : public ObIMvccValueIterator {
   bool read_by_sql_no(const ObIMvccCtx& ctx, const transaction::ObTransSnapInfo& snapshot_info, ObMvccRow* value,
       const ObQueryFlag& query_flag);
 
-  private:
+private:
   int find_start_pos(const int64_t read_snapshot);
   int find_trans_node_below_version(const int64_t read_snapshot, const bool is_safe_read);
   int check_trans_node_readable(const int64_t read_snapshot);
@@ -127,13 +127,13 @@ class ObMvccValueIterator : public ObIMvccValueIterator {
 
   void move_to_next_node();
 
-  private:
+private:
   static const int64_t WAIT_COMMIT_US = 20 * 1000;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMvccValueIterator);
 
-  private:
+private:
   bool is_inited_;
   const ObIMvccCtx* ctx_;
   const ObMvccRow* value_;
@@ -145,11 +145,11 @@ class ObMvccValueIterator : public ObIMvccValueIterator {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class ObMvccRowIterator {
-  public:
+public:
   ObMvccRowIterator();
   virtual ~ObMvccRowIterator();
 
-  public:
+public:
   int init(ObQueryEngine& query_engine, const ObIMvccCtx& ctx, const transaction::ObTransSnapInfo& snapshot_info,
       const ObMvccScanRange& range, const ObQueryFlag& query_flag);
   int get_next_row(
@@ -163,13 +163,13 @@ class ObMvccRowIterator {
     return query_engine_iter_ ? query_engine_iter_->get_iter_flag() : 0;
   }
 
-  private:
+private:
   int check_and_purge_row_(const ObMemtableKey* key, ObMvccRow* row, bool& purged);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMvccRowIterator);
 
-  private:
+private:
   bool is_inited_;
   const ObIMvccCtx* ctx_;
   transaction::ObTransSnapInfo snapshot_info_;

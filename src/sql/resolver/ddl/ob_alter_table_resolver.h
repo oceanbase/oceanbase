@@ -26,7 +26,7 @@ class ObAlterTableResolver : public ObDDLResolver {
   static const int64_t ALTER_TABLE_NODE_COUNT = 2;
   static const int64_t TABLE = 0;        // 0. table_node
   static const int64_t ACTION_LIST = 1;  // 1. alter table action list
-  public:
+public:
   explicit ObAlterTableResolver(ObResolverParams& params);
   virtual ~ObAlterTableResolver();
   virtual int resolve(const ParseNode& parse_tree);
@@ -57,7 +57,7 @@ class ObAlterTableResolver : public ObDDLResolver {
   };
   int resolve_column_index(const common::ObString& column_name);
 
-  private:
+private:
   int check_dup_foreign_keys_exist(
       share::schema::ObSchemaGetterGuard* schema_guard, const obrpc::ObCreateForeignKeyArg& foreign_key_arg);
   int resolve_alter_table_option_list(const ParseNode& node);

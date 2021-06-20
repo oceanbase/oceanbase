@@ -43,7 +43,7 @@ int ObMemtableArrWrap::dec_active_trx_count_at_active_mt()
 
   if (pos < 0 || count == 0 || mt_end_ <= 0 || mt_start_ < 0) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "dec_active_trx_count_at_acitve_mt invalid argument", K(pos), K(ret), K(mt_start_), K(mt_end_));
+    TRANS_LOG(WARN, "dec_active_trx_count_at_active_mt invalid argument", K(pos), K(ret), K(mt_start_), K(mt_end_));
   } else {
     if (NULL != mt_[pos]) {
       mt_[pos]->dec_active_trx_count();
@@ -62,7 +62,7 @@ int ObMemtableArrWrap::remove_mem_ctx_for_trans_ctx(ObMemtable* mt)
 
   if (OB_ISNULL(mt)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "dec_active_trx_count_at_acitve_mt invalid argument", K(mt), K(ret));
+    TRANS_LOG(WARN, "dec_active_trx_count_at_active_mt invalid argument", K(mt), K(ret));
   } else if (mt_end_ < 0 || mt_start_ < 0) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "remove mem ctx for trans ctx", K(ret), K(mt_start_), K(mt_end_));

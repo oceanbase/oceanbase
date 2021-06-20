@@ -38,22 +38,22 @@ struct ObStackHeader {
 };
 
 class CoProtectedStackAllocator {
-  private:
+private:
   class IMemHoldUpdater {
-    public:
+  public:
     virtual int update_hold(const uint64_t tenant_id, const ssize_t size, bool& updated) = 0;
   };
   class MemHoldUpdater : public IMemHoldUpdater {
-    public:
+  public:
     virtual int update_hold(const uint64_t tenant_id, const ssize_t size, bool& updated);
   };
 
-  public:
+public:
   void* alloc(const uint64_t tenant_id, const ssize_t size);
   void dealloc(void* ptr);
   static ObStackHeader* stack_header(void* ptr);
 
-  private:
+private:
   static ssize_t page_size();
   void* __alloc(const uint64_t tenant_id, const ssize_t size);
   static MemHoldUpdater mhu_;
@@ -64,7 +64,7 @@ class ObMemoryCutter;
 class CoStackMgr {
   friend class ObMemoryCutter;
 
-  public:
+public:
   CoStackMgr()
   {
     dummy_.prev_ = dummy_.next_ = &dummy_;
@@ -72,7 +72,7 @@ class CoStackMgr {
   void insert(ObStackHeader*);
   void erase(ObStackHeader*);
 
-  private:
+private:
   lib::ObMutex mutex_;
   ObStackHeader dummy_;
 };

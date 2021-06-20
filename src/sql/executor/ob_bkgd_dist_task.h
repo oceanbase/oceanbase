@@ -21,7 +21,7 @@ namespace sql {
 
 // dag information for background executing distributed task
 class ObBKGDDistTaskDag : public share::ObIDag {
-  public:
+public:
   ObBKGDDistTaskDag();
 
   int init(const uint64_t tenant_id, const ObTaskID& task_id, const uint64_t scheduler_id);
@@ -46,7 +46,7 @@ class ObBKGDDistTaskDag : public share::ObIDag {
   }
   virtual int64_t get_compat_mode() const override;
 
-  private:
+private:
   uint64_t tenant_id_;
   ObTaskID task_id_;
   uint64_t scheduler_id_;
@@ -56,7 +56,7 @@ class ObBKGDDistTaskDag : public share::ObIDag {
 
 // background executing distributed task
 class ObBKGDDistTask : public share::ObITask {
-  public:
+public:
   ObBKGDDistTask();
   virtual ~ObBKGDDistTask();
 
@@ -65,7 +65,7 @@ class ObBKGDDistTask : public share::ObITask {
   virtual int process() override;
   int get_index_tid(const ObTask& task, uint64_t& tid) const;
 
-  private:
+private:
   class ObDistTaskProcessor;
 
   common::ObAddr return_addr_;
@@ -81,7 +81,7 @@ class ObBKGDDistTask : public share::ObITask {
 // background executing distributed task global schedule info (scheduled by RS).
 // Memory are self managed, so we disable default copy constructor and assign function.
 class ObSchedBKGDDistTask {
-  public:
+public:
   ObSchedBKGDDistTask() : tenant_id_(common::OB_INVALID_ID), abs_timeout_us_(0), scheduler_id_(0)
   {}
 
@@ -143,7 +143,7 @@ class ObSchedBKGDDistTask {
     return serialized_task_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t abs_timeout_us_;
   ObTaskID task_id_;

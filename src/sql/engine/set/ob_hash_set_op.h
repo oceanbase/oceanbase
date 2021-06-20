@@ -24,7 +24,7 @@ namespace sql {
 class ObHashSetSpec : public ObSetSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObHashSetSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObSetSpec, K_(hash_funcs));
@@ -32,7 +32,7 @@ class ObHashSetSpec : public ObSetSpec {
 };
 
 class ObHashSetOp : public ObOperator {
-  public:
+public:
   ObHashSetOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObHashSetOp()
   {}
@@ -42,7 +42,7 @@ class ObHashSetOp : public ObOperator {
   virtual int rescan() override;
   virtual void destroy() override;
 
-  protected:
+protected:
   void reset();
   int is_left_has_row(bool& left_has_row);
   int get_left_row();
@@ -51,7 +51,7 @@ class ObHashSetOp : public ObOperator {
   int init_hash_partition_infras();
   int convert_row(const common::ObIArray<ObExpr*>& src_exprs, const common::ObIArray<ObExpr*>& dst_exprs);
 
-  protected:
+protected:
   // used by intersect and except
   bool first_get_left_;
   bool has_got_part_;

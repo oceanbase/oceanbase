@@ -23,7 +23,7 @@ namespace join {
 
 class ObStoredJoinRow;
 class ObHJBatch {
-  public:
+public:
   ObHJBatch(common::ObIAllocator& alloc, ObHJBufMgr* buf_mgr, uint64_t tenant_id, int32_t part_level, int32_t batchno)
       : alloc_(alloc),
         chunk_row_store_(&alloc),
@@ -158,7 +158,7 @@ class ObHJBatch {
     return chunk_row_store_;
   }
 
-  private:
+private:
   const int64_t ROW_CNT_PER = 0x3FF;
   common::ObIAllocator& alloc_;
   sql::ObChunkRowStore chunk_row_store_;

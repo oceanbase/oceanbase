@@ -23,20 +23,20 @@ namespace oceanbase {
 namespace clog {
 class ObILogMembershipMgr;
 class ObLogBroadcastInfoMgr {
-  public:
+public:
   ObLogBroadcastInfoMgr();
   ~ObLogBroadcastInfoMgr();
 
-  public:
+public:
   int init(const common::ObPartitionKey& partition_key, const ObILogMembershipMgr* membership_mgr);
   void destroy();
   int update_broadcast_info(
       const common::ObAddr& server, const common::ObReplicaType& replica_type, const uint64_t max_confirmed_log_id);
   int get_recyclable_log_id(uint64_t& log_id) const;
 
-  private:
+private:
   struct BroadcastInfo {
-    public:
+  public:
     BroadcastInfo()
         : server_(),
           replica_type_(common::REPLICA_TYPE_MAX),
@@ -47,14 +47,14 @@ class ObLogBroadcastInfoMgr {
     {}
     TO_STRING_KV(K_(server), K_(replica_type), K_(max_confirmed_log_id), K_(update_ts));
 
-    public:
+  public:
     common::ObAddr server_;
     common::ObReplicaType replica_type_;
     uint64_t max_confirmed_log_id_;
     int64_t update_ts_;
   };
 
-  private:
+private:
   bool is_member_completed_(const common::ObMemberList& member_list) const;
   int check_majority_or_all_(
       const common::ObMemberList& member_list, const int64_t replica_num, uint64_t& log_id) const;
@@ -63,7 +63,7 @@ class ObLogBroadcastInfoMgr {
   int get_broadcast_info_by_server(const common::ObAddr& observer, BroadcastInfo& out_info) const;
   int clear_expired_broadcast_info(const common::ObMemberList& member_list);
 
-  private:
+private:
   bool is_inited_;
   mutable common::ObSpinLock lock_;
   common::ObPartitionKey partition_key_;

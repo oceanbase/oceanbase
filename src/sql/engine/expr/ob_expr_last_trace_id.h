@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprLastTraceId : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprLastTraceId(common::ObIAllocator& alloc);
   virtual ~ObExprLastTraceId();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -26,7 +26,7 @@ class ObExprLastTraceId : public ObStringExprOperator {
   static int eval_last_trace_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLastTraceId);
 };
 }  // namespace sql

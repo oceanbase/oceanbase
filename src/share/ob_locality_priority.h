@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace share {
 class ObLocalityPriority {
-  public:
+public:
   static int get_primary_region_prioriry(const char* primary_zone,
       const common::ObIArray<ObLocalityRegion>& locality_region_array,
       common::ObIArray<ObLocalityRegion>& tenant_region_array);

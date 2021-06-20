@@ -24,26 +24,26 @@ namespace sql {
 class ObTableLookupSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableLookupSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type), remote_tsc_spec_(NULL), lookup_info_(), calc_part_id_expr_(NULL)
   {}
 
   virtual ~ObTableLookupSpec(){};
 
-  public:
+public:
   ObOpSpec* remote_tsc_spec_;
   ObLookupInfo lookup_info_;
 
   ObExpr* calc_part_id_expr_;
 
-  public:
-  private:
+public:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLookupSpec);
 };
 
 class ObTableLookupOp : public ObOperator {
-  public:
+public:
   ObTableLookupOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObTableLookupOp()
   {
@@ -56,7 +56,7 @@ class ObTableLookupOp : public ObOperator {
   int inner_close() override;
   void destroy() override;
 
-  private:
+private:
   enum LookupState { INDEX_SCAN, DISTRIBUTED_LOOKUP, OUTPUT_ROWS, EXECUTION_FINISHED };
   int process_row(int64_t& part_row_cnt);
   int store_row(int64_t part_id, const common::ObNewRow* row);
@@ -79,7 +79,7 @@ class ObTableLookupOp : public ObOperator {
   bool is_target_partition(int64_t pid);
   int wait_all_task(ObPhysicalPlanCtx* plan_ctx);
 
-  private:
+private:
   const static int64_t DEFAULT_BATCH_ROW_COUNT = 1024l * 1024;
   const static int64_t DEFAULT_PARTITION_BATCH_ROW_COUNT = 1000L;
 
@@ -97,7 +97,7 @@ class ObTableLookupOp : public ObOperator {
   int64_t partition_cnt_;
   share::schema::ObSchemaGetterGuard* schema_guard_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLookupOp);
 };
 

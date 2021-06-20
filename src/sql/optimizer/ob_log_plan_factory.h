@@ -24,17 +24,17 @@ class ObLogPlan;
 class ObOptimizerContext;
 class ObDMLStmt;
 class ObLogPlanFactory {
-  public:
+public:
   explicit ObLogPlanFactory(common::ObIAllocator& allocator);
   ~ObLogPlanFactory();
   ObLogPlan* create(ObOptimizerContext& ctx, const ObDMLStmt& stmt);
   void destroy();
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   common::ObObjStore<ObLogPlan*, common::ObIAllocator&, true> plan_store_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogPlanFactory);
 };
 }  // namespace sql

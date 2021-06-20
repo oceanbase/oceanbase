@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace common {
 
 class TestObMetaImage : public ObIRewritable, public lib::ThreadPool {
-  public:
+public:
   TestObMetaImage();
   virtual ~TestObMetaImage();
   int init(const int64_t expire_duration);
@@ -29,7 +29,7 @@ class TestObMetaImage : public ObIRewritable, public lib::ThreadPool {
   virtual int rewrite_switch();
   void run1() final;
 
-  private:
+private:
   static const int64_t MAX_META_COUNT = 1024L * 1024L * 2L;
   struct TestObMeta {
     int64_t size_;

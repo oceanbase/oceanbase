@@ -111,34 +111,34 @@ struct RpcStatItem {
 
 template <int N>
 class RpcStatBulk {
-  public:
+public:
   void add_piece(const RpcStatPiece& piece);
   void get_item(RpcStatItem& item) const;
 
-  private:
+private:
   RpcStatItem items_[N];
   common::ObRandom rand_;
 };
 
 class RpcStatEntry {
-  public:
+public:
   void add_piece(const RpcStatPiece& piece);
   void get_item(RpcStatItem& item) const;
 
-  private:
+private:
   RpcStatBulk<10> bulk_;
 };
 
 class RpcStatService {
   static const int64_t MAX_PCODE_COUNT = obrpc::ObRpcPacketSet::THE_PCODE_COUNT;
 
-  public:
+public:
   int add(int64_t pidx, const RpcStatPiece& piece);
   int get(int64_t pidx, RpcStatItem& item) const;
 
   static RpcStatService* instance();
 
-  private:
+private:
   RpcStatEntry entries_[MAX_PCODE_COUNT];
 };
 

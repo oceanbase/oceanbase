@@ -23,7 +23,7 @@ namespace sql {
 // WEEKOFYEAR() is a compatibility function
 // --that is equivalent to WEEK(date,3).
 class ObExprWeekOfYear : public ObFuncExprOperator {
-  public:
+public:
   ObExprWeekOfYear();
   explicit ObExprWeekOfYear(common::ObIAllocator& alloc);
   virtual ~ObExprWeekOfYear();
@@ -34,7 +34,7 @@ class ObExprWeekOfYear : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_weekofyear(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprWeekOfYear);
 };
 
@@ -56,7 +56,7 @@ inline int ObExprWeekOfYear::calc_result_type1(
 // Returns the weekday index for date
 // --(0 = Monday, 1 = Tuesday, ... 6 = Sunday).
 class ObExprWeekDay : public ObFuncExprOperator {
-  public:
+public:
   ObExprWeekDay();
   explicit ObExprWeekDay(common::ObIAllocator& alloc);
   virtual ~ObExprWeekDay();
@@ -67,7 +67,7 @@ class ObExprWeekDay : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_weekday(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprWeekDay);
 };
 inline int ObExprWeekDay::calc_result_type1(
@@ -89,7 +89,7 @@ inline int ObExprWeekDay::calc_result_type1(
 // example: select yearweek('2018-07-04',6) from dual;
 //-----------> 201827
 class ObExprYearWeek : public ObFuncExprOperator {
-  public:
+public:
   ObExprYearWeek();
   explicit ObExprYearWeek(common::ObIAllocator& alloc);
   virtual ~ObExprYearWeek();
@@ -100,7 +100,7 @@ class ObExprYearWeek : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_yearweek(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprYearWeek);
 };
 
@@ -109,7 +109,7 @@ class ObExprYearWeek : public ObFuncExprOperator {
 // from 1 to 53 e.g., SELECT WEEK('2008-02-20',1); --> 8
 //      SELECT WEEK('2008-02-20'); SELECT WEEK('2008-02-20', 0); --> 7
 class ObExprWeek : public ObFuncExprOperator {
-  public:
+public:
   ObExprWeek();
   explicit ObExprWeek(common::ObIAllocator& alloc);
   virtual ~ObExprWeek();
@@ -120,7 +120,7 @@ class ObExprWeek : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_week(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprWeek);
 };
 

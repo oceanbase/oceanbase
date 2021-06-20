@@ -23,14 +23,14 @@ class ObExecContext;
 class ObPrepareStmt;
 
 class ObPrepareExecutor {
-  public:
+public:
   ObPrepareExecutor()
   {}
   virtual ~ObPrepareExecutor()
   {}
   int execute(ObExecContext& ctx, ObPrepareStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPrepareExecutor);
 };
 

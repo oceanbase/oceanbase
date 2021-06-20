@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace blocksstable {
 class ObBufferHolder {
-  public:
+public:
   inline char* data()
   {
     return data_;
@@ -111,14 +111,14 @@ class ObBufferHolder {
 
   TO_STRING_KV(KP_(data), K_(pos), K_(capacity));
 
-  public:
+public:
   ObBufferHolder() : data_(NULL), pos_(0), capacity_(0)
   {}
   virtual ~ObBufferHolder()
   {}
   INLINE_NEED_SERIALIZE_AND_DESERIALIZE;
 
-  protected:
+protected:
   char* data_;
   int64_t pos_;
   int64_t capacity_;
@@ -203,7 +203,7 @@ struct BufferReadWrap<false> {
 };
 
 class ObBufferWriter : public ObBufferHolder {
-  public:
+public:
   template <typename T>
   int rollback(const T& value)
   {
@@ -301,7 +301,7 @@ class ObBufferWriter : public ObBufferHolder {
     return common::OB_BUF_NOT_ENOUGH;
   }
 
-  public:
+public:
   virtual ~ObBufferWriter()
   {}
   ObBufferWriter(char* buf, const int64_t data_len, int64_t pos = 0)
@@ -315,7 +315,7 @@ class ObBufferWriter : public ObBufferHolder {
     pos_ = pos;
   }
 
-  protected:
+protected:
   // write with no check;
   // caller ensure memory not out of bounds.
   template <typename T>
@@ -339,7 +339,7 @@ class ObBufferWriter : public ObBufferHolder {
 class ObSelfBufferWriter : public ObBufferWriter {
   static const int64_t BUFFER_ALIGN_SIZE = DIO_ALIGN_SIZE;
 
-  public:
+public:
   virtual int expand(const int64_t size)
   {
     int64_t new_size = std::max(capacity_ * 2, static_cast<int64_t>(size + capacity_));
@@ -350,7 +350,7 @@ class ObSelfBufferWriter : public ObBufferWriter {
     return ensure_space(new_size);
   }
 
-  public:
+public:
   explicit ObSelfBufferWriter(const int64_t size = 0, const char* label = 0, const bool need_align = false);
   virtual ~ObSelfBufferWriter();
   int ensure_space(const int64_t size);
@@ -370,18 +370,18 @@ class ObSelfBufferWriter : public ObBufferWriter {
     is_aligned_ = need_align;
   }
 
-  private:
+private:
   char* alloc(const int64_t size);
   void free();
 
-  private:
+private:
   const char* label_;
   bool is_aligned_;
   common::ObMacroBlockSizeMemoryContext macro_block_mem_ctx_;
 };
 
 class ObBufferReader : public ObBufferHolder {
-  public:
+public:
   template <typename T>
   int read_pod(T& value)
   {
@@ -456,7 +456,7 @@ class ObBufferReader : public ObBufferHolder {
     return ret;
   }
 
-  public:
+public:
   ObBufferReader()
   {
     assign(NULL, 0, 0);

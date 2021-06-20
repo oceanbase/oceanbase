@@ -24,7 +24,7 @@ namespace common {
 #endif
 
 class FileDirectoryUtils {
-  public:
+public:
   static const int MAX_PATH = 512;
   static int is_exists(const char* file_path, bool& result);
   static int is_accessible(const char* file_path, bool& result);

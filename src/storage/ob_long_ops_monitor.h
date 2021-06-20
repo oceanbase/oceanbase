@@ -193,12 +193,12 @@ struct ObCreateIndexPartitionStat : public ObILongOpsStat {
 class ObILongOpsStatHandle : public ObResourceHandle<ObILongOpsStat> {
   friend class ObLongOpsMonitor;
 
-  public:
+public:
   ObILongOpsStatHandle();
   virtual ~ObILongOpsStatHandle();
   void reset();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObILongOpsStatHandle);
 };
 
@@ -206,7 +206,7 @@ using MAP = storage::ObResourceMap<ObILongOpsKey, ObILongOpsStat>;
 using PAIR = common::hash::HashMapPair<ObILongOpsKey, ObILongOpsStat*>;
 
 class ObLongOpsMonitor {
-  public:
+public:
   static ObLongOpsMonitor& get_instance();
   int init();
   int add_long_ops_stat(const ObILongOpsKey& key, ObILongOpsStat& stat);
@@ -217,11 +217,11 @@ class ObLongOpsMonitor {
   int foreach (Callback& callback);
   int dec_handle_ref(ObILongOpsStatHandle& handle);
 
-  private:
+private:
   ObLongOpsMonitor();
   virtual ~ObLongOpsMonitor();
 
-  private:
+private:
   static const int64_t DEFAULT_BUCKET_NUM = 1543L;
   static const int64_t TOTAL_LIMIT = 10 * 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;
@@ -231,14 +231,14 @@ class ObLongOpsMonitor {
 };
 
 class ObLongOpsMonitorIterator {
-  public:
+public:
   class ObKeySnapshotCallback {
-    public:
+  public:
     explicit ObKeySnapshotCallback(common::ObIArray<ObILongOpsKey>& key_snapshot);
     virtual ~ObKeySnapshotCallback() = default;
     int operator()(PAIR& pair);
 
-    private:
+  private:
     common::ObIArray<ObILongOpsKey>& key_snapshot_;
   };
   ObLongOpsMonitorIterator();
@@ -246,24 +246,24 @@ class ObLongOpsMonitorIterator {
   int init();
   int get_next_stat(ObILongOpsStatHandle& part_stat);
 
-  private:
+private:
   int make_key_snapshot();
 
-  private:
+private:
   bool is_inited_;
   common::ObArray<ObILongOpsKey> key_snapshot_;
   int64_t key_cursor_;
 };
 
 class ObPurgeCompletedMonitorInfoTask : public common::ObTimerTask {
-  public:
+public:
   ObPurgeCompletedMonitorInfoTask();
   virtual ~ObPurgeCompletedMonitorInfoTask(){};
   int init(share::schema::ObMultiVersionSchemaService* schema_service, int tg_id);
   void destroy();
   virtual void runTimerTask() override;
 
-  private:
+private:
   static const int64_t MAX_BATCH_COUNT = 10000;
   static const int64_t SCHEDULE_INTERVAL = 3600 * 1000;  // 1h
   bool is_inited_;

@@ -292,7 +292,7 @@ struct ObResolverParams {
     return force_trace_log_;
   }
 
-  public:
+public:
   common::ObIAllocator* allocator_;
   ObSchemaChecker* schema_checker_;
   ObSQLSessionInfo* session_info_;
@@ -326,7 +326,7 @@ struct ObResolverParams {
   bool have_same_table_name_;
   bool is_default_param_;
 
-  private:
+private:
   uint64_t new_gen_did_;
   uint64_t new_gen_cid_;
   uint64_t new_gen_qid_;
@@ -334,7 +334,7 @@ struct ObResolverParams {
   int64_t new_gen_wid_;  // when number
   friend class ObStmtResolver;
 
-  public:
+public:
   bool is_multi_table_insert_;           // used to mark is multi table insert
   bool is_resolve_table_function_expr_;  // used to mark resolve table function expr.
 };

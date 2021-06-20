@@ -24,7 +24,7 @@ class ObIAllocator;
 namespace sqlclient {
 class ObMySQLPreparedStatement;
 class ObMySQLPreparedResult {
-  public:
+public:
   explicit ObMySQLPreparedResult(ObMySQLPreparedStatement& stmt);
   ~ObMySQLPreparedResult();
   int init();
@@ -50,7 +50,7 @@ class ObMySQLPreparedResult {
   int bind_result(
       const int64_t col_idx, enum_field_types buf_type, char* out_buf, const int64_t buf_len, unsigned long& res_len);
 
-  private:
+private:
   ObMySQLPreparedStatement& stmt_;
   common::ObIAllocator& alloc_;
   int64_t result_column_count_;

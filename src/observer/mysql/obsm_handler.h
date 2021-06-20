@@ -27,7 +27,7 @@ class ObProto20PktContext;
 namespace observer {
 
 class ObSMHandler : public obmysql::ObMySQLHandler {
-  public:
+public:
   ObSMHandler(rpc::frame::ObReqDeliver& deliver, ObGlobalContext& gctx);
   virtual ~ObSMHandler();
   virtual int on_connect(easy_connection_t* c);
@@ -44,14 +44,14 @@ class ObSMHandler : public obmysql::ObMySQLHandler {
   virtual uint32_t get_sessid(easy_connection_t* c) const;
   virtual common::ObCSProtocolType get_cs_protocol_type(easy_connection_t* c) const;
 
-  protected:
+protected:
   virtual obmysql::ObMysqlPktContext* get_mysql_pkt_context(easy_connection_t* c);
   virtual obmysql::ObCompressedPktContext* get_compressed_pkt_context(easy_connection_t* c);
   virtual obmysql::ObProto20PktContext* get_proto20_pkt_context(easy_connection_t* c);
 
   int create_scramble_string(char* scramble_buf, const int64_t buf_len, common::ObMysqlRandom& thread_rand);
 
-  private:
+private:
   ObGlobalContext& gctx_;
   DISALLOW_COPY_AND_ASSIGN(ObSMHandler);
 };  // end of class ObSMHandler

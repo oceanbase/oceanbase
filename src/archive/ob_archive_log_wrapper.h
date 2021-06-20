@@ -32,15 +32,15 @@ using namespace oceanbase::storage;
 using namespace oceanbase::clog;
 
 class ObArchiveLogWrapper {
-  public:
+public:
   static const int64_t MAX_LOCATE_RETRY_TIMES = 3;
 
-  public:
+public:
   ObArchiveLogWrapper()
       : inited_(false), partition_service_(NULL), log_engine_(NULL), next_ilog_file_id_(common::OB_INVALID_FILE_ID)
   {}
 
-  public:
+public:
   int init(ObPartitionService* partition_service, ObILogEngine* log_engine);
   int query_max_ilog_file_id(file_id_t& max_ilog_id);
   int locate_ilog_by_log_id(const common::ObPGKey& pg_key, const uint64_t start_log_id, uint64_t& end_log_id,
@@ -51,10 +51,10 @@ class ObArchiveLogWrapper {
   int get_pg_log_archive_status(const common::ObPGKey& pg_key, ObPGLogArchiveStatus& status);
   int get_pg_first_log_submit_ts(const common::ObPGKey& pg_key, int64_t& submit_ts);
 
-  private:
+private:
   void refresh_next_ilog_file_id_();
 
-  private:
+private:
   bool inited_;
   ObPartitionService* partition_service_;
   ObILogEngine* log_engine_;

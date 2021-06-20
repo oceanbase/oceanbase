@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace share {
 class ObAsyncTask {
-  public:
+public:
   ObAsyncTask() : retry_interval_(RETRY_INTERVAL), retry_times_(INFINITE_RETRY_TIMES), last_execute_time_(0)
   {}
 
@@ -46,7 +46,7 @@ class ObAsyncTask {
   inline int64_t get_last_execute_time() const;
   inline void set_last_execute_time(const int64_t execute_time);
 
-  private:
+private:
   static const int64_t RETRY_INTERVAL = 1000 * 1000L;  // 1s
   static const int64_t INFINITE_RETRY_TIMES = INT64_MAX;
   int64_t retry_interval_;  // us
@@ -95,7 +95,7 @@ inline void ObAsyncTask::set_last_execute_time(const int64_t execute_time)
 }
 
 class ObAsyncTaskQueue : public ObReentrantThread {
-  public:
+public:
   // if thread_cnt > 1, be sure the task can be processed in different order
   // with push order
   ObAsyncTaskQueue();
@@ -107,7 +107,7 @@ class ObAsyncTaskQueue : public ObReentrantThread {
 
   int push(ObAsyncTask& task);
 
-  protected:
+protected:
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 512L * 1024L * 1024L;
   static const int64_t PAGE_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE;
@@ -119,12 +119,12 @@ class ObAsyncTaskQueue : public ObReentrantThread {
   }
   int pop(ObAsyncTask*& task);
 
-  protected:
+protected:
   bool is_inited_;
   common::ObLightyQueue queue_;
   common::ObConcurrentFIFOAllocator allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAsyncTaskQueue);
 };
 }  // end namespace share

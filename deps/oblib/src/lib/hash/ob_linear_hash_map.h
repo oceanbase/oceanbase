@@ -188,7 +188,7 @@ struct UniqueMemMgrTag {};
 
 template <typename Key, typename Value, typename MemMgrTag = ShareMemMgrTag>
 class ObLinearHashMap {
-  private:
+private:
   /* Entry. */
   struct Node {
     Key key_;
@@ -208,7 +208,7 @@ class ObLinearHashMap {
   /* Memory alloc here uses mod id: LINEAR_HASH_MAP. */
   /* One combination of Key, Value and MemMgrTag corresponds to one Core class. */
   class HashMapMemMgrCore {
-    public:
+  public:
     HashMapMemMgrCore();
     ~HashMapMemMgrCore();
     static HashMapMemMgrCore& get_instance();
@@ -219,7 +219,7 @@ class ObLinearHashMap {
     void add_map(void* ptr);
     void rm_map(void* ptr);
 
-    private:
+  private:
     ObExternalRef hash_ref_;
     ObMemAttr attr_;
     ObSmallAllocator node_alloc_;
@@ -233,7 +233,7 @@ class ObLinearHashMap {
   /* Mem Mgr uses template in order to specialize an unique mem mgr class. */
   template <typename Tag, typename Dummy = void>
   class HashMapMemMgr {
-    public:
+  public:
     typedef HashMapMemMgrCore Core;
     HashMapMemMgr()
     {}
@@ -252,14 +252,14 @@ class ObLinearHashMap {
       Core::get_instance().rm_map(ptr);
     }
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(HashMapMemMgr);
   };
   /* Specialization. */
   /* Dummy helps partially specialize HashMapMemMgr in this non-specialized class. */
   template <typename Dummy>
   class HashMapMemMgr<UniqueMemMgrTag, Dummy> {
-    public:
+  public:
     HashMapMemMgr() : core_()
     {}
     virtual ~HashMapMemMgr()
@@ -278,7 +278,7 @@ class ObLinearHashMap {
       Core::get_instance().rm_map(ptr);
     }
 
-    private:
+  private:
     Core core_;
   };
   /* A fast counter. Several threads share one counter. */
@@ -292,7 +292,7 @@ class ObLinearHashMap {
       int64_t padding_[6];
     } CACHE_ALIGNED;
 
-    public:
+  public:
     Cnter();
     virtual ~Cnter()
     {}
@@ -302,12 +302,12 @@ class ObLinearHashMap {
     int64_t count() const;
     bool op_and_test_lmt(const int64_t lmt, const int64_t th_id = 0);
 
-    private:
+  private:
     HashMapMemMgr<MemMgrTag>* mem_mgr_;
     Counter* cnter_;
   };
 
-  public:
+public:
   /* BlurredIterator.
    * CAUTION: it's not a C++ STL style iterator.
    *
@@ -318,7 +318,7 @@ class ObLinearHashMap {
    * Use for_each(fn) to iterate on every element of this hashmap.
    */
   class BlurredIterator {
-    public:
+  public:
     explicit BlurredIterator(ObLinearHashMap& map) : map_(&map)
     {
       rewind();
@@ -328,13 +328,13 @@ class ObLinearHashMap {
     int next(Key& key, Value& value);
     void rewind();
 
-    private:
+  private:
     ObLinearHashMap* map_;
     uint64_t bkt_idx_;
     uint64_t key_idx_;
   };
 
-  private:
+private:
   /* Parameters L & P. High-order 8 bits for L, low-order 56 bits for p. */
   static const uint64_t LP_P_BIT_NUM = 56;
   static const uint64_t LP_L_BIT_NUM = 8;
@@ -372,7 +372,7 @@ class ObLinearHashMap {
   static const int TENANT_ID = OB_SERVER_TENANT_ID;
   static constexpr const char* LABEL = ObModIds::OB_LINEAR_HASH_MAP;
 
-  public:
+public:
   ObLinearHashMap()
       : init_(false),
         load_factor_(0.0),
@@ -466,7 +466,7 @@ class ObLinearHashMap {
     return init_;
   }
 
-  private:
+private:
   // Parameters L & P.
   void load_Lp_(uint64_t& L, uint64_t& p) const;
   void set_Lp_(uint64_t L, uint64_t p);
@@ -545,7 +545,7 @@ class ObLinearHashMap {
   template <typename Function>
   int do_operate_(const Key& key, Function& fn);
 
-  private:
+private:
   bool init_;
   double load_factor_;
   double load_factor_u_limit_;
@@ -581,7 +581,7 @@ class ObLinearHashMap {
   // Memory attr.
   ObMemAttr memattr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLinearHashMap);
   // For unit test.
   OB_LINEAR_HASH_MAP_UNITTEST_FRIEND;

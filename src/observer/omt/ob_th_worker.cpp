@@ -84,7 +84,7 @@ void ObThWorker::destroy()
 }
 
 class ObDiagTenantGuard {
-  public:
+public:
   ObDiagTenantGuard(ObThWorker& worker, uint64_t tenant_id) : worker_(worker)
   {
     if (OB_DIAG_TENANT_ID == tenant_id) {
@@ -97,7 +97,7 @@ class ObDiagTenantGuard {
     worker_.reset_rpc_tenant();
   }
 
-  private:
+private:
   ObThWorker& worker_;
 };
 
@@ -400,7 +400,7 @@ void ObThWorker::worker(int64_t& tenant_id, int64_t& req_recv_timestamp, int32_t
           CREATE_WITH_TEMP_CONTEXT(param)
           {
             class AllocatorGuard {
-              public:
+            public:
               AllocatorGuard(ObIAllocator** allocator) : allocator_(allocator)
               {
                 *allocator_ = &CURRENT_CONTEXT.get_arena_allocator();
@@ -410,7 +410,7 @@ void ObThWorker::worker(int64_t& tenant_id, int64_t& req_recv_timestamp, int32_t
                 *allocator_ = nullptr;
               }
 
-              private:
+            private:
               ObIAllocator** allocator_;
             } allocator_guard(&allocator_);
             const uint64_t owner_id =

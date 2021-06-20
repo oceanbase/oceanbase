@@ -26,7 +26,7 @@ using namespace election;
 using namespace common;
 namespace unittest {
 class ElectionRpcTask {
-  public:
+public:
   ElectionRpcTask()
   {
     reset();
@@ -41,7 +41,7 @@ class ElectionRpcTask {
     timestamp_ = 0;
   }
 
-  public:
+public:
   ObAddr server_;
   ObElectionMsgBuffer msgbuf_;
   ObPartitionKey partition_;
@@ -49,17 +49,17 @@ class ElectionRpcTask {
 };
 
 class ElectionRpcTaskFactory {
-  public:
+public:
   static ElectionRpcTask* alloc();
   static void release(ElectionRpcTask* task);
 
-  private:
+private:
   static int64_t alloc_count_;
   static int64_t release_count_;
 };
 
 class MockObElectionRpc : public ObIElectionRpc, public common::S2MQueueThread {
-  public:
+public:
   MockObElectionRpc() : inited_(false), election_mgr_(NULL)
   {}
   ~MockObElectionRpc()
@@ -108,7 +108,7 @@ class MockObElectionRpc : public ObIElectionRpc, public common::S2MQueueThread {
   int init(ObIElectionMgr* election_mgr, const ObAddr& self);
   void handle(void* task, void* pdata);
 
-  private:
+private:
   bool inited_;
   ObIElectionMgr* election_mgr_;
 };

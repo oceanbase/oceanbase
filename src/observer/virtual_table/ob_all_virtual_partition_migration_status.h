@@ -23,7 +23,7 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualPartitionMigrationStatus : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualPartitionMigrationStatus();
   virtual ~ObAllVirtualPartitionMigrationStatus();
 
@@ -31,7 +31,7 @@ class ObAllVirtualPartitionMigrationStatus : public common::ObVirtualTableScanne
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   enum TABLE_COLUMN {
     TASK_ID = common::OB_APP_MIN_COLUMN_ID,
     TENANT_ID,

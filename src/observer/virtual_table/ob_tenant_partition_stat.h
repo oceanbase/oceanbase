@@ -26,7 +26,7 @@ class ObMultiVersionSchemaService;
 }  // namespace share
 namespace observer {
 class ObTenantPartitionStat : public common::ObVirtualTableProjector {
-  public:
+public:
   ObTenantPartitionStat();
   virtual ~ObTenantPartitionStat();
 
@@ -35,7 +35,7 @@ class ObTenantPartitionStat : public common::ObVirtualTableProjector {
 
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   struct PartitionStat {
     PartitionStat();
     void reset();
@@ -68,7 +68,7 @@ class ObTenantPartitionStat : public common::ObVirtualTableProjector {
   share::ObPartitionInfo prefetch_info_;
   bool tenant_end_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantPartitionStat);
 };
 

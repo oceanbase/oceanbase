@@ -37,7 +37,7 @@ struct RawArray {
 };
 
 class ObIlogPerFileCache {
-  public:
+public:
   ObIlogPerFileCache()
       : is_inited_(false),
         file_id_(common::OB_INVALID_FILE_ID),
@@ -57,7 +57,7 @@ class ObIlogPerFileCache {
   }
   void destroy();
 
-  public:
+public:
   // append cursor to sorted array
   int append_cursor(const ObLogCursorExt& cursor);
   int query_cursor(const common::ObPartitionKey& pkey, const uint64_t query_log_id, const uint64_t min_log_id,
@@ -66,11 +66,11 @@ class ObIlogPerFileCache {
       const uint64_t max_log_id, const offset_t start_offset_index, uint64_t& target_log_id,
       int64_t& target_log_timestamp);
 
-  private:
+private:
   int binary_search_timestamp_from_cursor_array_(const ObLogCursorExt* csr_arr, const int64_t array_len,
       const int64_t start_ts, const ObLogCursorExt*& target_cursor);
 
-  private:
+private:
   bool is_inited_;
   file_id_t file_id_;
   common::PageArena<>* pf_allocator_;
@@ -86,11 +86,11 @@ class ObIlogPerFileCache {
 int ilog_entry_comparator(const void* e1, const void* e2);
 
 class ObIlogPerFileCacheBuilder {
-  public:
+public:
   ObIlogPerFileCacheBuilder() : ilog_storage_(NULL), file_id_cache_(NULL)
   {}
 
-  public:
+public:
   int init(ObIlogStorage* ilog_storage, ObFileIdCache* file_id_cache);
   void destroy()
   {
@@ -100,9 +100,9 @@ class ObIlogPerFileCacheBuilder {
   int build_cache(const file_id_t file_id, ObIlogPerFileCache* pf_cache, common::PageArena<>& pf_page_arena,
       ObIlogStorageQueryCost& csr_cost);
 
-  private:
+private:
   class BackfillGenerator {
-    public:
+  public:
     BackfillGenerator()
     {
       reset();
@@ -112,11 +112,11 @@ class ObIlogPerFileCacheBuilder {
     int track(const ObIndexEntry& ilog_entry, const int32_t array_index);
     int close();
 
-    private:
+  private:
     int do_track_(const common::ObPartitionKey& pkey, const uint64_t log_id, const int32_t array_index);
     int end_cur_pkey_();
 
-    private:
+  private:
     file_id_t file_id_;
     ObFileIdCache* file_id_cache_;
     offset_t cur_offset_;
@@ -127,14 +127,14 @@ class ObIlogPerFileCacheBuilder {
     offset_t cur_start_offset_index_;
   };
 
-  private:
+private:
   inline ObLogCursorExt trim_to_cursor_(const ObIndexEntry& ilog_entry);
   int prepare_sorted_raw_array_(const file_id_t file_id, ObIRawIndexIterator* raw_ilog_iter,
       common::ObIAllocator& raw_entry_allocator, RawArray& raw_array, ObIlogStorageQueryCost& csr_cost);
   int build_pf_cache_(const file_id_t file_id, const RawArray& raw_array, ObIlogPerFileCache* pf_cache);
   static const int64_t ILOG_ENTRY_COUNT_PER_FILE = 2 * 1000 * 1000;
 
-  private:
+private:
   ObIlogStorage* ilog_storage_;
   ObFileIdCache* file_id_cache_;
 };

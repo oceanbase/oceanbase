@@ -32,7 +32,7 @@ static const rootserver::ObRsJobType upgrade_job_type_array[UPGRADE_JOB_TYPE_COU
 };
 
 class ObUpgradeUtils {
-  public:
+public:
   ObUpgradeUtils()
   {}
   virtual ~ObUpgradeUtils()
@@ -50,7 +50,7 @@ class ObUpgradeUtils {
   static int upgrade_sys_variable(common::ObISQLClient& sql_client, const uint64_t tenant_id);
   static int upgrade_sys_stat(common::ObISQLClient& sql_client, const uint64_t tenant_id);
   /* ----------------------- */
-  private:
+private:
   static int check_table_exist(uint64_t table_id, bool& exist);
   static int check_table_partition_exist(uint64_t table_id, bool& exist);
   static int check_rs_job_exist(rootserver::ObRsJobType job_type, bool& exist);
@@ -79,7 +79,7 @@ class ObUpgradeUtils {
   static int filter_sys_stat(
       common::ObISQLClient& sql_client, const uint64_t tenant_id, rootserver::ObSysStat& sys_stat);
 
-  private:
+private:
   typedef common::ObFixedLengthString<OB_MAX_CONFIG_NAME_LEN> Name;
 };
 
@@ -88,14 +88,14 @@ class ObUpgradeUtils {
 // Special upgrade actions for specific cluster version,
 // which should be stateless and reentrant.
 class ObBaseUpgradeProcessor {
-  public:
+public:
   enum UpgradeMode { UPGRADE_MODE_INVALID, UPGRADE_MODE_OB, UPGRADE_MODE_PHYSICAL_RESTORE };
 
-  public:
+public:
   ObBaseUpgradeProcessor();
   virtual ~ObBaseUpgradeProcessor(){};
 
-  public:
+public:
   int init(int64_t cluster_version, UpgradeMode mode, common::ObMySQLProxy& sql_proxy, obrpc::ObSrvRpcProxy& rpc_proxy,
       share::schema::ObMultiVersionSchemaService& schema_service, share::ObCheckStopProvider& check_server_provider);
   int64_t get_version() const
@@ -114,10 +114,10 @@ class ObBaseUpgradeProcessor {
   virtual int post_upgrade() = 0;
   TO_STRING_KV(K_(inited), K_(cluster_version), K_(tenant_id), K_(mode));
 
-  protected:
+protected:
   virtual int check_inner_stat() const;
 
-  protected:
+protected:
   bool inited_;
   int64_t cluster_version_;
   uint64_t tenant_id_;
@@ -127,12 +127,12 @@ class ObBaseUpgradeProcessor {
   share::schema::ObMultiVersionSchemaService* schema_service_;
   share::ObCheckStopProvider* check_stop_provider_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBaseUpgradeProcessor);
 };
 
 class ObUpgradeProcesserSet {
-  public:
+public:
   ObUpgradeProcesserSet();
   virtual ~ObUpgradeProcesserSet();
   int init(ObBaseUpgradeProcessor::UpgradeMode mode, common::ObMySQLProxy& sql_proxy, obrpc::ObSrvRpcProxy& rpc_proxy,
@@ -142,11 +142,11 @@ class ObUpgradeProcesserSet {
   int get_processor_idx_by_range(
       const int64_t start_version, const int64_t end_version, int64_t& start_idx, int64_t& end_idx);
 
-  private:
+private:
   virtual int check_inner_stat() const;
   int get_processor_idx_by_version(const int64_t version, int64_t& idx) const;
 
-  private:
+private:
   bool inited_;
   common::ObArenaAllocator allocator_;
   common::ObArray<ObBaseUpgradeProcessor*> processor_list_;
@@ -155,7 +155,7 @@ class ObUpgradeProcesserSet {
 
 #define DEF_SIMPLE_UPGRARD_PROCESSER(MAJOR, MINOR, PATCH)                              \
   class ObUpgradeFor##MAJOR##MINOR##PATCH##Processor : public ObBaseUpgradeProcessor { \
-    public:                                                                            \
+  public:                                                                              \
     ObUpgradeFor##MAJOR##MINOR##PATCH##Processor() : ObBaseUpgradeProcessor()          \
     {}                                                                                 \
     virtual ~ObUpgradeFor##MAJOR##MINOR##PATCH##Processor()                            \
@@ -177,10 +177,10 @@ class ObUpgradeProcesserSet {
  * 3. Modify int ObUpgradeProcesserSet::init().
  */
 class ObUpgradeChecker {
-  public:
+public:
   static bool check_cluster_version_exist(const uint64_t version);
 
-  public:
+public:
   static const int64_t CLUTER_VERSION_NUM = 32;
   static const uint64_t UPGRADE_PATH[CLUTER_VERSION_NUM];
 };
@@ -189,7 +189,7 @@ class ObUpgradeChecker {
 DEF_SIMPLE_UPGRARD_PROCESSER(2, 2, 60);
 // 2.2.70
 class ObUpgradeFor2270Processor : public ObBaseUpgradeProcessor {
-  public:
+public:
   ObUpgradeFor2270Processor() : ObBaseUpgradeProcessor()
   {}
   virtual ~ObUpgradeFor2270Processor()
@@ -197,7 +197,7 @@ class ObUpgradeFor2270Processor : public ObBaseUpgradeProcessor {
   virtual int pre_upgrade() override;
   virtual int post_upgrade() override;
 
-  private:
+private:
   int modify_trigger_package_source_body();
   int modify_oracle_public_database_name();
 
@@ -214,7 +214,7 @@ DEF_SIMPLE_UPGRARD_PROCESSER(2, 2, 73);
 DEF_SIMPLE_UPGRARD_PROCESSER(2, 2, 74);
 
 class ObUpgradeFor2275Processor : public ObBaseUpgradeProcessor {
-  public:
+public:
   ObUpgradeFor2275Processor() : ObBaseUpgradeProcessor()
   {}
   virtual ~ObUpgradeFor2275Processor()

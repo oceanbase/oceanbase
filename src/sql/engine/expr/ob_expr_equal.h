@@ -20,14 +20,14 @@
 namespace oceanbase {
 namespace sql {
 class ObExprEqual : public ObRelationalExprOperator {
-  public:
+public:
   ObExprEqual();
   explicit ObExprEqual(common::ObIAllocator& alloc);
   virtual ~ObExprEqual(){};
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result2(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
+      common::ObExprCtx& expr_ctx) const override;
+  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
+      common::ObExprCtx& expr_ctx) const override;
 
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override
   {
@@ -42,9 +42,9 @@ class ObExprEqual : public ObRelationalExprOperator {
   static int calc_without_cast(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
       const common::ObCompareCtx& cmp_ctx, bool& need_cast);
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprEqual);
 };
 

@@ -39,7 +39,7 @@ struct InfluencePlan {};
 struct NeedSerialize {};
 
 class ObParameterAttr {
-  public:
+public:
   ObParameterAttr()
       : section_(Section::OBSERVER),
         scope_(Scope::CLUSTER),
@@ -99,7 +99,7 @@ class ObParameterAttr {
   bool is_readonly() const;
   bool is_invisible() const;
 
-  private:
+private:
   Section::SectionInfo section_;
   Scope::ScopeInfo scope_;
   Source::SourceInfo source_;

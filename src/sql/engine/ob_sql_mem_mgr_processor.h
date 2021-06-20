@@ -20,10 +20,10 @@ namespace oceanbase {
 namespace sql {
 
 class ObSqlMemMgrProcessor : public ObSqlMemoryCallback {
-  private:
+private:
   using PredFunc = std::function<bool(int64_t)>;
 
-  public:
+public:
   ObSqlMemMgrProcessor(ObSqlWorkAreaProfile& profile)
       : profile_(profile),
         sql_mem_mgr_(nullptr),
@@ -188,10 +188,10 @@ class ObSqlMemMgrProcessor : public ObSqlMemoryCallback {
     profile_.set_number_pass(num_pass);
   }
 
-  private:
+private:
   int try_upgrade_auto_mgr(ObIAllocator* allocator, int64_t mem_used);
 
-  private:
+private:
   static const int64_t MAX_SQL_MEM_SIZE = 2 * 1024 * 1024;  // 2M
   static const int64_t UPDATED_DELTA_SIZE = 1 * 1024 * 1024;
   static const int64_t EXTEND_RATIO = 10;
@@ -207,7 +207,7 @@ class ObSqlMemMgrProcessor : public ObSqlMemoryCallback {
 };
 
 class ObSqlWorkareaUtil {
-  public:
+public:
   static int get_workarea_size(const ObSqlWorkAreaType wa_type, const int64_t tenant_id, int64_t& value);
 };
 

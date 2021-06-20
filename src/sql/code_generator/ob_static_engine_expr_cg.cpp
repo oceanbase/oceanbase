@@ -400,7 +400,7 @@ struct TmpFrameInfo {
   {}
   TO_STRING_KV(K_(expr_start_pos), K_(frame_info));
 
-  public:
+public:
   uint64_t expr_start_pos_;
   ObFrameInfo frame_info_;
 };

@@ -30,12 +30,12 @@ class ObArchiveSender;
 struct ObArchiveSendTaskStatus;
 class ObArCLogSplitEngine : public ObArchiveThreadPool  // share::ObThreadPool
 {
-  public:
+public:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
 
-  public:
+public:
   ObArCLogSplitEngine();
   virtual ~ObArCLogSplitEngine();
   int init(logservice::ObExtLogService* ext_log_service, ObArchiveAllocator* allocator, ObArchiveSender* archive_sender,
@@ -55,12 +55,12 @@ class ObArCLogSplitEngine : public ObArchiveThreadPool  // share::ObThreadPool
   void set_thread_name_str(char* str);
   int handle_task_list(ObArchiveTaskStatus* task_status);
 
-  public:
+public:
   int submit_split_task(ObPGArchiveCLogTask* task);
 
-  private:
+private:
   struct ObArchiveSplitStat {
-    public:
+  public:
     ObArchiveSplitStat()
     {
       reset();
@@ -71,7 +71,7 @@ class ObArCLogSplitEngine : public ObArchiveThreadPool  // share::ObThreadPool
     }
     void reset();
 
-    public:
+  public:
     int64_t send_task_count_;
     int64_t read_log_used_;
     int64_t read_log_size_;
@@ -118,12 +118,12 @@ class ObArCLogSplitEngine : public ObArchiveThreadPool  // share::ObThreadPool
       const int64_t compressed_data_len, ObArchiveSendTask* send_task);
   void statistic(const ObArchiveSplitStat& stat);
 
-  private:
+private:
   // maybe replace these three with parameters later
   static const int64_t WAIT_TIME_AFTER_EAGAIN = DEFAULT_ARCHIVE_WAIT_TIME_AFTER_EAGAIN;
   static const int64_t MINI_MODE_SPLITER_THREAD_NUM = 1;
 
-  private:
+private:
   RWLock rwlock_;  // for log_archive_round, incarnation_ and current_round_stopped_
   int64_t log_archive_round_;
   int64_t incarnation_;

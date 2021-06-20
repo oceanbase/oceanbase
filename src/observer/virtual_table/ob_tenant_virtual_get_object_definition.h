@@ -41,13 +41,13 @@ class ObGetObjectDefinition : public common::ObVirtualTableScannerIterator {
   };
   static const char* ObjectTypeName[T_GET_DDL_MAX];
 
-  public:
+public:
   ObGetObjectDefinition();
   virtual ~ObGetObjectDefinition();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   int get_object_type_and_name(GetDDLObjectType& object_type, ObString& object_name, ObString& ob_schema,
       ObString& version, ObString& model, ObString& transform);
   int get_ddl_creation_str(
@@ -72,7 +72,7 @@ class ObGetObjectDefinition : public common::ObVirtualTableScannerIterator {
   int get_user_definition(
       ObString& ddl_str, const ObString& user_name, const ObString& db_name, GetDDLObjectType object_type);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGetObjectDefinition);
 };
 }  // namespace observer

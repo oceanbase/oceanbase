@@ -106,14 +106,14 @@ struct AllocBuf {
 
 class ObCacheTestTask;
 class ObICacheTestStat {
-  public:
+public:
   virtual void add_task(ObCacheTestTask* task) = 0;
   virtual ObCacheTestTask* pop_oppo_task(ObCacheTestTask* task) = 0;
   virtual void inc_fail_count() = 0;
 };
 
 class ObCacheTestTask {
-  public:
+public:
   ObCacheTestTask(const int64_t tenant_id, const bool is_alloc, const int64_t alloc_size, const int64_t alloc_count,
       ObICacheTestStat* stat)
       : tenant_id_(tenant_id),
@@ -198,7 +198,7 @@ class ObCacheTestTask {
   }
   TO_STRING_KV(K_(tenant_id), K_(is_alloc), K_(alloc_size), K_(alloc_count));
 
-  public:
+public:
   uint64_t tenant_id_;
   bool is_alloc_;  // alloc or free
   int64_t alloc_size_;
@@ -209,7 +209,7 @@ class ObCacheTestTask {
 };
 
 class CacheTestStat : public ObICacheTestStat {
-  public:
+public:
   CacheTestStat() : fail_count_(0), task_list_(NULL)
   {}
   virtual ~CacheTestStat()
@@ -258,13 +258,13 @@ class CacheTestStat : public ObICacheTestStat {
     return oppo_task;
   }
 
-  private:
+private:
   int64_t fail_count_;
   ObCacheTestTask* task_list_;
 };
 
 class ObAllocatorStress : public share::ObThreadPool {
-  public:
+public:
   ObAllocatorStress() : inited_(false), stat_(), queue_()
   {}
   virtual ~ObAllocatorStress()
@@ -366,7 +366,7 @@ class ObAllocatorStress : public share::ObThreadPool {
     return &stat_;
   }
 
-  private:
+private:
   bool inited_;
   CacheTestStat stat_;
   common::LightyQueue queue_;
@@ -374,7 +374,7 @@ class ObAllocatorStress : public share::ObThreadPool {
 
 template <int64_t K_SIZE, int64_t V_SIZE>
 class ObCacheStress : public share::ObThreadPool {
-  public:
+public:
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
 
@@ -445,7 +445,7 @@ class ObCacheStress : public share::ObThreadPool {
     return fail_count_;
   }
 
-  private:
+private:
   bool inited_;
   uint64_t tenant_id_;
   int64_t put_count_;
@@ -455,7 +455,7 @@ class ObCacheStress : public share::ObThreadPool {
 
 template <int64_t K_SIZE, int64_t V_SIZE>
 class ObCacheGetStress : public share::ObThreadPool {
-  public:
+public:
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
 
@@ -539,7 +539,7 @@ class ObCacheGetStress : public share::ObThreadPool {
     return (double)hit_cnt / (double)kv_cnt_;
   }
 
-  private:
+private:
   void do_monitor()
   {
     while (!has_set_stop()) {
@@ -594,7 +594,7 @@ class ObCacheGetStress : public share::ObThreadPool {
 
 template <int64_t K_SIZE, int64_t V_SIZE>
 class ObWorkingSetStress : public share::ObThreadPool {
-  public:
+public:
   typedef TestKVCacheKey<K_SIZE> TestKey;
   typedef TestKVCacheValue<V_SIZE> TestValue;
 
@@ -717,7 +717,7 @@ class ObWorkingSetStress : public share::ObThreadPool {
     return ws_.working_set_->get_limit();
   }
 
-  private:
+private:
   bool inited_;
   uint64_t tenant_id_;
   int64_t put_count_;

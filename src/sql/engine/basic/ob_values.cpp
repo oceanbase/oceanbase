@@ -19,7 +19,7 @@ namespace sql {
 OB_SERIALIZE_MEMBER((ObValues, ObNoChildrenPhyOperator), row_store_);
 
 class ObValues::ObValuesCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObValuesCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx), row_store_it_()
   {}
   virtual void destroy()
@@ -27,7 +27,7 @@ class ObValues::ObValuesCtx : public ObPhyOperatorCtx {
     ObPhyOperatorCtx::destroy_base();
   }
 
-  private:
+private:
   ObRowStore::Iterator row_store_it_;
   friend class ObValues;
 };

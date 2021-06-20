@@ -20,12 +20,12 @@ namespace oceanbase {
 namespace rootserver {
 /// thread checker thread.
 class ObRsThreadChecker : public ObRsReentrantThread {
-  public:
+public:
   ObRsThreadChecker();
   virtual ~ObRsThreadChecker();
 
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
@@ -34,7 +34,7 @@ class ObRsThreadChecker : public ObRsReentrantThread {
   void check_loop();
   int destroy();
 
-  private:
+private:
   bool inited_;
 #ifdef ERRSIM  // for obtest
   static const int64_t CHECK_TIMEVAL_US = 1000LL * 1000LL;

@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObLockTenantStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObLockTenantStmt(common::ObIAllocator* name_pool);
   ObLockTenantStmt();
   virtual ~ObLockTenantStmt();
@@ -39,7 +39,7 @@ class ObLockTenantStmt : public ObDDLStmt {
     return lock_tenant_arg_;
   }
 
-  private:
+private:
   obrpc::ObLockTenantArg lock_tenant_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObLockTenantStmt);
 };

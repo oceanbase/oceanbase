@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObRawExprCanonicalizer {
-  public:
+public:
   ObRawExprCanonicalizer()
   {}
   virtual ~ObRawExprCanonicalizer()
@@ -30,13 +30,13 @@ class ObRawExprCanonicalizer {
    */
   virtual int canonicalize(ObRawExpr*& expr) = 0;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprCanonicalizer);
   // function members
-  private:
+private:
   // data members
 };
 

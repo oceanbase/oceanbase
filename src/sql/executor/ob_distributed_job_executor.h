@@ -25,7 +25,7 @@ namespace sql {
 class ObJob;
 class ObExecContext;
 class ObDistributedJobExecutor {
-  public:
+public:
   ObDistributedJobExecutor();
   virtual ~ObDistributedJobExecutor();
 
@@ -51,13 +51,13 @@ class ObDistributedJobExecutor {
     executor_ = NULL;
   }
 
-  private:
+private:
   int get_executable_tasks(const ObExecContext& ctx, common::ObArray<ObTaskInfo*>& ready_tasks);
 
   ObJob* job_;
   ObDistributedTaskExecutor* executor_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistributedJobExecutor);
 };
 }  // namespace sql

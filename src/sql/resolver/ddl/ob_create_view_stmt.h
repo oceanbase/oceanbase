@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateViewStmt : public ObStmt {
-  public:
+public:
   explicit ObCreateViewStmt(common::ObIAllocator* name_pool);
   ObCreateViewStmt();
   virtual ~ObCreateViewStmt();
@@ -38,10 +38,10 @@ class ObCreateViewStmt : public ObStmt {
     return true;
   }
 
-  protected:
+protected:
   common::ObIAllocator* name_pool_;
 
-  private:
+private:
   ObSelectStmt* definition_stmt_;
   common::ObString view_name_;
   common::ObString view_definition_;

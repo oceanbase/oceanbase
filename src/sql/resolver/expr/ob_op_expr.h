@@ -20,7 +20,7 @@ namespace jit {
 namespace expr {
 
 class ObOpExpr : virtual public ObExpr {
-  public:
+public:
   ObOpExpr()
   {
     set_expr_class(EXPR_OPERATOR);
@@ -40,7 +40,7 @@ class ObOpExpr : virtual public ObExpr {
     return common::OB_NOT_SUPPORTED;
   };
 
-  private:
+private:
 };
 
 }  // namespace expr

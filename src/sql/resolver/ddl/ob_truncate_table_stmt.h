@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTruncateTableStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObTruncateTableStmt(common::ObIAllocator* name_pool);
   ObTruncateTableStmt();
   virtual ~ObTruncateTableStmt();
@@ -56,7 +56,7 @@ class ObTruncateTableStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(truncate_table_arg));
 
-  private:
+private:
   obrpc::ObTruncateTableArg truncate_table_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObTruncateTableStmt);
 };

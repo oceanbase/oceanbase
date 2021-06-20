@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace sql {
 class ObIntraPartitionTaskSpliter : public ObTaskSpliter {
-  public:
+public:
   ObIntraPartitionTaskSpliter();
   virtual ~ObIntraPartitionTaskSpliter();
   virtual int get_next_task(ObTaskInfo*& task);
@@ -31,13 +31,13 @@ class ObIntraPartitionTaskSpliter : public ObTaskSpliter {
     return ObTaskSpliter::INTRA_PARTITION_SPLIT;
   }
 
-  private:
+private:
   int prepare();
   int get_part_and_ranges(
       const share::ObPartitionReplicaLocation*& part_rep_loc, const ObSplittedRanges*& splitted_ranges);
   int get_scan_ranges(const ObSplittedRanges& splitted_ranges, ObTaskInfo::ObPartLoc& part_loc);
 
-  private:
+private:
   const ObPhyTableLocation* table_loc_;
   const ObPartitionReplicaLocationIArray* part_rep_loc_list_;
   const ObSplittedRangesIArray* splitted_ranges_list_;
@@ -48,7 +48,7 @@ class ObIntraPartitionTaskSpliter : public ObTaskSpliter {
 };
 
 class ObDistributedTaskSpliter : public ObTaskSpliter {
-  private:
+private:
   enum ObMatchType {
     MT_ONLY_MATCH = 0,
     MT_ALL_PART = 1,
@@ -56,7 +56,7 @@ class ObDistributedTaskSpliter : public ObTaskSpliter {
     MT_ALL_BOTH = MT_ALL_PART | MT_ALL_SLICE,
   };
   struct ObPartComparer {
-    public:
+  public:
     ObPartComparer(common::ObIArray<ObShuffleKeys>& shuffle_keys, bool cmp_part, bool cmp_subpart, int sort_order);
     virtual ~ObPartComparer();
     bool operator()(int64_t idx1, int64_t idx2);
@@ -65,7 +65,7 @@ class ObDistributedTaskSpliter : public ObTaskSpliter {
       return ret_;
     }
 
-    private:
+  private:
     common::ObIArray<ObShuffleKeys>& shuffle_keys_;
     bool cmp_part_;
     bool cmp_subpart_;
@@ -73,7 +73,7 @@ class ObDistributedTaskSpliter : public ObTaskSpliter {
     int ret_;
   };
   struct ObSliceComparer {
-    public:
+  public:
     ObSliceComparer(bool cmp_part, bool cmp_subpart, int sort_order);
     virtual ~ObSliceComparer();
     bool operator()(const ObSliceEvent* slice1, const ObSliceEvent* slice2);
@@ -82,14 +82,14 @@ class ObDistributedTaskSpliter : public ObTaskSpliter {
       return ret_;
     }
 
-    private:
+  private:
     bool cmp_part_;
     bool cmp_subpart_;
     int sort_order_;  // asc: 1, desc: -1.
     int ret_;
   };
   struct ObPhyTableLoc {
-    public:
+  public:
     ObPhyTableLoc()
         : table_loc_(NULL),
           depend_table_keys_(common::ObModIds::OB_SQL_EXECUTOR_TASK_SPLITER, OB_MALLOC_NORMAL_BLOCK_SIZE)
@@ -130,12 +130,12 @@ class ObDistributedTaskSpliter : public ObTaskSpliter {
     }
     TO_STRING_KV(K_(table_loc), K_(depend_table_keys));
 
-    private:
+  private:
     const ObPhyTableLocation* table_loc_;
     common::ObSEArray<ObPartitionKey, 1> depend_table_keys_;
   };
 
-  public:
+public:
   ObDistributedTaskSpliter();
   virtual ~ObDistributedTaskSpliter();
   virtual int get_next_task(ObTaskInfo*& task);
@@ -144,7 +144,7 @@ class ObDistributedTaskSpliter : public ObTaskSpliter {
     return ObTaskSpliter::DISTRIBUTED_SPLIT;
   }
 
-  private:
+private:
   int prepare();
   int init_match_type();
   int init_table_locations(ObPhyOperator* root_op);
@@ -175,7 +175,7 @@ class ObDistributedTaskSpliter : public ObTaskSpliter {
   int get_task_runner_server(common::ObAddr& runner_server) const;
   int need_split_task_by_partition(bool& by_partition) const;
 
-  private:
+private:
   // table informations.
   common::ObSEArray<ObPhyTableLoc, 8> table_locations_;
   common::ObSEArray<ObShuffleKeys, 8> part_shuffle_keys_;
@@ -195,7 +195,7 @@ class ObDistributedTaskSpliter : public ObTaskSpliter {
   bool repart_subpart_;
   bool prepare_done_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistributedTaskSpliter);
 };
 

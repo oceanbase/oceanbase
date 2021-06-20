@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprBaseLRpad : public ObStringExprOperator {
-  public:
+public:
   enum LRpadType { LPAD_TYPE = 0, RPAD_TYPE = 1 };
   explicit ObExprBaseLRpad(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num);
 
@@ -65,12 +65,12 @@ class ObExprBaseLRpad : public ObStringExprOperator {
   static int calc_oracle(LRpadType pad_type, const ObExpr& expr, const common::ObDatum& text,
       const common::ObDatum& len, const common::ObDatum& pad_text, common::ObIAllocator& res_alloc, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBaseLRpad);
 };
 
 class ObExprLpad : public ObExprBaseLRpad {
-  public:
+public:
   explicit ObExprLpad(common::ObIAllocator& alloc);
   virtual ~ObExprLpad();
 
@@ -83,12 +83,12 @@ class ObExprLpad : public ObExprBaseLRpad {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_mysql_lpad_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLpad);
 };
 
 class ObExprRpad : public ObExprBaseLRpad {
-  public:
+public:
   explicit ObExprRpad(common::ObIAllocator& alloc);
   explicit ObExprRpad(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name);
 
@@ -103,12 +103,12 @@ class ObExprRpad : public ObExprBaseLRpad {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_mysql_rpad_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRpad);
 };
 
 class ObExprOracleLpad : public ObExprBaseLRpad {
-  public:
+public:
   explicit ObExprOracleLpad(common::ObIAllocator& alloc);
   virtual ~ObExprOracleLpad();
 
@@ -121,12 +121,12 @@ class ObExprOracleLpad : public ObExprBaseLRpad {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_oracle_lpad_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprOracleLpad);
 };
 
 class ObExprOracleRpad : public ObExprBaseLRpad {
-  public:
+public:
   explicit ObExprOracleRpad(common::ObIAllocator& alloc);
   virtual ~ObExprOracleRpad();
 
@@ -139,7 +139,7 @@ class ObExprOracleRpad : public ObExprBaseLRpad {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_oracle_rpad_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprOracleRpad);
 };
 

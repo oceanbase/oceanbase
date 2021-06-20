@@ -24,7 +24,7 @@ namespace lib {
 // lib/coro/co_user_thread.h      using CoUserThread = CoUserThreadTemp<CoSetSched>;
 class ThreadPool : public lib::CoKThread /* CoKThreadTemp */
 {
-  public:
+public:
   void run(int64_t idx) final
   {
     thread_idx_ = static_cast<uint64_t>(idx);
@@ -46,13 +46,13 @@ class ThreadPool : public lib::CoKThread /* CoKThreadTemp */
 
   virtual void run1() = 0;
 
-  protected:
+protected:
   uint64_t get_thread_idx() const
   {
     return thread_idx_;
   }
 
-  private:
+private:
   static __thread uint64_t thread_idx_;
 };
 

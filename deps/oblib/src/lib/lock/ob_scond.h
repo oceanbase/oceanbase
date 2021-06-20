@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 struct SimpleCond {
-  public:
+public:
   SimpleCond() : n_waiters_(0)
   {}
   ~SimpleCond()
@@ -48,13 +48,13 @@ struct SimpleCond {
     return n2wakeup;
   }
 
-  private:
+private:
   lib::CoFutex futex_;
   uint32_t n_waiters_;
 };
 
 struct SCondReadyFlag {
-  public:
+public:
   SCondReadyFlag() : ready_(0), lock_(0)
   {}
   ~SCondReadyFlag()
@@ -75,13 +75,13 @@ struct SCondReadyFlag {
     ATOMIC_STORE(&lock_, 0);
   }
 
-  private:
+private:
   int ready_;
   int lock_;
 } CACHE_ALIGNED;
 
 class SCondSimpleCounter {
-  public:
+public:
   SCondSimpleCounter() : count_(0)
   {}
   void add(uint32_t x)
@@ -94,12 +94,12 @@ class SCondSimpleCounter {
     return (uint32_t)std::min(sum, 65536L);
   }
 
-  private:
+private:
   int64_t count_;
 } CACHE_ALIGNED;
 
 class SCondCounter {
-  public:
+public:
   enum { CPU_COUNT = OB_MAX_CPU_NUM };
   struct Item {
     Item() : count_(0)
@@ -121,12 +121,12 @@ class SCondCounter {
     return (uint32_t)std::min(sum, 65536L);
   }
 
-  private:
+private:
   Item count_[CPU_COUNT];
 };
 
 class SCondSimpleIdGen {
-  public:
+public:
   uint32_t next()
   {
     return (uint32_t)icpu_id();
@@ -138,7 +138,7 @@ class SCondSimpleIdGen {
 };
 
 struct SCond {
-  public:
+public:
   typedef SimpleCond CondPerCpu;
   typedef SCondReadyFlag Lock;
   typedef SCondCounter Counter;
@@ -176,7 +176,7 @@ struct SCond {
     wait((uint32_t)(wait_key >> 32), (uint32_t)wait_key, timeout);
   }
 
-  protected:
+protected:
   uint32_t get_key(uint32_t& id)
   {
     return conds_[id = (id_gen_.next() % COND_COUNT)].get_key();
@@ -186,7 +186,7 @@ struct SCond {
     conds_[id % COND_COUNT].wait(key, timeout);
   }
 
-  private:
+private:
   static uint64_t& get_wait_key()
   {
     static RLOCAL(uint64_t, key);
@@ -200,7 +200,7 @@ struct SCond {
     }
   }
 
-  private:
+private:
   Lock lock_ CACHE_ALIGNED;
   CondPerCpu conds_[COND_COUNT];
   Counter n2wakeup_;

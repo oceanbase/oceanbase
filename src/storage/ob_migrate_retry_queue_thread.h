@@ -45,13 +45,13 @@ struct ObMigrateRetryTask {
 };
 
 class ObMigrateRetryQueueThread : public lib::TGTaskHandler {
-  public:
+public:
   static const int64_t QUEUE_THREAD_NUM = 4;
   static const int64_t MINI_MODE_QUEUE_THREAD_NUM = 2;
   ObMigrateRetryQueueThread();
   virtual ~ObMigrateRetryQueueThread();
 
-  public:
+public:
   virtual int init(ObPartitionService* partition_service, int tg_id);
   virtual int push(const ObMigrateRetryTask* task);
   virtual void handle(void* task);
@@ -61,18 +61,18 @@ class ObMigrateRetryQueueThread : public lib::TGTaskHandler {
     return tg_id_;
   }
 
-  private:
+private:
   int get_task(ObMigrateRetryTask*& task);
   void free_task(ObMigrateRetryTask* task);
 
-  private:
+private:
   bool inited_;
   ObPartitionService* partition_service_;
   common::ObFixedQueue<ObMigrateRetryTask> free_queue_;
   ObMigrateRetryTask* tasks_;
   int tg_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrateRetryQueueThread);
 };
 

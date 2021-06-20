@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace rootserver {
 class ObRootService;
 class ObAllVirtualRootserviceStat : public common::ObSimpleVirtualTableIterator {
-  public:
+public:
   ObAllVirtualRootserviceStat();
   virtual ~ObAllVirtualRootserviceStat()
   {}
@@ -29,13 +29,13 @@ class ObAllVirtualRootserviceStat : public common::ObSimpleVirtualTableIterator 
   virtual int init_all_data() override;
   virtual int get_next_full_row(const share::schema::ObTableSchema* table, common::ObIArray<Column>& columns) override;
 
-  private:
+private:
   // data members
   ObRootService* rootservice_;
   common::ObDiagnoseTenantInfo sys_tenant_di_;
   int32_t stat_iter_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualRootserviceStat);
 };

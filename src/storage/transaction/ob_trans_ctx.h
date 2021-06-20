@@ -102,7 +102,7 @@ typedef common::LinkHashNode<ObTransKey> TransCtxHashNode;
 typedef common::LinkHashValue<ObTransKey> TransCtxHashValue;
 
 class ObTransState {
-  public:
+public:
   ObTransState()
   {
     reset();
@@ -129,7 +129,7 @@ class ObTransState {
   }
   VIRTUAL_TO_STRING_KV(K_(prepare_version), K_(state));
 
-  public:
+public:
   common::ObByteLock lock_;
   int64_t prepare_version_;
   int64_t state_;
@@ -138,14 +138,14 @@ class ObTransState {
 // NOTICE: You should **CHANGE** the signature of all inherit class once you
 // change one of the signature of `ObTransCtx`.
 // For Example: If you change the signature of the function `commit` in
-// `ObTransCtx`, you should also modify the signatore of function `commit` in
+// `ObTransCtx`, you should also modify the signature of function `commit` in
 // `ObPartTransCtx`, `ObSlaveTransCtx`, `ObScheTransCtx` and `ObCoordTransCtx`
 class ObTransCtx : public TransCtxHashValue {
   friend class CtxLock;
 
-  protected:
+protected:
   class TransAuditRecordMgrGuard {
-    public:
+  public:
     TransAuditRecordMgrGuard() : with_tenant_ctx_(NULL){};
     ~TransAuditRecordMgrGuard()
     {
@@ -155,12 +155,12 @@ class ObTransCtx : public TransCtxHashValue {
     void destroy();
     ObTransAuditRecordMgr* get_trans_audit_record_mgr();
 
-    private:
+  private:
     share::ObTenantSpaceFetcher* with_tenant_ctx_;
     char buf_[sizeof(share::ObTenantSpaceFetcher)];
   };
 
-  public:
+public:
   ObTransCtx(const char* ctx_type_str = "unknow", const int64_t ctx_type = ObTransCtxType::UNKNOWN)
       : magic_number_(UNKNOWN_RESET_CTX_MAGIC_NUM),
         ctx_type_str_(ctx_type_str),
@@ -209,7 +209,7 @@ class ObTransCtx : public TransCtxHashValue {
   virtual void destroy();
   void reset();
 
-  public:
+public:
   void get_ctx_guard(CtxLockGuard& guard);
   void print_trace_log();
   // ATTENTION! There is no lock protect
@@ -320,7 +320,7 @@ class ObTransCtx : public TransCtxHashValue {
     return is_elr_prepared_();
   }
 
-  public:
+public:
   bool is_exiting() const
   {
     return is_exiting_;
@@ -367,7 +367,7 @@ class ObTransCtx : public TransCtxHashValue {
   }
   int reset_trans_audit_record();
 
-  public:
+public:
   virtual bool is_inited() const = 0;
   virtual int handle_timeout(const int64_t delay) = 0;
   virtual int kill(const KillTransArg& arg, ObEndTransCallbackArray& cb_array) = 0;
@@ -384,12 +384,12 @@ class ObTransCtx : public TransCtxHashValue {
     return false;
   }
 
-  public:
+public:
   VIRTUAL_TO_STRING_KV(KP(this), K_(ctx_type), K_(trans_id), K_(tenant_id), K_(is_exiting), K_(trans_type),
       K_(is_readonly), K_(trans_expired_time), K_(self), K_(state), K_(cluster_version), K_(trans_need_wait_wrap),
       K_(trans_param), K_(can_elr), "uref", get_uref(), K_(ctx_create_time));
 
-  protected:
+protected:
   int set_trans_param_(const ObStartTransParam& trans_param);
   // There was a problem in the online pre delivery environment.
   // After timeout of transaction that did not enter 2pc, the time task did not clean it up,
@@ -485,14 +485,14 @@ class ObTransCtx : public TransCtxHashValue {
   }
   void remove_trans_table_();
 
-  public:
+public:
   // for resource pool
   // assume the size of transaction context(Scheduler/Coordinator/Participant) is about 200B,
   // then the total size of trans_ctx preallocated by resource pool is 200B * 100 * 1000 = 20MB.
   // Taking the concurrency num into consideration, obviously, it is appropriate.
   static const int64_t RP_TOTAL_NUM = 100 * 1000;
 
-  protected:
+protected:
   static const int64_t MAX_TRANS_2PC_TIMEOUT_US = 3 * 1000 * 1000;  // 3s
   // if 600 seconds after trans timeout, warn is required
   static const int64_t OB_TRANS_WARN_USE_TIME = 600 * 1000 * 1000;
@@ -506,13 +506,13 @@ class ObTransCtx : public TransCtxHashValue {
   // the time interval of asking scheduler for rs
   static const int64_t CHECK_RS_SCHEDULER_STATUS_INTERVAL = 60 * 1000 * 1000;
 
-  private:
+private:
   int alloc_audit_rec_and_trace_log_(ObTransService* trans_service, ObTransTraceLog*& trace_log);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransCtx);
 
-  protected:
+protected:
   TransAuditRecordMgrGuard record_mgr_guard_;
   int64_t magic_number_;
   const char* const ctx_type_str_;
@@ -566,7 +566,7 @@ class ObTransCtx : public TransCtxHashValue {
 };
 
 class TransCtxAlloc {
-  public:
+public:
   ObTransCtx* alloc_value()
   {
     return NULL;
@@ -595,7 +595,7 @@ class ObDistTransCtx : public ObTransCtx {
   friend class CtxLock;
   friend class IterateTransStatFunctor;
 
-  public:
+public:
   explicit ObDistTransCtx(const char* ctx_type_str, const int64_t ctx_type)
       : ObTransCtx(ctx_type_str, ctx_type),
         participants_(ObModIds::OB_TRANS_PARTITION_ARRAY, OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -618,7 +618,7 @@ class ObDistTransCtx : public ObTransCtx {
   virtual void destroy();
   void reset();
 
-  public:
+public:
   int set_scheduler(const common::ObAddr& scheduler);
   int set_coordinator(const common::ObPartitionKey& coordinator);
   int set_participants(const common::ObPartitionArray& participants);
@@ -647,11 +647,11 @@ class ObDistTransCtx : public ObTransCtx {
     return !xid_.empty();
   }
 
-  public:
+public:
   INHERIT_TO_STRING_KV("ObTransCtx", ObTransCtx, K_(scheduler), K_(coordinator), K_(participants), K_(request_id),
       K_(timeout_task), K_(xid));
 
-  protected:
+protected:
   int set_scheduler_(const common::ObAddr& scheduler);
   int set_coordinator_(const common::ObPartitionKey& coordinator);
   int set_participants_(const common::ObPartitionArray& participants);
@@ -679,10 +679,10 @@ class ObDistTransCtx : public ObTransCtx {
   int set_app_trace_id_(const ObString& app_trace_id);
   int set_xid_(const ObXATransID& xid);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistTransCtx);
 
-  protected:
+protected:
   common::ObAddr scheduler_;
   common::ObPartitionKey coordinator_;
   common::ObPartitionArray participants_;
@@ -690,7 +690,7 @@ class ObDistTransCtx : public ObTransCtx {
   ObITransRpc* rpc_;
   ObILocationAdapter* location_adapter_;
   int64_t commit_start_time_;
-  // the variable is used to get the time between the trans start and respone to client
+  // the variable is used to get the time between the trans start and response to client
   int64_t trans_start_time_;
   bool need_refresh_location_;
   int64_t trans_2pc_timeout_;

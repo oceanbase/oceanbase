@@ -25,19 +25,19 @@ namespace sql {
 
 template <class T>
 class ObSequenceResolver {
-  public:
+public:
   ObSequenceResolver()
   {}
   ~ObSequenceResolver() = default;
 
-  public:
+public:
   int resolve_sequence_options(T* stmt, ParseNode* node);
 
-  private:
+private:
   int resolve_sequence_option(T* stmt, ParseNode* node);
   int get_normalized_number(ParseNode& node, common::ObIAllocator& allocator, common::number::ObNumber& num);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSequenceResolver);
 };
 

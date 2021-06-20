@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObBitmap {
-  public:
+public:
   typedef uint64_t size_type;
   typedef uint64_t block_type;
 
@@ -30,7 +30,7 @@ class ObBitmap {
   static const size_type BLOCK_MOD_MASK = BITS_PER_BLOCK - 1;
   static const size_type BLOCK_MOD_BITS = 6;
 
-  public:
+public:
   ObBitmap(ObIAllocator& allocator);
   virtual ~ObBitmap();
 
@@ -115,7 +115,7 @@ class ObBitmap {
    */
   int load_blocks_from_array(block_type* block_data, size_type num_bits);
 
-  public:
+public:
   inline size_type capacity() const
   {
     return num_bits_;
@@ -142,7 +142,7 @@ class ObBitmap {
   }
   inline int init(const size_type valid_bits, const bool is_all_true = false);
 
-  private:
+private:
   struct MemBlock {
     MemBlock* next_;
     block_type bits_[BLOCKS_PER_MEM_BLOCK];
@@ -156,7 +156,7 @@ class ObBitmap {
     }
   };
 
-  private:
+private:
   inline static size_type block_index(size_type pos)
   {
     return pos >> BLOCK_MOD_BITS;
@@ -180,7 +180,7 @@ class ObBitmap {
 
   DISALLOW_COPY_AND_ASSIGN(ObBitmap);
 
-  private:
+private:
   size_type valid_bits_;
   size_type num_bits_;
   size_type popcnt_;

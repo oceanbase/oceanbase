@@ -23,14 +23,14 @@ namespace sql {
 class ObPurgeTableResolver : public ObDDLResolver {
   static const int TABLE_NODE = 0;
 
-  public:
+public:
   explicit ObPurgeTableResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
   virtual ~ObPurgeTableResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   static const int OLD_NAME_NODE = 0;
   static const int NEW_NAME_NODE = 1;
   DISALLOW_COPY_AND_ASSIGN(ObPurgeTableResolver);
@@ -39,14 +39,14 @@ class ObPurgeTableResolver : public ObDDLResolver {
 class ObPurgeIndexResolver : public ObDDLResolver {
   static const int TABLE_NODE = 0;
 
-  public:
+public:
   explicit ObPurgeIndexResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
   virtual ~ObPurgeIndexResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   static const int OLD_NAME_NODE = 0;
   static const int NEW_NAME_NODE = 1;
   DISALLOW_COPY_AND_ASSIGN(ObPurgeIndexResolver);
@@ -55,40 +55,40 @@ class ObPurgeIndexResolver : public ObDDLResolver {
 class ObPurgeDatabaseResolver : public ObDDLResolver {
   static const int DATABASE_NODE = 0;
 
-  public:
+public:
   explicit ObPurgeDatabaseResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
   virtual ~ObPurgeDatabaseResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPurgeDatabaseResolver);
 };
 
 class ObPurgeTenantResolver : public ObDDLResolver {
   static const int TENANT_NODE = 0;
 
-  public:
+public:
   explicit ObPurgeTenantResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
   virtual ~ObPurgeTenantResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPurgeTenantResolver);
 };
 
 class ObPurgeRecycleBinResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObPurgeRecycleBinResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
   virtual ~ObPurgeRecycleBinResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPurgeRecycleBinResolver);
 };
 

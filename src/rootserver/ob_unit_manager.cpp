@@ -2791,8 +2791,10 @@ int ObUnitManager::inner_get_pool_ids_of_tenant(const uint64_t tenant_id, ObIArr
         LOG_DEBUG("get_pools_by_tenant failed", K(tenant_id), K(ret));
       } else {
         // just return empty pool_ids
+        if (OB_GTS_TENANT_ID != tenant_id) {
+          LOG_INFO("tenant doesn't own any pool", K(tenant_id), KR(ret));
+        }
         ret = OB_SUCCESS;
-        LOG_WARN("tenant doesn't own any pool", K(tenant_id), K(ret));
       }
     } else if (NULL == pools) {
       ret = OB_ERR_UNEXPECTED;

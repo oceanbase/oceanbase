@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateRoleStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObCreateRoleStmt(common::ObIAllocator* name_pool);
   ObCreateRoleStmt();
   virtual ~ObCreateRoleStmt();
@@ -59,14 +59,14 @@ class ObCreateRoleStmt : public ObDDLStmt {
   }
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   // data members
   uint64_t tenant_id_;
   common::ObString role_name_;
   common::ObString password_;
   obrpc::ObCreateRoleArg create_role_arg_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateRoleStmt);
 };
 }  // end namespace sql

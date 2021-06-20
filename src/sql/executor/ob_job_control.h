@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 class ObTaskEvent;
 class ObJobControl {
-  public:
+public:
   explicit ObJobControl();
   virtual ~ObJobControl();
 
@@ -61,7 +61,7 @@ class ObJobControl {
 
   DECLARE_TO_STRING;
 
-  private:
+private:
   int build_job_ctx(ObExecContext& ctx, ObJob& job);
   int build_job_op_input(ObExecContext& ctx, ObJob& job);
   //  int jobs_quick_sort(common::ObIArray<ObJob *> &jobs,
@@ -69,9 +69,9 @@ class ObJobControl {
   //                      int64_t high);
   void print_job_tree(char* buf, const int64_t buf_len, int64_t& pos, ObJob* job) const;
 
-  protected:
+protected:
   common::ObSEArray<ObJob*, 2> jobs_;  // remote plan has two jobs
-  private:
+private:
   mutable uint64_t local_job_id_;
   static volatile uint64_t global_job_id_;
   DISALLOW_COPY_AND_ASSIGN(ObJobControl);

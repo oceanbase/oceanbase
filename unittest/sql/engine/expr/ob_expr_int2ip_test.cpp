@@ -18,18 +18,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObExprInt2ipTest : public ::testing::Test {
-  public:
+public:
   ObExprInt2ipTest();
   virtual ~ObExprInt2ipTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprInt2ipTest(const ObExprInt2ipTest& other);
   ObExprInt2ipTest& operator=(const ObExprInt2ipTest& other);
 
-  private:
+private:
   // data members
 };
 ObExprInt2ipTest::ObExprInt2ipTest()

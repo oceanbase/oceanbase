@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace obmysql {
 
 class OMPKResheader : public ObMySQLPacket {
-  public:
+public:
   OMPKResheader();
   virtual ~OMPKResheader();
 
@@ -38,7 +38,7 @@ class OMPKResheader : public ObMySQLPacket {
     return field_count_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(OMPKResheader);
 
   uint64_t field_count_;

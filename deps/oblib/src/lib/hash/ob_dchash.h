@@ -66,7 +66,7 @@ struct HashNode : public ObLink {
 };
 
 class DCArray {
-  public:
+public:
   DCArray(DCArray* parent, uint64_t capacity)
       : parent_(parent), capacity_(capacity), shift_(calc_shift(capacity_)), fill_idx_(0)
   {
@@ -135,7 +135,7 @@ class DCArray {
     return retired_array;
   }
 
-  private:
+private:
   static uint64_t calc_shift(uint64_t capacity)
   {
     return __builtin_clzll(capacity) + 1;
@@ -191,7 +191,7 @@ class DCArray {
     return err;
   }
 
-  private:
+private:
   DCArray* parent_;
   uint64_t capacity_;
   uint64_t shift_;
@@ -234,7 +234,7 @@ struct KeyHashNode : public HashNode {
 
 template <typename key_t, int64_t SHRINK_THRESHOLD = 8>
 class DCHash {
-  public:
+public:
   typedef ObSpinLock Lock;
   typedef ObSpinLockGuard LockGuard;
   typedef ObQSync QSync;
@@ -244,7 +244,7 @@ class DCHash {
   typedef KeyHashNode<key_t> Node;
   enum { BATCH_SIZE = 64 };
   class Handle {
-    public:
+  public:
     Handle(DCHash& host, int& err, int node_change_count)
         : host_(host),
           qsync_(host.get_qsync()),
@@ -269,7 +269,7 @@ class DCHash {
       return err;
     }
 
-    private:
+  private:
     void retire(int err, int64_t x)
     {
       if (0 == err) {
@@ -293,7 +293,7 @@ class DCHash {
       qsync_.release_ref(ref_);
     }
 
-    private:
+  private:
     DCHash& host_;
     QSync& qsync_;
     int64_t ref_;
@@ -303,7 +303,7 @@ class DCHash {
   };
   friend class Handle;
 
-  public:
+public:
   DCHash(IArrayAlloc& alloc, int64_t min_size)
       : alloc_(alloc), root_(0), tail_(UINT64_MAX), cur_array_(NULL), min_size_(min_size), target_size_(min_size)
   {
@@ -371,7 +371,7 @@ class DCHash {
     return node;
   }
 
-  private:
+private:
   static uint64_t next2n(const uint64_t x)
   {
     return x <= 2 ? x : (1UL << 63) >> (__builtin_clzll(x - 1) - 1);
@@ -494,7 +494,7 @@ class DCHash {
     return qsync;
   }
 
-  private:
+private:
   Lock lock_;
   IArrayAlloc& alloc_;
   HashNode root_ CACHE_ALIGNED;

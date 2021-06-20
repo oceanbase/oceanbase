@@ -30,7 +30,7 @@ namespace sql {
 
 static const int64_t COUNT = 200;
 class ObPartMgrAD {
-  public:
+public:
   // for hash/key/range_func part or insert statement
   static int get_part(common::ObPartMgr* part_mgr, const int64_t table_id,
       const share::schema::ObPartitionLevel part_level, const share::schema::ObPartitionFuncType part_type,
@@ -54,7 +54,7 @@ class ObPartMgrAD {
       const share::schema::ObPartitionLevel part_level, const int64_t p_id, ObOrderDirection direction,
       common::ObIArray<int64_t>& part_ids);
 
-  private:
+private:
   // Get point values range partition id
   static int get_part(common::ObPartMgr* part_mgr, const int64_t table_id,
       const share::schema::ObPartitionLevel part_level, const share::schema::ObPartitionFuncType part_type,

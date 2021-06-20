@@ -24,7 +24,7 @@ namespace lib {
 class Thread {
   using Runnable = std::function<void()>;
 
-  public:
+public:
   Thread();
   Thread(int64_t stack_size);
   Thread(Runnable runnable, int64_t stack_size = 0);
@@ -47,18 +47,18 @@ class Thread {
 
   bool has_set_stop() const;
 
-  public:
+public:
   static __thread bool monopoly_;
 
-  private:
+private:
   static void* __th_start(void* th);
   void destroy_stack();
   static __thread Thread* current_thread_;
 
-  private:
+private:
   static int64_t total_thread_count_;
 
-  private:
+private:
   pthread_t pth_;
   pid_t pid_;
   pid_t tid_;

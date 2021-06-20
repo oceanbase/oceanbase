@@ -36,7 +36,7 @@ namespace schema {
 
 template <typename TABLE_SCHEMA, typename SCHEMA>
 class ObSchemaRetrieveHelperBase {
-  public:
+public:
   static int64_t get_schema_id(const SCHEMA& schema)
   {
     UNUSED(schema);
@@ -62,7 +62,7 @@ class ObSchemaRetrieveHelperBase {
 
 template <typename TABLE_SCHEMA>
 class ObSchemaRetrieveHelperBase<TABLE_SCHEMA, ObColumnSchemaV2> {
-  public:
+public:
   static int64_t get_schema_id(const ObColumnSchemaV2& s);
   template <typename T>
   static int fill_current(
@@ -72,7 +72,7 @@ class ObSchemaRetrieveHelperBase<TABLE_SCHEMA, ObColumnSchemaV2> {
 
 template <typename TABLE_SCHEMA>
 class ObSchemaRetrieveHelperBase<TABLE_SCHEMA, ObConstraint> {
-  public:
+public:
   static int64_t get_schema_id(const ObConstraint& s);
   template <typename T>
   static int fill_current(
@@ -82,7 +82,7 @@ class ObSchemaRetrieveHelperBase<TABLE_SCHEMA, ObConstraint> {
 
 template <typename TABLE_SCHEMA>
 class ObSchemaRetrieveHelperBase<TABLE_SCHEMA, ObPartition> {
-  public:
+public:
   static int64_t get_schema_id(const ObPartition& s);
   template <typename T>
   static int fill_current(
@@ -92,7 +92,7 @@ class ObSchemaRetrieveHelperBase<TABLE_SCHEMA, ObPartition> {
 
 template <typename TABLE_SCHEMA>
 class ObSchemaRetrieveHelperBase<TABLE_SCHEMA, ObSubPartition> {
-  public:
+public:
   static int64_t get_schema_id(const ObSubPartition& s);
   template <typename T>
   static int fill_current(const uint64_t tenant_id, const bool check_deleted, const bool is_subpart_template, T& result,
@@ -102,10 +102,10 @@ class ObSchemaRetrieveHelperBase<TABLE_SCHEMA, ObSubPartition> {
 
 template <typename TABLE_SCHEMA, typename SCHEMA>
 class ObSchemaRetrieveHelper {
-  private:
+private:
   enum Mode { SINGLE_TABLE, MULTIPLE_TABLE };
 
-  public:
+public:
   ObSchemaRetrieveHelper(TABLE_SCHEMA& table)
       : mode_(SINGLE_TABLE), index_(0), is_subpart_def_(false), table_(&table), tmp_table_(NULL), table_array_(NULL)
   {}
@@ -134,7 +134,7 @@ class ObSchemaRetrieveHelper {
   template <typename T>
   static int fill_current(const uint64_t tenant_id, const bool check_deleted, T& result, SCHEMA& p, bool& is_deleted);
 
-  private:
+private:
   const Mode mode_;
   int index_;
   bool is_subpart_def_;
@@ -148,10 +148,10 @@ class ObSchemaRetrieveHelper {
 
 template <typename TABLE_SCHEMA>
 class ObSubPartSchemaRetrieveHelper {
-  private:
+private:
   enum Mode { SINGLE_TABLE, MULTIPLE_TABLE };
 
-  public:
+public:
   ObSubPartSchemaRetrieveHelper(
       TABLE_SCHEMA& table, const bool is_subpart_def = false, const bool is_subpart_template = true)
       : mode_(SINGLE_TABLE),
@@ -192,7 +192,7 @@ class ObSubPartSchemaRetrieveHelper {
   static int fill_current(const uint64_t tenant_id, const bool check_deleted, const bool is_subpart_template, T& result,
       ObSubPartition& p, bool& is_deleted);
 
-  private:
+private:
   const Mode mode_;
   int index_;
   bool is_subpart_def_;
@@ -209,7 +209,7 @@ class ObSubPartSchemaRetrieveHelper {
 
 class VersionHisVal;
 class ObSchemaRetrieveUtils {
-  public:
+public:
   /******************************************************************
    *
    * for full schemas
@@ -459,7 +459,7 @@ class ObSchemaRetrieveUtils {
   template <typename T>
   static int retrieve_drop_tenant_infos(T& result, ObIArray<ObDropTenantInfo>& drop_tenant_infos);
 
-  private:
+private:
   template <typename T>
   static bool compare_table_id(const T* table_schema, const uint64_t table_id);
   static int retrieve_generated_column(const ObTableSchema& table_schema, ObColumnSchemaV2& column);

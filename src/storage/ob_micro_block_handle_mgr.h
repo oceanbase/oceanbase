@@ -44,7 +44,7 @@ struct ObMicroBlockDataHandle {
 };
 
 class ObMicroBlockHandleMgr : public ObHandleMgr<ObMicroBlockDataHandle, blocksstable::ObMicroBlockCacheKey, 64> {
-  public:
+public:
   ObMicroBlockHandleMgr() = default;
   virtual ~ObMicroBlockHandleMgr() = default;
   int get_micro_block_handle(const uint64_t table_id, const blocksstable::ObMacroBlockCtx& block_ctx,

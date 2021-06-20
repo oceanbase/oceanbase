@@ -23,7 +23,7 @@ namespace logservice {
 // Subsequent consideration is to implement flow control at the request level,
 // control whether ack packet needs to wait, and control the ack frequency.
 class ObExtTrafficController {
-  public:
+public:
   ObExtTrafficController()
   {
     reset();
@@ -109,12 +109,12 @@ class ObExtTrafficController {
       "read_clog_disk_count_", ATOMIC_LOAD(&read_clog_disk_count_), "read_ilog_disk_count_",
       ATOMIC_LOAD(&read_ilog_disk_count_), "read_info_block_disk_count_", ATOMIC_LOAD(&read_info_block_disk_count_));
 
-  private:
+private:
   static const int64_t C = 100;                                     // coefficient
   static const int64_t TIRED_INTERVAL = 1000 * 1000;                // 1 second
   static const int64_t TRAFFIC_SIZE_LIMIT = 800 * 1024 * 1024 * C;  // 800 M
   static const int64_t READ_DISK_COUNT_LIMIT = 8192 * C;            // 8K
-  private:
+private:
   int64_t last_limit_ts_;
   int64_t traffic_size_;
   int64_t read_clog_disk_count_;        // times of disk reads when reading clog

@@ -18,10 +18,10 @@
 namespace oceanbase {
 namespace observer {
 class ObServerMemoryCutter : public lib::ObIMemoryCutter {
-  public:
+public:
   virtual void cut(int64_t& total_size) override;
 
-  private:
+private:
   void free_cache(int64_t& total_size);
 };
 

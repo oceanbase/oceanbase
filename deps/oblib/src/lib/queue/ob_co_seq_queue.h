@@ -23,7 +23,7 @@ namespace common {
 class ObCoSeqQueue {
   enum { MIN_QUEUE_SIZE = 4, READY = 1 };
 
-  public:
+public:
   ObCoSeqQueue() : next_(0), len_(0), items_(NULL), allocator_(NULL)
   {}
   ~ObCoSeqQueue()
@@ -31,7 +31,7 @@ class ObCoSeqQueue {
     destroy();
   }
 
-  public:
+public:
   int init(const int64_t limit, ObIAllocator* allocator)
   {
     int ret = common::OB_SUCCESS;
@@ -127,7 +127,7 @@ class ObCoSeqQueue {
     return last_got >= next_ ? last_got : 0;
   }
 
-  private:
+private:
   volatile int64_t next_ CACHE_ALIGNED;
   int64_t len_ CACHE_ALIGNED;
   volatile int64_t* items_;

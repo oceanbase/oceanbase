@@ -21,7 +21,7 @@ namespace common {
 class ObSegmentedBufffer {
   friend class ObSegmentedBuffferIterator;
 
-  public:
+public:
   ObSegmentedBufffer(const int block_size, const lib::ObMemAttr attr)
       : block_size_(block_size), attr_(attr), head_(nullptr), block_(nullptr), pos_(0)
   {}
@@ -35,7 +35,7 @@ class ObSegmentedBufffer {
   void destory();
   int dump_to_file(const char* file_name);
 
-  private:
+private:
   const int block_size_;
   const lib::ObMemAttr attr_;
   char* head_;
@@ -44,12 +44,12 @@ class ObSegmentedBufffer {
 };
 
 class ObSegmentedBuffferIterator {
-  public:
+public:
   ObSegmentedBuffferIterator(ObSegmentedBufffer& sb) : next_buf_(sb.head_), sb_(sb)
   {}
   char* next(int64_t& len);
 
-  private:
+private:
   char* next_buf_;
   const ObSegmentedBufffer& sb_;
 };

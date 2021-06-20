@@ -19,7 +19,7 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 class TestPostfixExpression : public ::testing::Test {
-  public:
+public:
   TestPostfixExpression();
   virtual ~TestPostfixExpression();
   virtual void SetUp();
@@ -31,13 +31,13 @@ class TestPostfixExpression : public ::testing::Test {
     return time_val.tv_sec * 1000000 + time_val.tv_usec;
   }
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestPostfixExpression);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 

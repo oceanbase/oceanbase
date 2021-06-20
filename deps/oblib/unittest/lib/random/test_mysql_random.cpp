@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace common {
 
 class TestMysqlRandom : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

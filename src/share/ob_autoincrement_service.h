@@ -151,12 +151,12 @@ inline void atomic_update(T& v, T new_v)
 }
 
 class ObAutoincrementService {
-  public:
+public:
   static const int64_t DEFAULT_TABLE_NODE_NUM = 1024;
   //  static const int64_t BATCH_FETCH_COUNT = 1024;
   typedef common::ObLinkHashMap<AutoincKey, TableNode> NodeMap;
 
-  public:
+public:
   ObAutoincrementService();
   ~ObAutoincrementService();
   static ObAutoincrementService& get_instance();
@@ -193,7 +193,7 @@ class ObAutoincrementService {
 
   int get_leader_epoch_id(const common::ObPartitionKey& part_key, int64_t& epoch_id) const;
 
-  private:
+private:
   uint64_t get_max_value(const common::ObObjType type);
   int get_table_node(const AutoincParam& param, TableNode*& table_node);
   int fetch_table_node(const AutoincParam& param, TableNode* table_node, const bool fetch_prefetch = false);
@@ -209,7 +209,7 @@ class ObAutoincrementService {
   int get_schema(share::schema::ObSchemaGetterGuard& schema_guard, const uint64_t schema_id,
       const std::function<int(uint64_t, const SchemaType*&)> get_schema_func, const SchemaType*& schema);
 
-  private:
+private:
   common::ObSmallAllocator node_allocator_;
   common::ObSmallAllocator handle_allocator_;
   common::ObAddr my_addr_;

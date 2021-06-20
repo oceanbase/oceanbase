@@ -31,7 +31,7 @@ class ObMemtableKey;
 class ObMvccRowCallback;
 
 struct ObMvccTransNode {
-  public:
+public:
   ObMvccTransNode()
       : trans_version_(0),
         log_timestamp_(INT64_MAX),
@@ -138,7 +138,7 @@ struct ObMvccTransNode {
   int try_cleanout(const ObMvccRow* value);
   int is_running(bool& is_running);
 
-  private:
+private:
   static const uint8_t F_INIT = 0x0;
   static const uint8_t F_WEAK_CONSISTENT_READ_BARRIER = 0x1;
   static const uint8_t F_STRONG_CONSISTENT_READ_BARRIER = 0x2;
@@ -150,12 +150,12 @@ struct ObMvccTransNode {
   static const uint8_t F_DELAYED_CLEANOUT = 0x40;
   static const uint8_t F_RELOCATED = 0x80;
 
-  private:
+private:
   void lock();
   void unlock();
 
   class TransNodeMutexGuard {
-    public:
+  public:
     TransNodeMutexGuard(ObMvccTransNode& node) : node_(node)
     {
       node_.lock();
@@ -166,7 +166,7 @@ struct ObMvccTransNode {
     }
     DISABLE_COPY_ASSIGN(TransNodeMutexGuard);
 
-    private:
+  private:
     ObMvccTransNode& node_;
   };
 
@@ -179,7 +179,7 @@ struct ObMvccTransNode {
 
 struct ObMvccRow {
   struct ObMvccRowIndex {
-    public:
+  public:
     ObMvccRowIndex() : is_empty_(true)
     {
       MEMSET(&replay_locations_, 0, sizeof(replay_locations_));
@@ -193,7 +193,7 @@ struct ObMvccRow {
     ObMvccTransNode* get_index_node(const int64_t index) const;
     void set_index_node(const int64_t index, ObMvccTransNode* node);
 
-    public:
+  public:
     bool is_empty_;
     ObMvccTransNode* replay_locations_[common::REPLAY_TASK_QUEUE_SIZE];
   };
@@ -383,7 +383,7 @@ struct ObMvccRow {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   int64_t to_string(char* buf, const int64_t buf_len, const bool verbose) const;
 
-  private:
+private:
   int try_wait_row_lock_for_read(ObIMvccCtx& ctx, const ObMemtableKey* key) const;
 
   uint32_t get_writer_uid();

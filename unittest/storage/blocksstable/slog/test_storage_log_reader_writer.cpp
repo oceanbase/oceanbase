@@ -24,7 +24,7 @@ using namespace ::testing;
 namespace oceanbase {
 namespace blocksstable {
 class TestStorageLogReaderWriter : public ::testing::Test {
-  public:
+public:
   TestStorageLogReaderWriter()
   {}
   virtual ~TestStorageLogReaderWriter()
@@ -368,7 +368,7 @@ TEST_F(TestStorageLogReaderWriter, large_item_batch_write)
 {
   int ret = OB_SUCCESS;
   const char LOG_DIR[512] = "./test_storage_log_rw";
-  const int64_t LOG_FILE_SIZE = 4 << 10;  // 4K
+  const int64_t LOG_FILE_SIZE = 12 * 1024;  // 12K
   const int64_t CONCURRENT_TRANS_CNT = 128;
   const int64_t LOG_BUFFER_SIZE = 512 * 1024;  // 512K
 
@@ -451,12 +451,13 @@ TEST_F(TestStorageLogReaderWriter, revise)
   start_cursor.log_id_ = 1;
   start_cursor.offset_ = 0;
 
-  char write_data[800];
-  MEMSET(write_data, 1, 800);
+  const int data_size = 5000;
+  char write_data[data_size];
+  MEMSET(write_data, 1, data_size);
   ObBaseStorageLogBuffer log_buf;
-  ret = log_buf.assign(write_data, 800);
+  ret = log_buf.assign(write_data, data_size);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = log_buf.set_pos(800);
+  ret = log_buf.set_pos(data_size);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObStorageLogWriter writer;
@@ -465,7 +466,7 @@ TEST_F(TestStorageLogReaderWriter, revise)
   ret = writer.start_log(start_cursor);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // write 3 logs so that valid data length is 3K
+  // write 3 logs so that valid data length is 4K * 3 = 12288
   for (int64_t i = 0; i < 3; ++i) {
     start_cursor.reset();
     ret = writer.flush_log(LogCommand::OB_LOG_DUMMY_LOG, log_buf, start_cursor);
@@ -476,7 +477,7 @@ TEST_F(TestStorageLogReaderWriter, revise)
   }
 
   // truncate the file so that last log is incomplete
-  ASSERT_TRUE(0 == ::truncate("./test_storage_log_rw/1", 2560));
+  ASSERT_TRUE(0 == ::truncate("./test_storage_log_rw/1", 20480));
 
   // revise log
   ObStorageLogReader reader;
@@ -489,7 +490,7 @@ TEST_F(TestStorageLogReaderWriter, revise)
   int64_t revise_size = 0;
   ret = FileDirectoryUtils::get_file_size("./test_storage_log_rw/1", revise_size);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(2048, revise_size);
+  ASSERT_EQ(16384, revise_size);
 }
 
 // the last log file has switch file entry at the end
@@ -498,7 +499,7 @@ TEST_F(TestStorageLogReaderWriter, switch_file_revise)
 {
   int ret = OB_SUCCESS;
   const char LOG_DIR[512] = "./test_storage_log_rw";
-  const int64_t LOG_FILE_SIZE = 2048;  // 2KB
+  const int64_t LOG_FILE_SIZE = 16 * 1024;  // 16KB
   const int64_t CONCURRENT_TRANS_CNT = 8;
   const int64_t LOG_BUFFER_SIZE = 1966080L;  // 1.875MB
 
@@ -545,14 +546,14 @@ TEST_F(TestStorageLogReaderWriter, switch_file_revise)
   int64_t revise_size = 0;
   ret = FileDirectoryUtils::get_file_size("./test_storage_log_rw/1", revise_size);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(2048, revise_size);
+  ASSERT_EQ(3 * 4096, revise_size);  // truncate last 4k
 }
 
 TEST_F(TestStorageLogReaderWriter, errsim_io_hung)
 {
   int ret = OB_SUCCESS;
   const char LOG_DIR[512] = "./test_storage_log_rw";
-  const int64_t LOG_FILE_SIZE = 2048;  // 2KB
+  const int64_t LOG_FILE_SIZE = 16 * 1024;  // 16KB
   const int64_t CONCURRENT_TRANS_CNT = 8;
   const int64_t LOG_BUFFER_SIZE = 1966080L;  // 1.875MB
 

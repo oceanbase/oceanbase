@@ -18,10 +18,10 @@
 namespace oceanbase {
 namespace share {
 class ObLocalityParser {
-  public:
+public:
   static int parse_type(const char* str, int64_t len, common::ObReplicaType& type);
 
-  private:
+private:
   // full replica
   static const char* FULL_REPLICA_STR;
   static const char* F_REPLICA_STR;

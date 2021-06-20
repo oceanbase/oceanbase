@@ -233,7 +233,7 @@ enum TSITransType {};
 
 template <class T>
 class Wrapper {
-  public:
+public:
   Wrapper() : instance_(NULL)
   {}
   ~Wrapper()
@@ -244,13 +244,13 @@ class Wrapper {
     }
   }
 
-  public:
+public:
   T*& get_instance()
   {
     return instance_;
   }
 
-  private:
+private:
   T* instance_;
 };
 
@@ -271,7 +271,7 @@ class Wrapper {
 //      (GET_TSI(Wrapper<type>)->get_instance() = new(std::nothrow) type(args))) : NULL
 
 class TSINodeBase {
-  public:
+public:
   TSINodeBase() : next(NULL)
   {}
   virtual ~TSINodeBase()
@@ -283,7 +283,7 @@ class TSINodeBase {
 
 template <class T>
 class TSINode : public TSINodeBase {
-  public:
+public:
   explicit TSINode(T* instance) : instance_(instance)
   {}
   virtual ~TSINode()
@@ -300,13 +300,13 @@ class TSINode : public TSINodeBase {
     }
   }
 
-  private:
+private:
   T* instance_;
 };
 
 template <class T, int N>
 class TSINode<T[N]> : public TSINodeBase {
-  public:
+public:
   explicit TSINode(T (*instance)[N]) : instance_(*instance)
   {}
   virtual ~TSINode()
@@ -319,14 +319,14 @@ class TSINode<T[N]> : public TSINodeBase {
     }
   }
 
-  private:
+private:
   T* instance_;
 };
 
 class ThreadSpecInfo {
   static const int64_t PAGE_SIZE = common::ModuleArena::DEFAULT_PAGE_SIZE;
 
-  public:
+public:
   ThreadSpecInfo() : list_(NULL), mod_(ObModIds::OB_TSI_FACTORY), alloc_(PAGE_SIZE, mod_)
   {}
   ~ThreadSpecInfo()
@@ -340,7 +340,7 @@ class ThreadSpecInfo {
     list_ = NULL;
   }
 
-  public:
+public:
   template <class T>
   T* get_instance()
   {
@@ -376,7 +376,7 @@ class ThreadSpecInfo {
     return instance;
   };
 
-  private:
+private:
   TSINodeBase* list_;
   common::ModulePageAllocator mod_;
   common::ModuleArena alloc_;
@@ -390,13 +390,13 @@ extern void tsi_factory_destroy();
 class TSIFactory {
   static const pthread_key_t INVALID_THREAD_KEY = INT32_MAX;
 
-  public:
+public:
   TSIFactory() : key_(INVALID_THREAD_KEY)
   {}
   ~TSIFactory()
   {}
 
-  public:
+public:
   int init()
   {
     int ret = OB_SUCCESS;
@@ -457,7 +457,7 @@ class TSIFactory {
     return instance;
   }
 
-  private:
+private:
   static void destroy_thread_data_(void* ptr)
   {
     if (NULL != ptr) {
@@ -466,7 +466,7 @@ class TSIFactory {
     }
   }
 
-  private:
+private:
   pthread_key_t key_;
 };
 

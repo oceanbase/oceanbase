@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprBitLeftShift : public ObBitwiseExprOperator {
-  public:
+public:
   explicit ObExprBitLeftShift(common::ObIAllocator& alloc);
   virtual ~ObExprBitLeftShift(){};
 
@@ -26,7 +26,7 @@ class ObExprBitLeftShift : public ObBitwiseExprOperator {
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBitLeftShift);
 };
 }  // namespace sql

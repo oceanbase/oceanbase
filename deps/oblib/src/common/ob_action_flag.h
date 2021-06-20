@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObActionFlag {
-  public:
+public:
   static const int64_t OP_MIN_OBJ = 1;
   static const int64_t OP_MAX_OBJ = 2;
   static const int64_t OP_NOP = 3;

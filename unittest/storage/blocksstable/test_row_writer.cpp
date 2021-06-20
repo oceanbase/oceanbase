@@ -31,24 +31,24 @@ using namespace share::schema;
 
 namespace unittest {
 class TestRowWriter : public ::testing::Test {
-  public:
+public:
   static const int64_t rowkey_column_count = 1;
   // Every ObObjType from ObTinyIntType to ObHexStringType inclusive.
   // Skip ObNullType and ObExtendType because for external usage, a column type
   // can't be NULL or NOP.
   static const int64_t column_num = ObHexStringType;
 
-  public:
+public:
   TestRowWriter();
   virtual void SetUp();
   virtual void TearDown();
   void alloc(char*& ptr, const int64_t size);
 
-  protected:
+protected:
   ObRowGenerate row_generate_;
   ObColumnMap column_map_;
 
-  private:
+private:
   ObArenaAllocator allocator_;
 };
 

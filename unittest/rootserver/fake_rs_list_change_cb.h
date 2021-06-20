@@ -15,7 +15,7 @@ namespace oceanbase {
 namespace share {
 using namespace common;
 class FakeRsListChangeCb : public ObIRsListChangeCb {
-  public:
+public:
   virtual int submit_update_rslist_task(const bool force_update)
   {
     UNUSED(force_update);
@@ -32,7 +32,7 @@ class FakeRsListChangeCb : public ObIRsListChangeCb {
   }
 };
 class FakeMergeErrorCb : public ObIMergeErrorCb {
-  public:
+public:
   FakeMergeErrorCb()
   {}
   ~FakeMergeErrorCb()

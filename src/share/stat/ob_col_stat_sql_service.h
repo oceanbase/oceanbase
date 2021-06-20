@@ -53,7 +53,7 @@ struct ObStatConverterInfo {
 class ObTableColStatSqlService {
   const static int64_t STATISTIC_WEAK_READ_TIMEOUT = 500000;
 
-  public:
+public:
   ObTableColStatSqlService();
   ~ObTableColStatSqlService();
 
@@ -74,7 +74,7 @@ class ObTableColStatSqlService {
       int64_t idx, ObStatConverterInfo& stat_converter_info);
   int fill_table_stat(common::sqlclient::ObMySQLResult& result, int64_t& partition_id, ObTableStat& stat);
 
-  private:
+private:
   // serialize data to hex-str. append \0 if return OB_SUCCESS
   //@pos, buf pos used.
   //@cstr_pos begin of hex-str.
@@ -96,10 +96,10 @@ class ObTableColStatSqlService {
       const share::schema::ObTableSchema* real_table_schema, const ObIArray<uint64_t>& column_ids,
       ObStatConverterInfo& stat_converter_info);
 
-  private:
+private:
   static const char* bitmap_compress_lib_name;
 
-  private:
+private:
   bool inited_;
   common::ObMySQLProxy* mysql_proxy_;
   lib::ObMutex mutex_;

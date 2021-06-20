@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObVirtualChannelInfo {
-  public:
+public:
   ObVirtualChannelInfo()
       : is_local_(false),
         is_data_(false),
@@ -51,7 +51,7 @@ class ObVirtualChannelInfo {
 
   TO_STRING_KV(K(channel_id_), K(op_id_), K(peer_id_), K(tenant_id_));
 
-  public:
+public:
   bool is_local_;  // 1
   bool is_data_;
   bool is_transmit_;
@@ -76,7 +76,7 @@ class ObVirtualChannelInfo {
 };
 
 class ObVirtualDtlChannelOp {
-  public:
+public:
   explicit ObVirtualDtlChannelOp(common::ObArray<ObVirtualChannelInfo, common::ObWrapperAllocator>* channels)
       : channels_(channels)
   {}
@@ -86,14 +86,14 @@ class ObVirtualDtlChannelOp {
   }
   int operator()(sql::dtl::ObDtlChannel* entry);
 
-  private:
+private:
   // the maxinum of get channels
   static const int64_t MAX_CHANNEL_CNT_PER_TENANT = 1000000;
   common::ObArray<ObVirtualChannelInfo, common::ObWrapperAllocator>* channels_;
 };
 
 class ObVirtualDtlChannelIterator {
-  public:
+public:
   ObVirtualDtlChannelIterator(common::ObArenaAllocator* allocator);
   ~ObVirtualDtlChannelIterator()
   {
@@ -118,14 +118,14 @@ class ObVirtualDtlChannelIterator {
 
   int get_next_channel(ObVirtualChannelInfo& chan_info);
 
-  private:
+private:
   common::ObArenaAllocator* iter_allocator_;
   common::ObArray<ObVirtualChannelInfo, common::ObWrapperAllocator> channels_;
   int64_t cur_nth_channel_;
 };
 
 class ObAllVirtualDtlChannel : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualDtlChannel();
   ~ObAllVirtualDtlChannel()
   {
@@ -137,7 +137,7 @@ class ObAllVirtualDtlChannel : public common::ObVirtualTableScannerIterator {
   int inner_open();
   int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   enum STORAGE_COLUMN {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -165,7 +165,7 @@ class ObAllVirtualDtlChannel : public common::ObVirtualTableScannerIterator {
   };
   int get_row(ObVirtualChannelInfo& chan_info, common::ObNewRow*& row);
 
-  private:
+private:
   common::ObString ipstr_;
   int32_t port_;
   common::ObArenaAllocator arena_allocator_;

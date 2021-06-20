@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprFuncPartOldKey : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFuncPartOldKey(common::ObIAllocator& alloc);
   virtual ~ObExprFuncPartOldKey();
 
@@ -30,13 +30,13 @@ class ObExprFuncPartOldKey : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_part_old_key(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncPartOldKey);
 };
 
 class ObExprFuncPartKey : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFuncPartKey(common::ObIAllocator& alloc);
   virtual ~ObExprFuncPartKey();
 
@@ -47,7 +47,7 @@ class ObExprFuncPartKey : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_partition_key(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncPartKey);
 };
@@ -55,7 +55,7 @@ class ObExprFuncPartKey : public ObFuncExprOperator {
 // key partitioning function, third version.
 // solve partition row skew problem
 class ObExprFuncPartNewKey : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFuncPartNewKey(common::ObIAllocator& alloc);
   virtual ~ObExprFuncPartNewKey();
 
@@ -66,7 +66,7 @@ class ObExprFuncPartNewKey : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_new_partition_key(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncPartNewKey);
 };

@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace share {}
 namespace sql {
 class ObSQLMockSchemaUtils {
-  public:
+public:
   static int mock_rowid_index(
       const share::schema::ObTableSchema* base_table_schema, const share::schema::ObTableSchema*& rowid_index_schema);
   static int mock_rowid_column(share::schema::ObTableSchema& table_schema);
@@ -49,21 +49,21 @@ class ObSQLMockSchemaUtils {
 
   static const char* get_rowid_index_name();
 
-  private:
+private:
   static int add_mock_index(const uint64_t table_id);
 };
 
 class ObSQLMockedTables {
-  private:
+private:
   // hit 25 bits
   // normal table id, high 24 bits is tenant_id, then 1 bit to determine this is table group id
   // so here we use 25 bits to specify this is a mocked rowid index table id
   const static uint64_t ROWID_INDEX_HIGH_BITS = 0xFEFDFC8;
 
-  public:
+public:
   const static uint64_t ROWID_INDEX_MASK = (ROWID_INDEX_HIGH_BITS << 39UL);
 
-  public:
+public:
   struct ObMockedRowIDIndexInfo {
     uint64_t org_table_id_;
     uint64_t mocked_table_id_;
@@ -91,7 +91,7 @@ class ObSQLMockedTables {
   typedef common::ObSEArray<ObMockedRowIDIndexInfo, 8> MockRowIDIdxArray;
   const static int64_t MOCKED_TABLE_IDENTIFIER = 0;
 
-  public:
+public:
   ObSQLMockedTables() : table_ids_()
   {}
   virtual ~ObSQLMockedTables()
@@ -131,13 +131,13 @@ class ObSQLMockedTables {
     return rowid_idx_ids_;
   }
 
-  private:
+private:
   MockTableIDArray table_ids_;
   MockRowIDIdxArray rowid_idx_ids_;
 };
 
 class ObSQLMockSchemaGuard {
-  public:
+public:
   ObSQLMockSchemaGuard();
   ~ObSQLMockSchemaGuard();
 };

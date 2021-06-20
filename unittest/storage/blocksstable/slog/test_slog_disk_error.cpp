@@ -25,7 +25,7 @@ using namespace ::testing;
 namespace oceanbase {
 namespace blocksstable {
 class TestSlogDiskError : public ::testing::Test {
-  public:
+public:
   TestSlogDiskError()
   {}
   virtual ~TestSlogDiskError()
@@ -38,7 +38,7 @@ class TestSlogDiskError : public ::testing::Test {
   virtual int make_log_ruined(const ObLogCursor& last_log_cursor);
   virtual int replay_log();
 
-  protected:
+protected:
   ObLogCursor replay_start_cursor_;
 };
 

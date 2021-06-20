@@ -18,18 +18,18 @@
 #define OK(value) ASSERT_EQ(OB_SUCCESS, (value))
 
 class ObParserResolver : public ::testing::Test {
-  public:
+public:
   ObParserResolver();
   virtual ~ObParserResolver();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObParserResolver(const ObParserResolver& other);
   ObParserResolver& operator=(const ObParserResolver& other);
 
-  protected:
+protected:
   // data members
 };
 

@@ -26,7 +26,7 @@ class ObGroupName;
 namespace omt {
 
 class ObCgroupCtrl {
-  public:
+public:
   ObCgroupCtrl() : valid_(false), last_cpu_usage_(0), last_usage_check_time_(0)
   {}
   ~ObCgroupCtrl()
@@ -66,7 +66,7 @@ class ObCgroupCtrl {
   int get_cpu_usage(const uint64_t tenant_id, int32_t& cpu_usage);
   int create_user_tenant_group_dir(const uint64_t tenant_id, int level, const common::ObString& group);
 
-  private:
+private:
   // The observer's initialization script will iterator the cgroup soft connection,
   // the directory layout is as follows:
   //  ---bin/
@@ -103,7 +103,7 @@ class ObCgroupCtrl {
   int64_t last_cpu_usage_;
   int64_t last_usage_check_time_;
 
-  private:
+private:
   int init_cgroup_root_dir_(const char* cgroup_path);
   int init_cgroup_dir_(const char* cgroup_path);
   int write_string_to_file_(const char* filename, const char* content);

@@ -41,7 +41,7 @@ static ObArray<ObRootAddr> global_rs_list;
 static ObArray<ObRootAddr> global_readonly_rs_list;
 
 class FakeRootAddrAgent : public ObRootAddrAgent {
-  public:
+public:
   virtual int store(const ObRootAddrList& addr_list, const ObRootAddrList& readonly_addr_list, const bool force)
   {
     int ret = OB_SUCCESS;
@@ -71,7 +71,7 @@ class FakeRootAddrAgent : public ObRootAddrAgent {
 };
 
 class FakeSrvRpcProxy : public ObCommonRpcProxy {
-  public:
+public:
   FakeSrvRpcProxy() : ObCommonRpcProxy(this)
   {}
 
@@ -92,12 +92,12 @@ class FakeSrvRpcProxy : public ObCommonRpcProxy {
 };
 
 class TestRsMgr : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown()
   {}
 
-  private:
+private:
   ObServerConfig config_;
   DBInitializer db_initer_;
 

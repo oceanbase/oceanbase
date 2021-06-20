@@ -31,9 +31,9 @@ using common::Source;
 class ObTenantConfigMgr;
 
 class ObTenantConfig : public ObCommonConfig {
-  public:
+public:
   class TenantConfigUpdateTask : public common::ObTimerTask {
-    public:
+  public:
     TenantConfigUpdateTask()
         : config_mgr_(nullptr),
           tenant_config_(nullptr),
@@ -72,7 +72,7 @@ class ObTenantConfig : public ObCommonConfig {
   };
   friend class TenantConfigUpdateTask;
 
-  public:
+public:
   ObTenantConfig();
   ObTenantConfig(uint64_t tenant_id);
   int init(ObTenantConfigMgr* config_mgr);
@@ -122,7 +122,7 @@ class ObTenantConfig : public ObCommonConfig {
 
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t current_version_;  // currently processed task version
   int64_t newest_version_;
@@ -135,7 +135,7 @@ class ObTenantConfig : public ObCommonConfig {
   common::ObLatch lock_;
   bool is_deleting_;
 
-  public:
+public:
 ///////////////////////////////////////////////////////////////////////////////
 // use MACRO 'OB_TENANT_PARAMETER' to define new tenant parameters
 // in ob_parameter_seed.ipp

@@ -23,7 +23,7 @@ namespace sql {
 
 class ObRawExpr;
 class RowDesc : public jit::expr::ObColumnIndexProvider {
-  public:
+public:
   RowDesc()
   {}
   virtual ~RowDesc()
@@ -45,7 +45,7 @@ class RowDesc : public jit::expr::ObColumnIndexProvider {
   int get_idx(const jit::expr::ObExpr* raw_expr, int64_t& idx) const override;
   TO_STRING_KV(N_EXPR, exprs_);
 
-  private:
+private:
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> ExprIdxMap;
   ExprIdxMap expr_idx_map_;
   common::ObSEArray<ObRawExpr*, 256> exprs_;

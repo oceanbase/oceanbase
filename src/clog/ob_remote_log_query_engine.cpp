@@ -80,13 +80,13 @@ void ObRemoteLogQueryEngine::ClearCacheTask::destroy()
 }
 
 class ObRemoteLogQueryEngine::RemoveIfFunctor {
-  public:
+public:
   RemoveIfFunctor()
   {}
   ~RemoveIfFunctor()
   {}
 
-  public:
+public:
   bool operator()(const ObPartitionLogInfo& pl_info, ObTransIDInfo& trans_id_info)
   {
     UNUSED(pl_info);

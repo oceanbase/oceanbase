@@ -20,16 +20,16 @@ namespace sql {
 class ObTableInsertSpec : public ObTableModifySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableInsertSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObTableModifySpec(alloc, type)
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertSpec);
 };
 
 class ObTableInsertOp : public ObTableModifyOp {
-  public:
+public:
   ObTableInsertOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableModifyOp(ctx, spec, input), curr_row_num_(0), part_row_cnt_(0), is_end_(false)
   {}
@@ -43,7 +43,7 @@ class ObTableInsertOp : public ObTableModifyOp {
     ObTableModifyOp::destroy();
   }
 
-  protected:
+protected:
   virtual int inner_open() override;
   virtual int inner_get_next_row() override;
   virtual int rescan() override;
@@ -54,7 +54,7 @@ class ObTableInsertOp : public ObTableModifyOp {
       storage::ObDMLBaseParam& dml_param, const common::ObIArray<DMLPartInfo>& part_infos, int64_t& affected_rows);
   int do_table_insert();
 
-  public:
+public:
   int64_t curr_row_num_;
   int64_t part_row_cnt_;
   storage::ObDMLBaseParam dml_param_;
@@ -63,14 +63,14 @@ class ObTableInsertOp : public ObTableModifyOp {
   // we set this flag  = true to avoid call child_->get_next_row() after OB_ITER_END
   bool is_end_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertOp);
 };
 
 class ObTableInsertOpInput : public ObTableModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableInsertOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableModifyOpInput(ctx, spec)
   {}
   int init(ObTaskInfo& task_info) override
@@ -78,12 +78,12 @@ class ObTableInsertOpInput : public ObTableModifyOpInput {
     return ObTableModifyOpInput::init(task_info);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertOpInput);
 };
 
 class ObSeInsertRowIterator : public ObTableModifyOp::DMLRowIterator {
-  public:
+public:
   ObSeInsertRowIterator(ObExecContext& ctx, ObTableInsertOp& op)
       : DMLRowIterator(ctx, op),
         batch_rows_(NULL),
@@ -112,13 +112,13 @@ class ObSeInsertRowIterator : public ObTableModifyOp::DMLRowIterator {
   }
 
   // for batch insert
-  private:
+private:
   static const int64_t BULK_COUNT = 500;  // get 500 rows when get_next_rows is called
   int create_cur_rows(int64_t total_cnt, int64_t col_cnt, common::ObNewRow*& row, int64_t& row_cnt);
   int alloc_rows_cells(const int64_t col_cnt, const int64_t row_cnt, common::ObNewRow* rows);
   int copy_cur_rows(const ObNewRow& src_row);
 
-  private:
+private:
   ObNewRow* batch_rows_;
   bool first_bulk_;
   int64_t estimate_rows_;

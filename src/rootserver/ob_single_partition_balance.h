@@ -35,7 +35,7 @@ class ObZoneManager;
 
 class ObSinglePartBalance {
   // Outer calls need lock protection
-  public:
+public:
   ObSinglePartBalance();
   virtual ~ObSinglePartBalance()
   {
@@ -54,7 +54,7 @@ class ObSinglePartBalance {
   int update_tenant_unit_replica_capacity(
       const uint64_t tenant_id, const common::ObIArray<share::TenantUnitRepCnt*>& tmp_ten_unit_reps);
 
-  private:
+private:
   inline static bool compare_with_tenant_id(
       const share::TenantUnitRepCnt* lhs, const share::TenantUnitRepCnt& ten_unit_rep);
   inline static bool compare_with_tenant_id_up(
@@ -74,7 +74,7 @@ class ObSinglePartBalance {
       const common::ObIArray<share::ObUnitInfo>& unit_infos, common::ObArray<uint64_t>& unit_ids);
   int create_tenant_unit_rep(const common::ObIArray<uint64_t>& unit_ids, const uint64_t tenant_id);
 
-  private:
+private:
   bool inited_;
   ObUnitManager* unit_mgr_;
   ObZoneManager* zone_mgr_;

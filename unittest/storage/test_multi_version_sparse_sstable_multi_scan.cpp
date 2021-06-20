@@ -24,7 +24,7 @@ using namespace share::schema;
 namespace unittest {
 
 class TestMultiVersionSparseSSTableMultiScan : public ObMultiVersionSSTableTest {
-  public:
+public:
   TestMultiVersionSparseSSTableMultiScan() : ObMultiVersionSSTableTest("testmultiversionsparsemultiscan")
   {}
   virtual ~TestMultiVersionSparseSSTableMultiScan()

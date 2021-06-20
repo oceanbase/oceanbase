@@ -29,18 +29,18 @@ class ObReqTransport;
 namespace transaction {
 class ObIGtsResponseRpc;
 class ObITimestampService {
-  public:
+public:
   virtual int get_timestamp(const common::ObPartitionKey& partition, int64_t& gts, common::ObAddr& leader) const = 0;
 };
 
 class ObIGlobalTimestampService {
-  public:
+public:
   virtual int handle_request(const ObGtsRequest& request, obrpc::ObGtsRpcResult& result) = 0;
   virtual int get_gts(const ObPartitionKey& gts_pkey, ObAddr& leader, int64_t& gts) = 0;
 };
 
 class ObGlobalTimestampService : public ObIGlobalTimestampService {
-  public:
+public:
   ObGlobalTimestampService() : is_inited_(false), is_running_(false), ts_service_(NULL), rpc_(NULL)
   {}
   ~ObGlobalTimestampService()
@@ -53,11 +53,11 @@ class ObGlobalTimestampService : public ObIGlobalTimestampService {
   int wait();
   void destroy();
 
-  public:
+public:
   int handle_request(const ObGtsRequest& request, obrpc::ObGtsRpcResult& result);
   int get_gts(const ObPartitionKey& gts_pkey, ObAddr& leader, int64_t& gts);
 
-  private:
+private:
   int handle_local_request_(const ObGtsRequest& request, obrpc::ObGtsRpcResult& result);
   bool is_inited_;
   bool is_running_;

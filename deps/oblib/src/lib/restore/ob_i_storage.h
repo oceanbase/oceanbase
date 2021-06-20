@@ -26,7 +26,7 @@ enum StorageOpenMode {
   ONLY_OPEN_UNLOCK = 2,  // only open
 };
 class ObIStorageUtil {
-  public:
+public:
   virtual int is_exist(const common::ObString& uri, const common::ObString& storage_info, bool& exist) = 0;
   virtual int get_file_length(
       const common::ObString& uri, const common::ObString& storage_info, int64_t& file_length) = 0;
@@ -44,7 +44,7 @@ class ObIStorageUtil {
 };
 
 class ObIStorageReader {
-  public:
+public:
   virtual int open(const common::ObString& uri, const common::ObString& storage_info) = 0;
   virtual int pread(char* buf, const int64_t buf_size, int64_t offset, int64_t& read_size) = 0;
   virtual int close() = 0;
@@ -53,7 +53,7 @@ class ObIStorageReader {
 };
 
 class ObIStorageWriter {
-  public:
+public:
   virtual int open(const common::ObString& uri, const common::ObString& storage_info) = 0;
   virtual int write(const char* buf, const int64_t size) = 0;
   virtual int close() = 0;
@@ -62,7 +62,7 @@ class ObIStorageWriter {
 };
 
 class ObIStorageMetaWrapper {
-  public:
+public:
   virtual int get(const common::ObString& uri, const common::ObString& storage_info, char* buf, const int64_t buf_size,
       int64_t& read_size) = 0;
   virtual int set(

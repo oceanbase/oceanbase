@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace rootserver {
 class ObServerStatusBuilder {
-  public:
+public:
   ObServerStatusBuilder() : config_(NULL), server_statuses_(), server_id_(OB_INIT_SERVER_ID)
   {}
   int init(ObServerConfig& config)
@@ -41,7 +41,7 @@ class ObServerStatusBuilder {
   }
   int build(ObServerManager& server_mgr);
 
-  private:
+private:
   ObServerConfig* config_;
   share::ObServerResourceInfo resource_;
   ObServerManager::ObServerStatusArray server_statuses_;

@@ -17,14 +17,14 @@ namespace oceanbase {
 namespace sql {
 #define DEF_SIMPLE_EXECUTOR(name)                      \
   class name##Executor {                               \
-    public:                                            \
+  public:                                              \
     name##Executor()                                   \
     {}                                                 \
     virtual ~name##Executor()                          \
     {}                                                 \
     int execute(ObExecContext& ctx, name##Stmt& stmt); \
                                                        \
-    private:                                           \
+  private:                                             \
     DISALLOW_COPY_AND_ASSIGN(name##Executor);          \
   }
 

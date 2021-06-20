@@ -31,14 +31,14 @@ class ObMultiVersionSchemaService;
 namespace rootserver {
 class ObServerManager;
 class ObStartupProgressTracker {
-  public:
+public:
   ObStartupProgressTracker();
   virtual ~ObStartupProgressTracker();
   int init(ObServerManager& server_manager, obrpc::ObSrvRpcProxy& rpc_proxy,
       share::schema::ObMultiVersionSchemaService& schema_service);
   int track_startup_progress(bool& is_finished);
 
-  private:
+private:
   typedef common::hash::ObHashMap<common::ObPartitionKey, obrpc::ObPartitionStat::PartitionStat> LeaderStatusMap;
 
   static const int64_t LEADER_STATUS_MAP_BUCKT_NUM = 1024 * 512;
@@ -53,14 +53,14 @@ class ObStartupProgressTracker {
       const int64_t writable_count, const int64_t recovering_count, const int64_t without_leader_count);
   int check_cancel() const;
 
-  private:
+private:
   bool inited_;
   ObServerManager* server_manager_;
   obrpc::ObSrvRpcProxy* rpc_proxy_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   LeaderStatusMap leader_status_map_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStartupProgressTracker);
 };
 }  // end namespace rootserver

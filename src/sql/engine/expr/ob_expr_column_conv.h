@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObBaseExprColumnConv {
-  public:
+public:
   ObBaseExprColumnConv(common::ObIAllocator& alloc) : alloc_(alloc), str_values_(alloc_)
   {}
   virtual ~ObBaseExprColumnConv()
@@ -39,14 +39,14 @@ class ObBaseExprColumnConv {
   ObBaseExprColumnConv(const ObBaseExprColumnConv& other) = delete;
   ObBaseExprColumnConv& operator=(const ObBaseExprColumnConv& other) = delete;
 
-  protected:
+protected:
   common::ObIAllocator& alloc_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> str_values_;
 };
 
 // fast column convert is a optimized form of OExprColumnConvert
 class ObFastColumnConvExpr : public ObBaseExprColumnConv, public ObFastExprOperator {
-  public:
+public:
   explicit ObFastColumnConvExpr(common::ObIAllocator& alloc);
   virtual ~ObFastColumnConvExpr()
   {}
@@ -83,7 +83,7 @@ class ObFastColumnConvExpr : public ObBaseExprColumnConv, public ObFastExprOpera
   }
   VIRTUAL_TO_STRING_KV(K_(column_type), K_(value_item), K_(column_info));
 
-  private:
+private:
   ObExprResType column_type_;
   ObPostExprItem value_item_;
   ObString column_info_;
@@ -92,7 +92,7 @@ class ObFastColumnConvExpr : public ObBaseExprColumnConv, public ObFastExprOpera
 class ObExprColumnConv : public ObBaseExprColumnConv, public ObFuncExprOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   // objs[0]  type
   // objs[1] collation_type
   // objs[2] accuray_expr
@@ -104,7 +104,7 @@ class ObExprColumnConv : public ObBaseExprColumnConv, public ObFuncExprOperator 
   static const int64_t PARAMS_COUNT_WITHOUT_COLUMN_INFO = 5;
   static const int64_t PARAMS_COUNT_WITH_COLUMN_INFO = 6;
 
-  public:
+public:
   explicit ObExprColumnConv(common::ObIAllocator& alloc);
   virtual ~ObExprColumnConv();
   virtual int calc_result_typeN(
@@ -119,7 +119,7 @@ class ObExprColumnConv : public ObBaseExprColumnConv, public ObFuncExprOperator 
       const ObString* column_info = NULL);
   static int column_convert(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprColumnConv) const;
 };

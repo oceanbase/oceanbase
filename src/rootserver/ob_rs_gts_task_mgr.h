@@ -30,11 +30,11 @@ class ObServerManager;
 class ObZoneManager;
 
 class ObRsGtsTaskQueue {
-  public:
+public:
   ObRsGtsTaskQueue() : inited_(false), task_alloc_(), wait_list_(), task_map_()
   {}
 
-  public:
+public:
   int init(const int64_t bucket_num);
   int push_task(const ObGtsReplicaTask* task);
   int pop_task(ObGtsReplicaTask*& task);
@@ -44,23 +44,23 @@ class ObRsGtsTaskQueue {
     return task_alloc_;
   }
 
-  private:
+private:
   typedef common::ObDList<ObGtsReplicaTask> TaskList;
   typedef common::hash::ObHashMap<ObGtsReplicaTaskKey, ObGtsReplicaTask*, common::hash::NoPthreadDefendMode>
       TaskInfoMap;
 
-  private:
+private:
   bool inited_;
   common::ObFIFOAllocator task_alloc_;
   TaskList wait_list_;
   TaskInfoMap task_map_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRsGtsTaskQueue);
 };
 
 class ObRsGtsTaskMgr : public ObRsReentrantThread {
-  public:
+public:
   ObRsGtsTaskMgr(
       rootserver::ObUnitManager& unit_mgr, rootserver::ObServerManager& server_mgr, rootserver::ObZoneManager& zone_mgr)
       : inited_(false),
@@ -73,7 +73,7 @@ class ObRsGtsTaskMgr : public ObRsReentrantThread {
         sql_proxy_(nullptr)
   {}
 
-  public:
+public:
   int init(obrpc::ObSrvRpcProxy* rpc_proxy, common::ObMySQLProxy* sql_proxy);
   int push_task(const ObGtsReplicaTask* task);
 
@@ -84,12 +84,12 @@ class ObRsGtsTaskMgr : public ObRsReentrantThread {
   }
   void stop();
 
-  private:
+private:
   const static int64_t TASK_QUEUE_LIMIT = 1 << 16;
   int pop_task(ObGtsReplicaTask*& task);
   int get_task_cnt(int64_t& task_cnt);
 
-  private:
+private:
   bool inited_;
   common::ObThreadCond cond_;
   ObRsGtsTaskQueue rs_gts_task_queue_;
@@ -100,7 +100,7 @@ class ObRsGtsTaskMgr : public ObRsReentrantThread {
   obrpc::ObSrvRpcProxy* rpc_proxy_;
   common::ObMySQLProxy* sql_proxy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRsGtsTaskMgr);
 };
 

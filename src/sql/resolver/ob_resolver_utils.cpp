@@ -1161,7 +1161,7 @@ int ObResolverUtils::resolve_const_expr(
       LOG_WARN("impicit cast for oracle", K(ret));
       if (OB_FAIL(ObRawExprUtils::resolve_op_exprs_for_oracle_implicit_cast(
               ctx.expr_factory_, ctx.session_info_, op_exprs))) {
-        LOG_WARN("impicit cast faild", K(ret));
+        LOG_WARN("impicit cast failed", K(ret));
       }
     }
 

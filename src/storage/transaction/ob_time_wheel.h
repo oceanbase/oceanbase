@@ -25,10 +25,10 @@ namespace oceanbase {
 namespace common {
 
 class ObTimeWheelTask : public ObDLinkBase<ObTimeWheelTask> {
-  public:
+public:
   static const int64_t INVALID_BUCKET_IDX = -1;
 
-  public:
+public:
   ObTimeWheelTask() : lock_()
   {
     reset();
@@ -41,7 +41,7 @@ class ObTimeWheelTask : public ObDLinkBase<ObTimeWheelTask> {
   void destroy()
   {}
 
-  public:
+public:
   void lock()
   {
     (void)lock_.lock();
@@ -82,14 +82,14 @@ class ObTimeWheelTask : public ObDLinkBase<ObTimeWheelTask> {
   }
   void runTask();
 
-  public:
+public:
   virtual void runTimerTask() = 0;
   virtual uint64_t hash() const = 0;
   virtual void begin_run()
   {}
   virtual int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  protected:
+protected:
   int64_t magic_number_;
   int64_t bucket_idx_;
   int64_t run_ticket_;
@@ -101,7 +101,7 @@ class ObTimeWheelTask : public ObDLinkBase<ObTimeWheelTask> {
 typedef ObDList<ObTimeWheelTask> TaskList;
 
 class TaskBucket {
-  public:
+public:
   TaskBucket() : lock_(ObLatchIds::TIME_WHEEL_BUCKET_LOCK)
   {}
   ~TaskBucket()
@@ -116,15 +116,15 @@ class TaskBucket {
     (void)lock_.unlock();
   }
 
-  public:
+public:
   TaskList list_;
 
-  private:
+private:
   mutable common::ObSpinLock lock_;
 } CACHE_ALIGNED;
 
 class TimeWheelBase : public share::ObThreadPool {
-  public:
+public:
   TimeWheelBase() : is_inited_(false), tid_(0), precision_(1), start_ticket_(0), scan_ticket_(0)
   {}
   ~TimeWheelBase()
@@ -133,23 +133,23 @@ class TimeWheelBase : public share::ObThreadPool {
   }
   int init(const int64_t precision, const char* name);
 
-  public:
+public:
   void run1() final;
 
   int schedule(ObTimeWheelTask* task, const int64_t delay);
   int cancel(ObTimeWheelTask* task);
 
-  private:
+private:
   int schedule_(ObTimeWheelTask* task, const int64_t run_ticket);
   int scan();
 
-  private:
+private:
   static const int64_t MAX_BUCKET = 10000;
-  // scaner max sleep 1000000us
+  // scanner max sleep 1000000us
   static const int64_t MAX_SCAN_SLEEP = 1000000;
   static const int64_t MAX_TIMER_NAME_LEN = 16;
 
-  private:
+private:
   bool is_inited_;
   pthread_t tid_;
   TaskBucket buckets_[MAX_BUCKET];
@@ -160,7 +160,7 @@ class TimeWheelBase : public share::ObThreadPool {
 };
 
 class ObTimeWheel {
-  public:
+public:
   ObTimeWheel()
   {
     reset();
@@ -180,15 +180,15 @@ class ObTimeWheel {
     return is_running_;
   }
 
-  public:
+public:
   int schedule(ObTimeWheelTask* task, const int64_t delay);
   int cancel(ObTimeWheelTask* task);
 
-  private:
+private:
   static const int64_t MAX_THREAD_NUM = 64;
   static const int64_t MAX_TIMER_NAME_LEN = 16;
 
-  private:
+private:
   bool is_inited_;
   int64_t precision_;
   bool is_running_;

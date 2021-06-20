@@ -25,10 +25,10 @@ namespace common {
 using lib::ObMemAttr;
 extern ObMemAttr default_memattr;
 class ObIAllocator {
-  public:
+public:
   virtual ~ObIAllocator(){};
 
-  public:
+public:
   /************************************************************************/
   /*                     New Interface (Under construction)               */
   /************************************************************************/
@@ -95,7 +95,7 @@ class ObIAllocator {
 extern ObIAllocator* global_default_allocator;
 
 class ObWrapperAllocator : public ObIAllocator {
-  public:
+public:
   explicit ObWrapperAllocator(ObIAllocator* alloc) : alloc_(alloc){};
   explicit ObWrapperAllocator(const lib::ObLabel& label) : alloc_(NULL)
   {
@@ -140,13 +140,13 @@ class ObWrapperAllocator : public ObIAllocator {
     return offsetof(ObWrapperAllocator, alloc_) * 8;
   }
 
-  private:
+private:
   // data members
   ObIAllocator* alloc_;
 };
 
 class ObWrapperAllocatorWithAttr : public ObWrapperAllocator {
-  public:
+public:
   explicit ObWrapperAllocatorWithAttr(ObIAllocator* alloc, ObMemAttr attr = ObMemAttr())
       : ObWrapperAllocator(alloc), mem_attr_(attr){};
   explicit ObWrapperAllocatorWithAttr(const lib::ObLabel& label) : ObWrapperAllocator(NULL), mem_attr_()
@@ -163,7 +163,7 @@ class ObWrapperAllocatorWithAttr : public ObWrapperAllocator {
     return ObWrapperAllocator::alloc(sz, mem_attr_);
   };
 
-  private:
+private:
   ObMemAttr mem_attr_;
 };
 }  // namespace common

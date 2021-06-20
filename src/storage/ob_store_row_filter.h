@@ -29,7 +29,7 @@ namespace storage {
 struct ObStoreRow;
 
 class ObIStoreRowFilter {
-  public:
+public:
   virtual int check(const ObStoreRow& store_row, bool& is_filtered) const = 0;
   virtual int init(const sql::ObTableLocation* part_filter, sql::ObExecContext* exec_ctx, common::ObPartMgr* part_mgr,
       const common::ObPartitionKey& pkey) = 0;
@@ -37,7 +37,7 @@ class ObIStoreRowFilter {
 };
 
 class ObStoreRowFilter : public ObIStoreRowFilter {
-  public:
+public:
   ObStoreRowFilter() : part_filter_(NULL), exec_ctx_(NULL), part_mgr_(NULL), pkey_()
   {}
   virtual ~ObStoreRowFilter()
@@ -47,7 +47,7 @@ class ObStoreRowFilter : public ObIStoreRowFilter {
   int check(const ObStoreRow& store_row, bool& is_filtered) const override;
   TO_STRING_KV(KP_(part_filter), KP_(exec_ctx), KP_(part_mgr), K_(pkey));
 
-  private:
+private:
   const sql::ObTableLocation* part_filter_;
   sql::ObExecContext* exec_ctx_;
   common::ObPartMgr* part_mgr_;

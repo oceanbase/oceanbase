@@ -27,7 +27,7 @@ typedef int (*ObGetStmtOraNeedPrivsFunc)(const share::schema::ObSessionPrivInfo&
     common::ObIArray<share::schema::ObOraNeedPriv>& need_privs);
 
 class ObPrivilegeCheck {
-  public:
+public:
   /// Check privilege
   ///@param ctx[in] sql ctx
   ///@param basic_stmt[in] stmt
@@ -60,7 +60,7 @@ class ObPrivilegeCheck {
   static int check_password_expired_on_connection(
       uint64_t user_id, share::schema::ObSchemaGetterGuard& schema_guard, sql::ObSQLSessionInfo& session);
 
-  private:
+private:
   /// Get all privilege info needed by a stmt, including sub-queries.
   /// called by generate_physical_plan
   ///@param ctx[in]               sql ctx

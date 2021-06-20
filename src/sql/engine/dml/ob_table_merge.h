@@ -26,7 +26,7 @@ namespace sql {
 class ObTableMergeInput : public ObTableModifyInput {
   friend class ObTableMerge;
 
-  public:
+public:
   ObTableMergeInput() : ObTableModifyInput()
   {}
   virtual ~ObTableMergeInput()
@@ -36,7 +36,7 @@ class ObTableMergeInput : public ObTableModifyInput {
     return PHY_MERGE;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableMergeInput);
 };
 
@@ -44,9 +44,9 @@ class ObTableMergeInput : public ObTableModifyInput {
 class ObTableMerge : public ObTableModify {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   class ObTableMergeCtx : public ObTableModifyCtx {
-    public:
+  public:
     explicit ObTableMergeCtx(ObExecContext& ctx);
     ~ObTableMergeCtx();
     int init(ObExecContext& ctx, bool has_insert_clause, bool has_update_clause, int64_t insert_row_column_count,
@@ -71,7 +71,7 @@ class ObTableMerge : public ObTableModify {
       return update_row_;
     }
 
-    public:
+  public:
     // fileds for update clause
     common::ObNewRow update_row_;     // row buffer for update clause, hold both old row and new row
     common::ObNewRow target_rowkey_;  // rowkey for the updated row
@@ -94,7 +94,7 @@ class ObTableMerge : public ObTableModify {
     common::ObSEArray<DMLPartInfo, 1> part_infos_;
   };
 
-  public:
+public:
   explicit ObTableMerge(common::ObIAllocator& alloc);
   virtual ~ObTableMerge()
   {}
@@ -212,11 +212,11 @@ class ObTableMerge : public ObTableModify {
   int copy_row(const ObNewRow& old_row, ObNewRow& new_row, int32_t* projector = NULL, int64_t projector_size = 0) const;
   virtual int rescan(ObExecContext& ctx) const;
 
-  protected:
+protected:
   int generate_origin_row(ObExecContext& ctx, const common::ObNewRow* input_row, bool& conflict) const;
   int calc_update_row(ObExecContext& ctx, const common::ObNewRow* input_row) const;
 
-  private:
+private:
   virtual int inner_open(ObExecContext& ctx) const;
   virtual int inner_close(ObExecContext& ctx) const;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
@@ -232,12 +232,12 @@ class ObTableMerge : public ObTableModify {
   int deserialize_projector(
       const char* buf, const int64_t data_len, int64_t& pos, int32_t*& projector, int64_t& projector_size);
 
-  private:
+private:
   template <class T>
   inline int add_id_to_array(T& array, uint64_t id);
   DISALLOW_COPY_AND_ASSIGN(ObTableMerge);
 
-  protected:
+protected:
   bool has_insert_clause_;
   bool has_update_clause_;
 
@@ -279,7 +279,7 @@ int ObTableMerge::add_id_to_array(T& array, uint64_t id)
 }
 /////////////////////////////////// functor //////////////////////////////////////
 class ExprFunction {
-  public:
+public:
   ExprFunction(ObTableMerge& table_merge) : table_merge_(table_merge)
   {}
   ~ExprFunction()
@@ -290,12 +290,12 @@ class ExprFunction {
     return table_merge_;
   }
 
-  protected:
+protected:
   ObTableMerge& table_merge_;
 };
 
 class MatchCondition : public ExprFunction {
-  public:
+public:
   MatchCondition(ObTableMerge& table_merge) : ExprFunction(table_merge)
   {}
   ~MatchCondition()
@@ -307,7 +307,7 @@ class MatchCondition : public ExprFunction {
 };
 
 class DeleteCondition : public ExprFunction {
-  public:
+public:
   DeleteCondition(ObTableMerge& table_merge) : ExprFunction(table_merge)
   {}
   ~DeleteCondition()
@@ -319,7 +319,7 @@ class DeleteCondition : public ExprFunction {
 };
 
 class UpdateCondition : public ExprFunction {
-  public:
+public:
   UpdateCondition(ObTableMerge& table_merge) : ExprFunction(table_merge)
   {}
   ~UpdateCondition()
@@ -331,7 +331,7 @@ class UpdateCondition : public ExprFunction {
 };
 
 class InsertCondition : public ExprFunction {
-  public:
+public:
   InsertCondition(ObTableMerge& table_merge) : ExprFunction(table_merge)
   {}
   ~InsertCondition()

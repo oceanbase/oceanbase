@@ -29,16 +29,16 @@ using namespace share::schema;
 namespace unittest {
 
 class TestTenantFileMgr : public TestDataFilePrepare {
-  public:
+public:
   TestTenantFileMgr();
   virtual ~TestTenantFileMgr() = default;
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   void test_pg_meta_checkpoint(const int64_t meta_size);
 
-  protected:
+protected:
   static const int64_t MACRO_BLOCK_SIZE = 128 * 1024;
   common::ObPGKey pg_key_;
 };

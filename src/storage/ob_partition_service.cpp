@@ -4466,7 +4466,7 @@ int ObPartitionService::get_role_for_partition_table(const common::ObPartitionKe
 int ObPartitionService::get_role_unsafe(const common::ObPartitionKey& pkey, common::ObRole& role) const
 {
   class GetRoleFunctor {
-    public:
+  public:
     GetRoleFunctor() : role_(common::ObRole::INVALID_ROLE)
     {}
     int operator()(const common::ObPartitionKey& pkey, const int64_t* file_id, ObIPartitionGroup* partition)

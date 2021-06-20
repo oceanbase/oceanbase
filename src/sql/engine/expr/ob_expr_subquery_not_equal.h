@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprSubQueryNotEqual : public ObSubQueryRelationalExpr {
-  public:
+public:
   explicit ObExprSubQueryNotEqual(common::ObIAllocator& alloc);
   virtual ~ObExprSubQueryNotEqual();
 
@@ -26,11 +26,11 @@ class ObExprSubQueryNotEqual : public ObSubQueryRelationalExpr {
     return ObSubQueryRelationalExpr::cg_expr(op_cg_ctx, raw_expr, rt_expr);
   }
 
-  private:
+private:
   virtual int compare_single_row(const common::ObNewRow& left_row, const common::ObNewRow& right_row,
       common::ObExprCtx& expr_ctx, common::ObObj& result) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSubQueryNotEqual);
 };
 }  // namespace sql

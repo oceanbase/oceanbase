@@ -30,7 +30,7 @@ namespace sql {
 struct ObPxPartitionInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxPartitionInfo() : partition_key_(), logical_row_count_(0), physical_row_count_(0)
   {}
   virtual ~ObPxPartitionInfo() = default;
@@ -48,7 +48,7 @@ struct ObPxPartitionInfo {
 struct ObPxDmlRowInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxDmlRowInfo() : row_match_count_(0), row_duplicated_count_(0), row_deleted_count_(0)
   {}
   ~ObPxDmlRowInfo() = default;
@@ -66,7 +66,7 @@ struct ObPxDmlRowInfo {
     row_deleted_count_ += row_info.row_deleted_count_;
   }
   TO_STRING_KV(K_(row_match_count), K_(row_duplicated_count), K_(row_deleted_count))
-  public:
+public:
   int64_t row_match_count_;
   int64_t row_duplicated_count_;
   int64_t row_deleted_count_;
@@ -75,7 +75,7 @@ struct ObPxDmlRowInfo {
 class ObPxTaskMonitorInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxTaskMonitorInfo() : sched_exec_time_start_(0), sched_exec_time_end_(0), exec_time_start_(0), exec_time_end_(0)
   {}
   ObPxTaskMonitorInfo& operator=(const ObPxTaskMonitorInfo& other)
@@ -125,7 +125,7 @@ class ObPxTaskMonitorInfo {
   TO_STRING_KV(
       K_(sched_exec_time_start), K_(sched_exec_time_end), K_(exec_time_start), K_(exec_time_end), K(metrics_.count()));
 
-  private:
+private:
   int64_t sched_exec_time_start_;
   int64_t sched_exec_time_end_;
   int64_t exec_time_start_;
@@ -138,7 +138,7 @@ typedef common::ObSEArray<ObPxTaskMonitorInfo, 32> ObPxTaskMonitorInfoArray;
 class ObPxTaskChSet : public dtl::ObDtlChSet {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxTaskChSet()
       : sqc_id_(common::OB_INVALID_INDEX), task_id_(common::OB_INVALID_INDEX), sm_group_id_(common::OB_INVALID_INDEX)
   {}
@@ -169,7 +169,7 @@ class ObPxTaskChSet : public dtl::ObDtlChSet {
   }
   int assign(const ObPxTaskChSet& ch_set);
 
-  private:
+private:
   int64_t sqc_id_;
   int64_t task_id_;
   int64_t sm_group_id_;
@@ -185,7 +185,7 @@ typedef common::ObArray<dtl::ObDtlChTotalInfo, common::ModulePageAllocator, fals
 struct ObPxPartChMapItem {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxPartChMapItem(int64_t first, int64_t second) : first_(first), second_(second), third_(INT64_MAX)
   {}
   ObPxPartChMapItem(int64_t first, int64_t second, int64_t third) : first_(first), second_(second), third_(third)
@@ -220,7 +220,7 @@ struct ObPxPartChInfo {
 class ObPxReceiveDataChannelMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_RECEIVE_DATA_CHANNEL> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxReceiveDataChannelMsg() : child_dfo_id_(-1), ch_sets_(), ch_map_opt_(false), ch_total_info_()
   {}
   virtual ~ObPxReceiveDataChannelMsg() = default;
@@ -282,7 +282,7 @@ class ObPxReceiveDataChannelMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX
   }
   TO_STRING_KV(K_(child_dfo_id), K_(ch_sets), K_(ch_map_opt), K_(ch_total_info));
 
-  private:
+private:
   int64_t child_dfo_id_;
   ObPxTaskChSets ch_sets_;
   bool ch_map_opt_;
@@ -292,7 +292,7 @@ class ObPxReceiveDataChannelMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX
 class ObPxTransmitDataChannelMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_TRANSMIT_DATA_CHANNEL> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxTransmitDataChannelMsg() : ch_sets_(), ch_total_info_(), part_affinity_map_(), ch_map_opt_(false)
   {}
   virtual ~ObPxTransmitDataChannelMsg() = default;
@@ -368,7 +368,7 @@ class ObPxTransmitDataChannelMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::P
   }
   TO_STRING_KV(K_(ch_sets), K_(part_affinity_map), K_(ch_total_info), K_(ch_map_opt));
 
-  private:
+private:
   ObPxTaskChSets ch_sets_;
   dtl::ObDtlChTotalInfo ch_total_info_;
   ObPxPartChMapArray part_affinity_map_;  // addressing channels in partition wise join
@@ -378,7 +378,7 @@ class ObPxTransmitDataChannelMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::P
 class ObPxInitSqcResultMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::INIT_SQC_RESULT> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxInitSqcResultMsg()
       : dfo_id_(common::OB_INVALID_ID), sqc_id_(common::OB_INVALID_ID), rc_(common::OB_SUCCESS), task_count_(0)
   {}
@@ -387,7 +387,7 @@ class ObPxInitSqcResultMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::INIT_SQ
   {}
   TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(task_count));
 
-  public:
+public:
   int64_t dfo_id_;
   int64_t sqc_id_;
   int rc_;
@@ -399,7 +399,7 @@ class ObPxInitSqcResultMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::INIT_SQ
 class ObPxFinishSqcResultMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::FINISH_SQC_RESULT> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxFinishSqcResultMsg()
       : dfo_id_(common::OB_INVALID_ID),
         sqc_id_(common::OB_INVALID_ID),
@@ -430,7 +430,7 @@ class ObPxFinishSqcResultMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::FINIS
   }
   TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(sqc_affected_rows));
 
-  public:
+public:
   int64_t dfo_id_;
   int64_t sqc_id_;
   int rc_;
@@ -445,7 +445,7 @@ class ObPxFinishSqcResultMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::FINIS
 class ObPxFinishTaskResultMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::FINISH_TASK_RESULT> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxFinishTaskResultMsg()
       : dfo_id_(common::OB_INVALID_ID),
         sqc_id_(common::OB_INVALID_ID),
@@ -465,7 +465,7 @@ class ObPxFinishTaskResultMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::FINI
   {}
   TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(task_id), K_(rc));
 
-  public:
+public:
   int64_t dfo_id_;
   int64_t sqc_id_;
   int64_t task_id_;

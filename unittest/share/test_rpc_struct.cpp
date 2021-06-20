@@ -20,7 +20,7 @@ using namespace common;
 namespace share {
 
 class TestRPCStruct : public ::testing::Test {
-  public:
+public:
   TestRPCStruct()
   {}
   virtual ~TestRPCStruct()

@@ -19,14 +19,14 @@ namespace oceanbase {
 namespace storage {
 
 class ObTenantConfigMetaCheckpointReader final {
-  public:
+public:
   ObTenantConfigMetaCheckpointReader();
   ~ObTenantConfigMetaCheckpointReader() = default;
   int init(const blocksstable::MacroBlockId& entry_block, blocksstable::ObStorageFileHandle& file_handle);
   int read_checkpoint();
   common::ObIArray<blocksstable::MacroBlockId>& get_meta_block_list();
 
-  private:
+private:
   bool is_inited_;
   ObPGMetaItemReader reader_;
 };

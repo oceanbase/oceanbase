@@ -39,17 +39,17 @@ class ObArchiveMgr;
 class ObArchiveRoundMgr;
 class StartArchiveHelper;
 class ObArchivePGMgr : public share::ObThreadPool {
-  public:
+public:
   static const int64_t THREAD_RUN_INTERVAL = 1 * 1000 * 1000L;
   static const int64_t RECONFIRM_PG_INTERVAL = 30 * 1000 * 1000L;
   static const int64_t PG_MGR_QUEUE_SIZE = 5;
   static const int64_t PG_MGR_THREAD_COUNT = PG_MGR_QUEUE_SIZE;
 
-  public:
+public:
   ObArchivePGMgr();
   virtual ~ObArchivePGMgr();
 
-  public:
+public:
   int init(ObArchiveAllocator* allocator, ObArchiveLogWrapper* log_wrapper, ObPartitionService* partition_service,
       ObArchiveRoundMgr* archive_round_mgr, ObArchiveMgr* archive_mgr);
   void destroy();
@@ -59,10 +59,10 @@ class ObArchivePGMgr : public share::ObThreadPool {
   int reset_tasks();
   void clear_archive_info();
 
-  private:
+private:
   void run1();
 
-  public:
+public:
   int add_pg_archive_task(ObIPartitionGroup* partition, bool& is_added);
   int add_all_pg_on_start_archive_task(const int64_t incarnation, const int64_t archive_round);
   int delete_pg_archive_task(ObIPartitionGroup* partition);
@@ -88,7 +88,7 @@ class ObArchivePGMgr : public share::ObThreadPool {
     return pg_map_.count();
   }
 
-  private:
+private:
   void do_thread_task_();
   bool need_dispatch_pg_();
   bool need_confirm_pg_();
@@ -121,11 +121,11 @@ class ObArchivePGMgr : public share::ObThreadPool {
   int push_pre_task_(const ObPGKey& pg_key, ObLink* link);
   int64_t thread_index_();
 
-  private:
+private:
   class CheckDeletePGFunctor;
   class CheckArchiveRoundStartFunctor;
 
-  private:
+private:
   bool inited_;
   int64_t thread_counter_;
   int64_t log_archive_round_;
@@ -144,12 +144,12 @@ class ObArchivePGMgr : public share::ObThreadPool {
   ObArchiveMgr* archive_mgr_;
   ObPartitionService* partition_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObArchivePGMgr);
 };
 
 class PreArchiveLinkedPGKey : public common::ObLink {
-  public:
+public:
   PreArchiveLinkedPGKey()
   {
     reset();
@@ -163,7 +163,7 @@ class PreArchiveLinkedPGKey : public common::ObLink {
   void reset();
   TO_STRING_KV(K(pg_key_), K(type_), K(epoch_), K(takeover_ts_), K(create_timestamp_), K(retry_times_));
 
-  public:
+public:
   ObPGKey pg_key_;
   bool type_;  // add task true, del task false
   int64_t epoch_;
@@ -171,7 +171,7 @@ class PreArchiveLinkedPGKey : public common::ObLink {
   int64_t create_timestamp_;
   uint64_t retry_times_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(PreArchiveLinkedPGKey);
 };
 

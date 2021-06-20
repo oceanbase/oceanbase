@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprOracleTrunc : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprOracleTrunc(common::ObIAllocator& alloc);
   explicit ObExprOracleTrunc(common::ObIAllocator& alloc, const char* name);
   virtual ~ObExprOracleTrunc()
@@ -30,7 +30,7 @@ class ObExprOracleTrunc : public ObFuncExprOperator {
       common::ObObj& result, const common::ObObj* params, int64_t params_count, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  protected:
+protected:
   int calc_with_date(common::ObObj& result, const common::ObObj& source, const common::ObObj& format,
       common::ObExprCtx& expr_ctx) const;
   int calc_with_decimal(common::ObObj& result, const common::ObObj& source, const common::ObObj& format,
@@ -40,18 +40,18 @@ class ObExprOracleTrunc : public ObFuncExprOperator {
   int calc_result2(
       common::ObObj& result, const common::ObObj& input, const common::ObObj& param, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprOracleTrunc);
 };
 
 class ObExprTrunc : public ObExprOracleTrunc {
-  public:
+public:
   explicit ObExprTrunc(common::ObIAllocator& alloc);
   virtual ~ObExprTrunc()
   {}
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTrunc);
 };

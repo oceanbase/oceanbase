@@ -26,7 +26,7 @@ using namespace election;
 using namespace common;
 
 class TestObElectionTimer : public ::testing::Test {
-  public:
+public:
   TestObElectionTimer()
   {}
   virtual ~TestObElectionTimer()
@@ -35,14 +35,14 @@ class TestObElectionTimer : public ::testing::Test {
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   static const int64_t TIMER_THREAD_COUNT = 6;
   int init();
   int start();
   int stop();
   int wait();
 
-  protected:
+protected:
   election::ObElection e_;
   election::ObElectionTimer timer_;
   election::ObElectionRpc rpc_;

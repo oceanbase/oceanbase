@@ -18,23 +18,23 @@
 using namespace oceanbase::common;
 
 class TestIArray : public ::testing::Test {
-  public:
+public:
   TestIArray();
   virtual ~TestIArray();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestIArray);
 
-  protected:
+protected:
   // function members
   template <typename T>
   void setup(int32_t N, T& arr);
   void verify(int32_t N, const ObIArray<int32_t>& arr);
 
-  protected:
+protected:
   // data members
 };
 

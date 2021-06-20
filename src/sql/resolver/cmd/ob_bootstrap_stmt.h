@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObBootstrapStmt : public ObSystemCmdStmt {
-  public:
+public:
   ObBootstrapStmt() : ObSystemCmdStmt(stmt::T_BOOTSTRAP), bootstrap_arg_()
   {}
   explicit ObBootstrapStmt(common::ObIAllocator* name_pool) : ObSystemCmdStmt(name_pool, stmt::T_BOOTSTRAP)
@@ -49,7 +49,7 @@ class ObBootstrapStmt : public ObSystemCmdStmt {
   }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(bootstrap_arg));
 
-  public:
+public:
   obrpc::ObBootstrapArg bootstrap_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObBootstrapStmt);
 };

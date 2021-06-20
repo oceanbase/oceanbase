@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObServerCheckpointWriter final {
-  public:
+public:
   static ObServerCheckpointWriter& get_instance();
   int init();
   int write_checkpoint(const common::ObLogCursor& checkpoint);
@@ -30,12 +30,12 @@ class ObServerCheckpointWriter final {
   int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId>& meta_block_list);
   void reset();
 
-  private:
+private:
   ObServerCheckpointWriter();
   ~ObServerCheckpointWriter() = default;
   int update_tenant_file_super_block(common::hash::ObHashMap<ObTenantFileKey, ObTenantFileCheckpointEntry>& hash_map);
 
-  private:
+private:
   static const int64_t MAX_SERVER_META_MACRO_CNT = 10L;
   static const int64_t FILE_CNT_PER_SERVER = 10000L;
   ObServerPGMetaCheckpointWriter meta_writer_;

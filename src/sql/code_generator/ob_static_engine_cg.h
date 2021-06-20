@@ -116,7 +116,7 @@ class ObTempTableTransformationOpSpec;
 // code generator for static typing engine.
 //
 class ObStaticEngineCG : public ObCodeGeneratorImpl {
-  public:
+public:
   using ObCodeGeneratorImpl::ObCodeGeneratorImpl;
   template <int TYPE>
   friend class GenSpecHelper;
@@ -130,7 +130,7 @@ class ObStaticEngineCG : public ObCodeGeneratorImpl {
   int generate_rt_expr(const ObRawExpr& raw_expr, ObExpr*& rt_expr);
   int generate_rt_exprs(const common::ObIArray<ObRawExpr*>& src, common::ObIArray<ObExpr*>& dst);
 
-  private:
+private:
   bool enable_pushdown_filter_to_storage(const ObLogTableScan& op);
   // Post order visit logic plan and generate operator specification.
   // %in_root_job indicate that the operator is executed in main execution thread,
@@ -313,7 +313,7 @@ class ObStaticEngineCG : public ObCodeGeneratorImpl {
   int generate_spec(ObLogInsert& op, ObPxMultiPartInsertSpec& spec, const bool in_root_job);
   int generate_spec(ObLogUpdate& op, ObPxMultiPartUpdateSpec& spec, const bool in_root_job);
 
-  private:
+private:
   int convert_global_index_merge_info(ObLogMerge& op, const TableColumns& table_columns,
       common::ObIArray<ObOpSpec*>& subplan_roots, ObTableDMLInfo& table_dml_info);
   int generate_merge_subplan_access_exprs(const bool has_update_clause, const ObAssignments& assigns,
@@ -403,7 +403,7 @@ class ObStaticEngineCG : public ObCodeGeneratorImpl {
   int generate_hash_func_exprs(const common::ObIArray<ObExchangeInfo::HashExpr>& hash_dist_exprs,
       ExprFixedArray& dist_exprs, common::ObHashFuncs& dist_hash_funcs);
 
-  private:
+private:
   // all exprs of current operator
   ObSEArray<ObRawExpr*, 8> cur_op_exprs_;
   // all self_produced exprs of current operator

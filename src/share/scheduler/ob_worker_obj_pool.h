@@ -20,7 +20,7 @@ namespace share {
 class ObDagWorkerNew;
 
 class ObWorkerObjPool {
-  public:
+public:
   static ObWorkerObjPool& get_instance();
   int init(const int64_t total_mem_limit = TOTAL_LIMIT, const int64_t hold_mem_limit = HOLD_LIMIT,
       const int64_t page_size = PAGE_SIZE);
@@ -40,7 +40,7 @@ class ObWorkerObjPool {
     return worker_cnt_;
   }
 
-  private:
+private:
   ObWorkerObjPool();   // prevent to new
   ~ObWorkerObjPool();  // prevent to delete
   ObWorkerObjPool(const ObWorkerObjPool&);
@@ -53,7 +53,7 @@ class ObWorkerObjPool {
   static constexpr double OBJ_UP_LIMIT_PERCENT = 4;
   static constexpr double OBJ_CREATE_PERCENT = 2;
 
-  private:
+private:
   bool is_inited_;
   lib::ObMutex lock_;
   int32_t init_worker_cnt_;

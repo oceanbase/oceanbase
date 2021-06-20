@@ -37,14 +37,14 @@ class ObFBPartitionParam;
 }  // namespace share
 namespace observer {
 class ObMPQuery : public ObMPBase, public ObIMPPacketSender {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_QUERY;
 
-  public:
+public:
   explicit ObMPQuery(const ObGlobalContext& gctx);
   virtual ~ObMPQuery();
 
-  public:
+public:
   virtual void disconnect();
   virtual void update_last_pkt_pos()
   {
@@ -102,14 +102,14 @@ class ObMPQuery : public ObMPBase, public ObIMPPacketSender {
     return is_com_filed_list_;
   }
 
-  protected:
+protected:
   int process();
   int deserialize();
   int check_readonly_stmt(ObMySQLResultSet& result);
   int is_readonly_stmt(ObMySQLResultSet& result, bool& is_readonly);
   virtual int after_process();
 
-  private:
+private:
   int register_callback_with_async(ObQueryExecCtx& query_ctx);
   int response_result(ObQueryExecCtx& query_ctx, bool force_sync_resp, bool& async_resp_used);
   int get_tenant_schema_info_(const uint64_t tenant_id, ObTenantCachedSchemaGuardInfo* cache_info,
@@ -133,10 +133,10 @@ class ObMPQuery : public ObMPBase, public ObIMPPacketSender {
       const ObMPParseStat& parse_stat, bool& optimization_done, bool& async_resp_used, bool& need_disconnect);
   int deserialize_com_field_list();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPQuery);
 
-  private:
+private:
   sql::ObSqlCtx ctx_;
   ObQueryRetryCtrl retry_ctrl_;
   common::ObString sql_;

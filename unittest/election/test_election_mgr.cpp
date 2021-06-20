@@ -39,7 +39,7 @@ static uint64_t table_id_ = tenant_id_ << 40;
 static ObElectionMgr mgr_;
 
 class TestObElectionMgr : public ::testing::Test {
-  public:
+public:
   TestObElectionMgr()
   {}
   ~TestObElectionMgr()
@@ -53,10 +53,10 @@ class TestObElectionMgr : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  public:
+public:
   void init();
 
-  public:
+public:
   ObAddr self_;
   obrpc::ObBatchRpc batch_rpc_;
   MockEGPriorityGetter eg_cb_;
@@ -64,7 +64,7 @@ class TestObElectionMgr : public ::testing::Test {
 };
 
 class MyObElectionCallback : public ObIElectionCallback {
-  public:
+public:
   MyObElectionCallback()
   {}
   ~MyObElectionCallback()

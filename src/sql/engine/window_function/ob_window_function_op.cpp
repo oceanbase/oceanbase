@@ -1188,14 +1188,14 @@ int ObWindowFunctionOp::inner_get_next_row()
         const ObRADatumStore::StoredRow* child_row = NULL;
         const ObRADatumStore::StoredRow* result_row = NULL;
         if (OB_FAIL(rows_store_.get_row(last_output_row_idx_, child_row))) {
-          LOG_WARN("get row faild", K(ret), K(last_output_row_idx_));
+          LOG_WARN("get row failed", K(ret), K(last_output_row_idx_));
         } else if (OB_FAIL(child_row->to_expr(get_all_expr(), eval_ctx_))) {
           LOG_WARN("Failed to get next row", K(ret));
         } else if (MY_SPEC.is_parallel_ && OB_FAIL(wf_cell.part_rows_store_.get_row(0, result_row))) {
-          LOG_WARN("get row faild", K(ret), K(last_output_row_idx_));
+          LOG_WARN("get row failed", K(ret), K(last_output_row_idx_));
         } else if (!MY_SPEC.is_parallel_ &&
                    OB_FAIL(wf_cell.part_rows_store_.get_row(last_output_row_idx_, result_row))) {
-          LOG_WARN("get row faild", K(ret), K(last_output_row_idx_));
+          LOG_WARN("get row failed", K(ret), K(last_output_row_idx_));
         } else {
           clear_evaluated_flag();
           WinFuncCell* tmp_wf_cell = wf_list_.get_first();
@@ -1304,7 +1304,7 @@ int ObWindowFunctionOp::parallel_winbuf_process()
       LOG_WARN("fail to get whole msg", K(ret));
     }
   } else if (OB_FAIL(wf_cell.part_rows_store_.get_row(0, res_row))) {
-    LOG_WARN("get row faild", K(ret), K(res_row));
+    LOG_WARN("get row failed", K(ret), K(res_row));
   } else if (OB_FAIL(get_whole_msg(false, whole, res_row))) {
     LOG_WARN("fail to get whole msg", K(ret));
   } else if (whole.is_empty_) {

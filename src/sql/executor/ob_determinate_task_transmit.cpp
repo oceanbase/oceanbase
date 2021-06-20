@@ -51,7 +51,7 @@ struct ObDeterminateTaskTransmit::RangeStartCompare {
     return cmp < 0;
   }
 
-  private:
+private:
   ObNewRow start_row_;
   int& ret_;
 };

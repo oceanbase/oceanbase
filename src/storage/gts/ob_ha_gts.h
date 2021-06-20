@@ -27,7 +27,7 @@ class ObSrvRpcProxy;
 namespace gts {
 class ObHaGtsManager;
 class ObGtsReq {
-  public:
+public:
   ObGtsReq(const common::ObAddr& client_addr, const uint64_t tenant_id, const transaction::MonotonicTs srr)
       : client_addr_(client_addr), tenant_id_(tenant_id), srr_(srr)
   {}
@@ -38,7 +38,7 @@ class ObGtsReq {
   ~ObGtsReq()
   {}
 
-  public:
+public:
   void reset()
   {
     client_addr_.reset();
@@ -58,7 +58,7 @@ class ObGtsReq {
     return srr_;
   }
 
-  private:
+private:
   common::ObAddr client_addr_;
   uint64_t tenant_id_;
   transaction::MonotonicTs srr_;
@@ -67,11 +67,11 @@ class ObGtsReq {
 typedef common::LinkHashNode<ObGtsID> HaGtsHashNode;
 typedef common::LinkHashValue<ObGtsID> HaGtsHashValue;
 class ObHaGts : public HaGtsHashValue {
-  public:
+public:
   ObHaGts();
   ~ObHaGts();
 
-  public:
+public:
   int init(const uint64_t gts_id, const int64_t epoch_id, const common::ObMemberList& member_list,
       const int64_t min_start_timestamp, obrpc::ObSrvRpcProxy* rpc_proxy, ObHaGtsManager* gts_mgr,
       const common::ObAddr& self_addr);
@@ -79,7 +79,7 @@ class ObHaGts : public HaGtsHashValue {
   void reset();
   void destroy();
 
-  public:
+public:
   int handle_ping_request(const obrpc::ObHaGtsPingRequest& request, obrpc::ObHaGtsPingResponse& response);
   int handle_ping_response(const obrpc::ObHaGtsPingResponse& response);
   int handle_get_request(const obrpc::ObHaGtsGetRequest& request);
@@ -102,25 +102,25 @@ class ObHaGts : public HaGtsHashValue {
   int inc_update_local_ts(const int64_t local_ts);
   const static int64_t HA_GTS_RPC_TIMEOUT = 1 * 1000 * 1000;  // 1s
   const static int64_t STALE_REQ_INTERVAL = 1 * 1000 * 1000;  // 1s
-  private:
+private:
   int ping_request_(const common::ObAddr& server, const obrpc::ObHaGtsPingRequest& request);
   int send_gts_response_(const common::ObAddr& server, const obrpc::ObHaGtsGetResponse& response);
   int send_heartbeat_(const common::ObAddr& server, const obrpc::ObHaGtsHeartbeat& heartbeat);
   int get_miss_replica_(const common::ObMemberList& member_list1, const common::ObMemberList& member_list2,
       common::ObAddr& miss_replica) const;
 
-  private:
+private:
   typedef common::RWLock RWLock;
   typedef RWLock::WLockGuard WLockGuard;
 
   class EraseIfFunctor {
-    public:
+  public:
     EraseIfFunctor() : req_()
     {}
     ~EraseIfFunctor()
     {}
 
-    public:
+  public:
     bool operator()(const ObGtsReqID& req_id, ObGtsReq& req)
     {
       UNUSED(req_id);
@@ -132,36 +132,36 @@ class ObHaGts : public HaGtsHashValue {
       return req_;
     }
 
-    private:
+  private:
     ObGtsReq req_;
   };
 
   class RemoveIfFunctor {
-    public:
+  public:
     RemoveIfFunctor(const transaction::MonotonicTs cur_ts) : cur_ts_(cur_ts)
     {}
     ~RemoveIfFunctor()
     {}
 
-    public:
+  public:
     bool operator()(const ObGtsReqID& req_id, ObGtsReq& req)
     {
       UNUSED(req_id);
       return cur_ts_ - req.get_srr() >= transaction::MonotonicTs(STALE_REQ_INTERVAL);
     }
 
-    private:
+  private:
     transaction::MonotonicTs cur_ts_;
   };
 
   class HeartbeatFunctor {
-    public:
+  public:
     HeartbeatFunctor()
     {}
     ~HeartbeatFunctor()
     {}
 
-    public:
+  public:
     bool operator()(const ObAddr& addr, int64_t& heartbeat_ts)
     {
       UNUSED(addr);
@@ -171,14 +171,14 @@ class ObHaGts : public HaGtsHashValue {
   };
 
   class CheckHeartbeatFunctor {
-    public:
+  public:
     CheckHeartbeatFunctor(const common::ObMemberList& member_list)
         : member_list_(member_list), heartbeat_member_list_(), offline_replica_()
     {}
     ~CheckHeartbeatFunctor()
     {}
 
-    public:
+  public:
     bool operator()(const ObAddr& addr, int64_t& heartbeat_ts)
     {
       int ret = OB_SUCCESS;
@@ -204,13 +204,13 @@ class ObHaGts : public HaGtsHashValue {
       return heartbeat_member_list_;
     }
 
-    private:
+  private:
     const common::ObMemberList& member_list_;
     common::ObMemberList heartbeat_member_list_;
     common::ObAddr offline_replica_;
   };
 
-  private:
+private:
   bool is_inited_;
   int64_t created_ts_;
   mutable RWLock lock_;
@@ -231,12 +231,12 @@ class ObHaGts : public HaGtsHashValue {
   // Single replica mode, need to be modified under lock protection
   bool is_single_mode_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHaGts);
 };
 
 class ObHaGtsFactory {
-  public:
+public:
   static ObHaGts* alloc()
   {
     ATOMIC_INC(&alloc_cnt_);
@@ -254,13 +254,13 @@ class ObHaGtsFactory {
     }
   }
 
-  private:
+private:
   static int64_t alloc_cnt_;
   static int64_t free_cnt_;
 };
 
 class ObHaGtsAlloc {
-  public:
+public:
   ObHaGts* alloc_value()
   {
     return NULL;

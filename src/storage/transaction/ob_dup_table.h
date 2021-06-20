@@ -32,7 +32,7 @@ typedef common::LinkHashNode<common::ObAddr> DupTableLeaseInfoHashNode;
 typedef common::LinkHashValue<common::ObAddr> DupTableLeaseInfoHashValue;
 
 class ObDupTableLeaseInfo : public DupTableLeaseInfoHashValue {
-  public:
+public:
   ObDupTableLeaseInfo()
   {
     reset();
@@ -56,7 +56,7 @@ class ObDupTableLeaseInfo : public DupTableLeaseInfoHashValue {
   void destroy();
   TO_STRING_KV(K_(lease_expired_ts), K_(cur_log_id));
 
-  private:
+private:
   // expire time of lease, -1 means already expired
   int64_t lease_expired_ts_;
   uint64_t cur_log_id_;
@@ -64,7 +64,7 @@ class ObDupTableLeaseInfo : public DupTableLeaseInfoHashValue {
 
 // for virtual table display only
 class ObDupTableLeaseInfoStat {
-  public:
+public:
   ObDupTableLeaseInfoStat(const common::ObAddr& addr, const int64_t lease_expired_ts, const uint64_t cur_log_id)
       : addr_(addr), lease_expired_ts_(lease_expired_ts), cur_log_id_(cur_log_id)
   {}
@@ -83,7 +83,7 @@ class ObDupTableLeaseInfoStat {
   }
   TO_STRING_KV(K_(addr), K_(lease_expired_ts), K_(cur_log_id));
 
-  private:
+private:
   common::ObAddr addr_;
   int64_t lease_expired_ts_;
   uint64_t cur_log_id_;
@@ -91,7 +91,7 @@ class ObDupTableLeaseInfoStat {
 
 // statistics data about lease request
 class ObDupTableLeaseRequestStatistics {
-  public:
+public:
   ObDupTableLeaseRequestStatistics()
   {
     reset();
@@ -131,7 +131,7 @@ class ObDupTableLeaseRequestStatistics {
   }
   void statistics(const common::ObPartitionKey& pkey);
 
-  private:
+private:
   int64_t request_count_;
   int64_t resp_succ_count_;
   int64_t resp_lease_expired_count_;
@@ -144,7 +144,7 @@ class ObDupTableLeaseRequestStatistics {
 typedef common::ObSEArray<ObDupTableLeaseInfoStat, 4> ObDupTableLeaseInfoArray;
 
 class ObDupTablePartitionInfo {
-  public:
+public:
   ObDupTablePartitionInfo()
   {
     reset();
@@ -179,10 +179,10 @@ class ObDupTablePartitionInfo {
     lease_request_statistics_.statistics(pkey);
   }
 
-  private:
+private:
   bool check_trans_log_id_replayed_(const ObTransID& trans_id, const uint64_t log_id);
 
-  private:
+private:
   ObPartitionTransCtxMgr* partition_mgr_;
   // expire time of lease
   int64_t lease_expired_ts_;
@@ -196,7 +196,7 @@ class ObDupTablePartitionInfo {
 };
 
 class DupTableLeaseInfoAlloc {
-  public:
+public:
   ObDupTableLeaseInfo* alloc_value()
   {
     return NULL;
@@ -226,7 +226,7 @@ typedef common::ObLinkHashMap<common::ObAddr, ObDupTableLeaseInfo, DupTableLease
     DupTableLeaseInfoHashMap;
 
 class GenPlaFromDupTableLeaseHashMapFunctor {
-  public:
+public:
   GenPlaFromDupTableLeaseHashMapFunctor(ObAddrLogIdArray& addr_logid_array, const uint64_t log_id)
       : addr_logid_array_(addr_logid_array), log_id_(log_id), err_(OB_SUCCESS)
   {}
@@ -265,14 +265,14 @@ class GenPlaFromDupTableLeaseHashMapFunctor {
     return err_;
   }
 
-  private:
+private:
   ObAddrLogIdArray& addr_logid_array_;
   uint64_t log_id_;
   int err_;
 };
 
 class PrintDupTableLeaseHashMapFunctor {
-  public:
+public:
   PrintDupTableLeaseHashMapFunctor(common::ObPartitionKey& pkey) : pkey_(pkey)
   {}
   ~PrintDupTableLeaseHashMapFunctor()
@@ -306,13 +306,13 @@ class PrintDupTableLeaseHashMapFunctor {
   }
   TO_STRING_KV(K_(pkey), K_(lease_list));
 
-  private:
+private:
   common::ObPartitionKey& pkey_;
   ObDupTableLeaseInfoArray lease_list_;
 };
 
 class ObDupTableLeaseStatistics {
-  public:
+public:
   ObDupTableLeaseStatistics()
   {
     reset();
@@ -352,7 +352,7 @@ class ObDupTableLeaseStatistics {
   }
   void statistics(const common::ObPartitionKey& pkey);
 
-  private:
+private:
   // The following situations are unexpected and need to be counted
   uint32_t not_master_count_;
   uint32_t get_lease_info_err_count_;
@@ -364,7 +364,7 @@ class ObDupTableLeaseStatistics {
 };
 
 class ObDupTablePartitionMgr {
-  public:
+public:
   ObDupTablePartitionMgr() : dup_table_lease_infos_(1 << 7)
   {
     reset();
@@ -404,16 +404,16 @@ class ObDupTablePartitionMgr {
     lease_statistics_.statistics(partition_);
   }
 
-  private:
+private:
   int update_lease_expired_ts_and_return_(
       bool need_update, ObDupTableLeaseInfo* lease_info, const ObDupTableLeaseRequestMsg& request);
   void check_is_dup_table_();
 
-  public:
+public:
   // the maximum number of missing logs allowed when the replica requests a lease
   static const int MAX_ALLOWED_LOG_MISSING_COUNT = 500;
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   ObPartitionTransCtxMgr* partition_mgr_;
   common::ObPartitionKey partition_;
@@ -432,7 +432,7 @@ class ObDupTablePartitionMgr {
 typedef common::LinkHashValue<common::ObPartitionKey> ObDupTableLeaseTaskHashValue;
 
 class ObDupTableLeaseTask : public ObITimeoutTask, public ObDupTableLeaseTaskHashValue {
-  public:
+public:
   ObDupTableLeaseTask() : is_inited_(false), trans_service_(NULL)
   {}
   virtual ~ObDupTableLeaseTask()
@@ -441,21 +441,21 @@ class ObDupTableLeaseTask : public ObITimeoutTask, public ObDupTableLeaseTaskHas
   int init(const common::ObPartitionKey pkey, ObTransService* trans_service);
   void reset();
 
-  public:
+public:
   virtual void runTimerTask() override;
   virtual uint64_t hash() const override
   {
     return pkey_.hash();
   }
 
-  private:
+private:
   bool is_inited_;
   ObTransService* trans_service_;
   common::ObPartitionKey pkey_;
 };
 
 class ObDupTableRedoSyncTask : public ObTransTask {
-  public:
+public:
   ObDupTableRedoSyncTask() : ObTransTask(ObTransRetryTaskType::UNKNOWN)
   {
     reset();
@@ -515,7 +515,7 @@ class ObDupTableRedoSyncTask : public ObTransTask {
   TO_STRING_KV(K_(trans_id), K_(partition), K_(log_id), K_(task_type), K_(log_type), K_(timestamp),
       K_(last_generate_mask_set_ts), K_(is_mask_set_ready));
 
-  public:
+public:
   ObTransID trans_id_;
   common::ObPartitionKey partition_;
   uint64_t log_id_;

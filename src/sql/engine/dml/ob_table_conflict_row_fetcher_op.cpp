@@ -129,7 +129,7 @@ int ObConflictDatumIterator::get_next_row(ObNewRow*& row)
   const ObChunkDatumStore::StoredRow* sr = NULL;
   if (OB_FAIL(row_iter_.get_next_row(sr))) {
     if (OB_ITER_END != ret) {
-      LOG_WARN("get next row faild", K(ret));
+      LOG_WARN("get next row failed", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

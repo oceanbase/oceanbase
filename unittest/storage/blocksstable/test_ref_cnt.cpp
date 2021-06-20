@@ -29,13 +29,13 @@ using namespace storage;
 namespace unittest {
 
 class TestStorageFile : public TestDataFilePrepare {
-  public:
+public:
   TestStorageFile();
   virtual ~TestStorageFile();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   ObStorageFile* pg_file_;
 };
 
@@ -62,14 +62,14 @@ void TestStorageFile::TearDown()
 }
 
 class TestStorageFileRefCnt : public share::ObThreadPool {
-  public:
+public:
   enum OptType { INC, DEC, MAX };
   TestStorageFileRefCnt();
   virtual ~TestStorageFileRefCnt() = default;
   int init(const int64_t thread_cnt, ObStorageFile* pg_file, OptType type);
   virtual void run1();
 
-  private:
+private:
   int do_work(const MacroBlockId& macro_id);
   ObStorageFile* pg_file_;
   OptType type_;

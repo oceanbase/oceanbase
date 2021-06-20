@@ -30,7 +30,7 @@ struct ObHJBatchPair {
 };
 
 class ObHJBatchMgr {
-  public:
+public:
   ObHJBatchMgr(common::ObIAllocator& alloc, ObHJBufMgr* buf_mgr, uint64_t tenant_id)
       : total_dump_count_(0),
         total_dump_size_(0),
@@ -65,12 +65,12 @@ class ObHJBatchMgr {
     }
   }
 
-  public:
+public:
   int64_t total_dump_count_;
   int64_t total_dump_size_;
   int64_t batch_count_;
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObIAllocator& alloc_;
   hj_batch_pair_list_type batch_list_;

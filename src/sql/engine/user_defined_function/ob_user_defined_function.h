@@ -72,7 +72,7 @@ class ObSqlExpression;
 struct ObUdfConstArgs {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObUdfConstArgs() : sql_calc_(nullptr), idx_in_udf_arg_(common::OB_INVALID_INDEX){};
   virtual ~ObUdfConstArgs() = default;
   ObUdfConstArgs& operator=(const ObUdfConstArgs& other)
@@ -87,10 +87,10 @@ struct ObUdfConstArgs {
 };
 
 class ObUdfFunction {
-  private:
+private:
   static const int OB_MYSQL_ERRMSG_SIZE = 512;
 
-  public:
+public:
   friend class ObGetUdfFunctor;
   friend class ObResetUdfFunctor;
   friend class ObForceDelUdfFunctor;
@@ -101,7 +101,7 @@ class ObUdfFunction {
     UDF_DEINIT,
   };
   class ObUdfCtx {
-    public:
+  public:
     ObUdfCtx() : state_(UDF_UNINITIALIZED), udf_init_(), udf_args_()
     {}
     virtual ~ObUdfCtx() = default;
@@ -110,7 +110,7 @@ class ObUdfFunction {
     ObUdfArgs udf_args_;
   };
 
-  public:
+public:
   ObUdfFunction()
       : udf_meta_(),
         dlhandle_(nullptr),
@@ -127,7 +127,7 @@ class ObUdfFunction {
   virtual int process_init_func(ObUdfFunction::ObUdfCtx& udf_ctx) const;
   virtual void process_deinit_func(ObUdfFunction::ObUdfCtx& udf_ctx) const;
 
-  protected:
+protected:
   share::schema::ObUDFMeta udf_meta_;
   ObUdfSoHandler dlhandle_;
   ObUdfFuncAny func_origin_;
@@ -139,8 +139,8 @@ class ObUdfFunction {
 };
 
 class ObNormalUdfFunction : public ObUdfFunction {
-  private:
-  public:
+private:
+public:
   ObNormalUdfFunction() = default;
   virtual ~ObNormalUdfFunction() = default;
   int process_origin_func(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
@@ -148,8 +148,8 @@ class ObNormalUdfFunction : public ObUdfFunction {
 };
 
 class ObAggUdfFunction : public ObUdfFunction {
-  private:
-  public:
+private:
+public:
   ObAggUdfFunction() = default;
   virtual ~ObAggUdfFunction() = default;
 
@@ -164,7 +164,7 @@ class ObAggUdfFunction : public ObUdfFunction {
 class ObAggUdfMeta {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObAggUdfMeta() : udf_meta_(), udf_attributes_(), udf_attributes_types_(), calculable_results_()
   {}
   explicit ObAggUdfMeta(const share::schema::ObUDFMeta& meta)
@@ -180,7 +180,7 @@ class ObAggUdfMeta {
 };
 
 class ObAggUdfExeUnit {
-  public:
+public:
   ObAggUdfExeUnit(ObAggUdfFunction* agg_func, ObUdfFunction::ObUdfCtx* udf_ctx) : agg_func_(agg_func), udf_ctx_(udf_ctx)
   {}
   ObAggUdfExeUnit() : agg_func_(nullptr), udf_ctx_(nullptr)
@@ -191,7 +191,7 @@ class ObAggUdfExeUnit {
 };
 
 class ObNormalUdfExeUnit {
-  public:
+public:
   ObNormalUdfExeUnit(ObNormalUdfFunction* normal_func, ObUdfFunction::ObUdfCtx* udf_ctx)
       : normal_func_(normal_func), udf_ctx_(udf_ctx)
   {}

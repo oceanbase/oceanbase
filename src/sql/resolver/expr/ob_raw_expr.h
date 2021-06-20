@@ -57,7 +57,7 @@ extern ObRawExpr* USELESS_POINTER;
 const static int64_t DEFAULT_SQL_BITSET_SIZE = 32;
 template <int64_t N = DEFAULT_SQL_BITSET_SIZE, typename FlagType = int64_t, bool auto_free = false>
 class ObSqlBitSet {
-  public:
+public:
   typedef uint32_t BitSetWord;
 
   ObSqlBitSet() : block_allocator_(NULL), bit_set_word_array_(NULL), desc_()
@@ -663,7 +663,7 @@ class ObSqlBitSet {
     return *this;
   }
 
-  private:
+private:
   int alloc_new_buf(int64_t word_cnt)
   {
     int ret = OB_SUCCESS;
@@ -720,7 +720,7 @@ class ObSqlBitSet {
     return ret;
   }
 
-  private:
+private:
   static const int64_t PER_BITSETWORD_BITS = 32;
   static const int64_t PER_BITSETWORD_MOD_BITS = 5;
   static const int64_t PER_BITSETWORD_MASK = PER_BITSETWORD_BITS - 1;
@@ -735,7 +735,7 @@ class ObSqlBitSet {
     {}
   };
 
-  private:
+private:
   ObIAllocator* block_allocator_;
   BitSetWord* bit_set_word_array_;
   SqlBitSetDesc desc_;
@@ -762,7 +762,7 @@ enum AccessNameType {
 class ObRawExpr;
 class ObSysFunRawExpr;
 class ObObjAccessIdent {
-  public:
+public:
   ObObjAccessIdent()
       : type_(UNKNOWN), access_name_(), access_index_(common::OB_INVALID_INDEX), sys_func_expr_(NULL), params_()
   {}
@@ -786,7 +786,7 @@ class ObObjAccessIdent {
     return *this;
   }
 
-  public:
+public:
   inline void set_type(AccessNameType type)
   {
     type_ = type;
@@ -863,7 +863,7 @@ class ObObjAccessIdent {
 
 class ObColumnRefRawExpr;
 class ObQualifiedName {
-  public:
+public:
   ObQualifiedName()
       : database_name_(),
         tbl_name_(),
@@ -915,7 +915,7 @@ class ObQualifiedName {
   TO_STRING_KV(N_DATABASE_NAME, database_name_, N_TABLE_NAME, tbl_name_, N_COLUMN, col_name_, K_(is_star), K_(ref_expr),
       K_(parents_expr_info), K_(parent_aggr_level), K_(access_idents), K_(is_access_root));
 
-  public:
+public:
   common::ObString database_name_;
   common::ObString tbl_name_;  // used for package name for UDF
   common::ObString col_name_;  // used for function name for UDF
@@ -959,7 +959,7 @@ struct OrderItem {
   OrderItem(ObRawExpr* expr, ObOrderDirection order_type) : expr_(expr), order_type_(order_type)
   {}
 
-  public:
+public:
   virtual ~OrderItem()
   {}
   void reset()
@@ -1107,7 +1107,7 @@ enum ObVarType {
 struct ObVarInfo final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObVarInfo() : type_(INVALID_VAR), name_()
   {}
   int deep_copy(common::ObIAllocator& allocator, ObVarInfo& var_info) const;
@@ -1209,7 +1209,7 @@ class ObRawExprVisitor;
 struct ObHiddenColumnItem;
 
 class ObRawExpr : virtual public jit::expr::ObExpr {
-  public:
+public:
   friend sql::ObExpr* ObStaticEngineExprCG::get_rt_expr(const ObRawExpr& raw_expr);
   friend sql::ObExpr* ObExprOperator::get_rt_expr(const ObRawExpr& raw_expr) const;
 
@@ -1487,14 +1487,14 @@ class ObRawExpr : virtual public jit::expr::ObExpr {
       K_(expr_level), K_(expr_levels), K_(enum_set_values), K_(is_explicited_reference), K_(ref_count),
       K_(is_for_generated_column), K_(extra), K_(is_calculated));
 
-  public:
+public:
   uint32_t magic_num_;
 
-  protected:
+protected:
   static const int64_t COMMON_MULTI_NUM = 16;
   static const int64_t COMMON_ENUM_SET_VALUE_NUM = 4;
 
-  protected:
+protected:
   ObExprInfo info_;   // flags
   ObRelIds rel_ids_;  // related table idx
   // means the raw expr contain which level variables(column, aggregate expr, set expr or subquery expr)
@@ -1515,7 +1515,7 @@ class ObRawExpr : virtual public jit::expr::ObExpr {
   ObRawExpr* orig_expr_;   // orig raw expr before pre cast of pre calc.
   bool is_calculated_;     // for code gerenation in static engine.
   bool is_deterministic_;  // expr is deterministic, given the same inputs, returns the same result
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExpr);
 };
 
@@ -1619,7 +1619,7 @@ inline const ObRelIds& ObRawExpr::get_relation_ids() const
 
 ////////////////////////////////////////////////////////////////
 class ObTerminalRawExpr : public ObRawExpr {
-  public:
+public:
   explicit ObTerminalRawExpr(ObItemType expr_type = T_INVALID) : ObRawExpr(expr_type)
   {}
   explicit ObTerminalRawExpr(common::ObIAllocator& alloc, ObItemType expr_type = T_INVALID)
@@ -1645,14 +1645,14 @@ class ObTerminalRawExpr : public ObRawExpr {
     return seed;
   }
 
-  protected:
-  private:
+protected:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTerminalRawExpr);
 };
 
 ////////////////////////////////////////////////////////////////
 class ObConstRawExpr : public ObTerminalRawExpr, public jit::expr::ObConstExpr {
-  public:
+public:
   ObConstRawExpr() : is_date_unit_(false) /*: precalc_expr_(NULL)*/
   {
     ObExpr::set_expr_class(ObExpr::EXPR_CONST);
@@ -1705,18 +1705,18 @@ class ObConstRawExpr : public ObTerminalRawExpr, public jit::expr::ObConstExpr {
   int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const;
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   common::ObString literal_prefix_;  // used in compile phase.
   common::ObObjMeta obj_meta_;
   bool is_date_unit_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObConstRawExpr);
 };
 
 ////////////////////////////////////////////////////////////////
 class ObVarRawExpr : public ObTerminalRawExpr, public jit::expr::ObVarExpr {
-  public:
+public:
   ObVarRawExpr()
   {
     ObExpr::set_expr_class(ObExpr::EXPR_VAR);
@@ -1754,14 +1754,14 @@ class ObVarRawExpr : public ObTerminalRawExpr, public jit::expr::ObVarExpr {
     return result_type_assigned_;
   }
 
-  private:
+private:
   bool result_type_assigned_;
   DISALLOW_COPY_AND_ASSIGN(ObVarRawExpr);
 };
 
 ////////////////////////////////////////////////////////////////
 class ObUserVarIdentRawExpr : public ObConstRawExpr {
-  public:
+public:
   ObUserVarIdentRawExpr() : is_contain_assign_(false), query_has_udf_(false)
   {}
   ObUserVarIdentRawExpr(common::ObIAllocator& alloc)
@@ -1804,18 +1804,18 @@ class ObUserVarIdentRawExpr : public ObConstRawExpr {
   bool is_same_variable(const ObObj& obj) const;
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   bool is_contain_assign_;
   bool query_has_udf_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUserVarIdentRawExpr);
 };
 
 ////////////////////////////////////////////////////////////////
 class ObLogicalOperator;
 class ObQueryRefRawExpr : public ObTerminalRawExpr {
-  public:
+public:
   ObQueryRefRawExpr()
       : ObTerminalRawExpr(),
         ref_id_(common::OB_INVALID_ID),
@@ -1934,7 +1934,7 @@ class ObQueryRefRawExpr : public ObTerminalRawExpr {
       ref_id_, K_(expr_level), K_(expr_levels), K_(output_column), K_(is_set), K_(is_cursor), K_(column_types),
       K_(enum_set_values));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRefRawExpr);
   int64_t ref_id_;
   union {
@@ -1970,7 +1970,7 @@ inline int64_t ObQueryRefRawExpr::get_output_column() const
 
 ////////////////////////////////////////////////////////////////
 class ObColumnRefRawExpr : public ObTerminalRawExpr, public jit::expr::ObColumnRefExpr {
-  public:
+public:
   ObColumnRefRawExpr()
       : ObExpr(),
         ObTerminalRawExpr(),
@@ -2210,7 +2210,7 @@ class ObColumnRefRawExpr : public ObTerminalRawExpr, public jit::expr::ObColumnR
       K_(column_name), K_(expr_level), K_(expr_levels), K_(column_flags), K_(enum_set_values), K_(is_lob_column),
       K_(is_unpivot_mocked_column), K_(is_hidden));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObColumnRefRawExpr);
   uint64_t table_id_;
   uint64_t column_id_;
@@ -2260,7 +2260,7 @@ inline uint64_t& ObColumnRefRawExpr::get_column_id()
 
 ////////////////////////////////////////////////////////////////
 class ObSetOpRawExpr : public ObTerminalRawExpr {
-  public:
+public:
   ObSetOpRawExpr() : ObTerminalRawExpr(), idx_(-1)
   {
     set_expr_class(ObExpr::EXPR_SET_OP);
@@ -2293,14 +2293,14 @@ class ObSetOpRawExpr : public ObTerminalRawExpr {
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
       K_(expr_level), K_(expr_levels), K_(idx));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSetOpRawExpr);
   int64_t idx_;
 };
 
 ////////////////////////////////////////////////////////////////
 class ObAliasRefRawExpr : public ObRawExpr {
-  public:
+public:
   ObAliasRefRawExpr() : ObRawExpr(), ref_expr_(NULL)
   {
     set_expr_class(ObExpr::EXPR_ALIAS_REF);
@@ -2354,7 +2354,7 @@ class ObAliasRefRawExpr : public ObRawExpr {
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, N_VALUE,
       ref_expr_, K_(enum_set_values));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAliasRefRawExpr);
   ObRawExpr* ref_expr_;
   int64_t project_index_;  // project index of the subquery
@@ -2362,7 +2362,7 @@ class ObAliasRefRawExpr : public ObRawExpr {
 
 ////////////////////////////////////////////////////////////////
 class ObNonTerminalRawExpr : public ObRawExpr {
-  public:
+public:
   ObNonTerminalRawExpr() : ObRawExpr(), op_(NULL), input_types_()
   {}
   ObNonTerminalRawExpr(common::ObIAllocator& alloc) : ObRawExpr(alloc), op_(NULL), input_types_()
@@ -2404,7 +2404,7 @@ class ObNonTerminalRawExpr : public ObRawExpr {
     return seed;
   }
 
-  protected:
+protected:
   // data members
   ObExprOperator* op_;
   ObExprResTypes input_types_;
@@ -2413,7 +2413,7 @@ class ObNonTerminalRawExpr : public ObRawExpr {
 
 ////////////////////////////////////////////////////////////////
 class ObOpRawExpr : public ObNonTerminalRawExpr, public jit::expr::ObOpExpr {
-  public:
+public:
   ObOpRawExpr()
       : ObExpr(),
         ObNonTerminalRawExpr(),
@@ -2510,13 +2510,13 @@ class ObOpRawExpr : public ObNonTerminalRawExpr, public jit::expr::ObOpExpr {
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
       K_(expr_levels), N_CHILDREN, exprs_);
 
-  protected:
+protected:
   common::ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, common::ModulePageAllocator, true> exprs_;
   ObSubQueryKey subquery_key_;
 
   bool deduce_type_adding_implicit_cast_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOpRawExpr);
 };
 
@@ -2588,7 +2588,7 @@ inline uint64_t ObOpRawExpr::hash_internal(uint64_t seed) const
 
 ////////////////////////////////////////////////////////////////
 class ObCaseOpRawExpr : public ObNonTerminalRawExpr, public jit::expr::ObCaseOpExpr {
-  public:
+public:
   ObCaseOpRawExpr()
       : ObExpr(),
         ObNonTerminalRawExpr(),
@@ -2679,7 +2679,7 @@ class ObCaseOpRawExpr : public ObNonTerminalRawExpr, public jit::expr::ObCaseOpE
       K_(expr_levels), N_ARG_CASE, arg_expr_, N_DEFAULT, default_expr_, N_WHEN, when_exprs_, N_THEN, then_exprs_,
       N_DECODE, is_decode_func_);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCaseOpRawExpr);
   ObRawExpr* arg_expr_;
   common::ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, common::ModulePageAllocator, true> when_exprs_;
@@ -2823,7 +2823,7 @@ inline uint64_t ObCaseOpRawExpr::hash_internal(uint64_t seed) const
 
 ////////////////////////////////////////////////////////////////
 class ObAggFunRawExpr : public ObRawExpr {
-  public:
+public:
   ObAggFunRawExpr()
       : ObRawExpr(),
         real_param_exprs_(),
@@ -2976,7 +2976,7 @@ class ObAggFunRawExpr : public ObRawExpr {
       K_(expr_level), K_(expr_levels), N_CHILDREN, real_param_exprs_, N_DISTINCT, distinct_, N_ORDER_BY, order_items_,
       N_SEPARATOR_PARAM_EXPR, separator_param_expr_, K_(udf_meta), N_LINEAR_INTER_EXPR, linear_inter_expr_);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAggFunRawExpr);
   // real_param_exprs_.count() == 0 means '*'
   common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> real_param_exprs_;
@@ -3089,7 +3089,7 @@ inline int ObAggFunRawExpr::add_order_item(const OrderItem& order_item)
 // for normal system function, func_name_ is used to distinguish them.
 // for special system function, ObRawExpr::type_ can be reset. Such function may not need name
 class ObSysFunRawExpr : public ObOpRawExpr {
-  public:
+public:
   ObSysFunRawExpr(common::ObIAllocator& alloc) : ObOpRawExpr(alloc), func_name_(), operator_id_(common::OB_INVALID_ID)
   {
     set_expr_class(ObExpr::EXPR_SYS_FUNC);
@@ -3134,7 +3134,7 @@ class ObSysFunRawExpr : public ObOpRawExpr {
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
       K_(expr_levels), N_FUNC, func_name_, N_CHILDREN, exprs_, K_(enum_set_values));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSysFunRawExpr);
   common::ObString func_name_;
   uint64_t operator_id_;
@@ -3150,7 +3150,7 @@ inline const common::ObString& ObSysFunRawExpr::get_func_name() const
 }
 
 class ObSequenceRawExpr : public ObSysFunRawExpr {
-  public:
+public:
   ObSequenceRawExpr(common::ObIAllocator& alloc) : ObSysFunRawExpr(alloc), name_(), action_(), sequence_id_(0)
   {}
   ObSequenceRawExpr() : ObSysFunRawExpr(), name_(), action_(), sequence_id_(0)
@@ -3175,14 +3175,14 @@ class ObSequenceRawExpr : public ObSysFunRawExpr {
   virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const override;
   virtual int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const override;
 
-  private:
+private:
   common::ObString name_;    // sequence object name
   common::ObString action_;  // NEXTVAL or CURRVAL
   uint64_t sequence_id_;
 };
 
 class ObNormalDllUdfRawExpr : public ObSysFunRawExpr {
-  public:
+public:
   ObNormalDllUdfRawExpr(common::ObIAllocator& alloc) : ObSysFunRawExpr(alloc), udf_meta_(), udf_attributes_()
   {}
   ObNormalDllUdfRawExpr() : ObSysFunRawExpr(), udf_meta_(), udf_attributes_()
@@ -3201,14 +3201,14 @@ class ObNormalDllUdfRawExpr : public ObSysFunRawExpr {
   }
   virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const override;
 
-  private:
+private:
   // for udf function info
   share::schema::ObUDFMeta udf_meta_;
   common::ObSEArray<common::ObString, 16> udf_attributes_;  // name of input expr
 };
 
 class ObPLSQLCodeSQLErrmRawExpr : public ObSysFunRawExpr {
-  public:
+public:
   ObPLSQLCodeSQLErrmRawExpr(common::ObIAllocator& alloc) : ObSysFunRawExpr(alloc), is_sqlcode_(true)
   {}
   ObPLSQLCodeSQLErrmRawExpr() : ObSysFunRawExpr(), is_sqlcode_(true)
@@ -3230,15 +3230,15 @@ class ObPLSQLCodeSQLErrmRawExpr : public ObSysFunRawExpr {
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_,
       K_(expr_level), K_(expr_levels), K_(is_sqlcode), N_CHILDREN, exprs_);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPLSQLCodeSQLErrmRawExpr);
 
-  private:
+private:
   bool is_sqlcode_;
 };
 
 class ObObjAccessRawExpr : public ObOpRawExpr {
-  public:
+public:
   ObObjAccessRawExpr(common::ObIAllocator& alloc)
       : ObOpRawExpr(alloc), get_attr_func_(0), func_name_(), var_indexs_(), for_write_(false)
   {}
@@ -3280,7 +3280,7 @@ class ObObjAccessRawExpr : public ObOpRawExpr {
     for_write_ = for_write;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObObjAccessRawExpr);
   uint64_t get_attr_func_;
   common::ObString func_name_;
@@ -3307,7 +3307,7 @@ enum ObMultiSetModifier {
 };
 
 class ObMultiSetRawExpr : public ObOpRawExpr {
-  public:
+public:
   ObMultiSetRawExpr(common::ObIAllocator& alloc)
       : ObOpRawExpr(alloc),
         ms_modifier_(ObMultiSetModifier::MULTISET_MODIFIER_INVALID),
@@ -3345,14 +3345,14 @@ class ObMultiSetRawExpr : public ObOpRawExpr {
     ms_type_ = type;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiSetRawExpr);
   ObMultiSetModifier ms_modifier_;
   ObMultiSetType ms_type_;
 };
 
 class ObCollPredRawExpr : public ObMultiSetRawExpr {
-  public:
+public:
   ObCollPredRawExpr(common::ObIAllocator& alloc) : ObMultiSetRawExpr(alloc)
   {}
   virtual ~ObCollPredRawExpr()
@@ -3363,12 +3363,12 @@ class ObCollPredRawExpr : public ObMultiSetRawExpr {
       bool use_new_allocator = false);
   virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCollPredRawExpr);
 };
 
 class ObFunMatchAgainst : public ObNonTerminalRawExpr {
-  public:
+public:
   ObFunMatchAgainst()
       : ObNonTerminalRawExpr(),
         mode_flag_(NATURAL_LANGUAGE_MODE),
@@ -3464,7 +3464,7 @@ class ObFunMatchAgainst : public ObNonTerminalRawExpr {
   VIRTUAL_TO_STRING_KV(
       N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, K_(mode_flag));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFunMatchAgainst);
   ObMatchAgainstMode mode_flag_;
   ObRawExpr* match_columns_;
@@ -3474,7 +3474,7 @@ class ObFunMatchAgainst : public ObNonTerminalRawExpr {
 };
 
 class ObSetIterRawExpr : public ObNonTerminalRawExpr {
-  public:
+public:
   ObSetIterRawExpr() : ObNonTerminalRawExpr(), left_iter_(NULL), right_iter_(NULL)
   {
     set_expr_class(ObExpr::EXPR_DOMAIN_INDEX);
@@ -3515,14 +3515,14 @@ class ObSetIterRawExpr : public ObNonTerminalRawExpr {
   }
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSetIterRawExpr);
   ObRawExpr* left_iter_;
   ObRawExpr* right_iter_;
 };
 
 class ObRowIterRawExpr : public ObTerminalRawExpr {
-  public:
+public:
   ObRowIterRawExpr() : ObTerminalRawExpr(), iter_idx_(common::OB_INVALID_INDEX)
   {
     set_expr_class(ObExpr::EXPR_DOMAIN_INDEX);
@@ -3552,7 +3552,7 @@ class ObRowIterRawExpr : public ObTerminalRawExpr {
   }
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, K_(iter_idx));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRowIterRawExpr);
   int64_t iter_idx_;
 };
@@ -3578,7 +3578,7 @@ enum BoundExprIdx { BOUND_EXPR_ADD = 0, BOUND_EXPR_SUB, BOUND_EXPR_MAX };
 struct Bound {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   Bound()
       : type_(BOUND_UNBOUNDED),
         is_preceding_(false),
@@ -3607,7 +3607,7 @@ struct Bound {
 
 ////////////////////////////////////////////////////////////////
 struct ObFrame {
-  public:
+public:
   ObFrame() : win_type_(WINDOW_MAX), is_between_(false)
   {}
   inline void set_window_type(WindowType win_type)
@@ -3652,7 +3652,7 @@ struct ObFrame {
 };
 
 struct ObWindow : public ObFrame {
-  public:
+public:
   ObWindow() : has_frame_orig_(false)
   {
     partition_exprs_.set_label(common::ObModIds::OB_SQL_WINDOW_FUNC);
@@ -3713,7 +3713,7 @@ struct ObWindow : public ObFrame {
 };
 
 class ObWinFunRawExpr : public ObRawExpr, public ObWindow {
-  public:
+public:
   ObWinFunRawExpr()
       : ObRawExpr(),
         ObWindow(),
@@ -3831,10 +3831,10 @@ class ObWinFunRawExpr : public ObRawExpr, public ObWindow {
       K_(expr_level), K_(expr_levels), K_(func_type), K_(is_distinct), K_(func_params), K_(partition_exprs),
       K_(order_items), K_(win_type), K_(is_between), K_(upper), K_(lower), KPC_(agg_expr));
 
-  public:
+public:
   common::ObString sort_str_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObWinFunRawExpr);
   ObItemType func_type_;
   bool is_distinct_;
@@ -3846,7 +3846,7 @@ class ObWinFunRawExpr : public ObRawExpr, public ObWindow {
 
 ////////////////////////////////////////////////////////////////
 class ObPseudoColumnRawExpr : public ObTerminalRawExpr {
-  public:
+public:
   ObPseudoColumnRawExpr() : ObTerminalRawExpr(), table_id_(common::OB_INVALID_ID)
   {
     set_expr_class(ObExpr::EXPR_PSEUDO_COLUMN);
@@ -3896,7 +3896,7 @@ class ObPseudoColumnRawExpr : public ObTerminalRawExpr {
   VIRTUAL_TO_STRING_KV(
       N_ITEM_TYPE, type_, N_RESULT_TYPE, result_type_, N_EXPR_INFO, info_, N_REL_ID, rel_ids_, N_TABLE_ID, table_id_);
 
-  private:
+private:
   ObRawExpr* cte_cycle_value_;
   ObRawExpr* cte_cycle_default_value_;
   int64_t table_id_;
@@ -3904,7 +3904,7 @@ class ObPseudoColumnRawExpr : public ObTerminalRawExpr {
 };
 /// visitor interface
 class ObRawExprVisitor {
-  public:
+public:
   ObRawExprVisitor()
   {}
   virtual ~ObRawExprVisitor()
@@ -3966,13 +3966,13 @@ class ObRawExprVisitor {
     return false;
   }
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprVisitor);
 };
 
 class ObRawExprFactory {
-  public:
+public:
   explicit ObRawExprFactory(common::ObIAllocator& alloc) : allocator_(alloc), expr_store_(alloc)
   {}
   ~ObRawExprFactory()
@@ -4025,16 +4025,16 @@ class ObRawExprFactory {
   }
   TO_STRING_KV("", "");
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   common::ObObjStore<ObRawExpr*, common::ObIAllocator&, true> expr_store_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprFactory);
 };
 
 class ObRawExprPointer {
-  public:
+public:
   ObRawExprPointer();
 
   virtual ~ObRawExprPointer();
@@ -4043,7 +4043,7 @@ class ObRawExprPointer {
   int add_ref(ObRawExpr** expr);
   TO_STRING_KV("", "");
 
-  private:
+private:
   common::ObSEArray<ObRawExpr**, 1> expr_group_;
 };
 

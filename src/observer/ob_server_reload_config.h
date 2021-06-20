@@ -21,13 +21,13 @@ namespace observer {
 class ObGlobalContext;
 
 class ObServerReloadConfig : public common::ObReloadConfig {
-  public:
+public:
   ObServerReloadConfig(common::ObServerConfig& config, ObGlobalContext& gctx);
   virtual ~ObServerReloadConfig();
 
   int operator()();
 
-  private:
+private:
   ObGlobalContext& gctx_;
 };
 

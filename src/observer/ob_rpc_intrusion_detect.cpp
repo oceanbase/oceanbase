@@ -24,7 +24,7 @@ static int ez2ob_addr(ObAddr& addr, easy_addr_t ez_addr)
   int ret = OB_SUCCESS;
   addr.reset();
   if (AF_INET == ez_addr.family) {
-    (void*)addr.set_ipv4_addr(ntohl(ez_addr.u.addr), ntohs(ez_addr.port));
+    addr.set_ipv4_addr(ntohl(ez_addr.u.addr), ntohs(ez_addr.port));
   } else if (AF_INET6 == ez_addr.family) {  // ipv6
     ret = OB_NOT_SUPPORTED;
   }

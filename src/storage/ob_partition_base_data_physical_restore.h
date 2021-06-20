@@ -26,9 +26,9 @@ using namespace share;
 namespace storage {
 
 class ObRestoreFileUtil {
-  public:
+public:
   static const int64_t MAX_IDLE_TIME = 10 * 1000LL * 1000LL;  // 10s
-  public:
+public:
   static int read_one_file(
       const ObString& path, const ObString& storage_info, ObIAllocator& allocator, char*& buf, int64_t& read_size);
   static int pread_file(
@@ -72,7 +72,7 @@ class ObRestoreFileUtil {
 };
 
 class ObPhyRestoreMetaIndexStore final {
-  public:
+public:
   ObPhyRestoreMetaIndexStore();
   virtual ~ObPhyRestoreMetaIndexStore();
   void reset();
@@ -81,7 +81,7 @@ class ObPhyRestoreMetaIndexStore final {
   int get_meta_index(const ObPartitionKey& part_key, const ObBackupMetaType& type, ObBackupMetaIndex& meta_index) const;
   int check_meta_index_completed(const int64_t compatible, const ObBackupBaseDataPathInfo& path_info);
 
-  public:
+public:
   typedef common::hash::ObHashMap<share::ObMetaIndexKey, share::ObBackupMetaIndex> MetaIndexMap;
   const MetaIndexMap& get_meta_index_map()
   {
@@ -89,7 +89,7 @@ class ObPhyRestoreMetaIndexStore final {
   }
   TO_STRING_KV(K_(is_inited));
 
-  private:
+private:
   static const int64_t BUCKET_SIZE = 1024;
   int init_one_file(const ObString& path, const ObString& storage_info, int64_t& file_length, int64_t& total_length);
   bool is_inited_;
@@ -99,7 +99,7 @@ class ObPhyRestoreMetaIndexStore final {
 
 // TODO():fetch MacroIndex on demand
 class ObPhyRestoreMacroIndexStore : public ObIPhyRestoreMacroIndexStore {
-  public:
+public:
   ObPhyRestoreMacroIndexStore();
   virtual ~ObPhyRestoreMacroIndexStore();
   void reset();
@@ -116,7 +116,7 @@ class ObPhyRestoreMacroIndexStore : public ObIPhyRestoreMacroIndexStore {
   virtual bool is_inited() const;
   TO_STRING_KV(K_(is_inited));
 
-  private:
+private:
   static const int64_t BUCKET_SIZE = 100000;  // 10w
   typedef common::hash::ObHashMap<uint64_t, common::ObArray<ObBackupMacroIndex>*> MacroIndexMap;
   int init_one_file(const ObString& path, const ObString& storage_info, int64_t& file_length, int64_t& total_length);
@@ -128,7 +128,7 @@ class ObPhyRestoreMacroIndexStore : public ObIPhyRestoreMacroIndexStore {
 };
 
 class ObPartitionMetaPhysicalReader final {
-  public:
+public:
   ObPartitionMetaPhysicalReader();
   virtual ~ObPartitionMetaPhysicalReader();
   void reset();
@@ -153,11 +153,11 @@ class ObPartitionMetaPhysicalReader final {
   }
   TO_STRING_KV(K_(is_inited), K_(sstable_index), K_(data_size), K_(pkey));
 
-  private:
+private:
   int read_all_sstable_meta();
   int read_table_keys();
 
-  private:
+private:
   bool is_inited_;
   int64_t sstable_index_;
   int64_t data_size_;
@@ -173,10 +173,10 @@ class ObPartitionMetaPhysicalReader final {
   DISALLOW_COPY_AND_ASSIGN(ObPartitionMetaPhysicalReader);
 };
 
-class ObPGMetaPyhsicalReader final {
-  public:
-  ObPGMetaPyhsicalReader();
-  virtual ~ObPGMetaPyhsicalReader();
+class ObPGMetaPhysicalReader final {
+public:
+  ObPGMetaPhysicalReader();
+  virtual ~ObPGMetaPhysicalReader();
   void reset();
   int init(const share::ObPhysicalRestoreArg& arg, const ObPhyRestoreMetaIndexStore& meta_indexs);
   int read_partition_group_meta(ObPartitionGroupMeta& pg_meta);
@@ -192,16 +192,16 @@ class ObPGMetaPyhsicalReader final {
     return is_inited_;
   }
 
-  private:
+private:
   bool is_inited_;
   int64_t data_size_;
   const share::ObPhysicalRestoreArg* arg_;
   const ObPhyRestoreMetaIndexStore* meta_indexs_;
-  DISALLOW_COPY_AND_ASSIGN(ObPGMetaPyhsicalReader);
+  DISALLOW_COPY_AND_ASSIGN(ObPGMetaPhysicalReader);
 };
 
 class ObPartitionBaseDataMetaRestoreReaderV1 {
-  public:
+public:
   ObPartitionBaseDataMetaRestoreReaderV1();
   virtual ~ObPartitionBaseDataMetaRestoreReaderV1();
   void reset();
@@ -219,10 +219,10 @@ class ObPartitionBaseDataMetaRestoreReaderV1 {
   int fetch_table_keys(const uint64_t index_id, obrpc::ObFetchTableInfoResult& table_res);
   TO_STRING_KV(K_(pkey), K_(restore_info), K_(last_read_size), K_(partition_store_meta), K_(data_version));
 
-  private:
+private:
   int prepare(const common::ObPartitionKey& pkey);
 
-  private:
+private:
   bool is_inited_;
   common::ObPartitionKey pkey_;
   const ObPhysicalRestoreArg* restore_info_;
@@ -236,7 +236,7 @@ class ObPartitionBaseDataMetaRestoreReaderV1 {
 
 class ObPartitionGroupMetaRestoreReaderV1;
 class ObPhysicalBaseMetaRestoreReaderV1 : public ObIPhysicalBaseMetaReader {
-  public:
+public:
   ObPhysicalBaseMetaRestoreReaderV1();
   virtual ~ObPhysicalBaseMetaRestoreReaderV1()
   {}
@@ -249,7 +249,7 @@ class ObPhysicalBaseMetaRestoreReaderV1 : public ObIPhysicalBaseMetaReader {
     return BASE_DATA_META_RESTORE_READER_V1;
   }
 
-  private:
+private:
   bool is_inited_;
   const ObPhysicalRestoreArg* restore_info_;
   ObIPartitionGroupMetaRestoreReader* reader_;
@@ -261,7 +261,7 @@ class ObPhysicalBaseMetaRestoreReaderV1 : public ObIPhysicalBaseMetaReader {
 
 // used for backup since 2.2.6
 class ObPartitionMacroBlockRestoreReaderV1 : public ObIPartitionMacroBlockReader {
-  public:
+public:
   ObPartitionMacroBlockRestoreReaderV1();
   virtual ~ObPartitionMacroBlockRestoreReaderV1();
   void reset();
@@ -279,11 +279,11 @@ class ObPartitionMacroBlockRestoreReaderV1 : public ObIPartitionMacroBlockReader
     return read_size_;
   }
 
-  private:
+private:
   int trans_macro_block(
       const uint64_t table_id, blocksstable::ObMacroBlockMetaV2& meta, blocksstable::ObBufferReader& data);
 
-  private:
+private:
   bool is_inited_;
   common::ObArray<obrpc::ObFetchMacroBlockArg> macro_list_;
   int64_t macro_idx_;
@@ -299,7 +299,7 @@ class ObPartitionMacroBlockRestoreReaderV1 : public ObIPartitionMacroBlockReader
 };
 
 class ObPartitionGroupMetaRestoreReaderV1 : public ObIPartitionGroupMetaRestoreReader {
-  public:
+public:
   ObPartitionGroupMetaRestoreReaderV1();
   virtual ~ObPartitionGroupMetaRestoreReaderV1();
   void reset();
@@ -321,7 +321,7 @@ class ObPartitionGroupMetaRestoreReaderV1 : public ObIPartitionGroupMetaRestoreR
   }
   int get_restore_tenant_id(uint64_t& tenant_id);
 
-  private:
+private:
   int prepare(common::ObInOutBandwidthThrottle& bandwidth_throttle, const ObPhysicalRestoreArg& restore_info,
       const ObPhyRestoreMetaIndexStore& meta_indexs, const ObPhyRestoreMacroIndexStore& macro_indexs);
   int prepare_pg_meta(common::ObInOutBandwidthThrottle& bandwidth_throttle, const ObPhysicalRestoreArg& restore_info);
@@ -331,12 +331,12 @@ class ObPartitionGroupMetaRestoreReaderV1 : public ObIPartitionGroupMetaRestoreR
   int trans_backup_pgmeta(ObPartitionGroupMeta& backup_pg_meta);
   int check_backup_partitions_in_pg(const ObPhysicalRestoreArg& restore_info, ObPartitionGroupMeta& backup_pg_meta);
 
-  private:
+private:
   typedef hash::ObHashMap<ObPartitionKey, ObPartitionBaseDataMetaRestoreReaderV1*> MetaReaderMap;
   bool is_inited_;
   const ObPhysicalRestoreArg* restore_info_;
   const ObPhyRestoreMetaIndexStore* meta_indexs_;
-  ObPGMetaPyhsicalReader reader_;
+  ObPGMetaPhysicalReader reader_;
   ObPartitionGroupMeta pg_meta_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
   int64_t last_read_size_;
@@ -347,7 +347,7 @@ class ObPartitionGroupMetaRestoreReaderV1 : public ObIPartitionGroupMetaRestoreR
 
 // used for 2.2
 class ObPGPartitionBaseDataMetaRestoreReaderV1 : public ObIPGPartitionBaseDataMetaObReader {
-  public:
+public:
   ObPGPartitionBaseDataMetaRestoreReaderV1();
   virtual ~ObPGPartitionBaseDataMetaRestoreReaderV1();
   void reset();
@@ -358,12 +358,12 @@ class ObPGPartitionBaseDataMetaRestoreReaderV1 : public ObIPGPartitionBaseDataMe
     return BASE_DATA_META_OB_RESTORE_READER_V1;
   }
 
-  private:
+private:
   int check_sstable_table_ids_in_table(const ObPartitionKey& pkey, const common::ObIArray<uint64_t>& table_ids);
   int check_sstable_ids_contain_schema_table_id(const hash::ObHashSet<uint64_t>& table_id_set,
       const uint64_t schema_table_id, schema::ObSchemaGetterGuard& schema_guard);
 
-  private:
+private:
   bool is_inited_;
   int64_t reader_index_;
   common::ObArray<ObPartitionBaseDataMetaRestoreReaderV1*> partition_reader_array_;

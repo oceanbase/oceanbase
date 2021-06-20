@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace clog {
 class ObLogInfoBlockReader : public ObILogInfoBlockReader {
-  public:
+public:
   ObLogInfoBlockReader();
   virtual ~ObLogInfoBlockReader();
 
@@ -37,10 +37,10 @@ class ObLogInfoBlockReader : public ObILogInfoBlockReader {
   }
   int read_info_block_data(const ObReadParam& param, ObReadRes& res, ObReadCost& cost);
 
-  private:
+private:
   int direct_read_info_block_data(const ObReadParam& param, ObReadRes& res, ObReadCost& cost);
 
-  private:
+private:
   bool is_inited_;
   ObILogDirectReader* direct_reader_;
   ObAlignedBuffer result_buffer_;

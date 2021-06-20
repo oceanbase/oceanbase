@@ -34,7 +34,7 @@ namespace storage {
 class ObMigrateCtx;
 
 struct ObBackupArchiveLogPGCtx {
-  public:
+public:
   ObBackupArchiveLogPGCtx();
   virtual ~ObBackupArchiveLogPGCtx();
 
@@ -56,7 +56,7 @@ struct ObBackupArchiveLogPGCtx {
   ObMigrateCtx* mig_ctx_;
   common::ObInOutBandwidthThrottle* throttle_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupArchiveLogPGCtx);
 };
 
@@ -103,13 +103,13 @@ class ObBackupArchiveLogPGTask : public share::ObITask {
     char storage_info_[share::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];  // under line storage for info_
   };
 
-  public:
+public:
   ObBackupArchiveLogPGTask();
   virtual ~ObBackupArchiveLogPGTask();
   int init(ObMigrateCtx& mig_ctx, ObBackupArchiveLogPGCtx& pg_ctx);
   virtual int process() override;
 
-  private:
+private:
   int check_nfs_mounted_if_nfs(const ObBackupArchiveLogPGCtx& pg_ctx, bool& mounted);
   int converge_task(
       const archive::LogArchiveFileType file_type, const ObBackupArchiveLogPGCtx& pg_ctx, FileRange& file_range);
@@ -150,7 +150,7 @@ class ObBackupArchiveLogPGTask : public share::ObITask {
       char* dest_path_buf, int64_t& pos);
   const char* get_file_prefix_with_type(const archive::LogArchiveFileType file_type);
 
-  private:
+private:
   int try_touch_archive_key(const ObBackupArchiveLogPGCtx& pg_ctx, const int64_t incarnation, const int64_t round);
   int build_archive_key_prefix(
       const ObBackupArchiveLogPGCtx& pg_ctx, const ObPGKey& pg_key, const int64_t incarnation, const int64_t round);
@@ -159,19 +159,19 @@ class ObBackupArchiveLogPGTask : public share::ObITask {
   int build_archive_key_path(const ObBackupArchiveLogPGCtx& pg_ctx, const int64_t incarnation, const int64_t round,
       const ObPGKey& pkey, share::ObBackupPath& archive_key_path);
 
-  private:
+private:
   bool is_inited_;
   common::ObPGKey pg_key_;
   ObMigrateCtx* mig_ctx_;
   ObBackupArchiveLogPGCtx* pg_ctx_;
   common::ObInOutBandwidthThrottle* throttle_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupArchiveLogPGTask);
 };
 
 class ObBackupArchiveLogFinishTask : public share::ObITask {
-  public:
+public:
   ObBackupArchiveLogFinishTask();
   virtual ~ObBackupArchiveLogFinishTask();
   int init(ObMigrateCtx& mig_ctx);
@@ -181,12 +181,12 @@ class ObBackupArchiveLogFinishTask : public share::ObITask {
     return pg_ctx_;
   }
 
-  private:
+private:
   bool is_inited_;
   ObMigrateCtx* mig_ctx_;
   ObBackupArchiveLogPGCtx pg_ctx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupArchiveLogFinishTask);
 };
 

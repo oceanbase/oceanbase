@@ -40,7 +40,7 @@ struct SkipInfo {
 };
 
 class ObSSTableTest : public TestDataFilePrepare {
-  public:
+public:
   ObSSTableTest(const char* data_dir = "sstable", const int64_t macro_block_size = 64 * 1024,
       const int64_t macro_block_cnt = 100);
   virtual ~ObSSTableTest();
@@ -51,7 +51,7 @@ class ObSSTableTest : public TestDataFilePrepare {
       const ObIArray<ObStoreRowkey>& rowkeys, ObArray<ObExtStoreRowkey>& ext_rowkeys, ObIAllocator& allocator);
   bool compare(const bool is_reverse_scan, const int64_t curr, const int64_t end);
 
-  protected:
+protected:
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 8;
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
   static const int64_t TEST_MULTI_GET_CNT = 2000;
@@ -81,7 +81,7 @@ class ObSSTableTest : public TestDataFilePrepare {
   ObBlockCacheWorkingSet block_cache_ws_;
   ObITable::TableKey table_key_;
 
-  protected:
+protected:
   enum CacheHitMode {
     HIT_ALL = 0,
     HIT_NONE,

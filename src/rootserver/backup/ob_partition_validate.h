@@ -33,33 +33,33 @@ class ObZoneManager;
 class TenantBalanceStat;
 
 class ObBackupValidateLoadBalancer {
-  public:
+public:
   ObBackupValidateLoadBalancer() = default;
   virtual ~ObBackupValidateLoadBalancer() = default;
 
   int init(rootserver::ObServerManager& server_mgr, rootserver::ObZoneManager& zone_mgr);
   int get_next_server(common::ObAddr& server);
 
-  private:
+private:
   int get_all_server_in_region(const common::ObRegion& region, common::ObIArray<common::ObAddr>& server_list);
   int get_zone_list(const common::ObRegion& region, common::ObIArray<common::ObZone>& zone_list);
   int choose_server(const common::ObIArray<common::ObAddr>& server_list, common::ObAddr& server);
 
-  private:
+private:
   bool is_inited_;
   rootserver::ObServerManager* server_mgr_;
   rootserver::ObZoneManager* zone_mgr_;
 };
 
 class ObPartitionValidate {
-  public:
+public:
   ObPartitionValidate();
   virtual ~ObPartitionValidate();
   int init(common::ObMySQLProxy& sql_proxy, ObRebalanceTaskMgr& task_mgr, ObServerManager& server_mgr,
       ObZoneManager& zone_mgr);
   int partition_validate(const uint64_t tenant_id, int64_t& task_cnt);
 
-  private:
+private:
   struct ObBackupSetPGTaskList {
     ObBackupSetPGTaskList(){};
     virtual ~ObBackupSetPGTaskList(){};
@@ -101,7 +101,7 @@ class ObPartitionValidate {
     }
   };
 
-  private:
+private:
   int get_backup_validate_task_info(const int64_t job_id, share::ObBackupValidateTaskInfo& task_info);
   int get_log_archive_backup_info_(const int64_t snapshot_version,
       const common::ObArray<share::ObLogArchiveBackupInfo>& log_infos, share::ObLogArchiveBackupInfo& log_info);
@@ -155,7 +155,7 @@ class ObPartitionValidate {
   int batch_update_pg_task_infos(
       const bool is_dropped_tenant, const common::ObIArray<share::ObPGValidateTaskInfo>& task_info);
 
-  private:
+private:
   bool is_inited_;
   common::ObMySQLProxy* sql_proxy_;
   rootserver::ObRootValidate* root_validate_;
@@ -165,7 +165,7 @@ class ObPartitionValidate {
   rootserver::ObBackupValidateLoadBalancer load_balancer_;
   share::ObPGValidateTaskUpdater pg_task_updater_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionValidate);
 };
 

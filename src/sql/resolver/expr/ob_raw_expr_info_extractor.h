@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObRawExprInfoExtractor : public ObRawExprVisitor {
-  public:
+public:
   ObRawExprInfoExtractor() : ObRawExprVisitor()
   {}
   virtual ~ObRawExprInfoExtractor()
@@ -39,9 +39,9 @@ class ObRawExprInfoExtractor : public ObRawExprVisitor {
   virtual int visit(ObWinFunRawExpr& expr);
   virtual int visit(ObPseudoColumnRawExpr& expr);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprInfoExtractor);
   // function members

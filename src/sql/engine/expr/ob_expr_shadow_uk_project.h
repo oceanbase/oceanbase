@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprShadowUKProject : public ObExprOperator {
-  public:
+public:
   ObExprShadowUKProject(common::ObIAllocator& alloc)
       : ObExprOperator(alloc, T_OP_SHADOW_UK_PROJECT, N_SHADOW_UK_PROJECTOR, MORE_THAN_ONE, NOT_ROW_DIMENSION)
   {}

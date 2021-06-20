@@ -25,13 +25,13 @@ using namespace oceanbase::common;
 using namespace oceanbase::election;
 
 class MockObElectionMsgHandler : public ObElectionMsgHandler {
-  public:
+public:
   MockObElectionMsgHandler();
   ~MockObElectionMsgHandler();
   virtual int init(ObElection* e);
   virtual void destroy(void);
 
-  public:
+public:
   //////handlers for vote message
   virtual int handle_devote_prepare(const ObElectionMsgDEPrepare& msg, ObDataBuffer& out_buff);
   virtual int handle_devote_vote(const ObElectionMsgDEVote& msg, ObDataBuffer& out_buff);
@@ -41,7 +41,7 @@ class MockObElectionMsgHandler : public ObElectionMsgHandler {
   virtual int handle_vote_vote(const ObElectionMsgVote& msg, ObDataBuffer& out_buff);
   virtual int handle_vote_success(const ObElectionMsgSuccess& msg, ObDataBuffer& out_buff);
 
-  public:
+public:
   void set_outage_for(ObElectionVoteMsgType type, int64_t start, int64_t end);
   void set_outage_all(int64_t start, int64_t end);
   void reset_outage_for(ObElectionVoteMsgType type);
@@ -50,7 +50,7 @@ class MockObElectionMsgHandler : public ObElectionMsgHandler {
   void set_loss_all(int64_t loss_rate, int64_t start = INT64_MIN, int64_t end = INT64_MAX);
   void reset_loss_all(void);
 
-  private:
+private:
   bool inited_;
   Outage outage_map_[MAX_VOTE_MSG_TYPE];
   Loss loss_map_[MAX_VOTE_MSG_TYPE];

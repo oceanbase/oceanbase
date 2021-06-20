@@ -157,7 +157,7 @@ int ShardGroupAnalyzer::build_prefix_map(uint64_t tenant_id, ShardGroupPrefixMap
 }
 
 class SortedShardGroupArray {
-  public:
+public:
   SortedShardGroupArray(ShardGroupPrefixMap& prefix_map);
   int sort();
   ObArray<ObIArray<TablePrefixValue>*>& array()
@@ -165,7 +165,7 @@ class SortedShardGroupArray {
     return prefix_infos_;
   }
 
-  private:
+private:
   ShardGroupPrefixMap& prefix_map_;
   ObArray<TablePrefixKey*> sorted_prefix_;
   ObArray<ObIArray<TablePrefixValue>*> prefix_infos_;
@@ -205,7 +205,7 @@ struct ShardGroupPrefixOrder {
     return cmp < 0;
   }
 
-  private:
+private:
   uint64_t get_min_tid(ObIArray<TablePrefixValue>& tables)
   {
     uint64_t tid = OB_INVALID_ID;
@@ -218,7 +218,7 @@ struct ShardGroupPrefixOrder {
     return tid;
   }
 
-  private:
+private:
   int& ret_;
   ShardGroupPrefixMap& prefix_map_;
 };

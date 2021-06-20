@@ -34,13 +34,13 @@ using namespace share::schema;
 
 namespace unittest {
 class TestMigrateLogicalRowWriter : public TestDataFilePrepare {
-  public:
+public:
   TestMigrateLogicalRowWriter();
   virtual ~TestMigrateLogicalRowWriter();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   void prepare_schema();
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 2;

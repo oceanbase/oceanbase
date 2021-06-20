@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 class ObTCBlock;
 class ObTCBlock : public common::ObDLinkBase<common::ObTCBlock> {
-  public:
+public:
   static ObTCBlock* new_block(int32_t obj_size, const lib::ObLabel& label);
   static void delete_block(ObTCBlock* blk);
   static ObTCBlock* get_block_by_obj(void* obj);
@@ -44,7 +44,7 @@ class ObTCBlock : public common::ObDLinkBase<common::ObTCBlock> {
   }
   static int32_t get_obj_num_by_obj_size(int32_t obj_size);
 
-  private:
+private:
   explicit ObTCBlock(int32_t obj_size);
   ~ObTCBlock(){};
   struct FreeNode {
@@ -55,12 +55,12 @@ class ObTCBlock : public common::ObDLinkBase<common::ObTCBlock> {
   static int32_t get_obj_num_by_aligned_obj_size(int32_t aligned_obj_size);
   static int32_t get_aligned_obj_size(int32_t obj_size);
 
-  private:
+private:
   static const int64_t BLOCK_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;  // ~2MB
   static const uint32_t OBJ_SIZE_ALIGN_SHIFT = sizeof(void*);
   static const uint32_t OBJ_SIZE_ALIGN_MASK = (~0U) << OBJ_SIZE_ALIGN_SHIFT;
 
-  private:
+private:
   int32_t obj_size_;
   int32_t in_use_count_;
   FreeNode* freelist_;
@@ -206,7 +206,7 @@ template <typename T, int64_t MAX_CLASS_NUM, const char* LABEL>
 class ObGlobalFreeList {
   typedef typename ObGlobalFactory<T, MAX_CLASS_NUM, LABEL>::create_method_t create_method_t;
 
-  public:
+public:
   ObGlobalFreeList() : lock_(), next_cache_line_(0), objs_cache_(), empty_blocks_(), nonempty_blocks_()
   {}
   virtual ~ObGlobalFreeList()
@@ -280,11 +280,11 @@ class ObGlobalFreeList {
     }
   }
 
-  private:
+private:
   // types and constants
   static const int64_t CACHE_SIZE = 64;
 
-  private:
+private:
   // function members
   void release_objs(common::ObDList<T>& range)
   {
@@ -382,7 +382,7 @@ class ObGlobalFreeList {
     return ret;
   }
 
-  private:
+private:
   // data members
   ObRecursiveMutex lock_;
   int32_t next_cache_line_;
@@ -391,13 +391,13 @@ class ObGlobalFreeList {
   common::ObDList<ObTCBlock> empty_blocks_;
   common::ObDList<ObTCBlock> nonempty_blocks_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGlobalFreeList);
 };
 ////////////////////////////////////////////////////////////////
 template <typename T, int64_t MAX_CLASS_NUM, const char* LABEL>
 class ObGlobalFactory {
-  public:
+public:
   typedef T* (*create_method_t)(void* ptr);
 
   static ObGlobalFactory* get_instance();
@@ -419,12 +419,12 @@ class ObGlobalFactory {
 
   void stat();
 
-  private:
+private:
   // types and constants
   typedef ObGlobalFactory<T, MAX_CLASS_NUM, LABEL> self_t;
   typedef ObGlobalFreeList<T, MAX_CLASS_NUM, LABEL> freelist_t;
 
-  private:
+private:
   // function members
   ObGlobalFactory()
   {
@@ -434,7 +434,7 @@ class ObGlobalFactory {
   };
   virtual ~ObGlobalFactory(){};
 
-  private:
+private:
   // static members
   static self_t* INSTANCE;
   // data members
@@ -443,7 +443,7 @@ class ObGlobalFactory {
   int32_t obj_size_[MAX_CLASS_NUM];
   int32_t batch_count_[MAX_CLASS_NUM];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGlobalFactory);
 };
 

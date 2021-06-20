@@ -30,7 +30,7 @@ namespace sql {
 class ObSynonymChecker;
 /// base class of all statement resolver
 class ObStmtResolver {
-  public:
+public:
   explicit ObStmtResolver(ObResolverParams& params)
       : allocator_(params.allocator_),
         schema_checker_(params.schema_checker_),
@@ -142,30 +142,30 @@ class ObStmtResolver {
   int get_column_schema(const uint64_t table_id, const uint64_t column_id,
       const share::schema::ObColumnSchemaV2*& column_schema, const bool get_hidden = false);
 
-  protected:
+protected:
   int normalize_table_or_database_names(common::ObString& name);
   virtual int init_stmt()
   {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObStmtResolver);
 
-  public:
+public:
   // data members
   common::ObIAllocator* allocator_;
   ObSchemaChecker* schema_checker_;
   ObSQLSessionInfo* session_info_;
   ObResolverParams& params_;
 
-  protected:
+protected:
   ObStmt* stmt_;
 };
 
 class ObSynonymChecker {
-  public:
+public:
   ObSynonymChecker() : has_synonym_(false), synonym_ids_()
   {}
   ~ObSynonymChecker()
@@ -184,7 +184,7 @@ class ObSynonymChecker {
     return has_synonym_;
   }
 
-  private:
+private:
   bool has_synonym_;
   common::ObSEArray<uint64_t, 2> synonym_ids_;
   DISALLOW_COPY_AND_ASSIGN(ObSynonymChecker);

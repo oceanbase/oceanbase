@@ -20,7 +20,7 @@ using namespace common;
 using namespace number;
 namespace unittest {
 class TestCellReader : public ::testing::Test {
-  public:
+public:
   TestCellReader();
   virtual void SetUp()
   {}
@@ -36,7 +36,7 @@ class TestCellReader : public ::testing::Test {
     return &arena_;
   }
 
-  private:
+private:
   ModulePageAllocator alloc_;
   ModuleArena arena_;
 };

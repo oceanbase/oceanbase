@@ -20,7 +20,7 @@ using namespace oceanbase::rpc::frame;
 
 template <int64_t SZ>
 struct ArgT {
-  public:
+public:
   int64_t sz_ = SZ;
   int serialize(char* buf, const int64_t buf_len, int64_t& pos) const
   {
@@ -47,7 +47,7 @@ static Arg_succ arg_succ;
 static Arg arg;
 
 class TestProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(TestProxy);
 
   RPC_AP(@PR5 test, OB_TEST_PCODE, (uint64_t));
@@ -60,7 +60,7 @@ class TestProxy : public ObRpcProxy {
 };
 
 class TestCB : public TestProxy::AsyncCB<OB_TEST_PCODE> {
-  public:
+public:
   TestCB() : processed_(false)
   {}
 
@@ -85,7 +85,7 @@ class TestCB : public TestProxy::AsyncCB<OB_TEST_PCODE> {
 };
 
 class TestRpcProxy : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     r_.user_data = &cb_;
@@ -96,7 +96,7 @@ class TestRpcProxy : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   void serialize_rcode(const ObRpcResultCode& rc)
   {
     int64_t pos = 0;
@@ -104,7 +104,7 @@ class TestRpcProxy : public ::testing::Test {
     pkt_.set_content(buf_, pos);
   }
 
-  protected:
+protected:
   TestCB cb_;
   ObRpcPacket pkt_;
   easy_request_t r_;

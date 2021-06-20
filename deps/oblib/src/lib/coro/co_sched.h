@@ -30,15 +30,15 @@ class CoTimer;
 ///
 /// CoSched is singleton for each thread.
 class CoSched : public CoMainRoutine {
-  public:
+public:
   static CoSched* get_instance();
   static CoRoutine* get_active_routine();
   static void set_active_routine(CoRoutine& routine);
 
-  protected:
+protected:
   using RoutineFunc = std::function<void()>;
 
-  public:
+public:
   CoSched();
   virtual ~CoSched();
 
@@ -61,7 +61,7 @@ class CoSched : public CoMainRoutine {
     return common::OB_ERROR;
   }
 
-  public:
+public:
   // Called by normal routine to yield execution resources to others.
   void co_yield(void);
   int co_wait(int64_t duration);
@@ -82,11 +82,11 @@ class CoSched : public CoMainRoutine {
     UNUSED(timer);
   }
 
-  protected:
+protected:
   // Called by schedule routine to resume specific routine.
   void resume_routine(CoRoutine& routine);
 
-  public:
+public:
   static __thread CoSched* instance_;
   static __thread CoRoutine* active_routine_;
 

@@ -22,19 +22,19 @@ namespace sql {
 class ObTableDeleteReturningSpec : public ObTableDeleteSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableDeleteReturningSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObTableDeleteSpec(alloc, type)
   {}
 
   virtual ~ObTableDeleteReturningSpec()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDeleteReturningSpec);
 };
 
 class ObTableDeleteReturningOp : public ObTableDeleteOp {
-  public:
+public:
   ObTableDeleteReturningOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableDeleteOp(ctx, spec, input),
         partition_service_(NULL),
@@ -45,11 +45,11 @@ class ObTableDeleteReturningOp : public ObTableDeleteOp {
   virtual ~ObTableDeleteReturningOp()
   {}
 
-  protected:
+protected:
   virtual int get_next_row() override;
   virtual int inner_open() override;
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   // the following three members is for interface of old engine
   int64_t child_row_count_;
@@ -59,7 +59,7 @@ class ObTableDeleteReturningOp : public ObTableDeleteOp {
 class ObTableDeleteReturningOpInput : public ObTableModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableDeleteReturningOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableModifyOpInput(ctx, spec)
   {}
 
@@ -68,7 +68,7 @@ class ObTableDeleteReturningOpInput : public ObTableModifyOpInput {
     return ObTableModifyOpInput::init(task_info);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDeleteReturningOpInput);
 };
 

@@ -25,17 +25,17 @@
 namespace oceanbase {
 namespace rootserver {
 class ObSchemaHistoryRecyclerIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObSchemaHistoryRecyclerIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual int64_t get_idle_interval_us();
 
-  public:
+public:
   const static int64_t DEFAULT_SCHEMA_HISTORY_RECYCLE_INTERVAL = 60 * 60 * 1000 * 1000L;  // 1h
 };
 
 struct ObFirstSchemaKey {
-  public:
+public:
   ObFirstSchemaKey();
   ~ObFirstSchemaKey();
   bool operator==(const ObFirstSchemaKey& other) const;
@@ -48,7 +48,7 @@ struct ObFirstSchemaKey {
   uint64_t hash() const;
   TO_STRING_KV(K_(first_schema_id));
 
-  public:
+public:
   union {
     uint64_t first_schema_id_;  // without tenant_id
     uint64_t tenant_id_;
@@ -70,7 +70,7 @@ struct ObFirstSchemaKey {
 };
 
 struct ObSecondSchemaKey : public ObFirstSchemaKey {
-  public:
+public:
   ObSecondSchemaKey();
   ~ObSecondSchemaKey();
   int assign(const ObSecondSchemaKey& other);
@@ -83,7 +83,7 @@ struct ObSecondSchemaKey : public ObFirstSchemaKey {
   uint64_t hash() const;
   TO_STRING_KV(K_(first_schema_id), K_(second_schema_id));
 
-  public:
+public:
   union {
     uint64_t second_schema_id_;
     uint64_t column_id_;
@@ -95,7 +95,7 @@ struct ObSecondSchemaKey : public ObFirstSchemaKey {
 };
 
 struct ObThirdSchemaKey : public ObSecondSchemaKey {
-  public:
+public:
   ObThirdSchemaKey();
   ~ObThirdSchemaKey();
   int assign(const ObThirdSchemaKey& other);
@@ -108,7 +108,7 @@ struct ObThirdSchemaKey : public ObSecondSchemaKey {
   uint64_t hash() const;
   TO_STRING_KV(K_(first_schema_id), K_(second_schema_id), K_(third_schema_id));
 
-  public:
+public:
   union {
     uint64_t third_schema_id_;
     uint64_t sub_part_id_;
@@ -117,7 +117,7 @@ struct ObThirdSchemaKey : public ObSecondSchemaKey {
 };
 
 struct ObSystemVariableSchemaKey {
-  public:
+public:
   ObSystemVariableSchemaKey();
   ~ObSystemVariableSchemaKey();
   bool operator==(const ObSystemVariableSchemaKey& other) const;
@@ -130,26 +130,26 @@ struct ObSystemVariableSchemaKey {
   uint64_t hash() const;
   TO_STRING_KV(K_(zone), K_(name));
 
-  public:
+public:
   common::ObString zone_;
   common::ObString name_;
 };
 
 struct ObSystemVariableCompressSchemaInfo {
-  public:
+public:
   ObSystemVariableCompressSchemaInfo() : key_(), max_schema_version_(common::OB_INVALID_VERSION)
   {}
   ~ObSystemVariableCompressSchemaInfo()
   {}
   TO_STRING_KV(K_(key), K_(max_schema_version));
 
-  public:
+public:
   ObSystemVariableSchemaKey key_;
   int64_t max_schema_version_;
 };
 
 struct ObRecycleSchemaValue {
-  public:
+public:
   ObRecycleSchemaValue();
   ~ObRecycleSchemaValue();
   ObRecycleSchemaValue& operator=(const ObRecycleSchemaValue& other);
@@ -158,28 +158,28 @@ struct ObRecycleSchemaValue {
   bool is_valid() const;
   TO_STRING_KV(K_(is_deleted), K_(max_schema_version), K_(record_cnt));
 
-  public:
+public:
   bool is_deleted_;
   int64_t max_schema_version_;
   int64_t record_cnt_;
 };
 
 struct ObFirstCompressSchemaInfo {
-  public:
+public:
   ObFirstCompressSchemaInfo() : key_(), max_schema_version_(common::OB_INVALID_VERSION)
   {}
   ~ObFirstCompressSchemaInfo()
   {}
   TO_STRING_KV(K_(key), K_(max_schema_version));
 
-  public:
+public:
   ObFirstSchemaKey key_;
   int64_t max_schema_version_;
 };
 
 // Running in a single thread.
 class ObSchemaHistoryRecycler : public ObRsReentrantThread {
-  public:
+public:
   ObSchemaHistoryRecycler();
   virtual ~ObSchemaHistoryRecycler();
 
@@ -196,7 +196,7 @@ class ObSchemaHistoryRecycler : public ObRsReentrantThread {
   int get_recycle_schema_versions(
       const obrpc::ObGetRecycleSchemaVersionsArg& arg, obrpc::ObGetRecycleSchemaVersionsResult& result);
 
-  private:
+private:
   int check_inner_stat();
   bool is_valid_recycle_schema_version(const int64_t recycle_schema_version);
   int idle();
@@ -217,10 +217,10 @@ class ObSchemaHistoryRecycler : public ObRsReentrantThread {
   int update_recycle_schema_versions(const common::ObIArray<uint64_t>& tenant_ids,
       common::hash::ObHashMap<uint64_t, int64_t>& recycle_schema_versions);
 
-  public:
+public:
   static const int64_t BUCKET_NUM = 10;
 
-  private:
+private:
   bool inited_;
   mutable ObSchemaHistoryRecyclerIdling idling_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
@@ -233,7 +233,7 @@ class ObSchemaHistoryRecycler : public ObRsReentrantThread {
 };
 
 class ObIRecycleSchemaExecutor {
-  public:
+public:
   enum RecycleMode {
     NONE = 0,
     RECYCLE_ONLY = 1,
@@ -249,7 +249,7 @@ class ObIRecycleSchemaExecutor {
   static const int64_t COMPRESS_RECORD_THREHOLD = 10;
   static const int64_t BUCKET_NUM = 10000;
 
-  public:
+public:
   ObIRecycleSchemaExecutor() = delete;
   ObIRecycleSchemaExecutor(const uint64_t tenant_id, const int64_t schema_version, const char* table_name,
       common::ObMySQLProxy* sql_proxy, ObSchemaHistoryRecycler* recycler);
@@ -259,7 +259,7 @@ class ObIRecycleSchemaExecutor {
   static bool need_recycle(RecycleMode mode);
   static bool need_compress(RecycleMode mode);
 
-  protected:
+protected:
   virtual bool is_valid() const = 0;
   int check_stop();
 
@@ -267,7 +267,7 @@ class ObIRecycleSchemaExecutor {
   virtual int recycle_schema_history() = 0;
   virtual int compress_schema_history() = 0;
 
-  protected:
+protected:
   uint64_t tenant_id_;
   int64_t schema_version_;
   const char* table_name_;
@@ -277,7 +277,7 @@ class ObIRecycleSchemaExecutor {
 };
 
 class ObRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
-  public:
+public:
   ObRecycleSchemaExecutor() = delete;
   ObRecycleSchemaExecutor(const uint64_t tenant_id, const int64_t schema_version, const char* table_name,
       const char* schema_key_name, const RecycleMode mode, common::ObMySQLProxy* sql_proxy,
@@ -285,7 +285,7 @@ class ObRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
   virtual ~ObRecycleSchemaExecutor();
   virtual int execute();
 
-  private:
+private:
   virtual bool is_valid() const;
   virtual int fill_schema_history_map();
   virtual int recycle_schema_history();
@@ -305,7 +305,7 @@ class ObRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
       const ObIArray<ObFirstCompressSchemaInfo>& compress_schema_infos, common::ObSqlString& sql);
   virtual int batch_compress_schema_history(const common::ObIArray<ObFirstCompressSchemaInfo>& compress_schema_infos);
 
-  private:
+private:
   const char* schema_key_name_;
   const RecycleMode mode_;
   common::hash::ObHashMap<ObFirstSchemaKey, ObRecycleSchemaValue, common::hash::NoPthreadDefendMode>
@@ -314,14 +314,14 @@ class ObRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
 };
 
 class ObSecondRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
-  public:
+public:
   ObSecondRecycleSchemaExecutor() = delete;
   ObSecondRecycleSchemaExecutor(const uint64_t tenant_id, const int64_t schema_version, const char* table_name,
       const char* schema_key_name, const char* second_schema_key_name, common::ObMySQLProxy* sql_proxy,
       ObSchemaHistoryRecycler* recycler);
   virtual ~ObSecondRecycleSchemaExecutor();
 
-  private:
+private:
   virtual bool is_valid() const;
   virtual int fill_schema_history_map();
   virtual int recycle_schema_history();
@@ -337,7 +337,7 @@ class ObSecondRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
       const common::ObIArray<ObSecondSchemaKey>& dropped_schema_keys, common::ObSqlString& sql);
   virtual int batch_recycle_schema_history(const common::ObIArray<ObSecondSchemaKey>& dropped_schema_ids);
 
-  private:
+private:
   const char* schema_key_name_;
   const char* second_schema_key_name_;
   common::hash::ObHashMap<ObSecondSchemaKey, ObRecycleSchemaValue, common::hash::NoPthreadDefendMode>
@@ -346,14 +346,14 @@ class ObSecondRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
 };
 
 class ObThirdRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
-  public:
+public:
   ObThirdRecycleSchemaExecutor() = delete;
   ObThirdRecycleSchemaExecutor(const uint64_t tenant_id, const int64_t schema_version, const char* table_name,
       const char* schema_key_name, const char* second_schema_key_name, const char* third_schema_key_name,
       common::ObMySQLProxy* sql_proxy, ObSchemaHistoryRecycler* recycler);
   virtual ~ObThirdRecycleSchemaExecutor();
 
-  private:
+private:
   virtual bool is_valid() const;
   virtual int fill_schema_history_map();
   virtual int recycle_schema_history();
@@ -369,7 +369,7 @@ class ObThirdRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
       const common::ObIArray<ObThirdSchemaKey>& dropped_schema_keys, common::ObSqlString& sql);
   virtual int batch_recycle_schema_history(const common::ObIArray<ObThirdSchemaKey>& dropped_schema_ids);
 
-  private:
+private:
   const char* schema_key_name_;
   const char* second_schema_key_name_;
   const char* third_schema_key_name_;
@@ -379,13 +379,13 @@ class ObThirdRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
 };
 
 class ObSystemVariableRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
-  public:
+public:
   ObSystemVariableRecycleSchemaExecutor() = delete;
   ObSystemVariableRecycleSchemaExecutor(const uint64_t tenant_id, const int64_t schema_version, const char* table_name,
       common::ObMySQLProxy* sql_proxy, ObSchemaHistoryRecycler* recycler);
   virtual ~ObSystemVariableRecycleSchemaExecutor();
 
-  private:
+private:
   virtual bool is_valid() const;
   virtual int fill_schema_history_map();
   virtual int recycle_schema_history();
@@ -402,7 +402,7 @@ class ObSystemVariableRecycleSchemaExecutor : public ObIRecycleSchemaExecutor {
   virtual int batch_compress_schema_history(
       const common::ObIArray<ObSystemVariableCompressSchemaInfo>& compress_schema_infos);
 
-  private:
+private:
   common::hash::ObHashMap<ObSystemVariableSchemaKey, ObRecycleSchemaValue, common::hash::NoPthreadDefendMode>
       schema_history_map_;
   common::ObArenaAllocator allocator_;

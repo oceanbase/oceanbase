@@ -43,7 +43,7 @@ typedef struct {
 } JoinData;
 
 class ObQueryRangeDummy {
-  public:
+public:
   ObQueryRangeDummy() : scan_key_value_(0)
   {}
   ~ObQueryRangeDummy()
@@ -57,12 +57,12 @@ class ObQueryRangeDummy {
     return scan_key_value_;
   }
 
-  private:
+private:
   int64_t scan_key_value_;
 };
 
 class ObJoinFakeTableScanInput : public ObIPhyOperatorInput {
-  public:
+public:
   virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, ObPhyOperator& op)
   {
     UNUSED(ctx);
@@ -81,16 +81,16 @@ class ObJoinFakeTableScanInput : public ObIPhyOperatorInput {
     return query_range_;
   }
 
-  private:
+private:
   ObQueryRangeDummy query_range_;
 };
 static ObArenaAllocator alloc_;
 class ObJoinFakeTable : public ObPhyOperator {
-  protected:
+protected:
   class ObJoinFakeTableCtx : public ObPhyOperatorCtx {
     friend class ObJoinFakeTable;
 
-    public:
+  public:
     ObJoinFakeTableCtx(ObExecContext& exex_ctx) : ObPhyOperatorCtx(exex_ctx), iter_(0)
     {}
     virtual void destroy()
@@ -98,12 +98,12 @@ class ObJoinFakeTable : public ObPhyOperator {
       return ObPhyOperatorCtx::destroy_base();
     }
 
-    private:
+  private:
     int64_t iter_;
     common::ObAddr server_;
   };
 
-  public:
+public:
   ObJoinFakeTable();
   virtual ~ObJoinFakeTable();
   int init(JoinOpTestType join_op_type);
@@ -123,18 +123,18 @@ class ObJoinFakeTable : public ObPhyOperator {
   virtual int create_operator_input(ObExecContext& exec_ctx) const;
   virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
 
-  public:
+public:
   int prepare_data(int64_t case_id, TableType table_type, ObJoinType join_type);
   void set_type(ObPhyOperatorType op_type)
   {
     op_type_ = op_type;
   }
 
-  private:
+private:
   int cons_row(int64_t col1, int64_t col2, common::ObNewRow& row) const;
   int cons_row(int64_t col1, int64_t col2, int64_t col3, int64_t col4, common::ObNewRow& row) const;
 
-  private:
+private:
   int64_t (*left_data_)[2];
   int64_t (*right_data_)[2];
   int64_t (*out_data_)[4];

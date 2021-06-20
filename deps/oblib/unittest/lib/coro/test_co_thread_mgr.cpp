@@ -28,7 +28,7 @@ class Add1 : public CoThread {
     }
   }
 
-  public:
+public:
   Add1(int& v) : v_(v)
   {}
   int& v_;

@@ -81,7 +81,7 @@ struct ObStmtCompareContext : ObExprEqualCheckContext {
 };
 
 class ObStmtComparer {
-  public:
+public:
   static int compute_stmt_overlap(ObDMLStmt* first, ObDMLStmt* second, ObStmtMapInfo& map_info);
 
   static int check_stmt_containment(

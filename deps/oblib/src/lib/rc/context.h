@@ -68,7 +68,7 @@ class ContextTLOptGuard {
   friend class MemoryContext;
   static RLOCAL(bool, enable_tl_opt);
 
-  public:
+public:
   ContextTLOptGuard(const bool enable_flag) : enable_flag_bak_(enable_tl_opt)
   {
     enable_tl_opt = enable_flag;
@@ -78,7 +78,7 @@ class ContextTLOptGuard {
     enable_tl_opt = enable_flag_bak_;
   }
 
-  private:
+private:
   const bool enable_flag_bak_;
 };
 
@@ -93,7 +93,7 @@ enum ContextPropertyEnum {
 };
 
 class TreeNode {
-  public:
+public:
   TreeNode(TreeNode* parent, const bool with_lock)
       : parent_(parent), child_(nullptr), prev_(nullptr), next_(nullptr), with_lock_(with_lock), lock_(0)
   {}
@@ -178,7 +178,7 @@ class TreeNode {
 class ContextParam {
   friend class MemoryContext;
 
-  public:
+public:
   ContextParam()
       : properties_(DEFAULT_PROPERTIES),
         attr_(),
@@ -218,7 +218,7 @@ class ContextParam {
     return *this;
   }
 
-  private:
+private:
   int64_t properties_;
   ObMemAttr attr_;
   int64_t page_size_;
@@ -234,7 +234,7 @@ struct StaticInfo {
 };
 
 class StaticInfos {
-  public:
+public:
   StaticInfos() : cnt_(0)
   {}
   static StaticInfos& get_instance()
@@ -260,7 +260,7 @@ class StaticInfos {
     return infos_[static_id];
   }
 
-  private:
+private:
   static const int MAX_NUM = 128;
   StaticInfo infos_[MAX_NUM];
   int cnt_;
@@ -279,7 +279,7 @@ struct DynamicInfo {
 class MemoryContext {
   friend class TreeNode;
 
-  public:
+public:
   MemoryContext(
       const bool need_free, const DynamicInfo& di, MemoryContext* parent, ContextParam& param, const int static_id)
       : need_free_(need_free),
@@ -379,13 +379,13 @@ class MemoryContext {
   TO_STRING_KV(KP(this), "static_id", static_id_, "static_info", StaticInfos::get_instance().get(static_id_),
       "dynamic info", di_, K(properties_), K(attr_));
 
-  private:
+private:
   static MemoryContext* node2context(TreeNode* node)
   {
     return reinterpret_cast<MemoryContext*>((char*)node - offsetof(MemoryContext, tree_node_));
   }
 
-  public:
+public:
   int init()
   {
     tree_node_.init();
@@ -526,7 +526,7 @@ class MemoryContext {
     }
   }
 
-  public:
+public:
   // Assignment is not in the constructor, record who assigns
   const bool need_free_;
   TreeNode tree_node_;
@@ -558,7 +558,7 @@ class MemoryContext {
 };
 
 class Flow final {
-  public:
+public:
   Flow(MemoryContext& ref_context) : ref_context_(ref_context), prev_(nullptr), next_(nullptr), is_inited_(false)
   {}
   MemoryContext& context()
@@ -618,14 +618,14 @@ class Flow final {
     return *prev_;
   }
 
-  private:
+private:
   static Flow*& g_flow()
   {
     static CoVar<Flow*> g_flow;
     return g_flow;
   }
 
-  private:
+private:
   MemoryContext& ref_context_;
   Flow* prev_;
   Flow* next_;
@@ -648,7 +648,7 @@ inline void ctxfree(void* ptr)
 }
 
 class _SBase {
-  public:
+public:
   int get_ret() const
   {
     return ret_;
@@ -670,7 +670,7 @@ class _S {};
 
 template <>
 class _S<ContextSource::WITH> : public _SBase {
-  public:
+public:
   _S(const bool condition, MemoryContext* context) : _SBase(), flow_(nullptr)
   {
     int ret = common::OB_SUCCESS;
@@ -698,7 +698,7 @@ class _S<ContextSource::WITH> : public _SBase {
 
 template <>
 class _S<ContextSource::CREATE> : public _SBase {
-  public:
+public:
   template <typename... Args>
   _S(const bool condition, Args&&... args) : _SBase(), context_(nullptr), flow_(nullptr)
   {

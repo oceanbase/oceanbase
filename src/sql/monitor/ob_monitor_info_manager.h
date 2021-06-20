@@ -38,7 +38,7 @@ struct PlanKey {
 class ObMonitorInfoManager {
   friend class TestMonitorInfoManager_tets_duplicated_Test;
   struct ReclainCond {
-    public:
+  public:
     ReclainCond(int64_t curr_timestamp, int64_t max_remain_interval)
         : curr_timestamp_(curr_timestamp), max_remain_interval_(max_remain_interval)
     {}
@@ -57,7 +57,7 @@ class ObMonitorInfoManager {
   };
   typedef common::ObRaQueue::Ref Ref;
 
-  public:
+public:
   ObMonitorInfoManager();
   ~ObMonitorInfoManager();
   int init();
@@ -102,7 +102,7 @@ class ObMonitorInfoManager {
   static const int64_t OB_BATCH_GC_COUNT = 2000;
   static const int64_t OB_MAX_PUSH_INTERVAL = 10 * 1000 * 1000;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMonitorInfoManager);
   void clear_queue(int64_t limit);
   int reclain_map();
@@ -111,7 +111,7 @@ class ObMonitorInfoManager {
     max_push_interval_ = time;
   }
 
-  private:
+private:
   common::ObConcurrentFIFOAllocator allocator_;
   common::ObRaQueue slow_query_queue_;
   common::ObTimer timer_;  // for timing task for cleaning data.

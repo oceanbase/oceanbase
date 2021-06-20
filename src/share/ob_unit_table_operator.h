@@ -23,7 +23,7 @@ class ObServerConfig;
 }  // end namespace common
 namespace share {
 class ObUnitTableOperator {
-  public:
+public:
   ObUnitTableOperator();
   virtual ~ObUnitTableOperator();
 
@@ -51,7 +51,7 @@ class ObUnitTableOperator {
   virtual int remove_unit_config(common::ObISQLClient& client, const uint64_t unit_config_id);
   virtual int get_tenants(common::ObIArray<uint64_t>& tenants) const;
 
-  private:
+private:
   static int zone_list2str(const common::ObIArray<common::ObZone>& zone_list, char* str, const int64_t buf_size);
   static int str2zone_list(const char* str, common::ObIArray<common::ObZone>& zone_list);
 
@@ -64,12 +64,12 @@ class ObUnitTableOperator {
   int read_tenant(const common::sqlclient::ObMySQLResult& result, uint64_t& tenant_id) const;
   int read_tenants(common::ObSqlString& sql, common::ObIArray<uint64_t>& tenants) const;
 
-  private:
+private:
   bool inited_;
   common::ObMySQLProxy* proxy_;
   common::ObServerConfig* config_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUnitTableOperator);
 };
 }  // end namespace share

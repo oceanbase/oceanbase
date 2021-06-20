@@ -23,7 +23,7 @@ namespace storage {
 class ObRelativeTable {
   friend class ObRelativeTables;
 
-  public:
+public:
   ObTablesHandle tables_handle_;
 
   ObRelativeTable()
@@ -81,14 +81,14 @@ class ObRelativeTable {
   TO_STRING_KV("index_id", NULL == schema_ ? 0 : schema_->get_table_id(), KP(schema_), K_(allow_not_ready),
       K_(use_schema_param), KPC(schema_param_));
 
-  private:
+private:
   int get_rowkey_col_desc_by_idx(const int64_t idx, share::schema::ObColDesc& col_desc) const;
   // must follow index column order
   int set_index_value(const common::ObNewRow& table_row, const share::schema::ColumnMap& col_map,
       const share::schema::ObColDesc& col_desc, const int64_t rowkey_size, common::ObNewRow& index_row,
       common::ObIArray<share::schema::ObColDesc>* idx_columns);
 
-  private:
+private:
   bool allow_not_ready_;
   const share::schema::ObTableSchema* schema_;
   const share::schema::ObTableSchemaParam* schema_param_;
@@ -96,7 +96,7 @@ class ObRelativeTable {
 };
 
 class ObRelativeTables {
-  public:
+public:
   explicit ObRelativeTables(common::ObIAllocator& allocator)
       : idx_cnt_(0),
         max_col_num_(0),
@@ -147,7 +147,7 @@ class ObRelativeTables {
     return index_tables_buf_count_;
   }
 
-  private:
+private:
   int prepare_data_table(const int64_t read_snapshot, ObPartitionStore& store);
   int prepare_index_tables(
       const int64_t read_snapshot, const common::ObIArray<uint64_t>* upd_col_ids, ObPartitionStore& store);
@@ -159,13 +159,13 @@ class ObRelativeTables {
   int check_tenant_schema_version(share::schema::ObMultiVersionSchemaService& schema_service, const uint64_t tenant_id,
       const uint64_t table_id, const int64_t tenant_schema_version);
 
-  public:
+public:
   int64_t idx_cnt_;
   int64_t max_col_num_;
   ObRelativeTable data_table_;
   ObRelativeTable* index_tables_;
 
-  private:
+private:
   int64_t index_tables_buf_count_;
   common::ObIAllocator& allocator_;
 

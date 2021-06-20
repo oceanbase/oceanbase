@@ -85,9 +85,9 @@ int ObAllVirtualDtlFirstCachedBufferIterator::init()
 }
 
 class ObAllVirtualDtlFirstCachedBufferPoolOp {
-  public:
+public:
   class ObDtlFirstBufferHashMapOp {
-    public:
+  public:
     ObDtlFirstBufferHashMapOp(int64_t max_cnt, int64_t tenant_id,
         ObArray<ObAllVirtualDtlFirstBufferInfo, ObWrapperAllocator>* first_buffer_info)
         : max_cnt_(max_cnt), tenant_id_(tenant_id), first_buffer_infos_(first_buffer_info)
@@ -108,13 +108,13 @@ class ObAllVirtualDtlFirstCachedBufferPoolOp {
       return ret;
     }
 
-    private:
+  private:
     int64_t max_cnt_;
     int64_t tenant_id_;
     ObArray<ObAllVirtualDtlFirstBufferInfo, ObWrapperAllocator>* first_buffer_infos_;
   };
 
-  public:
+public:
   explicit ObAllVirtualDtlFirstCachedBufferPoolOp(
       uint64_t tenant_id, ObArray<ObAllVirtualDtlFirstBufferInfo, ObWrapperAllocator>* first_buffer_info)
       : tenant_id_(tenant_id), first_buffer_infos_(first_buffer_info)
@@ -135,7 +135,7 @@ class ObAllVirtualDtlFirstCachedBufferPoolOp {
     return ret;
   }
 
-  private:
+private:
   // the maxinum of get channels
   static const int64_t MAX_BUFFER_CNT_PER_TENANT = 1000;
   uint64_t tenant_id_;

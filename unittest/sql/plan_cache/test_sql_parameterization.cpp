@@ -24,18 +24,18 @@ using namespace share::schema;
 #define OK(value) ASSERT_EQ(OB_SUCCESS, (value))
 
 class TestSqlParameterization : public ::testing::Test {
-  public:
+public:
   TestSqlParameterization();
   virtual ~TestSqlParameterization();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   TestSqlParameterization(const TestSqlParameterization& other);
   TestSqlParameterization& operator=(const TestSqlParameterization& other);
 
-  protected:
+protected:
   // data members
 };
 

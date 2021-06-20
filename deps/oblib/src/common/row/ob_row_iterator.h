@@ -19,13 +19,13 @@ namespace oceanbase {
 namespace common {
 
 class ObNewRowIterator {
-  public:
+public:
   enum IterType {
     Other = 0,
     ObTableScanIterator = 1,
   };
 
-  public:
+public:
   ObNewRowIterator() : type_(Other)
   {}
   explicit ObNewRowIterator(const IterType type) : type_(type)
@@ -69,18 +69,18 @@ class ObNewRowIterator {
     return type_;
   }
 
-  private:
+private:
   const IterType type_;
 };
 
 class ObNewIterIterator {
-  public:
+public:
   enum IterType {
     Other = 0,
     ObTableScanIterIterator = 1,
   };
 
-  public:
+public:
   ObNewIterIterator() : type_(Other)
   {}
   explicit ObNewIterIterator(const IterType type) : type_(type)
@@ -95,13 +95,13 @@ class ObNewIterIterator {
     return type_;
   }
 
-  private:
+private:
   const IterType type_;
 };
 
 /// wrap one row as an iterator
 class ObSingleRowIteratorWrapper : public ObNewRowIterator {
-  public:
+public:
   ObSingleRowIteratorWrapper();
   ObSingleRowIteratorWrapper(ObNewRow* row);
   virtual ~ObSingleRowIteratorWrapper()
@@ -117,11 +117,11 @@ class ObSingleRowIteratorWrapper : public ObNewRowIterator {
     iter_end_ = false;
   }
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSingleRowIteratorWrapper);
 
-  private:
+private:
   // data members
   ObNewRow* row_;
   bool iter_end_;
@@ -148,7 +148,7 @@ inline int ObSingleRowIteratorWrapper::get_next_row(ObNewRow*& row)
 }
 
 class ObOuterRowIterator {
-  public:
+public:
   ObOuterRowIterator()
   {}
   virtual ~ObOuterRowIterator()

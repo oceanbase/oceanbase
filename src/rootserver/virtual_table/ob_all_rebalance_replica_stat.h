@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace rootserver {
 class ObAllRebalanceReplicaStat : public common::ObVirtualTableProjector {
-  public:
+public:
   ObAllRebalanceReplicaStat();
   virtual ~ObAllRebalanceReplicaStat();
 
@@ -27,7 +27,7 @@ class ObAllRebalanceReplicaStat : public common::ObVirtualTableProjector {
   virtual int inner_open() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObAllRebalanceReplicaStat);
   // function members
@@ -35,7 +35,7 @@ class ObAllRebalanceReplicaStat : public common::ObVirtualTableProjector {
   int next();
   int get_full_row(const share::schema::ObTableSchema* table, common::ObIArray<Column>& columns);
 
-  private:
+private:
   // data members
   ObAllRebalanceTenantStat impl_;
   int64_t cur_partition_idx_;

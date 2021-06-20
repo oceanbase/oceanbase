@@ -18,13 +18,13 @@ namespace oceanbase {
 namespace sql {
 // resolver for both SET NAMES and SET CHARSET
 class ObSetNamesResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObSetNamesResolver(ObResolverParams& params);
   virtual ~ObSetNamesResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSetNamesResolver);
 };
 

@@ -32,7 +32,7 @@ using namespace share::schema;
 
 namespace unittest {
 class TestMicroBlockReader : public ::testing::Test {
-  public:
+public:
   static const int64_t rowkey_column_count = 2;
   // Every ObObjType from ObTinyIntType to ObHexStringType inclusive.
   // Skip ObNullType and ObExtendType because for external usage, a column type
@@ -40,7 +40,7 @@ class TestMicroBlockReader : public ::testing::Test {
   static const int64_t column_num = ObHexStringType;
   static const int64_t macro_block_size = 2L * 1024 * 1024L;
 
-  public:
+public:
   TestMicroBlockReader() : allocator_(ObModIds::TEST)
   {
     reset_row();
@@ -58,7 +58,7 @@ class TestMicroBlockReader : public ::testing::Test {
     row_.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
   }
 
-  protected:
+protected:
   ObRowGenerate row_generate_;
   ObColumnMap column_map_;
   ObArenaAllocator allocator_;

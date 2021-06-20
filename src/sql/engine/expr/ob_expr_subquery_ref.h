@@ -23,7 +23,7 @@ class ObSubQueryIterator;
 class ObExprSubQueryRef : public ObExprOperator {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // extra info stored in ObExpr::extra_
   struct ExtraInfo : public ObExprExtraInfoAccess<ExtraInfo> {
     const static uint32_t DEF_OP_ID = std::numeric_limits<uint32_t>::max();
@@ -77,10 +77,10 @@ class ObExprSubQueryRef : public ObExprOperator {
       row_dimension_, N_REAL_PARAM_NUM, real_param_num_, K_(scalar_result_type), K_(result_is_scalar), K_(subquery_idx),
       K_(row_desc));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSubQueryRef);
 
-  private:
+private:
   bool result_is_scalar_;
   ObExprResType scalar_result_type_;
   int64_t subquery_idx_;

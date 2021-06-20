@@ -25,7 +25,7 @@ namespace observer {
 struct ObGlobalContext;
 
 class ObMPStmtPrepare : public ObMPBase, public ObIMPPacketSender {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_STMT_PREPARE;
 
   explicit ObMPStmtPrepare(const ObGlobalContext& gctx);
@@ -60,7 +60,7 @@ class ObMPStmtPrepare : public ObMPBase, public ObIMPPacketSender {
     return proxy_version_;
   }
 
-  protected:
+protected:
   virtual int deserialize();
   virtual int before_process() override;
   virtual int process();
@@ -96,7 +96,7 @@ class ObMPStmtPrepare : public ObMPBase, public ObIMPPacketSender {
     return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet();
   }
 
-  private:
+private:
   int do_process(
       sql::ObSQLSessionInfo& session, const bool has_more_result, const bool force_sync_resp, bool& async_resp_used);
   int process_prepare_stmt(const sql::ObMultiStmtItem& multi_stmt_item, sql::ObSQLSessionInfo& session,
@@ -109,7 +109,7 @@ class ObMPStmtPrepare : public ObMPBase, public ObIMPPacketSender {
   int send_column_packet(const sql::ObSQLSessionInfo& session, ObMySQLResultSet& result);
   int send_param_packet(const sql::ObSQLSessionInfo& session, ObMySQLResultSet& result);
 
-  private:
+private:
   ObQueryRetryCtrl retry_ctrl_;
   sql::ObSqlCtx ctx_;
   common::ObString sql_;
@@ -119,7 +119,7 @@ class ObMPStmtPrepare : public ObMPBase, public ObIMPPacketSender {
   int64_t exec_end_timestamp_;
   uint64_t proxy_version_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtPrepare);
 
 };  // end of class ObMPStmtPrepare

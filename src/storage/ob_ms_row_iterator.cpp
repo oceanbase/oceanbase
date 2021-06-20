@@ -179,7 +179,7 @@ int ObMSRowIterator::get_next_row(const ObStoreRow*& store_row)
     }
   } else if (OB_ISNULL(store_row = partition_fuser_->get_result_row())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted null store row", KP(store_row), K(ret));
+    STORAGE_LOG(WARN, "Unexpected null store row", KP(store_row), K(ret));
   } else if (!store_row->is_valid()) {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "Invalid store row", K(ret), K(*store_row));

@@ -27,7 +27,7 @@ class ObObj;
 namespace observer {
 
 class ObInfoSchemaDiskStatTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObInfoSchemaDiskStatTable();
   virtual ~ObInfoSchemaDiskStatTable();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -38,7 +38,7 @@ class ObInfoSchemaDiskStatTable : public common::ObVirtualTableScannerIterator {
   }
   virtual int set_ip(common::ObAddr* addr);
 
-  private:
+private:
   enum DISK_COLUMN {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,

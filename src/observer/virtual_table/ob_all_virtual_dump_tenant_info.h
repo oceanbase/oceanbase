@@ -17,12 +17,12 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualDumpTenantInfo : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualDumpTenantInfo();
   virtual ~ObAllVirtualDumpTenantInfo();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualDumpTenantInfo);

@@ -20,23 +20,23 @@ namespace oceanbase {
 namespace common {
 
 class ObInitConfigContainer {
-  public:
+public:
   const ObConfigContainer& get_container();
 
-  protected:
+protected:
   ObInitConfigContainer();
   virtual ~ObInitConfigContainer()
   {}
   static ObConfigContainer*& local_container();
   ObConfigContainer container_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObInitConfigContainer);
 };
 
 // derive from ObInitConfigContainer to make sure config container inited before config item.
 class ObCommonConfig : public ObInitConfigContainer {
-  public:
+public:
   ObCommonConfig();
   virtual ~ObCommonConfig();
 
@@ -52,10 +52,10 @@ class ObCommonConfig : public ObInitConfigContainer {
 
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   static const int64_t MIN_LENGTH = 20;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCommonConfig);
 };
 

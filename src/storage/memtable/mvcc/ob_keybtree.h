@@ -53,10 +53,10 @@ struct BtreeNodeList {
 };
 
 class BtreeNodeAllocator {
-  private:
+private:
   enum { MAX_LIST_COUNT = common::MAX_CPU_NUM };
 
-  public:
+public:
   BtreeNodeAllocator(common::ObIAllocator& allocator) : allocator_(allocator), alloc_memory_(0)
   {}
   virtual ~BtreeNodeAllocator()
@@ -73,7 +73,7 @@ class BtreeNodeAllocator {
     }
   }
 
-  private:
+private:
   int64_t push_idx();
   int64_t pop_idx();
   void push(BtreeNode* p)
@@ -82,7 +82,7 @@ class BtreeNodeAllocator {
   }
   int pop(BtreeNode*& p);
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   int64_t alloc_memory_;
   BtreeNodeList free_list_array_[MAX_LIST_COUNT] CACHE_ALIGNED;
@@ -131,7 +131,7 @@ struct TScanRawHandle {
 };
 
 class ObKeyBtree {
-  public:
+public:
   ObKeyBtree(BtreeNodeAllocator& node_allocator) : node_allocator_(node_allocator), root_(nullptr)
   {}
   ~ObKeyBtree()
@@ -168,10 +168,10 @@ class ObKeyBtree {
   common::QClock& get_qclock();
   common::ObQSync& get_qsync();
 
-  private:
+private:
   void destroy(BtreeNode* root);
 
-  private:
+private:
   common::ObSimpleCounter size_;
   BtreeNodeAllocator& node_allocator_;
   BtreeNode* root_;

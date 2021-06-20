@@ -21,7 +21,7 @@ namespace rpc {
 // This is the base class for oceanbase packets. Contruct directly is
 // not allowed, so that the its destructor is unaccessible.
 class ObPacket {
-  public:
+public:
   ObPacket()
   {}
   virtual ~ObPacket()

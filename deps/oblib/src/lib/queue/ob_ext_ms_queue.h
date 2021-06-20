@@ -26,10 +26,10 @@ namespace oceanbase {
 namespace common {
 template <class KeyType>
 class ObExtMsQueue {
-  public:
+public:
   static const int64_t DEFAULT_MS_QUEUE_ITEM_COUNT = 1024;
 
-  public:
+public:
   typedef ObLink Task;
   enum QueueFlag {
     IDLE = 0,        // There is no output data in the queue
@@ -109,11 +109,11 @@ class ObExtMsQueue {
   typedef ObLinearHashMap<KeyType, MsQueueItem*> MsQueueMap;
   typedef ObSmallObjPool<MsQueueItem> MsQueuePool;
 
-  public:
+public:
   ObExtMsQueue();
   virtual ~ObExtMsQueue();
 
-  public:
+public:
   /// Initialization function
   ///
   /// @param max_cached_ms_queue_item_count Maximum number of cached MsQueue
@@ -123,7 +123,7 @@ class ObExtMsQueue {
       const int64_t queue_len_of_ms_queue, const lib::ObLabel& label = ObModIds::OB_EXT_MS_QUEUE);
   void destroy();
 
-  public:
+public:
   /// Add <key, MsQueue> key-value pair
   /// @note The same key assumes single-threaded operation
   ///
@@ -194,13 +194,13 @@ class ObExtMsQueue {
     return ms_queue_item_count_;
   }
 
-  private:
+private:
   int get_task_ctx_(TaskCtx*& ctx, const int64_t timeout);
   int push_msg_task_(TaskCtx* ctx);
   int get_task_(Task*& task, TaskCtx* ctx);
   int handle_end_task_(TaskCtx* ctx);
 
-  private:
+private:
   bool inited_;
   Task end_task_;                    // Terminate task
   ObLinkQueue task_ctx_queue_;       // Task context queue
@@ -211,7 +211,7 @@ class ObExtMsQueue {
   MsQueuePool ms_queue_pool_;        // Queue resource pool
   MsQueueMap ms_queue_map_;          // Queue Map structure
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExtMsQueue);
 };
 

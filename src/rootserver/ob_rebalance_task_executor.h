@@ -35,7 +35,7 @@ class ObLeaderCoordinator;
 class ObRebalanceTask;
 
 class ObRebalanceTaskExecutor {
-  public:
+public:
   ObRebalanceTaskExecutor()
       : inited_(false),
         pt_operator_(NULL),
@@ -59,7 +59,7 @@ class ObRebalanceTaskExecutor {
   }
   virtual int execute(const ObRebalanceTask& task, common::ObIArray<int>& rc_array);
 
-  private:
+private:
   bool inited_;
   share::ObPartitionTableOperator* pt_operator_;
   obrpc::ObSrvRpcProxy* rpc_proxy_;
@@ -74,7 +74,7 @@ class ObRebalanceTaskExecutor {
 
 class ObRebalanceTaskMgr;
 class ObRebalanceTaskUtil {
-  public:
+public:
   static const int64_t MAX_BATCH_MODIFY_QUORUM_COUNT = 10000;
   static const int64_t MAX_BATCH_REMOVE_MEMBER_COUNT = 10000;
   static const int64_t MAX_BATCH_REMOVE_NON_PAXOS_REPLICA_COUNT = 100;
@@ -89,7 +89,7 @@ class ObRebalanceTaskUtil {
   static int build_batch_modify_quorum_task(ObRebalanceTaskMgr& task_mgr, const ObModifyQuorumTaskInfo& task_info,
       const char* comment, common::ObIArray<rootserver::ObModifyQuorumTask>& modify_quorum_tasks);
 
-  private:
+private:
   static int get_remove_member_leader(const ObRemoveMemberTaskInfo& task_info, ObAddr& leader);
 };
 

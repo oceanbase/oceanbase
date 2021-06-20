@@ -19,19 +19,19 @@
 namespace oceanbase {
 namespace sql {
 class ObAddrsProvider {
-  public:
+public:
   enum {
     INVALID_PROVIDER = 0,
     RANDOM_PROVIDER = 1,
   };
 
-  public:
+public:
   ObAddrsProvider()
   {}
   virtual ~ObAddrsProvider()
   {}
 
-  public:
+public:
   virtual int select_servers(int64_t select_count, common::ObIArray<common::ObAddr>& servers) = 0;
   virtual int64_t to_string(char* buf, const int64_t buf_len) const = 0;
 };

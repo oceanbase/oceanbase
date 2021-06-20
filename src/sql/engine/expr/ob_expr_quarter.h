@@ -19,7 +19,7 @@ namespace sql {
 // Returns the quarter of date
 // range from 1 to 4
 class ObExprQuarter : public ObFuncExprOperator {
-  public:
+public:
   ObExprQuarter();
   explicit ObExprQuarter(common::ObIAllocator& alloc);
   virtual ~ObExprQuarter();
@@ -30,7 +30,7 @@ class ObExprQuarter : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_quater(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprQuarter);
 };
 }  // namespace sql

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprAscii : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprAscii(common::ObIAllocator& alloc);
   virtual ~ObExprAscii(){};
   static int calc(common::ObObj& obj, const common::ObObj& obj1, common::ObExprCtx& expr_ctx);
@@ -29,12 +29,12 @@ class ObExprAscii : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_ascii_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprAscii);
 };
 
 class ObExprOrd : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprOrd(common::ObIAllocator& alloc);
   virtual ~ObExprOrd(){};
   static int calc(common::ObObj& obj, const common::ObObj& obj1, common::ObExprCtx& expr_ctx);
@@ -46,7 +46,7 @@ class ObExprOrd : public ObFuncExprOperator {
 
   static int calc_ord_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprOrd);
 };
 

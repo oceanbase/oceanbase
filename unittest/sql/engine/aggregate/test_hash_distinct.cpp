@@ -31,7 +31,7 @@ namespace sql {
 using namespace common;
 
 class TestEnv : public ::testing::Environment {
-  public:
+public:
   virtual void SetUp() override
   {
     GCONF.enable_sql_operator_dump.set_value("True");
@@ -57,7 +57,7 @@ class TestEnv : public ::testing::Environment {
   ASSERT_FALSE(HasFatalFailure());
 
 class TestHashDistinct : public ObHashDistinct {
-  public:
+public:
   TestHashDistinct() : ObHashDistinct(alloc_)
   {}
   ~TestHashDistinct()
@@ -69,7 +69,7 @@ class TestHashDistinct : public ObHashDistinct {
   ASSERT_FALSE(HasFatalFailure());
 
 class TestHashDistinctTest : public blocksstable::TestDataFilePrepare {
-  public:
+public:
   TestHashDistinctTest() : blocksstable::TestDataFilePrepare("TestDisk_distinct", 2 << 20, 5000)
   {}
   virtual ~TestHashDistinctTest();
@@ -280,7 +280,7 @@ class TestHashDistinctTest : public blocksstable::TestDataFilePrepare {
     return physical_plan_;
   }
 
-  protected:
+protected:
   ObFakeTable fake_table_;
   ObFakeTable result_table_;
   ObPhysicalPlan physical_plan_;
@@ -297,7 +297,7 @@ class TestHashDistinctTest : public blocksstable::TestDataFilePrepare {
   char hit_val[BUF_SIZE];
   char hit_val_base[BUF_SIZE];
 
-  private:
+private:
   int64_t tenant_id_ = OB_SYS_TENANT_ID;
   int64_t ctx_id_ = ObCtxIds::WORK_AREA;
   int64_t mod_id_ = ObNewModIds::TEST1;
@@ -307,7 +307,7 @@ class TestHashDistinctTest : public blocksstable::TestDataFilePrepare {
   TestHashDistinctTest(const TestHashDistinctTest& other);
   TestHashDistinctTest& operator=(const TestHashDistinctTest& other);
 
-  private:
+private:
   // data members
 };
 

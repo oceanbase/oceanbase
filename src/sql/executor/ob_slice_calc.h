@@ -38,7 +38,7 @@ namespace sql {
 class ObRangeHashKeyGetter;
 class ObExecContext;
 class ObSliceIdxCalc {
-  public:
+public:
   static const int64_t DEFAULT_CHANNEL_CNT = 64;
   static const int64_t DEFAULT_CHANNEL_IDX_TO_DROP_ROW = -2;
   typedef common::ObSEArray<int64_t, DEFAULT_CHANNEL_CNT> SliceIdxArray;
@@ -51,7 +51,7 @@ class ObSliceIdxCalc {
   // get partition_if of the row of previous get_slice_indexes() call.
   virtual int get_previous_row_partition_id(ObObj& partition_id);
 
-  protected:
+protected:
   virtual int get_slice_idx(const common::ObNewRow& row, int64_t& slice_idx) = 0;
   virtual int get_slice_idx(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, int64_t& slice_idx)
   {
@@ -67,12 +67,12 @@ class ObSliceIdxCalc {
 
 // For transmit which need send one row to more than one channel. (e.g.: broadcast)
 class ObMultiSliceIdxCalc : public ObSliceIdxCalc {
-  public:
+public:
   ObMultiSliceIdxCalc(common::ObIAllocator& alloc) : ObSliceIdxCalc(alloc)
   {}
   virtual int get_slice_indexes(const common::ObNewRow& row, SliceIdxArray& slice_idx_array) = 0;
 
-  protected:
+protected:
   virtual int get_slice_idx(const common::ObNewRow& row, int64_t& slice_idx)
   {
     UNUSED(row);
@@ -83,18 +83,18 @@ class ObMultiSliceIdxCalc : public ObSliceIdxCalc {
 
 // for root dfo only.
 class ObAllToOneSliceIdxCalc : public ObSliceIdxCalc {
-  public:
+public:
   ObAllToOneSliceIdxCalc(common::ObIAllocator& alloc) : ObSliceIdxCalc(alloc)
   {}
   virtual ~ObAllToOneSliceIdxCalc() = default;
   virtual int get_slice_idx(const common::ObNewRow& row, int64_t& slice_idx) override;
   virtual int get_slice_idx(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, int64_t& slice_idx);
 
-  protected:
+protected:
 };
 
 class ObRepartSliceIdxCalc : virtual public ObSliceIdxCalc {
-  public:
+public:
   ObRepartSliceIdxCalc(ObExecContext& exec_ctx, const share::schema::ObTableSchema& table_schema,
       const ObSqlExpression* repart_func, const ObSqlExpression* repart_sub_func,
       const ObIArray<ObTransmitRepartColumn>* repart_columns,
@@ -175,14 +175,14 @@ class ObRepartSliceIdxCalc : virtual public ObSliceIdxCalc {
 
   int build_repart_ch_map(ObPxPartChMap& map);
 
-  private:
+private:
   // this is a trick!
   // get part id from hashmap, implicate that only one level-1 part in the map
   virtual int get_part_id_by_one_level_sub_ch_map(int64_t& part_id);
   virtual int get_sub_part_id_by_one_level_first_ch_map(const int64_t part_id, int64_t& sub_part_id);
   int init_cache_map(hash::ObHashMap<int64_t, int64_t, hash::NoPthreadDefendMode>& map);
 
-  protected:
+protected:
   ObExecContext& exec_ctx_;
   const share::schema::ObTableSchema& table_schema_;
   const ObSqlExpression* repart_func_;
@@ -205,7 +205,7 @@ class ObRepartSliceIdxCalc : virtual public ObSliceIdxCalc {
 };
 
 class ObSlaveMapRepartIdxCalcBase : public ObRepartSliceIdxCalc {
-  protected:
+protected:
   ObSlaveMapRepartIdxCalcBase(ObExecContext& exec_ctx, const share::schema::ObTableSchema& table_schema,
       const ObSqlExpression* repart_func, const ObSqlExpression* repart_sub_func,
       const ObIArray<ObTransmitRepartColumn>* repart_columns,
@@ -224,11 +224,11 @@ class ObSlaveMapRepartIdxCalcBase : public ObRepartSliceIdxCalc {
   {}
   ~ObSlaveMapRepartIdxCalcBase() = default;
 
-  protected:
+protected:
   virtual int init() override;
   virtual int destroy() override;
 
-  protected:
+protected:
   typedef common::ObSEArray<int64_t, 8> TaskIdxArray;
   typedef common::hash::ObHashMap<int64_t, TaskIdxArray, common::hash::NoPthreadDefendMode> PartId2TaskIdxArrayMap;
 
@@ -236,7 +236,7 @@ class ObSlaveMapRepartIdxCalcBase : public ObRepartSliceIdxCalc {
 };
 
 class ObRepartRandomSliceIdxCalc : public ObSlaveMapRepartIdxCalcBase {
-  public:
+public:
   ObRepartRandomSliceIdxCalc(ObExecContext& exec_ctx, const share::schema::ObTableSchema& table_schema,
       const ObSqlExpression* repart_func, const ObSqlExpression* repart_sub_func,
       const ObIArray<ObTransmitRepartColumn>* repart_columns,
@@ -261,12 +261,12 @@ class ObRepartRandomSliceIdxCalc : public ObSlaveMapRepartIdxCalcBase {
   virtual int init() override;
   virtual int destroy() override;
 
-  private:
+private:
   int get_task_idx_by_partition_id(int64_t partition_id, int64_t& task_idx);
 };
 
 class ObAffinitizedRepartSliceIdxCalc : public ObRepartSliceIdxCalc {
-  public:
+public:
   ObAffinitizedRepartSliceIdxCalc(ObExecContext& exec_ctx, const share::schema::ObTableSchema& table_schema,
       const ObSqlExpression* repart_func, const ObSqlExpression* repart_sub_func,
       const ObIArray<ObTransmitRepartColumn>* repart_columns,
@@ -292,12 +292,12 @@ class ObAffinitizedRepartSliceIdxCalc : public ObRepartSliceIdxCalc {
 
   virtual int get_slice_idx(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, int64_t& slice_idx) override;
 
-  private:
+private:
   const int64_t task_count_;
 };
 
 class ObSlaveMapBcastIdxCalc : virtual public ObRepartSliceIdxCalc {
-  public:
+public:
   ObSlaveMapBcastIdxCalc(ObExecContext& exec_ctx, const share::schema::ObTableSchema& table_schema,
       const ObSqlExpression* repart_func, const ObSqlExpression* repart_sub_func,
       const ObIArray<ObTransmitRepartColumn>* repart_columns,
@@ -312,12 +312,12 @@ class ObSlaveMapBcastIdxCalc : virtual public ObRepartSliceIdxCalc {
 
   virtual int get_slice_indexes(const common::ObNewRow& row, SliceIdxArray& slice_idx_array);
 
-  protected:
+protected:
   const int64_t task_count_;
 };
 
 class ObBc2HostSliceIdCalc : public ObMultiSliceIdxCalc {
-  public:
+public:
   struct HostIndex {
     HostIndex() : begin_(0), end_(0), idx_(0)
     {}
@@ -338,13 +338,13 @@ class ObBc2HostSliceIdCalc : public ObMultiSliceIdxCalc {
   virtual int get_slice_indexes(const common::ObNewRow& row, SliceIdxArray& slice_idx_array) override;
   virtual int get_slice_indexes(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, SliceIdxArray& slice_idx_array);
 
-  private:
+private:
   const ChannelIdxArray& channel_idx_;
   const HostIdxArray& host_idx_;
 };
 
 class ObRandomSliceIdCalc : public ObSliceIdxCalc {
-  public:
+public:
   ObRandomSliceIdCalc(common::ObIAllocator& alloc, const uint64_t slice_cnt)
       : ObSliceIdxCalc(alloc), idx_(0), slice_cnt_(slice_cnt)
   {}
@@ -352,13 +352,13 @@ class ObRandomSliceIdCalc : public ObSliceIdxCalc {
   virtual int get_slice_idx(const common::ObNewRow& row, int64_t& slice_idx) override;
   virtual int get_slice_idx(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, int64_t& slice_idx) override;
 
-  private:
+private:
   uint64_t idx_;
   uint64_t slice_cnt_;
 };
 
 class ObBroadcastSliceIdCalc : public ObMultiSliceIdxCalc {
-  public:
+public:
   ObBroadcastSliceIdCalc(common::ObIAllocator& alloc, uint64_t slice_cnt)
       : ObMultiSliceIdxCalc(alloc), slice_cnt_(slice_cnt)
   {}
@@ -366,12 +366,12 @@ class ObBroadcastSliceIdCalc : public ObMultiSliceIdxCalc {
   virtual int get_slice_indexes(const common::ObNewRow& row, SliceIdxArray& slice_idx_array) override;
   virtual int get_slice_indexes(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, SliceIdxArray& slice_idx_array);
 
-  private:
+private:
   uint64_t slice_cnt_;
 };
 
 class ObHashSliceIdCalc : virtual public ObSliceIdxCalc {
-  public:
+public:
   ObHashSliceIdCalc(ObIAllocator& alloc, common::ObExprCtx& expr_ctx,
       const common::ObIArray<ObHashColumn>& hash_dist_columns, const common::ObIArray<ObSqlExpression*>& dist_exprs,
       const int64_t task_cnt)
@@ -416,7 +416,7 @@ class ObHashSliceIdCalc : virtual public ObSliceIdxCalc {
 };
 
 class ObSlaveMapPkeyHashIdxCalc : public ObSlaveMapRepartIdxCalcBase, public ObHashSliceIdCalc {
-  public:
+public:
   ObSlaveMapPkeyHashIdxCalc(ObExecContext& exec_ctx, const share::schema::ObTableSchema& table_schema,
       const ObSqlExpression* repart_func, const ObSqlExpression* repart_sub_func,
       const ObIArray<ObTransmitRepartColumn>* repart_columns,
@@ -451,13 +451,13 @@ class ObSlaveMapPkeyHashIdxCalc : public ObSlaveMapRepartIdxCalcBase, public ObH
   // for static engine
   virtual int get_slice_idx(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, int64_t& slice_idx) override;
 
-  private:
+private:
   virtual int get_part_id_by_one_level_sub_ch_map(int64_t& part_id) override;
   virtual int get_sub_part_id_by_one_level_first_ch_map(const int64_t part_id, int64_t& sub_part_id) override;
   int get_task_idx_by_partition_id(ObEvalCtx& eval_ctx, int64_t partition_id, int64_t& task_idx);
   int build_affi_hash_map(hash::ObHashMap<int64_t, ObPxPartChMapItem>& affi_hash_map);
 
-  private:
+private:
   hash::ObHashMap<int64_t, ObPxPartChMapItem> affi_hash_map_;
 };
 

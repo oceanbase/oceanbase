@@ -67,7 +67,7 @@ int ObStorageCacheSuite::reset_priority(const int64_t index_cache_priority, cons
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "The cashe suite has not been inited, ", K(ret));
+    STORAGE_LOG(WARN, "The cache suite has not been inited, ", K(ret));
   } else if (OB_FAIL(block_index_cache_.set_priority(index_cache_priority))) {
     STORAGE_LOG(ERROR, "set priority for block index cache failed, ", K(ret));
   } else if (OB_FAIL(user_block_cache_.set_priority(user_block_cache_priority))) {

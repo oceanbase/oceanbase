@@ -21,7 +21,7 @@ namespace sql {
 namespace join {
 
 class ObHJBufMgr : public ObSqlMemoryCallback {
-  public:
+public:
   ObHJBufMgr()
       : reserve_memory_size_(0),
         pre_total_alloc_size_(0),
@@ -93,7 +93,7 @@ class ObHJBufMgr : public ObSqlMemoryCallback {
     return reserve_memory_size_ * RATIO / 100 < total_alloc_size_;
   }
 
-  private:
+private:
   const static int64_t RATIO = 80;
   int64_t reserve_memory_size_;
   int64_t pre_total_alloc_size_;

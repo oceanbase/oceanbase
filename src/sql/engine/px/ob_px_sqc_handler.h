@@ -25,7 +25,7 @@ namespace sql {
 #define OB_SQC_HANDLER_QC_SQC_LINKED (1ULL << 1)
 
 class ObPxWorkNotifier {
-  public:
+public:
   ObPxWorkNotifier() : start_worker_count_(0), finish_worker_count_(0), expect_worker_count_(0), cond_()
   {}
   ~ObPxWorkNotifier() = default;
@@ -44,7 +44,7 @@ class ObPxWorkNotifier {
 
   TO_STRING_KV(K_(start_worker_count), K_(finish_worker_count), K_(expect_worker_count), K_(tid_array))
 
-  private:
+private:
   volatile int64_t start_worker_count_;
   volatile int64_t finish_worker_count_;
   int64_t expect_worker_count_;
@@ -53,10 +53,10 @@ class ObPxWorkNotifier {
 };
 
 class ObPxSqcHandler : public common::ObDLinkBase<ObPxSqcHandler> {
-  public:
+public:
   typedef uint64_t ObPxSQCHandlerId;
 
-  public:
+public:
   ObPxSqcHandler()
       : mem_context_(NULL),
         tenant_id_(UINT64_MAX),
@@ -177,14 +177,14 @@ class ObPxSqcHandler : public common::ObDLinkBase<ObPxSqcHandler> {
   TO_STRING_KV(K_(tenant_id), K_(reserved_px_thread_count), KP_(notifier), K_(exec_ctx), K_(des_phy_plan),
       K_(sqc_init_args), KP_(sub_coord));
 
-  private:
+private:
   int destroy_sqc();
   void add_flag(uint64_t flag)
   {
     process_flags_ |= flag;
   };
 
-  private:
+private:
   lib::MemoryContext* mem_context_;
   uint64_t tenant_id_;
   int64_t reserved_px_thread_count_;

@@ -20,7 +20,7 @@ namespace storage {
 class ObPartitionService;
 
 class ObFreezeAsyncWorker {
-  public:
+public:
   ObFreezeAsyncWorker() : inited_(false), async_task_(), timer_()
   {}
   ~ObFreezeAsyncWorker()
@@ -37,9 +37,9 @@ class ObFreezeAsyncWorker {
   ObFreezeAsyncWorker(const ObFreezeAsyncWorker&) = delete;
   ObFreezeAsyncWorker& operator=(const ObFreezeAsyncWorker&) = delete;
 
-  private:
+private:
   class ObFreezeAsyncTask : public common::ObTimerTask {
-    public:
+  public:
     ObFreezeAsyncTask()
         : inited_(false),
           partition_service_(NULL),
@@ -61,7 +61,7 @@ class ObFreezeAsyncWorker {
     void fetch_task_with_lock_(int& in_freezing, int& needed_round);
     virtual void runTimerTask() override;
 
-    private:
+  private:
     bool inited_;
     ObPartitionService* partition_service_;
     int in_freezing_;

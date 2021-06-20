@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogForUpdate : public ObLogDelUpd {
-  public:
+public:
   ObLogForUpdate(ObLogPlan& plan);
   virtual ~ObLogForUpdate()
   {}
@@ -64,7 +64,7 @@ class ObLogForUpdate : public ObLogDelUpd {
   int is_rowkey_nullable(const uint64_t table_id, bool& is_nullable) const;
   int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
 
-  private:
+private:
   bool skip_locked_;
   int64_t wait_ts_;
   ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> lock_tables_;

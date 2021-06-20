@@ -50,12 +50,12 @@ enum class BalanceTaskType : int64_t {
 };
 
 class RowLeaderBalanceStat {
-  public:
+public:
   RowLeaderBalanceStat(SquareIdMap& map, IUnitProvider& unit_provider, const int64_t row_idx)
       : map_(map), unit_(unit_provider), row_idx_(row_idx), row_unit_()
   {}
 
-  public:
+public:
   int init();
   int prepare_for_next(const BalanceReplicaType bry_type);
   int64_t get_unit_count() const
@@ -72,7 +72,7 @@ class RowLeaderBalanceStat {
   }
   TO_STRING_KV(K_(row_idx), K_(row_unit));
 
-  public:
+public:
   struct UnitCounter {
     UnitCounter() : unit_id_(common::OB_INVALID_ID), accumulated_count_(0), current_count_(0)
     {}
@@ -102,7 +102,7 @@ class RowLeaderBalanceStat {
   int update_task_count(const uint64_t from_unit_id, const uint64_t to_unit_id, const bool update_accumulated_task);
   int finish_this_curr_task_balance();
 
-  protected:
+protected:
   static const double EPSILON;
   SquareIdMap& map_;
   IUnitProvider& unit_;
@@ -111,7 +111,7 @@ class RowLeaderBalanceStat {
 };
 
 class PartitionLeaderCountBalancer : public IdMapBalancer {
-  public:
+public:
   PartitionLeaderCountBalancer(SquareIdMap& map, IUnitProvider& unit_provider, common::ObZone& zone,
       share::schema::ObSchemaGetterGuard& schema_guard, balancer::ITenantStatFinder& stat_finder,
       const HashIndexCollection& hash_index_collection)
@@ -126,10 +126,10 @@ class PartitionLeaderCountBalancer : public IdMapBalancer {
   virtual ~PartitionLeaderCountBalancer()
   {}
 
-  public:
+public:
   virtual int balance() override;
 
-  private:
+private:
   int do_update_map_item_replica_attributes(SquareIdMap::Item& item);
   int update_map_item_replica_attributes();
   int intra_row_balance();
@@ -143,7 +143,7 @@ class PartitionLeaderCountBalancer : public IdMapBalancer {
   int accumulated_task_one_row_balance(const BalanceReplicaType balance_replica_type, const int64_t row_idx,
       RowLeaderBalanceStat& leader_balance_stat, bool& balance);
 
-  private:
+private:
   SquareIdMap& map_;
   IUnitProvider& unit_provider_;
   common::ObZone zone_;

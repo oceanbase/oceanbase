@@ -29,7 +29,7 @@ using common::ObPsStmtId;
 namespace sql {
 
 class ObPsCache {
-  public:
+public:
   // sql -> stmt_id
   typedef common::hash::ObHashMap<ObPsSqlKey, ObPsStmtItem*, common::hash::SpinReadWriteDefendMode> PsStmtIdMap;
   // stmt_id -> plan
@@ -61,7 +61,7 @@ class ObPsCache {
   }
   int set_mem_conf(const ObPCMemPctConf& conf);
 
-  public:
+public:
   // always make sure stmt_id is inner_stmt_id!!!
   int get_stmt_info_guard(const ObPsStmtId ps_stmt_id, ObPsStmtInfoGuard& guard);
   int ref_stmt_item(const uint64_t db_id, const common::ObString& ps_sql, ObPsStmtItem*& stmt_item);
@@ -113,7 +113,7 @@ class ObPsCache {
   int check_schema_version(ObSchemaGetterGuard& schema_guard, ObPsStmtInfo& stmt_info, bool& is_expired);
   int erase_stmt_item(ObPsSqlKey& ps_key);
 
-  private:
+private:
   int inner_cache_evict(bool is_evict_all);
   int fill_ps_stmt_info(const ObResultSet& result, int64_t param_cnt, ObPsStmtInfo& ps_stmt_info) const;
   int add_stmt_info(const ObPsStmtItem& ps_item, const ObPsStmtInfo& ps_info, ObPsStmtInfo*& ref_ps_info);
@@ -167,7 +167,7 @@ class ObPsCache {
     ATOMIC_STORE(&mem_low_pct_, pct);
   }
 
-  private:
+private:
   static const int64_t SLICE_SIZE = 1024;
 
   ObPsStmtId next_ps_stmt_id_;

@@ -22,14 +22,14 @@ namespace oceanbase {
 namespace sql {
 
 class ObExpandAggregateUtils {
-  public:
+public:
   static int expand_aggr_expr(ObDMLStmt* stmt, ObTransformerCtx* ctx, bool& trans_happened);
 
   static int expand_window_aggr_expr(ObDMLStmt* stmt, ObTransformerCtx* ctx, bool& trans_happened);
 
   static int add_linear_inter_expr(ObDMLStmt* stmt, ObTransformerCtx* ctx, bool& trans_happened);
 
-  private:
+private:
   static int add_linear_inter_expr(ObTransformerCtx* ctx, ObAggFunRawExpr* aggr_expr);
   static bool is_medain_percentile_aggr_type(const ObItemType aggr_type)
   {

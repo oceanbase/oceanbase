@@ -29,7 +29,7 @@ namespace unittest {
 
 static const char* TEST_CASE_NAME = "test_raid_file_system_data";
 class TestRaidFileSystem : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     for (int64_t i = 0; i < OB_DEFAULT_MACRO_BLOCK_SIZE; ++i) {

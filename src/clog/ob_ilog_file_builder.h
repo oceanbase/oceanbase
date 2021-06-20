@@ -24,7 +24,7 @@ namespace clog {
 class PinnedMemory;
 
 class MemberListInfo {
-  public:
+public:
   MemberListInfo()
       : memberlist_(),
         replica_num_(0),
@@ -34,7 +34,7 @@ class MemberListInfo {
   ~MemberListInfo()
   {}
 
-  public:
+public:
   const common::ObMemberList& get_memberlist() const
   {
     return memberlist_;
@@ -61,7 +61,7 @@ class MemberListInfo {
   }
   TO_STRING_KV(K(memberlist_), K(replica_num_), K(membership_log_id_), K(memberlist_version_));
 
-  private:
+private:
   common::ObMemberList memberlist_;
   int64_t replica_num_;
   uint64_t membership_log_id_;
@@ -72,11 +72,11 @@ typedef common::ObArrayHashMap<common::ObPartitionKey, MemberListInfo> MemberLis
 class ObIlogMemstore;
 class RawArray;
 class ObIlogFileBuilder {
-  public:
+public:
   ObIlogFileBuilder();
   ~ObIlogFileBuilder();
 
-  public:
+public:
   int init(ObIlogMemstore* ilog_memstore, PinnedMemory* pinned_memory);
   void destroy();
 
@@ -86,7 +86,7 @@ class ObIlogFileBuilder {
     return index_info_block_map_;
   }
 
-  private:
+private:
   class PrepareRawArrayFunctor;
   class UpdateStartOffsetFunctor;
   class BuildArrayMapFunctor;
@@ -111,7 +111,7 @@ class ObIlogFileBuilder {
   bool check_ilog_continous_(
       const uint64_t min_log_id, const uint64_t max_log_id, const uint64_t last_log_id, const uint64_t curr_log_id);
 
-  private:
+private:
   bool is_inited_;
   ObIlogMemstore* ilog_memstore_;
   char* buffer_;
@@ -122,7 +122,7 @@ class ObIlogFileBuilder {
   common::PageArena<> page_arena_;
   common::ObTimeGuard time_guard_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIlogFileBuilder);
 };
 }  // namespace clog

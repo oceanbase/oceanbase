@@ -35,32 +35,32 @@ class ObRootBalancer;
 class ObRebalanceTaskMgr;
 
 class ObBackupBackupsetIdling final : public ObThreadIdling {
-  public:
+public:
   explicit ObBackupBackupsetIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual int64_t get_idle_interval_us() override;
 };
 
 class ObBackupBackupsetLoadBalancer final {
-  public:
+public:
   ObBackupBackupsetLoadBalancer();
   virtual ~ObBackupBackupsetLoadBalancer();
 
   int init(ObZoneManager& zone_mgr, ObServerManager& server_mgr);
   int get_next_server(common::ObAddr& server);
 
-  private:
+private:
   int get_all_server_in_region(const common::ObRegion& region, common::ObIArray<common::ObAddr>& server_list);
   int get_zone_list(const common::ObRegion& region, common::ObIArray<common::ObZone>& zone_list);
   int choose_server(const common::ObIArray<common::ObAddr>& server_list, common::ObAddr& server);
 
-  private:
+private:
   bool is_inited_;
   ObRandom random_;
   ObZoneManager* zone_mgr_;
   ObServerManager* server_mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupBackupsetLoadBalancer);
 };
 
@@ -69,7 +69,7 @@ class ObBackupBackupset final : public ObRsReentrantThread {
   friend class ObTenantBackupBackupset;
   typedef ObArray<share::ObTenantBackupTaskItem>::const_iterator BackupArrayIter;
 
-  public:
+public:
   ObBackupBackupset();
   virtual ~ObBackupBackupset();
   int init(ObMySQLProxy& sql_proxy, ObZoneManager& zone_mgr, ObServerManager& server_mgr, ObRootBalancer& root_balancer,
@@ -85,7 +85,7 @@ class ObBackupBackupset final : public ObRsReentrantThread {
     BLOCKING_RUN_IMPLEMENT();
   }
 
-  private:
+private:
   int check_can_do_work();
   int do_work(const common::ObIArray<int64_t>& job_ids);
   int get_all_jobs(common::ObIArray<int64_t>& job_ids);
@@ -121,14 +121,14 @@ class ObBackupBackupset final : public ObRsReentrantThread {
   int do_extern_cluster_backup_info(const share::ObBackupBackupsetJobInfo& job_info,
       const share::ObClusterBackupDest& src, const share::ObClusterBackupDest& dst);
 
-  private:
+private:
   int do_job(const int64_t job_id);
   int do_schedule(const share::ObBackupBackupsetJobInfo& job_info);
   int do_backup(const share::ObBackupBackupsetJobInfo& job_info);
   int do_cancel(const share::ObBackupBackupsetJobInfo& job_info);
   int do_finish(const share::ObBackupBackupsetJobInfo& job_info);
 
-  private:
+private:
   int inner_schedule_tenant_task(
       const share::ObBackupBackupsetJobInfo& job_info, const common::ObIArray<uint64_t>& tenant_ids);
   int inner_schedule_tenant_backupset_task(const share::ObBackupBackupsetJobInfo& job_info, const uint64_t tenant_id,
@@ -140,7 +140,7 @@ class ObBackupBackupset final : public ObRsReentrantThread {
   int get_dst_backup_dest_str(char* buf, const int64_t buf_size) const;
   int construct_sys_tenant_backup_backupset_info(share::ObTenantBackupBackupsetTaskInfo& info);
 
-  private:
+private:
   struct CompareBackupTaskBackupSetId {
     bool operator()(const share::ObTenantBackupTaskItem& item, const int64_t backup_set_id)
     {
@@ -161,7 +161,7 @@ class ObBackupBackupset final : public ObRsReentrantThread {
     }
   };
 
-  private:
+private:
   bool is_inited_;
   ObMySQLProxy* sql_proxy_;
   ObZoneManager* zone_mgr_;
@@ -172,12 +172,12 @@ class ObBackupBackupset final : public ObRsReentrantThread {
   share::ObIBackupLeaseService* backup_lease_service_;
   mutable ObBackupBackupsetIdling idling_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupBackupset);
 };
 
 class ObTenantBackupBackupset final {
-  public:
+public:
   ObTenantBackupBackupset();
   virtual ~ObTenantBackupBackupset();
   int init(const uint64_t tenant_id, const int64_t job_id, const int64_t backup_set_id, ObMySQLProxy& sql_proxy,
@@ -185,14 +185,14 @@ class ObTenantBackupBackupset final {
       ObBackupBackupset& backup_backupset, share::ObIBackupLeaseService& backup_lease_service);
   int do_task();
 
-  private:
+private:
   int do_with_status(const share::ObTenantBackupBackupsetTaskInfo& task_info);
   int do_generate(const share::ObTenantBackupBackupsetTaskInfo& task_info);
   int do_backup(const share::ObTenantBackupBackupsetTaskInfo& task_info);
   int do_cancel(const share::ObTenantBackupBackupsetTaskInfo& task_info);
   int do_finish(const share::ObTenantBackupBackupsetTaskInfo& task_info);
 
-  private:
+private:
   int check_meta_file_complete(const share::ObTenantBackupTaskInfo& backup_info, const int64_t full_backup_set_id,
       const int64_t inc_backup_set_id, const common::ObIArray<common::ObPGKey>& pg_list, int64_t& total_partition_count,
       int64_t& total_macro_block_count, bool& complete);
@@ -200,7 +200,7 @@ class ObTenantBackupBackupset final {
       const common::ObIArray<common::ObPGKey>& pg_key_list, int64_t& total_partition_count,
       int64_t& total_macro_block_count, bool& complete);
 
-  private:
+private:
   int get_tenant_backup_task_info(const int64_t backup_set_id, share::ObTenantBackupTaskInfo& task_info);
   int get_backup_set_id_info(
       const share::ObTenantBackupTaskInfo& task_info, int64_t& full_backup_set_id, int64_t& inc_backup_set_id);
@@ -212,7 +212,7 @@ class ObTenantBackupBackupset final {
   int check_backup_backupset_task_finished(bool& finished);
   int get_finished_pg_stat(share::ObPGBackupBackupsetTaskStat& pg_stat);
 
-  private:
+private:
   int get_tenant_task_info(share::ObTenantBackupBackupsetTaskInfo& task_info);
   int update_tenant_task_info(const share::ObTenantBackupBackupsetTaskInfo& task_info);
   int transfer_backup_set_meta(const share::ObClusterBackupDest& src, const share::ObClusterBackupDest& dst,
@@ -235,10 +235,10 @@ class ObTenantBackupBackupset final {
   int check_backup_info_exist(const common::ObIArray<share::ObExternBackupInfo>& extern_backup_infos,
       const int64_t full_backup_set_id, const int64_t inc_backup_set_id, bool& exist);
 
-  private:
+private:
   int convert_array_to_set(const common::ObIArray<common::ObPGKey>& pg_key, hash::ObHashSet<common::ObPGKey>& pg_set);
 
-  private:
+private:
   bool is_inited_;
   uint64_t tenant_id_;
   int64_t job_id_;
@@ -254,18 +254,18 @@ class ObTenantBackupBackupset final {
   share::ObBaseBackupInfoStruct::BackupDest dst_backup_dest_;
   share::ObIBackupLeaseService* backup_lease_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantBackupBackupset);
 };
 
 class ObPartitionBackupBackupset final {
-  public:
+public:
   ObPartitionBackupBackupset();
   virtual ~ObPartitionBackupBackupset();
   int init(ObMySQLProxy& sql_proxy, ObZoneManager& zone_mgr, ObServerManager& server_mgr, ObRebalanceTaskMgr& task_mgr);
   int partition_backup_backupset(const uint64_t tenant_id);
 
-  private:
+private:
   int get_one_job(int64_t& job_id);
   int get_smallest_unfinished_task(
       const int64_t job_id, const uint64_t tenant_id, const int64_t copy_id, int64_t& backup_set_id);
@@ -289,7 +289,7 @@ class ObPartitionBackupBackupset final {
       const common::ObIArray<share::ObPGBackupBackupsetTaskInfo>& task_infos,
       common::ObIArray<share::ObPGBackupBackupsetTaskInfo>& new_task_infos);
 
-  private:
+private:
   bool is_inited_;
   ObMySQLProxy* sql_proxy_;
   ObZoneManager* zone_mgr_;
@@ -297,7 +297,7 @@ class ObPartitionBackupBackupset final {
   ObRebalanceTaskMgr* rebalance_task_mgr_;
   ObBackupBackupsetLoadBalancer load_balancer_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionBackupBackupset);
 };
 

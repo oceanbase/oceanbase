@@ -71,18 +71,18 @@ class ObSingleZoneModeMigrateReplica;
 class ObSinglePartitionBalance;
 
 class ObRootBalanceIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObRootBalanceIdling(volatile bool& stop, const ObRootBalancer& host) : ObThreadIdling(stop), host_(host)
   {}
 
   virtual int64_t get_idle_interval_us();
 
-  private:
+private:
   const ObRootBalancer& host_;
 };
 
 struct ObBalancerTargetSchemaInfo {
-  public:
+public:
   ObBalancerTargetSchemaInfo() : lock_(), tenant_schema_versions_()
   {}
   ~ObBalancerTargetSchemaInfo()
@@ -93,7 +93,7 @@ struct ObBalancerTargetSchemaInfo {
   void reset();
   TO_STRING_KV(K_(tenant_schema_versions));
 
-  private:
+private:
   common::SpinRWLock lock_;
   common::ObArray<share::TenantIdAndSchemaVersion> tenant_schema_versions_;
 };
@@ -105,7 +105,7 @@ struct ObBalancerTargetSchemaInfo {
 // - coordinate partition group members to the same.
 // - unit load balance. (migrate partition replica)
 class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProvider {
-  public:
+public:
   enum TaskStatus { UNKNOWN = 0, HAS_TASK, NO_TASK, MAX };
   ObRootBalancer();
   virtual ~ObRootBalancer();
@@ -200,7 +200,7 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
   int create_unit_replica_counter(const uint64_t tenant_id);
   int destory_tenant_unit_array();
 
-  private:
+private:
   int multiple_zone_deployment_tenant_balance(const uint64_t tenant_id,
       balancer::ObLeaderBalanceGroupContainer& balance_group_container,
       ObRootBalanceHelp::BalanceController& balance_controller, int64_t& task_cnt);
@@ -210,7 +210,7 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
   int cancel_unit_migration(int64_t& task_cnt);
   static const int64_t LOG_INTERVAL = 30 * 1000 * 1000;
 
-  private:
+private:
   bool inited_;
   volatile int64_t active_;
   mutable ObRootBalanceIdling idling_;
@@ -257,7 +257,7 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
 };
 
 class ObBlacklistProcess : public share::ObAsyncTask {
-  public:
+public:
   explicit ObBlacklistProcess() : init_(false), count_(0)
   {}
   virtual ~ObBlacklistProcess()
@@ -269,7 +269,7 @@ class ObBlacklistProcess : public share::ObAsyncTask {
   virtual int64_t get_deep_copy_size() const;
   share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-  private:
+private:
   bool init_;
   int64_t count_;
   share::ObPartitionTableOperator* pt_;

@@ -25,7 +25,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObExpVisitor {
-  public:
+public:
   ObExpVisitor(common::ObIArray<uint64_t>& output_column_ids, common::ObNewRow& cur_row, common::ObScanner& scanner)
       : output_column_ids_(output_column_ids),
         cur_row_(cur_row),
@@ -57,11 +57,11 @@ class ObExpVisitor {
     return ret;
   }
 
-  private:
+private:
   int get_table_access_desc(bool is_idx_access, const ObQueryFlag& scan_flag, ObString& tab_name,
       const ObString& index_name, ObString& ret_name);
 
-  protected:
+protected:
   common::ObIArray<uint64_t>& output_column_ids_;
   common::ObNewRow& cur_row_;
   common::ObScanner& scanner_;
@@ -72,7 +72,7 @@ class ObExpVisitor {
 };
 
 class ObPhyOpExpVisitor : public sql::ObPhyOperatorVisitor, public ObExpVisitor {
-  public:
+public:
   ObPhyOpExpVisitor(
       common::ObIArray<uint64_t>& output_column_ids, common::ObNewRow& cur_row, common::ObScanner& scanner)
       : ObExpVisitor(output_column_ids, cur_row, scanner)
@@ -85,7 +85,7 @@ class ObPhyOpExpVisitor : public sql::ObPhyOperatorVisitor, public ObExpVisitor 
     return ObExpVisitor::init(tenant_id, plan_id, allocator);
   }
 
-  private:
+private:
   int pre_visit(const sql::ObSingleChildPhyOperator& op)
   {
     UNUSED(op);
@@ -140,7 +140,7 @@ class ObPhyOpExpVisitor : public sql::ObPhyOperatorVisitor, public ObExpVisitor 
 };
 
 class ObOpSpecExpVisitor : public sql::ObOpSpecVisitor, public ObExpVisitor {
-  public:
+public:
   ObOpSpecExpVisitor(
       common::ObIArray<uint64_t>& output_column_ids, common::ObNewRow& cur_row, common::ObScanner& scanner)
       : ObExpVisitor(output_column_ids, cur_row, scanner)
@@ -162,12 +162,12 @@ class ObOpSpecExpVisitor : public sql::ObOpSpecVisitor, public ObExpVisitor {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOpSpecExpVisitor);
 };
 
 class ObPlanCachePlanExplain : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   enum {
     TENANT_ID_COL = 16,
     IP_COL,
@@ -191,7 +191,7 @@ class ObPlanCachePlanExplain : public common::ObVirtualTableScannerIterator {
   virtual int inner_open();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int set_tenant_plan_id(const common::ObIArray<common::ObNewRange>& ranges);
   int64_t tenant_id_;
   int64_t plan_id_;

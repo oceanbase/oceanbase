@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace storage {
 class ObTenantConfigMgr : public blocksstable::ObIRedoModule {
-  public:
+public:
   static ObTenantConfigMgr& get_instance();
 
   int init();
@@ -36,13 +36,13 @@ class ObTenantConfigMgr : public blocksstable::ObIRedoModule {
   virtual int replay(const blocksstable::ObRedoModuleReplayParam& param) override;
   virtual int parse(const int64_t subcmd, const char* buf, const int64_t len, FILE* stream) override;
 
-  private:
+private:
   ObTenantConfigMgr();
   virtual ~ObTenantConfigMgr();
   int replay_update_tenant_config(const char* buf, const int64_t buf_len);
   bool is_tenant_changed(const share::TenantUnits& old_tenant, const share::TenantUnits& new_tenant);
 
-  private:
+private:
   bool is_inited_;
   share::TenantUnits tenant_units_;
   mutable lib::ObMutex mutex_;

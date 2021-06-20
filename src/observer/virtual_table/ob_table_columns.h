@@ -33,7 +33,7 @@ class ObRawExpr;
 }  // namespace sql
 namespace observer {
 class ObTableColumns : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObTableColumns();
   virtual ~ObTableColumns();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -42,7 +42,7 @@ class ObTableColumns : public common::ObVirtualTableScannerIterator {
       share::schema::ObSchemaGetterGuard* guard, const share::schema::ObTableSchema& table_schema,
       sql::ObSelectStmt*& select_stmt, sql::ObRawExprFactory& expr_factory, sql::ObStmtFactory& stmt_factory);
 
-  private:
+private:
   enum KeyType {
     KEY_TYPE_EMPTY = 0,
     KEY_TYPE_PRIMARY = 1,
@@ -83,7 +83,7 @@ class ObTableColumns : public common::ObVirtualTableScannerIterator {
   int get_type_str(const ObObjMeta& obj_meta, const ObAccuracy& accuracy, const common::ObIArray<ObString>& type_info,
       const int16_t default_length_semantics, ObString& type_val);
 
-  private:
+private:
   char type_str_[common::OB_MAX_SYS_PARAM_NAME_LENGTH];
   char* column_type_str_;
   int64_t column_type_str_len_;

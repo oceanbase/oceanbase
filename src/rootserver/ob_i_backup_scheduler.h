@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace rootserver {
 
 class ObIBackupScheduler {
-  public:
+public:
   ObIBackupScheduler()
   {}
   virtual ~ObIBackupScheduler()

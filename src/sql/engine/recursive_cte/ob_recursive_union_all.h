@@ -28,9 +28,9 @@ namespace sql {
 class ObRecursiveUnionAll : public ObMergeSetOperator {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class ObRecursiveUnionAllOperatorCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     explicit ObRecursiveUnionAllOperatorCtx(ObExecContext& ctx)
         : ObPhyOperatorCtx(ctx), inner_data_(ctx.get_allocator())
     {}
@@ -52,12 +52,12 @@ class ObRecursiveUnionAll : public ObMergeSetOperator {
     int init();
     int ctx_close();
 
-    public:
+  public:
     common::ObExprCtx expr_ctx_;
     ObRecursiveInnerData inner_data_;
   };
 
-  public:
+public:
   explicit ObRecursiveUnionAll(common::ObIAllocator& alloc);
   ~ObRecursiveUnionAll();
   virtual void reset();
@@ -74,7 +74,7 @@ class ObRecursiveUnionAll : public ObMergeSetOperator {
   };
   int set_cycle_pseudo_values(ObSqlExpression& v, ObSqlExpression& d_v);
 
-  protected:
+protected:
   /**
    * @brief for specified phy operator to print it's member variable with json key-value format
    * @param buf[in] to string buffer
@@ -116,11 +116,11 @@ class ObRecursiveUnionAll : public ObMergeSetOperator {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRecursiveUnionAll);
 
-  public:
+public:
   common::ObFixedArray<ObSortColumn, common::ObIAllocator> search_by_col_lists_;
   common::ObFixedArray<common::ObColumnInfo, common::ObIAllocator> cycle_by_col_lists_;
 
-  protected:
+protected:
   static const int32_t CMP_DIRECTION_ASC = 1;
   static const int32_t CMP_DIRECTION_DESC = -1;
   const ObFakeCTETable* pump_operator_;

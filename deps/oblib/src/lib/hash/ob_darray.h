@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace common {
 class IAlloc {
-  public:
+public:
   IAlloc()
   {}
   virtual ~IAlloc()
@@ -73,7 +73,7 @@ struct EstimateCounter {
 
 // thread cached ref_cnt
 class TcRef {
-  public:
+public:
   typedef ObSpinLock Lock;
   typedef ObSpinLockGuard LockGuard;
   struct Item {
@@ -128,18 +128,18 @@ class TcRef {
     return ret;
   }
 
-  private:
+private:
   static int64_t min(int64_t x, int64_t y)
   {
     return x < y ? x : y;
   }
 
-  private:
+private:
   Item ref_[MAX_THREAD_NUM];
 };
 
 class ReadRef {
-  public:
+public:
   ReadRef()
   {}
   ~ReadRef()
@@ -183,7 +183,7 @@ class ReadRef {
     }
   }
 
-  private:
+private:
   static int64_t min(int64_t x, int64_t y)
   {
     return x < y ? x : y;
@@ -202,7 +202,7 @@ class ReadRef {
     }
   }
 
-  private:
+private:
   struct RefMarker {
     RefMarker() : value_(NULL)
     {}
@@ -214,14 +214,14 @@ class ReadRef {
 };
 
 struct NestLessRWLockHandler {
-  private:
+private:
   enum {
     UNLOCKED = 0,
     WR_LOCKING = 1,
     WR_LOCKED = 2,
   };
 
-  public:
+public:
   static bool try_rdlock(ReadRef& ref, uint32_t* write_uid)
   {
     bool lock_succ = false;
@@ -296,7 +296,7 @@ struct NestLessRWLockHandler {
 };
 
 class ArrayHeadHandler {
-  public:
+public:
   typedef NestLessRWLockHandler LockHandler;
   bool try_rdlock(uint32_t* lock)
   {
@@ -334,13 +334,13 @@ class ArrayHeadHandler {
     return tc_ref_.get_ref(addr);
   }
 
-  private:
+private:
   ReadRef read_ref_;
   TcRef tc_ref_;
 };
 
 class ArrayHead : public HazardNode {
-  public:
+public:
   typedef void* val_t;
   ArrayHead(uint64_t limit, int level, ArrayHeadHandler& head_handler)
       : HazardNode(),
@@ -463,7 +463,7 @@ class ArrayHead : public HazardNode {
     return err;
   }
 
-  private:
+private:
   uint32_t capacity_;
   int32_t level_;
   uint32_t lock_;
@@ -473,11 +473,11 @@ class ArrayHead : public HazardNode {
 };
 
 class ArrayBase {
-  public:
+public:
   typedef void* val_t;
   typedef ArrayHead Node;
   class Path {
-    public:
+  public:
     enum { MAX_LEVEL = 32 };
 
     // record position of this level
@@ -559,7 +559,7 @@ class ArrayBase {
       return err;
     }
 
-    private:
+  private:
     Node* root_node_;
     int root_level_;
     int pop_idx_;
@@ -568,7 +568,7 @@ class ArrayBase {
   };
 
   class BaseHandle {
-    public:
+  public:
     explicit BaseHandle(ArrayBase& host)
         : node_size_(host.get_node_size()),
           alloc_(host.get_alloc()),
@@ -616,7 +616,7 @@ class ArrayBase {
       retire_list_handle_.add_del(node);
     }
 
-    private:
+  private:
     void free_node(Node* p)
     {
       if (NULL != p) {
@@ -626,7 +626,7 @@ class ArrayBase {
       }
     }
 
-    private:
+  private:
     int64_t node_size_;
     IArrayAlloc& alloc_;
     ArrayHeadHandler& array_head_handler_;
@@ -635,7 +635,7 @@ class ArrayBase {
   };
 
   class Handle : public BaseHandle {
-    public:
+  public:
     explicit Handle(ArrayBase& host) : BaseHandle(host), handler_(host.get_array_handler())
     {}
     ~Handle()
@@ -753,12 +753,12 @@ class ArrayBase {
       }
     }
 
-    private:
+  private:
     Path path_;
     ArrayHeadHandler& handler_;
   };
 
-  public:
+public:
   ArrayBase(IArrayAlloc& alloc, int64_t node_size) : alloc_(alloc), node_size_(node_size), hazard_ref_(false)
   {}
   ~ArrayBase()
@@ -834,7 +834,7 @@ class ArrayBase {
     return err;
   }
 
-  private:
+private:
   IArrayAlloc& alloc_;
   int64_t node_size_;
   HazardRef hazard_ref_;

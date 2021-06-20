@@ -45,9 +45,9 @@ class ObExecContext;
 class ObTaskExecutorCtx {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   class CalcVirtualPartitionIdParams {
-    public:
+  public:
     CalcVirtualPartitionIdParams() : inited_(false), ref_table_id_(common::OB_INVALID_ID)
     {}
     ~CalcVirtualPartitionIdParams()
@@ -70,7 +70,7 @@ class ObTaskExecutorCtx {
 
     TO_STRING_KV(K_(inited), K_(ref_table_id));
 
-    private:
+  private:
     bool inited_;
     uint64_t ref_table_id_;
   };
@@ -253,10 +253,10 @@ class ObTaskExecutorCtx {
   }  // alias
   int append_table_locations_no_dup(const ObTablePartitionInfoArray& table_partition_infos);
 
-  private:
+private:
   int is_valid_addr(uint64_t ref_table_id, const common::ObAddr& addr, bool& is_valid) const;
 
-  private:
+private:
   // BEGIN local variables
   RemoteExecuteStreamHandle* task_resp_handler_;
   ObExecuteResult execute_result_;
@@ -279,7 +279,7 @@ class ObTaskExecutorCtx {
 
   int64_t sys_job_id_;
 
-  public:
+public:
   // BEGIN global singleton
   share::ObIPartitionLocationCache* partition_location_cache_;
   ObExecutorRpcImpl* task_executor_rpc_;
@@ -297,7 +297,7 @@ class ObTaskExecutorCtx {
 
 class ObExecutorRpcImpl;
 class ObTaskExecutorCtxUtil {
-  public:
+public:
   static int get_stream_handler(ObExecContext& ctx, RemoteExecuteStreamHandle*& handler);
   static int get_task_executor_rpc(ObExecContext& ctx, ObExecutorRpcImpl*& rpc);
   static int get_phy_table_location(ObExecContext& ctx, uint64_t table_location_key, uint64_t ref_table_id,

@@ -21,11 +21,11 @@
 namespace oceanbase {
 namespace common {
 class ObRingBuffer {
-  public:
+public:
   typedef ObLink Link;
 
   class Node : public Link {
-    public:
+  public:
     static Node* const LOCKED_ADDR;
     friend class ObRingBuffer;
     Node(int64_t blk_size, int64_t start, int64_t end)
@@ -136,7 +136,7 @@ class ObRingBuffer {
       purge_list = &retire_link_;
     }
 
-    private:
+  private:
     bool is_leaf()
     {
       return child_size_ <= (int64_t)sizeof(void*);
@@ -293,7 +293,7 @@ class ObRingBuffer {
     return ret;
   }
 
-  private:
+private:
   bool is_inited()
   {
     return NULL != alloc_ && blk_size_ > 0;
@@ -345,7 +345,7 @@ class ObRingBuffer {
     return ol_del(&head_, node, target);
   }
 
-  private:
+private:
   common::ObIAllocator* alloc_;
   int64_t blk_size_;
   int64_t start_;

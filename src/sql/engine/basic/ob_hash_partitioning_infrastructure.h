@@ -105,7 +105,7 @@ struct TempHashPartCols : public HashPartCols {
 
 template <typename Item>
 class ObPartitionExtendHashTable {
-  public:
+public:
   const static int64_t INITIAL_SIZE = 128;
   const static int64_t SIZE_BUCKET_PERCENT = 80;
   const static int64_t MAX_MEM_PERCENT = 40;
@@ -203,14 +203,14 @@ class ObPartitionExtendHashTable {
     sql_mem_processor_ = sql_mem_processor;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionExtendHashTable);
   using BucketArray = common::ObSegmentArray<Item*, OB_MALLOC_BIG_BLOCK_SIZE, common::ModulePageAllocator>;
   int extend(const int64_t new_bucket_num);
   static int64_t estimate_bucket_num(const int64_t bucket_num, const int64_t max_hash_mem);
   int create_bucket_array(const int64_t bucket_num, BucketArray*& new_buckets);
 
-  private:
+private:
   int64_t size_;
   int64_t bucket_num_;
   BucketArray* buckets_;
@@ -222,7 +222,7 @@ class ObPartitionExtendHashTable {
 
 template <typename HashCol, typename HashRowStore>
 class ObBasicHashPartInfrastructure {
-  public:
+public:
   ObBasicHashPartInfrastructure()
       : tenant_id_(UINT64_MAX),
         mem_context_(nullptr),
@@ -263,14 +263,14 @@ class ObBasicHashPartInfrastructure {
   {}
   ~ObBasicHashPartInfrastructure();
 
-  public:
+public:
   enum InputWays { ONE = 1, TWO = 2 };
   enum ProcessMode {
     Cache = 0,
     PreProcess = 1,
   };
 
-  public:
+public:
   struct ObIntraPartKey {
     ObIntraPartKey() : nth_way_(0), level_(0), nth_part_(0)
     {}
@@ -309,7 +309,7 @@ class ObBasicHashPartInfrastructure {
     };
   };
   class ObIntraPartition : public common::ObDLinkBase<ObIntraPartition> {
-    public:
+  public:
     ObIntraPartition() : part_key_(), store_()
     {}
     ~ObIntraPartition()
@@ -317,17 +317,17 @@ class ObBasicHashPartInfrastructure {
       store_.reset();
     }
 
-    public:
+  public:
     int init();
 
     TO_STRING_KV(K_(part_key));
 
-    public:
+  public:
     ObIntraPartKey part_key_;
     ObChunkRowStore store_;
   };
 
-  private:
+private:
   bool is_left() const
   {
     return InputSide::LEFT == cur_side_;
@@ -387,7 +387,7 @@ class ObBasicHashPartInfrastructure {
 
   int update_mem_status_periodically();
 
-  public:
+public:
   int init(uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part, int64_t ways,
       ObSqlMemMgrProcessor* sql_mem_processor);
 
@@ -483,7 +483,7 @@ class ObBasicHashPartInfrastructure {
 
   int calc_hash_value(const common::ObNewRow* row, uint64_t& hash_value);
 
-  private:
+private:
   static const int64_t BLOCK_SIZE = 64 * 1024;
   static const int64_t MIN_BUCKET_NUM = 128;
   static const int64_t MAX_BUCKET_NUM = 131072;  // 1M = 131072 * 8

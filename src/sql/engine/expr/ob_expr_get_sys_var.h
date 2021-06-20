@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 // get_sys_var(name, scope)
 class ObExprGetSysVar : public ObFuncExprOperator {
-  public:
+public:
   static const ObExprOperatorType op_type_;
   ObExprGetSysVar();
   explicit ObExprGetSysVar(common::ObIAllocator& alloc);
@@ -32,7 +32,7 @@ class ObExprGetSysVar : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_get_sys_val_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   static int calc_(common::ObObj& result, const common::ObString& var_name, const int64_t var_scope,
       ObSQLSessionInfo* session, ObExecContext* exec_ctx, common::ObIAllocator& alloc);
   static int get_session_var(common::ObObj& result, const common::ObString& var_name, common::ObIAllocator& alloc,
@@ -40,7 +40,7 @@ class ObExprGetSysVar : public ObFuncExprOperator {
   static int get_sys_var_disp_obj(common::ObIAllocator& allocator, const ObSQLSessionInfo& session,
       const common::ObString& var_name, common::ObObj& disp_obj);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprGetSysVar);
 };

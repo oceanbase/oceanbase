@@ -38,7 +38,7 @@ const int SUBMIT_EAGAIN_COUNT = 6;
 namespace clog {
 // add by dongjian
 class MockSubmitLogCb : public ObITransSubmitLogCb {
-  public:
+public:
   MockSubmitLogCb()
   {}
   ~MockSubmitLogCb()
@@ -86,13 +86,13 @@ class MockSubmitLogCb : public ObITransSubmitLogCb {
 
 namespace unittest {
 class TestObClogAdapter : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
   {}
 
-  public:
+public:
   // valid partition parameters
   static const int64_t VALID_TABLE_ID = 1;
   static const int32_t VALID_PARTITION_ID = 1;
@@ -104,7 +104,7 @@ class TestObClogAdapter : public ::testing::Test {
 };
 
 class MyMockObPartitionLogService : public MockPartitionLogService {
-  public:
+public:
   int submit_log(const char* buff, const int64_t size, const storage::ObStorageLogType log_type,
       const common::ObVersion& version, ObITransSubmitLogCb* cb)
   {
@@ -128,7 +128,7 @@ using clog::MockSubmitLogCb;
 class MyMockObPartitionLogService2 : public MockPartitionLogService, public ObSimpleThreadPool {
   // inner class
   class LogServiceSubmitTask {
-    public:
+  public:
     LogServiceSubmitTask() : cb_(NULL)
     {}
     ~LogServiceSubmitTask()
@@ -142,11 +142,11 @@ class MyMockObPartitionLogService2 : public MockPartitionLogService, public ObSi
       return cb_;
     }
 
-    private:
+  private:
     ObITransSubmitLogCb* cb_;
   };
 
-  public:
+public:
   MyMockObPartitionLogService2()
   {
     ObAddr self;  // we don't care about this field.
@@ -198,7 +198,7 @@ class MyMockObPartitionLogService2 : public MockPartitionLogService, public ObSi
 };
 
 class MyMockObPartitionComponentFactory : public MockObIPartitionComponentFactory {
-  public:
+public:
   virtual void free(ObIPartitionGroup* partition)
   {
     UNUSED(partition);
@@ -207,7 +207,7 @@ class MyMockObPartitionComponentFactory : public MockObIPartitionComponentFactor
 };
 
 class MyMockObPartition : public MockObIPartitionGroup {
-  public:
+public:
   MyMockObPartition() : partition_log_service_(NULL), pg_file_(NULL)
   {}
   virtual ~MyMockObPartition()
@@ -243,14 +243,14 @@ class MyMockObPartition : public MockObIPartitionGroup {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   ObIPartitionLogService* partition_log_service_;
   blocksstable::ObStorageFile* pg_file_;
   blocksstable::ObStorageFileHandle file_handle_;
 };
 
 class MyMockObPartitionService : public MockObIPartitionService {
-  public:
+public:
   MyMockObPartitionService() : partition_(NULL)
   {
     partition_ = new MyMockObPartition();
@@ -318,13 +318,13 @@ class MyMockObPartitionService : public MockObIPartitionService {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   MyMockObPartition* partition_;
 };
 
 // add by dongjian
 class MyMockObPartitionService2 : public MockObIPartitionService {
-  public:
+public:
   MyMockObPartitionService2()
   {
     partition_ = new MyMockObPartition();
@@ -380,7 +380,7 @@ class MyMockObPartitionService2 : public MockObIPartitionService {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   MyMockObPartition* partition_;
 };
 

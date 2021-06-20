@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace common {
 // A gauge just returns a value.
 class ObGauge {
-  public:
+public:
   virtual ~ObGauge(){};
   virtual int64_t get_value() const = 0;
 };

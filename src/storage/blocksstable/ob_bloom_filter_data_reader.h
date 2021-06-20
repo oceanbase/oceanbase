@@ -23,27 +23,27 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObBloomFilterMacroBlockReader {
-  public:
+public:
   ObBloomFilterMacroBlockReader(const bool is_sys_read = false);
   virtual ~ObBloomFilterMacroBlockReader();
   void reset();
   int read_macro_block(
       const ObMacroBlockCtx& macro_block_ctx, ObStorageFile* pg_file, const char*& bf_buf, int64_t& bf_size);
 
-  private:
+private:
   int decompress_micro_block(const ObFullMacroBlockMeta& macro_meta, const char*& block_buf, int64_t& block_size);
   int read_micro_block(const char* buf, const int64_t buf_size, const char*& bf_buf, int64_t& bf_size);
   int check_macro_meta(const ObFullMacroBlockMeta& macro_meta) const;
   int read_macro_block(const ObMacroBlockCtx& macro_block_ctx, ObStorageFile* pg_file);
 
-  private:
+private:
   ObMacroBlockReader macro_reader_;
   ObMacroBlockHandle macro_handle_;
   bool is_sys_read_;
 };
 
 class ObBloomFilterDataReader {
-  public:
+public:
   ObBloomFilterDataReader(const bool is_sys_read = false);
   virtual ~ObBloomFilterDataReader();
   void reset();
@@ -51,7 +51,7 @@ class ObBloomFilterDataReader {
   int read_bloom_filter(
       const ObMacroBlockCtx& macro_block_ctx, ObStorageFile* pg_file, ObBloomFilterCacheValue& bf_cache_value);
 
-  private:
+private:
   ObBloomFilterMacroBlockReader bf_macro_reader_;
 };
 

@@ -22,7 +22,7 @@ class ObTableLocation;
 class ObMultiTableInsertUp : public ObTableInsertUp, public ObMultiDMLInfo {
   class ObMultiTableInsertUpCtx;
 
-  public:
+public:
   // insert a row if there is no duplicate row with all unique index, otherwise
   // delete and insert a row.
   static const int64_t DELETE_OP = 0;
@@ -30,7 +30,7 @@ class ObMultiTableInsertUp : public ObTableInsertUp, public ObMultiDMLInfo {
   static const int64_t UPDATE_OP = 2;
   static const int64_t DML_OP_CNT = 3;
 
-  public:
+public:
   explicit ObMultiTableInsertUp(common::ObIAllocator& alloc);
   virtual ~ObMultiTableInsertUp();
 
@@ -54,7 +54,7 @@ class ObMultiTableInsertUp : public ObTableInsertUp, public ObMultiDMLInfo {
     return true;
   }
 
-  protected:
+protected:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -75,7 +75,7 @@ class ObMultiTableInsertUp : public ObTableInsertUp, public ObMultiDMLInfo {
   int shuffle_update_row(ObExecContext& ctx, common::ObPartMgr& part_mgr, ObMultiTableInsertUpCtx& insert_up_ctx,
       const common::ObNewRow& insert_row, const common::ObNewRow& duplicate_row) const;
 
-  private:
+private:
   ObDuplicatedKeyChecker duplicate_key_checker_;
 };
 }  // namespace sql

@@ -18,11 +18,12 @@
 namespace oceanbase {
 namespace sql {
 class ObExprEstimateNdv : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprEstimateNdv(common::ObIAllocator& alloc);
   virtual ~ObExprEstimateNdv();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_type1(
+      ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const override;
   static int llc_estimate_ndv(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx);
   static void llc_estimate_ndv(int64_t& result, const common::ObString& bitmap_str);
   static int llc_estimate_ndv(double& estimate_ndv, const common::ObString& bitmap_buf);
@@ -34,13 +35,13 @@ class ObExprEstimateNdv : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_estimate_ndv_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   static inline double llc_alpha_times_m_square(const uint64_t m);
   // the count of buckets should be between 16 and 65536, according to Google's HLLC paper.
   static const int LLC_NUM_BUCKETS_MIN = (1 << 4);
   static const int LLC_NUM_BUCKETS_MAX = (1 << 16);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprEstimateNdv);
 };
 } /* namespace sql */

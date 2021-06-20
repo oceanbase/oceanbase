@@ -50,7 +50,7 @@ namespace share {
 struct ObRedoTransportOption {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t DEFAULT_NET_TIMEOUT = 30 * 1000 * 1000;  // 30s
   static const int64_t DEFAULT_REOPEN = 300 * 1000 * 1000;      // 300s
   static const int64_t DEFAULT_MAX_FAILURE = 0;                 // 0 always retry
@@ -84,14 +84,14 @@ struct ObRedoTransportOption {
   int get_redo_transport_options_str(common::ObSqlString& str) const;
   TO_STRING_KV(K_(net_timeout), K_(reopen), K_(max_failure), K_(is_sync));
 
-  private:
+private:
   RedoOptionProfile str_to_redo_transport_options(const char* str);
 };
 
 struct ObClusterRsAddr {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObClusterRsAddr() : cluster_id_(common::OB_INVALID_ID), addr_()
   {}
   virtual ~ObClusterRsAddr()
@@ -101,7 +101,7 @@ struct ObClusterRsAddr {
   int assign(const ObClusterRsAddr& other);
   TO_STRING_KV(K_(cluster_id), K_(addr));
 
-  public:
+public:
   int64_t cluster_id_;
   common::ObAddr addr_;
 };
@@ -109,7 +109,7 @@ struct ObClusterRsAddr {
 struct ObClusterAddr {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int64_t cluster_id_;
   common::ObClusterType cluster_type_;
   common::ObClusterStatus cluster_status_;
@@ -158,7 +158,7 @@ typedef common::ObIArray<ObClusterAddr> ObClusterIAddrList;
 typedef common::ObSArray<ObClusterAddr> ObClusterAddrList;
 // store and fetch root server address list via REST style web service.
 class ObWebServiceRootAddr : public ObRootAddrAgent {
-  public:
+public:
   static const int64_t MAX_RECV_CONTENT_LEN = 512 * 1024;  // 512KB
 
   ObWebServiceRootAddr()
@@ -167,11 +167,12 @@ class ObWebServiceRootAddr : public ObRootAddrAgent {
   {}
 
   virtual int store(const ObIAddrList& addr_list, const ObIAddrList& readonly_addr_list, const bool force,
-      const common::ObClusterType cluster_type, const int64_t timestamp);
-  virtual int fetch(ObIAddrList& add_list, ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_typ);
+      const common::ObClusterType cluster_type, const int64_t timestamp) override;
+  virtual int fetch(
+      ObIAddrList& add_list, ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_typ) override;
   virtual int fetch_remote_rslist(const int64_t cluster_id, ObIAddrList& addr_list, ObIAddrList& readonly_addr_list,
       common::ObClusterType& cluster_type) override;
-  virtual int delete_cluster(const int64_t cluster_id);
+  virtual int delete_cluster(const int64_t cluster_id) override;
   /// get RS_LIST from URL
   ///
   /// @param [in] appanme              cluster appanme
@@ -192,7 +193,7 @@ class ObWebServiceRootAddr : public ObRootAddrAgent {
   static int from_json(const char* json_str, const char* appname, ObClusterAddr& cluster);
   static int parse_data(const json::Value* data, ObClusterAddr& cluster);
 
-  private:
+private:
   /// store rs_list to URL
   ///
   /// @param rs_list           RS address list
@@ -223,7 +224,7 @@ class ObWebServiceRootAddr : public ObRootAddrAgent {
   int fetch_rslist_by_id(const int64_t cluster_id, ObIAddrList& addr_list, ObIAddrList& readonly_addr_list,
       common::ObClusterType& cluster_type);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObWebServiceRootAddr);
 };
 

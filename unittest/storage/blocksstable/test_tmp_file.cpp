@@ -29,7 +29,7 @@ static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
 static const int64_t TEST_ROWKEY_COLUMN_CNT = 2;
 
 struct BufHeader {
-  public:
+public:
   BufHeader() : data_size_(0), start_row_(0)
   {}
   virtual ~BufHeader()
@@ -72,14 +72,14 @@ int64_t BufHeader::get_serialize_size() const
 }
 
 class TestTmpFileStress : public share::ObThreadPool {
-  public:
+public:
   TestTmpFileStress();
   virtual ~TestTmpFileStress();
   int init(const int fd, const bool is_write, const int64_t thread_cnt, ObTableSchema* table_schema,
       const bool is_plain_data, const bool is_big_file);
   virtual void run1();
 
-  private:
+private:
   void prepare_data(char* buf, const int64_t macro_block_size);
   void prepare_plain_data(const int64_t buf_size, char* buf, ObIArray<int64_t>& size_array);
   void prepare_one_buffer(const int64_t macro_block_size, const int64_t start_index, char* buf, int64_t& end_index);
@@ -90,7 +90,7 @@ class TestTmpFileStress : public share::ObThreadPool {
   void read_data(const int64_t macro_block_size);
   void read_plain_data(const char* buf, const int64_t macro_block_size);
 
-  private:
+private:
   static const int64_t BUF_COUNT = 16;
   int64_t thread_cnt_;
   int64_t size_;
@@ -356,18 +356,18 @@ void TestTmpFileStress::run1()
 }
 
 class TestMultiTmpFileStress : public share::ObThreadPool {
-  public:
+public:
   TestMultiTmpFileStress();
   virtual ~TestMultiTmpFileStress();
   int init(const int64_t file_cnt, const int64_t dir_id, const int64_t thread_cnt, ObTableSchema* table_schema,
       const bool is_plain_data, const bool is_big_file);
   virtual void run1();
 
-  private:
+private:
   void run_plain_case();
   void run_normal_case();
 
-  private:
+private:
   int64_t file_cnt_;
   int64_t dir_id_;
   int64_t thread_cnt_perf_file_;
@@ -456,16 +456,16 @@ void TestMultiTmpFileStress::run1()
 }
 
 class TestTmpFile : public TestDataFilePrepare {
-  public:
+public:
   TestTmpFile();
   virtual ~TestTmpFile();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   ObTableSchema table_schema_;
 
-  private:
+private:
   void prepare_schema();
 };
 

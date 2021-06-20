@@ -19,10 +19,10 @@ namespace oceanbase {
 namespace sql {
 class ObRepartSliceIdxCalc;
 class ObPxRepartTransmitInput : public ObPxTransmitInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxRepartTransmitInput() : ObPxTransmitInput()
   {}
   virtual ~ObPxRepartTransmitInput()
@@ -34,29 +34,29 @@ class ObPxRepartTransmitInput : public ObPxTransmitInput {
 };
 
 class ObPxRepartTransmit : public ObPxTransmit {
-  public:
+public:
   class ObPxRepartTransmitCtx : public ObPxTransmitCtx {
-    public:
+  public:
     friend class ObPxRepartTransmit;
 
-    public:
+  public:
     explicit ObPxRepartTransmitCtx(ObExecContext& ctx);
     virtual ~ObPxRepartTransmitCtx();
   };
 
-  public:
+public:
   explicit ObPxRepartTransmit(common::ObIAllocator& alloc);
   virtual ~ObPxRepartTransmit();
   virtual int add_compute(ObColumnExpression* expr) override;
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const;
   virtual int do_transmit(ObExecContext& ctx) const override;
   virtual int inner_close(ObExecContext& exec_ctx) const;
   virtual int init_op_ctx(ObExecContext& ctx) const;
   virtual int create_operator_input(ObExecContext& ctx) const;
 
-  private:
+private:
   int do_repart_transmit(ObExecContext& exec_ctx, ObRepartSliceIdxCalc& repart_slice_calc) const;
 };
 

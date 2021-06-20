@@ -24,11 +24,11 @@ class ObIPartitionGroupIterator;
 }  // namespace storage
 namespace observer {
 class ObAllVirtualElectionPriority : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   explicit ObAllVirtualElectionPriority(storage::ObPartitionService* partition_service);
   virtual ~ObAllVirtualElectionPriority();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   void set_addr(common::ObAddr& addr)
   {
@@ -36,16 +36,16 @@ class ObAllVirtualElectionPriority : public common::ObVirtualTableScannerIterato
   }
   void destroy();
 
-  private:
+private:
   int inner_get_next_row_(common::ObNewRow*& row);
   int prepare_get_election_priority_();
   int finish_get_election_priority_();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   storage::ObIPartitionGroupIterator* partition_iter_;
 
-  private:
+private:
   common::ObAddr addr_;
   char server_ip_buff_[common::OB_IP_STR_BUFF];
 };  // class ObAllVirtualElectionPriority

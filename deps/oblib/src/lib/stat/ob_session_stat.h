@@ -23,7 +23,7 @@ struct ObSysSessionIds {
 };
 
 class ObSessionDIBuffer {
-  public:
+public:
   ObSessionDIBuffer();
   virtual ~ObSessionDIBuffer();
   int switch_both(const uint64_t tenant_id, const uint64_t session_id, const bool is_multi_thread_plan);
@@ -44,7 +44,7 @@ class ObSessionDIBuffer {
     return tenant_cache_;
   }
 
-  private:
+private:
   ObDIThreadTenantCache tenant_cache_;
   ObDISessionCollect local_session_collect_;
   ObDISessionCollect* session_collect_;
@@ -54,23 +54,23 @@ class ObSessionDIBuffer {
 };
 
 class ObSessionStatEstGuard {
-  public:
+public:
   ObSessionStatEstGuard(const uint64_t tenant_id = OB_SYS_TENANT_ID,
       const uint64_t session_id = ObSysSessionIds::DEFAULT, const bool is_multi_thread_plan = false);
   virtual ~ObSessionStatEstGuard();
 
-  private:
+private:
   uint64_t prev_tenant_id_;
   uint64_t prev_session_id_;
   ObSessionDIBuffer* buffer_;
 };
 
 class ObTenantStatEstGuard {
-  public:
+public:
   explicit ObTenantStatEstGuard(uint64_t tenant_id = OB_SYS_TENANT_ID);
   virtual ~ObTenantStatEstGuard();
 
-  private:
+private:
   uint64_t prev_tenant_id_;
   ObSessionDIBuffer* buffer_;
 };

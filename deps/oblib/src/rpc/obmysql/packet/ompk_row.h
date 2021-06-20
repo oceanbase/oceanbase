@@ -20,14 +20,14 @@ namespace oceanbase {
 namespace obmysql {
 
 class OMPKRow : public ObMySQLPacket {
-  public:
+public:
   explicit OMPKRow(const ObMySQLRow& row);
   virtual ~OMPKRow()
   {}
 
   virtual int serialize(char* buffer, int64_t len, int64_t& pos) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(OMPKRow);
   const ObMySQLRow& row_;
 };

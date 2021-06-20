@@ -23,7 +23,7 @@ class ObInsertStmt;
 class ObSQLSessionInfo;
 
 class ObRawExprWrapEnumSet : public ObRawExprVisitor {
-  public:
+public:
   ObRawExprWrapEnumSet(ObRawExprFactory& expr_factory, ObSQLSessionInfo* my_session)
       : ObRawExprVisitor(), current_level_(-1), expr_factory_(expr_factory), my_session_(my_session)
   {}
@@ -45,7 +45,7 @@ class ObRawExprWrapEnumSet : public ObRawExprVisitor {
   int visit(ObFunMatchAgainst& expr);
   bool skip_child();
 
-  private:
+private:
   int32_t get_current_level() const
   {
     return current_level_;
@@ -61,7 +61,7 @@ class ObRawExprWrapEnumSet : public ObRawExprVisitor {
   int wrap_value_vector(ObInsertStmt& stmt);
   int wrap_nullif_expr(ObSysFunRawExpr& expr);
 
-  private:
+private:
   int32_t current_level_;
   ObRawExprFactory& expr_factory_;
   ObSQLSessionInfo* my_session_;

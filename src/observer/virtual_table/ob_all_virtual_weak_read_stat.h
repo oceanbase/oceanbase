@@ -57,13 +57,13 @@ class ObAllVirtualWeakReadStat : public common::ObVirtualTableScannerIterator {
     MAX_CLUSTER_VERSION
   };
 
-  public:
+public:
   ObAllVirtualWeakReadStat();
   ~ObAllVirtualWeakReadStat();
   void reset();
   int inner_get_next_row(common::ObNewRow*& row);
 
-  protected:
+protected:
   bool start_to_read_;
 };
 

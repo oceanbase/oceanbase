@@ -38,7 +38,7 @@ class ObTenantShowTables : public common::ObVirtualTableIterator {
     TABLE_TYPE = OB_APP_MIN_COLUMN_ID + 2,
   };
 
-  public:
+public:
   ObTenantShowTables();
   virtual ~ObTenantShowTables();
   virtual int inner_open();
@@ -49,10 +49,10 @@ class ObTenantShowTables : public common::ObVirtualTableIterator {
     tenant_id_ = tenant_id;
   }
 
-  private:
+private:
   int inner_get_next_row();
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObSEArray<const share::schema::ObSimpleTableSchemaV2*, 128> table_schemas_;

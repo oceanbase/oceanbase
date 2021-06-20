@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogUnpivot : public ObLogicalOperator {
-  public:
+public:
   ObLogUnpivot(ObLogPlan& plan)
       : ObLogicalOperator(plan), subquery_id_(common::OB_INVALID_ID), subquery_name_(), access_exprs_()
   {}
@@ -64,13 +64,13 @@ class ObLogUnpivot : public ObLogicalOperator {
   virtual int compute_fd_item_set() override;
   virtual int compute_one_row_info() override;
 
-  public:
+public:
   uint64_t subquery_id_;
   common::ObString subquery_name_;
   common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> access_exprs_;
   ObUnpivotInfo unpivot_info_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogUnpivot);
 };
 

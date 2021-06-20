@@ -24,7 +24,7 @@ namespace sql {
 class ObMultiPartUpdate::ObMultiPartUpdateCtx : public ObTableModifyCtx, public ObMultiDMLCtx {
   friend class ObMultiPartUpdate;
 
-  public:
+public:
   explicit ObMultiPartUpdateCtx(ObExecContext& ctx)
       : ObTableModifyCtx(ctx), ObMultiDMLCtx(ctx.get_allocator()), found_rows_(0), changed_rows_(0), affected_rows_(0)
   {}
@@ -48,7 +48,7 @@ class ObMultiPartUpdate::ObMultiPartUpdateCtx : public ObTableModifyCtx, public 
     ++affected_rows_;
   }
 
-  private:
+private:
   int64_t found_rows_;
   int64_t changed_rows_;
   int64_t affected_rows_;

@@ -35,7 +35,7 @@ class GetScheduleInfo;  // for test
 // descending sort list
 template <typename T>
 class ObSortList {
-  public:
+public:
   ObSortList()
   {}
   virtual ~ObSortList()
@@ -125,12 +125,12 @@ class ObSortList {
   }
   VIRTUAL_TO_STRING_KV(K_(list));
 
-  private:
+private:
   common::ObDList<T> list_;
 };
 
 class ObTenantThreadPool {
-  public:
+public:
   ObTenantThreadPool(int64_t tenant_id);
   virtual ~ObTenantThreadPool();
   int init(const int64_t hash_bucket_num = DEFAULT_BUCKET_NUM, const int64_t total_mem_limit = TOTAL_LIMIT,
@@ -172,14 +172,14 @@ class ObTenantThreadPool {
 #endif
   VIRTUAL_TO_STRING_KV(KP(this), K_(is_inited), K_(tenant_id), K_(max_thread_num));
 
-  private:
+private:
   friend class ObDagWorkerNew;
   friend class ObTaskNew;
   static const int32_t MAX_TYPE_CNT = 20;
 
-  private:
+private:
   class DynamicScore : public common::ObDLinkBase<DynamicScore> {
-    public:
+  public:
     int64_t type_id_;
     double d_score_;
     DynamicScore() : type_id_(0), d_score_(0)
@@ -231,7 +231,7 @@ class ObTenantThreadPool {
   static const int64_t PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t DAG_SIZE_LIMIT = 10 << 10;
 
-  private:
+private:
   int sys_task_start_(ObIDagNew* dag);
   void reset_dynamic_score_();
   void calc_penalty_();
@@ -260,7 +260,7 @@ class ObTenantThreadPool {
   int pause_task(ObITaskNew* task, const ObITaskNew::SwitchTaskFlag flag);
   int switch_task(ObITaskNew* task, const ObITaskNew::SwitchTaskFlag flag);
 
-  private:
+private:
   bool is_inited_;
   bool is_stoped_;
   int64_t tenant_id_;

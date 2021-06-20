@@ -34,7 +34,7 @@ namespace observer {
 class ObInnerSQLResult;
 
 class ObAgentTableBase : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   typedef int (*convert_func_t)(const common::ObObj& src, common::ObObj& dst, common::ObIAllocator&);
   struct MapItem {
     MapItem() : base_col_name_(), convert_func_(NULL), combine_tenant_id_(false)
@@ -62,7 +62,7 @@ class ObAgentTableBase : public common::ObVirtualTableScannerIterator {
 
   void destroy();
 
-  protected:
+protected:
   int build_base_table_mapping();
 
   // init map item, which column not exist in base table.
@@ -87,7 +87,7 @@ class ObAgentTableBase : public common::ObVirtualTableScannerIterator {
 
   virtual int change_column_value(const MapItem& item, ObIAllocator& allocator, ObObj& new_value);
 
-  protected:
+protected:
   // Allocator used in inner_open() to inner_close() duration.
   common::ObArenaAllocator inner_allocator_;
   // save value to %allocator_bak_ before switch allocator_ to %inner_allocator_

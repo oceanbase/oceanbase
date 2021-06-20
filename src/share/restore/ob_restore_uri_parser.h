@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef __OCENABASE_SHARE_RESTORE_URI_PARSER_H__
-#define __OCENABASE_SHARE_RESTORE_URI_PARSER_H__
+#ifndef __OCEANBASE_SHARE_RESTORE_URI_PARSER_H__
+#define __OCEANBASE_SHARE_RESTORE_URI_PARSER_H__
 
 #include "share/backup/ob_physical_restore_info.h"
 #include "share/ob_kv_parser.h"
@@ -47,36 +47,36 @@ struct ObAgentBackupInfo {
 };
 
 class ObRestoreURIParserHelper {
-  public:
+public:
   static int set_data_version(share::ObRestoreArgs& arg);
 };
 
 class ObRestoreURIParser {
-  public:
+public:
   static int parse(const common::ObString& uri, ObRestoreArgs& arg);
 
-  private:
+private:
   static int parse(const char* uri, share::ObRestoreArgs& arg);
   static int split_uri(const char* full_uri, share::ObRestoreArgs& arg, char* dir_path, char* extra_args);
 
-  public:
+public:
   class DirParser {
-    public:
+  public:
     DirParser(share::ObRestoreArgs& arg) : arg_(arg){};
     int parse(const char* val);
 
-    private:
+  private:
     /* functions */
     share::ObRestoreArgs& arg_;
   };
 
   class ExtraArgsCb : public share::ObKVMatchCb {
-    public:
+  public:
     ExtraArgsCb(share::ObRestoreArgs& arg);  // : arg_(arg) {};
     int match(const char* key, const char* value);
     bool check() const;
 
-    private:
+  private:
     /* functions */
     typedef int (*Setter)(share::ObRestoreArgs& arg, const char* val);
     static int set_data_timestamp(share::ObRestoreArgs& arg, const char* val);
@@ -89,7 +89,7 @@ class ObRestoreURIParser {
     static int set_restore_pass(share::ObRestoreArgs& arg, const char* val);
     static int set_tcp_invited_nodes(share::ObRestoreArgs& arg, const char* val);
 
-    private:
+  private:
     share::ObRestoreArgs& arg_;
     struct Action {
       const char* key;
@@ -102,37 +102,37 @@ class ObRestoreURIParser {
   };
 
   class ZoneMapCb : public share::ObKVMatchCb {
-    public:
+  public:
     typedef common::hash::ObHashMap<common::ObZone, common::ObZone> ZoneMap;
 
-    public:
+  public:
     ZoneMapCb(ZoneMap& zone_map) : zone_map_(zone_map){};
     int match(const char* key, const char* val);
 
-    private:
+  private:
     ZoneMap& zone_map_;
   };
 
-  private:
+private:
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObRestoreURIParser);
 };
 
 class ObPhysicalRestoreOptionParser {
-  public:
+public:
   static int parse(const common::ObString& uri, ObPhysicalRestoreJob& job);
 
-  private:
+private:
   static int parse(const char* uri, ObPhysicalRestoreJob& job);
 
-  public:
+public:
   class ExtraArgsCb : public share::ObKVMatchCb {
-    public:
+  public:
     ExtraArgsCb(ObPhysicalRestoreJob& job);
     int match(const char* key, const char* value);
     bool check() const;
 
-    private:
+  private:
     /* functions */
     typedef int (*Setter)(ObPhysicalRestoreJob& job, const char* val);
     static int set_restore_job_id(ObPhysicalRestoreJob& job, const char* val);
@@ -142,7 +142,7 @@ class ObPhysicalRestoreOptionParser {
     static int set_locality(ObPhysicalRestoreJob& job, const char* val);
     static int set_primary_zone(ObPhysicalRestoreJob& job, const char* val);
 
-    private:
+  private:
     ObPhysicalRestoreJob& job_;
     struct Action {
       const char* key;
@@ -154,11 +154,11 @@ class ObPhysicalRestoreOptionParser {
     bool is_set_[ACTION_CNT];
   };
 
-  private:
+private:
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalRestoreOptionParser);
 };
 }  // namespace share
 }  // namespace oceanbase
-#endif /* __OCENABASE_SHARE_RESTORE_URI_PARSER_H__ */
+#endif /* __OCEANBASE_SHARE_RESTORE_URI_PARSER_H__ */
 //// end of header file

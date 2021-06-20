@@ -27,7 +27,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::observer;
 class DISABLED_TestSessionMgr : public ::testing::Test {
-  public:
+public:
   DISABLED_TestSessionMgr() : mgr_(&pt_srv_)
   {}
 
@@ -39,9 +39,9 @@ class DISABLED_TestSessionMgr : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   class SessionOperator {
-    public:
+  public:
     uint64_t sum;
     SessionOperator() : sum(0)
     {}
@@ -54,7 +54,7 @@ class DISABLED_TestSessionMgr : public ::testing::Test {
     }
   };
 
-  protected:
+protected:
   oceanbase::storage::ObPartitionService pt_srv_;
   ObSQLSessionMgr mgr_;
   SessionOperator sess_operator_;
@@ -178,7 +178,7 @@ TEST_F(DISABLED_TestSessionMgr, test_for_each)
 
 int64_t create_num = 0;
 class ObStressThread_create : public share::ObThreadPool {
-  public:
+public:
   void run1()
   {
     ObSQLSessionInfo* sess_info = NULL;

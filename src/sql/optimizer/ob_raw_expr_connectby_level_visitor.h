@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObRawConnectByLevelVisitor : public ObRawExprVisitor {
-  public:
+public:
   ObRawConnectByLevelVisitor() : level_exprs_(nullptr){};
   virtual ~ObRawConnectByLevelVisitor() = default;
 
@@ -50,7 +50,7 @@ class ObRawConnectByLevelVisitor : public ObRawExprVisitor {
   virtual int visit(ObWinFunRawExpr& expr);
   virtual int visit(ObPseudoColumnRawExpr& expr);
 
-  private:
+private:
   common::ObIArray<ObRawExpr*>* level_exprs_;
 };
 

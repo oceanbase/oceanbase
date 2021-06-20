@@ -24,7 +24,7 @@ class ObISQLClient;
 }
 namespace share {
 struct ObSnapshotInfo {
-  public:
+public:
   share::ObSnapShotType snapshot_type_;
   int64_t snapshot_ts_;
   int64_t schema_version_;
@@ -40,7 +40,7 @@ struct ObSnapshotInfo {
 };
 
 struct TenantSnapshot {
-  public:
+public:
   uint64_t tenant_id_;
   int64_t snapshot_ts_;
   TenantSnapshot()
@@ -55,7 +55,7 @@ struct TenantSnapshot {
 };
 
 class ObSnapshotTableProxy {
-  public:
+public:
   ObSnapshotTableProxy() : lock_(), last_event_ts_(0)
   {}
   virtual ~ObSnapshotTableProxy()
@@ -81,13 +81,13 @@ class ObSnapshotTableProxy {
   int get_snapshot_count(
       common::ObISQLClient& proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type, int64_t& count);
 
-  private:
+private:
   int inner_add_snapshot(common::ObMySQLTransaction& trans, const ObSnapshotInfo& info, const bool& insert_update);
   int gen_event_ts(int64_t& event_ts);
   int check_snapshot_valid(
       common::ObISQLClient& client, const ObSnapshotInfo& info, const bool& need_lock_gc_snapshot, bool& is_valid);
 
-  private:
+private:
   lib::ObMutex lock_;
   int64_t last_event_ts_;
 };

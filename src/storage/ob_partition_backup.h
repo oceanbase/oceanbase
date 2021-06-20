@@ -37,7 +37,7 @@ class ObBackupPhysicalPGCtx;
 class ObPartGroupBackupMajorTask;
 
 class ObPartGroupBackupTask : public ObPartGroupTask {
-  public:
+public:
   static const int64_t PART_GROUP_TASK_IDLE_TIME_MS = 10 * 1000LL;   // 10s
   static const int64_t PART_GROUP_BACKUP_POINT_CHECK_TIME_MS = 100;  // 100ms
   typedef hash::ObHashMap<ObITable::TableKey, int64_t> BackupTableIndexMap;
@@ -55,7 +55,7 @@ class ObPartGroupBackupTask : public ObPartGroupTask {
   TO_STRING_KV(K_(task_id), K_(is_inited), K_(is_finished), K_(is_batch_mode), KP_(partition_service),
       K_(first_error_code), K_(type), "sub_task_count", task_list_.count(), K_(task_list));
 
-  private:
+private:
   int check_partition_validation();  // only invoked before executing, so without concurrency invoke
   int do_part_group_backup_minor_task();
   int do_part_group_backup_major_task();
@@ -75,12 +75,12 @@ class ObPartGroupBackupTask : public ObPartGroupTask {
   int check_all_pg_backup_point_created();
   int check_pg_backup_point_created(const ObPartitionKey& pg_key, const int64_t backup_snapshot_version);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartGroupBackupTask);
 };
 
 class ObBackupPrepareTask : public share::ObITask {
-  public:
+public:
   typedef common::hash::ObHashMap<blocksstable::ObSSTablePair, blocksstable::MacroBlockId> MacroPairMap;
   ObBackupPrepareTask();
   virtual ~ObBackupPrepareTask();
@@ -88,7 +88,7 @@ class ObBackupPrepareTask : public share::ObITask {
       ObPartitionService& partition_service);
   virtual int process() override;
 
-  protected:
+protected:
   int add_backup_status(ObMigrateCtx* ctx);
   int add_partition_backup_status(const ObMigrateCtx& ctx);
   int prepare_backup();
@@ -132,7 +132,7 @@ class ObBackupPrepareTask : public share::ObITask {
       const ObMigrateSrcInfo& src_info, ObIPGPartitionBaseDataMetaObReader*& reader);
   int check_backup_data_continues();
 
-  protected:
+protected:
   bool is_inited_;
   ObMigrateCtx* ctx_;
   ObIPartitionComponentFactory* cp_fty_;
@@ -140,7 +140,7 @@ class ObBackupPrepareTask : public share::ObITask {
   ObPartitionService* partition_service_;
   ObPartitionGroupMetaBackupReader* backup_meta_reader_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupPrepareTask);
 };
 

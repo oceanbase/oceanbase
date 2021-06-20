@@ -45,7 +45,7 @@ void ObHaGtsSource::ObHaGtsSourceTask::runTimerTask()
 }
 
 class ObHaGtsSource::GetTenantArrayFunctor {
-  public:
+public:
   GetTenantArrayFunctor(const transaction::MonotonicTs srr) : srr_(srr)
   {
     tenant_array_.reset();
@@ -53,7 +53,7 @@ class ObHaGtsSource::GetTenantArrayFunctor {
   ~GetTenantArrayFunctor()
   {}
 
-  public:
+public:
   bool operator()(const ObGtsID& gts_id, ObGtsMeta& gts_meta)
   {
     UNUSED(gts_id);
@@ -76,19 +76,19 @@ class ObHaGtsSource::GetTenantArrayFunctor {
     return tenant_array_;
   }
 
-  private:
+private:
   transaction::MonotonicTs srr_;
   ObTenantArray tenant_array_;
 };
 
 class ObHaGtsSource::ModifyTenantCacheFunctor {
-  public:
+public:
   ModifyTenantCacheFunctor(const transaction::MonotonicTs srr, const int64_t gts) : srr_(srr), gts_(gts)
   {}
   ~ModifyTenantCacheFunctor()
   {}
 
-  public:
+public:
   bool operator()(const ObTenantID& tenant_id, ObTenantCache& tenant_cache)
   {
     UNUSED(tenant_id);
@@ -98,19 +98,19 @@ class ObHaGtsSource::ModifyTenantCacheFunctor {
     return true;
   }
 
-  private:
+private:
   transaction::MonotonicTs srr_;
   int64_t gts_;
 };
 
 class ObHaGtsSource::RefreshGtsFunctor {
-  public:
+public:
   RefreshGtsFunctor(ObHaGtsSource* source) : host_(source)
   {}
   ~RefreshGtsFunctor()
   {}
 
-  public:
+public:
   bool operator()(const ObGtsID& gts_id, ObGtsMeta& gts_meta)
   {
     const uint64_t gts = gts_id.get_value();
@@ -125,7 +125,7 @@ class ObHaGtsSource::RefreshGtsFunctor {
     return true;
   }
 
-  private:
+private:
   const common::ObAddr choose_gts_server_(const common::ObMemberList& member_list) const
   {
     int tmp_ret = OB_SUCCESS;
@@ -140,14 +140,14 @@ class ObHaGtsSource::RefreshGtsFunctor {
 };
 
 class ObHaGtsSource::ModifyGtsMetaFunctor {
-  public:
+public:
   ModifyGtsMetaFunctor(const ObGtsIDArray& gts_id_array, const ObGtsMetaArray& gts_meta_array)
       : gts_id_array_(gts_id_array), gts_meta_array_(gts_meta_array)
   {}
   ~ModifyGtsMetaFunctor()
   {}
 
-  public:
+public:
   bool operator()(const ObGtsID& gts_id, ObGtsMeta& gts_meta)
   {
     bool bool_ret = false;
@@ -163,7 +163,7 @@ class ObHaGtsSource::ModifyGtsMetaFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   bool is_gts_exist_(const uint64_t gts_id, int64_t& index) const
   {
     bool bool_ret = false;
@@ -216,7 +216,7 @@ class ObHaGtsSource::ModifyGtsMetaFunctor {
     }
   }
 
-  private:
+private:
   const ObGtsIDArray& gts_id_array_;
   const ObGtsMetaArray& gts_meta_array_;
 };

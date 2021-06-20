@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprTimestampNvl : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprTimestampNvl(common::ObIAllocator& alloc);
   virtual ~ObExprTimestampNvl();
   virtual int calc_result_type2(
@@ -28,7 +28,7 @@ class ObExprTimestampNvl : public ObStringExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_timestampnvl(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprTimestampNvl);
 };
 }  // namespace sql

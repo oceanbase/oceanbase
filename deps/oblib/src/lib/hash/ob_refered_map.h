@@ -23,9 +23,9 @@ namespace hash {
 
 template <typename K, typename V>
 class ObReferedMap {
-  public:
+public:
   struct Item {
-    public:
+  public:
     struct GetKey {
       const K& operator()(const Item& item)
       {
@@ -52,11 +52,11 @@ class ObReferedMap {
 
     TO_STRING_KV(K_(ref_cnt), K_(map), K_(v));
 
-    private:
+  private:
     int64_t ref_cnt_;
     ObReferedMap* map_;
 
-    public:
+  public:
     V v_;
   };
   typedef common::hash::ObHashTable<K, Item, common::hash::hash_func<K>, common::hash::equal_to<K>,
@@ -94,7 +94,7 @@ class ObReferedMap {
 
   TO_STRING_EMPTY();
 
-  private:
+private:
   bool inited_;
   common::hash::SimpleAllocer<typename common::hash::HashTableTypes<Item>::AllocType> allocator_;
   common::ObMalloc bucket_allocator_;

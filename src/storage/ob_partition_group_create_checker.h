@@ -21,7 +21,7 @@ using namespace oceanbase::common;
 
 namespace storage {
 class ObPartitionGroupCreateChecker {
-  public:
+public:
   ObPartitionGroupCreateChecker() : creating_pgs_()
   {}
   ~ObPartitionGroupCreateChecker()
@@ -34,11 +34,11 @@ class ObPartitionGroupCreateChecker {
   int mark_pg_created(const ObPartitionKey& pkey);
   void reset();
 
-  private:
+private:
   bool is_pg_creating_(const ObPartitionKey& pkey);
   int mark_pg_created_(const ObPartitionKey& pkey);
 
-  private:
+private:
   common::TCRWLock lock_;
   ObPartitionArray creating_pgs_;
 };

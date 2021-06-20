@@ -37,7 +37,7 @@ struct TestSqlCtx {
 };
 
 class TestSQL : public TestOptimizerUtils {
-  public:
+public:
   TestSQL(const ObString& schema_file_name);
   virtual ~TestSQL();
   void TestBody()
@@ -81,11 +81,11 @@ class TestSQL : public TestOptimizerUtils {
     return merged_version_;
   }
 
-  protected:
+protected:
   ObAddr addr_;  // local addr
   int64_t merged_version_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestSQL);
 };

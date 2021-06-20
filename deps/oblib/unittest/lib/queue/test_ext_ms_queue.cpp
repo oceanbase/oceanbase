@@ -20,7 +20,7 @@
 using namespace oceanbase::common;
 
 class ExtMsQueueTest : public ::testing::Test {
-  public:
+public:
   static const int64_t KEY_COUNT = 10;
   static const int64_t MAX_CACHED_MS_QUEUE_ITEM_COUNT = KEY_COUNT;
   static const int64_t MSQ_QUEUE_COUNT = 4;
@@ -31,7 +31,7 @@ class ExtMsQueueTest : public ::testing::Test {
   static const int64_t OP_TIMEOUT = 100 * 1000;
   static const int64_t WAIT_TIME = 100;
 
-  public:
+public:
   typedef ObPartitionKey KeyType;
   typedef ObLink TaskType;
 
@@ -60,13 +60,13 @@ class ExtMsQueueTest : public ::testing::Test {
   void wait_consumers_();
   int terminate_all_ms_queue_();
 
-  public:
+public:
   ExtMsQueueTest();
   virtual ~ExtMsQueueTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  public:
+public:
   int64_t end_time_;
   KeyValue kv_[KEY_COUNT];
   TaskType task_[MSQ_QUEUE_COUNT];  // every Queue in MsQueue corresponds to a Task
@@ -76,7 +76,7 @@ class ExtMsQueueTest : public ::testing::Test {
   int64_t producer_thread_index_counter_;
   ObExtMsQueue<KeyType> ext_ms_queue_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ExtMsQueueTest);
 };
 

@@ -34,7 +34,7 @@ class Service {
   // Deliver is the class that transfers the result of unpacking RpcHandler to the corresponding queue. Here will be
   // countered The deliver method of Service facilitates the integration of logic into the Service class.
   class Deliver : public ObReqQDeliver {
-    public:
+  public:
     Deliver(ObiReqQHandler& qhandler, Service& service) : ObReqQDeliver(qhandler), service_(service)
     {}
     int init() override
@@ -45,24 +45,24 @@ class Service {
     {}
     int deliver(rpc::ObRequest& req) override;
 
-    private:
+  private:
     Service& service_;
   };
   // Translator is responsible for translating an ObRequest request into the corresponding Processor. Here will
   // Reverse the translate method of Service, so that the logic is concentrated in the Service.
   class Translator : public ObReqTranslator {
-    public:
+  public:
     Translator(Service& service) : service_(service)
     {}
 
-    protected:
+  protected:
     ObReqProcessor* get_processor(ObRequest& req) override;
 
-    private:
+  private:
     Service& service_;
   };
 
-  public:
+public:
   Service(int listen_port = 33244)
       : easy_(),
         translator_(*this),
@@ -95,11 +95,11 @@ class Service {
   template <class Proc>
   int reg_processor(Proc* p);
 
-  protected:
+protected:
   ObReqProcessor* translate(ObRequest& req);
   int deliver(ObRequest& req);
 
-  private:
+private:
   ObNetEasy easy_;
   Translator translator_;
   ObReqQHandler qhandler_;

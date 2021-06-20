@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprCalcURowID : public ObExprOperator {
-  public:
+public:
   explicit ObExprCalcURowID(common::ObIAllocator& alloc);
   virtual ~ObExprCalcURowID();
 
@@ -32,7 +32,7 @@ class ObExprCalcURowID : public ObExprOperator {
 
   static int calc_urowid(const ObExpr& rt_expr, ObEvalCtx& eva_ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCalcURowID);
 };
 }  // namespace sql

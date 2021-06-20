@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObLogGranuleIterator : public ObLogicalOperator {
-  public:
+public:
   ObLogGranuleIterator(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         tablet_size_(common::OB_DEFAULT_TABLET_SIZE),
@@ -131,7 +131,7 @@ class ObLogGranuleIterator : public ObLogicalOperator {
 
   int is_partition_gi(bool& partition_granule) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGranuleIterator);
   int64_t tablet_size_;
   uint64_t gi_attri_flag_;

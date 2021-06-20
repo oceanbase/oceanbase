@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObRawExprResolver {
-  public:
+public:
   ObRawExprResolver()
   {}
 
@@ -32,11 +32,11 @@ class ObRawExprResolver {
       common::ObIArray<ObAggFunRawExpr*>& aggr_exprs, common::ObIArray<ObWinFunRawExpr*>& win_exprs,
       common::ObIArray<ObOpRawExpr*>& op_exprs, common::ObIArray<ObUserVarIdentRawExpr*>& user_var_exprs) = 0;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprResolver);
   // function members
-  private:
+private:
   // data members
 };
 

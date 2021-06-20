@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace storage {
 
 class MockObIPartitionComponentFactory : public ObIPartitionComponentFactory {
-  public:
+public:
   MOCK_METHOD1(get_partition, ObIPartitionGroup*(const uint64_t tenant_id));
   MOCK_METHOD1(get_replay_status, ObReplayStatus*(const uint64_t tenant_id));
   MOCK_METHOD0(get_ssstore, ObSSStore*());

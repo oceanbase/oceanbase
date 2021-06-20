@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprSpmLoadPlans : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSpmLoadPlans(common::ObIAllocator& alloc);
   virtual ~ObExprSpmLoadPlans();
   virtual int calc_result_typeN(
@@ -27,12 +27,12 @@ class ObExprSpmLoadPlans : public ObFuncExprOperator {
   virtual int calc_resultN(
       common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSpmLoadPlans);
 };
 
 class ObExprSpmAlterBaseline : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSpmAlterBaseline(common::ObIAllocator& alloc);
   virtual ~ObExprSpmAlterBaseline();
   virtual int calc_resultN(
@@ -40,12 +40,12 @@ class ObExprSpmAlterBaseline : public ObFuncExprOperator {
   virtual int calc_result_typeN(
       ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSpmAlterBaseline);
 };
 
 class ObExprSpmDropBaseline : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSpmDropBaseline(common::ObIAllocator& alloc);
   virtual ~ObExprSpmDropBaseline();
   int calc_result2(
@@ -53,7 +53,7 @@ class ObExprSpmDropBaseline : public ObFuncExprOperator {
   int calc_result_type2(
       ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSpmDropBaseline);
 };
 

@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace clog {
 class ObILogExtRingBufferData : public common::ObExternalRef::IERefPtr {
-  public:
+public:
   virtual bool can_overwrite(const ObILogExtRingBufferData* data) = 0;
 
   virtual bool can_be_removed() = 0;
@@ -36,13 +36,13 @@ class ObILogExtRingBufferData : public common::ObExternalRef::IERefPtr {
 };
 
 class ObILogTaskCallBack {
-  public:
+public:
   ObILogTaskCallBack()
   {}
   virtual ~ObILogTaskCallBack()
   {}
 
-  public:
+public:
   virtual int sliding_cb(const int64_t sn, const ObILogExtRingBufferData* data) = 0;
 };
 
@@ -112,13 +112,13 @@ class ObLogExtRingBuffer : protected common::ObExtendibleRingBuffer<ObILogExtRin
   typedef ObLogExtRingBuffer MyType;
   typedef common::ObExtendibleRingBuffer<ObILogExtRingBufferData> BaseType;
 
-  public:
+public:
   ObLogExtRingBuffer();
   virtual ~ObLogExtRingBuffer();
   inline int init(const int64_t start_id);
   int destroy();
 
-  public:
+public:
   int get(const int64_t id, ObILogExtRingBufferData*& val, const int64_t*& ref) const;
   int revert(const int64_t* ref);
   int set(const int64_t id, ObILogExtRingBufferData* data);
@@ -134,10 +134,10 @@ class ObLogExtRingBuffer : protected common::ObExtendibleRingBuffer<ObILogExtRin
   int truncate(const int64_t new_start_id);
   int64_t get_start_id() const;
 
-  private:
+private:
   int truncate_(const int64_t new_start_id);
 
-  private:
+private:
   bool inited_;
   DISALLOW_COPY_AND_ASSIGN(ObLogExtRingBuffer);
 };

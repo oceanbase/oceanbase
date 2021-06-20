@@ -19,7 +19,7 @@ namespace sql {
 class ObTableScanWithIndexBackSpec : public ObTableScanSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObTableScanWithIndexBackSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   virtual ~ObTableScanWithIndexBackSpec();
   inline void set_index_scan_tree_id(uint64_t index_scan_tree_id)
@@ -31,15 +31,15 @@ class ObTableScanWithIndexBackSpec : public ObTableScanSpec {
     return index_scan_tree_id_;
   }
 
-  private:
+private:
   uint64_t index_scan_tree_id_;
 };
 
 class ObTableScanWithIndexBackOp : public ObTableScanOp {
-  private:
+private:
   enum READ_ACTION { INVALID_ACTION, READ_ITERATOR, READ_TABLE_PARTITION, READ_ITER_END };
 
-  public:
+public:
   explicit ObTableScanWithIndexBackOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableScanOp(exec_ctx, spec, input),
         is_index_end_(false),
@@ -52,13 +52,13 @@ class ObTableScanWithIndexBackOp : public ObTableScanOp {
   virtual int inner_get_next_row() override;
   virtual int rescan() override;
 
-  protected:
+protected:
   int open_index_scan();
   int extract_range_from_index();
   int do_table_scan_with_index();
   int do_table_rescan_with_index();
 
-  private:
+private:
   bool is_index_end_;
   bool use_table_allocator_;
   READ_ACTION read_action_;

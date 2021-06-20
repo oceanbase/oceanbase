@@ -20,13 +20,13 @@
 namespace oceanbase {
 namespace transaction {
 class ObLtsSource : public ObITsSource {
-  public:
+public:
   ObLtsSource()
   {}
   ~ObLtsSource()
   {}
 
-  public:
+public:
   int update_gts(const int64_t gts, bool& update);
   int update_local_trans_version(const int64_t version, bool& update);
   int get_gts(const MonotonicTs stc, ObTsCbTask* task, int64_t& gts, MonotonicTs& receive_gts_ts);
@@ -45,7 +45,7 @@ class ObLtsSource : public ObITsSource {
   int update_publish_version(const int64_t publish_version);
   int get_publish_version(int64_t& publish_version);
 
-  public:
+public:
   TO_STRING_KV("ts_source", "LTS");
 };
 }  // namespace transaction

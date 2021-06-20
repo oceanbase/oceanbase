@@ -282,7 +282,7 @@ int ObMySQLHandler::write_data(int fd, char* buffer, size_t length) const
           is_going_on = false;  // continue;
         } else {
           ret = OB_ERROR;
-          LOG_WARN("write data faild", K(errno), KERRMSG);
+          LOG_WARN("write data failed", K(errno), KERRMSG);
         }
       }
       if (is_going_on) {
@@ -321,7 +321,7 @@ int ObMySQLHandler::read_data(int fd, char* buffer, size_t length) const
             is_going_on = false;  // continue;
           } else {
             ret = OB_ERROR;
-            LOG_WARN("read data faild", K(errno), KERRMSG);
+            LOG_WARN("read data failed", K(errno), KERRMSG);
           }
         }
         if (is_going_on) {

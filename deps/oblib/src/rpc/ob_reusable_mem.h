@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace rpc {
 class ObReusableMem {
-  public:
+public:
   enum { N_PTR = 4 };
   struct MemPtr {
     void set(void* p, int64_t sz)
@@ -29,7 +29,7 @@ class ObReusableMem {
     int64_t size_;
   };
 
-  public:
+public:
   ObReusableMem() : nptr_(0), mask_(0)
   {}
   ~ObReusableMem()
@@ -56,7 +56,7 @@ class ObReusableMem {
     }
   }
 
-  private:
+private:
   int32_t nptr_;
   uint32_t mask_;
   MemPtr ptr_[N_PTR];

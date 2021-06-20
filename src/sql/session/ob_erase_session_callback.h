@@ -18,7 +18,7 @@ class ObEndTransReq;
 }
 namespace sql {
 class ObIEraseSessionCallback {
-  public:
+public:
   ObIEraseSessionCallback();
   virtual ~ObIEraseSessionCallback();
   virtual int callback(common::ObEndTransReq& req) = 0;

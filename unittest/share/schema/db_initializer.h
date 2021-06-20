@@ -32,10 +32,10 @@ namespace schema {
 //     pass: ""
 //     database: ${USER//./_}_unittest
 //
-// 2. create ocenabase system table schema in mysql server.
+// 2. create OceanBase system table schema in mysql server.
 //
 class DBInitializer {
-  public:
+public:
   DBInitializer()
   {}
   virtual ~DBInitializer();
@@ -59,7 +59,7 @@ class DBInitializer {
     return common::ObServerConfig::get_instance();
   }
 
-  private:
+private:
   struct DBConfig {
     std::string host_;
     int port_;

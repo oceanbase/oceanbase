@@ -25,7 +25,7 @@ class ObMultiVersionSchemaService;
 namespace rootserver {
 class ObUnitManager;
 class ObUnitStatManager {
-  public:
+public:
   ObUnitStatManager();
   virtual ~ObUnitStatManager() = default;
 
@@ -35,7 +35,7 @@ class ObUnitStatManager {
   virtual int gather_stat();
   virtual int get_unit_stat(uint64_t unit_id, share::ObUnitStat& unit_stat);
 
-  private:
+private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   ObUnitManager* unit_mgr_;

@@ -21,12 +21,12 @@ namespace oceanbase {
 namespace storage {
 
 class ObServerCheckpointLogReader final {
-  public:
+public:
   ObServerCheckpointLogReader();
   ~ObServerCheckpointLogReader() = default;
   int read_checkpoint_and_replay_log();
 
-  private:
+private:
   int get_replay_start_point(const common::ObLogCursor& org_log_cursor, common::ObLogCursor& replay_start_cursor);
   int read_tenant_file_super_block_checkpoint(const blocksstable::ObSuperBlockMetaEntry& meta_entry);
   int replay_server_slog(const common::ObLogCursor& replay_start_cursor,
@@ -37,20 +37,20 @@ class ObServerCheckpointLogReader final {
       blocksstable::ObStorageLogCommittedTransGetter& committed_trans_getter);
   int set_meta_block_list();
 
-  private:
+private:
   ObServerPGMetaCheckpointReader pg_meta_reader_;
   ObTenantFileSuperBlockCheckpointReader tenant_file_reader_;
   ObTenantConfigMetaCheckpointReader tenant_config_meta_reader_;
 };
 
 class ObServerPGMetaSLogFilter : public blocksstable::ObISLogFilter {
-  public:
+public:
   ObServerPGMetaSLogFilter() : cmd_filter_(), file_filter_()
   {}
   virtual ~ObServerPGMetaSLogFilter() = default;
   virtual int filter(const ObISLogFilter::Param& param, bool& is_filtered) const override;
 
-  private:
+private:
   blocksstable::ObNotReplaySuperBlockAndConfigMetaSLogFilter cmd_filter_;
   ObTenantFileSLogFilter file_filter_;
 };

@@ -97,7 +97,7 @@ enum ObDefaultRoleFlag {
 struct Bool {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   Bool(bool v = false) : v_(v)
   {}
 
@@ -111,14 +111,14 @@ struct Bool {
   }
   DEFINE_TO_STRING(BUF_PRINTO(v_));
 
-  private:
+private:
   bool v_;
 };
 
 struct Int64 {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   Int64(int64_t v = common::OB_INVALID_ID) : v_(v)
   {}
 
@@ -137,14 +137,14 @@ struct Int64 {
   }
   DEFINE_TO_STRING(BUF_PRINTO(v_));
 
-  private:
+private:
   int64_t v_;
 };
 
 struct UInt64 {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   UInt64(uint64_t v = common::OB_INVALID_ID) : v_(v)
   {}
 
@@ -158,14 +158,14 @@ struct UInt64 {
   }
   DEFINE_TO_STRING(BUF_PRINTO(v_));
 
-  private:
+private:
   uint64_t v_;
 };
 
 struct ObGetRootserverRoleResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetRootserverRoleResult()
       : role_(0), zone_(), type_(common::REPLICA_TYPE_MAX), status_(share::status::MAX), replica_(), partition_info_()
   {}
@@ -183,7 +183,7 @@ struct ObGetRootserverRoleResult {
 struct ObServerInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   common::ObZone zone_;
   common::ObAddr server_;
   common::ObRegion region_;
@@ -200,7 +200,7 @@ struct ObServerInfo {
 struct ObPartitionId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int64_t table_id_;
   int64_t partition_id_;
 
@@ -213,7 +213,7 @@ struct ObPartitionId {
 struct ObPartitionStat {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum PartitionStat {
     RECOVERING = 0,
     WRITABLE = 1,
@@ -239,7 +239,7 @@ typedef common::ObArray<ObServerInfoList> ObPartitionServerList;
 struct ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDDLArg()
       : ddl_stmt_str_(),
         exec_tenant_id_(common::OB_INVALID_TENANT_ID),
@@ -278,7 +278,7 @@ struct ObDDLArg {
 struct ObCreateResourceUnitArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateResourceUnitArg()
       : ObDDLArg(),
         min_cpu_(0),
@@ -316,7 +316,7 @@ struct ObCreateResourceUnitArg : public ObDDLArg {
 struct ObAlterResourceUnitArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAlterResourceUnitArg()
       : ObDDLArg(),
         min_cpu_(0),
@@ -352,7 +352,7 @@ struct ObAlterResourceUnitArg : public ObDDLArg {
 struct ObDropResourceUnitArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropResourceUnitArg() : ObDDLArg(), if_exist_(false)
   {}
   virtual ~ObDropResourceUnitArg()
@@ -372,7 +372,7 @@ struct ObDropResourceUnitArg : public ObDDLArg {
 struct ObCreateResourcePoolArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateResourcePoolArg()
       : ObDDLArg(), unit_num_(0), if_not_exist_(0), replica_type_(common::REPLICA_TYPE_FULL), is_tenant_sys_pool_(false)
   {}
@@ -398,7 +398,7 @@ struct ObCreateResourcePoolArg : public ObDDLArg {
 struct ObSplitResourcePoolArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSplitResourcePoolArg() : ObDDLArg(), pool_name_(), zone_list_(), split_pool_list_()
   {}
   virtual ~ObSplitResourcePoolArg()
@@ -419,7 +419,7 @@ struct ObSplitResourcePoolArg : public ObDDLArg {
 struct ObMergeResourcePoolArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMergeResourcePoolArg()
       : ObDDLArg(),
         old_pool_list_(),  // Before the merger
@@ -440,7 +440,7 @@ struct ObMergeResourcePoolArg : public ObDDLArg {
 struct ObAlterResourcePoolArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAlterResourcePoolArg() : ObDDLArg(), pool_name_(), unit_(), unit_num_(0), zone_list_(), delete_unit_id_array_()
   {}
   virtual ~ObAlterResourcePoolArg()
@@ -463,7 +463,7 @@ struct ObAlterResourcePoolArg : public ObDDLArg {
 struct ObDropResourcePoolArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropResourcePoolArg() : ObDDLArg(), if_exist_(false)
   {}
   virtual ~ObDropResourcePoolArg()
@@ -483,7 +483,7 @@ struct ObDropResourcePoolArg : public ObDDLArg {
 struct ObCmdArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   common::ObString& get_sql_stmt()
   {
     return sql_text_;
@@ -493,14 +493,14 @@ struct ObCmdArg {
     return sql_text_;
   }
 
-  public:
+public:
   common::ObString sql_text_;
 };
 
 struct ObSysVarIdValue {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSysVarIdValue() : sys_id_(share::SYS_VAR_INVALID), value_()
   {}
   ObSysVarIdValue(share::ObSysVarClassType sys_id, common::ObString& value) : sys_id_(sys_id), value_(value)
@@ -517,7 +517,7 @@ struct ObSysVarIdValue {
 struct ObCreateTenantArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateTenantArg()
       : ObDDLArg(),
         tenant_schema_(),
@@ -546,7 +546,7 @@ struct ObCreateTenantArg : public ObDDLArg {
 struct ObCreateTenantEndArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateTenantEndArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_TENANT_ID)
   {}
   virtual ~ObCreateTenantEndArg()
@@ -565,7 +565,7 @@ struct ObCreateTenantEndArg : public ObDDLArg {
 struct ObModifyTenantArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum ModifiableOptions {
     REPLICA_NUM = 1,
     CHARSET_TYPE,
@@ -605,7 +605,7 @@ struct ObModifyTenantArg : public ObDDLArg {
 struct ObLockTenantArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLockTenantArg() : ObDDLArg(), is_locked_(false)
   {}
   bool is_valid() const;
@@ -618,7 +618,7 @@ struct ObLockTenantArg : public ObDDLArg {
 struct ObDropTenantArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropTenantArg()
       : ObDDLArg(),
         if_exist_(false),
@@ -664,7 +664,7 @@ struct ObDropTenantArg : public ObDDLArg {
 struct ObSequenceDDLArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSequenceDDLArg() : ObDDLArg(), stmt_type_(common::OB_INVALID_ID), option_bitset_(), seq_schema_(), database_name_()
   {}
   bool is_valid() const
@@ -721,7 +721,7 @@ struct ObSequenceDDLArg : public ObDDLArg {
   }
   TO_STRING_KV(K_(stmt_type), K_(seq_schema), K_(database_name));
 
-  public:
+public:
   int64_t stmt_type_;
   common::ObBitSet<> option_bitset_;
   share::schema::ObSequenceSchema seq_schema_;
@@ -731,7 +731,7 @@ struct ObSequenceDDLArg : public ObDDLArg {
 struct ObAddSysVarArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAddSysVarArg() : sysvar_(), if_not_exist_(false)
   {}
   DECLARE_TO_STRING;
@@ -747,7 +747,7 @@ struct ObAddSysVarArg : public ObDDLArg {
 struct ObModifySysVarArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObModifySysVarArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), is_inner_(false)
   {}
   DECLARE_TO_STRING;
@@ -769,7 +769,7 @@ struct ObModifySysVarArg : public ObDDLArg {
 struct ObCreateDatabaseArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateDatabaseArg() : ObDDLArg(), if_not_exist_(false)
   {}
   bool is_valid() const;
@@ -788,7 +788,7 @@ struct ObCreateDatabaseArg : public ObDDLArg {
 struct ObAlterDatabaseArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum ModifiableOptions {
     REPLICA_NUM = 1,
     CHARSET_TYPE,
@@ -799,7 +799,7 @@ struct ObAlterDatabaseArg : public ObDDLArg {
     MAX_OPTION
   };
 
-  public:
+public:
   ObAlterDatabaseArg() : ObDDLArg()
   {}
   bool is_valid() const;
@@ -821,7 +821,7 @@ struct ObAlterDatabaseArg : public ObDDLArg {
 struct ObDropDatabaseArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropDatabaseArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), if_exist_(false), to_recyclebin_(false)
   {}
   bool is_valid() const;
@@ -840,7 +840,7 @@ struct ObDropDatabaseArg : public ObDDLArg {
 struct ObCreateTablegroupArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateTablegroupArg() : ObDDLArg(), if_not_exist_(false), create_mode_(obrpc::OB_CREATE_TABLE_MODE_STRICT)
   {}
   bool is_valid() const;
@@ -858,7 +858,7 @@ struct ObCreateTablegroupArg : public ObDDLArg {
 struct ObDropTablegroupArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropTablegroupArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), if_exist_(false)
   {}
   bool is_valid() const;
@@ -877,7 +877,7 @@ struct ObTableItem;
 struct ObAlterTablegroupArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAlterTablegroupArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_ID),
@@ -916,7 +916,7 @@ struct ObAlterTablegroupArg : public ObDDLArg {
 struct ObReachPartitionLimitArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObReachPartitionLimitArg() : batch_cnt_(0), tenant_id_(common::OB_INVALID_ID), is_pg_arg_(false)
   {}
 
@@ -930,7 +930,7 @@ struct ObReachPartitionLimitArg {
   bool is_valid() const;
   TO_STRING_KV(K_(batch_cnt), K_(tenant_id), K_(is_pg_arg));
 
-  public:
+public:
   int64_t batch_cnt_;
   uint64_t tenant_id_;
   bool is_pg_arg_;
@@ -939,7 +939,7 @@ struct ObReachPartitionLimitArg {
 struct ObCheckFrozenVersionArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckFrozenVersionArg() : frozen_version_(0)
   {}
 
@@ -952,14 +952,14 @@ struct ObCheckFrozenVersionArg {
   }
   TO_STRING_KV(K_(frozen_version));
 
-  public:
+public:
   int64_t frozen_version_;
 };
 
 struct ObGetMinSSTableSchemaVersionArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetMinSSTableSchemaVersionArg()
   {
     tenant_id_arg_list_.reuse();
@@ -976,7 +976,7 @@ struct ObGetMinSSTableSchemaVersionArg {
   }
   TO_STRING_KV(K_(tenant_id_arg_list));
 
-  public:
+public:
   common::ObSArray<uint64_t> tenant_id_arg_list_;
 };
 
@@ -985,7 +985,7 @@ struct ObCreateForeignKeyArg;  // Forward declaration
 struct ObCreateTableArg : ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateTableArg()
       : ObDDLArg(),
         if_not_exist_(false),
@@ -1014,7 +1014,7 @@ struct ObCreateTableArg : ObDDLArg {
 struct ObCreateTableLikeArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateTableLikeArg()
       : ObDDLArg(),
         if_not_exist_(false),
@@ -1044,7 +1044,7 @@ struct ObCreateTableLikeArg : public ObDDLArg {
 struct ObCreateSynonymArg : ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateSynonymArg() : or_replace_(false), synonym_info_(), db_name_()
   {}
   TO_STRING_KV(K_(synonym_info), K_(db_name), K_(obj_db_name));
@@ -1057,7 +1057,7 @@ struct ObCreateSynonymArg : ObDDLArg {
 struct ObDropSynonymArg : ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropSynonymArg() : tenant_id_(common::OB_INVALID_ID), is_force_(false), db_name_(), synonym_name_()
   {}
   virtual ~ObDropSynonymArg()
@@ -1078,7 +1078,7 @@ struct ObDropSynonymArg : ObDDLArg {
 struct ObAlterPlanBaselineArg : ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum FieldUpdated {
     FIXED = 0x1,
     ENABLED = 0x02,
@@ -1098,7 +1098,7 @@ struct ObAlterPlanBaselineArg : ObDDLArg {
 struct ObCreatePlanBaselineArg : ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreatePlanBaselineArg() : plan_baseline_info_(), is_replace_(false)
   {}
   TO_STRING_KV(K_(plan_baseline_info), K(is_replace_));
@@ -1109,7 +1109,7 @@ struct ObCreatePlanBaselineArg : ObDDLArg {
 struct ObDropPlanBaselineArg : ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropPlanBaselineArg()
       : tenant_id_(common::OB_INVALID_ID),
         sql_id_(),
@@ -1136,7 +1136,7 @@ struct ObDropPlanBaselineArg : ObDDLArg {
 struct ObIndexArg : public ObDDLArg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   enum IndexActionType {
     INVALID_ACTION = 1,
     ADD_INDEX,
@@ -1196,7 +1196,7 @@ struct ObIndexArg : public ObDDLArg {
 struct ObUpdateStatCacheArg : public ObDDLArg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObUpdateStatCacheArg()
       : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID), partition_ids_(), column_ids_()
   {}
@@ -1238,7 +1238,7 @@ struct ObUpdateStatCacheArg : public ObDDLArg {
 struct ObDropIndexArg : public ObIndexArg {
   OB_UNIS_VERSION(1);
   // if add new member,should add to_string and serialize function
-  public:
+public:
   ObDropIndexArg()
   {
     index_action_type_ = DROP_INDEX;
@@ -1269,7 +1269,7 @@ struct ObDropIndexArg : public ObIndexArg {
 struct ObRebuildIndexArg : public ObIndexArg {
   OB_UNIS_VERSION(1);
   // if add new member,should add to_string and serialize function
-  public:
+public:
   ObRebuildIndexArg() : ObIndexArg()
   {
     create_mode_ = OB_CREATE_TABLE_MODE_STRICT;
@@ -1309,7 +1309,7 @@ struct ObRebuildIndexArg : public ObIndexArg {
 struct ObAlterIndexParallelArg : public ObIndexArg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObAlterIndexParallelArg() : ObIndexArg(), new_parallel_(common::OB_DEFAULT_TABLE_DOP)
   {
     index_action_type_ = ALTER_INDEX_PARALLEL;
@@ -1336,7 +1336,7 @@ struct ObAlterIndexParallelArg : public ObIndexArg {
 struct ObRenameIndexArg : public ObIndexArg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObRenameIndexArg() : ObIndexArg(), origin_index_name_(), new_index_name_()
   {
     index_action_type_ = RENAME_INDEX;
@@ -1360,7 +1360,7 @@ struct ObRenameIndexArg : public ObIndexArg {
 struct ObAlterIndexArg : public ObIndexArg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObAlterIndexArg() : ObIndexArg(), index_visibility_(common::OB_DEFAULT_INDEX_VISIBILITY)
   {
     index_action_type_ = ALTER_INDEX;
@@ -1382,7 +1382,7 @@ struct ObAlterIndexArg : public ObIndexArg {
 struct ObTruncateTableArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTruncateTableArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_ID),
@@ -1406,7 +1406,7 @@ struct ObTruncateTableArg : public ObDDLArg {
 struct ObRenameTableItem {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRenameTableItem()
       : origin_db_name_(),
         new_db_name_(),
@@ -1427,7 +1427,7 @@ struct ObRenameTableItem {
 struct ObRenameTableArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRenameTableArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), rename_table_items_()
   {}
   bool is_valid() const;
@@ -1440,7 +1440,7 @@ struct ObRenameTableArg : public ObDDLArg {
 struct ObAlterTableArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum ModifiableTableColumns {
     AUTO_INCREMENT = 1,
     BLOCK_SIZE,
@@ -1575,7 +1575,7 @@ struct ObAlterTableArg : public ObDDLArg {
 struct ObTableItem {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTableItem()
       : mode_(common::OB_NAME_CASE_INVALID),  // for compare
         database_name_(),
@@ -1609,7 +1609,7 @@ inline uint64_t ObTableItem::hash(uint64_t seed) const
 struct ObDropTableArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropTableArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_ID),
@@ -1639,7 +1639,7 @@ struct ObDropTableArg : public ObDDLArg {
 struct ObOptimizeTableArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObOptimizeTableArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), tables_()
   {}
   DECLARE_TO_STRING;
@@ -1651,7 +1651,7 @@ struct ObOptimizeTableArg : public ObDDLArg {
 struct ObOptimizeTenantArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObOptimizeTenantArg() : ObDDLArg(), tenant_name_()
   {}
   bool is_valid() const;
@@ -1663,7 +1663,7 @@ struct ObOptimizeTenantArg : public ObDDLArg {
 struct ObOptimizeAllArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObOptimizeAllArg() : ObDDLArg()
   {}
   bool is_valid() const
@@ -1676,7 +1676,7 @@ struct ObOptimizeAllArg : public ObDDLArg {
 struct ObColumnSortItem {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObColumnSortItem()
       : column_name_(),
         prefix_len_(0),
@@ -1709,7 +1709,7 @@ struct ObColumnSortItem {
 struct ObTableOption {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableOption()
       : block_size_(-1),
         replica_num_(0),
@@ -1761,7 +1761,7 @@ struct ObTableOption {
 struct ObIndexOption : public ObTableOption {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObIndexOption()
       : ObTableOption(),
         parser_name_(common::OB_DEFAULT_FULLTEXT_PARSER_NAME),
@@ -1783,7 +1783,7 @@ struct ObIndexOption : public ObTableOption {
 struct ObCreateIndexArg : public ObIndexArg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObCreateIndexArg()
       : index_type_(share::schema::INDEX_TYPE_IS_NOT),
         index_columns_(),
@@ -1879,7 +1879,7 @@ struct ObCreateIndexArg : public ObIndexArg {
 struct ObCreateForeignKeyArg : public ObIndexArg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObCreateForeignKeyArg()
       : ObIndexArg(),
         parent_database_(),
@@ -1925,7 +1925,7 @@ struct ObCreateForeignKeyArg : public ObIndexArg {
   bool is_valid() const;
   DECLARE_VIRTUAL_TO_STRING;
 
-  public:
+public:
   common::ObString parent_database_;
   common::ObString parent_table_;
   common::ObSEArray<common::ObString, 8> child_columns_;
@@ -1947,7 +1947,7 @@ struct ObCreateForeignKeyArg : public ObIndexArg {
 struct ObDropForeignKeyArg : public ObIndexArg {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDropForeignKeyArg() : ObIndexArg(), foreign_key_name_()
   {
     index_action_type_ = DROP_FOREIGN_KEY;
@@ -1963,14 +1963,14 @@ struct ObDropForeignKeyArg : public ObIndexArg {
   bool is_valid() const;
   DECLARE_VIRTUAL_TO_STRING;
 
-  public:
+public:
   common::ObString foreign_key_name_;
 };
 
 struct ObFlashBackTableFromRecyclebinArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFlashBackTableFromRecyclebinArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_ID),
@@ -1995,7 +1995,7 @@ struct ObFlashBackTableFromRecyclebinArg : public ObDDLArg {
 struct ObFlashBackTableToScnArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFlashBackTableToScnArg() : tenant_id_(common::OB_INVALID_ID), time_point_(-1), tables_(), query_end_time_(-1)
   {}
   bool is_valid() const;
@@ -2011,7 +2011,7 @@ struct ObFlashBackTableToScnArg : public ObDDLArg {
 struct ObFlashBackIndexArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFlashBackIndexArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_ID),
@@ -2033,7 +2033,7 @@ struct ObFlashBackIndexArg : public ObDDLArg {
 struct ObFlashBackDatabaseArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFlashBackDatabaseArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), origin_db_name_(), new_db_name_()
   {}
   bool is_valid() const;
@@ -2047,7 +2047,7 @@ struct ObFlashBackDatabaseArg : public ObDDLArg {
 struct ObFlashBackTenantArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFlashBackTenantArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), origin_tenant_name_(), new_tenant_name_()
   {}
   bool is_valid() const;
@@ -2061,7 +2061,7 @@ struct ObFlashBackTenantArg : public ObDDLArg {
 struct ObPurgeTableArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPurgeTableArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), table_name_()
   {}
   bool is_valid() const;
@@ -2077,7 +2077,7 @@ struct ObPurgeTableArg : public ObDDLArg {
 struct ObPurgeIndexArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPurgeIndexArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), table_name_(), table_id_(common::OB_INVALID_ID)
   {}
   bool is_valid() const;
@@ -2095,7 +2095,7 @@ struct ObPurgeIndexArg : public ObDDLArg {
 struct ObPurgeDatabaseArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPurgeDatabaseArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_()
   {}
   bool is_valid() const;
@@ -2111,7 +2111,7 @@ struct ObPurgeDatabaseArg : public ObDDLArg {
 struct ObPurgeTenantArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPurgeTenantArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), tenant_name_()
   {}
   bool is_valid() const;
@@ -2127,7 +2127,7 @@ struct ObPurgeTenantArg : public ObDDLArg {
 struct ObPurgeRecycleBinArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int DEFAULT_PURGE_EACH_TIME = 10;
   ObPurgeRecycleBinArg()
       : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), purge_num_(0), expire_time_(0), auto_purge_(false)
@@ -2161,7 +2161,7 @@ struct ObPurgeRecycleBinArg : public ObDDLArg {
 struct ObCreatePartitionArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreatePartitionArg()
   {
     reset();
@@ -2230,14 +2230,14 @@ struct ObCreatePartitionArg {
   share::ObSplitPartition split_info_;  // It makes sense when dismantling tables and splitting to build partiton
   bool ignore_member_list_;  // Used to mark whether the partition needs to be created repeatedly, currently only used
                              // in the creation of replicas synchronized from the standby database
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreatePartitionArg);
 };
 
 struct ObCreatePartitionStorageArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreatePartitionStorageArg()
   {
     reset();
@@ -2261,7 +2261,7 @@ struct ObCreatePartitionStorageArg {
 struct ObCreatePartitionBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreatePartitionBatchArg()
   {
     reset();
@@ -2280,14 +2280,14 @@ struct ObCreatePartitionBatchArg {
 
   common::ObSArray<ObCreatePartitionArg> args_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreatePartitionBatchArg);
 };
 
 struct ObSetMemberListArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSetMemberListArg() : key_(), member_list_(), quorum_(0), lease_start_(0), leader_()
   {}
   ~ObSetMemberListArg()
@@ -2305,14 +2305,14 @@ struct ObSetMemberListArg {
   int64_t lease_start_;
   common::ObAddr leader_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSetMemberListArg);
 };
 
 struct ObSetMemberListBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSetMemberListBatchArg()
   {
     reset();
@@ -2335,14 +2335,14 @@ struct ObSetMemberListBatchArg {
 
   common::ObSArray<ObSetMemberListArg> args_;
   int64_t timestamp_;  // Used to verify asynchronous rpc return packets
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSetMemberListBatchArg);
 };
 
 struct ObCreatePartitionBatchRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreatePartitionBatchRes() : ret_list_(), timestamp_(common::OB_INVALID_TIMESTAMP)
   {}
   ~ObCreatePartitionBatchRes()
@@ -2356,14 +2356,14 @@ struct ObCreatePartitionBatchRes {
   common::ObSArray<int> ret_list_;
   int64_t timestamp_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreatePartitionBatchRes);
 };
 
 struct ObGetMinSSTableSchemaVersionRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetMinSSTableSchemaVersionRes() : ret_list_()
   {}
   ~ObGetMinSSTableSchemaVersionRes()
@@ -2383,14 +2383,14 @@ struct ObGetMinSSTableSchemaVersionRes {
   // response includes all rets
   common::ObSArray<int64_t> ret_list_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGetMinSSTableSchemaVersionRes);
 };
 
 struct ObCheckUniqueIndexRequestArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckUniqueIndexRequestArg()
   {
     reset();
@@ -2400,19 +2400,19 @@ struct ObCheckUniqueIndexRequestArg {
   void reset();
   TO_STRING_KV(K_(pkey), K_(index_id), K_(schema_version));
 
-  public:
+public:
   common::ObPartitionKey pkey_;
   uint64_t index_id_;
   int64_t schema_version_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCheckUniqueIndexRequestArg);
 };
 
 struct ObCheckUniqueIndexResponseArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckUniqueIndexResponseArg()
   {
     reset();
@@ -2422,20 +2422,20 @@ struct ObCheckUniqueIndexResponseArg {
   void reset();
   TO_STRING_KV(K_(pkey), K_(index_id), K_(ret_code), K_(is_valid));
 
-  public:
+public:
   common::ObPartitionKey pkey_;
   uint64_t index_id_;
   int ret_code_;
   bool is_valid_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCheckUniqueIndexResponseArg);
 };
 
 struct ObCalcColumnChecksumRequestArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCalcColumnChecksumRequestArg()
   {
     reset();
@@ -2445,21 +2445,21 @@ struct ObCalcColumnChecksumRequestArg {
   void reset();
   TO_STRING_KV(K_(pkey), K_(index_id), K_(schema_version), K_(execution_id), K_(snapshot_version));
 
-  public:
+public:
   common::ObPartitionKey pkey_;
   uint64_t index_id_;
   int64_t schema_version_;
   uint64_t execution_id_;
   int64_t snapshot_version_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCalcColumnChecksumRequestArg);
 };
 
 struct ObCalcColumnChecksumResponseArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCalcColumnChecksumResponseArg()
   {
     reset();
@@ -2469,19 +2469,19 @@ struct ObCalcColumnChecksumResponseArg {
   void reset();
   TO_STRING_KV(K_(pkey), K_(index_id), K_(ret_code));
 
-  public:
+public:
   common::ObPartitionKey pkey_;
   uint64_t index_id_;
   int ret_code_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCalcColumnChecksumResponseArg);
 };
 
 struct ObCheckSingleReplicaMajorSSTableExistArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckSingleReplicaMajorSSTableExistArg()
   {
     reset();
@@ -2493,14 +2493,14 @@ struct ObCheckSingleReplicaMajorSSTableExistArg {
   common::ObPartitionKey pkey_;
   uint64_t index_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCheckSingleReplicaMajorSSTableExistArg);
 };
 
 struct ObCheckSingleReplicaMajorSSTableExistResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckSingleReplicaMajorSSTableExistResult()
   {
     reset();
@@ -2514,7 +2514,7 @@ struct ObCheckSingleReplicaMajorSSTableExistResult {
 struct ObCheckAllReplicaMajorSSTableExistArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckAllReplicaMajorSSTableExistArg()
   {
     reset();
@@ -2526,14 +2526,14 @@ struct ObCheckAllReplicaMajorSSTableExistArg {
   common::ObPartitionKey pkey_;
   uint64_t index_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCheckAllReplicaMajorSSTableExistArg);
 };
 
 struct ObCheckAllReplicaMajorSSTableExistResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckAllReplicaMajorSSTableExistResult()
   {
     reset();
@@ -2548,7 +2548,7 @@ struct ObCheckAllReplicaMajorSSTableExistResult {
 struct ObMigrateArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMigrateArg() : keep_src_(false)
   {}
   bool is_valid() const
@@ -2568,7 +2568,7 @@ struct ObMigrateArg {
 struct ObCopySSTableArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCopySSTableArg()
       : key_(),
         src_(),
@@ -2608,7 +2608,7 @@ struct ObCopySSTableArg {
 struct ObCopySSTableRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCopySSTableRes()
       : key_(),
         src_(),
@@ -2638,7 +2638,7 @@ struct ObCopySSTableRes {
 struct ObAddReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAddReplicaArg()
       : key_(),
         src_(),
@@ -2682,7 +2682,7 @@ struct ObAddReplicaArg {
 struct ObAddReplicaRes {
   OB_UNIS_VERSION(2);
 
-  public:
+public:
   ObAddReplicaRes() : key_(), src_(), dst_(), data_src_(), quorum_(0), result_(0)
   {}
   bool is_valid() const
@@ -2702,7 +2702,7 @@ struct ObAddReplicaRes {
 struct ObRebuildReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRebuildReplicaArg()
       : key_(),
         src_(),
@@ -2737,7 +2737,7 @@ struct ObRebuildReplicaArg {
 struct ObRebuildReplicaRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRebuildReplicaRes() : key_(), src_(), dst_(), data_src_(), result_(0)
   {}
   bool is_valid() const
@@ -2757,7 +2757,7 @@ struct ObRebuildReplicaRes {
 struct ObRemoveNonPaxosReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRemoveNonPaxosReplicaArg()
       : key_(), dst_(), task_id_(), skip_change_member_list_(false), switch_epoch_(common::OB_INVALID_VERSION)
   {}
@@ -2781,14 +2781,14 @@ struct ObRemoveNonPaxosReplicaArg {
 };
 
 struct ObRemoveNonPaxosReplicaBatchResult {
-  public:
+public:
   ObRemoveNonPaxosReplicaBatchResult() : return_array_()
   {}
 
-  public:
+public:
   TO_STRING_KV(K_(return_array));
 
-  public:
+public:
   common::ObSArray<int> return_array_;
 
   OB_UNIS_VERSION(3);
@@ -2797,7 +2797,7 @@ struct ObRemoveNonPaxosReplicaBatchResult {
 struct ObRestoreReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRestoreReplicaArg()
       : key_(),
         src_(),
@@ -2831,7 +2831,7 @@ struct ObRestoreReplicaArg {
 struct ObRestoreReplicaRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRestoreReplicaRes() : key_(), src_(), dst_(), result_(0)
   {}
   bool is_valid() const
@@ -2850,7 +2850,7 @@ struct ObRestoreReplicaRes {
 struct ObPhyRestoreReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPhyRestoreReplicaArg();
   bool is_valid() const;
   TO_STRING_KV(K_(key), K_(src), K_(dst), K_(task_id), K_(priority));
@@ -2865,7 +2865,7 @@ struct ObPhyRestoreReplicaArg {
 struct ObPhyRestoreReplicaRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPhyRestoreReplicaRes();
   bool is_valid() const;
 
@@ -2880,7 +2880,7 @@ struct ObPhyRestoreReplicaRes {
 struct ObMigrateReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMigrateReplicaArg()
       : key_(),
         src_(),
@@ -2923,7 +2923,7 @@ struct ObMigrateReplicaArg {
 struct ObMigrateReplicaRes {
   OB_UNIS_VERSION(2);
 
-  public:
+public:
   ObMigrateReplicaRes() : key_(), src_(), dst_(), data_src_(), result_(0)
   {}
   bool is_valid() const
@@ -2942,7 +2942,7 @@ struct ObMigrateReplicaRes {
 struct ObChangeReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObChangeReplicaArg()
       : key_(),
         src_(),
@@ -2971,7 +2971,7 @@ struct ObChangeReplicaArg {
 struct ObChangeReplicaRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObChangeReplicaRes() : key_(), src_(), dst_(), data_src_(), quorum_(0), result_(0)
   {}
   bool is_valid() const
@@ -2992,7 +2992,7 @@ struct ObChangeReplicaRes {
 struct ObBackupArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBackupArg()
       : key_(),
         src_(),
@@ -3029,7 +3029,7 @@ struct ObBackupArg {
 struct ObValidateArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObValidateArg() : trace_id_(), dst_(), physical_validate_arg_(), priority_(common::ObReplicaOpPriority::PRIO_LOW)
   {}
   int assign(const ObValidateArg& arg);
@@ -3048,7 +3048,7 @@ struct ObValidateArg {
 struct ObStandbyCutDataTaskArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStandbyCutDataTaskArg() : dst_(), pkey_()
   {}
   bool is_valid() const
@@ -3063,7 +3063,7 @@ struct ObStandbyCutDataTaskArg {
 struct ObBackupRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBackupRes() : key_(), src_(), dst_(), data_src_(), physical_backup_arg_(), result_(0)
   {}
   bool is_valid() const
@@ -3084,7 +3084,7 @@ struct ObBackupRes {
 struct ObValidateRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObValidateRes() : key_(), dst_(), validate_arg_(), result_(0)
   {}
   int assign(const ObValidateRes& res);
@@ -3105,45 +3105,45 @@ struct ObValidateRes {
 struct ObAddReplicaBatchRes {
   OB_UNIS_VERSION(2);
 
-  public:
+public:
   ObAddReplicaBatchRes() : res_array_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(res_array));
 
-  public:
+public:
   common::ObSArray<ObAddReplicaRes> res_array_;
 };
 
 struct ObRebuildReplicaBatchRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRebuildReplicaBatchRes() : res_array_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(res_array));
 
-  public:
+public:
   common::ObSArray<ObRebuildReplicaRes> res_array_;
 };
 
 struct ObCopySSTableBatchRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCopySSTableBatchRes() : res_array_(), type_(common::OB_COPY_SSTABLE_TYPE_INVALID)
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(res_array), K_(type));
 
-  public:
+public:
   common::ObSArray<ObCopySSTableRes> res_array_;
   common::ObCopySSTableType type_;
 };
@@ -3151,35 +3151,35 @@ struct ObCopySSTableBatchRes {
 struct ObMigrateReplicaBatchRes {
   OB_UNIS_VERSION(2);
 
-  public:
+public:
   ObMigrateReplicaBatchRes() : res_array_()
   {}
   bool is_valid() const;
   TO_STRING_KV(K_(res_array));
 
-  public:
+public:
   common::ObSArray<ObMigrateReplicaRes> res_array_;
 };
 
 struct ObChangeReplicaBatchRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObChangeReplicaBatchRes() : res_array_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(res_array));
 
-  public:
+public:
   common::ObSArray<ObChangeReplicaRes> res_array_;
 };
 
 struct ObStandbyCutDataTaskRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStandbyCutDataTaskRes() : key_(), dst_(), result_(0)
   {}
   bool is_valid() const
@@ -3196,47 +3196,47 @@ struct ObStandbyCutDataTaskRes {
 struct ObStandbyCutDataBatchTaskRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStandbyCutDataBatchTaskRes() : res_array_()
   {}
 
-  public:
+public:
   int assign(const struct ObStandbyCutDataBatchTaskRes& res);
   bool is_valid() const;
   TO_STRING_KV(K_(res_array));
 
-  public:
+public:
   common::ObSArray<ObStandbyCutDataTaskRes> res_array_;
 };
 
 struct ObBackupBatchRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBackupBatchRes() : res_array_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(res_array));
 
-  public:
+public:
   common::ObSArray<ObBackupRes> res_array_;
 };
 
 struct ObValidateBatchRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObValidateBatchRes() : res_array_()
   {}
 
-  public:
+public:
   int assign(const ObValidateBatchRes& res);
   bool is_valid() const;
   TO_STRING_KV(K_(res_array));
 
-  public:
+public:
   common::ObSArray<ObValidateRes> res_array_;
 };
 
@@ -3244,16 +3244,16 @@ struct ObValidateBatchRes {
 struct ObAddReplicaBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAddReplicaBatchArg() : arg_array_(), timeout_ts_(0), task_id_()
   {}
 
-  public:
+public:
   bool is_valid() const;
 
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
 
-  public:
+public:
   common::ObSArray<ObAddReplicaArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId task_id_;
@@ -3262,15 +3262,15 @@ struct ObAddReplicaBatchArg {
 struct ObRemoveNonPaxosReplicaBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRemoveNonPaxosReplicaBatchArg() : arg_array_(), timeout_ts_(0), task_id_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
 
-  public:
+public:
   common::ObSArray<ObRemoveNonPaxosReplicaArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId task_id_;
@@ -3279,15 +3279,15 @@ struct ObRemoveNonPaxosReplicaBatchArg {
 struct ObMigrateReplicaBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMigrateReplicaBatchArg() : arg_array_(), timeout_ts_(0), task_id_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
 
-  public:
+public:
   common::ObSArray<ObMigrateReplicaArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId task_id_;
@@ -3296,15 +3296,15 @@ struct ObMigrateReplicaBatchArg {
 struct ObChangeReplicaBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObChangeReplicaBatchArg() : arg_array_(), timeout_ts_(0), task_id_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
 
-  public:
+public:
   common::ObSArray<ObChangeReplicaArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId task_id_;
@@ -3313,15 +3313,15 @@ struct ObChangeReplicaBatchArg {
 struct ObCopySSTableBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCopySSTableBatchArg() : arg_array_(), timeout_ts_(0), task_id_(), type_(common::OB_COPY_SSTABLE_TYPE_INVALID)
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id), K_(type));
 
-  public:
+public:
   common::ObSArray<ObCopySSTableArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId task_id_;
@@ -3331,15 +3331,15 @@ struct ObCopySSTableBatchArg {
 struct ObRebuildReplicaBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRebuildReplicaBatchArg() : arg_array_(), timeout_ts_(0), task_id_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
 
-  public:
+public:
   common::ObSArray<ObRebuildReplicaArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId task_id_;
@@ -3348,16 +3348,16 @@ struct ObRebuildReplicaBatchArg {
 struct ObServerCopyLocalIndexSSTableArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObServerCopyLocalIndexSSTableArg()
       : data_src_(), dst_(), pkey_(), index_table_id_(common::OB_INVALID_ID), cluster_id_(common::OB_INVALID_ID)
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(data_src), K_(dst), K_(pkey), K_(index_table_id), K_(cluster_id));
 
-  public:
+public:
   common::ObAddr data_src_;
   common::ObAddr dst_;
   common::ObPartitionKey pkey_;
@@ -3368,15 +3368,15 @@ struct ObServerCopyLocalIndexSSTableArg {
 struct ObBackupBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBackupBatchArg() : arg_array_(), timeout_ts_(0), task_id_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
 
-  public:
+public:
   common::ObSArray<ObBackupArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId task_id_;
@@ -3392,13 +3392,13 @@ enum ObReplicaMovingType : int8_t {
 struct ObAuthReplicaMovingkArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAuthReplicaMovingkArg() : file_id_(0), type_(REPLICA_MOVING_TYPE_INVALID)
   {}
   bool is_valid() const;
   TO_STRING_KV(K(pg_key_), K(addr_), K(file_id_), K(type_));
 
-  public:
+public:
   common::ObPGKey pg_key_;
   common::ObAddr addr_;
   int64_t file_id_;
@@ -3408,16 +3408,16 @@ struct ObAuthReplicaMovingkArg {
 struct ObValidateBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObValidateBatchArg() : arg_array_(), timeout_ts_(0), task_id_()
   {}
 
-  public:
+public:
   int assign(const ObValidateBatchArg& arg);
   bool is_valid() const;
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
 
-  public:
+public:
   common::ObSArray<ObValidateArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId task_id_;
@@ -3426,18 +3426,18 @@ struct ObValidateBatchArg {
 struct ObStandbyCutDataBatchTaskArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStandbyCutDataBatchTaskArg()
       : arg_array_(), timeout_ts_(0), trace_id_(), fo_trace_id_(), flashback_ts_(0), switchover_epoch_(0)
   {}
 
-  public:
+public:
   int init(const int64_t timeout, const share::ObTaskId& task_id, const common::ObCurTraceId::TraceId& fo_trace_id,
       const int64_t flashback_ts, const int64_t switchover_epoch);
   bool is_valid() const;
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(trace_id), K_(flashback_ts), K_(switchover_epoch), K_(fo_trace_id));
 
-  public:
+public:
   common::ObSArray<ObStandbyCutDataTaskArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId trace_id_;
@@ -3451,7 +3451,7 @@ struct ObStandbyCutDataBatchTaskArg {
 struct ObMajorFreezeArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMajorFreezeArg() : frozen_version_(0), schema_version_(0), frozen_timestamp_(0)
   {}
   inline void reset();
@@ -3463,14 +3463,14 @@ struct ObMajorFreezeArg {
   int64_t schema_version_;
   int64_t frozen_timestamp_;
 
-  private:
+private:
   // DISALLOW_COPY_AND_ASSIGN(ObMajorFreezeArg);
 };
 
 struct ObSetReplicaNumArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSetReplicaNumArg() : partition_key_(), replica_num_(0)
   {}
   ~ObSetReplicaNumArg()
@@ -3490,7 +3490,7 @@ struct ObSetReplicaNumArg {
 struct ObSetParentArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSetParentArg() : partition_key_(), parent_addr_()
   {}
   ~ObSetParentArg()
@@ -3510,7 +3510,7 @@ struct ObSetParentArg {
 struct ObSwitchLeaderArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSwitchLeaderArg() : partition_key_(), leader_addr_()
   {}
   ~ObSwitchLeaderArg()
@@ -3530,7 +3530,7 @@ struct ObSwitchLeaderArg {
 struct ObSwitchSchemaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObSwitchSchemaArg() : schema_info_(), force_refresh_(false)
   {}
   explicit ObSwitchSchemaArg(const share::schema::ObRefreshSchemaInfo& schema_info, bool force_refresh)
@@ -3553,7 +3553,7 @@ struct ObSwitchSchemaArg {
 struct ObCheckSchemaVersionElapsedArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckSchemaVersionElapsedArg() : pkey_(), schema_version_(0)
   {}
   bool is_valid() const
@@ -3574,7 +3574,7 @@ struct ObCheckSchemaVersionElapsedArg {
 struct ObCheckCtxCreateTimestampElapsedArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckCtxCreateTimestampElapsedArg() : pkey_(), sstable_exist_ts_(0)
   {}
   bool is_valid() const
@@ -3595,7 +3595,7 @@ struct ObCheckCtxCreateTimestampElapsedArg {
 struct ObCheckSchemaVersionElapsedResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckSchemaVersionElapsedResult() : snapshot_(common::OB_INVALID_TIMESTAMP)
   {}
   bool is_valid() const
@@ -3613,7 +3613,7 @@ struct ObCheckSchemaVersionElapsedResult {
 struct ObCheckCtxCreateTimestampElapsedResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckCtxCreateTimestampElapsedResult() : snapshot_(common::OB_INVALID_TIMESTAMP)
   {}
   bool is_valid() const
@@ -3631,7 +3631,7 @@ struct ObCheckCtxCreateTimestampElapsedResult {
 struct ObGetLeaderCandidatesArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetLeaderCandidatesArg() : partitions_()
   {}
   void reuse()
@@ -3651,7 +3651,7 @@ struct ObGetLeaderCandidatesArg {
 struct ObGetLeaderCandidatesV2Arg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetLeaderCandidatesV2Arg() : partitions_(), prep_candidates_()
   {}
   void reuse()
@@ -3673,13 +3673,13 @@ struct ObGetLeaderCandidatesV2Arg {
 class CandidateStatus {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   CandidateStatus() : candidate_status_(0)
   {}
   virtual ~CandidateStatus()
   {}
 
-  public:
+public:
   void set_in_black_list(const bool in_black_list)
   {
     if (in_black_list) {
@@ -3699,7 +3699,7 @@ class CandidateStatus {
   }
   TO_STRING_KV("in_black_list", get_in_black_list());
 
-  private:
+private:
   union {
     uint64_t candidate_status_;
     struct {
@@ -3714,7 +3714,7 @@ typedef common::ObSArray<CandidateStatus> CandidateStatusList;
 struct ObGetLeaderCandidatesResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetLeaderCandidatesResult() : candidates_()
   {}
   void reuse()
@@ -3733,7 +3733,7 @@ struct ObGetLeaderCandidatesResult {
 struct ObAccountArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAccountArg() : user_name_(), host_name_(), is_role_(false)
   {}
   ObAccountArg(const common::ObString& user_name, const common::ObString& host_name)
@@ -3766,7 +3766,7 @@ struct ObAccountArg {
 struct ObCreateUserArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateUserArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_ID),
@@ -3790,7 +3790,7 @@ struct ObCreateUserArg : public ObDDLArg {
 struct ObDropUserArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropUserArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), is_role_(false)
   {}
   virtual ~ObDropUserArg()
@@ -3811,7 +3811,7 @@ struct ObDropUserArg : public ObDDLArg {
 struct ObRenameUserArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRenameUserArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID)
   {}
   virtual ~ObRenameUserArg()
@@ -3829,7 +3829,7 @@ struct ObRenameUserArg : public ObDDLArg {
 struct ObSetPasswdArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSetPasswdArg()
       : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), ssl_type_(share::schema::ObSSLType::SSL_TYPE_NOT_SPECIFIED)
   {}
@@ -3852,7 +3852,7 @@ struct ObSetPasswdArg : public ObDDLArg {
 struct ObLockUserArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLockUserArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), locked_(false)
   {}
   virtual ~ObLockUserArg()
@@ -3869,7 +3869,7 @@ struct ObLockUserArg : public ObDDLArg {
 struct ObAlterUserProfileArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAlterUserProfileArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_TENANT_ID),
@@ -3898,7 +3898,7 @@ struct ObAlterUserProfileArg : public ObDDLArg {
 struct ObGrantArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGrantArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_ID),
@@ -3959,7 +3959,7 @@ struct ObGrantArg : public ObDDLArg {
 struct ObStandbyGrantArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStandbyGrantArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_ID),
@@ -3985,7 +3985,7 @@ struct ObStandbyGrantArg : public ObDDLArg {
 struct ObRevokeUserArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRevokeUserArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_ID),
@@ -4008,7 +4008,7 @@ struct ObRevokeUserArg : public ObDDLArg {
 struct ObRevokeDBArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRevokeDBArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID), priv_set_(0)
   {}
   bool is_valid() const;
@@ -4023,7 +4023,7 @@ struct ObRevokeDBArg : public ObDDLArg {
 struct ObRevokeTableArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRevokeTableArg()
       : ObDDLArg(),
         tenant_id_(common::OB_INVALID_ID),
@@ -4056,7 +4056,7 @@ struct ObRevokeTableArg : public ObDDLArg {
 struct ObRevokeSysPrivArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRevokeSysPrivArg()
       : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), grantee_id_(common::OB_INVALID_ID), sys_priv_array_()
   {}
@@ -4071,7 +4071,7 @@ struct ObRevokeSysPrivArg : public ObDDLArg {
 struct ObCreateRoleArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateRoleArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID)
   {}
   bool is_valid() const;
@@ -4088,7 +4088,7 @@ struct ObCreateRoleArg : public ObDDLArg {
 struct ObAdminServerArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum AdminServerOp {
     INVALID_OP = 0,
     ADD = 1,
@@ -4120,7 +4120,7 @@ struct ObAdminServerArg {
 struct ObAdminZoneArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum AdminZoneOp {
     ADD = 1,
     DELETE = 2,
@@ -4137,7 +4137,7 @@ struct ObAdminZoneArg {
     ALTER_ZONE_MAX = 128,
   };
 
-  public:
+public:
   ObAdminZoneArg()
       : zone_(), region_(), idc_(), zone_type_(common::ObZoneType::ZONE_TYPE_INVALID), force_stop_(false), op_(ADD)
   {}
@@ -4164,7 +4164,7 @@ struct ObAdminZoneArg {
 struct ObAdminSwitchReplicaRoleArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminSwitchReplicaRoleArg() : role_(common::FOLLOWER), partition_key_(), server_(), zone_(), tenant_name_()
   {}
   ~ObAdminSwitchReplicaRoleArg()
@@ -4183,7 +4183,7 @@ struct ObAdminSwitchReplicaRoleArg {
 struct ObAdminSwitchRSRoleArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminSwitchRSRoleArg() : role_(common::FOLLOWER), server_(), zone_()
   {}
   ~ObAdminSwitchRSRoleArg()
@@ -4200,7 +4200,7 @@ struct ObAdminSwitchRSRoleArg {
 struct ObAdminChangeReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminChangeReplicaArg() : partition_key_(), member_(), force_cmd_(false)
   {}
   ~ObAdminChangeReplicaArg()
@@ -4217,7 +4217,7 @@ struct ObAdminChangeReplicaArg {
 struct ObCheckGtsReplicaStopServer {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckGtsReplicaStopServer() : servers_()
   {}
   TO_STRING_KV(K_(servers));
@@ -4235,14 +4235,14 @@ struct ObCheckGtsReplicaStopServer {
     return servers_.count() > 0;
   }
 
-  public:
+public:
   common::ObSArray<common::ObAddr> servers_;
 };
 
 struct ObCheckGtsReplicaStopZone {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckGtsReplicaStopZone() : zone_()
   {}
   ObCheckGtsReplicaStopZone(const common::ObZone& zone) : zone_(zone)
@@ -4253,14 +4253,14 @@ struct ObCheckGtsReplicaStopZone {
     return !zone_.is_empty();
   }
 
-  public:
+public:
   common::ObZone zone_;
 };
 
 struct ObAdminDropReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminDropReplicaArg() : partition_key_(), server_(), zone_(), create_timestamp_(0), force_cmd_(false)
   {}
   ~ObAdminDropReplicaArg()
@@ -4279,7 +4279,7 @@ struct ObAdminDropReplicaArg {
 struct ObAdminAddDiskArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminAddDiskArg() : diskgroup_name_(), disk_path_(), alias_name_(), server_(), zone_()
   {}
   ~ObAdminAddDiskArg()
@@ -4298,7 +4298,7 @@ struct ObAdminAddDiskArg {
 struct ObAdminDropDiskArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminDropDiskArg() : diskgroup_name_(), alias_name_(), server_(), zone_()
   {}
   ~ObAdminDropDiskArg()
@@ -4315,7 +4315,7 @@ struct ObAdminDropDiskArg {
 struct ObAdminMigrateReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminMigrateReplicaArg() : is_copy_(false), partition_key_(), src_(), dest_(), force_cmd_(false)
   {}
   ~ObAdminMigrateReplicaArg()
@@ -4334,7 +4334,7 @@ struct ObAdminMigrateReplicaArg {
 struct ObPhysicalRestoreTenantArg : public ObCmdArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPhysicalRestoreTenantArg();
   bool is_valid() const;
   TO_STRING_KV(
@@ -4351,7 +4351,7 @@ struct ObPhysicalRestoreTenantArg : public ObCmdArg {
 struct ObRestoreTenantArg : public ObCmdArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRestoreTenantArg() : ObCmdArg(), tenant_name_(), oss_uri_()
   {}
   bool is_valid() const
@@ -4367,7 +4367,7 @@ struct ObRestoreTenantArg : public ObCmdArg {
 struct ObRestorePartitionsArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRestorePartitionsArg()
       : schema_id_(common::OB_INVALID_ID),
         mode_(OB_CREATE_TABLE_MODE_RESTORE),
@@ -4387,7 +4387,7 @@ struct ObRestorePartitionsArg {
 struct ObServerZoneArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObServerZoneArg() : server_(), zone_()
   {}
 
@@ -4415,7 +4415,7 @@ struct ObAdminClearLocationCacheArg : public ObServerZoneArg {};
 struct ObRunJobArg : public ObServerZoneArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRunJobArg() : ObServerZoneArg(), job_()
   {}
 
@@ -4431,16 +4431,16 @@ struct ObRunJobArg : public ObServerZoneArg {
 struct ObUpgradeJobArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum Action { INVALID_ACTION, RUN_UPGRADE_JOB, STOP_UPGRADE_JOB };
 
-  public:
+public:
   ObUpgradeJobArg();
   bool is_valid() const;
   int assign(const ObUpgradeJobArg& other);
   TO_STRING_KV(K_(action), K_(version));
 
-  public:
+public:
   Action action_;
   int64_t version_;
 };
@@ -4448,7 +4448,7 @@ struct ObUpgradeJobArg {
 struct ObAdminMergeArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum Type {
     START_MERGE = 1,
     SUSPEND_MERGE = 2,
@@ -4467,7 +4467,7 @@ struct ObAdminMergeArg {
 struct ObAdminClearRoottableArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminClearRoottableArg() : tenant_name_()
   {}
 
@@ -4484,7 +4484,7 @@ struct ObAdminClearRoottableArg {
 struct ObAdminSetConfigItem {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminSetConfigItem()
       : name_(),
         value_(),
@@ -4511,7 +4511,7 @@ struct ObAdminSetConfigItem {
 struct ObAdminSetConfigArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminSetConfigArg() : items_(), is_inner_(false)
   {}
   ~ObAdminSetConfigArg()
@@ -4530,7 +4530,7 @@ struct ObAdminSetConfigArg {
 struct ObAdminLoadBaselineArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminLoadBaselineArg()
       : tenant_ids_(), sql_id_(), plan_hash_value_(common::OB_INVALID_ID), fixed_(false), enabled_(true)
   {}
@@ -4552,7 +4552,7 @@ struct ObAdminLoadBaselineArg {
 struct ObAdminFlushCacheArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminFlushCacheArg() : cache_type_(CACHE_TYPE_INVALID)
   {}
   virtual ~ObAdminFlushCacheArg()
@@ -4574,7 +4574,7 @@ struct ObAdminFlushCacheArg {
 struct ObAdminMigrateUnitArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminMigrateUnitArg() : unit_id_(0), is_cancel_(false), destination_()
   {}
   ~ObAdminMigrateUnitArg()
@@ -4594,7 +4594,7 @@ struct ObAdminMigrateUnitArg {
 struct ObAutoincSyncArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAutoincSyncArg()
       : tenant_id_(common::OB_INVALID_ID),
         table_id_(common::OB_INVALID_ID),
@@ -4618,7 +4618,7 @@ struct ObAutoincSyncArg {
 struct ObDropReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropReplicaArg() : partition_key_(), member_()
   {}
   bool is_valid() const
@@ -4635,7 +4635,7 @@ struct ObDropReplicaArg {
 struct ObUpdateIndexStatusArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObUpdateIndexStatusArg()
       : ObDDLArg(),
         index_table_id_(common::OB_INVALID_ID),
@@ -4660,7 +4660,7 @@ struct ObUpdateIndexStatusArg : public ObDDLArg {
 struct ObMergeFinishArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMergeFinishArg() : frozen_version_(0)
   {}
 
@@ -4677,7 +4677,7 @@ struct ObMergeFinishArg {
 struct ObMergeErrorArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMergeErrorArg() : error_code_(0)
   {}
 
@@ -4692,7 +4692,7 @@ struct ObMergeErrorArg {
 struct ObAdminRebuildReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminRebuildReplicaArg() : key_(), server_()
   {}
 
@@ -4709,7 +4709,7 @@ struct ObAdminRebuildReplicaArg {
 struct ObDebugSyncActionArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDebugSyncActionArg() : reset_(false), clear_(false)
   {}
 
@@ -4727,7 +4727,7 @@ struct ObDebugSyncActionArg {
 struct ObRootMajorFreezeArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRootMajorFreezeArg()
       : try_frozen_version_(0),
         launch_new_round_(false),
@@ -4756,7 +4756,7 @@ struct ObRootMajorFreezeArg {
 struct ObMinorFreezeArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMinorFreezeArg()
   {}
 
@@ -4780,7 +4780,7 @@ struct ObMinorFreezeArg {
 struct ObRootMinorFreezeArg {
   OB_UNIS_VERSION(2);
 
-  public:
+public:
   ObRootMinorFreezeArg()
   {}
 
@@ -4808,7 +4808,7 @@ struct ObRootMinorFreezeArg {
 struct ObSyncPartitionTableFinishArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSyncPartitionTableFinishArg() : server_(), version_(0)
   {}
 
@@ -4825,7 +4825,7 @@ struct ObSyncPartitionTableFinishArg {
 struct ObSyncPGPartitionMTFinishArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSyncPGPartitionMTFinishArg() : server_(), version_(0)
   {}
 
@@ -4842,7 +4842,7 @@ struct ObSyncPGPartitionMTFinishArg {
 struct ObCheckDanglingReplicaFinishArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckDanglingReplicaFinishArg() : server_(), version_(0), dangling_count_(common::OB_INVALID_ID)
   {}
 
@@ -4860,7 +4860,7 @@ struct ObCheckDanglingReplicaFinishArg {
 struct ObGetMemberListAndLeaderResult final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetMemberListAndLeaderResult()
       : member_list_(), leader_(), self_(), lower_list_(), replica_type_(common::REPLICA_TYPE_MAX), property_()
   {}
@@ -4887,7 +4887,7 @@ struct ObGetMemberListAndLeaderResult final {
 struct ObMemberListAndLeaderArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMemberListAndLeaderArg()
       : member_list_(),
         leader_(),
@@ -4917,7 +4917,7 @@ struct ObMemberListAndLeaderArg {
 struct ObBatchGetRoleArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBatchGetRoleArg() : keys_()
   {}
   virtual ~ObBatchGetRoleArg()
@@ -4931,7 +4931,7 @@ struct ObBatchGetRoleArg {
 struct ObBatchGetRoleResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBatchGetRoleResult() : results_()
   {}
   virtual ~ObBatchGetRoleResult()
@@ -4945,7 +4945,7 @@ struct ObBatchGetRoleResult {
 struct ObSwitchLeaderListArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSwitchLeaderListArg() : partition_key_list_(), leader_addr_()
   {}
   ~ObSwitchLeaderListArg()
@@ -4970,7 +4970,7 @@ struct ObSwitchLeaderListArg {
 struct ObCheckFlashbackInfoArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckFlashbackInfoArg() : min_weak_read_timestamp_(common::OB_INVALID_TIMESTAMP)
   {}
   ~ObCheckFlashbackInfoArg()
@@ -4987,7 +4987,7 @@ struct ObCheckFlashbackInfoArg {
 struct ObCheckFlashbackInfoResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckFlashbackInfoResult()
       : addr_(),
         pkey_(),
@@ -5009,7 +5009,7 @@ struct ObCheckFlashbackInfoResult {
 struct ObGetPartitionCountResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetPartitionCountResult() : partition_count_(0)
   {}
   void reset()
@@ -5104,7 +5104,7 @@ inline void ObRootMajorFreezeArg::reset()
 struct ObCreateUserDefinedFunctionArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateUserDefinedFunctionArg() : ObDDLArg(), udf_()
   {}
   virtual ~ObCreateUserDefinedFunctionArg()
@@ -5121,7 +5121,7 @@ struct ObCreateUserDefinedFunctionArg : public ObDDLArg {
 struct ObDropUserDefinedFunctionArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropUserDefinedFunctionArg() : tenant_id_(common::OB_INVALID_ID), name_(), if_exist_(false)
   {}
   virtual ~ObDropUserDefinedFunctionArg()
@@ -5144,7 +5144,7 @@ struct ObDropUserDefinedFunctionArg : public ObDDLArg {
 struct ObCreateOutlineArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateOutlineArg() : ObDDLArg(), or_replace_(false), outline_info_(), db_name_()
   {}
   virtual ~ObCreateOutlineArg()
@@ -5160,7 +5160,7 @@ struct ObCreateOutlineArg : public ObDDLArg {
 struct ObAlterOutlineArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum AlterOutlineOptions { ADD_OUTLINE_CONTENT = 1, ADD_CONCURRENT_LIMIT, MAX_OPTION };
   ObAlterOutlineArg() : ObDDLArg(), alter_outline_info_(), db_name_()
   {}
@@ -5180,7 +5180,7 @@ struct ObAlterOutlineArg : public ObDDLArg {
 struct ObDropOutlineArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropOutlineArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_(), outline_name_()
   {}
   virtual ~ObDropOutlineArg()
@@ -5200,7 +5200,7 @@ struct ObDropOutlineArg : public ObDDLArg {
 struct ObCreateDbLinkArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateDbLinkArg() : ObDDLArg(), dblink_info_()
   {}
   virtual ~ObCreateDbLinkArg()
@@ -5213,7 +5213,7 @@ struct ObCreateDbLinkArg : public ObDDLArg {
 struct ObDropDbLinkArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropDbLinkArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), dblink_name_()
   {}
   virtual ~ObDropDbLinkArg()
@@ -5227,7 +5227,7 @@ struct ObDropDbLinkArg : public ObDDLArg {
 struct ObUseDatabaseArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObUseDatabaseArg() : ObDDLArg()
   {}
 };
@@ -5235,7 +5235,7 @@ struct ObUseDatabaseArg : public ObDDLArg {
 struct ObFetchAliveServerArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFetchAliveServerArg() : cluster_id_(0)
   {}
   TO_STRING_KV(K_(cluster_id));
@@ -5250,7 +5250,7 @@ struct ObFetchAliveServerArg {
 struct ObFetchAliveServerResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   TO_STRING_KV(K_(active_server_list));
   bool is_valid() const
   {
@@ -5264,7 +5264,7 @@ struct ObFetchAliveServerResult {
 struct ObLoadBaselineArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLoadBaselineArg()
       : is_all_tenant_(false),
         tenant_id_(common::OB_INVALID_TENANT_ID),
@@ -5288,7 +5288,7 @@ struct ObLoadBaselineArg {
 struct ObFlushCacheArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFlushCacheArg() : is_all_tenant_(false), tenant_id_(common::OB_INVALID_TENANT_ID), cache_type_(CACHE_TYPE_INVALID)
   {}
   virtual ~ObFlushCacheArg()
@@ -5307,7 +5307,7 @@ struct ObFlushCacheArg {
 struct ObGetAllSchemaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetAllSchemaArg() : schema_version_(common::OB_INVALID_VERSION)
   {}
   TO_STRING_KV(K_(schema_version), K_(tenant_name));
@@ -5319,7 +5319,7 @@ struct ObGetAllSchemaArg {
 struct ObAdminSetTPArg : public ObServerZoneArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminSetTPArg() : event_no_(0), occur_(0), trigger_freq_(1), error_code_(0)
   {}
 
@@ -5340,7 +5340,7 @@ struct ObAdminSetTPArg : public ObServerZoneArg {
 struct ObCancelTaskArg : public ObServerZoneArg {
   OB_UNIS_VERSION(2);
 
-  public:
+public:
   ObCancelTaskArg() : task_id_()
   {}
   TO_STRING_KV(K_(task_id));
@@ -5350,7 +5350,7 @@ struct ObCancelTaskArg : public ObServerZoneArg {
 struct ObReportSingleReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObReportSingleReplicaArg() : partition_key_()
   {}
   bool is_valid() const
@@ -5366,7 +5366,7 @@ struct ObReportSingleReplicaArg {
 struct ObSetDiskValidArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSetDiskValidArg()
   {}
   bool is_valid() const
@@ -5378,7 +5378,7 @@ struct ObSetDiskValidArg {
 struct ObAdminClearBalanceTaskArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum TaskType { AUTO = 0, MANUAL, ALL, MAX_TYPE };
 
   ObAdminClearBalanceTaskArg() : tenant_ids_(), type_(ALL), zone_names_()
@@ -5395,7 +5395,7 @@ struct ObAdminClearBalanceTaskArg {
 class ObMCLogInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMCLogInfo() : log_id_(common::OB_INVALID_ID), timestamp_(common::OB_INVALID_TIMESTAMP)
   {}
   ~ObMCLogInfo(){};
@@ -5404,7 +5404,7 @@ class ObMCLogInfo {
     return common::OB_INVALID_ID != log_id_ && common::OB_INVALID_TIMESTAMP != timestamp_;
   }
 
-  public:
+public:
   uint64_t log_id_;
   int64_t timestamp_;
   TO_STRING_KV(K_(log_id), K_(timestamp));
@@ -5413,7 +5413,7 @@ class ObMCLogInfo {
 struct ObChangeMemberArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObChangeMemberArg() : partition_key_(), member_(), quorum_(), switch_epoch_(common::OB_INVALID_VERSION)
   {}
   common::ObPartitionKey partition_key_;
@@ -5426,7 +5426,7 @@ struct ObChangeMemberArg {
 struct ObChangeMemberCtx {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObChangeMemberCtx() : partition_key_(), ret_value_(common::OB_SUCCESS), log_info_()
   {}
   common::ObPartitionKey partition_key_;
@@ -5441,7 +5441,7 @@ typedef common::ObSArray<ObChangeMemberCtx> ObChangeMemberCtxs;
 struct ObChangeMemberCtxsWrapper {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObChangeMemberCtxsWrapper() : result_code_(common::OB_SUCCESS), ctxs_()
   {}
   int32_t result_code_;
@@ -5452,7 +5452,7 @@ struct ObChangeMemberCtxsWrapper {
 struct ObMemberMajorSSTableCheckArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMemberMajorSSTableCheckArg() : pkey_(), table_ids_()
   {}
   TO_STRING_KV(K_(pkey), K_(table_ids));
@@ -5463,7 +5463,7 @@ struct ObMemberMajorSSTableCheckArg {
 struct ObForceSwitchILogFileArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObForceSwitchILogFileArg() : force_(true)
   {}
   ~ObForceSwitchILogFileArg()
@@ -5476,7 +5476,7 @@ struct ObForceSwitchILogFileArg {
 struct ObForceSetAllAsSingleReplicaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObForceSetAllAsSingleReplicaArg() : force_(true)
   {}
   ~ObForceSetAllAsSingleReplicaArg()
@@ -5489,7 +5489,7 @@ struct ObForceSetAllAsSingleReplicaArg {
 struct ObForceSetServerListArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObForceSetServerListArg() : server_list_(), replica_num_(0)
   {}
   ~ObForceSetServerListArg()
@@ -5503,7 +5503,7 @@ struct ObForceSetServerListArg {
 struct ObForceCreateSysTableArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObForceCreateSysTableArg()
       : tenant_id_(common::OB_INVALID_TENANT_ID),
         table_id_(common::OB_INVALID_ID),
@@ -5522,7 +5522,7 @@ struct ObForceCreateSysTableArg {
 struct ObForceSetLocalityArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObForceSetLocalityArg() : ObDDLArg(), locality_()
   {}
   virtual ~ObForceSetLocalityArg()
@@ -5540,7 +5540,7 @@ struct ObForceSetLocalityArg : public ObDDLArg {
 struct ObRootSplitPartitionArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRootSplitPartitionArg() : ObDDLArg(), table_id_(common::OB_INVALID_ID)
   {}
   virtual ~ObRootSplitPartitionArg()
@@ -5562,7 +5562,7 @@ struct ObRootSplitPartitionArg : public ObDDLArg {
 struct ObSplitPartitionArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSplitPartitionArg() : split_info_()
   {}
   ~ObSplitPartitionArg()
@@ -5577,14 +5577,14 @@ struct ObSplitPartitionArg {
     split_info_.reset();
   }
 
-  public:
+public:
   share::ObSplitPartition split_info_;
 };
 
 struct ObSplitPartitionResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSplitPartitionResult() : results_()
   {}
   ~ObSplitPartitionResult()
@@ -5603,14 +5603,14 @@ struct ObSplitPartitionResult {
   }
   TO_STRING_KV(K_(results));
 
-  private:
+private:
   common::ObSArray<share::ObPartitionSplitProgress> results_;
 };
 
 struct ObSplitPartitionBatchArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSplitPartitionBatchArg()
   {}
   ~ObSplitPartitionBatchArg()
@@ -5624,14 +5624,14 @@ struct ObSplitPartitionBatchArg {
   DECLARE_TO_STRING;
   share::ObSplitPartition split_info_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSplitPartitionBatchArg);
 };
 
 struct ObSplitPartitionBatchRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSplitPartitionBatchRes() : ret_list_()
   {}
   ~ObSplitPartitionBatchRes()
@@ -5647,14 +5647,14 @@ struct ObSplitPartitionBatchRes {
   // response includes all rets
   common::ObSArray<common::ObPartitionKey> ret_list_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSplitPartitionBatchRes);
 };
 
 struct ObQueryMaxDecidedTransVersionRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObQueryMaxDecidedTransVersionRequest() : partition_array_(), last_max_decided_trans_version_(0)
   {}
   ~ObQueryMaxDecidedTransVersionRequest()
@@ -5673,7 +5673,7 @@ struct ObQueryMaxDecidedTransVersionRequest {
 struct ObQueryMaxDecidedTransVersionResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObQueryMaxDecidedTransVersionResponse() : ret_value_(common::OB_SUCCESS), trans_version_(0)
   {}
   ~ObQueryMaxDecidedTransVersionResponse()
@@ -5693,7 +5693,7 @@ struct ObQueryMaxDecidedTransVersionResponse {
 struct ObQueryIsValidMemberRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObQueryIsValidMemberRequest() : self_addr_(), partition_array_()
   {}
   ~ObQueryIsValidMemberRequest()
@@ -5712,7 +5712,7 @@ struct ObQueryIsValidMemberRequest {
 struct ObQueryIsValidMemberResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObQueryIsValidMemberResponse()
       : ret_value_(common::OB_SUCCESS), partition_array_(), candidates_status_(), ret_array_()
   {}
@@ -5736,7 +5736,7 @@ struct ObQueryIsValidMemberResponse {
 struct ObQueryMaxFlushedILogIdRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObQueryMaxFlushedILogIdRequest() : partition_array_()
   {}
   ~ObQueryMaxFlushedILogIdRequest()
@@ -5753,7 +5753,7 @@ struct ObQueryMaxFlushedILogIdRequest {
 struct ObQueryMaxFlushedILogIdResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObQueryMaxFlushedILogIdResponse() : err_code_(common::OB_SUCCESS), partition_array_(), max_flushed_ilog_ids_()
   {}
   ~ObQueryMaxFlushedILogIdResponse()
@@ -5774,7 +5774,7 @@ struct ObQueryMaxFlushedILogIdResponse {
 struct ObBootstrapArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBootstrapArg()
       : server_list_(),
         cluster_type_(common::PRIMARY_CLUSTER),
@@ -5803,7 +5803,7 @@ struct ObBootstrapArg {
 struct ObBatchStartElectionArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum SwitchType {
     INVALID_TYPE = -1,
     SWITCHOVER,
@@ -5897,14 +5897,14 @@ struct ObBatchStartElectionArg {
   TO_STRING_KV(K_(trace_id), "count", pkeys_.count(), K_(member_list), K_(lease_start_time), K_(leader),
       K_(switch_timestamp), K_(switch_type), K_(pkeys), K_(quorum));
 
-  public:
+public:
   static bool is_valid_switch_type(const int32_t switch_type)
   {
     return (switch_type >= SWITCHOVER && switch_type <= FAILOVER);
   }
   ObPkeyArray pkeys_;
 
-  private:
+private:
   int64_t lease_start_time_;
   common::ObAddr leader_;
   common::ObMemberList member_list_;
@@ -5913,14 +5913,14 @@ struct ObBatchStartElectionArg {
   int64_t quorum_;  // In the failover process, there may be a single copy, so quorum needs to be specified by rs
   common::ObCurTraceId::TraceId trace_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchStartElectionArg);
 };
 
 struct ObBatchFlashbackArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t MAX_COUNT = 128;
   ObBatchFlashbackArg()
       : switchover_timestamp_(0),
@@ -6014,7 +6014,7 @@ struct ObBatchFlashbackArg {
   TO_STRING_KV(K_(switchover_timestamp), K_(flashback_to_ts), K_(flashback_from_ts), K_(leader),
       K_(is_logical_flashback), K_(pkeys), K_(frozen_timestamp), K_(query_end_time), K_(schema_version));
 
-  public:
+public:
   int64_t switchover_timestamp_;
   int64_t flashback_to_ts_;
   common::ObAddr leader_;
@@ -6029,7 +6029,7 @@ struct ObBatchFlashbackArg {
 struct ObAlterClusterInfoArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum OpType {
     INVALID_TYPE = -1,
     SWITCH_TO_STANDBY = 0,
@@ -6087,7 +6087,7 @@ struct ObAlterClusterInfoArg : public ObDDLArg {
     return cstr;
   }
 
-  public:
+public:
   OpType op_type_;
   common::ObProtectionMode mode_;
   bool is_force_;
@@ -6097,7 +6097,7 @@ struct ObAlterClusterInfoArg : public ObDDLArg {
 struct ObAdminClusterArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum AlterClusterType {
     INVALID_TYPE = -1,
     ADD_CLUSTER = 0,
@@ -6107,7 +6107,7 @@ struct ObAdminClusterArg {
     ALTER_CLUSTER,
   };
 
-  public:
+public:
   ObAdminClusterArg()
       : cluster_name_(),
         cluster_id_(common::OB_INVALID_ID),
@@ -6190,13 +6190,13 @@ struct ObAdminClusterArg {
 struct ObClusterActionVerifyArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum VerifyType {
     INVALID_TYPE = -1,
     ADD_CLUSTER_VERIFY = 0,
   };
 
-  public:
+public:
   ObClusterActionVerifyArg() : verify_type_(INVALID_TYPE)
   {}
   ~ObClusterActionVerifyArg()
@@ -6216,13 +6216,13 @@ struct ObClusterActionVerifyArg {
 struct ObDDLNopOpreatorArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDDLNopOpreatorArg() : schema_operation_()
   {}
   ~ObDDLNopOpreatorArg()
   {}
 
-  public:
+public:
   share::schema::ObSchemaOperation schema_operation_;
   bool is_valid() const
   {
@@ -6238,7 +6238,7 @@ struct ObDDLNopOpreatorArg : public ObDDLArg {
   }
   TO_STRING_KV(K_(schema_operation));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLNopOpreatorArg);
 };
 
@@ -6373,7 +6373,7 @@ struct ObEstPartRes {
 };
 
 struct TenantServerUnitConfig {
-  public:
+public:
   TenantServerUnitConfig()
       : tenant_id_(common::OB_INVALID_ID),
         compat_mode_(share::ObWorker::CompatMode::INVALID),
@@ -6400,7 +6400,7 @@ struct TenantServerUnitConfig {
 struct ObGetWRSArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum Scope { INVALID_RANGE = 0, INNER_TABLE, USER_TABLE, ALL_TABLE };
   TO_STRING_KV(K_(tenant_id), K_(scope), K_(need_filter));
   bool is_valid() const;
@@ -6425,7 +6425,7 @@ struct ObGetWRSArg {
 struct ObGetWRSResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetWRSResult() : self_addr_(), err_code_(0), replica_wrs_info_list_()
   {}
 
@@ -6436,7 +6436,7 @@ struct ObGetWRSResult {
     replica_wrs_info_list_.reset();
   }
 
-  public:
+public:
   common::ObAddr self_addr_;
   int err_code_;  // error code
 
@@ -6450,7 +6450,7 @@ struct ObGetWRSResult {
 struct ObTenantSchemaVersions {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantSchemaVersions() : tenant_schema_versions_()
   {}
   common::ObSArray<share::TenantIdAndSchemaVersion> tenant_schema_versions_;
@@ -6477,7 +6477,7 @@ struct ObTenantSchemaVersions {
 struct ObGetSchemaArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetSchemaArg() : reserve_(0), ignore_fail_(false)
   {}
   virtual bool is_allow_when_upgrade() const
@@ -6491,7 +6491,7 @@ struct ObGetSchemaArg : public ObDDLArg {
 struct TenantIdAndStats {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   TenantIdAndStats()
       : tenant_id_(common::OB_INVALID_TENANT_ID),
         refreshed_schema_version_(0),
@@ -6530,7 +6530,7 @@ struct TenantIdAndStats {
 struct ObClusterTenantStats {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   void reset()
   {
     return tenant_stats_array_.reset();
@@ -6550,7 +6550,7 @@ struct ObClusterTenantStats {
 struct ObFinishSchemaSplitArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFinishSchemaSplitArg()
       : tenant_id_(common::OB_INVALID_TENANT_ID), type_(rootserver::ObRsJobType::JOB_TYPE_SCHEMA_SPLIT_V2)
   {}
@@ -6564,7 +6564,7 @@ struct ObFinishSchemaSplitArg : public ObDDLArg {
   }
   TO_STRING_KV(K_(tenant_id), K_(type));
 
-  public:
+public:
   uint64_t tenant_id_;
   rootserver::ObRsJobType type_;
 };
@@ -6572,12 +6572,12 @@ struct ObFinishSchemaSplitArg : public ObDDLArg {
 struct ObBroadcastSchemaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBroadcastSchemaArg() : tenant_id_(common::OB_INVALID_TENANT_ID), schema_version_(common::OB_INVALID_VERSION)
   {}
   void reset();
 
-  public:
+public:
   uint64_t tenant_id_;
   int64_t schema_version_;
   TO_STRING_KV(K_(tenant_id), K_(schema_version));
@@ -6586,12 +6586,12 @@ struct ObBroadcastSchemaArg {
 struct ObCheckMergeFinishArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckMergeFinishArg() : frozen_version_(0)
   {}
   bool is_valid() const;
 
-  public:
+public:
   int64_t frozen_version_;
   TO_STRING_KV(K_(frozen_version));
 };
@@ -6599,7 +6599,7 @@ struct ObCheckMergeFinishArg {
 struct ObGetRecycleSchemaVersionsArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetRecycleSchemaVersionsArg() : tenant_ids_()
   {}
   virtual ~ObGetRecycleSchemaVersionsArg()
@@ -6608,7 +6608,7 @@ struct ObGetRecycleSchemaVersionsArg {
   void reset();
   int assign(const ObGetRecycleSchemaVersionsArg& other);
 
-  public:
+public:
   common::ObSArray<uint64_t> tenant_ids_;
   TO_STRING_KV(K_(tenant_ids));
 };
@@ -6616,7 +6616,7 @@ struct ObGetRecycleSchemaVersionsArg {
 struct ObGetRecycleSchemaVersionsResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetRecycleSchemaVersionsResult() : recycle_schema_versions_()
   {}
   virtual ~ObGetRecycleSchemaVersionsResult()
@@ -6625,7 +6625,7 @@ struct ObGetRecycleSchemaVersionsResult {
   void reset();
   int assign(const ObGetRecycleSchemaVersionsResult& other);
 
-  public:
+public:
   common::ObSArray<share::TenantIdAndSchemaVersion> recycle_schema_versions_;
   TO_STRING_KV(K_(recycle_schema_versions));
 };
@@ -6633,7 +6633,7 @@ struct ObGetRecycleSchemaVersionsResult {
 struct ObGetClusterInfoArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetClusterInfoArg()
       : need_check_sync_(false),
         max_primary_schema_version_(common::OB_INVALID_VERSION),
@@ -6646,7 +6646,7 @@ struct ObGetClusterInfoArg {
   TO_STRING_KV(K_(need_check_sync), K_(max_primary_schema_version), K_(primary_schema_versions), K_(cluster_version),
       K_(standby_became_primary_scn));
 
-  public:
+public:
   bool need_check_sync_;
   int64_t max_primary_schema_version_;              // The largest schema version of the main library system tenant
   ObTenantSchemaVersions primary_schema_versions_;  // The schema version of all tenants of the main library, used to
@@ -6658,7 +6658,7 @@ struct ObGetClusterInfoArg {
 struct ObCheckAddStandbyArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckAddStandbyArg() : cluster_version_(common::OB_INVALID_ID)
   {}
   bool is_valid() const
@@ -6671,14 +6671,14 @@ struct ObCheckAddStandbyArg {
   }
   TO_STRING_KV(K_(cluster_version));
 
-  public:
+public:
   uint64_t cluster_version_;
 };
 
 class ObHaGtsPingRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHaGtsPingRequest()
       : gts_id_(common::OB_INVALID_ID),
         req_id_(common::OB_INVALID_ID),
@@ -6688,7 +6688,7 @@ class ObHaGtsPingRequest {
   ~ObHaGtsPingRequest()
   {}
 
-  public:
+public:
   void reset()
   {
     gts_id_ = common::OB_INVALID_ID;
@@ -6725,7 +6725,7 @@ class ObHaGtsPingRequest {
   }
   TO_STRING_KV(K(gts_id_), K(req_id_), K(epoch_id_), K(request_ts_));
 
-  private:
+private:
   uint64_t gts_id_;
   uint64_t req_id_;
   int64_t epoch_id_;
@@ -6735,7 +6735,7 @@ class ObHaGtsPingRequest {
 class ObHaGtsPingResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHaGtsPingResponse()
       : gts_id_(common::OB_INVALID_ID),
         req_id_(common::OB_INVALID_ID),
@@ -6745,7 +6745,7 @@ class ObHaGtsPingResponse {
   ~ObHaGtsPingResponse()
   {}
 
-  public:
+public:
   void reset()
   {
     gts_id_ = common::OB_INVALID_ID;
@@ -6782,7 +6782,7 @@ class ObHaGtsPingResponse {
   }
   TO_STRING_KV(K(gts_id_), K(req_id_), K(epoch_id_), K(response_ts_));
 
-  private:
+private:
   uint64_t gts_id_;
   uint64_t req_id_;
   int64_t epoch_id_;
@@ -6792,7 +6792,7 @@ class ObHaGtsPingResponse {
 class ObHaGtsGetRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHaGtsGetRequest()
       : gts_id_(common::OB_INVALID_ID),
         self_addr_(),
@@ -6802,7 +6802,7 @@ class ObHaGtsGetRequest {
   ~ObHaGtsGetRequest()
   {}
 
-  public:
+public:
   void reset()
   {
     gts_id_ = common::OB_INVALID_ID;
@@ -6840,7 +6840,7 @@ class ObHaGtsGetRequest {
   }
   TO_STRING_KV(K(gts_id_), K(self_addr_), K(tenant_id_), K(srr_));
 
-  private:
+private:
   uint64_t gts_id_;
   common::ObAddr self_addr_;
   // TODO: To be deleted
@@ -6851,7 +6851,7 @@ class ObHaGtsGetRequest {
 class ObHaGtsGetResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHaGtsGetResponse()
       : gts_id_(common::OB_INVALID_ID),
         tenant_id_(common::OB_INVALID_TENANT_ID),
@@ -6861,7 +6861,7 @@ class ObHaGtsGetResponse {
   ~ObHaGtsGetResponse()
   {}
 
-  public:
+public:
   void reset()
   {
     gts_id_ = common::OB_INVALID_ID;
@@ -6898,7 +6898,7 @@ class ObHaGtsGetResponse {
   }
   TO_STRING_KV(K(gts_id_), K(tenant_id_), K(srr_), K(gts_));
 
-  private:
+private:
   uint64_t gts_id_;
   // TODO: To be deleted
   uint64_t tenant_id_;
@@ -6909,13 +6909,13 @@ class ObHaGtsGetResponse {
 class ObHaGtsHeartbeat {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHaGtsHeartbeat() : gts_id_(common::OB_INVALID_ID), addr_()
   {}
   ~ObHaGtsHeartbeat()
   {}
 
-  public:
+public:
   bool is_valid() const
   {
     return common::is_valid_gts_id(gts_id_) && addr_.is_valid();
@@ -6935,7 +6935,7 @@ class ObHaGtsHeartbeat {
   }
   TO_STRING_KV(K(gts_id_), K(addr_));
 
-  private:
+private:
   uint64_t gts_id_;
   common::ObAddr addr_;
 };
@@ -6943,7 +6943,7 @@ class ObHaGtsHeartbeat {
 class ObHaGtsUpdateMetaRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHaGtsUpdateMetaRequest()
       : gts_id_(common::OB_INVALID_ID),
         epoch_id_(common::OB_INVALID_TIMESTAMP),
@@ -6953,7 +6953,7 @@ class ObHaGtsUpdateMetaRequest {
   ~ObHaGtsUpdateMetaRequest()
   {}
 
-  public:
+public:
   bool is_valid() const
   {
     return common::is_valid_gts_id(gts_id_) && epoch_id_ > 0 && member_list_.get_member_number() > 0 &&
@@ -6985,7 +6985,7 @@ class ObHaGtsUpdateMetaRequest {
   }
   TO_STRING_KV(K(gts_id_), K(epoch_id_), K(member_list_), K(local_ts_));
 
-  private:
+private:
   uint64_t gts_id_;
   int64_t epoch_id_;
   common::ObMemberList member_list_;
@@ -6995,13 +6995,13 @@ class ObHaGtsUpdateMetaRequest {
 class ObHaGtsUpdateMetaResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHaGtsUpdateMetaResponse() : local_ts_(common::OB_INVALID_TIMESTAMP)
   {}
   ~ObHaGtsUpdateMetaResponse()
   {}
 
-  public:
+public:
   bool is_valid() const
   {
     return local_ts_ > 0;
@@ -7016,20 +7016,20 @@ class ObHaGtsUpdateMetaResponse {
   }
   TO_STRING_KV(K(local_ts_));
 
-  private:
+private:
   int64_t local_ts_;
 };
 
 class ObHaGtsChangeMemberRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHaGtsChangeMemberRequest() : gts_id_(common::OB_INVALID_ID), offline_replica_()
   {}
   ~ObHaGtsChangeMemberRequest()
   {}
 
-  public:
+public:
   bool is_valid() const
   {
     return common::is_valid_gts_id(gts_id_) && offline_replica_.is_valid();
@@ -7049,7 +7049,7 @@ class ObHaGtsChangeMemberRequest {
   }
   TO_STRING_KV(K(gts_id_), K(offline_replica_));
 
-  private:
+private:
   uint64_t gts_id_;
   common::ObAddr offline_replica_;
 };
@@ -7057,13 +7057,13 @@ class ObHaGtsChangeMemberRequest {
 class ObHaGtsChangeMemberResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHaGtsChangeMemberResponse() : ret_value_(common::OB_SUCCESS)
   {}
   ~ObHaGtsChangeMemberResponse()
   {}
 
-  public:
+public:
   void set(const int ret_value)
   {
     ret_value_ = ret_value;
@@ -7074,14 +7074,14 @@ class ObHaGtsChangeMemberResponse {
   }
   TO_STRING_KV(K(ret_value_));
 
-  private:
+private:
   int ret_value_;
 };
 
 struct ObClusterInfoArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObClusterInfoArg()
       : cluster_info_(), server_status_(share::OBSERVER_INVALID_STATUS), sync_cluster_ids_(), redo_options_()
   {}
@@ -7089,7 +7089,7 @@ struct ObClusterInfoArg {
   TO_STRING_KV(K_(cluster_info), K_(server_status), K_(sync_cluster_ids), K_(redo_options));
   int assign(const ObClusterInfoArg& other);
 
-  public:
+public:
   share::ObClusterInfo cluster_info_;
   share::ServerServiceStatus server_status_;
   common::ObSEArray<int64_t, 1> sync_cluster_ids_;
@@ -7099,7 +7099,7 @@ struct ObClusterInfoArg {
 struct ObSchemaSnapshotArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSchemaSnapshotArg() : schema_version_(0), frozen_version_(0)
   {}
   bool is_valid() const
@@ -7112,7 +7112,7 @@ struct ObSchemaSnapshotArg {
   }
   TO_STRING_KV(K_(schema_version), K_(frozen_version));
 
-  public:
+public:
   int64_t schema_version_;
   int64_t frozen_version_;
 };
@@ -7122,7 +7122,7 @@ struct ObSchemaSnapshotArg {
 struct ObSchemaSnapshotRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSchemaSnapshotRes();
   bool is_valid() const;
   void reset();
@@ -7131,7 +7131,7 @@ struct ObSchemaSnapshotRes {
       K_(tenant_flashback_scn), K_(failover_timestamp), K_(frozen_status), K_(cluster_name));
   int assign(const ObSchemaSnapshotRes& res);
 
-  public:
+public:
   int64_t schema_version_;
   int64_t frozen_version_;
   common::ObSArray<share::schema::ObTableSchema> table_schemas_;
@@ -7152,7 +7152,7 @@ struct ObSchemaSnapshotRes {
 struct ObRegistClusterArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRegistClusterArg() : cluster_name_(), cluster_id_(common::OB_INVALID_ID), pre_regist_(false), cluster_addr_()
   {}
   bool is_valid() const
@@ -7160,7 +7160,7 @@ struct ObRegistClusterArg {
     return cluster_id_ > 0 && !cluster_name_.empty();
   }
 
-  public:
+public:
   common::ObString cluster_name_;
   uint64_t cluster_id_;
   bool pre_regist_;
@@ -7171,7 +7171,7 @@ struct ObRegistClusterArg {
 struct ObAlterTableResArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAlterTableResArg()
       : schema_type_(share::schema::OB_MAX_SCHEMA),
         schema_id_(common::OB_INVALID_ID),
@@ -7183,7 +7183,7 @@ struct ObAlterTableResArg {
   {}
   void reset();
 
-  public:
+public:
   TO_STRING_KV(K_(schema_type), K_(schema_id), K_(schema_version));
   share::schema::ObSchemaType schema_type_;
   uint64_t schema_id_;
@@ -7193,7 +7193,7 @@ struct ObAlterTableResArg {
 struct ObAlterTableRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAlterTableRes()
       : index_table_id_(common::OB_INVALID_ID),
         constriant_id_(common::OB_INVALID_ID),
@@ -7202,7 +7202,7 @@ struct ObAlterTableRes {
   {}
   void reset();
 
-  public:
+public:
   TO_STRING_KV(K_(index_table_id), K_(constriant_id), K_(schema_version), K_(res_arg_array));
   uint64_t index_table_id_;
   uint64_t constriant_id_;
@@ -7213,7 +7213,7 @@ struct ObAlterTableRes {
 struct ObRegistClusterRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRegistClusterRes() : cluster_idx_(common::OB_INVALID_INDEX)
   {}
   bool is_valid() const
@@ -7231,7 +7231,7 @@ struct ObRegistClusterRes {
   int set_primary_cluster(const share::ObClusterAddr& primary_cluster);
   void reset();
 
-  public:
+public:
   TO_STRING_KV(K_(cluster_idx), K_(login_name));
   int64_t cluster_idx_;
   share::ObClusterInfo::UserNameString login_name_;
@@ -7242,7 +7242,7 @@ struct ObRegistClusterRes {
 struct ObStandbyHeartBeatRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStandbyHeartBeatRes()
       : primary_addr_(),
         standby_addr_(),
@@ -7276,7 +7276,7 @@ struct ObStandbyHeartBeatRes {
     protection_mode_ = common::MAXIMUM_PROTECTION_MODE;
   }
 
-  public:
+public:
   TO_STRING_KV(K_(primary_addr), K_(standby_addr), K_(primary_schema_info), K_(protection_mode));
   share::ObClusterAddr primary_addr_;
   share::ObClusterAddr standby_addr_;
@@ -7288,13 +7288,13 @@ struct ObStandbyHeartBeatRes {
 struct ObGetSwitchoverStatusRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetSwitchoverStatusRes() : switchover_status_(share::ObClusterInfo::I_INVALID), switchover_info_()
   {}
   ~ObGetSwitchoverStatusRes()
   {}
 
-  public:
+public:
   TO_STRING_KV(K_(switchover_status), K_(switchover_info));
   share::ObClusterInfo::InMemorySwitchOverStatus switchover_status_;
   share::ObClusterSwitchoverInfoWrap switchover_info_;
@@ -7303,7 +7303,7 @@ struct ObGetSwitchoverStatusRes {
 struct ObGetTenantSchemaVersionArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetTenantSchemaVersionArg() : tenant_id_(common::OB_INVALID_TENANT_ID)
   {}
   bool is_valid() const
@@ -7318,7 +7318,7 @@ struct ObGetTenantSchemaVersionArg {
 struct ObGetTenantSchemaVersionResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetTenantSchemaVersionResult() : schema_version_(common::OB_INVALID_VERSION)
   {}
   bool is_valid() const
@@ -7333,7 +7333,7 @@ struct ObGetTenantSchemaVersionResult {
 struct ObFinishReplayArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFinishReplayArg() : schema_version_(common::OB_INVALID_VERSION)
   {}
   bool is_valid() const
@@ -7352,7 +7352,7 @@ struct ObFinishReplayArg : public ObDDLArg {
 struct ObTenantMemoryArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantMemoryArg() : tenant_id_(0), memory_size_(0), refresh_interval_(0)
   {}
   bool is_valid() const
@@ -7369,7 +7369,7 @@ struct ObTenantMemoryArg {
 struct ObProfileDDLArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObProfileDDLArg() : ObDDLArg(), schema_(), ddl_type_(), is_cascade_(false)
   {}
   virtual bool is_allow_when_upgrade() const
@@ -7386,7 +7386,7 @@ struct ObProfileDDLArg : public ObDDLArg {
 struct ObCheckServerEmptyArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum Mode { BOOTSTRAP, ADD_SERVER };
 
   ObCheckServerEmptyArg() : mode_(BOOTSTRAP)
@@ -7398,7 +7398,7 @@ struct ObCheckServerEmptyArg {
 struct ObForceDropSchemaArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObForceDropSchemaArg()
       : ObDDLArg(),
         recycle_schema_version_(common::OB_INVALID_VERSION),
@@ -7431,7 +7431,7 @@ struct ObForceDropSchemaArg : public ObDDLArg {
 struct ObArchiveLogArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObArchiveLogArg() : enable_(true)
   {}
   TO_STRING_KV(K_(enable));
@@ -7441,7 +7441,7 @@ struct ObArchiveLogArg {
 struct ObBackupDatabaseArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBackupDatabaseArg();
   bool is_valid() const;
   TO_STRING_KV(K_(tenant_id), K_(is_incremental), K_(passwd), K_(encryption_mode));
@@ -7454,7 +7454,7 @@ struct ObBackupDatabaseArg {
 struct ObBackupManageArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum Type {
     CANCEL_BACKUP = 0,
     SUSPEND_BACKUP = 1,
@@ -7480,7 +7480,7 @@ struct ObBackupManageArg {
 struct ObCheckStandbyCanAccessArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckStandbyCanAccessArg()
       : failover_epoch_(common::OB_INVALID_VERSION),
         last_merged_version_(common::OB_INVALID_VERSION),
@@ -7504,7 +7504,7 @@ struct ObCheckStandbyCanAccessArg {
 struct ObPhysicalFlashbackResultArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPhysicalFlashbackResultArg()
       : min_version_(common::OB_INVALID_VERSION), max_version_(common::OB_INVALID_VERSION), enable_result_(false)
   {}
@@ -7519,7 +7519,7 @@ struct ObPhysicalFlashbackResultArg {
 struct ObCheckPhysicalFlashbackArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckPhysicalFlashbackArg()
       : merged_version_(common::OB_INVALID_VERSION), flashback_scn_(common::OB_INVALID_VERSION)
   {}
@@ -7527,7 +7527,7 @@ struct ObCheckPhysicalFlashbackArg {
   {}
   TO_STRING_KV(K_(merged_version), K_(flashback_scn));
 
-  public:
+public:
   int64_t merged_version_;
   int64_t flashback_scn_;
 };
@@ -7535,7 +7535,7 @@ struct ObCheckPhysicalFlashbackArg {
 struct CheckLeaderRpcIndex {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int64_t switchover_timestamp_;  // Switch logo
   int64_t epoch_;  //(switchover_timestamp, epoch) uniquely identifies a statistical information during a switching
                    // process
@@ -7560,7 +7560,7 @@ struct CheckLeaderRpcIndex {
 struct ObBatchWriteCutdataClogArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBatchWriteCutdataClogArg()
   {
     reset();
@@ -7631,7 +7631,7 @@ struct ObBatchWriteCutdataClogArg {
   TO_STRING_KV(
       K_(switchover_timestamp), K_(pkeys), K_(flashback_ts), K_(schema_version), K_(trace_id), K_(query_end_time));
 
-  public:
+public:
   static const int64_t MAX_COUNT = 1024;
   int64_t switchover_timestamp_;
   ObPkeyArray pkeys_;
@@ -7645,7 +7645,7 @@ struct ObBatchWriteCutdataClogArg {
 struct ObBatchCheckLeaderArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPkeyArray pkeys_;
   CheckLeaderRpcIndex index_;
   common::ObCurTraceId::TraceId trace_id_;  // TODO: set trace to facilitate tracking
@@ -7675,7 +7675,7 @@ struct ObBatchCheckLeaderArg {
 struct ObBatchCheckRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   common::ObSArray<bool> results_;  // Corresponding to the above pkeys--, true means there is a master, false means no
                                     // master
   CheckLeaderRpcIndex index_;       // Same value as ObBatchCheckLeaderArg
@@ -7693,7 +7693,7 @@ struct ObBatchCheckRes {
 struct ObRebuildIndexInRestoreArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRebuildIndexInRestoreArg() : tenant_id_(common::OB_INVALID_TENANT_ID)
   {}
   ~ObRebuildIndexInRestoreArg()
@@ -7707,7 +7707,7 @@ struct ObRebuildIndexInRestoreArg {
     tenant_id_ = common::OB_INVALID_TENANT_ID;
   }
 
-  public:
+public:
   uint64_t tenant_id_;
   TO_STRING_KV(K_(tenant_id));
 };
@@ -7715,7 +7715,7 @@ struct ObRebuildIndexInRestoreArg {
 struct ObUpdateTableSchemaVersionArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObUpdateTableSchemaVersionArg()
       : tenant_id_(common::OB_INVALID_TENANT_ID),
         table_id_(common::OB_INVALID_ID),
@@ -7733,7 +7733,7 @@ struct ObUpdateTableSchemaVersionArg : public ObDDLArg {
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(schema_version));
   void reset();
 
-  public:
+public:
   uint64_t tenant_id_;
   uint64_t table_id_;
   int64_t schema_version_;
@@ -7742,7 +7742,7 @@ struct ObUpdateTableSchemaVersionArg : public ObDDLArg {
 struct ObRestoreModifySchemaArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum TYPE {
     INVALID_TYPE,
     RESET_DATABASE_PRIMARY_ZONE,
@@ -7755,7 +7755,7 @@ struct ObRestoreModifySchemaArg : public ObDDLArg {
     MAX_TYPE,
   };
 
-  public:
+public:
   ObRestoreModifySchemaArg() : type_(INVALID_TYPE), schema_id_(common::OB_INVALID_ID)
   {}
   ~ObRestoreModifySchemaArg()
@@ -7763,7 +7763,7 @@ struct ObRestoreModifySchemaArg : public ObDDLArg {
   bool is_valid() const;
   TO_STRING_KV(K_(type), K_(schema_id));
 
-  public:
+public:
   TYPE type_;
   uint64_t schema_id_;
 };
@@ -7771,7 +7771,7 @@ struct ObRestoreModifySchemaArg : public ObDDLArg {
 struct ObCheckDeploymentModeArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckDeploymentModeArg() : single_zone_deployment_on_(false)
   {}
   TO_STRING_KV(K_(single_zone_deployment_on));
@@ -7781,7 +7781,7 @@ struct ObCheckDeploymentModeArg {
 struct ObPreProcessServerArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPreProcessServerArg() : server_(), rescue_server_()
   {}
   TO_STRING_KV(K_(server));
@@ -7791,7 +7791,7 @@ struct ObPreProcessServerArg {
   }
   int init(const common::ObAddr& server, const common::ObAddr& rescue_server);
 
-  public:
+public:
   common::ObAddr server_;
   common::ObAddr rescue_server_;
 };
@@ -7799,7 +7799,7 @@ struct ObPreProcessServerArg {
 struct ObAdminRollingUpgradeArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAdminRollingUpgradeArg() : stage_(OB_UPGRADE_STAGE_MAX)
   {}
   ~ObAdminRollingUpgradeArg()
@@ -7813,7 +7813,7 @@ struct ObAdminRollingUpgradeArg {
 struct ObPreProcessServerReplyArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPreProcessServerReplyArg() : server_(), rescue_server_(), ret_code_(common::OB_SUCCESS)
   {}
   TO_STRING_KV(K_(server), K_(rescue_server), K_(ret_code));
@@ -7823,7 +7823,7 @@ struct ObPreProcessServerReplyArg {
   }
   int init(const common::ObAddr& server, const common::ObAddr& rescue_server, const int ret_code);
 
-  public:
+public:
   common::ObAddr server_;
   common::ObAddr rescue_server_;
   int ret_code_;
@@ -7832,7 +7832,7 @@ struct ObPreProcessServerReplyArg {
 struct ObRsListArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRsListArg() : rs_list_(), master_rs_()
   {}
   ~ObRsListArg()
@@ -7849,7 +7849,7 @@ struct ObRsListArg {
 struct ObLocationRpcRenewArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLocationRpcRenewArg() : keys_()
   {}
   ObLocationRpcRenewArg(common::ObIAllocator& allocator);
@@ -7867,7 +7867,7 @@ struct ObLocationRpcRenewArg {
 struct ObLocationRpcRenewResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLocationRpcRenewResult() : results_()
   {}
   ~ObLocationRpcRenewResult()
@@ -7884,7 +7884,7 @@ struct ObLocationRpcRenewResult {
 struct ObGetMasterKeyResultArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGetMasterKeyResultArg() : str_(share::OB_CLOG_ENCRYPT_MASTER_KEY_LEN, 0, buf_)
   {}
   ~ObGetMasterKeyResultArg()
@@ -7901,7 +7901,7 @@ struct ObGetMasterKeyResultArg {
 struct ObKillPartTransCtxArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObKillPartTransCtxArg()
   {}
   ~ObKillPartTransCtxArg()
@@ -7918,7 +7918,7 @@ struct ObKillPartTransCtxArg {
 struct ObPhysicalRestoreResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPhysicalRestoreResult();
   virtual ~ObPhysicalRestoreResult()
   {}
@@ -7937,7 +7937,7 @@ struct ObPhysicalRestoreResult {
 struct ObExecuteRangePartSplitArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObExecuteRangePartSplitArg() : ObDDLArg(), partition_key_(), rowkey_()
   {}
   virtual ~ObExecuteRangePartSplitArg()
@@ -7958,7 +7958,7 @@ struct ObExecuteRangePartSplitArg : public ObDDLArg {
 struct ObRefreshTimezoneArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRefreshTimezoneArg() : tenant_id_(common::OB_INVALID_TENANT_ID)
   {}
   ObRefreshTimezoneArg(uint64_t tenant_id) : tenant_id_(tenant_id)
@@ -7976,7 +7976,7 @@ struct ObRefreshTimezoneArg {
 struct ObCreateRestorePointArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCreateRestorePointArg() : tenant_id_(0), name_()
   {}
   int assign(const ObCreateRestorePointArg& arg)
@@ -7998,7 +7998,7 @@ struct ObCreateRestorePointArg {
 struct ObDropRestorePointArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDropRestorePointArg() : tenant_id_(0), name_()
   {}
   int assign(const ObDropRestorePointArg& arg)
@@ -8020,7 +8020,7 @@ struct ObDropRestorePointArg {
 struct ObCheckBuildIndexTaskExistArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCheckBuildIndexTaskExistArg() : tenant_id_(0), task_id_(), scheduler_id_(0)
   {}
 

@@ -34,7 +34,7 @@ class ObKVCacheIterator;
 
 template <class Key, class Value>
 class ObIKVCache {
-  public:
+public:
   virtual int put(const Key& key, const Value& value, bool overwrite = true) = 0;
   virtual int put_and_fetch(
       const Key& key, const Value& value, const Value*& pvalue, ObKVCacheHandle& handle, bool overwrite = true) = 0;
@@ -48,18 +48,18 @@ class ObIKVCache {
 
 template <class Key, class Value>
 class ObKVCache : public ObIKVCache<Key, Value> {
-  public:
+public:
   ObKVCache();
   virtual ~ObKVCache();
   int init(const char* cache_name, const int64_t priority = 1);
   void destroy();
   int set_priority(const int64_t priority);
-  virtual int put(const Key& key, const Value& value, bool overwrite = true);
-  virtual int put_and_fetch(
-      const Key& key, const Value& value, const Value*& pvalue, ObKVCacheHandle& handle, bool overwrite = true);
-  virtual int get(const Key& key, const Value*& pvalue, ObKVCacheHandle& handle);
+  virtual int put(const Key& key, const Value& value, bool overwrite = true) override;
+  virtual int put_and_fetch(const Key& key, const Value& value, const Value*& pvalue, ObKVCacheHandle& handle,
+      bool overwrite = true) override;
+  virtual int get(const Key& key, const Value*& pvalue, ObKVCacheHandle& handle) override;
   int get_iterator(ObKVCacheIterator& iter);
-  virtual int erase(const Key& key);
+  virtual int erase(const Key& key) override;
   virtual int alloc(const uint64_t tenant_id, const int64_t key_size, const int64_t value_size, ObKVCachePair*& kvpair,
       ObKVCacheHandle& handle, ObKVCacheInstHandle& inst_handle) override;
   int64_t size(const uint64_t tenant_id = OB_SYS_TENANT_ID) const;
@@ -73,7 +73,7 @@ class ObKVCache : public ObIKVCache<Key, Value> {
     return cache_id_;
   }
 
-  private:
+private:
   bool inited_;
   int64_t cache_id_;
 };
@@ -81,7 +81,7 @@ class ObKVCache : public ObIKVCache<Key, Value> {
 // working set is a special cache that limit memory used
 template <class Key, class Value>
 class ObCacheWorkingSet : public ObIKVCache<Key, Value> {
-  public:
+public:
   ObCacheWorkingSet();
   virtual ~ObCacheWorkingSet();
 
@@ -105,7 +105,7 @@ class ObCacheWorkingSet : public ObIKVCache<Key, Value> {
   virtual int alloc(const uint64_t tenant_id, const int64_t key_size, const int64_t value_size, ObKVCachePair*& kvpair,
       ObKVCacheHandle& handle, ObKVCacheInstHandle& inst_handle) override;
 
-  private:
+private:
   bool inited_;
   uint64_t tenant_id_;
   ObKVCache<Key, Value>* cache_;
@@ -116,7 +116,7 @@ class ObKVCacheHandle;
 class ObKVGlobalCache : public lib::ObICacheWasher {
   friend class observer::ObServerMemoryCutter;
 
-  public:
+public:
   static ObKVGlobalCache& get_instance();
   int init(const int64_t bucket_num = DEFAULT_BUCKET_NUM, const int64_t max_cache_size = DEFAULT_MAX_CACHE_SIZE,
       const int64_t block_size = lib::ACHUNK_SIZE, const int64_t cache_wash_interval = 0);
@@ -139,7 +139,7 @@ class ObKVGlobalCache : public lib::ObICacheWasher {
   virtual int sync_wash_mbs(const uint64_t tenant_id, const int64_t wash_size, const bool wash_single_mb,
       lib::ObICacheWasher::ObCacheMemBlock*& wash_blocks);
 
-  private:
+private:
   template <class Key, class Value>
   friend class ObIKVCache;
   template <class Key, class Value>
@@ -178,7 +178,7 @@ class ObKVGlobalCache : public lib::ObICacheWasher {
   void replace_map();
   int get_cache_id(const char* cache_name, int64_t& cache_id);
 
-  private:
+private:
   static const int64_t DEFAULT_BUCKET_NUM = 10000000L;
   static const int64_t DEFAULT_MAX_CACHE_SIZE = 1024L * 1024L * 1024L * 1024L;  // 1T
   static const int64_t MAP_ONCE_CLEAN_NUM = 100000;
@@ -190,9 +190,9 @@ class ObKVGlobalCache : public lib::ObICacheWasher {
   static const int64_t MAX_BUCKET_NUM_LEVEL = 6;
   static const int64_t bucket_num_array_[MAX_BUCKET_NUM_LEVEL];
 
-  private:
+private:
   class KVStoreWashTask : public ObTimerTask {
-    public:
+  public:
     KVStoreWashTask()
     {}
     virtual ~KVStoreWashTask()
@@ -203,7 +203,7 @@ class ObKVGlobalCache : public lib::ObICacheWasher {
     }
   };
   class KVMapReplaceTask : public ObTimerTask {
-    public:
+  public:
     KVMapReplaceTask()
     {}
     virtual ~KVMapReplaceTask()
@@ -214,7 +214,7 @@ class ObKVGlobalCache : public lib::ObICacheWasher {
     }
   };
 
-  private:
+private:
   bool inited_;
   // map
   ObKVCacheMap map_;
@@ -238,7 +238,7 @@ class ObKVGlobalCache : public lib::ObICacheWasher {
 };
 
 class ObKVCacheHandle {
-  public:
+public:
   ObKVCacheHandle();
   virtual ~ObKVCacheHandle();
   ObKVCacheHandle(const ObKVCacheHandle& other);
@@ -250,7 +250,7 @@ class ObKVCacheHandle {
   }
   TO_STRING_KV(KP_(mb_handle));
 
-  private:
+private:
   template <class Key, class Value>
   friend class ObIKVCache;
   template <class Key, class Value>
@@ -262,7 +262,7 @@ class ObKVCacheHandle {
 };
 
 class ObKVCacheIterator {
-  public:
+public:
   ObKVCacheIterator();
   virtual ~ObKVCacheIterator();
   int init(const int64_t cache_id, ObKVCacheMap* map);
@@ -278,7 +278,7 @@ class ObKVCacheIterator {
   int get_next_kvpair(const Key*& key, const Value*& value, ObKVCacheHandle& handle);
   void reset();
 
-  private:
+private:
   int64_t cache_id_;
   ObKVCacheMap* map_;
   int64_t pos_;

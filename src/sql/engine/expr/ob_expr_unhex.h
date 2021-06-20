@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprUnhex : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprUnhex(common::ObIAllocator& alloc);
   virtual ~ObExprUnhex();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
@@ -27,7 +27,7 @@ class ObExprUnhex : public ObStringExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_unhex(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUnhex);
 };
 

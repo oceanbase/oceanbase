@@ -23,7 +23,7 @@ class ObScanner;
 }
 namespace sql {
 class ObIIntermResultItem {
-  public:
+public:
   ObIIntermResultItem() : row_count_(0), data_len_(0)
   {}
   virtual ~ObIIntermResultItem()
@@ -47,7 +47,7 @@ class ObIIntermResultItem {
 
   VIRTUAL_TO_STRING_KV(K_(row_count), K_(data_len));
 
-  protected:
+protected:
   int64_t row_count_;
   int64_t data_len_;
 
@@ -58,7 +58,7 @@ class ObDiskIntermResultItem;
 class ObIntermResultItem : public ObIIntermResultItem {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObIntermResultItem(const char* label = common::ObModIds::OB_SQL_EXECUTOR_INTERM_RESULT_ITEM,
       uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
   virtual ~ObIntermResultItem();
@@ -87,16 +87,16 @@ class ObIntermResultItem : public ObIIntermResultItem {
 
   INHERIT_TO_STRING_KV("iinterm_result", ObIIntermResultItem, KP_(data_buf));
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   char* data_buf_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIntermResultItem);
 };
 
 class ObDiskIntermResultItem : public ObIIntermResultItem {
-  public:
+public:
   ObDiskIntermResultItem();
   virtual ~ObDiskIntermResultItem();
 
@@ -119,7 +119,7 @@ class ObDiskIntermResultItem : public ObIIntermResultItem {
 
   INHERIT_TO_STRING_KV("iinterm_result", ObIIntermResultItem, K_(fd), K_(offset), K_(tenant_id));
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t fd_;
   int64_t dir_id_;

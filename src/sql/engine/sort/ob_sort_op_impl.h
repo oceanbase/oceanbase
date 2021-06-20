@@ -31,7 +31,7 @@ struct ObSortOpChunk : public common::ObDLinkBase<ObSortOpChunk> {
   ObChunkDatumStore::Iterator iter_;
   const ObChunkDatumStore::StoredRow* row_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSortOpChunk);
 };
 
@@ -66,7 +66,7 @@ struct ObSortOpChunk : public common::ObDLinkBase<ObSortOpChunk> {
  * ems/EMS: external merge sort
  */
 class ObSortOpImpl {
-  public:
+public:
   static const int64_t EXTEND_MULTIPLE = 2;
   static const int64_t MAX_MERGE_WAYS = 256;
   static const int64_t INMEMORY_MERGE_SORT_WARN_WAYS = 10000;
@@ -159,7 +159,7 @@ class ObSortOpImpl {
   void unregister_profile();
 
   class Compare {
-    public:
+  public:
     Compare();
     int init(const ObIArray<ObSortFieldCollation>* sort_collations, const ObIArray<ObSortCmpFunc>* sort_cmp_funs);
 
@@ -189,17 +189,17 @@ class ObSortOpImpl {
       new (this) Compare();
     }
 
-    public:
+  public:
     int ret_;
     const ObIArray<ObSortFieldCollation>* sort_collations_;
     const ObIArray<ObSortCmpFunc>* sort_cmp_funs_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(Compare);
   };
 
   class CopyableComparer {
-    public:
+  public:
     CopyableComparer(Compare& compare) : compare_(compare)
     {}
     bool operator()(const ObChunkDatumStore::StoredRow* l, const ObChunkDatumStore::StoredRow* r)
@@ -209,9 +209,9 @@ class ObSortOpImpl {
     Compare& compare_;
   };
 
-  protected:
+protected:
   class MemEntifyFreeGuard {
-    public:
+  public:
     explicit MemEntifyFreeGuard(lib::MemoryContext*& entify) : entify_(entify)
     {}
     ~MemEntifyFreeGuard()
@@ -273,7 +273,7 @@ class ObSortOpImpl {
 
   DISALLOW_COPY_AND_ASSIGN(ObSortOpImpl);
 
-  protected:
+protected:
   typedef common::ObBinaryHeap<ObChunkDatumStore::StoredRow**, Compare, 16> IMMSHeap;
   typedef common::ObBinaryHeap<ObSortOpChunk*, Compare, MAX_MERGE_WAYS> EMSHeap;
   static const int64_t MAX_ROW_CNT = 268435456;  // (2G / 8)
@@ -312,7 +312,7 @@ class ObSortOpImpl {
 };
 
 class ObPrefixSortImpl : public ObSortOpImpl {
-  public:
+public:
   ObPrefixSortImpl();
 
   // init && start fetch %op rows
@@ -325,13 +325,13 @@ class ObPrefixSortImpl : public ObSortOpImpl {
   void reuse();
   void reset();
 
-  private:
+private:
   // fetch rows in same prefix && do sort, set %next_prefix_row_ to NULL
   // when all child rows are fetched.
   int fetch_rows(const common::ObIArray<ObExpr*>& all_exprs);
   using ObSortOpImpl::init;
 
-  private:
+private:
   int64_t prefix_pos_;
   const ObIArray<ObSortFieldCollation>* full_sort_collations_;
   const ObIArray<ObSortCmpFunc>* full_sort_cmp_funs_;
@@ -349,7 +349,7 @@ class ObPrefixSortImpl : public ObSortOpImpl {
 };
 
 class ObUniqueSortImpl : public ObSortOpImpl {
-  public:
+public:
   ObUniqueSortImpl() : prev_row_(NULL), prev_buf_size_(0)
   {}
 
@@ -383,17 +383,17 @@ class ObUniqueSortImpl : public ObSortOpImpl {
     return ObSortOpImpl::rewind();
   }
 
-  private:
+private:
   int save_prev_row(const ObChunkDatumStore::StoredRow& sr);
   void free_prev_row();
 
-  private:
+private:
   ObChunkDatumStore::StoredRow* prev_row_;
   int64_t prev_buf_size_;
 };
 
 class ObInMemoryTopnSortImpl {
-  public:
+public:
   ObInMemoryTopnSortImpl();
   virtual ~ObInMemoryTopnSortImpl();
   int init(const int64_t tenant_id, int64_t prefix_pos_, const ObIArray<ObSortFieldCollation>* sort_collations,
@@ -425,7 +425,7 @@ class ObInMemoryTopnSortImpl {
     is_fetch_with_ties_ = is_fetch_with_ties;
   }
   // TO_STRING_KV(K_(sort_array_pos));
-  private:
+private:
   // Optimize mem usage/performance of top-n sort:
   // Record buf_len of each allocated row. When old row pop-ed out of the heap
   // and has enough space for new row, use the space of old row to store new row
@@ -457,7 +457,7 @@ class ObInMemoryTopnSortImpl {
     }
   };
 
-  private:
+private:
   int adjust_topn_heap(const common::ObIArray<ObExpr*>& exprs);
   int convert_row(const SortStoredRow* sr, const common::ObIArray<ObExpr*>& exprs);
   int check_block_row(const common::ObIArray<ObExpr*>& exprs, const SortStoredRow* last_row, bool& is_cur_block);
@@ -466,7 +466,7 @@ class ObInMemoryTopnSortImpl {
     return prefix_pos_ > 0;
   }
 
-  private:
+private:
   static const int64_t STORE_ROW_HEADER_SIZE = sizeof(SortStoredRow);
   static const int64_t STORE_ROW_EXTRA_SIZE = sizeof(uint64_t);
   // data members

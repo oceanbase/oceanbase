@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace common {
 class ObFifoArena;
 class ObHandleList {
-  public:
+public:
   typedef ObDLink DLink;
   struct DList {
     DLink head_;
@@ -163,18 +163,18 @@ class ObHandleList {
     return total_list_.next(iter);
   }
 
-  protected:
+protected:
   void set_frozen_(Handle& handle);
   int64_t alloc_id()
   {
     return ATOMIC_AAF(&id_, 1);
   }
 
-  private:
+private:
   void update_hazard();
   int64_t calc_hazard();
 
-  private:
+private:
   int64_t id_;
   DList total_list_;
   DList active_list_;

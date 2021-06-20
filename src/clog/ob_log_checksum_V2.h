@@ -18,13 +18,13 @@
 namespace oceanbase {
 namespace clog {
 class ObILogChecksum {
-  public:
+public:
   ObILogChecksum()
   {}
   virtual ~ObILogChecksum()
   {}
 
-  public:
+public:
   // called by leader/follower when handle_index_log_()
   virtual int acquire_accum_checksum(const int64_t data_checksum, int64_t& accum_checksum) = 0;
   // called when slide out from sw
@@ -37,12 +37,12 @@ class ObILogChecksum {
 };
 
 class ObLogChecksum : public ObILogChecksum {
-  public:
+public:
   ObLogChecksum();
   virtual ~ObLogChecksum()
   {}
 
-  public:
+public:
   int init(uint64_t log_id, const int64_t accum_checksum, const common::ObPartitionKey& partition_key);
   virtual int acquire_accum_checksum(const int64_t data_checksum, int64_t& accum_checksum);
   virtual int verify_accum_checksum(const int64_t data_checksum, const int64_t accum_checksum);
@@ -51,13 +51,13 @@ class ObLogChecksum : public ObILogChecksum {
   virtual void set_verify_checksum(const uint64_t log_id, const int64_t verify_checksum);
   virtual int64_t get_verify_checksum() const;
 
-  private:
+private:
   bool is_inited_;
   common::ObPartitionKey partition_key_;
   int64_t accum_checksum_;
   int64_t verify_checksum_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogChecksum);
 };
 

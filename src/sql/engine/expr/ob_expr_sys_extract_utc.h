@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprSysExtractUtc : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSysExtractUtc(common::ObIAllocator& alloc);
   virtual ~ObExprSysExtractUtc()
   {}
@@ -28,7 +28,7 @@ class ObExprSysExtractUtc : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_sys_extract_utc(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprSysExtractUtc);
 };

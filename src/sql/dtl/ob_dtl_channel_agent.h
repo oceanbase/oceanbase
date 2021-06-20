@@ -32,7 +32,7 @@ class ObDtlRpcChannel;
 class ObDtlLocalChannel;
 
 class ObDtlBufEncoder {
-  public:
+public:
   ObDtlBufEncoder() : use_row_store_(false), tenant_id_(500), buffer_(nullptr), msg_writer_(nullptr)
   {}
   ~ObDtlBufEncoder()
@@ -71,7 +71,7 @@ class ObDtlBufEncoder {
     return buffer_;
   }
 
-  private:
+private:
   int64_t use_row_store_;
   int64_t tenant_id_;
   ObDtlLinkedBuffer* buffer_;
@@ -82,7 +82,7 @@ class ObDtlBufEncoder {
 };
 
 class ObDtlBcastService {
-  public:
+public:
   ObDtlBcastService()
       : server_addr_(),
         bcast_buf_(nullptr),
@@ -130,7 +130,7 @@ class ObDtlChanAgent {
     TO_STRING_KV(K(server_addr_), K(ch_count_));
   };
 
-  public:
+public:
   ObDtlChanAgent()
       : init_(false),
         local_channels_(),
@@ -149,12 +149,12 @@ class ObDtlChanAgent {
       int64_t tenant_id, int64_t timeout_ts);
   void destroy();
 
-  private:
+private:
   int switch_buffer(int64_t need_size);
   int send_last_buffer(ObDtlLinkedBuffer*& last_buffer);
   int inner_broadcast_row(const ObDtlMsg& msg, ObEvalCtx* eval_ctx, bool is_eof);
 
-  private:
+private:
   bool init_;
   // use to allocate broadcast service.
   common::ObArenaAllocator allocator_;

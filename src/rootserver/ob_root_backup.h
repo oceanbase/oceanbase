@@ -98,14 +98,14 @@ struct ObTenantBackupMetaInfo {
 };
 
 class ORootBackupIdling : public ObThreadIdling {
-  public:
+public:
   explicit ORootBackupIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual int64_t get_idle_interval_us();
 };
 
 class ObRootBackup : public ObRsReentrantThread, public ObIBackupScheduler {
-  public:
+public:
   ObRootBackup();
   virtual ~ObRootBackup();
   int init(common::ObServerConfig& cfg, share::schema::ObMultiVersionSchemaService& schema_service,
@@ -136,7 +136,7 @@ class ObRootBackup : public ObRsReentrantThread, public ObIBackupScheduler {
   void reset_tenant_backup_meta_info();
   int check_can_backup();
 
-  private:
+private:
   int get_need_backup_tenant_ids(common::ObIArray<uint64_t>& tenant_ids);
   int get_need_backup_info(const uint64_t tenant_id, share::ObBackupInfoManager& info_manager, bool& need_add);
   int get_all_tenant_ids(common::ObIArray<uint64_t>& tenant_ids);
@@ -213,7 +213,7 @@ class ObRootBackup : public ObRsReentrantThread, public ObIBackupScheduler {
       share::ObBackupInfoManager& info_manager);
   int start_trans(ObTimeoutCtx& timeout_ctx, share::ObBackupItemTransUpdater& updater);
 
-  private:
+private:
   bool is_inited_;
   common::ObServerConfig* config_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
@@ -235,12 +235,12 @@ class ObRootBackup : public ObRsReentrantThread, public ObIBackupScheduler {
   share::ObIBackupLeaseService* backup_lease_service_;
   ObRestorePointService* restore_point_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRootBackup);
 };
 
 class ObTenantBackup {
-  public:
+public:
   ObTenantBackup();
   virtual ~ObTenantBackup()
   {}
@@ -250,7 +250,7 @@ class ObTenantBackup {
       share::ObIBackupLeaseService& backup_lease_service);
   int do_backup();
 
-  private:
+private:
   int get_tenant_backup_task_info(share::ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans);
   int do_scheduler();
   int do_generate(const share::ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans);
@@ -310,11 +310,11 @@ class ObTenantBackup {
   int commit_trans(ObMySQLTransaction& trans);
   int start_trans(ObTimeoutCtx& timeout_ctx, ObMySQLTransaction& trans);
 
-  private:
+private:
   static const int64_t MAX_CHECK_INTERVAL = 10 * 1000 * 1000;  // 10s
   static const int64_t PG_TASK_MAX_RETRY_NUM = 64;
 
-  private:
+private:
   bool is_inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   common::ObMySQLProxy* sql_proxy_;
@@ -334,12 +334,12 @@ class ObTenantBackup {
   int64_t total_partition_count_;
   share::ObIBackupLeaseService* backup_lease_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantBackup);
 };
 
 class ObBackupUtil {
-  public:
+public:
   ObBackupUtil()
   {}
   virtual ~ObBackupUtil()

@@ -31,7 +31,7 @@ using namespace oceanbase::blocksstable;
 using oceanbase::sql::test::ObFakeTable;
 
 class TestMergeSort : public ObMergeSort {
-  public:
+public:
   TestMergeSort(ObIAllocator& alloc) : ObMergeSort(alloc)
   {}
   ~TestMergeSort()
@@ -45,7 +45,7 @@ class TestMergeSortTest : public oceanbase::blocksstable::TestDataFilePrepare {
   static const int64_t MACRO_BLOCK_COUNT = 50 * 1024;
   static const uint64_t TENATN_ID = 1;
 
-  public:
+public:
   TestMergeSortTest();
   virtual ~TestMergeSortTest();
   virtual void SetUp();
@@ -53,18 +53,18 @@ class TestMergeSortTest : public oceanbase::blocksstable::TestDataFilePrepare {
   int init_tenant_mgr();
   void destroy_tenant_mgr();
 
-  private:
+private:
   // disallow copy
   TestMergeSortTest(const TestMergeSortTest& other);
   TestMergeSortTest& operator=(const TestMergeSortTest& other);
 
-  protected:
+protected:
   typedef ObSArray<ObSortColumn> ObSortColumns;
   void sort_test(int64_t run_count, int64_t row_count, int64_t sort_col1, ObCollationType cs_type1, int64_t sort_col2,
       ObCollationType cs_type2);
   void sort_exception_test(int expect_ret);
 
-  private:
+private:
   int init_op(TestMergeSort& merge_sort, ObFakeTable& input_table, ObSortColumns& sort_cols, int64_t row_count,
       int64_t sort_col1, ObCollationType cs_type1, int64_t sort_col2, ObCollationType cs_type2);
   int init_data(TestMergeSort& merge_sort, ObBaseSort& in_mem_sort, ObFakeTable& input_table, ObSortColumns& sort_cols,
@@ -74,7 +74,7 @@ class TestMergeSortTest : public oceanbase::blocksstable::TestDataFilePrepare {
   void copy_cell_varchar(ObObj& cell, char* buf, int64_t buf_size);
   void cons_new_row(ObNewRow& row, int64_t column_count);
 
-  private:
+private:
   ObPhysicalPlan physical_plan_;
   ObArenaAllocator alloc_;
 };

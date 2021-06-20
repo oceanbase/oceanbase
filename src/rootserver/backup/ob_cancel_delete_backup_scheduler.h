@@ -22,16 +22,16 @@ namespace oceanbase {
 namespace rootserver {
 
 class ObCancelDeleteBackupScheduler {
-  public:
+public:
   ObCancelDeleteBackupScheduler();
   virtual ~ObCancelDeleteBackupScheduler();
   int init(const uint64_t tenant_id, common::ObMySQLProxy& proxy, rootserver::ObBackupDataClean* backup_data_clean);
   int start_schedule_cacel_delete_backup();
 
-  private:
+private:
   int inner_schedule_cancel_delete_backup();
 
-  private:
+private:
   bool is_inited_;
   uint64_t tenant_id_;
   common::ObMySQLProxy* proxy_;
