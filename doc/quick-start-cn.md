@@ -81,7 +81,7 @@
 
 本节介绍如何使用 OBD 部署 OceanBase 数据库。按照以下步骤部署 OceanBase 数据库：
 
-1. 从 Gitee/Github 上下载对应的配置文件模板。
+1. 从 Gitee/GitHub 上下载对应的配置文件模板。
 
     - 如果您采用本地安装，即中控机器和目标机器是同一台机器，请下载 [本地安装配置文件](https://gitee.com/oceanbase/obdeploy/blob/master/example/mini-local-example.yaml)。
     - 如果您采用单机安装，即中控机器和目标机器不是同一台机器，且目标机器只有一台，请下载 [单机安装配置文件](https://gitee.com/oceanbase/obdeploy/blob/master/example/mini-single-example.yaml)。

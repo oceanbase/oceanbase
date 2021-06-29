@@ -81,7 +81,7 @@ If your server does not have Internet access, take the following steps to instal
 
 This section describes how to use OBD to deploy OceanBase Database. Take the following steps:
 
-1. Download the corresponding configuration template from Github. These are some sample configurations:
+1. Download the corresponding configuration template from GitHub. These are some sample configurations:
 
    - If you want to install OceanBase Database on your central control server, download the [local installation configuration file](https://github.com/oceanbase/obdeploy/blob/master/example/mini-local-example.yaml).
    - If you want to install OceanBase Database on a standalone server other than the central control server, download the [standalone installation configuration file](https://github.com/oceanbase/obdeploy/blob/master/example/mini-single-example.yaml).
