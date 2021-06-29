@@ -62,6 +62,8 @@
     wget -B https://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/ -i rpm_list -P rpm
     ```
 
+    **注意：** 示例中的安装包可能不是最新版本，建议您下载最新的安装包。详细信息，参考 [OceanBase 数据库发行版本](https://github.com/oceanbase/oceanbase/releases)。
+
 2. 运行以下命令，将软件包拷贝到您的中控机器：
 
     ```bash
@@ -161,6 +163,8 @@
     ```bash
     sudo yum install -y obclient-2.0.0-1.el7.x86_64.rpm 
     ```
+
+    **注意：** 示例中的安装包可能不是最新版本，建议您下载最新的安装包。详细信息，参考 [OceanBase 官网下载中心](https://github.com/oceanbase/oceanbase/releases)。
 
 2. 运行以下命令，使用 OBClient 客户端连接 OceanBase 数据库：
 

@@ -62,6 +62,8 @@ If your server does not have Internet access, take the following steps to instal
    wget -B https://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/ -i rpm_list -P rpm
    ```
 
+   **NOTE:** The installation packages in the preceding example may not be the latest version. We recommend that you download the latest installation packages. For more information, see [OceanBase Database Releases](https://github.com/oceanbase/oceanbase/releases).
+
 2. Run the following command to copy the package to your central control server:
 
    ```bash
@@ -79,11 +81,11 @@ If your server does not have Internet access, take the following steps to instal
 
 This section describes how to use OBD to deploy OceanBase Database. Take the following steps:
 
-1. Download the corresponding configuration template from Gitee or Github.
+1. Download the corresponding configuration template from Github. These are some sample configurations:
 
-   - If you want to install OceanBase Database on your central control server, download the [local installation configuration file](https://gitee.com/oceanbase/obdeploy/blob/master/example/mini-local-example.yaml).
-   - If you want to install OceanBase Database on a standalone server other than the central control server, download the [standalone installation configuration file](https://gitee.com/oceanbase/obdeploy/blob/master/example/mini-single-example.yaml).
-   - If you want to install OceanBase Database on multiple servers other than the central control server, download the [distributed installation configuration file](https://gitee.com/oceanbase/obdeploy/blob/master/example/mini-distributed-example.yaml)
+   - If you want to install OceanBase Database on your central control server, download the [local installation configuration file](https://github.com/oceanbase/obdeploy/blob/master/example/mini-local-example.yaml).
+   - If you want to install OceanBase Database on a standalone server other than the central control server, download the [standalone installation configuration file](https://github.com/oceanbase/obdeploy/blob/master/example/mini-single-example.yaml).
+   - If you want to install OceanBase Database on multiple servers other than the central control server, download the [distributed installation configuration file](https://github.com/oceanbase/obdeploy/blob/master/example/mini-distributed-example.yaml)
    > **NOTE:** The following example describes how to modify the configuration file in local installation mode. You must select the configuration template that corresponds to your installation mode.
 
 2. If you want to install OceanBase Database on a server other than the central control server, you need to add relevant configurations for SSH remote access at the beginning of the configuration file.
@@ -161,6 +163,8 @@ Take the following steps:
    ```bash
    sudo yum install -y obclient-2.0.0-1.el7.x86_64.rpm
    ```
+
+   **NOTE:** The installation packages in the preceding example may not be the latest version. We recommend that you download the latest installation packages. For more information, see [OceanBase Download Center](https://github.com/oceanbase/oceanbase/releases).
 
 2. Run the following command to connect to OceanBase Database from the OBClient:
 
