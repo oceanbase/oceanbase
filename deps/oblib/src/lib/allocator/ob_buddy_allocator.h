@@ -20,7 +20,7 @@ namespace common {
 class ObBuddyAllocator : public common::ObIAllocator {
   friend class ::BuddyAllocatorTest;
 
-  public:
+public:
   ObBuddyAllocator(ObIAllocator& alloc);
   ~ObBuddyAllocator();
   int32_t init(const int64_t min_block_size);
@@ -30,12 +30,12 @@ class ObBuddyAllocator : public common::ObIAllocator {
 
   int print_info(char* buf, const int64_t buf_len, int64_t& pos) const;
 
-  protected:
+protected:
   int32_t fix_index_array(int32_t order);
   bool find_buddy(int64_t index, int64_t& buddy_index, int32_t order) const;
   void* compute_addr_in(int64_t index, int32_t order) const;
 
-  private:
+private:
   // uncopyable class
   ObBuddyAllocator(const ObBuddyAllocator&);
   ObBuddyAllocator& operator=(const ObBuddyAllocator&);
@@ -49,7 +49,7 @@ class ObBuddyAllocator : public common::ObIAllocator {
   int32_t combine_free(int64_t index, int64_t buddy_index, int32_t current_order);
   int32_t single_free(void*& ptr, int64_t index, int32_t order);
 
-  private:
+private:
   static const int MAX_MEMORY_ORDER = 20;  // max alloc 1MB memory
   static const int MAX_AREA_SIZE = MAX_MEMORY_ORDER + 10;
   bool inited_;

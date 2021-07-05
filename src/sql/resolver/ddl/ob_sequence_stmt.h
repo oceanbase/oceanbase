@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObSequenceDDLStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObSequenceDDLStmt(common::ObIAllocator* name_pool, stmt::StmtType type) : ObDDLStmt(name_pool, type), arg_()
   {
     arg_.set_stmt_type(type);
@@ -68,13 +68,13 @@ class ObSequenceDDLStmt : public ObDDLStmt {
     return arg_;
   }
 
-  private:
+private:
   obrpc::ObSequenceDDLArg arg_;
   DISALLOW_COPY_AND_ASSIGN(ObSequenceDDLStmt);
 };
 
 class ObCreateSequenceStmt : public ObSequenceDDLStmt {
-  public:
+public:
   explicit ObCreateSequenceStmt(common::ObIAllocator* name_pool) : ObSequenceDDLStmt(name_pool, stmt::T_CREATE_SEQUENCE)
   {}
   ObCreateSequenceStmt() : ObSequenceDDLStmt(stmt::T_CREATE_SEQUENCE)
@@ -83,7 +83,7 @@ class ObCreateSequenceStmt : public ObSequenceDDLStmt {
 };
 
 class ObAlterSequenceStmt : public ObSequenceDDLStmt {
-  public:
+public:
   explicit ObAlterSequenceStmt(common::ObIAllocator* name_pool) : ObSequenceDDLStmt(name_pool, stmt::T_ALTER_SEQUENCE)
   {}
   ObAlterSequenceStmt() : ObSequenceDDLStmt(stmt::T_ALTER_SEQUENCE)
@@ -92,7 +92,7 @@ class ObAlterSequenceStmt : public ObSequenceDDLStmt {
 };
 
 class ObDropSequenceStmt : public ObSequenceDDLStmt {
-  public:
+public:
   explicit ObDropSequenceStmt(common::ObIAllocator* name_pool) : ObSequenceDDLStmt(name_pool, stmt::T_DROP_SEQUENCE)
   {}
   ObDropSequenceStmt() : ObSequenceDDLStmt(stmt::T_DROP_SEQUENCE)

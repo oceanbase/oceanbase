@@ -21,17 +21,17 @@ namespace sql {
 class ObScalarAggregateSpec : public ObGroupBySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObScalarAggregateSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObGroupBySpec(alloc, type)
   {}
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObScalarAggregateSpec);
 };
 
 class ObScalarAggregateOp : public ObGroupByOp {
-  public:
+public:
   friend ObAggregateProcessor;
   ObScalarAggregateOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObGroupByOp(exec_ctx, spec, input), started_(false)
@@ -44,11 +44,11 @@ class ObScalarAggregateOp : public ObGroupByOp {
   virtual int inner_get_next_row() override;
   virtual void destroy() override;
   // reset default value of %cur_rownum_ && %rownum_limit_
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObScalarAggregateOp);
 
-  private:
+private:
   bool started_;
 };
 

@@ -31,7 +31,7 @@ using namespace oceanbase::share::schema;
 
 const int64_t BUF_LEN = 102400;
 class ObQueryRangeTest : public ::testing::Test {
-  public:
+public:
   ObQueryRangeTest();
   virtual ~ObQueryRangeTest();
   virtual void SetUp();
@@ -254,12 +254,12 @@ class ObQueryRangeTest : public ::testing::Test {
     allocator_.reset();
   }
 
-  private:
+private:
   // disallow copy
   ObQueryRangeTest(const ObQueryRangeTest& other);
   ObQueryRangeTest& operator=(const ObQueryRangeTest& other);
 
-  protected:
+protected:
   // data members
   uint64_t table_id_;
   uint64_t column_id1_;

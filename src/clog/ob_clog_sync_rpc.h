@@ -24,7 +24,7 @@ class ObPartitionService;
 }
 namespace obrpc {
 class ObLogGetMCTsProcessor : public ObRpcProcessor<obrpc::ObLogRpcProxy::ObRpc<OB_LOG_GET_MC_TS> > {
-  public:
+public:
   ObLogGetMCTsProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObLogGetMCTsProcessor()
@@ -32,18 +32,18 @@ class ObLogGetMCTsProcessor : public ObRpcProcessor<obrpc::ObLogRpcProxy::ObRpc<
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetMCTsProcessor);
 };
 
 class ObLogGetMcCtxArrayProcessor : public ObRpcProcessor<obrpc::ObLogRpcProxy::ObRpc<OB_LOG_GET_MC_CTX_ARRAY> > {
-  public:
+public:
   ObLogGetMcCtxArrayProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObLogGetMcCtxArrayProcessor()
@@ -51,18 +51,18 @@ class ObLogGetMcCtxArrayProcessor : public ObRpcProcessor<obrpc::ObLogRpcProxy::
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetMcCtxArrayProcessor);
 };
 
 class ObLogGetPriorityArrayProcessor : public ObRpcProcessor<obrpc::ObLogRpcProxy::ObRpc<OB_LOG_GET_PRIORITY_ARRAY> > {
-  public:
+public:
   ObLogGetPriorityArrayProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObLogGetPriorityArrayProcessor()
@@ -70,18 +70,18 @@ class ObLogGetPriorityArrayProcessor : public ObRpcProcessor<obrpc::ObLogRpcProx
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetPriorityArrayProcessor);
 };
 
 class ObLogGetRemoteLogProcessor : public ObRpcProcessor<obrpc::ObLogRpcProxy::ObRpc<OB_LOG_GET_REMOTE_LOG> > {
-  public:
+public:
   ObLogGetRemoteLogProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObLogGetRemoteLogProcessor()
@@ -89,13 +89,13 @@ class ObLogGetRemoteLogProcessor : public ObRpcProcessor<obrpc::ObLogRpcProxy::O
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetRemoteLogProcessor);
 };
 }  // namespace obrpc

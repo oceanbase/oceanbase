@@ -19,7 +19,7 @@ namespace sql {
 class ObTableLockInput : public ObTableModifyInput {
   friend class ObTableLock;
 
-  public:
+public:
   ObTableLockInput() : ObTableModifyInput()
   {}
   virtual ~ObTableLockInput()
@@ -29,16 +29,16 @@ class ObTableLockInput : public ObTableModifyInput {
     return PHY_LOCK;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLockInput);
 };
 
 class ObTableLock : public ObTableModify {
-  public:
+public:
   class ObTableLockCtx : public ObTableModifyCtx {
     friend class ObTableLock;
 
-    public:
+  public:
     explicit ObTableLockCtx(ObExecContext& ctx)
         : ObTableModifyCtx(ctx), lock_row_(), dml_param_(), part_key_(), part_infos_(), for_update_wait_timeout_(-1)
     {}
@@ -52,7 +52,7 @@ class ObTableLock : public ObTableModify {
     }
     friend class ObTableLock;
 
-    protected:
+  protected:
     common::ObNewRow lock_row_;
     storage::ObDMLBaseParam dml_param_;
     common::ObPartitionKey part_key_;
@@ -62,7 +62,7 @@ class ObTableLock : public ObTableModify {
 
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObTableLock(common::ObIAllocator& alloc);
   virtual ~ObTableLock();
   virtual void reset();
@@ -86,7 +86,7 @@ class ObTableLock : public ObTableModify {
     return false;
   }
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const;
   virtual int inner_close(ObExecContext& ctx) const;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
@@ -109,10 +109,10 @@ class ObTableLock : public ObTableModify {
     return for_update_wait_us_ == 0;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLock);
 
-  protected:
+protected:
   // projector for build the lock row
   int32_t* rowkey_projector_;
   int64_t rowkey_projector_size_;

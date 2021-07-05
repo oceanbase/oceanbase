@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObSavePointStmt : public ObTCLStmt {
-  public:
+public:
   explicit ObSavePointStmt(stmt::StmtType type) : ObTCLStmt(type), sp_name_()
   {}
   virtual ~ObSavePointStmt()
@@ -30,41 +30,41 @@ class ObSavePointStmt : public ObTCLStmt {
     return sp_name_;
   }
 
-  private:
+private:
   common::ObString sp_name_;
   DISALLOW_COPY_AND_ASSIGN(ObSavePointStmt);
 };
 
 class ObCreateSavePointStmt : public ObSavePointStmt {
-  public:
+public:
   explicit ObCreateSavePointStmt() : ObSavePointStmt(stmt::T_CREATE_SAVEPOINT)
   {}
   virtual ~ObCreateSavePointStmt()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateSavePointStmt);
 };
 
 class ObRollbackSavePointStmt : public ObSavePointStmt {
-  public:
+public:
   explicit ObRollbackSavePointStmt() : ObSavePointStmt(stmt::T_ROLLBACK_SAVEPOINT)
   {}
   virtual ~ObRollbackSavePointStmt()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRollbackSavePointStmt);
 };
 
 class ObReleaseSavePointStmt : public ObSavePointStmt {
-  public:
+public:
   explicit ObReleaseSavePointStmt() : ObSavePointStmt(stmt::T_RELEASE_SAVEPOINT)
   {}
   virtual ~ObReleaseSavePointStmt()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObReleaseSavePointStmt);
 };
 

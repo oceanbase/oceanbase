@@ -29,10 +29,10 @@ namespace oceanbase {
 namespace sql {
 
 struct ObAggrInfo {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObAggrInfo()
       : expr_(NULL),
         real_aggr_type_(T_INVALID),
@@ -122,7 +122,7 @@ inline bool ObAggrInfo::is_number() const
 typedef common::ObFixedArray<ObDatum, common::ObIAllocator> DatumFixedArray;
 
 class ObAggregateProcessor {
-  public:
+public:
   // Context structure for one aggregation function of one group, only some functions need this:
   //  with distinct: need this for distinct calculate
   //  group concat:  need context to hold the input cells.
@@ -139,7 +139,7 @@ class ObAggregateProcessor {
   // We only implement distinct logic here, no common interface abstracted here,
   // use the derived class directly.
   class ExtraResult {
-    public:
+  public:
     // %alloc is used to initialize the structures, can not be used to hold the data
     explicit ExtraResult(common::ObIAllocator& alloc) : alloc_(alloc), unique_sort_op_(NULL)
     {}
@@ -149,16 +149,16 @@ class ObAggregateProcessor {
         const uint64_t tenant_id, const ObAggrInfo& aggr_info, ObEvalCtx& eval_ctx, const bool need_rewind);
     DECLARE_VIRTUAL_TO_STRING;
 
-    protected:
+  protected:
     common::ObIAllocator& alloc_;
 
-    public:
+  public:
     // for distinct calculate may be replace by hash based distinct in the future.
     ObUniqueSortImpl* unique_sort_op_;
   };
 
   class GroupConcatExtraResult : public ExtraResult {
-    public:
+  public:
     explicit GroupConcatExtraResult(common::ObIAllocator& alloc)
         : ExtraResult(alloc), row_count_(0), iter_idx_(0), sort_op_(NULL)
     {}
@@ -210,7 +210,7 @@ class ObAggregateProcessor {
     }
     DECLARE_VIRTUAL_TO_STRING;
 
-    private:
+  private:
     int64_t row_count_;
     int64_t iter_idx_;
 
@@ -221,7 +221,7 @@ class ObAggregateProcessor {
   };
 
   class AggrCell {
-    public:
+  public:
     AggrCell()
         : curr_row_results_(),
           row_count_(0),
@@ -319,10 +319,10 @@ class ObAggregateProcessor {
       ;
     }
 
-    public:
+  public:
     ObChunkDatumStore::ShadowStoredRow<> curr_row_results_;
 
-    private:
+  private:
     // for avg/count
     int64_t row_count_;
 
@@ -370,7 +370,7 @@ class ObAggregateProcessor {
     ObChunkDatumStore::StoredRow* groupby_store_row_;
   };
 
-  public:
+public:
   ObAggregateProcessor(ObEvalCtx& eval_ctx, ObIArray<ObAggrInfo>& aggr_infos);
   ~ObAggregateProcessor()
   {
@@ -428,7 +428,7 @@ class ObAggregateProcessor {
   int clone_cell(ObDatum& target_cell, const ObDatum& src_cell, const bool is_number = false);
   static int get_llc_size();
 
-  private:
+private:
   int extend_concat_str_buf(const ObString& pad_str, const int64_t pos, const int64_t group_concat_cur_row_num,
       int64_t& append_len, bool& buf_is_full);
   OB_INLINE bool need_extra_info(const ObExprOperatorType expr_type);
@@ -483,7 +483,7 @@ class ObAggregateProcessor {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObAggregateProcessor);
 
-  private:
+private:
   static const int64_t GROUP_ROW_SIZE = sizeof(GroupRow);
   static const int64_t GROUP_CELL_SIZE = sizeof(AggrCell);
   // data members
@@ -508,7 +508,7 @@ class ObAggregateProcessor {
 
 // Used for calc hash for columns
 class ObGroupRowItem {
-  public:
+public:
   ObGroupRowItem() : group_id_(0), group_row_ptr_(NULL), groupby_datums_hash_(0), next_(NULL)
   {}
 
@@ -525,7 +525,7 @@ class ObGroupRowItem {
 
   TO_STRING_KV(K_(group_id), KPC_(group_row), K_(groupby_datums_hash), KP_(group_exprs), KP_(next));
 
-  public:
+public:
   int64_t group_id_;
   union {
     void* group_row_ptr_;
@@ -537,7 +537,7 @@ class ObGroupRowItem {
 };
 
 class ObGroupRowHashTable : public ObExtendHashTable<ObGroupRowItem> {
-  public:
+public:
   ObGroupRowHashTable() : ObExtendHashTable(), eval_ctx_(nullptr), cmp_funcs_(nullptr)
   {}
 
@@ -545,10 +545,10 @@ class ObGroupRowHashTable : public ObExtendHashTable<ObGroupRowItem> {
   int init(ObIAllocator* allocator, lib::ObMemAttr& mem_attr, ObEvalCtx* eval_ctx,
       const common::ObIArray<ObCmpFunc>* cmp_funcs, int64_t initial_size = INITIAL_SIZE);
 
-  private:
+private:
   bool compare(const ObGroupRowItem& left, const ObGroupRowItem& right) const;
 
-  private:
+private:
   ObEvalCtx* eval_ctx_;
   const common::ObIArray<ObCmpFunc>* cmp_funcs_;
 };

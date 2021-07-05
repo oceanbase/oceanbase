@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTransformSemiToInner : public ObTransformRule {
-  public:
+public:
   ObTransformSemiToInner(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
   virtual ~ObTransformSemiToInner()
@@ -28,7 +28,7 @@ class ObTransformSemiToInner : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   int transform_semi_to_inner(ObDMLStmt* root_stmt, ObDMLStmt* stmt, const SemiInfo* pre_semi_info,
       ObDMLStmt*& trans_stmt, bool& need_check_cost, bool& trans_happened);
 
@@ -71,7 +71,7 @@ class ObTransformSemiToInner : public ObTransformRule {
 
   int check_stmt_limit_validity(const ObSelectStmt* select_stmt, bool& is_valid, bool& need_add_const_constraint);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformSemiToInner);
 };
 

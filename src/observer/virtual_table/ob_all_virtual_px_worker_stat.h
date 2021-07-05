@@ -24,7 +24,7 @@ class ObPxWorkerStat;
 namespace observer {
 
 class ObAllPxWorkerStatTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllPxWorkerStatTable();
   virtual ~ObAllPxWorkerStatTable();
   virtual void reset();
@@ -34,7 +34,7 @@ class ObAllPxWorkerStatTable : public common::ObVirtualTableScannerIterator {
     addr_ = &addr;
   }
 
-  private:
+private:
   common::ObAddr* addr_;
   bool start_to_read_;
   common::ObArray<sql::ObPxWorkerStat> stat_array_;
@@ -54,7 +54,7 @@ class ObAllPxWorkerStatTable : public common::ObVirtualTableScannerIterator {
     THREAD_ID,
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllPxWorkerStatTable);
 };
 

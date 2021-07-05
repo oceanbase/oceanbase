@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef _OB_OCEANBAE_SCHEMA_SCHEMA_SERVICE_H
-#define _OB_OCEANBAE_SCHEMA_SCHEMA_SERVICE_H
+#ifndef _OB_OCEANBASE_SCHEMA_SCHEMA_SERVICE_H
+#define _OB_OCEANBASE_SCHEMA_SCHEMA_SERVICE_H
 
 #include "lib/ob_name_def.h"
 #include "lib/string/ob_string.h"
@@ -262,7 +262,7 @@ DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
 struct ObSchemaOperation {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObSchemaOperation();
   int64_t schema_version_;
   uint64_t tenant_id_;
@@ -343,7 +343,7 @@ struct ObSchemaOperation {
 struct ObPrimarySchemaInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPrimarySchemaInfo();
   ObPrimarySchemaInfo(const int64_t refreshed_schema_version, const int64_t next_schema_version)
   {
@@ -366,7 +366,7 @@ struct ObPrimarySchemaInfo {
 };
 
 class ObMockSchemaInfo {
-  public:
+public:
   enum MockSchemaType { MOCK_INDEX_UNAVAILABLE = 0, MOCK_SCHEMA_SPLIT = 1, MOCK_MAX_TYPE };
 
   ObMockSchemaInfo()
@@ -400,7 +400,7 @@ class ObMockSchemaInfo {
   TO_STRING_KV(K_(schema_id), "mock_index_unavaliable", mock_schema_type_[MOCK_INDEX_UNAVAILABLE], "mock_schema_split",
       mock_schema_type_[MOCK_SCHEMA_SPLIT]);
 
-  private:
+private:
   uint64_t schema_id_;
   bool mock_schema_type_[MOCK_MAX_TYPE];
 };
@@ -408,7 +408,7 @@ class ObMockSchemaInfo {
 struct AlterColumnSchema : public ObColumnSchemaV2 {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   AlterColumnSchema()
       : ObColumnSchemaV2(),
         alter_type_(OB_INVALID_DDL_OP),
@@ -490,7 +490,7 @@ struct AlterColumnSchema : public ObColumnSchemaV2 {
 struct AlterTableSchema : public ObTableSchema {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   AlterTableSchema()
       : ObTableSchema(),
         alter_type_(OB_INVALID_DDL_OP),
@@ -637,13 +637,13 @@ class ObDbLinkSqlService;
 // table schema service interface layer
 class ObServerSchemaService;
 class ObSchemaService {
-  public:
+public:
   // default false, only use for liboblog to control compatable
   static bool g_ignore_column_retrieve_error_;
   static bool g_liboblog_mode_;
   typedef common::ObArrayImpl<ObSchemaOperation> ObSchemaOperationSet;
   class SchemaOperationSetWithAlloc : public ObSchemaOperationSet {
-    public:
+  public:
     SchemaOperationSetWithAlloc() : string_buf_(common::ObModIds::OB_SCHEMA_OPERATOR_SET_WITH_ALLOC)
     {}
     virtual ~SchemaOperationSetWithAlloc()
@@ -667,7 +667,7 @@ class ObSchemaService {
       ptr = NULL;
     }
 
-    private:
+  private:
     common::ObStringBuf string_buf_;  // alloc varchar
   };
   virtual ~ObSchemaService()
@@ -954,4 +954,4 @@ class ObSchemaService {
 }  // namespace schema
 }  // namespace share
 }  // namespace oceanbase
-#endif /* _OB_OCEANBAE_SCHEMA_SCHEMA_SERVICE_H */
+#endif /* _OB_OCEANBASE_SCHEMA_SCHEMA_SERVICE_H */

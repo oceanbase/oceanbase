@@ -28,7 +28,7 @@ namespace common {
  */
 template <typename BlockAllocatorT = ObMalloc, typename LockT = ObNullLock>
 class ObPool {
-  public:
+public:
   ObPool(int64_t obj_size, int64_t block_size = common::OB_MALLOC_NORMAL_BLOCK_SIZE,
       const BlockAllocatorT& alloc = BlockAllocatorT(ObModIds::OB_POOL));
   virtual ~ObPool();
@@ -53,12 +53,12 @@ class ObPool {
   }
   int mprotect_mem_pool(int prot);
 
-  private:
+private:
   void* freelist_pop();
   void freelist_push(void* obj);
   void alloc_new_block();
 
-  private:
+private:
   struct FreeNode {
     FreeNode* next_;
   };
@@ -66,7 +66,7 @@ class ObPool {
     BlockHeader* next_;
   };
 
-  private:
+private:
   // data members
   int64_t obj_size_;
   int64_t block_size_;
@@ -78,7 +78,7 @@ class ObPool {
   BlockAllocatorT block_allocator_;
   LockT lock_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPool);
 };
 
@@ -108,7 +108,7 @@ typedef ObPool<ObMalloc, ObSpinLock> ObLockedPool;
 // A small block allocator which split the block allocated by the BlockAllocator into small blocks
 template <typename BlockAllocatorT = ObMalloc, typename LockT = ObNullLock>
 class ObSmallBlockAllocator : public ObIAllocator {
-  public:
+public:
   ObSmallBlockAllocator(
       int64_t small_block_size, int64_t block_size, const BlockAllocatorT& alloc = BlockAllocatorT(ObModIds::OB_POOL))
       : block_pool_(small_block_size, block_size, alloc)
@@ -156,11 +156,11 @@ class ObSmallBlockAllocator : public ObIAllocator {
     block_pool_.reset();
   }
 
-  private:
+private:
   // data members
   ObPool<BlockAllocatorT, LockT> block_pool_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSmallBlockAllocator);
 };
 

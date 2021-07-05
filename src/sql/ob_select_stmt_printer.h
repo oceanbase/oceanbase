@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 class ObSelectStmtPrinter : public ObDMLStmtPrinter {
 
-  public:
+public:
   ObSelectStmtPrinter()
       : ObDMLStmtPrinter(),
         column_list_(NULL),
@@ -48,7 +48,7 @@ class ObSelectStmtPrinter : public ObDMLStmtPrinter {
   virtual int do_print();
   static int remove_double_quotation_for_string(ObString& alias_string, ObIAllocator& allocator);
 
-  private:
+private:
   int print();
   int print_unpivot();
   int print_set_op_stmt();
@@ -71,7 +71,7 @@ class ObSelectStmtPrinter : public ObDMLStmtPrinter {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSelectStmtPrinter);
 
-  private:
+private:
   // data members
   // create view v(column_list) as...
   common::ObIArray<common::ObString>* column_list_;

@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace archive {
 
 class ObArchivePathUtil {
-  public:
+public:
   // oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round/
   int build_base_path(const char* root_path, const char* cluster_name, const int64_t cluster_id,
       const uint64_t tenant_id, const int64_t incarnantion, const int64_t archive_round, const int64_t path_buf_len,
@@ -58,7 +58,7 @@ class ObArchivePathUtil {
   int build_server_start_archive_path(const int64_t incarnation, const int64_t round, const int64_t path_buf_len,
       char* dest_path, const int64_t storage_info_len, char* info);
 
-  private:
+private:
   int build_archive_file_prefix_(const common::ObPGKey& pg_key, const LogArchiveFileType file_type,
       const int64_t incarnation, const int64_t round, const int64_t path_buf_len, char* dest_path, int64_t& pos);
   int build_file_prefix_(const common::ObPGKey& pg_key, const char* base_path, const LogArchiveFileType file_type,

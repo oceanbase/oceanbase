@@ -52,7 +52,7 @@ struct ObRowkeyColumn {
 };
 
 class ObRowkeyInfo {
-  public:
+public:
   ObRowkeyInfo();
   explicit ObRowkeyInfo(ObIAllocator* allocator);
   ~ObRowkeyInfo();
@@ -107,7 +107,7 @@ class ObRowkeyInfo {
   int get_column_ids(ObBitSet<>& column_ids) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   int expand(const int64_t size);
   static const int64_t DEFAULT_ROWKEY_COLUMN_ARRAY_CAPACITY = 8;
   ObRowkeyColumn* columns_;

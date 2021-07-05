@@ -19,7 +19,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
 using namespace oceanbase::sql;
 class ObExprCompareTest : public ::testing::Test {
-  public:
+public:
   ObExprCompareTest()
   {}
   virtual void SetUp()
@@ -51,7 +51,7 @@ class ObExprCompareTest : public ::testing::Test {
     LOG_INFO("total ", K(total_my));
   }
 
-  protected:
+protected:
 };
 
 TEST_F(ObExprCompareTest, calc)

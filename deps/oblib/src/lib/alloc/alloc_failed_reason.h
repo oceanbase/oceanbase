@@ -27,7 +27,7 @@ enum AllocFailedReason {
 };
 
 struct AllocFailedCtx {
-  public:
+public:
   int reason_;
   int64_t alloc_size_;
   union {

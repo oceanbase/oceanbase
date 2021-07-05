@@ -21,7 +21,7 @@ using namespace transaction;
 namespace storage {
 
 class ObSSTableRowLockChecker : public ObSSTableRowGetter {
-  public:
+public:
   ObSSTableRowLockChecker();
   virtual ~ObSSTableRowLockChecker();
   bool is_curr_row_locked() const
@@ -37,11 +37,11 @@ class ObSSTableRowLockChecker : public ObSSTableRowGetter {
     return lock_state_.lock_trans_id_;
   }
 
-  protected:
+protected:
   virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row);
   virtual void set_row_snapshot(ObStoreRow& row) override;
 
-  private:
+private:
   ObStoreRow store_row_;
   ObStoreRowLockState lock_state_;
 };

@@ -36,7 +36,7 @@ namespace common {
 class ObRequestTZInfoArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObRequestTZInfoArg(const common::ObAddr& addr, uint64_t tenant_id) : obs_addr_(addr), tenant_id_(tenant_id)
   {}
   ObRequestTZInfoArg() : obs_addr_()
@@ -44,7 +44,7 @@ class ObRequestTZInfoArg {
   ~ObRequestTZInfoArg()
   {}
 
-  public:
+public:
   common::ObAddr obs_addr_;
   uint64_t tenant_id_;
 };
@@ -52,13 +52,13 @@ class ObRequestTZInfoArg {
 class ObRequestTZInfoResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRequestTZInfoResult() : last_version_(-1), tz_array_()
   {}
   ~ObRequestTZInfoResult()
   {}
 
-  public:
+public:
   int64_t last_version_;
   common::ObSArray<ObTimeZoneInfoPos> tz_array_;
 };
@@ -71,38 +71,38 @@ class ObTimeZoneInfoManager {
   const int64_t TASK_NUM_LIMIT = 512;
   static const char* UPDATE_TZ_INFO_VERSION_SQL;
 
-  private:
+private:
   class TaskProcessThread : public common::ObSimpleThreadPool {
-    public:
+  public:
     virtual void handle(void* task);
   };
 
   class TZInfoTask {
-    public:
+  public:
     explicit TZInfoTask(ObTimeZoneInfoManager& tz_mgr) : tz_mgr_(tz_mgr)
     {}
     virtual ~TZInfoTask()
     {}
     virtual int run_task() = 0;
 
-    protected:
+  protected:
     ObTimeZoneInfoManager& tz_mgr_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(TZInfoTask);
   };
 
   class FillRequestTZInfoResult {
-    public:
+  public:
     FillRequestTZInfoResult(ObRequestTZInfoResult& tz_result) : tz_result_(tz_result)
     {}
     bool operator()(ObTZIDKey key, ObTimeZoneInfoPos* tz_info);
 
-    private:
+  private:
     ObRequestTZInfoResult& tz_result_;
   };
 
-  public:
+public:
   ObTimeZoneInfoManager(obrpc::ObCommonRpcProxy& rs_rpc_proxy, common::ObMySQLProxy& sql_proxy,
       rootserver::ObRootService& root_service, ObTZInfoMap& tz_info_map, int64_t tenant_id)
       : rs_rpc_proxy_(rs_rpc_proxy),
@@ -154,7 +154,7 @@ class ObTimeZoneInfoManager {
   static const char* FETCH_LATEST_TZ_VERSION_SQL;
   static int fill_tz_info_map(common::sqlclient::ObMySQLResult& result, ObTZInfoMap& tz_info_map);
 
-  private:
+private:
   int fetch_time_zone_info_from_tenant_table(const int64_t current_tz_version);
   int fetch_time_zone_info_from_sys_table();
   static int calc_default_tran_type(
@@ -166,7 +166,7 @@ class ObTimeZoneInfoManager {
   int fill_tz_info_map(ObRequestTZInfoResult& tz_result);
   int print_tz_info_map();
 
-  private:
+private:
   obrpc::ObCommonRpcProxy& rs_rpc_proxy_;
   common::ObMySQLProxy& sql_proxy_;
   rootserver::ObRootService& root_service_;
@@ -181,7 +181,7 @@ class ObTimeZoneInfoManager {
   // record tenant_id_ for getting tz_info_version.
   int64_t tenant_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTimeZoneInfoManager);
 };
 

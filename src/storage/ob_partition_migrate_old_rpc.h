@@ -30,7 +30,7 @@ namespace oceanbase {
 
 namespace storage {
 class ObStoreInfo {
-  public:
+public:
   ObStoreInfo();
   virtual ~ObStoreInfo();
   void reset()
@@ -52,11 +52,11 @@ class ObStoreInfo {
 
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   ObSavedStorageInfo saved_storage_info_;
   int64_t sstable_count_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStoreInfo);
 };
 
@@ -118,7 +118,7 @@ struct ObMigrateInfoFetchResult {
 struct ObFetchBaseDataMetaArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFetchBaseDataMetaArg() : pkey_(), version_(0), store_type_(storage::INVALID_STORE_TYPE)
   {}
   TO_STRING_KV(K_(pkey), K_(version), K_(store_type));
@@ -131,7 +131,7 @@ struct ObFetchBaseDataMetaArg {
 struct ObFetchMacroBlockOldArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFetchMacroBlockOldArg() : index_id_(0), macro_block_index_(0), data_version_(0), data_seq_(0)
   {}
   void reset();
@@ -148,7 +148,7 @@ struct ObFetchMacroBlockOldArg {
 struct ObFetchMacroBlockListOldArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFetchMacroBlockListOldArg();
   TO_STRING_KV(K_(pkey), K_(data_version), K(store_type_), "arg_count", arg_list_.count());
   common::ObPartitionKey pkey_;

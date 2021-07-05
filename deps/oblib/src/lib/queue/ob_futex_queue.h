@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace common {
 class ObFutexQueue {
-  public:
+public:
   static bool is2n(uint64_t n)
   {
     return 0 == (n & (n - 1));
@@ -39,7 +39,7 @@ class ObFutexQueue {
   }
 
   struct Cond {
-    public:
+  public:
     Cond() : n_waiters_(0)
     {}
     ~Cond()
@@ -65,7 +65,7 @@ class ObFutexQueue {
       }
     }
 
-    private:
+  private:
     lib::CoFutex futex_;
     uint32_t n_waiters_;
   };
@@ -102,7 +102,7 @@ class ObFutexQueue {
     void* data_;
   };
 
-  public:
+public:
   const static uint64_t WAKE_ID = ~(0LL);
   ObFutexQueue() : push_(0), pop_(0), capacity_(0), allocated_(NULL), items_(NULL)
   {}
@@ -193,7 +193,7 @@ class ObFutexQueue {
     return (int64_t)(push - pop);
   }
 
-  private:
+private:
   uint64_t idx(uint64_t x)
   {
     return x & (capacity_ - 1);
@@ -228,7 +228,7 @@ class ObFutexQueue {
     return err;
   }
 
-  private:
+private:
   uint64_t push_ CACHE_ALIGNED;
   uint64_t pop_ CACHE_ALIGNED;
   uint64_t capacity_ CACHE_ALIGNED;

@@ -38,16 +38,16 @@ class ObMemtable;
 class ObMTKVBuilder;
 
 class ObMvccEngine {
-  public:
+public:
   ObMvccEngine();
   virtual ~ObMvccEngine();
 
-  public:
+public:
   virtual int init(
       common::ObIAllocator* allocator, ObMTKVBuilder* kv_builder, ObQueryEngine* query_engine, ObMemtable* memtable);
   virtual void destroy();
 
-  public:
+public:
   int get_max_trans_version(const ObMemtableKey* key, bool& locked, int64_t& max_trans_version);
   int create_kv(const ObMemtableKey* key, ObMemtableKey* stored_key, ObMvccRow*& value);
   int store_data(ObMvccRow& value, const ObMemtableData* data, const int64_t version, const int64_t timestamp);
@@ -85,7 +85,7 @@ class ObMvccEngine {
       const bool is_replay, const bool need_fill_redo, const ObRowData* old_row, const int64_t version,
       const bool is_stmt_committed, const int32_t sql_no, const int64_t log_ts, const bool is_sequential_relocate);
 
-  private:
+private:
   int m_prepare_kv(ObIMvccCtx& ctx, const ObMemtableKey* key, ObMemtableKey* stored_key, ObMvccRow*& value,
       const bool is_replay, const int32_t sql_no, bool& is_new_add);
   int m_store_data(ObIMvccCtx& ctx, const ObMemtableKey* key, ObMvccRow& value, const ObMemtableData* data,
@@ -93,7 +93,7 @@ class ObMvccEngine {
       const int64_t version, const int32_t sql_no, const int64_t log_timestamp);
   int try_compact_row(ObIMvccCtx& ctx, const transaction::ObTransSnapInfo& snapshot_info, ObMvccRow& row);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMvccEngine);
   bool is_inited_;
   ObMTKVBuilder* kv_builder_;

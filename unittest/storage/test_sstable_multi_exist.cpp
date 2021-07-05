@@ -23,7 +23,7 @@ using namespace share::schema;
 
 namespace unittest {
 class TestSSTableMultiExist : public ObSSTableTest {
-  public:
+public:
   TestSSTableMultiExist();
   virtual ~TestSSTableMultiExist();
   virtual void SetUp();

@@ -52,7 +52,7 @@ class ObInfoSchemaColumnsTable : public common::ObVirtualTableScannerIterator {
     GENERATION_EXPRESSION
   };
 
-  public:
+public:
   ObInfoSchemaColumnsTable();
   virtual ~ObInfoSchemaColumnsTable();
 
@@ -64,7 +64,7 @@ class ObInfoSchemaColumnsTable : public common::ObVirtualTableScannerIterator {
     tenant_id_ = tenant_id;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaColumnsTable);
   int fill_row_cells(const common::ObString& database_name, const share::schema::ObTableSchema* table_schema,
       const share::schema::ObColumnSchemaV2* column_schema, const uint64_t ordinal_position);
@@ -86,7 +86,7 @@ class ObInfoSchemaColumnsTable : public common::ObVirtualTableScannerIterator {
   int get_type_str(const ObObjMeta& obj_meta, const ObAccuracy& accuracy, const common::ObIArray<ObString>& type_info,
       const int16_t default_length_semantics, int64_t& pos);
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t last_schema_idx_;
   int64_t last_table_idx_;

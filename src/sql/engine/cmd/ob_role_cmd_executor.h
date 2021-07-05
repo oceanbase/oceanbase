@@ -27,7 +27,7 @@ class ObExecContext;
 class ObCreateRoleStmt;
 class ObDropRoleStmt;
 class ObCreateRoleExecutor {
-  public:
+public:
   ObCreateRoleExecutor()
   {}
   virtual ~ObCreateRoleExecutor()
@@ -36,16 +36,16 @@ class ObCreateRoleExecutor {
   static int encrypt_passwd(
       const common::ObString& passwd, common::ObString& encrypted_passwd, char* enc_buf, int64_t buf_len);
 
-  private:
+private:
   int create_role(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObCreateRoleArg& arg) const;
   int drop_role(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObDropUserArg& arg) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateRoleExecutor);
 };
 
 class ObDropRoleExecutor {
-  public:
+public:
   ObDropRoleExecutor()
   {}
   virtual ~ObDropRoleExecutor()
@@ -54,10 +54,10 @@ class ObDropRoleExecutor {
   static int encrypt_passwd(
       const common::ObString& passwd, common::ObString& encrypted_passwd, char* enc_buf, int64_t buf_len);
 
-  private:
+private:
   int drop_role(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObDropUserArg& arg) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDropRoleExecutor);
 };
 

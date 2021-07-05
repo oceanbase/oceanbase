@@ -22,11 +22,11 @@ class ObPartitionService;
 }
 namespace clog {
 class ObLogArchiveAndRestoreDriver : public share::ObThreadPool {
-  public:
+public:
   ObLogArchiveAndRestoreDriver();
   virtual ~ObLogArchiveAndRestoreDriver();
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service);
   void destroy();
   void run1();
@@ -35,7 +35,7 @@ class ObLogArchiveAndRestoreDriver : public share::ObThreadPool {
     return last_run_time_;
   }
 
-  private:
+private:
   void state_driver_loop();
   const int64_t SYNC_LOG_ARCHIVE_PROGRESS_INTERVAL = 2 * 1000 * 1000LL;  // 2s
   const int64_t CONFIRM_CLOG_INTERVAL = 1 * 1000 * 1000LL;
@@ -43,7 +43,7 @@ class ObLogArchiveAndRestoreDriver : public share::ObThreadPool {
   const int64_t CHECK_LOG_ARCHIVE_CHECKPOINT_INTERVAL = 1 * 1000 * 1000LL;  // 1s
   const int64_t CLEAR_TRANS_AFTER_RESTORE_INTERVAL = 5 * 1000 * 1000LL;     // 5s
   const int64_t ARCHVIE_AND_RESTORE_STATE_DRIVER_INTERVAL = 500 * 1000LL;   // 500ms
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* partition_service_;
   int64_t last_check_time_for_sync_log_archive_progress_;
@@ -53,7 +53,7 @@ class ObLogArchiveAndRestoreDriver : public share::ObThreadPool {
   int64_t last_check_time_for_clear_trans_after_restore_;
   int64_t last_run_time_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogArchiveAndRestoreDriver);
 };
 

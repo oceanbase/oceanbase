@@ -40,7 +40,7 @@ typedef common::ObIArray<ColumnItem> ColumnIArray;
 class ObQueryRange : public ObQueryRangeProvider {
   OB_UNIS_VERSION(4);
 
-  private:
+private:
   struct ObRangeExprItem {
     const ObRawExpr* cur_expr_;
     common::ObSEArray<int64_t, 16> cur_pos_;
@@ -73,7 +73,7 @@ class ObQueryRange : public ObQueryRangeProvider {
     const ParamsIArray* params_;
   };
 
-  public:
+public:
   enum ObQueryRangeState {
     NEED_INIT = 0,
     NEED_TARGET_CND,
@@ -138,7 +138,7 @@ class ObQueryRange : public ObQueryRangeProvider {
     }
   };
 
-  private:
+private:
   struct ObSearchState {
     ObSearchState(common::ObIAllocator& allocator)
         : start_(NULL),
@@ -223,7 +223,7 @@ class ObQueryRange : public ObQueryRangeProvider {
     bool is_precise_get_;
   };
 
-  public:
+public:
   ObQueryRange();
   explicit ObQueryRange(common::ObIAllocator& alloc);
   virtual ~ObQueryRange();
@@ -327,7 +327,7 @@ class ObQueryRange : public ObQueryRangeProvider {
   int get_param_value(common::ObObj& val, const ParamsIArray& params) const;
   DECLARE_TO_STRING;
 
-  private:
+private:
   //  @brief this function to initialize query range context
   //  @param range_columns[in], columns group with the range order
   //  @return if success, return OB_SUCCESS
@@ -449,12 +449,12 @@ class ObQueryRange : public ObQueryRangeProvider {
   int cast_like_obj_if_needed(const ObObj& string_obj, ObObj& buf_obj, const ObObj*& obj_ptr, ObKeyPart& out_key_part,
       const ObDataTypeCastParams& dtc_params);
 
-  private:
+private:
   static const int64_t COMMON_KEY_PART_NUM = 256;
   static const int64_t RANGE_BUCKET_SIZE = 1000;
   typedef common::ObObjStore<ObKeyPart*, common::ObIAllocator&> KeyPartStore;
 
-  private:
+private:
   ObRangeGraph table_graph_;
   ObQueryRangeState state_;
   int64_t column_count_;

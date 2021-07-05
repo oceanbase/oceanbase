@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObDataStorageInfo {
-  public:
+public:
   ObDataStorageInfo()
       : last_replay_log_id_(0),
         publish_version_(0),
@@ -62,7 +62,7 @@ class ObDataStorageInfo {
       publish_version_, "schema_version", schema_version_, "created_by_new_minor_freeze", created_by_new_minor_freeze_);
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   // Log point to start replay.
   uint64_t last_replay_log_id_;
   int64_t publish_version_;

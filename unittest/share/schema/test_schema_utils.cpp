@@ -32,10 +32,10 @@ namespace share {
 namespace schema {
 
 class TestSchemaUtils : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
 
-  private:
+private:
 };
 
 void TestSchemaUtils::SetUp()

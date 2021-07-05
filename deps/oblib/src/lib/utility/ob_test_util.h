@@ -27,7 +27,7 @@
  */
 #define BEGIN_THREAD_CODE(class_name, thread_count)         \
   class _##class_name : public oceanbase::lib::ThreadPool { \
-    public:                                                 \
+  public:                                                   \
     _##class_name()                                         \
     {                                                       \
       set_thread_count(thread_count);                       \

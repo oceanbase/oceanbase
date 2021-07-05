@@ -53,7 +53,7 @@ class ObShardingInfo;
 class ObTablePartitionInfo;
 struct SubPlanInfo;
 class ObOptimizerUtil {
-  public:
+public:
   static int is_prefix_ordering(const common::ObIArray<OrderItem>& pre, const common::ObIArray<OrderItem>& full,
       const EqualSets& equal_sets, const common::ObIArray<ObRawExpr*>& const_exprs, bool& is_prefix);
 
@@ -668,7 +668,7 @@ class ObOptimizerUtil {
   static int check_pushdown_filter_to_base_table(ObLogPlan& plan, const uint64_t table_id,
       const ObIArray<ObRawExpr*>& pushdown_filters, const ObIArray<ObRawExpr*>& restrict_infos, bool& can_pushdown);
 
-  private:
+private:
   // disallow construct
   ObOptimizerUtil();
   ~ObOptimizerUtil();

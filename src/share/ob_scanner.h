@@ -34,11 +34,11 @@ class ObIAllocator;
 class ObScanner {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t DEFAULT_MAX_SERIALIZE_SIZE = (OB_MAX_PACKET_LENGTH - OB_MAX_ROW_KEY_LENGTH * 2 - 1024);
   typedef ObRowStore::Iterator Iterator;
 
-  public:
+public:
   ObScanner(const char* label = ObModIds::OB_NEW_SCANNER, ObIAllocator* allocator = NULL,
       int64_t mem_size_limit = DEFAULT_MAX_SERIALIZE_SIZE, uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
       bool use_row_compact = true);
@@ -260,7 +260,7 @@ class ObScanner {
       last_insert_id_to_client_, N_LAST_INSERT_ID_SESSION, last_insert_id_session_, K_(is_result_accurate),
       K_(trans_result), K_(implicit_cursors), K_(rcode));
 
-  protected:
+protected:
   ObRowStore row_store_;
   int64_t mem_size_limit_; /**< memory size of row store */
   uint64_t tenant_id_;
@@ -287,12 +287,12 @@ class ObScanner {
   sql::ObChunkDatumStore datum_store_;
   obrpc::ObRpcResultCode rcode_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObScanner);
 };
 
 class ObScannerable {
-  public:
+public:
   ObScannerable(){};
   virtual ~ObScannerable(){};
   virtual int get_scanner(ObIAllocator& allocator, ObScanner& scanner) = 0;

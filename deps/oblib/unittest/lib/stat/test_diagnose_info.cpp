@@ -217,7 +217,7 @@ TEST(ObDiagnoseSessionInfo, normal)
 }
 
 class AtomicWaitEventTestRun : public cotesting::DefaultRunnable {
-  public:
+public:
   AtomicWaitEventTestRun()
   {}
   ~AtomicWaitEventTestRun()
@@ -230,7 +230,7 @@ class AtomicWaitEventTestRun : public cotesting::DefaultRunnable {
     lock_.unlock();
   }
 
-  private:
+private:
   SpinRWLock lock_;
 };
 

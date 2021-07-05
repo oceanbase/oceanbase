@@ -126,7 +126,7 @@ int ObRootServiceMonitor::monitor_root_service()
     } else if (root_service_.is_stopping()) {
       // need exit
       if (OB_FAIL(root_service_.stop_service())) {
-        LOG_WARN("root_service stop_service failed", K(ret));
+        LOG_WARN("root service stop service failed", K(ret));
       } else {
         LOG_INFO("root service stop service finish success");
       }
@@ -140,10 +140,10 @@ int ObRootServiceMonitor::monitor_root_service()
         } else if (!root_service_.can_start_service()) {
           LOG_ERROR("bug here. root service can not start service");
         } else {
-          LOG_INFO("try to start rootservice");
+          LOG_INFO("try to start root service");
           DEBUG_SYNC(BEFORE_START_RS);
           if (OB_FAIL(try_start_root_service())) {
-            LOG_WARN("fail to start root_service", K(ret));
+            LOG_WARN("fail to start root service", K(ret));
           } else {
             LOG_INFO("start root service success");
           }
@@ -161,7 +161,7 @@ int ObRootServiceMonitor::monitor_root_service()
               // nothing todo
             } else if (root_service_.is_stopping()) {
               if (OB_FAIL(root_service_.stop_service())) {
-                LOG_WARN("root_service stop_service failed", K(ret));
+                LOG_WARN("root service stop service failed", K(ret));
               } else {
                 LOG_INFO("root service stop service finish success");
               }
@@ -213,7 +213,7 @@ int ObRootServiceMonitor::try_start_root_service()
         usleep(2 * MONITOR_ROOT_SERVICE_INTERVAL_US);
       }
     } else if (!stopped) {
-      LOG_WARN("already have rootservice in service, start service later");
+      LOG_WARN("already have root service in service, start service later");
       ret = OB_SUCCESS;
       if (!has_set_stop()) {
         usleep(2 * MONITOR_ROOT_SERVICE_INTERVAL_US);
@@ -223,7 +223,7 @@ int ObRootServiceMonitor::try_start_root_service()
     if (OB_SUCC(ret)) {
       LOG_INFO("try to start root service");
       if (OB_FAIL(root_service_.start_service())) {
-        LOG_WARN("root_service start_service failed", K(ret));
+        LOG_WARN("root service start service failed", K(ret));
       } else {
         LOG_INFO("root service start service success", K(ret));
       }

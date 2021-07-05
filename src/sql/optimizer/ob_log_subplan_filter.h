@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObBasicCostInfo;
 class ObLogSubPlanFilter : public ObLogicalOperator {
-  public:
+public:
   ObLogSubPlanFilter(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         exec_params_(),
@@ -127,14 +127,14 @@ class ObLogSubPlanFilter : public ObLogicalOperator {
   int allocate_granule_post(AllocGIContext& ctx);
   virtual int compute_one_row_info() override;
 
-  protected:
+protected:
   common::ObSEArray<std::pair<int64_t, ObRawExpr*>, 8, common::ModulePageAllocator, true> exec_params_;
   common::ObSEArray<std::pair<int64_t, ObRawExpr*>, 8, common::ModulePageAllocator, true> onetime_exprs_;
   common::ObBitSet<> init_plan_idxs_;
   common::ObBitSet<> one_time_idxs_;
   bool update_set_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogSubPlanFilter);
 };
 }  // end of namespace sql

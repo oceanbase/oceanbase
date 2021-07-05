@@ -27,7 +27,7 @@ class ObPhysicalPlan;
 class ObExecContext;
 
 class ObPxAdmission {
-  public:
+public:
   ObPxAdmission() = default;
   ~ObPxAdmission() = default;
   static bool admit(int64_t cnt, int64_t& admit_cnt);
@@ -36,13 +36,13 @@ class ObPxAdmission {
       sql::ObSQLSessionInfo& session, sql::ObExecContext& exec_ctx, sql::ObPhysicalPlan& plan, int64_t& worker_count);
   static void exit_query_admission(int64_t worker_count);
 
-  private:
+private:
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObPxAdmission);
 };
 
 class ObPxPoolStat {
-  public:
+public:
   static int mtl_init(ObPxPoolStat*& pool)
   {
     int ret = common::OB_SUCCESS;
@@ -64,7 +64,7 @@ class ObPxPoolStat {
     pool = nullptr;
   }
 
-  public:
+public:
   // PARALLEL_SERVERS_TARGET
   inline int64_t get_target() const
   {
@@ -93,7 +93,7 @@ class ObPxPoolStat {
 
   TO_STRING_KV(K_(target), K_(parallel_servers_target_used), K_(pool_size), K_(max_parallel_servers_used));
 
-  private:
+private:
   // PARALLEL_SERVERS_TARGET
   int64_t target_;
   int64_t parallel_servers_target_used_;  // The number of threads currently occupied by the worker
@@ -106,13 +106,13 @@ class ObPxPoolStat {
 };
 
 class ObPxSubAdmission {
-  public:
+public:
   ObPxSubAdmission() = default;
   ~ObPxSubAdmission() = default;
   static void acquire(int64_t max, int64_t min, int64_t& acquired_cnt);
   static void release(int64_t acquired_cnt);
 
-  private:
+private:
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObPxSubAdmission);
 };

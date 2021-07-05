@@ -31,14 +31,14 @@ class ObTableSchema;
 }  // namespace share
 namespace rootserver {
 class ObAllTenantStat : public common::ObVirtualTableProjector {
-  public:
+public:
   ObAllTenantStat();
   virtual ~ObAllTenantStat();
 
   int init(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& proxy);
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   struct PartitionStat {
     uint64_t table_id_;
     int64_t partition_id_;
@@ -125,12 +125,12 @@ class ObAllTenantStat : public common::ObVirtualTableProjector {
   int get_full_row(
       const share::schema::ObTableSchema* table, const TenantStat& tenant_stat, common::ObIArray<Column>& columns);
 
-  private:
+private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   common::ObMySQLProxy* proxy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllTenantStat);
 };
 

@@ -26,7 +26,7 @@ namespace sql {
 class ObRecursiveUnionAllSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObRecursiveUnionAllSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   ~ObRecursiveUnionAllSpec();
   friend class ObRecursiveUnionAllOp;
@@ -49,7 +49,7 @@ class ObRecursiveUnionAllSpec : public ObOpSpec {
   int set_cycle_pseudo_values(ObExpr* v, ObExpr* d_v);
   static const int64_t UNUSED_POS;
 
-  protected:
+protected:
   /**
    * @brief for specified phy operator to print it's member variable with json key-value format
    * @param buf[in] to string buffer
@@ -60,14 +60,14 @@ class ObRecursiveUnionAllSpec : public ObOpSpec {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRecursiveUnionAllSpec);
 
-  public:
+public:
   common::ObFixedArray<ObSortFieldCollation, common::ObIAllocator> sort_collations_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> cycle_by_col_lists_;
   // T_OP_UNION expression in the output of recursive uion all operator.
   // copy datums of inner_data rows to datums of these exprs.
   common::ObFixedArray<ObExpr*, common::ObIAllocator> output_union_exprs_;
 
-  protected:
+protected:
   static const int32_t CMP_DIRECTION_ASC = 1;
   static const int32_t CMP_DIRECTION_DESC = -1;
   uint64_t pump_operator_id_;
@@ -79,7 +79,7 @@ class ObRecursiveUnionAllSpec : public ObOpSpec {
 };
 
 class ObRecursiveUnionAllOp : public ObOperator {
-  public:
+public:
   explicit ObRecursiveUnionAllOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input),
         inner_data_(*exec_ctx.get_eval_ctx(), exec_ctx,  // spec.output_,
@@ -106,7 +106,7 @@ class ObRecursiveUnionAllOp : public ObOperator {
     return static_cast<const ObRecursiveUnionAllSpec&>(spec_);
   }
 
-  public:
+public:
   ObRecursiveInnerDataOp inner_data_;
 };
 

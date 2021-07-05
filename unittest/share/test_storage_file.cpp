@@ -26,7 +26,7 @@
 
 using namespace oceanbase::common;
 class TestStorageFile : public ::testing::Test {
-  public:
+public:
   TestStorageFile()
   {}
   virtual ~TestStorageFile()
@@ -50,13 +50,13 @@ class TestStorageFile : public ::testing::Test {
   static void TearDownTestCase()
   {}
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestStorageFile);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   char test_dir_[OB_MAX_URI_LENGTH];
   char test_dir_uri_[OB_MAX_URI_LENGTH];
 };
@@ -254,7 +254,7 @@ TEST_F(TestStorageFile, test_mkdir)
 TEST_F(TestStorageFile, test_parallel_mkdir)
 {
   class MakedirTask : public ObDynamicThreadTask {
-    public:
+  public:
     int init(const char* dir)
     {
       EXPECT_FALSE(NULL == dir);
@@ -276,7 +276,7 @@ TEST_F(TestStorageFile, test_parallel_mkdir)
       return OB_SUCCESS;
     }
 
-    private:
+  private:
     char uri_[OB_MAX_URI_LENGTH];
   };
 

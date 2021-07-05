@@ -22,17 +22,17 @@ namespace oceanbase {
 namespace common {
 template <typename T>
 class ObFixedQueue {
-  public:
+public:
   ObFixedQueue();
   ~ObFixedQueue();
 
-  public:
+public:
   int init(const int64_t max_num, char* buf);
   int init(const int64_t max_num, ObIAllocator* allocator = global_default_allocator,
       const lib::ObLabel& label = ObModIds::OB_FIXED_QUEUE);
   void destroy();
 
-  public:
+public:
   int push(T* ptr);
   int pop(T*& ptr);
   inline int64_t get_total() const;
@@ -47,16 +47,16 @@ class ObFixedQueue {
     return max_num_;
   }
 
-  private:
+private:
   struct ArrayItem {
     T* data;
   };
 
-  private:
+private:
   inline int64_t get_total_(const uint64_t consumer, const uint64_t producer) const;
   inline int64_t get_free_(const uint64_t consumer, const uint64_t producer) const;
 
-  private:
+private:
   bool is_inited_;
   int64_t max_num_;
   ArrayItem* array_;
@@ -64,7 +64,7 @@ class ObFixedQueue {
   uint64_t consumer_ CACHE_ALIGNED;
   uint64_t producer_ CACHE_ALIGNED;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFixedQueue);
 };
 

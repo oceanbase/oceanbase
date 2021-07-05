@@ -66,13 +66,13 @@ class ObDedupQueue;
 class IObDedupTask {
   friend class ObDedupQueue;
 
-  public:
+public:
   explicit IObDedupTask(const int type) : type_(type), stat_(ST_WAITING), memory_(NULL), prev_(NULL), next_(NULL)
   {}
   virtual ~IObDedupTask()
   {}
 
-  public:
+public:
   virtual int64_t hash() const = 0;
   virtual bool operator==(const IObDedupTask& other) const = 0;
   virtual int64_t get_deep_copy_size() const = 0;
@@ -84,11 +84,11 @@ class IObDedupTask {
     return type_;
   }
 
-  private:
+private:
   static const int ST_WAITING = 0;
   static const int ST_DONE = 1;
 
-  private:
+private:
   void set_prev(IObDedupTask* prev)
   {
     prev_ = prev;
@@ -134,7 +134,7 @@ class IObDedupTask {
     memory_ = memory;
   }
 
-  private:
+private:
   const int type_;
   int stat_;
   ObSpinLock sync_;
@@ -142,13 +142,13 @@ class IObDedupTask {
   IObDedupTask* prev_;
   IObDedupTask* next_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(IObDedupTask);
 };
 
 template <class T, class Host>
 class AllocatorWrapper {
-  public:
+public:
   AllocatorWrapper() : allocator_(NULL)
   {}
   explicit AllocatorWrapper(Host& allocator) : allocator_(&allocator)
@@ -156,7 +156,7 @@ class AllocatorWrapper {
   ~AllocatorWrapper()
   {}
 
-  public:
+public:
   T* alloc()
   {
     T* ret = nullptr;
@@ -185,33 +185,33 @@ class AllocatorWrapper {
   void clear()
   {}
 
-  private:
+private:
   Host* allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(AllocatorWrapper);
 };
 
 class ObDedupQueue : public lib::ThreadPool {
-  public:
+public:
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 512L * 1024L * 1024L;
   static const int64_t PAGE_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE;
   static const int64_t TASK_MAP_SIZE = 20L * 1000;
   static const int64_t TASK_QUEUE_SIZE = 20L * 1000;
 
-  public:
+public:
   ObDedupQueue();
   virtual ~ObDedupQueue();
 
-  public:
+public:
   int init(int32_t thread_num = DEFAULT_THREAD_NUM, const char* thread_name = nullptr,
       const int64_t queue_size = TASK_QUEUE_SIZE, const int64_t task_map_size = TASK_MAP_SIZE,
       const int64_t total_mem_limit = TOTAL_LIMIT, const int64_t hold_mem_limit = HOLD_LIMIT,
       const int64_t page_size = PAGE_SIZE);
   void destroy();
 
-  public:
+public:
   int add_task(const IObDedupTask& task);
   int64_t task_count() const
   {
@@ -224,10 +224,10 @@ class ObDedupQueue : public lib::ThreadPool {
   int set_thread_dead_threshold(const int64_t thread_dead_threshold);
   int set_work_thread_num(const int32_t work_thread_num);
 
-  public:
+public:
   void run1() override;
 
-  private:
+private:
   typedef ObFixedQueue<IObDedupTask> TaskQueue;
   typedef AllocatorWrapper<hash::HashMapTypes<const IObDedupTask*, IObDedupTask*>::AllocType, ObConcurrentFIFOAllocator>
       HashAllocator;
@@ -259,7 +259,7 @@ class ObDedupQueue : public lib::ThreadPool {
     TH_GC = 2,
   };
   struct ThreadMeta {
-    public:
+  public:
     int stat_;
     int task_type_;
     const IObDedupTask* running_task_;
@@ -327,14 +327,14 @@ class ObDedupQueue : public lib::ThreadPool {
     };
   };
 
-  private:
+private:
   int map_callback_(const IObDedupTask& task, TaskMapKVPair& kvpair);
   int add_task_(const IObDedupTask& task);
   IObDedupTask* copy_task_(const IObDedupTask& task);
   void destroy_task_(IObDedupTask* task);
   bool gc_();
 
-  private:
+private:
   bool is_inited_;
   ThreadMeta thread_metas_[MAX_THREAD_NUM];
   int32_t thread_num_;
@@ -351,7 +351,7 @@ class ObDedupQueue : public lib::ThreadPool {
   ObThreadCond work_thread_sync_;
   const char* thread_name_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDedupQueue);
 };
 }  // namespace common

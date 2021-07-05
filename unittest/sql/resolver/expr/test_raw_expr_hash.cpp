@@ -32,7 +32,7 @@ namespace test {
   })
 
 class TestRawExprToStr : public ::testing::Test {
-  public:
+public:
   TestRawExprToStr()
   {}
   virtual ~TestRawExprToStr()
@@ -42,7 +42,7 @@ class TestRawExprToStr : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   // disallow copy and assign
   TestRawExprToStr(const TestRawExprToStr& other);
   TestRawExprToStr& operator=(const TestRawExprToStr& ohter);

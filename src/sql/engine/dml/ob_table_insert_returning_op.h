@@ -21,26 +21,26 @@ namespace sql {
 class ObTableInsertReturningOpInput : public ObTableInsertOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   using ObTableInsertOpInput::ObTableInsertOpInput;
 };
 
 class ObTableInsertReturningSpec : public ObTableInsertSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   using ObTableInsertSpec::ObTableInsertSpec;
 };
 
 class ObTableInsertReturningOp : public ObTableInsertOp {
-  public:
+public:
   using ObTableInsertOp::ObTableInsertOp;
 
   virtual int inner_open() override;
   virtual int get_next_row() override;
   virtual int inner_close() override;
 
-  private:
+private:
   common::ObNewRow new_row_;
 };
 

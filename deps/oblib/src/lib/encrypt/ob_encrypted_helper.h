@@ -27,7 +27,7 @@
 namespace oceanbase {
 namespace common {
 class ObEncryptedHelper {
-  public:
+public:
   static int encrypt_passwd_to_stage1(const ObString& password, ObString& stage1);
   static int encrypt_passwd_to_stage2(const ObString& password, ObString& encrypted_pass);
   static int encrypt_stage1_to_stage2_hex(
@@ -46,7 +46,7 @@ class ObEncryptedHelper {
 
   static int my_xor(const unsigned char* s1, const unsigned char* s2, uint32_t len, unsigned char* to);
 
-  private:
+private:
   // see RFC 3174
   typedef struct SHA1_CONTEXT {
     unsigned long Length;                           /* Message length in bits      */

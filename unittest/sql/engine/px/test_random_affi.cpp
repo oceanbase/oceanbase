@@ -27,7 +27,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 
 class ObRandomAffiTaskSplitTest : public ::testing::Test {
-  public:
+public:
   const static int64_t TEST_PARTITION_COUNT = 5;
   const static int64_t TEST_SPLIT_TASK_COUNT = 8;
 
@@ -36,7 +36,7 @@ class ObRandomAffiTaskSplitTest : public ::testing::Test {
   virtual void SetUp(){};
   virtual void TearDown(){};
 
-  private:
+private:
   // disallow copy
   ObRandomAffiTaskSplitTest(const ObRandomAffiTaskSplitTest& other);
   ObRandomAffiTaskSplitTest& operator=(const ObRandomAffiTaskSplitTest& other);

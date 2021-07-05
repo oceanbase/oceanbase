@@ -47,7 +47,7 @@ struct ipaddr_less {
 };
 
 class CNetUtil {
-  public:
+public:
   static int getLocalAddr6(const char* dev_name, char* ipv6, int len);
   static uint32_t getLocalAddr(const char* dev_name);
   static bool isLocalAddr(uint32_t ip, bool loopSkip = true);

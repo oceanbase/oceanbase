@@ -21,7 +21,7 @@ using namespace oceanbase::common;
 namespace test {
 
 class ObSkylinePrunningTest : public ::testing::Test {
-  public:
+public:
   ObSkylinePrunningTest()
   {}
   virtual ~ObSkylinePrunningTest()
@@ -47,7 +47,7 @@ class ObSkylinePrunningTest : public ::testing::Test {
       const uint64_t* filter_ids, const int64_t filter_cnt, const uint64_t* interest_ids, const int64_t interest_cnt,
       const uint64_t* range_ids, const int64_t range_cnt);
 
-  protected:
+protected:
   ObArenaAllocator allocator_;
 };
 

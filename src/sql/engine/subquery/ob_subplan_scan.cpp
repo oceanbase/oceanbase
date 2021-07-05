@@ -18,7 +18,7 @@ namespace oceanbase {
 using namespace common;
 namespace sql {
 class ObSubPlanScan::ObSubPlanScanCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObSubPlanScanCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
   {}
   virtual void destroy()

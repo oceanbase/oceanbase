@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace sql {
 // statement for both SET NAMES and SET CHARSET
 class ObSetNamesStmt : public ObCMDStmt {
-  public:
+public:
   ObSetNamesStmt()
       : ObCMDStmt(stmt::T_SET_NAMES), is_set_names_(true), is_default_charset_(false), is_default_collation_(false)
   {}
@@ -72,11 +72,11 @@ class ObSetNamesStmt : public ObCMDStmt {
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(is_set_names), K_(is_default_charset), K_(is_default_collation),
       K_(charset), K_(collation));
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // function members
-  private:
+private:
   // data members
   bool is_set_names_;  // SET NAMES or SET CHARSET?
   bool is_default_charset_;

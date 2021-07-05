@@ -120,7 +120,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::transaction;
 
 class ObCodeGeneratorImpl::ColumnIndexProviderImpl : public jit::expr::ObColumnIndexProvider {
-  public:
+public:
   ColumnIndexProviderImpl(const RowDesc& input_row_desc, const int32_t* projector = NULL, int64_t projector_size = 0)
       : left_row_desc_(&input_row_desc), right_row_desc_(NULL), projector_(projector), projector_size_(projector_size)
   {}
@@ -163,10 +163,10 @@ class ObCodeGeneratorImpl::ColumnIndexProviderImpl : public jit::expr::ObColumnI
     return ret;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ColumnIndexProviderImpl);
 
-  private:
+private:
   const RowDesc* left_row_desc_;
   const RowDesc* right_row_desc_;
   const int32_t* projector_;
@@ -3047,7 +3047,7 @@ int ObCodeGeneratorImpl::generate_root_row_desc(ObJoin* join, const std::pair<Ob
 }
 
 class LGITargetOp {
-  public:
+public:
   bool operator()(const ObPhyOperator& op) const
   {
     return PHY_LIGHT_GRANULE_ITERATOR == op.get_type();
@@ -8514,7 +8514,7 @@ int ObCodeGeneratorImpl::get_phy_op_type(ObLogicalOperator& log_op, ObPhyOperato
 }
 
 class TSCTargetOp {
-  public:
+public:
   bool operator()(const ObPhyOperator& op) const
   {
     return op.is_table_scan() && PHY_FAKE_TABLE != op.get_type();
@@ -8522,7 +8522,7 @@ class TSCTargetOp {
 };
 
 class SingleDMLTargetOp {
-  public:
+public:
   bool operator()(const ObPhyOperator& op) const
   {
     return op.is_dml_operator() && PHY_MULTI_PART_UPDATE != op.get_type() && PHY_MULTI_PART_INSERT != op.get_type() &&

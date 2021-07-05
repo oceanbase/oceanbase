@@ -35,14 +35,14 @@ struct ObDynamicThreadInfo {
 };
 
 class ObDynamicThreadTask {
-  public:
+public:
   virtual ~ObDynamicThreadTask()
   {}
   virtual int process(const bool& is_stop) = 0;
 };
 
 class ObDynamicThreadPool : public lib::ThreadPool {
-  public:
+public:
   static const int64_t MAX_THREAD_NUM = 512;
   static const int64_t MAX_TASK_NUM = 1024 * 1024;
   static const int64_t DEFAULT_CHECK_TIME_MS = 1000;  // 1s
@@ -54,7 +54,7 @@ class ObDynamicThreadPool : public lib::ThreadPool {
   int add_task(ObDynamicThreadTask* task);
 
   void run1() override;
-  void stop();
+  void stop() override;
   void destroy();
   void task_thread_idle();
   int64_t get_task_count() const
@@ -64,7 +64,7 @@ class ObDynamicThreadPool : public lib::ThreadPool {
   TO_STRING_KV(K_(is_inited), K_(is_stop), K_(thread_num), K_(need_idle), K_(start_thread_num), K_(stop_thread_num),
       "left_task", task_queue_.get_total());
 
-  private:
+private:
   int check_thread_status();
   int stop_all_threads();
   void wakeup();
@@ -74,7 +74,7 @@ class ObDynamicThreadPool : public lib::ThreadPool {
   int pop_task(ObDynamicThreadTask*& task);
   static void* task_thread_func(void* data);
 
-  private:
+private:
   bool is_inited_;
   volatile bool is_stop_;
   int64_t thread_num_;

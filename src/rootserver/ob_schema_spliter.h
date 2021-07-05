@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace rootserver {
 class ObSchemaSplitExecutor;
 class ObTableSchemaSpliter {
-  public:
+public:
   ObTableSchemaSpliter(ObSchemaSplitExecutor& executor, share::schema::ObMultiVersionSchemaService& schema_service,
       common::ObMySQLProxy* sql_proxy, share::schema::ObTableSchema& table_schema, bool iter_sys)
       : executor_(executor),
@@ -44,7 +44,7 @@ class ObTableSchemaSpliter {
   virtual int process();
   virtual int process(const uint64_t tenant_id);
 
-  protected:
+protected:
   typedef int (*convert_func_t)(const common::ObObj& src, common::ObObj& dst, common::ObIAllocator&);
 
   struct MapItem {
@@ -57,7 +57,7 @@ class ObTableSchemaSpliter {
   };
 
   class ObSplitTableIterator {
-    public:
+  public:
     ObSplitTableIterator(ObSchemaSplitExecutor& executor, common::ObMySQLProxy* sql_proxy)
         : executor_(executor),
           sql_proxy_(sql_proxy),
@@ -76,12 +76,12 @@ class ObTableSchemaSpliter {
     int init(common::ObSqlString& base_sql, const uint64_t exec_tenant_id);
     int get_next_row(const common::ObNewRow*& row);
 
-    private:
+  private:
     void destroy();
     int get_next_batch();
     int check_stop();
 
-    private:
+  private:
     static const int64_t MAX_FETCH_ROW_COUNT = 5000;
     ObSchemaSplitExecutor& executor_;
     common::ObMySQLProxy* sql_proxy_;
@@ -94,7 +94,7 @@ class ObTableSchemaSpliter {
     bool is_inited_;
   };
 
-  protected:
+protected:
   virtual int build_column_mapping();
   virtual int construct_base_sql();
   virtual int add_extra_condition();
@@ -107,12 +107,12 @@ class ObTableSchemaSpliter {
   virtual int init_sys_iterator(const uint64_t tenant_id, ObSplitTableIterator& iter);
   virtual int init_tenant_iterator(const uint64_t tenant_id, ObSplitTableIterator& iter);
 
-  private:
+private:
   virtual int add_convert_func(const share::schema::ObColumnSchemaV2& column, MapItem& item);
   virtual int batch_replace_rows(const uint64_t tenant_id, common::ObIArray<common::ObNewRow*>& replace_rows);
   virtual int compare_obj(const common::ObObj& obj1, const common::ObObj& obj2);
 
-  protected:
+protected:
   static const int64_t BATCH_REPLACE_ROW_COUNT = 10;
   static const int64_t DEFAULT_COLUMN_NUM = 10;
   ObSchemaSplitExecutor& executor_;
@@ -129,7 +129,7 @@ class ObTableSchemaSpliter {
 
 #define DEF_SIMPLE_SCHEMA_SPLITER(TID, SchemaSpliter)                                                          \
   class SchemaSpliter : public ObTableSchemaSpliter {                                                          \
-    public:                                                                                                    \
+  public:                                                                                                      \
     SchemaSpliter(ObSchemaSplitExecutor& executor, share::schema::ObMultiVersionSchemaService& schema_service, \
         common::ObMySQLProxy* sql_proxy, share::schema::ObTableSchema& table_schema)                           \
         : ObTableSchemaSpliter(executor, schema_service, sql_proxy, table_schema, false)                       \
@@ -207,7 +207,7 @@ DEF_SIMPLE_SCHEMA_SPLITER(OB_ALL_TENANT_PROFILE_HISTORY_TID, ObAllTenantProfileH
 
 #define DEF_SCHEMA_SPLITER_FILTER_INNER_TABLE(TID, SchemaSpliter)                                              \
   class SchemaSpliter : public ObTableSchemaSpliter {                                                          \
-    public:                                                                                                    \
+  public:                                                                                                      \
     SchemaSpliter(ObSchemaSplitExecutor& executor, share::schema::ObMultiVersionSchemaService& schema_service, \
         common::ObMySQLProxy* sql_proxy, share::schema::ObTableSchema& table_schema)                           \
         : ObTableSchemaSpliter(executor, schema_service, sql_proxy, table_schema, false)                       \
@@ -215,7 +215,7 @@ DEF_SIMPLE_SCHEMA_SPLITER(OB_ALL_TENANT_PROFILE_HISTORY_TID, ObAllTenantProfileH
     virtual ~SchemaSpliter()                                                                                   \
     {}                                                                                                         \
                                                                                                                \
-    private:                                                                                                   \
+  private:                                                                                                     \
     virtual int add_extra_condition() override;                                                                \
   };
 // migrate table by tenant_id & filter inner_table info
@@ -228,7 +228,7 @@ DEF_SCHEMA_SPLITER_FILTER_INNER_TABLE(OB_ALL_DDL_OPERATION_TID, ObAllDdlOperatio
 
 #define DEF_SCHEMA_SPLITER_FILTER_TENANT_ID(TID, SchemaSpliter)                                                \
   class SchemaSpliter : public ObTableSchemaSpliter {                                                          \
-    public:                                                                                                    \
+  public:                                                                                                      \
     SchemaSpliter(ObSchemaSplitExecutor& executor, share::schema::ObMultiVersionSchemaService& schema_service, \
         common::ObMySQLProxy* sql_proxy, share::schema::ObTableSchema& table_schema)                           \
         : ObTableSchemaSpliter(executor, schema_service, sql_proxy, table_schema, false)                       \
@@ -236,7 +236,7 @@ DEF_SCHEMA_SPLITER_FILTER_INNER_TABLE(OB_ALL_DDL_OPERATION_TID, ObAllDdlOperatio
     virtual ~SchemaSpliter()                                                                                   \
     {}                                                                                                         \
                                                                                                                \
-    private:                                                                                                   \
+  private:                                                                                                     \
     virtual int quick_check(const uint64_t tenant_id, bool& passed) override;                                  \
     virtual int migrate(const uint64_t tenant_id) override;                                                    \
     virtual int check(const uint64_t tenant_id) override;                                                      \
@@ -247,7 +247,7 @@ DEF_SCHEMA_SPLITER_FILTER_TENANT_ID(OB_ALL_TENANT_GC_PARTITION_INFO_TID, ObAllTe
 
 // split system variable schema from tenant schema
 class ObSysVarDDLOperationSchemaSpliter : public ObTableSchemaSpliter {
-  public:
+public:
   ObSysVarDDLOperationSchemaSpliter(ObSchemaSplitExecutor& executor,
       share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy* sql_proxy,
       share::schema::ObTableSchema& table_schema)
@@ -256,13 +256,13 @@ class ObSysVarDDLOperationSchemaSpliter : public ObTableSchemaSpliter {
   virtual ~ObSysVarDDLOperationSchemaSpliter()
   {}
 
-  private:
+private:
   virtual int build_column_mapping() override;
   virtual int add_extra_condition() override;
 };
 
 class ObAllClogHistoryInfoV2SchemaSpliter : public ObTableSchemaSpliter {
-  public:
+public:
   ObAllClogHistoryInfoV2SchemaSpliter(ObSchemaSplitExecutor& executor,
       share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy* sql_proxy,
       share::schema::ObTableSchema& table_schema)
@@ -271,12 +271,12 @@ class ObAllClogHistoryInfoV2SchemaSpliter : public ObTableSchemaSpliter {
   virtual ~ObAllClogHistoryInfoV2SchemaSpliter()
   {}
 
-  private:
+private:
   virtual int quick_check(const uint64_t tenant_id, bool& passed) override;
   virtual int construct_sql(const uint64_t tenant_id, ObSqlString& sql) override;
 };
 class ObAllTenantPartitionMetaTableSchemaSpliter : public ObTableSchemaSpliter {
-  public:
+public:
   ObAllTenantPartitionMetaTableSchemaSpliter(ObSchemaSplitExecutor& executor,
       share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy* sql_proxy,
       share::schema::ObTableSchema& table_schema)
@@ -285,14 +285,14 @@ class ObAllTenantPartitionMetaTableSchemaSpliter : public ObTableSchemaSpliter {
   virtual ~ObAllTenantPartitionMetaTableSchemaSpliter()
   {}
 
-  private:
+private:
   virtual int quick_check(const uint64_t tenant_id, bool& passed) override;
   virtual int construct_sql(const uint64_t tenant_id, ObSqlString& sql) override;
   virtual int process();
 };
 
 class ObAllTableV2SchemaSpliter : public ObTableSchemaSpliter {
-  public:
+public:
   ObAllTableV2SchemaSpliter(ObSchemaSplitExecutor& executor, share::schema::ObMultiVersionSchemaService& schema_service,
       common::ObMySQLProxy* sql_proxy, share::schema::ObTableSchema& table_schema)
       : ObTableSchemaSpliter(executor, schema_service, sql_proxy, table_schema, true)
@@ -300,7 +300,7 @@ class ObAllTableV2SchemaSpliter : public ObTableSchemaSpliter {
   virtual ~ObAllTableV2SchemaSpliter()
   {}
 
-  private:
+private:
   virtual int add_convert_func(const share::schema::ObColumnSchemaV2& column_schema, MapItem& item) override;
   virtual int construct_base_sql() override;
   virtual int construct_sql(const uint64_t tenant_id, const char* tname, common::ObSqlString& sql);
@@ -310,7 +310,7 @@ class ObAllTableV2SchemaSpliter : public ObTableSchemaSpliter {
 };
 
 class ObAllTableV2HistorySchemaSpliter : public ObTableSchemaSpliter {
-  public:
+public:
   ObAllTableV2HistorySchemaSpliter(ObSchemaSplitExecutor& executor,
       share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy* sql_proxy,
       share::schema::ObTableSchema& table_schema)
@@ -319,7 +319,7 @@ class ObAllTableV2HistorySchemaSpliter : public ObTableSchemaSpliter {
   virtual ~ObAllTableV2HistorySchemaSpliter()
   {}
 
-  private:
+private:
   virtual int add_convert_func(const share::schema::ObColumnSchemaV2& column_schema, MapItem& item) override;
   virtual int construct_base_sql() override;
   virtual int construct_sql(const uint64_t tenant_id, const char* tname, common::ObSqlString& sql);

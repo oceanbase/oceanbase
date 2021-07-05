@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace share {
 using namespace schema;
 class TestPrimaryZoneUtil : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

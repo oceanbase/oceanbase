@@ -62,7 +62,7 @@ struct ObDTLIntermResultInfo {
 class ObDTLIntermResultGC : public common::ObTimerTask {
   friend class ObDTLIntermResultManager;
 
-  public:
+public:
   ObDTLIntermResultGC()
       : cur_time_(0), expire_keys_(), gc_type_(NOT_INIT), dump_count_(0), interm_cnt_(0), clean_cnt_(0)
   {}
@@ -71,17 +71,17 @@ class ObDTLIntermResultGC : public common::ObTimerTask {
   void operator()(common::hash::HashMapPair<ObDTLIntermResultKey, ObDTLIntermResultInfo>& entry);
   void runTimerTask();
 
-  public:
+public:
   const static int64_t REFRESH_INTERVAL = 10 * 1000L * 1000L;      // 10s interval
   const static int64_t DUMP_TIME_THRESHOLD = 10 * 1000L * 1000L;   // dump time threshold is 10s
   const static int64_t CLEAR_TIME_THRESHOLD = 10 * 1000L * 1000L;  // clean time threashold is 10s
-  public:
+public:
   enum ObGCType { NOT_INIT = 0, CLEAR = 1, DUMP = 2 };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDTLIntermResultGC);
 
-  private:
+private:
   int64_t cur_time_;
   common::ObSEArray<ObDTLIntermResultKey, 1> expire_keys_;
   ObGCType gc_type_;
@@ -91,24 +91,24 @@ class ObDTLIntermResultGC : public common::ObTimerTask {
 };
 
 class ObAtomicGetIntermResultInfoCall {
-  public:
+public:
   ObAtomicGetIntermResultInfoCall() : result_info_()
   {}
   ~ObAtomicGetIntermResultInfoCall() = default;
   void operator()(common::hash::HashMapPair<ObDTLIntermResultKey, ObDTLIntermResultInfo>& entry);
 
-  public:
+public:
   ObDTLIntermResultInfo result_info_;
 };
 
 class ObAtomicAppendBlockCall {
-  public:
+public:
   ObAtomicAppendBlockCall(char* buf, int64_t size) : block_buf_(buf), size_(size), ret_(common::OB_SUCCESS)
   {}
   ~ObAtomicAppendBlockCall() = default;
   void operator()(common::hash::HashMapPair<ObDTLIntermResultKey, ObDTLIntermResultInfo>& entry);
 
-  public:
+public:
   char* block_buf_;
   int64_t size_;
   int ret_;
@@ -117,7 +117,7 @@ class ObAtomicAppendBlockCall {
 class ObDTLIntermResultManager {
   friend class ObDTLIntermResultGC;
 
-  public:
+public:
   static ObDTLIntermResultManager& getInstance();
   typedef common::hash::ObHashMap<ObDTLIntermResultKey, ObDTLIntermResultInfo> MAP;
   int get_interm_result_info(ObDTLIntermResultKey& key, ObDTLIntermResultInfo& result_info);
@@ -136,15 +136,15 @@ class ObDTLIntermResultManager {
   int init();
   void destroy();
 
-  private:
+private:
   static const int64_t BUCKET_NUM = 500000;  // 50w
-  private:
+private:
   MAP map_;
   bool is_inited_;
   int64_t dir_id_;
   ObDTLIntermResultGC gc_;
 
-  private:
+private:
   ObDTLIntermResultManager();
   ~ObDTLIntermResultManager();
   DISALLOW_COPY_AND_ASSIGN(ObDTLIntermResultManager);

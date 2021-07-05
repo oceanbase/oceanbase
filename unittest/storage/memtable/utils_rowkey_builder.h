@@ -25,7 +25,7 @@ namespace unittest {
 using namespace oceanbase::common;
 
 class ObStoreRowkeyWrapper {
-  public:
+public:
   template <class... Args>
   ObStoreRowkeyWrapper(const Args&... args) : obj_cnt_(0)
   {
@@ -38,7 +38,7 @@ class ObStoreRowkeyWrapper {
   ~ObStoreRowkeyWrapper()
   {}
 
-  public:
+public:
   CharArena& get_allocator()
   {
     return allocator_;
@@ -68,7 +68,7 @@ class ObStoreRowkeyWrapper {
     return rowkey_ = ObStoreRowkey(objs_, obj_cnt_);
   }
 
-  private:
+private:
   template <class T, class... Args>
   void fill(const T& head, const Args&... args)
   {
@@ -79,7 +79,7 @@ class ObStoreRowkeyWrapper {
   { /*for recursion exit*/
   }
 
-  private:
+private:
   CharArena allocator_;
   mutable ObObj objs_[OB_MAX_ROWKEY_COLUMN_NUMBER];
   int64_t obj_cnt_;
@@ -87,7 +87,7 @@ class ObStoreRowkeyWrapper {
 };
 
 class ObColumnDesc {
-  public:
+public:
   template <class... Args>
   ObColumnDesc(const Args&... args)
   {
@@ -98,7 +98,7 @@ class ObColumnDesc {
     return columns_;
   }
 
-  private:
+private:
   template <class... Args>
   void fill(const uint64_t col_id, const ObObjType col_type, const ObCollationType col_collation, const Args&... args)
   {
@@ -113,7 +113,7 @@ class ObColumnDesc {
   { /*for recursion exit*/
   }
 
-  private:
+private:
   ObSEArray<share::schema::ObColDesc, 64> columns_;
 };
 
@@ -121,33 +121,33 @@ class ObColumnDesc {
 
 #define DEFINE_TYPE_OBJ(classname, ctype, obtype)          \
   class classname {                                        \
-    public:                                                \
+  public:                                                  \
     classname(const ctype v) : v_(v)                       \
     {}                                                     \
     ~classname()                                           \
     {}                                                     \
                                                            \
-    public:                                                \
+  public:                                                  \
     void build(ObStoreRowkeyWrapper& rowkey_wrapper) const \
     {                                                      \
       rowkey_wrapper.get_cur_obj().set_##obtype(v_);       \
       rowkey_wrapper.add_obj();                            \
     }                                                      \
                                                            \
-    private:                                               \
+  private:                                                 \
     const ctype v_;                                        \
   };
 
 #define DEFINE_CHARTYPE_OBJ(classname, obtype, cltype)                                                \
   class classname {                                                                                   \
-    public:                                                                                           \
+  public:                                                                                             \
     classname(const char* str, const int64_t len, const ObCollationType cltype = CS_TYPE_UTF8MB4_BIN) \
         : str_(str), len_(len), cltype_(cltype)                                                       \
     {}                                                                                                \
     ~classname()                                                                                      \
     {}                                                                                                \
                                                                                                       \
-    public:                                                                                           \
+  public:                                                                                             \
     void build(ObStoreRowkeyWrapper& rowkey_wrapper) const                                            \
     {                                                                                                 \
       ObString obstr;                                                                                 \
@@ -157,7 +157,7 @@ class ObColumnDesc {
       rowkey_wrapper.add_obj();                                                                       \
     }                                                                                                 \
                                                                                                       \
-    private:                                                                                          \
+  private:                                                                                            \
     const char* str_;                                                                                 \
     const int64_t len_;                                                                               \
     const ObCollationType cltype_;                                                                    \
@@ -165,13 +165,13 @@ class ObColumnDesc {
 
 #define DEFINE_NMBTYPE_OBJ(classname, obtype)              \
   class classname {                                        \
-    public:                                                \
+  public:                                                  \
     classname(const char* str) : str_(str)                 \
     {}                                                     \
     ~classname()                                           \
     {}                                                     \
                                                            \
-    public:                                                \
+  public:                                                  \
     void build(ObStoreRowkeyWrapper& rowkey_wrapper) const \
     {                                                      \
       number::ObNumber obnmb;                              \
@@ -180,18 +180,18 @@ class ObColumnDesc {
       rowkey_wrapper.add_obj();                            \
     }                                                      \
                                                            \
-    private:                                               \
+  private:                                                 \
     const char* str_;                                      \
   };
 
 class U {
-  public:
+public:
   U()
   {}
   ~U()
   {}
 
-  public:
+public:
   void build(ObStoreRowkeyWrapper& rowkey_wrapper) const
   {
     rowkey_wrapper.get_cur_obj().set_null();
@@ -200,13 +200,13 @@ class U {
 };
 
 class OBMIN {
-  public:
+public:
   OBMIN()
   {}
   ~OBMIN()
   {}
 
-  public:
+public:
   void build(ObStoreRowkeyWrapper& rowkey_wrapper) const
   {
     rowkey_wrapper.get_cur_obj().set_ext(ObObj::MIN_OBJECT_VALUE);
@@ -215,13 +215,13 @@ class OBMIN {
 };
 
 class OBMAX {
-  public:
+public:
   OBMAX()
   {}
   ~OBMAX()
   {}
 
-  public:
+public:
   void build(ObStoreRowkeyWrapper& rowkey_wrapper) const
   {
     rowkey_wrapper.get_cur_obj().set_ext(ObObj::MAX_OBJECT_VALUE);

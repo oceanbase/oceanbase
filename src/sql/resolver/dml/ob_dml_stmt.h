@@ -131,10 +131,10 @@ struct TransposeItem {
 };
 
 struct ObUnpivotInfo {
-  public:
+public:
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObUnpivotInfo() : is_include_null_(false), old_column_count_(0), for_column_count_(0), unpivot_column_count_(0)
   {}
   ObUnpivotInfo(const bool is_include_null, const int64_t old_column_count, const int64_t for_column_count,
@@ -482,7 +482,7 @@ struct JoinedTable : public TableItem {
 };
 
 class SemiInfo {
-  public:
+public:
   SemiInfo(ObJoinType join_type = LEFT_SEMI_JOIN)
       : join_type_(join_type),
         semi_id_(common::OB_INVALID_ID),
@@ -595,7 +595,7 @@ enum EQUAL_SET_SCOPE { SCOPE_WHERE = 1 << 0, SCOPE_HAVING = 1 << 1, SCOPE_MAX = 
 
 /// In fact, ObStmt is ObDMLStmt.
 class ObDMLStmt : public ObStmt {
-  public:
+public:
   struct PartExprArray {
     PartExprArray() : table_id_(common::OB_INVALID_ID), index_tid_(common::OB_INVALID_ID)
     {}
@@ -634,7 +634,7 @@ class ObDMLStmt : public ObStmt {
   };
   typedef common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ObViewTableIds;
 
-  public:
+public:
   explicit ObDMLStmt(stmt::StmtType type);
   virtual ~ObDMLStmt();
   int assign(const ObDMLStmt& other);
@@ -1391,7 +1391,7 @@ class ObDMLStmt : public ObStmt {
   }
   int reset_statement_id(const ObDMLStmt& other);
 
-  protected:
+protected:
   int check_and_convert_hint(const ObSQLSessionInfo& session_info, ObStmtHint& hint);
   int check_and_convert_index_hint(const ObSQLSessionInfo& session_info, ObStmtHint& hint);
   int check_and_convert_leading_hint(const ObSQLSessionInfo& session_info, ObStmtHint& hint);
@@ -1403,7 +1403,7 @@ class ObDMLStmt : public ObStmt {
   int check_and_convert_pq_map_hint(const ObSQLSessionInfo& session_info, ObStmtHint& hint);
   //////////end of functions for sql hint/////////////
 
-  protected:
+protected:
   int replace_expr_in_joined_table(JoinedTable& joined_table, ObRawExpr* from, ObRawExpr* to);
   int create_table_item(TableItem*& table_item);
 
@@ -1413,7 +1413,7 @@ class ObDMLStmt : public ObStmt {
     return inner_get_relation_exprs(expr_checker);
   }
 
-  protected:
+protected:
   int construct_join_tables(const ObDMLStmt& other);
   int construct_join_table(const ObDMLStmt& other, const JoinedTable& other_joined_table, JoinedTable& joined_table);
   int extract_column_expr(
@@ -1426,7 +1426,7 @@ class ObDMLStmt : public ObStmt {
   int replace_expr_for_joined_table(const common::ObIArray<ObRawExpr*>& other_exprs,
       const common::ObIArray<ObRawExpr*>& new_exprs, JoinedTable& joined_tables);
 
-  protected:
+protected:
   /**
    * @note
    * Per MySQL 5.7, the following clauses are common in 'select', 'delete' and 'update' statement:
@@ -1493,7 +1493,7 @@ class ObDMLStmt : public ObStmt {
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> check_constraint_exprs_;
   common::ObSEArray<ObUserVarIdentRawExpr*, 4, common::ModulePageAllocator, true> user_var_exprs_;
 
-  private:
+private:
   bool has_is_table_;
   bool eliminated_;
   bool has_temp_table_;

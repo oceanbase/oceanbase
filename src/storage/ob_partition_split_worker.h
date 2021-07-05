@@ -25,7 +25,7 @@ namespace storage {
 class ObPartitionService;
 
 class ObPartitionSplitTask {
-  public:
+public:
   ObPartitionSplitTask() : schema_version_(0), partition_pair_(), next_run_ts_(0)
   {}
   ~ObPartitionSplitTask()
@@ -50,23 +50,23 @@ class ObPartitionSplitTask {
   bool is_valid() const;
   void reset();
 
-  public:
+public:
   TO_STRING_KV(K_(schema_version), K_(partition_pair), K_(next_run_ts));
 
-  private:
+private:
   int64_t schema_version_;
   share::ObSplitPartitionPair partition_pair_;
   int64_t next_run_ts_;
 };
 
 class ObPartitionSplitTaskFactory {
-  public:
+public:
   static ObPartitionSplitTask* alloc();
   static void release(ObPartitionSplitTask* task);
 };
 
 class ObPartitionSplitWorker : public share::ObThreadPool {
-  public:
+public:
   ObPartitionSplitWorker() : is_inited_(false), partition_service_(NULL), queue_()
   {}
   ~ObPartitionSplitWorker()
@@ -81,14 +81,14 @@ class ObPartitionSplitWorker : public share::ObThreadPool {
   void run1();
   int push(ObPartitionSplitTask* task);
 
-  private:
+private:
   static const int64_t CHECK_PHYSICAL_SPLIT_PROGRESS_INTERVAL = 10 * 1000 * 1000;
 
-  private:
+private:
   int handle_(ObPartitionSplitTask* task);
   int push_(ObPartitionSplitTask* task);
 
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* partition_service_;
   common::ObLightyQueue queue_;

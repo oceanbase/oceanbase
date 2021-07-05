@@ -36,7 +36,7 @@ namespace rootserver {
 
 class ObSystemAdminCtx;
 class ObRestoreMeta {
-  private:
+private:
   struct TablegroupIdPair {
     TablegroupIdPair() : tablegroup_id_(common::OB_INVALID_ID), backup_tablegroup_id_(common::OB_INVALID_ID)
     {}
@@ -82,12 +82,12 @@ class ObRestoreMeta {
     TO_STRING_KV(K_(table_id), K_(index_id), K_(backup_index_id));
   };
 
-  public:
+public:
   explicit ObRestoreMeta(observer::ObRestoreCtx& restore_ctx, RestoreJob& job_info, const volatile bool& is_stop);
   ~ObRestoreMeta();
   int execute();
 
-  private:
+private:
   /* functions */
   int check_stop()
   {

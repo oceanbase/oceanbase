@@ -22,7 +22,7 @@ namespace common {
 int myfallocate(int fd, int mode, off_t offset, off_t len);
 
 class MinAvailFileIdGetter {
-  public:
+public:
   MinAvailFileIdGetter()
   {}
   virtual ~MinAvailFileIdGetter()
@@ -31,12 +31,12 @@ class MinAvailFileIdGetter {
 };
 
 class ObLogDataWriter {
-  public:
+public:
   static const int OPEN_FLAG = O_WRONLY | O_DIRECT;
   static const int OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
   static const int CREATE_FLAG = OPEN_FLAG | O_CREAT;
   class AppendBuffer {
-    public:
+  public:
     static const int64_t DEFAULT_BUF_SIZE = 1 << 22;
     AppendBuffer();
     ~AppendBuffer();
@@ -44,14 +44,14 @@ class ObLogDataWriter {
     int flush(int fd);
     void destroy();
 
-    private:
+  private:
     int64_t file_pos_;
     char* buf_;
     int64_t buf_end_;
     int64_t buf_limit_;
   };
 
-  public:
+public:
   ObLogDataWriter();
   ~ObLogDataWriter();
   int init(const char* log_dir, const int64_t file_size, const int64_t du_percent, const int64_t log_sync_type,
@@ -67,13 +67,13 @@ class ObLogDataWriter {
   }
   int64_t to_string(char* buf, const int64_t len) const;
 
-  protected:
+protected:
   int check_eof_after_log_cursor(const ObLogCursor& cursor);
   int prepare_fd(const int64_t file_id);
   int reuse(const char* pool_file, const char* fname);
   const char* select_pool_file(char* fname, const int64_t limit);
 
-  private:
+private:
   AppendBuffer write_buffer_;
   const char* log_dir_;
   int64_t file_size_;

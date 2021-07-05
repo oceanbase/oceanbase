@@ -44,7 +44,7 @@ struct CoConfig {
   /// whether there are routines waiting to run.
   int64_t slice_ticks_ = 4 << 20;
 
-  private:
+private:
   /// Make \c config() to be the only place where can construct \c
   /// CoConfig instance.
   friend CoConfig& config();

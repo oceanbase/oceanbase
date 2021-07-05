@@ -25,19 +25,19 @@ namespace sql {
 class ObTableReplaceSpec : public ObTableModifySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableReplaceSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableModifySpec(alloc, type), only_one_unique_key_(false), table_column_exprs_(alloc)
   {}
 
   bool only_one_unique_key_;
   ExprFixedArray table_column_exprs_;  // table column exprs
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableReplaceSpec);
 };
 
 class ObTableReplaceOp : public ObTableModifyOp {
-  public:
+public:
   ObTableReplaceOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableModifyOp(ctx, spec, input),
         row2exprs_projector_(ctx.get_allocator()),
@@ -56,10 +56,10 @@ class ObTableReplaceOp : public ObTableModifyOp {
   virtual void destroy() override;
   int do_table_replace();
 
-  protected:
+protected:
   int check_values(bool& is_equal) const;
 
-  private:
+private:
   int try_insert(ObSQLSessionInfo& my_session, const ObPartitionKey& part_key,
       storage::ObPartitionService& partition_service, const storage::ObDMLBaseParam& dml_param,
       ObNewRowIterator*& dup_rows_iter);
@@ -70,7 +70,7 @@ class ObTableReplaceOp : public ObTableModifyOp {
       storage::ObPartitionService& partition_service, storage::ObTableScanParam& scan_param,
       const common::ObNewRowIterator& dup_rows_iter, common::ObNewRowIterator** result);
 
-  protected:
+protected:
   storage::ObRow2ExprsProjector row2exprs_projector_;
   int64_t record_;
   int64_t affected_rows_;
@@ -82,7 +82,7 @@ class ObTableReplaceOp : public ObTableModifyOp {
 class ObTableReplaceOpInput : public ObTableModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableReplaceOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableModifyOpInput(ctx, spec)
   {}
   int init(ObTaskInfo& task_info) override
@@ -90,7 +90,7 @@ class ObTableReplaceOpInput : public ObTableModifyOpInput {
     return ObTableModifyOpInput::init(task_info);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableReplaceOpInput);
 };
 

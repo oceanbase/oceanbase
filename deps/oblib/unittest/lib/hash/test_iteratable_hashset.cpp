@@ -17,18 +17,18 @@
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 class ObIteratableHashSetTest : public ::testing::Test {
-  public:
+public:
   ObIteratableHashSetTest();
   virtual ~ObIteratableHashSetTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObIteratableHashSetTest(const ObIteratableHashSetTest& other);
   ObIteratableHashSetTest& operator=(const ObIteratableHashSetTest& other);
 
-  protected:
+protected:
   // data members
 };
 

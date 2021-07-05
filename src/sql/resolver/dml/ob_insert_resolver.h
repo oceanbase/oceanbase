@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObSelectResolver;
 class ObInsertResolver : public ObDMLResolver {
-  public:
+public:
   static const int64_t target_relation = 0;  /* target relation */
   static const int64_t column_list = 1;      /* column list */
   static const int64_t value_list = 2;       /* value list */
@@ -30,7 +30,7 @@ class ObInsertResolver : public ObDMLResolver {
   static const int64_t insert_ignore = 7;    /* opt_ignore */
   static const int64_t insert_hint = 8;      /* hint */
   static const int64_t insert_returning = 9; /* returning */
-  public:
+public:
   explicit ObInsertResolver(ObResolverParams& params);
   virtual ~ObInsertResolver();
 
@@ -44,7 +44,7 @@ class ObInsertResolver : public ObDMLResolver {
     return static_cast<ObInsertStmt*>(stmt_);
   }
 
-  protected:
+protected:
   int add_rowkey_columns_for_insert_up();
   int add_relation_columns();
   int process_values_function(ObRawExpr*& expr);
@@ -128,10 +128,10 @@ class ObInsertResolver : public ObDMLResolver {
     return is_oracle_tmp_table_array_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObInsertResolver);
 
-  private:
+private:
   common::hash::ObPlacementHashSet<uint64_t> insert_column_ids_;
   int64_t row_count_;
   ObSelectResolver* sub_select_resolver_;

@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObLogMonitoringDump : public ObLogicalOperator {
-  public:
+public:
   ObLogMonitoringDump(ObLogPlan& plan) : ObLogicalOperator(plan), flags_(0), dst_op_line_id_(0)
   {}
   virtual ~ObLogMonitoringDump() = default;
@@ -49,7 +49,7 @@ class ObLogMonitoringDump : public ObLogicalOperator {
     return dst_op_line_id_;
   }
 
-  private:
+private:
   uint64_t flags_;
   uint64_t dst_op_line_id_;
   DISALLOW_COPY_AND_ASSIGN(ObLogMonitoringDump);

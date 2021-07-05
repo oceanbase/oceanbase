@@ -30,7 +30,7 @@ enum ObRebuildSwitch {
 };
 
 class ObIPartitionReport {
-  public:
+public:
   ObIPartitionReport()
   {}
   virtual ~ObIPartitionReport()

@@ -20,12 +20,12 @@
 namespace oceanbase {
 namespace common {
 class ObTraceProfile {
-  public:
+public:
   ObTraceProfile();
   ~ObTraceProfile()
   {}
 
-  public:
+public:
   int init(const char* module, const int64_t warn_timeout, const bool is_tracing);
   void set_sign(const uint64_t sign);
   void reset();
@@ -35,7 +35,7 @@ class ObTraceProfile {
   int trace(const ObPartitionKey& partition_key, const char* flag, const ObAddr& server);
   void report_trace();
 
-  private:
+private:
   struct TraceEntry {
     void reset();
     ObPartitionKey partition_key_;
@@ -56,7 +56,7 @@ class ObTraceProfile {
 
   TraceEntry entry_[MAX_TRACE_NUM];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTraceProfile);
 };
 

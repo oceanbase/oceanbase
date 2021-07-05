@@ -22,14 +22,14 @@ namespace oceanbase {
 namespace observer {
 
 class ObVirtualBadBlockTable : public ObVirtualTableScannerIterator {
-  public:
+public:
   ObVirtualBadBlockTable();
   virtual ~ObVirtualBadBlockTable();
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
   virtual void reset() override;
   int init(const common::ObAddr& addr);
 
-  private:
+private:
   enum BAD_BLOCK_COLUMN {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,

@@ -20,7 +20,7 @@ namespace storage {
 
 template <typename Handle, typename Key, int64_t N>
 class ObHandleMgr {
-  public:
+public:
   ObHandleMgr() : is_inited_(false), is_multi_(false), is_ordered_(false), last_handle_(NULL), handle_cache_(NULL)
   {}
   virtual ~ObHandleMgr()
@@ -78,7 +78,7 @@ class ObHandleMgr {
   }
   TO_STRING_KV(KP_(last_handle), KP_(handle_cache));
 
-  protected:
+protected:
   typedef ObHandleCache<Key, Handle, N> HandleCache;
   bool is_inited_;
   bool is_multi_;

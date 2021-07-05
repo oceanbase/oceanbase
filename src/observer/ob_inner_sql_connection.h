@@ -48,7 +48,7 @@ class ObVTIterCreator;
 class ObVirtualTableIteratorFactory;
 class ObInnerSQLReadContext;
 class ObITimeRecord {
-  public:
+public:
   virtual int64_t get_send_timestamp() const = 0;
   virtual int64_t get_receive_timestamp() const = 0;
   virtual int64_t get_enqueue_timestamp() const = 0;
@@ -63,10 +63,10 @@ typedef common::Ob2DArray<ObObjParam, common::OB_MALLOC_BIG_BLOCK_SIZE, common::
 
 class ObInnerSQLConnection : public common::sqlclient::ObISQLConnection,
                              public common::ObDLinkBase<ObInnerSQLConnection> {
-  public:
+public:
   static constexpr const char LABEL[] = "RPInnerSqlConn";
   class SavedValue {
-    public:
+  public:
     SavedValue()
     {
       reset();
@@ -78,7 +78,7 @@ class ObInnerSQLConnection : public common::sqlclient::ObISQLConnection,
       execute_end_timestamp_ = 0;
     }
 
-    public:
+  public:
     ObInnerSQLReadContext* ref_ctx_;
     int64_t execute_start_timestamp_;
     int64_t execute_end_timestamp_;
@@ -86,18 +86,18 @@ class ObInnerSQLConnection : public common::sqlclient::ObISQLConnection,
 
   // Worker and session timeout may be altered in sql execution, restore to origin value after execution.
   class TimeoutGuard {
-    public:
+  public:
     TimeoutGuard(ObInnerSQLConnection& conn);
     ~TimeoutGuard();
 
-    private:
+  private:
     ObInnerSQLConnection& conn_;
     int64_t worker_timeout_;
     int64_t query_timeout_;
     int64_t trx_timeout_;
   };
 
-  public:
+public:
   class ObSqlQueryExecutor;
 
   ObInnerSQLConnection();
@@ -161,7 +161,7 @@ class ObInnerSQLConnection : public common::sqlclient::ObISQLConnection,
   }
   void dump_conn_bt_info();
   class RefGuard {
-    public:
+  public:
     explicit RefGuard(ObInnerSQLConnection& conn) : conn_(conn)
     {
       conn_.ref();
@@ -175,11 +175,11 @@ class ObInnerSQLConnection : public common::sqlclient::ObISQLConnection,
       return conn_;
     }
 
-    private:
+  private:
     ObInnerSQLConnection& conn_;
   };
 
-  public:
+public:
   int64_t get_send_timestamp() const
   {
     return get_session().get_query_start_time();
@@ -217,7 +217,7 @@ class ObInnerSQLConnection : public common::sqlclient::ObISQLConnection,
     return associated_client_;
   }
 
-  public:
+public:
   int prepare(const uint64_t tenant_id, const ObString& sql, bool is_dynamic_sql, bool is_dbms_sql, bool is_cursor,
       common::ObISQLClient::ReadResult& res);
   int execute(const uint64_t tenant_id, const ObPsStmtId client_stmt_id, const sql::stmt::StmtType stmt_type,
@@ -225,7 +225,7 @@ class ObInnerSQLConnection : public common::sqlclient::ObISQLConnection,
 
   virtual int execute(const uint64_t tenant_id, sqlclient::ObIExecutor& executor) override;
 
-  public:
+public:
   // nested session and sql execute for foreign key.
   int begin_nested_session(
       sql::ObSQLSessionInfo::StmtSavedValue& saved_session, SavedValue& saved_conn, bool skip_cur_stmt_tables);
@@ -247,14 +247,14 @@ class ObInnerSQLConnection : public common::sqlclient::ObISQLConnection,
     return is_spi_conn_;
   }
 
-  public:
+public:
   static int process_record(ObInnerSQLResult& res, sql::ObSQLSessionInfo& session, ObITimeRecord& time_record,
       int last_ret, int64_t execution_id, int64_t ps_stmt_id, int64_t routine_id, ObWaitEventDesc& max_wait_desc,
       ObWaitEventStat& total_wait_desc, sql::ObExecRecord& exec_record, sql::ObExecTimestamp& exec_timestamp,
       bool is_from_pl = false);
   static void record_stat(sql::ObSQLSessionInfo& session, const sql::stmt::StmtType type, bool is_from_pl = false);
 
-  public:
+public:
   static const int64_t LOCK_RETRY_TIME = 1L * 1000 * 1000;
   static const int64_t TOO_MANY_REF_ALERT = 1024;
   static const uint32_t INNER_SQL_SESS_VERSION = 0;
@@ -263,7 +263,7 @@ class ObInnerSQLConnection : public common::sqlclient::ObISQLConnection,
   static const int64_t MAX_BT_SIZE = 20;
   static const int64_t EXTRA_REFRESH_LOCATION_TIME = 1L * 1000 * 1000;
 
-  private:
+private:
   int init_session(sql::ObSQLSessionInfo* session_info = NULL);
   int init_result(ObInnerSQLResult& res, ObVirtualTableIteratorFactory* vt_iter_factory, int64_t retry_cnt,
       share::schema::ObSchemaGetterGuard& schema_guard, bool is_prepare_protocol = false, bool is_prepare_stage = false,
@@ -296,7 +296,7 @@ class ObInnerSQLConnection : public common::sqlclient::ObISQLConnection,
 
   share::ObWorker::CompatMode get_compat_mode() const;
 
-  private:
+private:
   bool inited_;
   sql::ObSQLSessionInfo inner_session_;
   sql::ObSQLSessionInfo* extern_session_;  // nested sql and spi both use it, rename to extern.

@@ -40,7 +40,7 @@ inline bool is_ts_type_external_consistent(const int64_t ts_type)
 }
 
 class ObTsParam {
-  public:
+public:
   ObTsParam()
   {
     reset();
@@ -66,14 +66,14 @@ class ObTsParam {
     return need_inc_;
   }
 
-  private:
+private:
   // Whether the gts value needs to be +1,
   // it is increased by one by default in the gts cache management
   bool need_inc_;
 };
 
 class ObITsSource {
-  public:
+public:
   virtual int update_gts(const int64_t gts, bool& update) = 0;
   virtual int update_local_trans_version(const int64_t version, bool& update) = 0;
   virtual int get_gts(const MonotonicTs stc, ObTsCbTask* task, int64_t& gts, MonotonicTs& receive_gts_ts) = 0;
@@ -92,7 +92,7 @@ class ObITsSource {
   virtual int update_publish_version(const int64_t publish_version) = 0;
   virtual int get_publish_version(int64_t& publish_version) = 0;
 
-  public:
+public:
   VIRTUAL_TO_STRING_KV("", "");
 };
 

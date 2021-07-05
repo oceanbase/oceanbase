@@ -130,7 +130,7 @@ int ObIPartitionMergeFuser::check_merge_param(const ObMergeParameter& merge_para
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Unexpected merge param with major fuser", K(merge_param), K(ret));
   } else if (OB_FAIL(inner_check_merge_param(merge_param))) {
-    STORAGE_LOG(WARN, "Unexcepted merge param to init merge fuser", K(merge_param), K(ret));
+    STORAGE_LOG(WARN, "Unexpected merge param to init merge fuser", K(merge_param), K(ret));
   }
 
   return ret;
@@ -404,7 +404,7 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter& merge_param)
               K(ret));
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Unexcepted null generated expr", KP(expr), K(ret));
+          STORAGE_LOG(WARN, "Unexpected null generated expr", KP(expr), K(ret));
         } else if (OB_FAIL(dependent_exprs_.push_back(expr))) {
           STORAGE_LOG(WARN, "push back error", K(ret));
         } else {
@@ -808,7 +808,7 @@ int ObIncrementMajorPartitionMergeFuser::calc_column_checksum(const bool rewrite
     STORAGE_LOG(WARN, "ObMajorPartitionMergeFuser is not inited", K_(is_inited), K(ret));
   } else if (OB_ISNULL(checksum_calculator_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted null checksum calculator", K(ret));
+    STORAGE_LOG(WARN, "Unexpected null checksum calculator", K(ret));
   } else if (!row_changed_) {
     // skip not changed row
   } else if (OB_FAIL(checksum_calculator_->calc_column_checksum(
@@ -901,10 +901,10 @@ int ObMinorPartitionMergeFuser::inner_init(const ObMergeParameter& merge_param)
     STORAGE_LOG(WARN, "Failed to generate multi version row info", K(ret));
   } else if (OB_ISNULL(multi_version_row_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted null multi version row info", K(ret));
+    STORAGE_LOG(WARN, "Unexpected null multi version row info", K(ret));
   } else if (OB_ISNULL(out_cols_project_ = multi_version_col_desc_gen_.get_out_cols_project())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted null out cols project", K(ret));
+    STORAGE_LOG(WARN, "Unexpected null out cols project", K(ret));
   } else {
     column_cnt_ = multi_version_row_info_->column_cnt_;
     cur_first_dml_ = T_DML_UNKNOWN;

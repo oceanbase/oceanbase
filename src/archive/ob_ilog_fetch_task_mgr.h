@@ -24,7 +24,7 @@ namespace archive {
 using oceanbase::clog::file_id_t;
 class ObArchiveAllocator;
 struct PGFetchTask {
-  public:
+public:
   explicit PGFetchTask();
   ~PGFetchTask();
   bool is_valid();
@@ -34,7 +34,7 @@ struct PGFetchTask {
   TO_STRING_KV(K(pg_key_), K(incarnation_), K(archive_round_), K(epoch_), K(start_log_id_), K(ilog_file_id_),
       K(clog_task_), K(clog_size_), K(clog_count_), K(first_log_gen_tstamp_));
 
-  public:
+public:
   // start_log_id = max_log_id + 1, this log maybe not exist
   common::ObPGKey pg_key_;
   int64_t incarnation_;
@@ -50,11 +50,11 @@ struct PGFetchTask {
 };
 
 class IlogPGFetchQueue {
-  public:
+public:
   IlogPGFetchQueue(ObArchiveAllocator& allocator);
   ~IlogPGFetchQueue();
 
-  public:
+public:
   int push_task(PGFetchTask& task);
   int pop_task(PGFetchTask& task);
   void set_ilog_file_id(const file_id_t ilog_file_id);
@@ -66,7 +66,7 @@ class IlogPGFetchQueue {
   TO_STRING_KV(K(ilog_file_id_), K(next_), K(pg_array_));
   typedef common::ObSEArray<PGFetchTask, 32> PGArray;
 
-  private:
+private:
   file_id_t ilog_file_id_;
   IlogPGFetchQueue* next_;
   ObArchiveAllocator& allocator_;
@@ -74,30 +74,30 @@ class IlogPGFetchQueue {
 };
 
 class ObArchiveIlogFetchTaskMgr {
-  public:
+public:
   static const int64_t ILOG_FETCH_WAIT_INTERVAL = 100 * 1000L;
   typedef SimpleSortList<IlogPGFetchQueue> IlogPGFetchQueueList;
   typedef common::SpinRWLock RWLock;
   typedef common::SpinWLockGuard WLockGuard;
   typedef common::SpinRLockGuard RLockGuard;
 
-  public:
+public:
   ObArchiveIlogFetchTaskMgr();
   ~ObArchiveIlogFetchTaskMgr();
 
-  public:
+public:
   int init(ObArchiveAllocator* allocator);
   void reset();
   int destroy();
 
-  public:
+public:
   int add_ilog_fetch_task(PGFetchTask& task);
 
   int pop_ilog_fetch_task(PGFetchTask& task, bool& exist_task);
 
   int64_t get_alloc_size();
 
-  private:
+private:
   int generate_cur_ilog_fetch_mgr_();
   void destroy_task_list_();
   // locate ilog pg queue, return the pre one if the queue not exist
@@ -106,7 +106,7 @@ class ObArchiveIlogFetchTaskMgr {
   int handle_add_task_with_ilog_not_exist_(PGFetchTask& task, IlogPGFetchQueue* location);
   int pop_ilog_fetch_task_(PGFetchTask& task, bool& exist_task, bool& new_ilog_file);
 
-  private:
+private:
   bool stop_flag_;
   int64_t ilog_count_;
   IlogPGFetchQueue* cur_ilog_fetch_queue_;

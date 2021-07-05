@@ -17,14 +17,14 @@
 namespace oceanbase {
 namespace sql {
 class ObDropSynonymResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObDropSynonymResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
   virtual ~ObDropSynonymResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   static const int64_t SYNONYM_CHILD_COUNT = 4;
   DISALLOW_COPY_AND_ASSIGN(ObDropSynonymResolver);
 };

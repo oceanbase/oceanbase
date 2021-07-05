@@ -30,7 +30,7 @@ class ObRsAsyncCB : public obrpc::ObSrvRpcProxy::AsyncCB<PC>,
                     public common::ObDLinkBase<ObRsAsyncCB<PC, AsyncRpcProxy> > {
   using AsyncCB = typename obrpc::ObSrvRpcProxy::AsyncCB<PC>;
 
-  public:
+public:
   ObRsAsyncCB(AsyncRpcProxy& proxy) : proxy_(proxy)
   {}
   virtual ~ObRsAsyncCB()
@@ -65,7 +65,7 @@ class ObRsAsyncCB : public obrpc::ObSrvRpcProxy::AsyncCB<PC>,
 
   TO_STRING_KV("dst", get_dst(), "ret_code", get_ret_code(), "result", get_result());
 
-  private:
+private:
   AsyncRpcProxy& proxy_;
 };
 
@@ -109,9 +109,9 @@ void ObRsAsyncCB<PC, AsyncRpcProxy>::on_invalid()
 
 template <obrpc::ObRpcPacketCode PC, typename RpcArg, typename RpcResult, typename Func>
 class ObRsAsyncRpcProxy {
-  public:
+public:
   struct EmptyType {
-    public:
+  public:
     bool is_valid() const
     {
       return true;
@@ -145,7 +145,7 @@ class ObRsAsyncRpcProxy {
   }
   int receive_response();
 
-  private:
+private:
   int call_rpc(const common::ObAddr& server, const int64_t timeout, const uint64_t tenant_id, const RpcArg& arg,
       ObRsAsyncCB<PC, ObRsAsyncRpcProxy>* cb);
   int call_rpc(const common::ObAddr& server, const int64_t timeout, const uint64_t tenant_id,
@@ -161,7 +161,7 @@ class ObRsAsyncRpcProxy {
   int64_t response_count_;
   common::ObThreadCond cond_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRsAsyncRpcProxy);
 };
 

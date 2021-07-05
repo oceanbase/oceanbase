@@ -52,7 +52,7 @@ static const MonitorName OB_PLAN_MONITOR_INFOS[] = {
     {MAX_EVENT_ID, "max_event"}};
 
 class ObPhyPlanExecInfo final : public ObPhyOperatorMonitorInfo {
-  public:
+public:
   ObPhyPlanExecInfo()
   {}
   inline virtual int64_t print_info(char* buf, int64_t buf_len) const;
@@ -63,7 +63,7 @@ class ObPhyPlanExecInfo final : public ObPhyOperatorMonitorInfo {
     return print_info(buf, buf_len);
   }
 
-  private:
+private:
   void set_value(ObPlanMonitorInfoIds index, int64_t value)
   {
     plan_info_array_[index] = value;
@@ -74,7 +74,7 @@ class ObPhyPlanExecInfo final : public ObPhyOperatorMonitorInfo {
   }
   DISALLOW_COPY_AND_ASSIGN(ObPhyPlanExecInfo);
 
-  private:
+private:
   common::ObWaitEventDesc max_wait_event_;
   int64_t plan_info_array_[MAX_EVENT_ID];
 };

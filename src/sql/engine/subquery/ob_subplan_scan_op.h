@@ -21,7 +21,7 @@ namespace sql {
 class ObSubPlanScanSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObSubPlanScanSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   // project child output to subplan scan column.
   // projector_is filled with [child output, scan column] paires, even index is child output,
@@ -31,7 +31,7 @@ class ObSubPlanScanSpec : public ObOpSpec {
 };
 
 class ObSubPlanScanOp : public ObOperator {
-  public:
+public:
   ObSubPlanScanOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;

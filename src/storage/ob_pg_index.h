@@ -24,7 +24,7 @@ typedef common::LinkHashNode<common::ObPartitionKey> ObPGHashNode;
 typedef common::LinkHashValue<common::ObPartitionKey> ObPGHashValue;
 
 class ObPGKeyWrap : public ObPGHashValue {
-  public:
+public:
   ObPGKeyWrap()
   {}
   ~ObPGKeyWrap()
@@ -50,12 +50,12 @@ class ObPGKeyWrap : public ObPGHashValue {
   }
   TO_STRING_KV(K_(pg_key));
 
-  private:
+private:
   common::ObPGKey pg_key_;
 };
 
 class PGKeyInfoAlloc {
-  public:
+public:
   static ObPGKeyWrap* alloc_value()
   {
     return op_alloc(ObPGKeyWrap);
@@ -85,7 +85,7 @@ class PGKeyInfoAlloc {
 typedef common::ObLinkHashMap<common::ObPartitionKey, ObPGKeyWrap, PGKeyInfoAlloc> ObPGIndexMap;
 
 class ObPartitionGroupIndex {
-  public:
+public:
   ObPartitionGroupIndex();
   virtual ~ObPartitionGroupIndex()
   {
@@ -98,10 +98,10 @@ class ObPartitionGroupIndex {
   int remove_partition(const common::ObPartitionKey& pkey);
   int get_pg_key(const common::ObPartitionKey& pkey, common::ObPGKey& pg_key);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionGroupIndex);
 
-  private:
+private:
   bool is_inited_;
   ObPGIndexMap pg_index_map_;
   mutable lib::ObMutex change_mutex_;

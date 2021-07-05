@@ -51,7 +51,7 @@ using ObIAllocator = common::ObIAllocator;
 class CoSetSched : public CoBaseSched {
   static constexpr int MAX_SET_CNT = 32;
 
-  public:
+public:
   using PrepFuncT = std::function<int()>;
   using PostFuncT = std::function<void()>;
   using RunFuncT = std::function<void()>;
@@ -84,18 +84,18 @@ class CoSetSched : public CoBaseSched {
 
   int create_routine(RoutineFunc start) override;
 
-  protected:
-  int prepare();
-  void postrun();
+protected:
+  int prepare() override;
+  void postrun() override;
 
-  private:
+private:
   void add_runnable(CoBaseSched::Worker& w) override;
   CoRoutine* get_next_runnable(int64_t& waittime) override;
   void remove_finished_workers();
 
   void* allocator_alloc(ObIAllocator& allocator, size_t size);
 
-  private:
+private:
   using SetArr = Set* [MAX_SET_CNT];
 
   SetArr sets_;
@@ -110,7 +110,7 @@ class CoSetSched::Worker : public CoBaseSched::Worker {
   friend class CoSetSched;
   using FuncT = std::function<void()>;
 
-  public:
+public:
   Worker(CoSetSched& sched, FuncT func = nullptr, ObIAllocator* allocator = nullptr);
 
   int& get_setid();
@@ -118,10 +118,10 @@ class CoSetSched::Worker : public CoBaseSched::Worker {
 
   void check();
 
-  private:
+private:
   void run() override;
 
-  private:
+private:
   int setid_;
   bool owned_;  // True if we're responsible delete it.
   FuncT func_;
@@ -130,7 +130,7 @@ class CoSetSched::Worker : public CoBaseSched::Worker {
 };
 
 class CoSetSched::Set {
-  public:
+public:
   /// \note \c Set is allocated in local storage and the dctor won't
   /// be called.
   Set();
@@ -141,10 +141,10 @@ class CoSetSched::Set {
   virtual void add_worker(Worker& worker);
   virtual Worker* get_next_runnable(int64_t& waittime);
 
-  protected:
+protected:
   using LinkedList = CoSetSched::LinkedList;
 
-  private:
+private:
   int setid_;
   LinkedList runnables_;
 };

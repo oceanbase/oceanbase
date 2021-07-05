@@ -31,7 +31,7 @@ class ObMySQLProxy;
 namespace share {
 class ObEventHistoryTableOperator;
 class ObEventTableClearTask : public common::ObAsyncTimerTask {
-  public:
+public:
   ObEventTableClearTask(ObEventHistoryTableOperator& rs_event_operator,
       ObEventHistoryTableOperator& server_event_operator, common::ObWorkQueue& work_queue);
   virtual ~ObEventTableClearTask()
@@ -45,16 +45,16 @@ class ObEventTableClearTask : public common::ObAsyncTimerTask {
   }
   virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-  private:
+private:
   ObEventHistoryTableOperator& rs_event_operator_;
   ObEventHistoryTableOperator& server_event_operator_;
 };
 
 class ObEventHistoryTableOperator {
-  public:
+public:
   static const int64_t EVENT_TABLE_CLEAR_INTERVAL = 2L * 3600L * 1000L * 1000L;  // 2 Hours
   class ObEventTableUpdateTask : public common::IObDedupTask {
-    public:
+  public:
     ObEventTableUpdateTask(ObEventHistoryTableOperator& table_operator, const bool is_delete);
     virtual ~ObEventTableUpdateTask()
     {}
@@ -73,7 +73,7 @@ class ObEventHistoryTableOperator {
     }
     virtual int process();
 
-    public:
+  public:
     void assign_ptr(char* ptr, const int64_t buf_size)
     {
       sql_.assign_ptr(ptr, static_cast<int32_t>(buf_size));
@@ -81,7 +81,7 @@ class ObEventHistoryTableOperator {
 
     TO_STRING_KV(K_(sql), K_(is_delete));
 
-    private:
+  private:
     ObEventHistoryTableOperator& table_operator_;
     common::ObString sql_;
     bool is_delete_;
@@ -123,7 +123,7 @@ class ObEventHistoryTableOperator {
 
   virtual int async_delete() = 0;
 
-  protected:
+protected:
   void set_addr(const common::ObAddr self_addr, bool is_rs_ev)
   {
     self_addr_ = self_addr;
@@ -144,7 +144,7 @@ class ObEventHistoryTableOperator {
   int add_task(const common::ObSqlString& sql, const bool is_delete = false);
   int gen_event_ts(int64_t& event_ts);
 
-  protected:
+protected:
   static const int64_t TOTAL_LIMIT = 320L * 1024L * 1024L;  // 320MB
   static const int64_t HOLD_LIMIT = 160L * 1024L * 1024L;   // 160MB
   static const int64_t PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
@@ -156,7 +156,7 @@ class ObEventHistoryTableOperator {
 
   virtual int process_task(const common::ObString& sql, const bool is_delete);
 
-  private:
+private:
   bool inited_;
   volatile bool stopped_;
   int64_t last_event_ts_;
@@ -167,10 +167,10 @@ class ObEventHistoryTableOperator {
   common::ObAddr self_addr_;
   bool is_rootservice_event_history_;
 
-  protected:
+protected:
   ObEventHistoryTableOperator();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObEventHistoryTableOperator);
 };
 

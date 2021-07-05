@@ -29,7 +29,7 @@ namespace unittest {
 using namespace election;
 using namespace common;
 class TestObElectionMsg : public ::testing::Test {
-  public:
+public:
   TestObElectionMsg()
   {}
   ~TestObElectionMsg()
@@ -41,11 +41,11 @@ class TestObElectionMsg : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  public:
+public:
   void init();
   int64_t get_current_ts(ObPartitionKey& pkey) const;
 
-  public:
+public:
   static const int64_t OB_ELECTION_HASH_TABLE_NUM = 100;
   ObAddr self_;
   int64_t t1_;

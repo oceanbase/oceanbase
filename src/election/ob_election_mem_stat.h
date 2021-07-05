@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace election {
 class ObElectionMemStat {
-  public:
+public:
   ObElectionMemStat()
   {
     reset();
@@ -33,7 +33,7 @@ class ObElectionMemStat {
   void reset();
   void destroy();
 
-  public:
+public:
   const char* get_type_name() const
   {
     return type_name_;
@@ -54,10 +54,10 @@ class ObElectionMemStat {
 
   TO_STRING_KV("type_name", type_name_, K_(alloc_count), K_(release_count));
 
-  public:
+public:
   static const int64_t OB_ELECTION_TYPE_NAME_LENGTH = 64;
 
-  private:
+private:
   common::ObAddr addr_;
   char type_name_[OB_ELECTION_TYPE_NAME_LENGTH];
   int64_t alloc_count_;

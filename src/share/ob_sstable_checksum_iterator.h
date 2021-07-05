@@ -21,7 +21,7 @@ namespace share {
 class ObIMergeErrorCb;
 
 class ObSSTableDataChecksumInfo {
-  public:
+public:
   ObSSTableDataChecksumInfo() = default;
   virtual ~ObSSTableDataChecksumInfo() = default;
   void reset();
@@ -35,26 +35,26 @@ class ObSSTableDataChecksumInfo {
   }
   TO_STRING_KV(K_(replicas));
 
-  private:
+private:
   static const int64_t DEFAULT_REPLICA_COUNT = 7;
   common::ObSEArray<ObSSTableDataChecksumItem, DEFAULT_REPLICA_COUNT> replicas_;
 };
 
 class ObSSTableDataChecksumIterator {
   class ObIDataChecksumItemFiter : public common::ObDLinkBase<ObIDataChecksumItemFiter> {
-    public:
+  public:
     ObIDataChecksumItemFiter()
     {}
     virtual ~ObIDataChecksumItemFiter()
     {}
     virtual int filter(const ObSSTableDataChecksumItem& item, bool& is_filtered) = 0;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObIDataChecksumItemFiter);
   };
 
   class ObOnlyUserTenantChecksumItemFilter : public ObIDataChecksumItemFiter {
-    public:
+  public:
     ObOnlyUserTenantChecksumItemFilter() = default;
     virtual ~ObOnlyUserTenantChecksumItemFilter() = default;
     int filter(const ObSSTableDataChecksumItem& item, bool& is_filtered) override
@@ -69,12 +69,12 @@ class ObSSTableDataChecksumIterator {
       return ret;
     }
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObOnlyUserTenantChecksumItemFilter);
   };
 
   class ObSpecialTableChecksumItemFilter : public ObIDataChecksumItemFiter {
-    public:
+  public:
     ObSpecialTableChecksumItemFilter() = default;
     virtual ~ObSpecialTableChecksumItemFilter() = default;
     int filter(const ObSSTableDataChecksumItem& item, bool& is_filtered) override
@@ -89,11 +89,11 @@ class ObSSTableDataChecksumIterator {
       return ret;
     }
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObSpecialTableChecksumItemFilter);
   };
 
-  public:
+public:
   ObSSTableDataChecksumIterator() : cur_idx_(0), sql_proxy_(nullptr), merge_error_cb_(nullptr)
   {}
   virtual ~ObSSTableDataChecksumIterator()
@@ -106,11 +106,11 @@ class ObSSTableDataChecksumIterator {
   int set_only_user_tenant_filter();
   void reset();
 
-  private:
+private:
   int fetch_next_batch_();
   int filter_(const ObSSTableDataChecksumItem& item, bool& is_filtered);
 
-  private:
+private:
   static const int64_t BATCH_CNT = 999;
   common::ObSEArray<ObSSTableDataChecksumItem, BATCH_CNT> fetched_checksum_items_;
   int64_t cur_idx_;

@@ -36,51 +36,51 @@ struct ServerBalancePlanTask {
 };
 
 class ServerManager : public ObServerManager {
-  public:
+public:
   ServerManager() : ObServerManager()
   {}
   virtual ~ServerManager()
   {}
 
-  public:
+public:
   virtual int get_servers_of_zone(
       const common::ObZone& zone, common::ObArray<common::ObAddr>& server_list) const override;
   virtual int get_server_status(const common::ObAddr& server, share::ObServerStatus& server_status) const override;
 
-  public:
+public:
   int clone(ObServerManager& server_mgr);
   int reduce_disk_use(const common::ObAddr& server, const int64_t size);
   int add_disk_use(const common::ObAddr& server, const int64_t size);
 
-  private:
+private:
   int find_server_status(const ObAddr& server, share::ObServerStatus*& status) const;
 };
 
 class UnitManager : public ObUnitManager {
-  public:
+public:
   UnitManager(ObServerManager& server_mgr, ObZoneManager& zone_mgr) : ObUnitManager(server_mgr, zone_mgr)
   {}
   virtual ~UnitManager()
   {}
 
-  private:
+private:
   int migrate_unit(const uint64_t unit_id, const common::ObAddr& dst, const bool is_manual = false) override;
   int end_migrate_unit(const uint64_t unit_id, const EndMigrateOp end_migrate_op = COMMIT) override;
 };
 
 class ServerBalancer : public ObServerBalancer {
-  public:
+public:
   ServerBalancer() : ObServerBalancer(), task_iter_idx_(0), task_array_(), unit_iter_idx_(0), unit_distribution_()
   {}
   virtual ~ServerBalancer()
   {}
 
-  public:
+public:
   int get_next_task(ServerBalancePlanTask& task);
   int get_next_unit_distribution(share::ObUnitInfo& unit);
   int generate_server_balance_plan(common::ObZone& zone);
 
-  private:
+private:
   struct UnitIdCmp {
     UnitIdCmp() : ret_(common::OB_SUCCESS)
     {}
@@ -105,7 +105,7 @@ class ServerBalancer : public ObServerBalancer {
     int ret_;
   };
 
-  private:
+private:
   virtual int do_migrate_unit_task(const common::ObIArray<ObServerBalancer::UnitMigrateStat>& task_array) override;
   virtual int do_migrate_unit_task(const common::ObIArray<ObServerBalancer::UnitMigrateStat*>& task_array) override;
   int get_all_zone_units(const common::ObZone& zone, common::ObIArray<share::ObUnitInfo>& units);
@@ -114,7 +114,7 @@ class ServerBalancer : public ObServerBalancer {
   int do_generate_server_balance_plan(const common::ObZone& zone);
   int execute_migrate_unit(const share::ObUnit& unit, const ObServerBalancer::UnitMigrateStat& task);
 
-  private:
+private:
   int64_t task_iter_idx_;
   common::ObArray<ServerBalancePlanTask> task_array_;
   int64_t unit_iter_idx_;
@@ -122,7 +122,7 @@ class ServerBalancer : public ObServerBalancer {
 };
 
 class CheckStopProvider : public share::ObCheckStopProvider {
-  public:
+public:
   CheckStopProvider()
   {}
   virtual ~CheckStopProvider()
@@ -134,7 +134,7 @@ class CheckStopProvider : public share::ObCheckStopProvider {
 };
 
 class ObServerBalancePlan {
-  public:
+public:
   ObServerBalancePlan(ObUnitManager& unit_mgr, ObILeaderCoordinator& leader_coordinator, ObServerManager& server_mgr,
       ObZoneManager& zone_mgr)
       : unit_mgr_(unit_mgr),
@@ -154,17 +154,17 @@ class ObServerBalancePlan {
   virtual ~ObServerBalancePlan()
   {}
 
-  public:
+public:
   int init(common::ObMySQLProxy& proxy, common::ObServerConfig& server_config,
       share::schema::ObMultiVersionSchemaService& schema_service, ObRootBalancer& root_balance);
   int generate_server_balance_plan();
   int get_next_task(ServerBalancePlanTask& task);
   int get_next_unit_distribution(share::ObUnitInfo& unit);
 
-  private:
+private:
   int clone_fake_unit_mgr();
 
-  private:
+private:
   ObUnitManager& unit_mgr_;
   ObILeaderCoordinator& leader_coordinator_;
   ObServerManager& server_mgr_;
@@ -183,7 +183,7 @@ class ObServerBalancePlan {
   bool is_inited_;
   bool plan_generated_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObServerBalancePlan);
 };
 

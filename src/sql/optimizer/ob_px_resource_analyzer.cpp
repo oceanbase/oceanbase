@@ -25,7 +25,7 @@ namespace sql {
 
 template <class T>
 class DfoTreeNormalizer {
-  public:
+public:
   static int normalize(T& root);
 };
 
@@ -98,7 +98,7 @@ int DfoTreeNormalizer<T>::normalize(T& root)
 }
 
 class SchedOrderGenerator {
-  public:
+public:
   SchedOrderGenerator() = default;
   ~SchedOrderGenerator() = default;
   int generate(DfoInfo& root, ObIArray<DfoInfo*>& edges);

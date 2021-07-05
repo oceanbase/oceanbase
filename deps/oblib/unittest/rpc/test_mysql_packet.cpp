@@ -18,12 +18,12 @@ using namespace oceanbase::rpc;
 using namespace oceanbase::obmysql;
 
 class ObFakeMySQLPacket : public ObMySQLPacket {
-  public:
+public:
   ObFakeMySQLPacket() : content_len_(0)
   {}
   int64_t content_len_;
 
-  protected:
+protected:
   virtual int serialize(char* start, const int64_t len, int64_t& pos) const
   {
     int ret = OB_SUCCESS;
@@ -42,7 +42,7 @@ class ObFakeMySQLPacket : public ObMySQLPacket {
 };
 
 class TestMySQLPacket : public ::testing::Test {
-  public:
+public:
   TestMySQLPacket()
   {}
 

@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace observer {
 class ObTenantVirtualCharset : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObTenantVirtualCharset()
   {}
   ~ObTenantVirtualCharset()
@@ -29,7 +29,7 @@ class ObTenantVirtualCharset : public common::ObVirtualTableScannerIterator {
   }
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   ObTenantVirtualCharset(const ObTenantVirtualCharset& other) = delete;
   ObTenantVirtualCharset& operator=(const ObTenantVirtualCharset& other) = delete;
   enum CHARSET_COLUMN { CHARSET = common::OB_APP_MIN_COLUMN_ID, DESCRIPTION, DEFAULT_COLLATION, MAX_LENGTH };

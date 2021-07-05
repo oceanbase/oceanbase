@@ -24,12 +24,12 @@ static const int64_t OB_SESSION_SMALL_BLOCK_SIZE = 4 * 1024LL;
 // Each prepared statements has one object of this type in the session.
 // The object is immutable during the life of the prepared statement.
 class ObPsSessionInfo {
-  public:
+public:
   typedef common::ObSegmentArray<oceanbase::obmysql::EMySQLFieldType, OB_SESSION_SMALL_BLOCK_SIZE,
       common::ObWrapperAllocator, false /* use set alloc */, common::ObSEArray<char*, 64> >
       ParamsType;
 
-  public:
+public:
   ObPsSessionInfo()
       : sql_id_(0), params_count_(0), stmt_type_(stmt::T_NONE), params_type_(), prepare_sql_(), is_dml_(false)
   {}
@@ -84,10 +84,10 @@ class ObPsSessionInfo {
     return is_dml_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPsSessionInfo);
 
-  private:
+private:
   uint64_t sql_id_;  // key of plan cache
   int64_t params_count_;
   stmt::StmtType stmt_type_;  // used by query result cache before got the plan

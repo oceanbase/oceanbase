@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObNoChildrenPhyOperator : public ObPhyOperator {
-  public:
+public:
   explicit ObNoChildrenPhyOperator(common::ObIAllocator& alloc) : ObPhyOperator(alloc)
   {}
   virtual ~ObNoChildrenPhyOperator()
@@ -27,7 +27,7 @@ class ObNoChildrenPhyOperator : public ObPhyOperator {
   virtual int32_t get_child_num() const;
   virtual int accept(ObPhyOperatorVisitor& visitor) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObNoChildrenPhyOperator);
 };

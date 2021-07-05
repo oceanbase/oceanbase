@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace storage {
 
 class MockObStoreRowIterator : public ObStoreRowIterator {
-  public:
+public:
   MockObStoreRowIterator()
   {}
   virtual ~MockObStoreRowIterator()

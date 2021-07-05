@@ -34,7 +34,7 @@ class ObFIFOAllocator : public common::ObIAllocator {
   friend class ::ObFIFOAllocatorNormalPageListTest;
   friend class UsedTotalChecker;
 
-  private:
+private:
   static const int32_t PAGE_HEADER = 0xe1fba00c;
   // Alloc Header Magic Number. f1f0allc for FIFOALLC
   static const int32_t ALLOC_HEADER = 0xf1f0a11c;
@@ -42,7 +42,7 @@ class ObFIFOAllocator : public common::ObIAllocator {
   static const int32_t ALREADY_FREE = 0xf5eebef0;
   static const int64_t SPECIAL_FLAG = -1;
 
-  public:
+public:
   struct BasePageHeader {
     using LinkedNode = common::ObDLinkNode<BasePageHeader*>;
     BasePageHeader() : magic_num_(PAGE_HEADER)
@@ -77,7 +77,7 @@ class ObFIFOAllocator : public common::ObIAllocator {
     BasePageHeader* page_header_;
   } __attribute__((aligned(16)));
 
-  public:
+public:
   explicit ObFIFOAllocator(const uint64_t tenant_id = OB_SERVER_TENANT_ID);
   ~ObFIFOAllocator();
 
@@ -122,7 +122,7 @@ class ObFIFOAllocator : public common::ObIAllocator {
     return normal_total() + special_total_;
   }
 
-  private:
+private:
   BasePageHeader* get_page_header(void* p);
   bool check_param(const int64_t size, const int64_t align);
   bool check_magic(void* p, int64_t& size);
@@ -140,7 +140,7 @@ class ObFIFOAllocator : public common::ObIAllocator {
   void free_special(SpecialPageHeader* page);
   int sync_idle(const int64_t idle_size, const int64_t max_size);
 
-  private:
+private:
   bool is_inited_;
   ObIAllocator* allocator_;
   int64_t page_size_;
@@ -155,7 +155,7 @@ class ObFIFOAllocator : public common::ObIAllocator {
   int64_t special_total_;
   mutable ObSpinLock lock_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFIFOAllocator);
 };
 

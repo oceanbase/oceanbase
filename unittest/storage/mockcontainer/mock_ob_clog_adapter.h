@@ -36,7 +36,7 @@ struct MySubmitLogTask {
 };
 
 class MockObClogAdapter : public ObIClogAdapter, public ObSimpleThreadPool {
-  public:
+public:
   MockObClogAdapter()
   {}
   ~MockObClogAdapter()

@@ -29,7 +29,7 @@ class ObDatabaseSchema;
 
 namespace observer {
 class ObInfoSchemaPartitionsTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObInfoSchemaPartitionsTable();
   virtual ~ObInfoSchemaPartitionsTable();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -37,7 +37,7 @@ class ObInfoSchemaPartitionsTable : public common::ObVirtualTableScannerIterator
 
   inline void set_tenant_id(uint64_t tenant_id);
 
-  private:
+private:
   int add_partitions(
       const share::schema::ObDatabaseSchema& database_schema, common::ObObj* cells, const int64_t col_count);
   int add_partitions(const share::schema::ObTableSchema& table_schema, const common::ObString& database_name,
@@ -48,7 +48,7 @@ class ObInfoSchemaPartitionsTable : public common::ObVirtualTableScannerIterator
       const share::schema::ObTableSchema& table_schema, const int64_t part_id, common::ObString& val_str);
   uint64_t tenant_id_;
 
-  private:
+private:
   enum PARTITION_COLUMN {
     TABLE_CATALOG = common::OB_APP_MIN_COLUMN_ID,
     TABLE_SCHEMA,

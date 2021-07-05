@@ -26,7 +26,7 @@ enum class ObMacroBlockIdMode : uint8_t {
 };
 
 class MacroBlockId final {
-  public:
+public:
   MacroBlockId();
   explicit MacroBlockId(const int64_t block_id);
   MacroBlockId(const MacroBlockId& id);
@@ -103,14 +103,14 @@ class MacroBlockId final {
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  public:
+public:
   static ObMacroBlockIdMode DEFAULT_MODE;
 
-  private:
+private:
   // for unit test
   int serialize_old(char* buf, const int64_t buf_len, int64_t& pos) const;
 
-  private:
+private:
   // serialization
   static const uint64_t SF_BIT_RAW_ID = 56;
   static const uint64_t SF_BIT_ID_MODE = 4;
@@ -149,7 +149,7 @@ class MacroBlockId final {
   static const uint64_t SF_MASK_RESTART_SEQ = (0x1UL << SF_BIT_RESTART_SEQ) - 1;
   static const uint64_t SF_MASK_REWRITE_SEQ = (0x1UL << SF_BIT_REWRITE_SEQ) - 1;
 
-  private:
+private:
   union {
     int64_t first_id_;
     struct  // serialization

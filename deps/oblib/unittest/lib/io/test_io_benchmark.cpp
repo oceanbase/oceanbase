@@ -44,7 +44,7 @@ using namespace oceanbase::lib;
 namespace oceanbase {
 namespace unittest {
 class TestIOBenchmark : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown();
 };

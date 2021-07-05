@@ -264,7 +264,7 @@ int ObSyncPlanDriver::response_query_result(
           ctx_.schema_guard_,
           session_.get_effective_tenant_id()));
       if (OB_FAIL(sender_.response_packet(rp))) {
-        LOG_WARN("response packet fail", K(ret), K(*row), K(row_num), K(can_retry));
+        LOG_WARN("response packet fail", K(ret), KP(row), K(row_num), K(can_retry));
         // break;
       } else {
         // LOG_DEBUG("response row succ", K(*row));

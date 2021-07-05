@@ -22,7 +22,7 @@ namespace test {
 const int64_t SER_BUF_LEN = 10001;
 const int64_t ITEM_CNT = 5;
 class TestRowkey : public ::testing::Test {
-  public:
+public:
   TestRowkey()
   {}
   ~TestRowkey()

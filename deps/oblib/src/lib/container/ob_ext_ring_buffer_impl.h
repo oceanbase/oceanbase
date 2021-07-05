@@ -39,7 +39,7 @@ static inline void on_fatal_error()
 
 // alloc
 class RingBufferAlloc : public ObIAllocator {
-  public:
+public:
   RingBufferAlloc() : mem_attr_()
   {
     mem_attr_.label_ = ObModIds::OB_RING_BUFFER;
@@ -64,7 +64,7 @@ class RingBufferAlloc : public ObIAllocator {
     mem_attr_ = attr;
   }
 
-  private:
+private:
   ObMemAttr mem_attr_;
   DISALLOW_COPY_AND_ASSIGN(RingBufferAlloc);
 };
@@ -217,7 +217,7 @@ class ObExtendibleRingBufferBase {
   static const int64_t MIN_SEG_CNT = 2;
   static const int64_t INIT_SEG_CNT = MIN_SEG_CNT;
   typedef std::pair<int64_t, int64_t> SlotIdx;  // <Segment index, Slot index on Segment>
-  public:
+public:
   // Interface for subclass.
   ObExtendibleRingBufferBase()
       : inited_(false), seg_size_(0), seg_capacity_(0), begin_sn_(0), end_sn_(0), dir_(0), es_lock_(), allocator_(NULL)
@@ -306,7 +306,7 @@ class ObExtendibleRingBufferBase {
     update_end_sn_(end_id);
   }
 
-  protected:
+protected:
   typedef common::ObExternalRef::RetireList RetireList;
   ObExternalRef& get_dir_ref()
   {
@@ -329,7 +329,7 @@ class ObExtendibleRingBufferBase {
     return retire_list;
   }
 
-  private:
+private:
   // Atomic loader & setter.
   int64_t load_begin_sn_()
   {
@@ -851,7 +851,7 @@ class ObExtendibleRingBufferBase {
     return ret;
   }
 
-  private:
+private:
   bool inited_;
   int64_t seg_size_;
   int64_t seg_capacity_;

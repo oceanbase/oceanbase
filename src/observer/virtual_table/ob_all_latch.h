@@ -24,7 +24,7 @@ class ObDiagnoseTenantInfo;
 namespace observer {
 
 class ObAllLatch : public common::ObVirtualTableIterator {
-  public:
+public:
   ObAllLatch();
   virtual ~ObAllLatch();
   virtual int inner_open();
@@ -36,7 +36,7 @@ class ObAllLatch : public common::ObVirtualTableIterator {
     addr_ = &addr;
   }
 
-  private:
+private:
   enum SYS_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,

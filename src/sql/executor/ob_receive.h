@@ -38,7 +38,7 @@ class ObReceiveInput : public ObIPhyOperatorInput {
   friend class ObReceive;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObReceiveInput();
   virtual ~ObReceiveInput();
   virtual void reset() override;
@@ -59,7 +59,7 @@ class ObReceiveInput : public ObIPhyOperatorInput {
   };
   int get_result_location(const int64_t child_job_id, const int64_t child_task_id, common::ObAddr& svr) const;
 
-  protected:
+protected:
   uint64_t pull_slice_id_;
   int64_t child_job_id_;
   uint64_t child_op_id_;
@@ -69,9 +69,9 @@ class ObReceiveInput : public ObIPhyOperatorInput {
 class ObReceive : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class ObReceiveCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     explicit ObReceiveCtx(ObExecContext& ctx);
     virtual ~ObReceiveCtx();
     virtual void destroy()
@@ -80,7 +80,7 @@ class ObReceive : public ObSingleChildPhyOperator {
     }
   };
 
-  public:
+public:
   explicit ObReceive(common::ObIAllocator& alloc);
   virtual ~ObReceive();
   virtual int switch_iterator(ObExecContext& ctx) const override;
@@ -125,12 +125,12 @@ class ObReceive : public ObSingleChildPhyOperator {
     return common::OB_SUCCESS;
   }
 
-  protected:
+protected:
   bool partition_order_specified_;
   bool need_set_affected_row_;
   bool is_merge_sort_;
 
-  private:
+private:
   // disallow copy
   ObReceive(const ObReceive& other);
   ObReceive& operator=(const ObReceive& ohter);

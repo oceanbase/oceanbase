@@ -23,7 +23,7 @@ class ObTimeConvertCtx;
 }
 namespace sql {
 class ObExprTimeStampAdd : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprTimeStampAdd(common::ObIAllocator& alloc);
   virtual ~ObExprTimeStampAdd();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& unit, ObExprResType& interval,
@@ -35,7 +35,7 @@ class ObExprTimeStampAdd : public ObFuncExprOperator {
   static int calc(const int64_t unit_value, common::ObTime& ot, const int64_t ts,
       const common::ObTimeConvertCtx& cvrt_ctx, int64_t interval, int64_t& delta);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTimeStampAdd);
 };

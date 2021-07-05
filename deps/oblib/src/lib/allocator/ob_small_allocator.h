@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace common {
 class ObSmallAllocator : public ObSliceAlloc {
-  public:
+public:
   typedef ObBlockAllocMgr BlockAlloc;
   static const int64_t DEFAULT_MIN_OBJ_COUNT_ON_BLOCK = 1;
   ObSmallAllocator()
@@ -50,7 +50,7 @@ class ObSmallAllocator : public ObSliceAlloc {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   BlockAlloc block_alloc_;
 };
 };  // end namespace common

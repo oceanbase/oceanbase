@@ -106,7 +106,7 @@ ObBKGDDistTask::~ObBKGDDistTask()
 }
 
 class ObBKGDDistTask::ObDistTaskProcessor : public ObDistExecuteBaseP {
-  public:
+public:
   ObDistTaskProcessor(ObBKGDDistTask& task) : ObDistExecuteBaseP(GCTX, false /* do not send result */), task_(task)
   {}
 
@@ -134,7 +134,7 @@ class ObBKGDDistTask::ObDistTaskProcessor : public ObDistExecuteBaseP {
     return ret;
   }
 
-  private:
+private:
   ObBKGDDistTask& task_;
 };
 
@@ -208,7 +208,7 @@ int ObBKGDDistTask::get_index_tid(const ObTask& task, uint64_t& tid) const
 }
 
 class ObExtraIndexBuildCheck : public ObIExtraStatusCheck {
-  public:
+public:
   ObExtraIndexBuildCheck(const uint64_t index_tid) : index_tid_(index_tid), last_check_time_(0)
   {}
 
@@ -265,7 +265,7 @@ class ObExtraIndexBuildCheck : public ObIExtraStatusCheck {
     return ret;
   }
 
-  private:
+private:
   uint64_t index_tid_;
   mutable int64_t last_check_time_;
 };

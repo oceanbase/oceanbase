@@ -36,7 +36,7 @@ class HashIndexCollection;
 }
 
 class ObSingleZoneModeMigrateReplica {
-  public:
+public:
   ObSingleZoneModeMigrateReplica();
   virtual ~ObSingleZoneModeMigrateReplica()
   {}
@@ -45,7 +45,7 @@ class ObSingleZoneModeMigrateReplica {
       TenantBalanceStat& tenant_stat, share::ObCheckStopProvider& check_stop_provider);
   int migrate_replica(int64_t& task_cnt);
 
-  private:
+private:
   int migrate_not_inner_table_replica(const Partition& p, const Partition*& first_migrate_p, Replica& dest_replica,
       bool& small_tenant, common::ObIArray<ObMigrateTaskInfo>& task_info_array, int64_t& task_cnt);
   int get_random_dest(const Partition& partition, const Replica& pr, Replica& dest_replica, Replica& dest);
@@ -60,7 +60,7 @@ class ObSingleZoneModeMigrateReplica {
     return check_stop_provider_->check_stop();
   }
 
-  private:
+private:
   bool inited_;
   common::ObServerConfig* config_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

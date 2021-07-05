@@ -48,7 +48,7 @@ enum ObCacheObjType {
 struct ObOutlineState {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObOutlineState() : outline_version_(), is_plan_fixed_(false)
   {}
   ~ObOutlineState()
@@ -106,7 +106,7 @@ class ObCacheObject {
   friend class ObCacheObjectFactory;
   friend class ::test::MockCacheObjectFactory;
 
-  public:
+public:
   ObCacheObject(ObCacheObjType co_type, lib::MemoryContext& mem_context = CURRENT_CONTEXT);
   virtual ~ObCacheObject()
   {}
@@ -343,14 +343,14 @@ class ObCacheObject {
       K_(object_id), K_(dependency_tables), K_(outline_state), K_(pre_calc_exprs), K_(params_info),
       K_(is_contain_virtual_table), K_(is_contain_inner_table), K_(fetch_cur_time));
 
-  protected:
+protected:
   static int construct_array_params(const ObSqlExpression& expr, common::ObIAllocator& allocator,
       common::ObExprCtx& expr_ctx, common::ObNewRow& row, common::ObObjParam& result);
 
-  private:
+private:
   int64_t dec_ref_count(const CacheRefHandleID ref_handle);
 
-  protected:
+protected:
   lib::MemoryContext& mem_context_;
   common::ObIAllocator& allocator_;
   ObCacheObjType type_;

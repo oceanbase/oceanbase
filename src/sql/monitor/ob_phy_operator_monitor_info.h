@@ -49,7 +49,7 @@ static const MonitorName OB_OPERATOR_MONITOR_INFOS[] = {
 class ObPhyOperatorMonitorInfo : public ObIValue {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPhyOperatorMonitorInfo();
   virtual ~ObPhyOperatorMonitorInfo();
   int set_operator_id(int64_t op_id);
@@ -85,15 +85,15 @@ class ObPhyOperatorMonitorInfo : public ObIValue {
   void increase_value(ObOperatorMonitorInfoIds index);
   static const int64_t OB_MAX_INFORMATION_COUNT = MONITOR_INFO_END;
 
-  private:
+private:
   int64_t get_valid_info_count() const;
   virtual bool is_timestamp(int64_t index) const;
 
-  protected:
+protected:
   int64_t op_id_;
   int64_t job_id_;   // Effective in distributed execution plan
   int64_t task_id_;  // Effective in distributed execution plan
-  private:
+private:
   ObPhyOperatorType op_type_;
   uint64_t info_array_[OB_MAX_INFORMATION_COUNT];
 };

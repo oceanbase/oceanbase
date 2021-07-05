@@ -1461,9 +1461,9 @@ int ObTransformJoinElimination::EliminationHelper::push_back(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(child_table_items_.push_back(child))) {
-    LOG_WARN("faild to push back table item", K(ret));
+    LOG_WARN("failed to push back table item", K(ret));
   } else if (OB_FAIL(parent_table_items_.push_back(parent))) {
-    LOG_WARN("faild to push back table item", K(ret));
+    LOG_WARN("failed to push back table item", K(ret));
   } else if (OB_FAIL(foreign_key_infos_.push_back(info))) {
     LOG_WARN("failed to push back foreign key info", K(ret));
   } else if (OB_FAIL(bitmap_.push_back(false))) {
@@ -1485,7 +1485,7 @@ int ObTransformJoinElimination::EliminationHelper::get_eliminable_group(
       if (bitmap_.at(i)) {
         /* table already eliminated */
       } else if (OB_FAIL(is_table_in_child_items(parent_table_items_.at(i), in_child))) {
-        LOG_WARN("faild to find table item", K(ret));
+        LOG_WARN("failed to find table item", K(ret));
       } else if (in_child) {
         /* do nothing */
       } else {

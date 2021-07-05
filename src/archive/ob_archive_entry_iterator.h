@@ -55,7 +55,7 @@ struct LogBufPackage {
  * single archive data file per iterator, start from start_offset
  */
 class ObArchiveEntryIterator {
-  public:
+public:
   ObArchiveEntryIterator();
   ~ObArchiveEntryIterator()
   {
@@ -64,7 +64,7 @@ class ObArchiveEntryIterator {
   void reset();
   static int parse_archive_item_type(const char* buf, const int64_t len, ObArchiveItemType& type);
 
-  public:
+public:
   int init(ObIArchiveLogFileStore* file_store, const common::ObPGKey& pg_key, const uint64_t file_id,
       const int64_t start_offset, const int64_t timeout, const bool need_limit_bandwidth,
       const uint64_t real_tenant_id = common::OB_INVALID_TENANT_ID);
@@ -98,7 +98,7 @@ class ObArchiveEntryIterator {
       K(rbuf_), K(dd_buf_), K(origin_buf_), K(timeout_), K(io_cost_), K(io_count_), K(limit_bandwidth_cost_),
       K(has_load_entire_file_));
 
-  private:
+private:
   int prepare_buffer_();
   void advance_(const int64_t step);
   int get_entry_type_(ObArchiveItemType& type) const;
@@ -118,7 +118,7 @@ class ObArchiveEntryIterator {
   void fill_log_package_(char* buf, const int64_t buf_len);
   int fill_origin_buf_(ObArchiveBlockMeta& block_meta);
 
-  private:
+private:
   static const int64_t MAGIC_NUM_LEN = 2;
   const int64_t MAX_IDLE_TIME = 10 * 1000LL * 1000LL;  // 10s
   const int64_t MAX_READ_BUF_SIZE = MAX_ARCHIVE_BLOCK_SIZE;
@@ -167,7 +167,7 @@ class ObArchiveEntryIterator {
   bool has_load_entire_file_;
   ObArchiveBlockMeta last_block_meta_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObArchiveEntryIterator);
 };
 

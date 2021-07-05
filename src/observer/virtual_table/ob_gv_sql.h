@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObGVSql : public ObAllPlanCacheBase {
-  public:
+public:
   ObGVSql();
   virtual ~ObGVSql();
   void reset();
@@ -29,12 +29,12 @@ class ObGVSql : public ObAllPlanCacheBase {
     return get_row_from_tenants();
   }
 
-  protected:
+protected:
   int get_row_from_tenants();
   int fill_cells(const sql::ObCacheObject* cache_obj, const sql::ObPlanCache& plan_cache);
   int get_row_from_specified_tenant(uint64_t tenant_id, bool& is_end);
 
-  private:
+private:
   common::ObSEArray<uint64_t, 1024> plan_id_array_;
   int64_t plan_id_array_idx_;
   sql::ObPlanCache* plan_cache_;

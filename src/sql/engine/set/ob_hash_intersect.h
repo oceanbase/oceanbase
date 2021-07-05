@@ -18,15 +18,15 @@
 namespace oceanbase {
 namespace sql {
 class ObHashIntersect : public ObHashSetOperator {
-  private:
+private:
   class ObHashIntersectCtx;
 
-  public:
+public:
   explicit ObHashIntersect(common::ObIAllocator& alloc);
 
   virtual ~ObHashIntersect();
 
-  private:
+private:
   int build_hash_table_by_part(ObExecContext& ctx, ObHashIntersectCtx* intersect_ctx) const;
   int get_next_group_part(ObExecContext& ctx, ObHashIntersectCtx* intersect_ctx) const;
   virtual int inner_create_operator_ctx(ObExecContext& ctx, ObPhyOperatorCtx*& op_ctx) const;

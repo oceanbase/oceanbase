@@ -25,11 +25,11 @@ namespace sql {
 using namespace share::schema;
 
 class ObShuffleService {
-  public:
+public:
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> PartIdx2PartIdMap;
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> SubPartIdx2SubPartIdMap;
 
-  public:
+public:
   ObShuffleService(ObIAllocator& allocator)
       : allocator_(allocator),
         row_cache_(),
@@ -97,7 +97,7 @@ class ObShuffleService {
     return ret;
   }
 
-  private:
+private:
   int init_expr_ctx(ObExecContext& exec_ctx);
   int get_part_id(ObExecContext& exec_ctx, const share::schema::ObTableSchema& table_schema,
       const common::ObNewRow& row, const ObSqlExpression& part_func,
@@ -123,10 +123,10 @@ class ObShuffleService {
   int get_hash_subpart_id(const common::ObNewRow& row, const int64_t subpart_num,
       common::ObIArray<int64_t>& subpart_ids, const SubPartIdx2SubPartIdMap& subpart_map);
 
-  public:
+public:
   constexpr static int64_t NO_MATCH_PARTITION = -2;
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   common::ObNewRow row_cache_;
   int64_t current_cell_count_;

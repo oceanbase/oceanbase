@@ -50,7 +50,7 @@ typedef ObConcurrentHashMap<Key, int64_t> HashMap;
 
 int64_t create_num = 0;
 class ObStressThread : public lib::ThreadPool {
-  public:
+public:
   ObStressThread()
   {}
   void run1()
@@ -66,7 +66,7 @@ class ObStressThread : public lib::ThreadPool {
   }
   HashMap* hashmap;
 
-  private:
+private:
   obsys::CThreadMutex mutex;
 };
 

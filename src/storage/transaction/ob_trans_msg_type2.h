@@ -69,7 +69,7 @@ enum ObTransMsgType2 {
 };
 
 class ObTransMsgType2Checker {
-  public:
+public:
   static bool is_valid_msg_type(const int64_t msg_type)
   {
     return OB_TRX_2PC_CLEAR_REQUEST == msg_type || OB_TRX_2PC_CLEAR_RESPONSE == msg_type ||

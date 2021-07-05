@@ -28,7 +28,7 @@ enum ObRedoLogSubType {
 };
 
 class ObPGSSTableMgr {
-  public:
+public:
   ObPGSSTableMgr();
   virtual ~ObPGSSTableMgr();
   int init(const common::ObPGKey& pg_key);
@@ -58,11 +58,11 @@ class ObPGSSTableMgr {
   }
   int get_clean_out_log_ts(int64_t& clean_out_log_ts);
 
-  private:
+private:
   static const int64_t DEFAULT_HASH_BUCKET_COUNT = 100;
   static const int64_t DEFAULT_MAX_RECYCLE_COUNT = 1000;
   struct TableNode : public common::hash::ObPreAllocLinkHashNode<ObITable::TableKey, ObITable> {
-    public:
+  public:
     explicit TableNode(ObITable& item) : ObPreAllocLinkHashNode(item), next_(NULL)
     {}
     virtual ~TableNode()
@@ -82,17 +82,17 @@ class ObPGSSTableMgr {
   };
   typedef common::hash::ObPreAllocLinkHashMap<ObITable::TableKey, ObITable, TableNode, ObTableProtector> TableMap;
   class TableGetFunctor : public TableMap::GetFunctor {
-    public:
+  public:
     explicit TableGetFunctor(ObTableHandle& table_handle) : table_handle_(table_handle)
     {}
     virtual ~TableGetFunctor() = default;
     virtual int operator()(ObITable& table) override;
 
-    private:
+  private:
     ObTableHandle& table_handle_;
   };
   class UnusedTableFunctor : public TableMap::ForeachFunctor {
-    public:
+  public:
     UnusedTableFunctor() : is_inited_(false), is_full_(false), max_recycle_cnt_(0), tables_()
     {}
     virtual ~UnusedTableFunctor() = default;
@@ -108,14 +108,14 @@ class ObPGSSTableMgr {
       return is_full_;
     }
 
-    private:
+  private:
     bool is_inited_;
     bool is_full_;
     int64_t max_recycle_cnt_;
     common::ObArray<ObITable*> tables_;
   };
   class CheckAllTableUnusedFunctor : public TableMap::ForeachFunctor {
-    public:
+  public:
     CheckAllTableUnusedFunctor() : is_all_unused_(true)
     {}
     virtual ~CheckAllTableUnusedFunctor() = default;
@@ -125,11 +125,11 @@ class ObPGSSTableMgr {
       return is_all_unused_;
     }
 
-    private:
+  private:
     bool is_all_unused_;
   };
   class GetCleanOutLogIdFunctor : public TableMap::ForeachFunctor {
-    public:
+  public:
     GetCleanOutLogIdFunctor() : clean_out_log_ts_(INT64_MAX)
     {}
     virtual ~GetCleanOutLogIdFunctor() = default;
@@ -139,7 +139,7 @@ class ObPGSSTableMgr {
     }
     virtual int operator()(ObITable& table, bool& is_full) override;
 
-    private:
+  private:
     int64_t clean_out_log_ts_;
   };
   void destroy();
@@ -151,7 +151,7 @@ class ObPGSSTableMgr {
   int alloc_sstable(const int64_t tenant_id, ObSSTable*& sstable);
   int64_t get_serialize_size();
 
-  private:
+private:
   bool is_inited_;
   ObPGKey pg_key_;
   common::ObBucketLock bucket_lock_;

@@ -59,7 +59,7 @@ class ObTenantAllTables : public common::ObVirtualTableIterator {
     COMMENT = OB_APP_MIN_COLUMN_ID + 19
   };
   class TableStatistics {
-    public:
+  public:
     TableStatistics()
         : row_count_(0), data_size_(0), data_version_(0), data_checksum_(0), create_time_(0), update_time_(0)
     {}
@@ -82,7 +82,7 @@ class ObTenantAllTables : public common::ObVirtualTableIterator {
     int64_t update_time_;
   };
 
-  public:
+public:
   ObTenantAllTables();
   virtual ~ObTenantAllTables();
   virtual int inner_open();
@@ -97,7 +97,7 @@ class ObTenantAllTables : public common::ObVirtualTableIterator {
     sql_proxy_ = sql_proxy;
   }
 
-  private:
+private:
   int inner_get_next_row();
   int get_tables_stat();
   int get_sequence_value();
@@ -108,7 +108,7 @@ class ObTenantAllTables : public common::ObVirtualTableIterator {
   int fill_user_table_statistics(
       const common::ObIArray<uint64_t>& table_ids, const char* meta_table_name, uint64_t sql_tenant_id);
 
-  private:
+private:
   common::ObMySQLProxy* sql_proxy_;
   uint64_t tenant_id_;
   uint64_t database_id_;

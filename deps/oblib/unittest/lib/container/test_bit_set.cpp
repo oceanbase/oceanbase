@@ -17,19 +17,19 @@
 #include "lib/container/ob_array.h"
 using namespace oceanbase::common;
 class TestBitSet : public ::testing::Test {
-  public:
+public:
   TestBitSet();
   virtual ~TestBitSet();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestBitSet);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 

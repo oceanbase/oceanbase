@@ -18,19 +18,19 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class TestRawExprPrintVisitor : public ::testing::Test {
-  public:
+public:
   TestRawExprPrintVisitor();
   virtual ~TestRawExprPrintVisitor();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRawExprPrintVisitor);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 

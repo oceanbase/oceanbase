@@ -23,14 +23,14 @@ class ObTableLocation;
 class ObMultiTableReplace : public ObTableReplace, public ObMultiDMLInfo {
   class ObMultiTableReplaceCtx;
 
-  public:
+public:
   // insert a row if there is no duplicate row with all unique index, otherwise
   // delete and insert a row.
   static const int64_t DELETE_OP = 0;
   static const int64_t INSERT_OP = 1;
   static const int64_t DML_OP_CNT = 2;
 
-  public:
+public:
   explicit ObMultiTableReplace(common::ObIAllocator& alloc);
   virtual ~ObMultiTableReplace();
 
@@ -54,7 +54,7 @@ class ObMultiTableReplace : public ObTableReplace, public ObMultiDMLInfo {
     return true;
   }
 
-  protected:
+protected:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -71,7 +71,7 @@ class ObMultiTableReplace : public ObTableReplace, public ObMultiDMLInfo {
   int load_replace_row(ObExecContext& ctx, common::ObRowStore& row_store) const;
   int shuffle_replace_row(ObExecContext& ctx, bool& got_row) const;
 
-  private:
+private:
   ObDuplicatedKeyChecker duplicate_key_checker_;
 };
 }  // namespace sql

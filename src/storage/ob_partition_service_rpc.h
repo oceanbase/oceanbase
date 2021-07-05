@@ -59,7 +59,7 @@ struct ObMCLogRpcInfo {
 };
 
 struct ObMemberChangeArg {
-  public:
+public:
   common::ObPartitionKey key_;
   common::ObReplicaMember member_;
   bool no_used_;
@@ -83,29 +83,29 @@ struct ObMemberChangeArg {
 };
 
 struct ObMemberChangeBatchResult {
-  public:
+public:
   ObMemberChangeBatchResult() : return_array_()
   {}
 
-  public:
+public:
   TO_STRING_KV(K_(return_array));
 
-  public:
+public:
   common::ObSArray<int> return_array_;
 
   OB_UNIS_VERSION(3);
 };
 
 struct ObMemberChangeBatchArg {
-  public:
+public:
   ObMemberChangeBatchArg() : arg_array_(), timeout_ts_(0), task_id_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
 
-  public:
+public:
   common::ObSArray<ObMemberChangeArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId task_id_;
@@ -114,21 +114,21 @@ struct ObMemberChangeBatchArg {
 };
 
 struct ObModifyQuorumBatchResult {
-  public:
+public:
   ObModifyQuorumBatchResult() : return_array_()
   {}
 
-  public:
+public:
   TO_STRING_KV(K_(return_array));
 
-  public:
+public:
   common::ObSArray<int> return_array_;
 
   OB_UNIS_VERSION(3);
 };
 
 struct ObModifyQuorumArg {
-  public:
+public:
   common::ObPartitionKey key_;
   int64_t quorum_;
   int64_t orig_quorum_;
@@ -146,15 +146,15 @@ struct ObModifyQuorumArg {
 };
 
 struct ObModifyQuorumBatchArg {
-  public:
+public:
   ObModifyQuorumBatchArg() : arg_array_(), timeout_ts_(0), task_id_()
   {}
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(arg_array), K_(timeout_ts), K_(task_id));
 
-  public:
+public:
   common::ObSArray<ObModifyQuorumArg> arg_array_;
   int64_t timeout_ts_;
   share::ObTaskId task_id_;
@@ -199,7 +199,7 @@ struct ObRemoveReplicaArgs {
 struct ObFetchMacroBlockArg {
   OB_UNIS_VERSION(2);
 
-  public:
+public:
   ObFetchMacroBlockArg() : macro_block_index_(0), data_version_(0), data_seq_(0)
   {}
   void reset();
@@ -213,7 +213,7 @@ struct ObFetchMacroBlockArg {
 struct ObFetchMacroBlockListArg {
   OB_UNIS_VERSION(2);
 
-  public:
+public:
   ObFetchMacroBlockListArg();
   TO_STRING_KV(K_(table_key), "arg_count", arg_list_.count());
   storage::ObITable::TableKey table_key_;
@@ -618,7 +618,7 @@ struct ObBatchFetchReplicaInfoRes {
 struct ObSuspendPartitionArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSuspendPartitionArg()
   {
     reset();
@@ -629,7 +629,7 @@ struct ObSuspendPartitionArg {
   bool is_valid() const;
   TO_STRING_KV(K(pg_key_), K(mig_dest_server_), K(need_force_change_owner_), K(is_batch_));
 
-  public:
+public:
   ObPGKey pg_key_;
   ObAddr mig_dest_server_;
   bool need_force_change_owner_;
@@ -639,7 +639,7 @@ struct ObSuspendPartitionArg {
 struct ObSuspendPartitionRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSuspendPartitionRes()
   {
     reset();
@@ -650,7 +650,7 @@ struct ObSuspendPartitionRes {
   bool is_valid() const;
   TO_STRING_KV(K(pg_key_), K(max_clog_id_));
 
-  public:
+public:
   ObPGKey pg_key_;
   uint64_t max_clog_id_;
 };
@@ -666,7 +666,7 @@ enum ObHandoverPartitionType : int8_t {
 struct ObHandoverPartitionArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHandoverPartitionArg()
   {
     reset();
@@ -677,7 +677,7 @@ struct ObHandoverPartitionArg {
   bool is_valid() const;
   TO_STRING_KV(K(type_), K(pg_key_), K(src_file_id_), K(candidate_server_));
 
-  public:
+public:
   ObHandoverPartitionType type_;
   ObPGKey pg_key_;
   int64_t src_file_id_;
@@ -685,7 +685,7 @@ struct ObHandoverPartitionArg {
 };
 
 class ObPartitionServiceRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObPartitionServiceRpcProxy);
   // 1.4x old rpc to fetch store info
   RPC_S(PR5 fetch_migrate_info, OB_PTS_FETCH_INFO, (ObMigrateInfoFetchArg), ObMigrateInfoFetchResult);
@@ -731,7 +731,7 @@ class ObPartitionServiceRpcProxy : public obrpc::ObRpcProxy {
 
 // 1.4x old rpc to fetch store info
 class ObPTSFetchInfoP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_PTS_FETCH_INFO> > {
-  public:
+public:
   explicit ObPTSFetchInfoP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObPTSFetchInfoP()
@@ -739,15 +739,15 @@ class ObPTSFetchInfoP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy:
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObPTSAddMemberP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_PTS_ADD_REPLICA> > {
-  public:
+public:
   explicit ObPTSAddMemberP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObPTSAddMemberP()
@@ -755,15 +755,15 @@ class ObPTSAddMemberP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy:
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObPTSRemoveMemberP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_PTS_REMOVE_REPLICA> > {
-  public:
+public:
   explicit ObPTSRemoveMemberP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObPTSRemoveMemberP()
@@ -771,15 +771,15 @@ class ObPTSRemoveMemberP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcPro
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObPTSRemoveReplicaP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_PTS_REMOVE_PARTITION> > {
-  public:
+public:
   explicit ObPTSRemoveReplicaP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObPTSRemoveReplicaP()
@@ -787,16 +787,16 @@ class ObPTSRemoveReplicaP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcPr
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObBatchRemoveReplicaP
     : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_BATCH_REMOVE_PARTITION> > {
-  public:
+public:
   explicit ObBatchRemoveReplicaP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObBatchRemoveReplicaP()
@@ -804,16 +804,16 @@ class ObBatchRemoveReplicaP
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObIsMemberChangeDoneP
     : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_IN_MEMBER_CHANGE_DONE> > {
-  public:
+public:
   explicit ObIsMemberChangeDoneP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObIsMemberChangeDoneP()
@@ -821,15 +821,15 @@ class ObIsMemberChangeDoneP
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObWarmUpRequestP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_WARM_UP_REQUEST> > {
-  public:
+public:
   explicit ObWarmUpRequestP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObWarmUpRequestP()
@@ -837,45 +837,45 @@ class ObWarmUpRequestP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObSplitDestPartitionRequestP
     : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_SPLIT_DEST_PARTITION_REQUEST> > {
-  public:
+public:
   explicit ObSplitDestPartitionRequestP(storage::ObPartitionService* ps) : ps_(ps)
   {}
   virtual ~ObSplitDestPartitionRequestP()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* ps_;
 };
 
 class ObReplicaSplitProgressRequestP
     : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_REPLICA_SPLIT_PROGRESS_REQUEST> > {
-  public:
+public:
   explicit ObReplicaSplitProgressRequestP(storage::ObPartitionService* ps) : ps_(ps)
   {}
   virtual ~ObReplicaSplitProgressRequestP()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* ps_;
 };
 
 class ObGetMemberListP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_GET_LEADER_MEMBER_LIST> > {
-  public:
+public:
   explicit ObGetMemberListP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObGetMemberListP()
@@ -883,16 +883,16 @@ class ObGetMemberListP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObCheckMemberMajorSSTableEnoughP
     : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_CHECK_MEMBER_MAJOR_SSTABLE_ENOUGH> > {
-  public:
+public:
   explicit ObCheckMemberMajorSSTableEnoughP(storage::ObPartitionService* partition_service)
       : partition_service_(partition_service)
   {}
@@ -901,16 +901,16 @@ class ObCheckMemberMajorSSTableEnoughP
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   virtual int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObCheckMemberPGMajorSSTableEnoughP
     : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_CHECK_MEMBER_PG_MAJOR_SSTABLE_ENOUGH> > {
-  public:
+public:
   explicit ObCheckMemberPGMajorSSTableEnoughP(storage::ObPartitionService* partition_service)
       : partition_service_(partition_service)
   {}
@@ -919,15 +919,15 @@ class ObCheckMemberPGMajorSSTableEnoughP
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   virtual int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObFetchReplicaInfoP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_FETCH_PUBLISH_VERSION> > {
-  public:
+public:
   explicit ObFetchReplicaInfoP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObFetchReplicaInfoP()
@@ -935,15 +935,15 @@ class ObFetchReplicaInfoP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcPr
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   virtual int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObWarmUpRPCCB : public ObPartitionServiceRpcProxy::AsyncCB<obrpc::OB_WARM_UP_REQUEST> {
-  public:
+public:
   ObWarmUpRPCCB()
   {}
   virtual ~ObWarmUpRPCCB()
@@ -963,7 +963,7 @@ class ObWarmUpRPCCB : public ObPartitionServiceRpcProxy::AsyncCB<obrpc::OB_WARM_
     return newcb;
   }
 
-  public:
+public:
   int process()
   { /* do nothing */
     return common::OB_SUCCESS;
@@ -972,12 +972,12 @@ class ObWarmUpRPCCB : public ObPartitionServiceRpcProxy::AsyncCB<obrpc::OB_WARM_
   { /* do nothing */
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObWarmUpRPCCB);
 };
 
 class ObSplitDestPartitionRPCCB : public ObPartitionServiceRpcProxy::AsyncCB<obrpc::OB_SPLIT_DEST_PARTITION_REQUEST> {
-  public:
+public:
   ObSplitDestPartitionRPCCB() : ps_(NULL)
   {}
   virtual ~ObSplitDestPartitionRPCCB()
@@ -1009,20 +1009,20 @@ class ObSplitDestPartitionRPCCB : public ObPartitionServiceRpcProxy::AsyncCB<obr
     return newcb;
   }
 
-  public:
+public:
   int process();
   void on_timeout();
 
-  private:
+private:
   storage::ObPartitionService* ps_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSplitDestPartitionRPCCB);
 };
 
 class ObReplicaSplitProgressRPCCB
     : public ObPartitionServiceRpcProxy::AsyncCB<obrpc::OB_REPLICA_SPLIT_PROGRESS_REQUEST> {
-  public:
+public:
   ObReplicaSplitProgressRPCCB() : ps_(NULL)
   {}
   virtual ~ObReplicaSplitProgressRPCCB()
@@ -1054,26 +1054,26 @@ class ObReplicaSplitProgressRPCCB
     return newcb;
   }
 
-  public:
+public:
   int process();
   void on_timeout();
 
-  private:
+private:
   storage::ObPartitionService* ps_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObReplicaSplitProgressRPCCB);
 };
 
 template <ObRpcPacketCode RPC_CODE>
 class ObCommonPartitionServiceRpcP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<RPC_CODE> > {
-  public:
+public:
   explicit ObCommonPartitionServiceRpcP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   virtual ~ObCommonPartitionServiceRpcP()
   {}
 
-  protected:
+protected:
   template <typename Data>
   int fill_data(const Data& data);
   template <typename Data>
@@ -1084,7 +1084,7 @@ class ObCommonPartitionServiceRpcP : public ObRpcProcessor<obrpc::ObPartitionSer
   int flush_and_wait();
   int alloc_buffer();
 
-  protected:
+protected:
   storage::ObPartitionService* partition_service_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
   int64_t last_send_time_;
@@ -1093,12 +1093,12 @@ class ObCommonPartitionServiceRpcP : public ObRpcProcessor<obrpc::ObPartitionSer
 
 template <ObRpcPacketCode RPC_CODE>
 class ObLogicPartitionServiceRpcP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<RPC_CODE> > {
-  public:
+public:
   explicit ObLogicPartitionServiceRpcP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   virtual ~ObLogicPartitionServiceRpcP();
 
-  protected:
+protected:
   template <typename Data>
   int fill_data(const Data& data);
   int reserve_header();
@@ -1110,7 +1110,7 @@ class ObLogicPartitionServiceRpcP : public ObRpcProcessor<obrpc::ObPartitionServ
   int set_connect_status(const ObLogicMigrateRpcHeader::ConnectStatus connect_status);
   int extend_buffer(const int64_t buf_size);
 
-  protected:
+protected:
   storage::ObPartitionService* partition_service_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
   int64_t last_send_time_;
@@ -1122,43 +1122,43 @@ class ObLogicPartitionServiceRpcP : public ObRpcProcessor<obrpc::ObPartitionServ
 
 // 1.4x old rpc
 class ObFetchBaseDataMetaP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_FETCH_BASE_DATA_META> > {
-  public:
+public:
   explicit ObFetchBaseDataMetaP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   virtual ~ObFetchBaseDataMetaP();
 
-  protected:
+protected:
   int process();
 };
 
 // 1.4x old rpc
 class ObFetchMacroBlockOldP : public ObCommonPartitionServiceRpcP<OB_FETCH_MACRO_BLOCK_OLD> {
-  public:
+public:
   explicit ObFetchMacroBlockOldP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   virtual ~ObFetchMacroBlockOldP()
   {}
 
-  protected:
+protected:
   int process();
 };
 
 class ObFetchMacroBlockP : public ObCommonPartitionServiceRpcP<OB_FETCH_MACRO_BLOCK> {
-  public:
+public:
   explicit ObFetchMacroBlockP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   virtual ~ObFetchMacroBlockP()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   int64_t total_macro_block_count_;
 };
 
 class ObBatchRemoveMemberP : public ObPartitionServiceRpcProxy::Processor<OB_BATCH_REMOVE_MEMBER> {
-  public:
+public:
   explicit ObBatchRemoveMemberP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObBatchRemoveMemberP()
@@ -1166,15 +1166,15 @@ class ObBatchRemoveMemberP : public ObPartitionServiceRpcProxy::Processor<OB_BAT
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObBatchAddMemberP : public ObPartitionServiceRpcProxy::Processor<OB_BATCH_ADD_MEMBER> {
-  public:
+public:
   explicit ObBatchAddMemberP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObBatchAddMemberP()
@@ -1182,15 +1182,15 @@ class ObBatchAddMemberP : public ObPartitionServiceRpcProxy::Processor<OB_BATCH_
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObBatchMemberChangeDoneP : public ObPartitionServiceRpcProxy::Processor<OB_BATCH_MEMBER_CHANGE_DONE> {
-  public:
+public:
   explicit ObBatchMemberChangeDoneP(storage::ObPartitionService* partition_service)
       : partition_service_(partition_service)
   {}
@@ -1199,15 +1199,15 @@ class ObBatchMemberChangeDoneP : public ObPartitionServiceRpcProxy::Processor<OB
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObFetchPartitionInfoP : public ObPartitionServiceRpcProxy::Processor<OB_FETCH_PARTITION_INFO> {
-  public:
+public:
   explicit ObFetchPartitionInfoP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObFetchPartitionInfoP()
@@ -1215,15 +1215,15 @@ class ObFetchPartitionInfoP : public ObPartitionServiceRpcProxy::Processor<OB_FE
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObFetchTableInfoP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProxy::ObRpc<OB_FETCH_TABLE_INFO> > {
-  public:
+public:
   explicit ObFetchTableInfoP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObFetchTableInfoP()
@@ -1231,37 +1231,37 @@ class ObFetchTableInfoP : public ObRpcProcessor<obrpc::ObPartitionServiceRpcProx
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObFetchLogicBaseMetaP : public ObCommonPartitionServiceRpcP<OB_FETCH_LOGIC_BASE_META> {
-  public:
+public:
   ObFetchLogicBaseMetaP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   ~ObFetchLogicBaseMetaP()
   {}
 
-  protected:
+protected:
   int process();
 };
 
 class ObFetchPhysicalBaseMetaP : public ObCommonPartitionServiceRpcP<OB_FETCH_PHYSICAL_BASE_META> {
-  public:
+public:
   ObFetchPhysicalBaseMetaP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   ~ObFetchPhysicalBaseMetaP()
   {}
 
-  protected:
+protected:
   int process();
 };
 
 class ObFetchLogicRowInfo final {
-  public:
+public:
   ObFetchLogicRowInfo();
   ~ObFetchLogicRowInfo();
   int add_row(const storage::ObStoreRow& row);
@@ -1269,7 +1269,7 @@ class ObFetchLogicRowInfo final {
       K_(sparse_row_count), "dml_count", common::ObArrayWrap<int64_t>(dml_count_, storage::T_DML_MAX),
       "first_dml_count", common::ObArrayWrap<int64_t>(first_dml_count_, storage::T_DML_MAX));
 
-  private:
+private:
   int64_t total_row_count_;
   int64_t not_exist_row_count_;
   int64_t exist_row_count_;
@@ -1281,35 +1281,35 @@ class ObFetchLogicRowInfo final {
 };
 
 class ObFetchLogicRowP : public ObCommonPartitionServiceRpcP<OB_FETCH_LOGIC_ROW> {
-  public:
+public:
   ObFetchLogicRowP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   ~ObFetchLogicRowP()
   {}
 
-  protected:
+protected:
   int process();
 };
 
 class ObFetchLogicDataChecksumP : public ObCommonPartitionServiceRpcP<OB_FETCH_LOGIC_DATA_CHECKSUM> {
-  public:
+public:
   ObFetchLogicDataChecksumP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   virtual ~ObFetchLogicDataChecksumP()
   {}
 
-  protected:
+protected:
   int process();
 };
 
 class ObFetchLogicDataChecksumSliceP : public ObLogicPartitionServiceRpcP<OB_FETCH_LOGIC_DATA_CHECKSUM_SLICE> {
-  public:
+public:
   ObFetchLogicDataChecksumSliceP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   virtual ~ObFetchLogicDataChecksumSliceP()
   {}
 
-  protected:
+protected:
   int process();
   int fill_rpc_buffer(const ObLogicDataChecksumProtocol& checksum_protocol);
   int set_data_checksum_protocol(const bool is_rowkey_valid, const int64_t schema_rowkey_cnt,
@@ -1317,18 +1317,18 @@ class ObFetchLogicDataChecksumSliceP : public ObLogicPartitionServiceRpcP<OB_FET
 };
 
 class ObFetchLogicRowSliceP : public ObLogicPartitionServiceRpcP<OB_FETCH_LOGIC_ROW_SLICE> {
-  public:
+public:
   ObFetchLogicRowSliceP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   virtual ~ObFetchLogicRowSliceP()
   {}
 
-  protected:
+protected:
   int process();
 };
 
 class ObFetchPartitionGroupInfoP : public ObPartitionServiceRpcProxy::Processor<OB_FETCH_PARTITION_GROUP_INFO> {
-  public:
+public:
   explicit ObFetchPartitionGroupInfoP(storage::ObPartitionService* partition_service)
       : partition_service_(partition_service)
   {}
@@ -1337,28 +1337,28 @@ class ObFetchPartitionGroupInfoP : public ObPartitionServiceRpcProxy::Processor<
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObFetchPGPartitioninfoP : public ObCommonPartitionServiceRpcP<OB_FETCH_PG_PARTITION_INFO> {
-  public:
+public:
   explicit ObFetchPGPartitioninfoP(
       storage::ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle);
   virtual ~ObFetchPGPartitioninfoP()
   {}
 
-  protected:
+protected:
   int process();
 };
 }  // namespace obrpc
 
 namespace storage {
 class ObIPartitionServiceRpc {
-  public:
+public:
   ObIPartitionServiceRpc()
   {}
   virtual ~ObIPartitionServiceRpc()
@@ -1367,7 +1367,7 @@ class ObIPartitionServiceRpc {
       const common::ObAddr& self, obrpc::ObCommonRpcProxy* rs_rpc_proxy) = 0;
   virtual void destroy() = 0;
 
-  public:
+public:
   virtual int post_add_replica_mc_msg(
       const common::ObAddr& server, const obrpc::ObMemberChangeArg& arg, obrpc::ObMCLogRpcInfo& mc_log_info) = 0;
   virtual int post_add_replica_res(const common::ObAddr& server, const obrpc::ObAddReplicaRes& res) = 0;
@@ -1413,7 +1413,7 @@ class ObIPartitionServiceRpc {
 };
 
 class ObPartitionServiceRpc : public ObIPartitionServiceRpc {
-  public:
+public:
   ObPartitionServiceRpc()
       : is_inited_(false),
         rpc_proxy_(NULL),
@@ -1430,7 +1430,7 @@ class ObPartitionServiceRpc : public ObIPartitionServiceRpc {
       const common::ObAddr& self, obrpc::ObCommonRpcProxy* rs_rpc_proxy);
   void destroy();
 
-  public:
+public:
   int post_add_replica_mc_msg(
       const common::ObAddr& server, const obrpc::ObMemberChangeArg& arg, obrpc::ObMCLogRpcInfo& mc_log_info);
   int post_remove_replica_mc_msg(
@@ -1488,7 +1488,7 @@ class ObPartitionServiceRpc : public ObIPartitionServiceRpc {
       const common::ObReplicaType& replica_type, const int64_t cluster_id, const bool use_slave_safe_read_ts,
       obrpc::ObFetchPGInfoResult& res);
 
-  private:
+private:
   bool is_inited_;
   obrpc::ObPartitionServiceRpcProxy* rpc_proxy_;
   ObPartitionService* partition_service_;

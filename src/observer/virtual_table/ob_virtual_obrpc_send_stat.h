@@ -19,13 +19,13 @@ namespace oceanbase {
 namespace observer {
 
 class ObVirtualObRpcSendStat : public common::ObVirtualTableIterator {
-  public:
+public:
   ObVirtualObRpcSendStat();
   virtual ~ObVirtualObRpcSendStat();
 
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   enum CACHE_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,

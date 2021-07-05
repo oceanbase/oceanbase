@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObLogStoreFactory {
-  public:
+public:
   static ObILogFileStore* create(const char* log_dir, const int64_t file_size, const clog::ObLogWritePoolType type);
 
   static void destroy(ObILogFileStore*& store);

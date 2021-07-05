@@ -46,7 +46,7 @@ class ObTransformerImpl {
   static const int64_t DEFAULT_ITERATION_COUNT = 10;
   static const int64_t MAX_RULE_COUNT = 64;
 
-  public:
+public:
   ObTransformerImpl(ObTransformerCtx* ctx)
       : ctx_(ctx), needed_transform_types_(0), max_iteration_count_(ObTransformerImpl::DEFAULT_ITERATION_COUNT)
   {
@@ -132,12 +132,12 @@ class ObTransformerImpl {
     return ctx_;
   }
 
-  private:
+private:
   int collect_trans_stat(const ObTransformRule& rule);
 
   void print_trans_stat();
 
-  private:
+private:
   ObTransformerCtx* ctx_;
   uint64_t needed_transform_types_;
   int64_t max_iteration_count_;

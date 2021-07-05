@@ -22,7 +22,7 @@ class ObPartitionResolveResult {
   typedef common::ObSEArray<ObRawExpr*, OB_DEFAULT_ARRAY_SIZE, common::ModulePageAllocator, true> array_t;
   typedef common::ObSEArray<array_t, OB_DEFAULT_ARRAY_SIZE, common::ModulePageAllocator, true> array_array_t;
 
-  public:
+public:
   ObPartitionResolveResult()
   {}
   ~ObPartitionResolveResult()
@@ -50,7 +50,7 @@ class ObPartitionResolveResult {
   TO_STRING_KV(K_(part_fun_exprs), K_(part_values_exprs), K_(subpart_fun_exprs), K_(template_subpart_values_exprs),
       K_(individual_subpart_values_exprs));
 
-  private:
+private:
   array_t part_fun_exprs_;                         // for part fun expr
   array_t part_values_exprs_;                      // for part values expr
   array_t subpart_fun_exprs_;                      // for subpart fun expr
@@ -61,7 +61,7 @@ class ObPartitionResolveResult {
 class ObTableStmt : public ObPartitionedStmt {
   const static int OB_DEFAULT_ARRAY_SIZE = 16;
 
-  public:
+public:
   ObTableStmt(common::ObIAllocator* name_pool, stmt::StmtType type)
       : ObPartitionedStmt(name_pool, type), part_type_(share::schema::PARTITION_FUNC_TYPE_MAX)
   {}
@@ -81,11 +81,11 @@ class ObTableStmt : public ObPartitionedStmt {
   }
   TO_STRING_KV(K_(part_type));
 
-  private:
+private:
   common::ObSArray<ObPartitionResolveResult> index_partition_resolve_results_;
   share::schema::ObPartitionFuncType part_type_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableStmt);
 };
 }  // namespace sql

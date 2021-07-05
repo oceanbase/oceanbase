@@ -88,7 +88,7 @@ struct ObBlockIntermediateHeader {
 };
 
 class ObBlockIntermediateBuilder {
-  public:
+public:
   ObBlockIntermediateBuilder();
   virtual ~ObBlockIntermediateBuilder();
   void reset();
@@ -98,7 +98,7 @@ class ObBlockIntermediateBuilder {
   int set_rowkey(const ObStoreRowkey& rowkey);
   int set_rowkey(const ObDataStoreDesc& desc, const ObString& s_rowkey);
 
-  private:
+private:
   ObBlockIntermediateHeader header_;
   storage::ObStoreRow intermediate_row_;  // rowkey_, buf_
   common::ObArenaAllocator allocator_;
@@ -109,13 +109,13 @@ class ObBlockIntermediateBuilder {
 };
 
 class ObBlockIntermediateRowParser {
-  public:
+public:
   ObBlockIntermediateRowParser();
   virtual ~ObBlockIntermediateRowParser();
   int init(const int64_t rowkey_column_count, const storage::ObStoreRow& row);
   int get_intermediate_header(const ObBlockIntermediateHeader*& header);
 
-  private:
+private:
   storage::ObStoreRow* intermediate_row_;
   ObBlockIntermediateHeader* header_;
   int64_t rowkey_column_count_;

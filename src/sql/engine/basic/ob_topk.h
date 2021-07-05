@@ -21,10 +21,10 @@ class ObSqlExpression;
 class ObTopK : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   class ObTopKCtx;
 
-  public:
+public:
   explicit ObTopK(common::ObIAllocator& alloc);
   virtual ~ObTopK();
 
@@ -34,7 +34,7 @@ class ObTopK : public ObSingleChildPhyOperator {
       ObSqlExpression* limit, ObSqlExpression* offset, int64_t minimum_row_count, int64_t topk_precision);
   virtual int rescan(ObExecContext& ctx) const;
 
-  private:
+private:
   bool is_valid() const;
   int get_int_value(ObExecContext& ctx, const ObSqlExpression* in_val, int64_t& out_val, bool& is_null_value) const;
   /**
@@ -72,7 +72,7 @@ class ObTopK : public ObSingleChildPhyOperator {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTopK);
 
-  private:
+private:
   // data members
   int64_t minimum_row_count_;
   int64_t topk_precision_;

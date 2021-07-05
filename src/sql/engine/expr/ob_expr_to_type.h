@@ -22,7 +22,7 @@ namespace sql {
 class ObExprToType : public ObFuncExprOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObExprToType();
   explicit ObExprToType(common::ObIAllocator& alloc);
   virtual ~ObExprToType(){};
@@ -33,7 +33,7 @@ class ObExprToType : public ObFuncExprOperator {
   virtual int assign(const ObExprOperator& other);
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  public:
+public:
   OB_INLINE void set_expect_type(common::ObObjType expect_type)
   {
     expect_type_ = expect_type;
@@ -43,11 +43,11 @@ class ObExprToType : public ObFuncExprOperator {
     cast_mode_ = cast_mode;
   }
 
-  private:
+private:
   int calc_result_type_for_literal(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   int calc_result_type_for_column(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
 
-  private:
+private:
   // data members
   common::ObObjType expect_type_;
   common::ObCastMode cast_mode_;

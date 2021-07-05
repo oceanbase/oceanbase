@@ -50,7 +50,7 @@ class ObTableScanInput : public ObIPhyOperatorInput {
   friend class ObMultiPartitionTableScan;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableScanInput();
   virtual ~ObTableScanInput();
   virtual void reset() override;
@@ -67,20 +67,20 @@ class ObTableScanInput : public ObIPhyOperatorInput {
   int translate_pid_to_ldx(ObExecContext& ctx, int64_t partition_id, int64_t table_location_key, int64_t ref_table_id,
       int64_t& location_idx);
 
-  private:
+private:
   int deep_copy_range(common::ObIAllocator* allocator, const common::ObNewRange& src, common::ObNewRange& dst);
 
-  protected:
+protected:
   int64_t location_idx_;
 
-  protected:
+protected:
   common::ObSEArray<common::ObNewRange, 16> key_ranges_;
   common::ObPosArray range_array_pos_;
   // This variable is reserved for compatibility. Because 2.0 will
   // serialize and deserialize this variable
   common::ObSEArray<ObPartitionScanRanges, 16> partition_ranges_;
 
-  protected:
+protected:
   common::ObIAllocator* deserialize_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTableScanInput);
 };
@@ -88,7 +88,7 @@ class ObTableScanInput : public ObIPhyOperatorInput {
 class ObTableScan : public ObNoChildrenPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   class ObTableScanCtx : public ObPhyOperatorCtx {
     friend class ObTableScan;
     friend class ObDomainIndex;
@@ -100,7 +100,7 @@ class ObTableScan : public ObNoChildrenPhyOperator {
     friend class ObTableScanCreateDomainIndex;
     friend class ObMultiPartTableScan;
 
-    public:
+  public:
     explicit ObTableScanCtx(ObExecContext& ctx)
         : ObPhyOperatorCtx(ctx),
           result_(NULL),
@@ -170,7 +170,7 @@ class ObTableScan : public ObNoChildrenPhyOperator {
     }
     virtual int init_table_allocator(ObExecContext& ctx);
 
-    public:
+  public:
     common::ObNewRowIterator* result_;
     // used for array binding
     common::ObNewIterIterator* iter_result_;
@@ -190,7 +190,7 @@ class ObTableScan : public ObNoChildrenPhyOperator {
     sql::ObVirtualTableResultConverter* vt_result_converter_;
   };
 
-  public:
+public:
   explicit ObTableScan(common::ObIAllocator& allocator);
   virtual ~ObTableScan();
   virtual void reset();
@@ -568,7 +568,7 @@ class ObTableScan : public ObNoChildrenPhyOperator {
   static int transform_rowid_range(
       common::ObIAllocator& allocator, const ObIArray<share::schema::ObColDesc>& rowkey_descs, ObNewRange& key_range);
 
-  protected:
+protected:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -623,7 +623,7 @@ class ObTableScan : public ObNoChildrenPhyOperator {
   static int transform_rowid_rowkey(
       common::ObIAllocator& allocator, const ObIArray<share::schema::ObColDesc>& rowkey_descs, ObRowkey& row_key);
 
-  protected:
+protected:
   // params
   uint64_t ref_table_id_;  // real table id for table to scan
   // @param: table_name_ & index_name_
@@ -693,13 +693,13 @@ class ObTableScan : public ObNoChildrenPhyOperator {
   // used for partition cutting
   ObTableLocation part_filter_;
 
-  private:
+private:
   bool is_whole_range_scan_;
   // used for batch nested loop join
   bool batch_scan_flag_;
   bool need_scn_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableScan);
 };
 

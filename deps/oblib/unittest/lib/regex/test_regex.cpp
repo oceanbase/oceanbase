@@ -533,18 +533,18 @@ static int efind(char* name)
 }
 
 class ObRegexTest : public ::testing::Test {
-  public:
+public:
   ObRegexTest();
   virtual ~ObRegexTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObRegexTest(const ObRegexTest& other);
   ObRegexTest& operator=(const ObRegexTest& other);
 
-  private:
+private:
   // data members
 };
 ObRegexTest::ObRegexTest()

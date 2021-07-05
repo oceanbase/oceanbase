@@ -23,7 +23,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::memtable;
 
 class ObMockTransCallback : public ObITransCallback {
-  public:
+public:
   ObMockTransCallback(ObMemtable* mt) : fake_mt_(mt)
   {}
 

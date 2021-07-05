@@ -25,7 +25,7 @@ namespace share {
 using namespace common;
 
 class ObTSIBGMonitorSlotInfo {
-  public:
+public:
   ObTSIBGMonitorSlotInfo() : slot_idx_(-1)
   {}
   ~ObTSIBGMonitorSlotInfo()
@@ -47,7 +47,7 @@ class ObTSIBGMonitorSlotInfo {
     return -1 == slot_idx_;
   }
 
-  private:
+private:
   int64_t slot_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObTSIBGMonitorSlotInfo);
 };
@@ -82,7 +82,7 @@ class ObTSIBGMonitorSlotInfo {
 
 // @brief Used to alloc callback
 class ObTSIBGMonitorMemory {
-  public:
+public:
   ObTSIBGMonitorMemory() : ptr_(NULL), pos_(0)
   {}
   ~ObTSIBGMonitorMemory();
@@ -110,13 +110,13 @@ class ObTSIBGMonitorMemory {
   }
   static const int64_t MEMORY_SIZE = 128;
 
-  private:
+private:
   char* ptr_;
   int64_t pos_;
 };
 
 class IBGCallback : public common::ObICallback {
-  public:
+public:
   void set_class_size(const int64_t size)
   {
     size_ = size;
@@ -127,26 +127,26 @@ class IBGCallback : public common::ObICallback {
   }
   virtual void destroy() = 0;
 
-  protected:
+protected:
   int64_t size_;
 };
 
 class MonitorCallbackWrapper {
-  public:
+public:
   MonitorCallbackWrapper();
   MonitorCallbackWrapper(common::ObICallback* callback, bool is_idempotent);
   ~MonitorCallbackWrapper();
   int handle_callback();
   void reset();
 
-  private:
+private:
   bool is_idempotent_;
   bool has_called_;
   common::ObICallback* callback_;
 };
 
 class BGDummyCallback : public IBGCallback {
-  public:
+public:
   BGDummyCallback() : function_name_()
   {}
   BGDummyCallback(const char* function_name) : function_name_(function_name)
@@ -166,7 +166,7 @@ class BGDummyCallback : public IBGCallback {
   void destroy()
   {}
 
-  private:
+private:
   common::ObString function_name_;
 };
 
@@ -185,14 +185,14 @@ struct MonitorEntry {
 };
 
 class MonitorEntryStack {
-  public:
+public:
   MonitorEntryStack();
   ~MonitorEntryStack();
   int push(const int64_t start_ts, const int64_t warn_ts, const MonitorCallbackWrapper& callback);
   void pop();
   void check_and_handle_timeout_task(const int64_t current_ts);
 
-  private:
+private:
   static const int64_t NEST_LIMIT = 5;
   int64_t curr_idx_;
   MonitorEntry inner_entry_[NEST_LIMIT];
@@ -203,7 +203,7 @@ class MonitorEntryStack {
 };
 
 class ObBGThreadMonitor : public share::ObThreadPool {
-  public:
+public:
   ObBGThreadMonitor();
   ~ObBGThreadMonitor();
   int init();
@@ -213,27 +213,27 @@ class ObBGThreadMonitor : public share::ObThreadPool {
   void stop();
   void destroy();
 
-  public:
+public:
   int set(const int64_t start_ts, const int64_t warn_ts, const MonitorCallbackWrapper& callback);
   void reset();
   static ObBGThreadMonitor& get_instance();
 
-  public:
+public:
   const int64_t MONITOR_LIMIT = 500;
   const int64_t CHECK_INTERVAL = 1000 * 1000;
 
-  private:
+private:
   void run_loop_();
   int register_slot_idx_(ObTSIBGMonitorSlotInfo*& slot_info);
   int get_slot_idx_(int64_t& slot_idx);
 
-  private:
+private:
   bool is_inited_;
   int64_t seq_;
   MonitorEntryStack* monitor_entry_stack_;
   common::ObMalloc allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBGThreadMonitor);
 };
 
@@ -290,16 +290,16 @@ class ObBGThreadMonitor : public share::ObThreadPool {
 //    BG_MONITOR_GUARD(warn_ts, is_idempotent, cb);
 //
 class MonitorGuard {
-  public:
+public:
   explicit MonitorGuard(const int64_t warn_ts, const char* function_name);
   explicit MonitorGuard(const int64_t warn_ts, const bool is_idempotent, IBGCallback* callback);
   ~MonitorGuard();
 
-  private:
+private:
   int ret_code_;
   IBGCallback* callback_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(MonitorGuard);
 };
 

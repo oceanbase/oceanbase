@@ -39,10 +39,10 @@ struct ObSchemaIdPair {
 };
 
 class ObRestoreArgs {
-  public:
+public:
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   struct OrignalSQLInfo {
     OrignalSQLInfo()
         : backup_table_id_(common::OB_INVALID_ID),
@@ -130,7 +130,7 @@ class ObRestoreArgs {
         K_(backup_index_name), K_(backup_database_name), K_(backup_tablegroup_name));
   };
 
-  public:
+public:
   static constexpr int64_t OB_MAX_URI_LENGTH = 2048;
   static constexpr int64_t OB_MAX_URI_HOST_LENGTH = 128;
   static constexpr int64_t OB_MAX_URI_ACCESS_ID_LENGTH = 128;
@@ -142,7 +142,7 @@ class ObRestoreArgs {
   static constexpr int64_t OB_MAX_URI_BUCKET_DIR_DEPTH = 10;
   static constexpr int64_t OB_MAX_TCP_INVITED_NODES_LENGTH = common::MAX_IP_ADDR_LENGTH * 100;  // 3,200
 
-  public:
+public:
   ObRestoreArgs();
   ~ObRestoreArgs() = default;
   void reset();
@@ -188,7 +188,7 @@ class ObRestoreArgs {
       K_(partition_id), K_(schema_id_list), K_(sql_info), K_(schema_version), K_(uri_header), K_(cluster_name),
       K_(storage_info), K_(schema_id_list));
 
-  private:
+private:
   /* functions */
   int add_schema_id_pair(const uint64_t schema_id, const uint64_t backup_schema_id);
   /* variables */

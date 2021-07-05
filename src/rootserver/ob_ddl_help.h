@@ -30,7 +30,7 @@ class ObMultiVersionSchemaService;
 namespace rootserver {
 class ObDDLService;
 class ObTableGroupHelp {
-  public:
+public:
   ObTableGroupHelp(ObDDLService& ddl_service, share::schema::ObMultiVersionSchemaService& schema_service,
       common::ObMySQLProxy& sql_proxy)
       : ddl_service_(&ddl_service), schema_service_(&schema_service), sql_proxy_(&sql_proxy)
@@ -62,7 +62,7 @@ class ObTableGroupHelp {
       const share::schema::ObTablegroupSchema* orig_tablegroup_schema,
       const share::schema::ObTablegroupSchema& alter_tablegroup_schema, ObMySQLTransaction& trans);
 
-  private:
+private:
   int check_partition_option(const share::schema::ObTablegroupSchema& tablegroup, share::schema::ObTableSchema& table);
 
   int check_partition_option(const share::schema::ObTablegroupSchema& tablegroup, share::schema::ObTableSchema& table,
@@ -136,14 +136,14 @@ class ObTableGroupHelp {
 
   DISALLOW_COPY_AND_ASSIGN(ObTableGroupHelp);
 
-  private:
+private:
   ObDDLService* ddl_service_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   common::ObMySQLProxy* sql_proxy_;
 };
 
 class ObPartitionSplitHelper {
-  public:
+public:
   ObPartitionSplitHelper()
   {}
   virtual ~ObPartitionSplitHelper()

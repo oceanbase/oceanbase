@@ -16,18 +16,18 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 class ObExprEqualTest : public ::testing::Test {
-  public:
+public:
   ObExprEqualTest();
   virtual ~ObExprEqualTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprEqualTest(const ObExprEqualTest& other);
   ObExprEqualTest& operator=(const ObExprEqualTest& other);
 
-  protected:
+protected:
   // data members
 };
 

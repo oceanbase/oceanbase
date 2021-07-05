@@ -24,7 +24,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::observer;
 namespace test {
 class TestLocationPartitionId : public TestOptimizerUtils {
-  public:
+public:
   TestLocationPartitionId()
   {}
   ~TestLocationPartitionId()

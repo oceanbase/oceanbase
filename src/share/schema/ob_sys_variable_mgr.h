@@ -24,7 +24,7 @@ namespace share {
 namespace schema {
 
 class ObSimpleSysVariableSchema : public ObSchema {
-  public:
+public:
   ObSimpleSysVariableSchema();
   explicit ObSimpleSysVariableSchema(common::ObIAllocator* allocator);
   ObSimpleSysVariableSchema(const ObSimpleSysVariableSchema& src_schema);
@@ -67,7 +67,7 @@ class ObSimpleSysVariableSchema : public ObSchema {
     return read_only_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t schema_version_;
   common::ObNameCaseMode name_case_mode_;
@@ -75,7 +75,7 @@ class ObSimpleSysVariableSchema : public ObSchema {
 };
 
 class ObSysVariableHashWrapper {
-  public:
+public:
   ObSysVariableHashWrapper() : tenant_id_(common::OB_INVALID_ID)
   {}
   ObSysVariableHashWrapper(uint64_t tenant_id) : tenant_id_(tenant_id)
@@ -102,7 +102,7 @@ class ObSysVariableHashWrapper {
   }
   TO_STRING_KV(K_(tenant_id));
 
-  private:
+private:
   uint64_t tenant_id_;
 };
 
@@ -128,7 +128,7 @@ struct ObGetSysVariableKey<ObSysVariableHashWrapper, ObSimpleSysVariableSchema*>
 };
 
 class ObSysVariableMgr {
-  public:
+public:
   typedef common::ObSortedVector<ObSimpleSysVariableSchema*> SysVariableInfos;
   typedef common::hash::ObPointerHashMap<ObSysVariableHashWrapper, ObSimpleSysVariableSchema*, ObGetSysVariableKey>
       ObSysVariableMap;
@@ -161,11 +161,11 @@ class ObSysVariableMgr {
   }
   static int rebuild_sys_variable_hashmap(const SysVariableInfos& sys_var_infos, ObSysVariableMap& sys_var_map);
 
-  private:
+private:
   inline static bool compare_with_tenant_id(const ObSimpleSysVariableSchema* lhs, const uint64_t& tenant_id);
   inline static bool equal_to_tenant_id(const ObSimpleSysVariableSchema* lhs, const uint64_t& tenant_id);
 
-  private:
+private:
   bool is_inited_;
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator& allocator_;

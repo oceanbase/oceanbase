@@ -29,7 +29,7 @@ typedef common::ObSEArray<bool, 2, common::ModulePageAllocator, true> ObGetMetho
 typedef common::ObSEArray<ColumnItem, 16, common::ModulePageAllocator, true> ColumnArray;
 
 class ObQueryRangeProvider {
-  public:
+public:
   virtual int get_tablet_ranges(
       ObQueryRangeArray& ranges, ObGetMethodArray& get_methods, const common::ObDataTypeCastParams& dtc_params) = 0;
 

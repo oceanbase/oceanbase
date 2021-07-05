@@ -25,7 +25,7 @@ namespace sql {
 // Use ObSmallAllocator for size less than object_size_, else use ObMalloc.
 // ALLOC_MAGIC is used to mark and check the memory allocated.
 class ObIdManagerAllocator : public common::ObIAllocator {
-  public:
+public:
   ObIdManagerAllocator();
   ~ObIdManagerAllocator();
 
@@ -41,11 +41,11 @@ class ObIdManagerAllocator : public common::ObIAllocator {
   }
   void reset();
 
-  private:
+private:
   void* alloc_(int64_t sz);
   void free_(void* ptr);
 
-  private:
+private:
   const static int64_t ALLOC_MAGIC = 0x1A4420844B;
   const static int64_t SMALL_ALLOC_SYMBOL = 0x38;
   const static int64_t M_ALLOC_SYMBOL = 0x7;
@@ -58,7 +58,7 @@ class ObIdManagerAllocator : public common::ObIAllocator {
   int64_t object_size_;
   bool inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIdManagerAllocator);
 };
 

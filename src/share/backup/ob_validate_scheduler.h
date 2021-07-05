@@ -33,19 +33,19 @@ namespace share {
 class ObValidateInfoManager;
 
 class ObValidateScheduler {
-  public:
+public:
   ObValidateScheduler();
   virtual ~ObValidateScheduler();
   int init(const uint64_t tenant_id, const int64_t backup_set_id_, common::ObMySQLProxy& sql_proxy,
       rootserver::ObRootValidate& root_validate);
   int start_schedule_validate();
 
-  private:
+private:
   int get_log_archive_time_range(const uint64_t tenant_id, int64_t& start_ts, int64_t& checkpoint_ts);
   int check_backup_set_id_valid(const uint64_t tenant_id, const int64_t backup_set_id);
   int start_validate();
 
-  private:
+private:
   bool is_inited_;
   share::ObBackupValidateTaskInfo task_info_;
   common::ObMySQLProxy* sql_proxy_;
@@ -55,7 +55,7 @@ class ObValidateScheduler {
   share::ObLogArchiveBackupInfoMgr log_archive_mgr_;
   share::ObBackupTaskHistoryUpdater backup_history_updater_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObValidateScheduler);
 };
 

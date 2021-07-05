@@ -34,7 +34,7 @@ namespace common {
      worker_thread: end()
  */
 class ObSigProcessor {
-  public:
+public:
   virtual int start()
   {
     return OB_SUCCESS;
@@ -51,13 +51,13 @@ inline ObSigProcessor::~ObSigProcessor()
 {}
 
 class ObSigBTOnlyProcessor : public ObSigProcessor {
-  public:
+public:
   ObSigBTOnlyProcessor();
   ~ObSigBTOnlyProcessor();
   int prepare() override;
   int process() override;
 
-  protected:
+protected:
   int fd_;
   char filename_[128];
   char buf_[1024];
@@ -65,13 +65,13 @@ class ObSigBTOnlyProcessor : public ObSigProcessor {
 };
 
 class ObSigBTSQLProcessor : public ObSigBTOnlyProcessor {
-  public:
+public:
   ObSigBTSQLProcessor() : sql_(nullptr)
   {}
   virtual int prepare() override;
   virtual int process() override;
 
-  private:
+private:
   char* sql_;
 };
 

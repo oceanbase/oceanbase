@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprTimeToUsec : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprTimeToUsec(common::ObIAllocator& alloc);
   virtual ~ObExprTimeToUsec();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& date, common::ObExprTypeCtx& type_ctx) const;
@@ -26,7 +26,7 @@ class ObExprTimeToUsec : public ObFuncExprOperator {
 
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTimeToUsec);
 };

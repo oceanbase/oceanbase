@@ -93,7 +93,7 @@ struct RedoDataNode {
 class ObMemtableCtx;
 class ObMemtable;
 class ObITransCallback {
-  public:
+public:
   ObITransCallback() : prev_(NULL), next_(NULL)
   {}
   virtual ~ObITransCallback()
@@ -215,7 +215,7 @@ class ObITransCallback {
 
   VIRTUAL_TO_STRING_KV(KP(this), KP_(prev), KP_(next));
 
-  private:
+private:
   int insert(ObITransCallback* prev, ObITransCallback* next)
   {
     int ret = common::OB_SUCCESS;
@@ -230,14 +230,14 @@ class ObITransCallback {
     return ret;
   }
 
-  private:
+private:
   ObITransCallback* prev_;
   ObITransCallback* next_;
 };
 
 class ObTransCallbackMgr;
 class ObTransCallbackList {
-  public:
+public:
   ObTransCallbackList(ObTransCallbackMgr& callback_mgr) : callback_mgr_(callback_mgr)
   {
     reset();
@@ -324,10 +324,10 @@ class ObTransCallbackList {
   int calc_checksum_before_log_ts(const ObITransCallback* start, const ObITransCallback* end, const int64_t log_ts);
   int fetch_rollback_data_size(const ObITransCallback* start, const ObITransCallback* end, int64_t& rollback_size);
 
-  private:
+private:
   const ObMemtable* get_first_memtable();
 
-  private:
+private:
   ObITransCallback head_;
   uint64_t length_;
   ObTransCallbackMgr& callback_mgr_;
@@ -335,7 +335,7 @@ class ObTransCallbackList {
 };
 
 class ObTransCallbackMgr {
-  public:
+public:
   ObTransCallbackMgr(ObIMvccCtx& host)
       : host_(host),
         callback_list_(*this),
@@ -501,10 +501,10 @@ class ObTransCallbackMgr {
       const ObMemtable* const frozen_memtable, const ObMemtable* const active_memtable, bool& marked, int64_t& cb_cnt);
   int get_cur_max_sql_no(int64_t& sql_no);
 
-  private:
+private:
   void release_rowlocks();
 
-  public:
+public:
   bool is_rowlocks_released() const;
   int calc_checksum_before_log_ts(const int64_t log_ts);
   int fetch_rollback_data_size(const ObITransCallback* point, int64_t& rollback_size);
@@ -531,7 +531,7 @@ class ObTransCallbackMgr {
   int rollback_pending_log_size_(const bool need_write_log, const ObITransCallback* const end);
   void truncate_to_(ObITransCallback* end, const bool change_sub_trans_end);
 
-  private:
+private:
   ObITransCallback* guard()
   {
     return callback_list_.get_guard();
@@ -545,7 +545,7 @@ class ObTransCallbackMgr {
     return callback_list_.lifo_callback(callback_list_.get_guard(), end, type, for_replay_);
   }
 
-  private:
+private:
   ObIMvccCtx& host_;
   ObTransCallbackList callback_list_;
   ObITransCallback* sub_trans_begin_;
@@ -562,7 +562,7 @@ class ObTransCallbackMgr {
 
 // class ObIMvccCtx;
 class ObMvccRowCallback : public ObITransCallback {
-  public:
+public:
   ObMvccRowCallback(ObIMvccCtx& ctx, ObMvccRow& value, ObMemtable* memtable)
       : ctx_(ctx),
         value_(value),
@@ -638,8 +638,10 @@ class ObMvccRowCallback : public ObITransCallback {
       tnode_->set_sql_sequence(sql_no_);
     }
   }
-  int callback(const int type, const bool for_replay, const bool need_lock_for_write, ObMemtable* memtable = NULL);
-  int callback(transaction::ObMemtableKeyArray& memtable_key_arr, ObMemtable* memtable);
+
+  int callback(
+      const int type, const bool for_replay, const bool need_lock_for_write, ObMemtable* memtable = NULL) override;
+  int callback(transaction::ObMemtableKeyArray& memtable_key_arr, ObMemtable* memtable) override;
   bool on_memtable(const ObMemtable* const memtable) override
   {
     return memtable == memtable_;
@@ -687,7 +689,7 @@ class ObMvccRowCallback : public ObITransCallback {
   {
     is_savepoint_ = true;
   }
-  bool is_savepoint() const
+  bool is_savepoint() const override
   {
     return is_savepoint_;
   }
@@ -695,13 +697,13 @@ class ObMvccRowCallback : public ObITransCallback {
   {
     return need_fill_redo_;
   }
-  int32_t get_sql_no() const
+  int32_t get_sql_no() const override
   {
     return sql_no_;
   }
   int get_trans_id(transaction::ObTransID& trans_id) const;
   transaction::ObTransCtx* get_trans_ctx() const;
-  int64_t to_string(char* buf, const int64_t buf_len) const;
+  int64_t to_string(char* buf, const int64_t buf_len) const override;
   int64_t get_log_ts() const
   {
     return log_ts_;
@@ -716,11 +718,11 @@ class ObMvccRowCallback : public ObITransCallback {
   {
     return INT64_MAX != log_ts_;
   }
-  int64_t get_data_size()
+  int64_t get_data_size() override
   {
     return data_size_;
   }
-  virtual int del();
+  virtual int del() override;
   int check_sequential_relocate(const ObMemtable* memtable, bool& is_sequential_relocate) const;
   virtual bool mark_for_logging() override
   {
@@ -740,7 +742,7 @@ class ObMvccRowCallback : public ObITransCallback {
   virtual int fetch_rollback_data_size(int64_t& rollback_size) override;
   virtual int print_callback() override;
 
-  private:
+private:
   int row_unlock();
   int row_unlock_v2();
   int trans_commit(const bool for_replay);
@@ -766,7 +768,7 @@ class ObMvccRowCallback : public ObITransCallback {
   int dec_pending_cb_count();
   void mark_tnode_overflow(const int64_t log_ts);
 
-  private:
+private:
   ObIMvccCtx& ctx_;
   ObMemtableKey key_;
   ObMvccRow& value_;

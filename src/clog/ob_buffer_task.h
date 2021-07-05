@@ -23,7 +23,7 @@ class ObLogWriterWrapper;
 
 template <int64_t limit>
 class MyFixedBufferAlloc {
-  public:
+public:
   MyFixedBufferAlloc() : pos_(0)
   {}
   ~MyFixedBufferAlloc()
@@ -42,7 +42,7 @@ class MyFixedBufferAlloc {
     return ret;
   }
 
-  private:
+private:
   int64_t pos_;
   char buf_[limit];
 
@@ -51,7 +51,7 @@ class MyFixedBufferAlloc {
 
 // DiskLogBuffer and NetLogBuffer serilize different content to BatchBuffer by using respective BufferTask.
 class ObIBufferTask {
-  public:
+public:
   ObIBufferTask() : next_(NULL), need_callback_(false)
   {}
   virtual ~ObIBufferTask()
@@ -72,7 +72,7 @@ class ObIBufferTask {
 };
 
 class DummyBuffferTask : public ObIBufferTask {
-  public:
+public:
   DummyBuffferTask()
   {}
   virtual ~DummyBuffferTask()
@@ -83,13 +83,13 @@ class DummyBuffferTask : public ObIBufferTask {
   virtual int st_after_consume(const int handle_err);
   virtual int after_consume(const int handle_err, const void* arg, const int64_t before_push_cb_ts);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(DummyBuffferTask);
 };
 
 // BatchBuffer will submit a batch to BufferConsumer, which will construct a header and submit to disk/net.
 class ObIBatchBufferTask {
-  public:
+public:
   ObIBatchBufferTask() : batch_buf_(NULL), batch_size_(0), subtask_count_(0), head_(), task_list_tail_(&head_)
   {}
   virtual ~ObIBatchBufferTask()
@@ -125,7 +125,7 @@ class ObIBatchBufferTask {
   virtual ObICLogItem* get_flush_task() = 0;
   TO_STRING_KV(N_BUF, ((uint64_t)(batch_buf_)), N_BUF_LEN, batch_size_, N_COUNT, subtask_count_);
 
-  private:
+private:
   // alloc memory for RpcPostHandler's Task
   MyFixedBufferAlloc<256> alloc_;
   char* batch_buf_;
@@ -138,7 +138,7 @@ class ObIBatchBufferTask {
 };
 
 class ObIBufferConsumer {
-  public:
+public:
   typedef ObIBufferTask Task;
   ObIBufferConsumer()
   {}
@@ -148,7 +148,7 @@ class ObIBufferConsumer {
 };
 
 class ObIBatchBufferConsumer {
-  public:
+public:
   typedef ObIBatchBufferTask Task;
   ObIBatchBufferConsumer()
   {}

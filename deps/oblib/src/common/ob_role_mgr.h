@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace common {
 /// @brief ObRoleMgr manages the role and status of the process
 class ObRoleMgr {
-  public:
+public:
   static const int32_t OB_MASTER = 1;
   static const int32_t OB_SLAVE = 2;
   enum Role {
@@ -50,7 +50,7 @@ class ObRoleMgr {
     BOOTOK = 8,
   };
 
-  public:
+public:
   ObRoleMgr() : role_(SLAVE), state_(INIT)
   {}
 
@@ -75,10 +75,10 @@ class ObRoleMgr {
 
   inline const char* get_state_str() const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRoleMgr);
 
-  private:
+private:
   volatile Role role_;
   volatile State state_;
 };

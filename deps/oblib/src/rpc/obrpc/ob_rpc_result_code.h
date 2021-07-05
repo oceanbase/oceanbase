@@ -24,7 +24,7 @@ namespace obrpc {
 struct ObRpcResultCode {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRpcResultCode() : rcode_(0)
   {
     msg_[0] = '\0';

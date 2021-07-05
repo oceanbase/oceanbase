@@ -75,11 +75,11 @@ class ObSnapshotInfoManager;
 class ObSinglePartBalance;
 
 class ObDDLService {
-  public:
+public:
   typedef common::hash::ObHashMap<common::ObPGKey, share::ObPartitionInfo, common::hash::NoPthreadDefendMode>
       PartitionInfoMap;
 
-  public:
+public:
   friend class ObTableGroupHelp;
   friend class ObStandbyClusterSchemaProcessor;
   ObDDLService();
@@ -449,7 +449,7 @@ class ObDDLService {
 
   int modify_schema_in_restore(const obrpc::ObRestoreModifySchemaArg& arg);
 
-  private:
+private:
   enum PartitionBornMethod : int64_t {
     PBM_INVALID = 0,
     PBM_DIRECTLY_CREATE,
@@ -734,7 +734,7 @@ class ObDDLService {
   int drop_resource_pool_final(
       const uint64_t tenant_id, const bool is_standby, ObIArray<share::ObResourcePoolName>& pool_names);
 
-  public:
+public:
   int construct_zone_region_list(common::ObIArray<share::schema::ObZoneRegion>& zone_region_list,
       const common::ObIArray<common::ObZone>& zone_list);
   virtual int create_partitions_for_split(const int64_t schema_version, const share::schema::ObTableSchema& table,
@@ -763,7 +763,7 @@ class ObDDLService {
   bool is_sync_primary_ddl();
   int clear_partition_member_list(const int64_t max_schema_version, const int64_t tenant_id, const bool is_inner_table);
 
-  private:
+private:
   int do_modify_system_variable(
       uint64_t tenant_id, const share::schema::ObSysVarSchema& modify_var, share::schema::ObSysVarSchema& new_schema);
 
@@ -816,13 +816,13 @@ class ObDDLService {
   int get_part_by_id(share::schema::AlterTableSchema& table_schema, const int64_t part_id,
       const share::schema::ObPartition*& partition);
 
-  public:
+public:
   int get_tenant_primary_zone_entity_count(
       const uint64_t tenant_id, share::schema::ObSchemaGetterGuard& schema_guard, int64_t& pz_entity_count);
   int refresh_unit_replica_counter(const uint64 tenant_id);
   int check_restore_point_allow(const int64_t tenant_id, const int64_t table_id);
 
-  private:
+private:
   // used only by create normal tenant
   int check_tenant_schema(const common::ObIArray<common::ObString>& pool_list,
       share::schema::ObTenantSchema& tenant_schema, share::schema::ObSchemaGetterGuard& schema_guard);
@@ -1081,7 +1081,7 @@ class ObDDLService {
       const share::schema::ObTableSchema& orig_table_schema);
   bool add_sys_table_index(const uint64_t table_id, common::ObIArray<share::schema::ObTableSchema>& schemas);
 
-  private:
+private:
   // gts tenant associated
   int modify_gts_tenant(const obrpc::ObModifyTenantArg& arg, share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObTenantSchema& tenant_schema);
@@ -1096,7 +1096,7 @@ class ObDDLService {
       const share::schema::ObTableSchema& orig_table_schema, share::schema::AlterTableSchema& inc_table_schema);
   int check_table_pk(const share::schema::ObTableSchema& orig_table_schema);
 
-  private:
+private:
   bool inited_;
   volatile bool stopped_;
   obrpc::ObSrvRpcProxy* rpc_proxy_;
@@ -1114,12 +1114,12 @@ class ObDDLService {
   ObRebalanceTaskMgr* task_mgr_;
   mutable common::SpinRWLock pz_entity_cnt_lock_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLService);
 };
 
 class ObDDLSQLTransaction : public common::ObMySQLTransaction {
-  public:
+public:
   ObDDLSQLTransaction(share::schema::ObMultiVersionSchemaService* schema_service)
       : schema_service_(schema_service),
         tenant_id_(OB_INVALID_ID),
@@ -1128,7 +1128,7 @@ class ObDDLSQLTransaction : public common::ObMySQLTransaction {
   {}
   virtual ~ObDDLSQLTransaction(){};
 
-  public:
+public:
   virtual int start(ObISQLClient* proxy, bool with_snapshot = false) override;
   // If you commit the transaction, you need to write a line in ddl_operation once, the mark of end
   virtual int end(const bool commit) override;
@@ -1145,10 +1145,10 @@ class ObDDLSQLTransaction : public common::ObMySQLTransaction {
     return start_operation_schema_version_;
   }
 
-  private:
+private:
   int try_lock_all_ddl_operation(common::ObMySQLTransaction& trans, const uint64_t tenant_id);
 
-  private:
+private:
   share::schema::ObMultiVersionSchemaService* schema_service_;
   int64_t tenant_id_;
   // Filter out only one 1503 DDL transaction to prevent the schema from being invalidly pushed up

@@ -20,9 +20,9 @@
 namespace oceanbase {
 namespace sql {
 class ObConnectByOpPumpBase {
-  private:
+private:
   class MallocWrapper : public common::ObMalloc {
-    public:
+  public:
     explicit MallocWrapper(const char* label) : allocator_(label), alloc_cnt_(0)
     {}
     virtual ~MallocWrapper()
@@ -49,12 +49,12 @@ class ObConnectByOpPumpBase {
       allocator_.free(ptr);
     }
 
-    private:
+  private:
     common::ObArenaAllocator allocator_;
     int64_t alloc_cnt_;
   };
 
-  public:
+public:
   ObConnectByOpPumpBase()
       :  // shallow_row_(),
          // pump_row_desc_(NULL),
@@ -78,10 +78,10 @@ class ObConnectByOpPumpBase {
   }
   //  virtual int set_connect_by_root_row(const common::ObNewRow *root_row) = 0;
 
-  protected:
+protected:
   int deep_copy_row(const common::ObIArray<ObExpr*>& exprs, const ObChunkDatumStore::StoredRow*& dst_row);
 
-  protected:
+protected:
   static const int64_t SYS_PATH_BUFFER_INIT_SIZE = 128;
   // for init hash set for loop check
   static const int64_t CONNECT_BY_TREE_HEIGHT = 16;
@@ -102,9 +102,9 @@ class ObNLConnectByOp;
 class ObConnectByOpPump : public ObConnectByOpPumpBase {
   friend ObNLConnectByOp;
 
-  private:
+private:
   class ObHashColumn {
-    public:
+  public:
     ObHashColumn() : row_(NULL), exprs_(NULL), hash_val_(0)
     {}
     ObHashColumn(const ObChunkDatumStore::StoredRow* row, const common::ObIArray<ObExpr*>* exprs)
@@ -126,14 +126,14 @@ class ObConnectByOpPump : public ObConnectByOpPumpBase {
 
     bool operator==(const ObHashColumn& other) const;
 
-    public:
+  public:
     const ObChunkDatumStore::StoredRow* row_;
     const common::ObIArray<ObExpr*>* exprs_;
     mutable uint64_t hash_val_;
   };
 
   class PumpNode {
-    public:
+  public:
     PumpNode()
         : pump_row_(NULL),
           output_row_(NULL),
@@ -165,7 +165,7 @@ class ObConnectByOpPump : public ObConnectByOpPumpBase {
   };
   typedef common::hash::ObHashSet<ObHashColumn, common::hash::NoPthreadDefendMode> RowMap;
 
-  public:
+public:
   ObConnectByOpPump()
       : ObConnectByOpPumpBase(),
         //      prior_exprs_result_row_(),
@@ -197,7 +197,7 @@ class ObConnectByOpPump : public ObConnectByOpPumpBase {
   int get_sys_path(uint64_t sys_connect_by_path_id, ObString& parent_path);
   int concat_sys_path(uint64_t sys_connect_by_path_id, const ObString& cur_path);
 
-  private:
+private:
   //  int alloc_prior_row_cells(uint64_t row_count);
   int push_back_node_to_stack(PumpNode& node);
   int calc_prior_and_check_cycle(PumpNode& node, bool set_refactored, PumpNode* left_node);
@@ -215,7 +215,7 @@ class ObConnectByOpPump : public ObConnectByOpPumpBase {
     return datum_store_constructed_;
   }
 
-  private:
+private:
   static const int64_t SYS_PATH_BUFFER_INIT_SIZE = 128;
   static const int64_t CONNECT_BY_MAX_NODE_NUM = (2L << 30) / sizeof(PumpNode);
   ObArray<PumpNode> pump_stack_;

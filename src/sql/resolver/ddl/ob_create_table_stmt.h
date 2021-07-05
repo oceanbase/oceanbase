@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObCreateTableStmt : public ObTableStmt {
-  public:
+public:
   explicit ObCreateTableStmt(common::ObIAllocator* name_pool);
   ObCreateTableStmt();
   virtual ~ObCreateTableStmt();
@@ -116,10 +116,10 @@ class ObCreateTableStmt : public ObTableStmt {
   }
   INHERIT_TO_STRING_KV("ObTableStmt", ObTableStmt, K_(stmt_type), K_(create_table_arg), K_(index_arg_list));
 
-  private:
+private:
   int set_table_id(ObStmtResolver& ctx, const uint64_t table_id);
 
-  private:
+private:
   obrpc::ObCreateTableArg create_table_arg_;
   bool is_view_stmt_;
   share::schema::ObStmtNeedPrivs::NeedPrivs view_need_privs_;
@@ -134,7 +134,7 @@ class ObCreateTableStmt : public ObTableStmt {
   //  }
   //
   // create table xxx as already_exist_table, pay attention to whether data are need
-  protected:
+protected:
   ObSelectStmt* sub_select_stmt_;  // create table  ... as select...
   ObSelectStmt* view_define_;
 };

@@ -37,7 +37,7 @@ class ObLeaderCoordinator;
 class ObUnitManager;
 struct TenantBalanceStat;
 class ObShrinkResourcePoolChecker {
-  public:
+public:
   ObShrinkResourcePoolChecker(volatile bool& is_stop)
       : is_stop_(is_stop),
         leader_coordinator_(NULL),
@@ -54,17 +54,17 @@ class ObShrinkResourcePoolChecker {
   virtual ~ObShrinkResourcePoolChecker()
   {}
 
-  public:
+public:
   int init(share::schema::ObMultiVersionSchemaService* schema_service,
       rootserver::ObLeaderCoordinator* leader_coordinator, obrpc::ObSrvRpcProxy* srv_rpc_proxy, common::ObAddr& addr,
       rootserver::ObUnitManager* unit_mgr, share::ObPartitionTableOperator* pt_operator, TenantBalanceStat* tenant_stat,
       ObRebalanceTaskMgr* rebalance_task_mgr, ObServerManager* server_mgr);
 
-  public:
+public:
   int check_shrink_resource_pool_finished();
   int try_shrink_tenant_resource_pools(int64_t& task_cnt);
 
-  private:
+private:
   const int64_t NOT_IN_POOL_NON_PAXOS_SAFE_REMOVE_INTERVAL = 120 * 1000000;  // 120s
   struct ZoneReplicas {
     common::ObZone zone_;
@@ -81,7 +81,7 @@ class ObShrinkResourcePoolChecker {
     }
   };
 
-  private:
+private:
   int check_stop();
   int check_shrink_resource_pool_finished_by_tenant(
       share::schema::ObSchemaGetterGuard& schema_guard, const uint64_t tenant_id);
@@ -107,7 +107,7 @@ class ObShrinkResourcePoolChecker {
   bool is_non_paxos_replica(const int32_t replica_type);
   bool is_paxos_replica_V2(const int32_t replica_type);
 
-  private:
+private:
   const volatile bool& is_stop_;
   rootserver::ObLeaderCoordinator* leader_coordinator_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

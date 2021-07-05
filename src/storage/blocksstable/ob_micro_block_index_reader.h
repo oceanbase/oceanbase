@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace blocksstable {
 
 struct ObBlockIndexIterator {
-  public:
+public:
   typedef ObBlockIndexIterator self_t;
   typedef std::random_access_iterator_tag iterator_category;
   typedef uint64_t value_type;
@@ -114,10 +114,10 @@ struct ObBlockIndexIterator {
 };
 
 class ObMicroBlockIndexReader {
-  public:
+public:
   typedef ObBlockIndexIterator Iterator;
 
-  public:
+public:
   ObMicroBlockIndexReader();
   ~ObMicroBlockIndexReader();
   void reset();
@@ -152,13 +152,13 @@ class ObMicroBlockIndexReader {
     return nullptr == delta_array_ ? 0 : sizeof(int32_t) * block_count_;
   }
 
-  private:
+private:
   int init(const char* index_buf, const common::ObObjMeta* column_type_array, const int32_t row_key_column_cnt,
       const int32_t micro_block_cnt, const int32_t index_buf_size, const int32_t endkey_buf_size,
       const int32_t mark_deletion_buf_size, const int32_t delta_buf_size, const int32_t data_base_offset,
       const common::ObRowStoreType row_store_type);
   class ObBlockIndexCompare {
-    public:
+  public:
     ObBlockIndexCompare(ObMicroBlockIndexReader& index_reader, common::ObObj* objs, const int64_t row_key_column_number)
         : index_reader_(index_reader),
           objs_(objs),
@@ -185,14 +185,14 @@ class ObMicroBlockIndexReader {
       return ret_;
     }
 
-    private:
+  private:
     ObMicroBlockIndexReader& index_reader_;
     common::ObObj* objs_;
     const int64_t row_key_column_number_;
     int ret_;
   };
 
-  private:
+private:
   int get_end_keys(const Iterator& begin, const Iterator& end, common::ObIAllocator& allocator,
       common::ObIArray<common::ObStoreRowkey>& end_keys);
   int get_micro_block_infos(
@@ -202,7 +202,7 @@ class ObMicroBlockIndexReader {
   int lower_bound(const common::ObStoreRowkey& key, common::ObObj* objs, Iterator& index);
   int init_row_reader(const ObRowStoreType row_store_type);
 
-  private:
+private:
   ObIRowReader* row_reader_;
   ObFlatRowReader flat_row_reader_;
   ObSparseRowReader sparse_row_reader_;

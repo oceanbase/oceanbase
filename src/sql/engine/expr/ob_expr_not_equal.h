@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprNotEqual : public ObRelationalExprOperator {
-  public:
+public:
   ObExprNotEqual();
   explicit ObExprNotEqual(common::ObIAllocator& alloc);
   virtual ~ObExprNotEqual(){};
@@ -40,7 +40,7 @@ class ObExprNotEqual : public ObRelationalExprOperator {
     return ObRelationalExprOperator::cg_expr(expr_cg_ctx, raw_expr, rt_expr);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprNotEqual);
 };
 

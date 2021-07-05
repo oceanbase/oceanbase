@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprFuncLnnvl : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFuncLnnvl(common::ObIAllocator& alloc);
   virtual ~ObExprFuncLnnvl();
   virtual int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const;
@@ -27,7 +27,7 @@ class ObExprFuncLnnvl : public ObFuncExprOperator {
 
   static int eval_lnnvl(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncLnnvl);
 };

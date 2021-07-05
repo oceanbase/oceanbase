@@ -27,18 +27,18 @@ namespace schema {
 class ObDbLinkInfo;
 
 class ObDbLinkSqlService : public ObDDLSqlService {
-  public:
+public:
   ObDbLinkSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObDbLinkSqlService()
   {}
 
-  public:
+public:
   int insert_dblink(const ObDbLinkBaseInfo& dblink_info, const int64_t is_deleted, common::ObISQLClient& sql_client,
       const common::ObString* ddl_stmt_str);
   int delete_dblink(const uint64_t tenant_id, const uint64_t dblink_id, common::ObISQLClient& sql_client);
 
-  private:
+private:
   int add_pk_columns(const uint64_t tenant_id, const uint64_t dblink_id, ObDMLSqlSplicer& dml);
   int add_normal_columns(const ObDbLinkBaseInfo& dblink_info, ObDMLSqlSplicer& dml);
   int add_history_columns(const ObDbLinkBaseInfo& dblink_info, int64_t is_deleted, ObDMLSqlSplicer& dml);

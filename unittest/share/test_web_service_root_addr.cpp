@@ -21,7 +21,7 @@ namespace share {
 using namespace common;
 
 class TestWebServiceRootAddr : public ::testing::Test {
-  public:
+public:
   TestWebServiceRootAddr() : service_pid_(0)
   {}
 
@@ -32,7 +32,7 @@ class TestWebServiceRootAddr : public ::testing::Test {
   void set_response_json(const char* json);
   void set_response_json2(const char* json);
 
-  protected:
+protected:
   pid_t service_pid_;
   schema::DBInitializer initer_;
   schema::DBInitializer initer2_;

@@ -43,7 +43,7 @@ static bool is_equal_content(const char* tmp_file, const char* result_file)
 }
 
 class ObTestDatumCmp : public ::testing::Test {
-  public:
+public:
   ObTestDatumCmp()
   {}
   ~ObTestDatumCmp()
@@ -53,7 +53,7 @@ class ObTestDatumCmp : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTestDatumCmp);
 };
 

@@ -29,7 +29,7 @@ class ObMultiVersionSchemaService;
 }  // namespace schema
 
 class ObSequenceDDLProxy {
-  public:
+public:
   ObSequenceDDLProxy(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy);
   virtual ~ObSequenceDDLProxy();
   int create_sequence(share::schema::ObSequenceSchema& seq_schema, const common::ObBitSet<>& opt_bitset,
@@ -43,7 +43,7 @@ class ObSequenceDDLProxy {
   int rename_sequence(share::schema::ObSequenceSchema& seq_schema, common::ObMySQLTransaction& trans,
       const common::ObString* ddl_stmt_str);
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObSequenceDDLProxy);

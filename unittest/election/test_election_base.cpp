@@ -23,7 +23,7 @@ namespace unittest {
 using namespace common;
 using namespace election;
 class TestObElectionBase : public ::testing::Test {
-  public:
+public:
   TestObElectionBase()
   {}
   ~TestObElectionBase()

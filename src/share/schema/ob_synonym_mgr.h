@@ -25,7 +25,7 @@ namespace share {
 namespace schema {
 
 class ObSimpleSynonymSchema : public ObSchema {
-  public:
+public:
   ObSimpleSynonymSchema();
   explicit ObSimpleSynonymSchema(common::ObIAllocator* allocator);
   ObSimpleSynonymSchema(const ObSimpleSynonymSchema& src_schema);
@@ -113,7 +113,7 @@ class ObSimpleSynonymSchema : public ObSchema {
     return ObTenantSynonymId(tenant_id_, synonym_id_);
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t synonym_id_;
   int64_t schema_version_;
@@ -124,7 +124,7 @@ class ObSimpleSynonymSchema : public ObSchema {
 };
 
 class ObSynonymHashWrapper {
-  public:
+public:
   ObSynonymHashWrapper() : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID), synonym_name_()
   {}
   ObSynonymHashWrapper(uint64_t tenant_id, uint64_t database_id, const common::ObString& synonym_name)
@@ -160,7 +160,7 @@ class ObSynonymHashWrapper {
   }
   TO_STRING_KV(K_(tenant_id), K_(database_id), K_(synonym_name));
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString synonym_name_;
@@ -205,7 +205,7 @@ struct ObGetSynonymKey<ObSynonymHashWrapper, ObSimpleSynonymSchema*> {
 };
 
 class ObSynonymMgr {
-  public:
+public:
   typedef common::ObSortedVector<ObSimpleSynonymSchema*> SynonymInfos;
   typedef common::hash::ObPointerHashMap<ObSynonymHashWrapper, ObSimpleSynonymSchema*, ObGetSynonymKey> ObSynonymMap;
   typedef SynonymInfos::iterator SynonymIter;
@@ -248,13 +248,13 @@ class ObSynonymMgr {
   }
   static int rebuild_synonym_hashmap(const SynonymInfos& synonym_infos, ObSynonymMap& synonym_map);
 
-  private:
+private:
   inline static bool compare_with_tenant_synonym_id(
       const ObSimpleSynonymSchema* lhs, const ObTenantSynonymId& tenant_outline_id);
   inline static bool equal_to_tenant_synonym_id(
       const ObSimpleSynonymSchema* lhs, const ObTenantSynonymId& tenant_outline_id);
 
-  private:
+private:
   bool is_inited_;
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator& allocator_;

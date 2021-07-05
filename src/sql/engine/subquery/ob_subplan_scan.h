@@ -19,10 +19,10 @@ namespace sql {
 class ObSubPlanScan : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   class ObSubPlanScanCtx;
 
-  public:
+public:
   explicit ObSubPlanScan(common::ObIAllocator& alloc);
   virtual ~ObSubPlanScan();
   virtual void reset();
@@ -34,7 +34,7 @@ class ObSubPlanScan : public ObSingleChildPhyOperator {
     return init_array_size<>(output_indexs_, count);
   }
 
-  private:
+private:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -66,11 +66,11 @@ class ObSubPlanScan : public ObSingleChildPhyOperator {
    */
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSubPlanScan);
 
-  private:
+private:
   // The information saved by output_indexs_ is the index of the column iterated by the lower operator that needs to be
   // output
   common::ObFixedArray<int64_t, common::ObIAllocator> output_indexs_;

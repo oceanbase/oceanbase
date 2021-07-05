@@ -18,7 +18,7 @@ using namespace common;
 namespace blocksstable {
 
 class TestStorageCacheSuite : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

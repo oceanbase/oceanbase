@@ -34,12 +34,12 @@ class ObILogFileStore;
 namespace clog {
 class ObCommitLogEnv;
 class ObIlogAccessor {
-  public:
+public:
   ObIlogAccessor();
   virtual ~ObIlogAccessor();
   virtual void destroy();
 
-  public:
+public:
   int init(const char* dir_name, const char* shm_path, const int64_t server_seq, const common::ObAddr& addr,
       ObLogCache* log_cache);
 
@@ -69,7 +69,7 @@ class ObIlogAccessor {
   int check_partition_ilog_can_be_purged(const ObPartitionKey& pkey, const int64_t max_decided_trans_version,
       const uint64_t item_max_log_id, const int64_t item_max_log_ts, bool& can_purge);
 
-  protected:
+protected:
   int handle_last_ilog_file_(const file_id_t file_id);
   int fill_file_id_cache_(const file_id_t file_id);
   int get_index_info_block_map_(
@@ -81,7 +81,7 @@ class ObIlogAccessor {
   int write_old_version_trailer_(const file_id_t file_id, const offset_t offset);
   bool is_new_version_ilog_file_(const file_id_t file_id) const;
 
-  protected:
+protected:
   ObILogFileStore* file_store_;
   ObFileIdCache file_id_cache_;
   ObAlignedBuffer buffer_;
@@ -90,16 +90,16 @@ class ObIlogAccessor {
   ObLogDirectReader direct_reader_;
   file_id_t old_version_max_file_id_;
 
-  private:
+private:
   bool inited_;
 };
 
 class ObIlogStorage : public ObIlogAccessor {
-  public:
+public:
   ObIlogStorage();
   ~ObIlogStorage();
 
-  public:
+public:
   int init(const char* dir_name, const char* shm_path, const int64_t server_seq, const common::ObAddr& addr,
       ObLogCache* log_cache, storage::ObPartitionService* partition_service, ObCommitLogEnv* commit_log_env);
   void destroy();
@@ -107,7 +107,7 @@ class ObIlogStorage : public ObIlogAccessor {
   void stop();
   void wait();
 
-  public:
+public:
   // Return value:
   // 1) OB_SUCCESS
   // 2) OB_ERR_OUT_OF_UPPER_BOUND
@@ -164,30 +164,30 @@ class ObIlogStorage : public ObIlogAccessor {
 
   int get_next_ilog_file_id_from_memory(file_id_t& next_ilog_file_id) const;
 
-  private:
+private:
   class PurgeCheckFunctor;
   class ObIlogStorageTimerTask : public common::ObTimerTask {
-    public:
+  public:
     ObIlogStorageTimerTask() : ilog_storage_(NULL)
     {}
     ~ObIlogStorageTimerTask()
     {}
 
-    public:
+  public:
     int init(ObIlogStorage* ilog_storage);
     virtual void runTimerTask();
 
-    private:
+  private:
     void wash_ilog_cache_();
     void purge_stale_file_();
     void purge_stale_ilog_index_();
 
-    private:
+  private:
     ObIlogStorage* ilog_storage_;
   };
   static const int64_t TIMER_TASK_INTERVAL = 20L * 1000L * 1000L;
 
-  private:
+private:
   int init_next_ilog_file_id_(file_id_t& next_ilog_file_id) const;
   int get_cursor_from_memstore_(
       const common::ObPartitionKey& partition_key, const uint64_t query_log_id, ObGetCursorResult& result);
@@ -214,7 +214,7 @@ class ObIlogStorage : public ObIlogAccessor {
   int search_cursor_result_for_locate_(
       const ObGetCursorResult& result, const int64_t start_ts, const ObLogCursorExt*& target_cursor) const;
 
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* partition_service_;
   ObCommitLogEnv* commit_log_env_;
@@ -223,7 +223,7 @@ class ObIlogStorage : public ObIlogAccessor {
   ObIlogCache ilog_cache_;
   ObIlogStorageTimerTask task_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIlogStorage);
 };
 }  // namespace clog

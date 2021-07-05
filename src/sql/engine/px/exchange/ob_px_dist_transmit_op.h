@@ -21,7 +21,7 @@ namespace sql {
 class ObPxDistTransmitOpInput : public ObPxTransmitOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxDistTransmitOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxTransmitOpInput(ctx, spec)
   {}
   virtual ~ObPxDistTransmitOpInput()
@@ -31,7 +31,7 @@ class ObPxDistTransmitOpInput : public ObPxTransmitOpInput {
 class ObPxDistTransmitSpec : public ObPxTransmitSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxDistTransmitSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObPxTransmitSpec(alloc, type), dist_exprs_(alloc), dist_hash_funcs_(alloc)
   {}
@@ -42,14 +42,14 @@ class ObPxDistTransmitSpec : public ObPxTransmitSpec {
 };
 
 class ObPxDistTransmitOp : public ObPxTransmitOp {
-  public:
+public:
   ObPxDistTransmitOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObPxTransmitOp(exec_ctx, spec, input)
   {}
   virtual ~ObPxDistTransmitOp()
   {}
 
-  public:
+public:
   virtual int inner_open() override;
   virtual int rescan() override
   {
@@ -63,7 +63,7 @@ class ObPxDistTransmitOp : public ObPxTransmitOp {
 
   virtual int do_transmit() override;
 
-  private:
+private:
   int do_hash_dist();
   int do_bc2host_dist();
   int do_random_dist();

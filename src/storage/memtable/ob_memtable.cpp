@@ -43,7 +43,7 @@ using namespace storage;
 using namespace transaction;
 namespace memtable {
 class ObStoreRowWrapper : public ObStoreRow, public ObWithArena {
-  public:
+public:
   static const int64_t PAGE_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE;
   explicit ObStoreRowWrapper(ObIAllocator& allocator)
       : ObStoreRow(), ObWithArena(allocator, PAGE_SIZE), allocator_(allocator)
@@ -58,13 +58,13 @@ class ObStoreRowWrapper : public ObStoreRow, public ObWithArena {
     return allocator_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStoreRowWrapper);
   ObIAllocator& allocator_;
 };
 
 class ObGlobalMtAlloc {
-  public:
+public:
   ObGlobalMtAlloc()
   {
     int ret = OB_SUCCESS;
@@ -84,7 +84,7 @@ class ObGlobalMtAlloc {
     ptr = NULL;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGlobalMtAlloc);
   ObLfFIFOAllocator allocator_;
 };
@@ -2634,7 +2634,7 @@ int ObMemtable::check_standby_cluster_schema_condition_(
       // user tables of normal tenants(not sys tenant) need to be checked by schema version of
       // itself;
       // sys tables of normal tenants(not sys tenant) need to be checked by schema version of sys tenent;
-      uint64_t referred_tenant_id = is_inner_table(table_id) ? OB_SYS_TENANT_ID : tenant_id;
+      uint64_t referred_tenant_id = common::is_inner_table(table_id) ? OB_SYS_TENANT_ID : tenant_id;
       int64_t tenant_schema_version = 0;
       if (OB_FAIL(GSCHEMASERVICE.get_tenant_refreshed_schema_version(referred_tenant_id, tenant_schema_version))) {
         TRANS_LOG(WARN,

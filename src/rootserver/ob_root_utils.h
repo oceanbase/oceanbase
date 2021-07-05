@@ -79,7 +79,7 @@ inline bool is_same_pg(const T& left, const T& right)
 enum ObResourceType { RES_CPU = 0, RES_MEM = 1, RES_DISK = 2, RES_MAX };
 
 class ObIServerResource {
-  public:
+public:
   ObIServerResource() = default;
   virtual ~ObIServerResource() = default;
   // return -1 if resource_type is invalid
@@ -89,7 +89,7 @@ class ObIServerResource {
 };
 
 class ObIServerResourceDemand {
-  public:
+public:
   ObIServerResourceDemand() = default;
   virtual ~ObIServerResourceDemand() = default;
   // return -1 if resource_type is invalid
@@ -97,7 +97,7 @@ class ObIServerResourceDemand {
 };
 
 class ObResourceUtils {
-  public:
+public:
   // the weight of the i-th resource is equal to the average usage of i-th resource
   template <class T>
   static int calc_server_resource_weight(const common::ObArray<T>& servers, double* weights, int64_t count)
@@ -216,7 +216,7 @@ class ObResourceUtils {
     return is_enough;
   }
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObResourceUtils);
   ObResourceUtils();
@@ -224,7 +224,7 @@ class ObResourceUtils {
 };
 
 class ObTenantUtils {
-  public:
+public:
   static int get_tenant_ids(
       share::schema::ObMultiVersionSchemaService* schema_service, common::ObIArray<uint64_t>& tenant_ids);
   static int get_tenant_ids(share::schema::ObMultiVersionSchemaService* schema_service, int64_t& sys_schema_version,
@@ -234,25 +234,25 @@ class ObTenantUtils {
   static int remove_ineffective_task(common::ObMySQLTransaction& trans, const uint64_t tenant_id);
   static bool is_balance_target_schema(const share::schema::ObTableSchema& table_schema);
 
-  private:
+private:
   static int check_small_tenant_primary_zone_and_locality_condition(
       share::schema::ObSchemaGetterGuard& schema_guard, const uint64_t tenant_id, bool& small_tenant);
 };
 
 class ObBalanceTaskBuilder {
-  public:
+public:
   // check method: F or L paxos replicas are enough to tolerate single server disaster.
   static bool can_do_type_transform(TenantBalanceStat& ts, const Partition& partition, const Replica& replica,
       common::ObReplicaType dest_type, int64_t dest_memstore_percent);
 };
 
 class ObRootServiceRoleChecker {
-  public:
+public:
   static bool is_rootserver(share::ObIPartPropertyGetter* prop_getter);
 };
 
 class ObRootBalanceHelp {
-  public:
+public:
   enum BalanceControllerItem {
     ENABLE_REBUILD = 0,
     ENABLE_EMERGENCY_REPLICATE,
@@ -272,7 +272,7 @@ class ObRootBalanceHelp {
     MAX_BALANCE_ITEM
   };
   class BalanceController {
-    public:
+  public:
     BalanceController()
     {
       init();
@@ -314,7 +314,7 @@ class ObRootBalanceHelp {
       infos_[idx] = result;
     }
 
-    private:
+  private:
     bool infos_[MAX_BALANCE_ITEM];
   };
   const static char* BalanceItem[];
@@ -322,7 +322,7 @@ class ObRootBalanceHelp {
 };
 
 class ObTenantGroupParser {
-  public:
+public:
   struct TenantNameGroup {
     TenantNameGroup() : row_(0), column_(0), tenants_()
     {}
@@ -332,16 +332,16 @@ class ObTenantGroupParser {
     TO_STRING_KV(K_(row), K(column_), K(tenants_));
   };
 
-  public:
+public:
   ObTenantGroupParser() : all_tenant_names_()
   {}
   virtual ~ObTenantGroupParser()
   {}
 
-  public:
+public:
   int parse_tenant_groups(const common::ObString& ttg_str, common::ObIArray<TenantNameGroup>& tenant_groups);
 
-  private:
+private:
   int get_next_tenant_name(
       int64_t& pos, const int64_t end, const common::ObString& ttg_str, common::ObString& tenant_name);
   int jump_to_next_tenant_name(int64_t& pos, const int64_t end, const common::ObString& ttg_str);
@@ -357,18 +357,18 @@ class ObTenantGroupParser {
       common::ObIArray<TenantNameGroup>& tenant_groups);
   void jump_over_space(int64_t& pos, const int64_t end, const common::ObString& ttg_str);
 
-  private:
+private:
   common::ObArray<common::ObString> all_tenant_names_;
 };
 
 class ObLocalityUtil {
-  public:
+public:
   ObLocalityUtil()
   {}
   virtual ~ObLocalityUtil()
   {}
 
-  public:
+public:
   static int parse_zone_list_from_locality_str(
       common::ObString& locality_locality, common::ObIArray<common::ObZone>& zone_list);
   template <typename X, typename Y>
@@ -396,7 +396,7 @@ class ObLocalityUtil {
     return my_seed;
   }
 
-  private:
+private:
   /*
    * the follow interfaces are for generating designated zone locality
    * interfaces that have ObPartitionKey parameter are for leader_coordinator
@@ -440,7 +440,7 @@ int ObLocalityUtil::check_locality_completed_match(share::schema::ObSchemaGetter
 }
 
 class ObLocalityTaskHelp {
-  public:
+public:
   ObLocalityTaskHelp()
   {}
   virtual ~ObLocalityTaskHelp()
@@ -483,11 +483,11 @@ struct AlterPaxosLocalityTask {
 };
 
 class ObLocalityCheckHelp {
-  public:
+public:
   typedef common::hash::ObHashMap<common::ObZone, share::ObZoneReplicaAttrSet, common::hash::NoPthreadDefendMode>
       ZoneReplicaMap;
 
-  public:
+public:
   ObLocalityCheckHelp()
   {}
   virtual ~ObLocalityCheckHelp()
@@ -500,7 +500,7 @@ class ObLocalityCheckHelp {
   static int calc_paxos_replica_num(
       const common::ObIArray<share::ObZoneReplicaAttrSet>& zone_locality, int64_t& paxos_num);
 
-  private:
+private:
   enum class SingleZoneLocalitySearch : int64_t {
     SZLS_IN_ASSOC_SINGLE = 0,
     SZLS_IN_ASSOC_MULTI,
@@ -597,7 +597,7 @@ inline ObTraceEventRecorder* get_rs_trace_recorder()
 }
 
 class ObQuorumGetter {
-  public:
+public:
   ObQuorumGetter(share::schema::ObSchemaGetterGuard& schema_guard, const ObUnitManager& unit_manager,
       const ObZoneManager& zone_manager)
       : schema_guard_(&schema_guard), unit_mgr_(&unit_manager), zone_mgr_(&zone_manager)
@@ -605,7 +605,7 @@ class ObQuorumGetter {
   virtual ~ObQuorumGetter()
   {}
 
-  public:
+public:
   virtual int get_migrate_replica_quorum_size(
       const uint64_t table_id, const int64_t orig_quorum, int64_t& quorum) const;
   virtual int get_add_replica_quorum_size(const uint64_t table_id, const int64_t orig_quorum, const ObZone& zone,
@@ -615,7 +615,7 @@ class ObQuorumGetter {
   virtual int get_remove_replica_quorum_size(const uint64_t table_id, const int64_t orig_quorum, const ObZone& zone,
       const ObReplicaType type, int64_t& quorum) const;
 
-  private:
+private:
   int get_table_alter_quorum_replica_task(const uint64_t table_id, const int64_t orig_quorum,
       common::ObIArray<AlterPaxosLocalityTask>& alter_paxos_tasks, int64_t& add_paxos_num) const;
   int get_tablegroup_alter_quorum_replica_task(const uint64_t tablegroup_id, const int64_t orig_quorum,
@@ -631,7 +631,7 @@ class ObQuorumGetter {
   int get_tenant_pool_zone_list(const uint64_t tenant_id, common::ObIArray<common::ObZone>& pool_zone_list) const;
   int get_schema_paxos_replica_num(const uint64_t schema_id, int64_t& cur_paxos_count) const;
 
-  private:
+private:
   share::schema::ObSchemaGetterGuard* schema_guard_;
   const ObUnitManager* unit_mgr_;
   const ObZoneManager* zone_mgr_;
@@ -640,7 +640,7 @@ class ObQuorumGetter {
 };
 
 class ObRootUtils {
-  public:
+public:
   ObRootUtils()
   {}
   virtual ~ObRootUtils()
@@ -677,7 +677,7 @@ class ObRootUtils {
 };
 
 class ObClusterInfoGetter {
-  public:
+public:
   ObClusterInfoGetter()
   {}
   virtual ~ObClusterInfoGetter()

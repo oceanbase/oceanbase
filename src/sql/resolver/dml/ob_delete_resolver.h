@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDeleteResolver : public ObDMLResolver {
-  public:
+public:
   // delete
   static const int64_t TABLE = 0;     /* table_node */
   static const int64_t WHERE = 1;     /* where */
@@ -27,7 +27,7 @@ class ObDeleteResolver : public ObDMLResolver {
   static const int64_t HINT = 5;      /* hint */
   static const int64_t RETURNING = 6; /* returning */
 
-  public:
+public:
   explicit ObDeleteResolver(ObResolverParams& params);
   virtual ~ObDeleteResolver();
 
@@ -45,7 +45,7 @@ class ObDeleteResolver : public ObDMLResolver {
     return static_cast<ObDeleteStmt*>(stmt_);
   }
 
-  private:
+private:
   int add_related_columns_to_stmt(const TableItem& table_item);
   int add_index_related_column_to_stmt(
       const TableItem& table_item, common::ObIArray<ObColumnRefRawExpr*>& column_exprs);

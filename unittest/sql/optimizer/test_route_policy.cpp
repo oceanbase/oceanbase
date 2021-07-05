@@ -28,7 +28,7 @@ using namespace oceanbase::storage;
 using namespace oceanbase::share;
 namespace test {
 class ObRoutePolicyTest : public ::testing::Test {
-  public:
+public:
   ObRoutePolicyTest() : addr_(), part_service_(), route_policy_(addr_, part_service_), route_policy_ctx_()
   {
     route_policy_.has_readonly_zone_ = true;
@@ -41,7 +41,7 @@ class ObRoutePolicyTest : public ::testing::Test {
       ObRoutePolicy::PositionType pos_type, ObRoutePolicy::MergeStatus merge_status, ObZoneType zone_type,
       oceanbase::share::ObZoneStatus::Status zone_status);
 
-  public:
+public:
   ObAddr addr_;
   ObPartitionService part_service_;
   ObRoutePolicy route_policy_;

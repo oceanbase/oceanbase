@@ -28,7 +28,7 @@ class ObTableSchema;
 namespace sql {
 
 class ObRangeHashKeyGetter {
-  public:
+public:
   ObRangeHashKeyGetter(const int64_t& repartition_table_id,
       const common::ObFixedArray<ObTransmitRepartColumn, common::ObIAllocator>& repart_columns,
       const common::ObFixedArray<ObTransmitRepartColumn, common::ObIAllocator>& repart_sub_columns)
@@ -44,7 +44,7 @@ class ObRangeHashKeyGetter {
   //                                  int64_t slice_idx,
   //                                  int64_t &part_idx,
   //                                  int64_t &subpart_idx) const;
-  private:
+private:
   const int64_t& repartition_table_id_;
   const common::ObFixedArray<ObTransmitRepartColumn, common::ObIAllocator>& repart_columns_;
   const common::ObFixedArray<ObTransmitRepartColumn, common::ObIAllocator>& repart_sub_columns_;

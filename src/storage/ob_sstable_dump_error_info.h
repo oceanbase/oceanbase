@@ -21,7 +21,7 @@ using namespace share::schema;
 
 namespace storage {
 class ObSSTableDumpErrorInfo {
-  public:
+public:
   ObSSTableDumpErrorInfo()
       : param_(),
         context_(),
@@ -41,10 +41,10 @@ class ObSSTableDumpErrorInfo {
   void reset();
   void destory();
 
-  private:
+private:
   static const int64_t COL_ARRAY_LEN = 128;
 
-  private:
+private:
   int find_extra_row(
       ObSSTable& sstable1, const ObTableSchema& schema1, ObSSTable& sstable2, const ObTableSchema& schema2);
   OB_INLINE int transform_rowkey(
@@ -57,7 +57,7 @@ class ObSSTableDumpErrorInfo {
       common::ObSEArray<int64_t, COL_ARRAY_LEN>& projector, int64_t& found_row_cnt);
   int prepare_sstable_query_param(ObSSTable& sstable, const ObTableSchema& schema);
 
-  private:
+private:
   ObObj rowkey_obj_[OB_MAX_ROWKEY_COLUMN_NUMBER];
   ObTableIterParam param_;
   ObTableAccessContext context_;

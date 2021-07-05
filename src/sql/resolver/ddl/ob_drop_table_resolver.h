@@ -17,16 +17,16 @@
 namespace oceanbase {
 namespace sql {
 class ObDropTableResolver : public ObDDLResolver {
-  public:
+public:
   enum node_type { MATERIALIZED_NODE = 0, IF_EXIST_NODE, TABLE_LIST_NODE, MAX_NODE };
 
-  public:
+public:
   explicit ObDropTableResolver(ObResolverParams& params);
   virtual ~ObDropTableResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDropTableResolver);
 };
 }  // namespace sql

@@ -120,7 +120,7 @@ struct ObSysStat {
 };
 
 class ObDDLOperator {
-  public:
+public:
   ObDDLOperator(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy);
   virtual ~ObDDLOperator();
 
@@ -504,7 +504,7 @@ class ObDDLOperator {
   int construct_new_name_for_recyclebin(const T& schema, common::ObSqlString& new_table_name);
   static int replace_sys_stat(const uint64_t tenant_id, ObSysStat& sys_stat, common::ObISQLClient& trans);
 
-  private:
+private:
   virtual int set_need_flush_ora(share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObObjPrivSortKey& obj_priv_key, /* in: obj priv key*/
       const uint64_t option,                               /* in: new option */
@@ -605,7 +605,7 @@ class ObDDLOperator {
       common::ObString& object_name);
   int get_user_id_for_inner_ur(share::schema::ObUserInfo& user, bool& is_inner_ur, uint64_t& new_user_id);
 
-  private:
+private:
   int drop_fk_cascade(uint64_t tenant_id, share::schema::ObSchemaGetterGuard& schema_guard, bool has_ref_priv,
       bool has_no_cascade, const common::ObString& grantee_name, const common::ObString& parent_db_name,
       const common::ObString& parent_tab_name, common::ObMySQLTransaction& trans);
@@ -646,7 +646,7 @@ class ObDDLOperator {
   int check_modify_column_when_upgrade(
       const share::schema::ObColumnSchemaV2& new_column, const share::schema::ObColumnSchemaV2& orig_column);
 
-  private:
+private:
   share::schema::ObMultiVersionSchemaService& schema_service_;
   common::ObMySQLProxy& sql_proxy_;
 };

@@ -25,7 +25,7 @@ class ObCaseOpExpr;
 class ObColumnRefExpr;
 
 class ObExprVisitor {
-  public:
+public:
   virtual int visit(const ObExpr& expr) = 0;
   virtual int visit(const ObConstExpr& expr) = 0;
   virtual int visit(const ObVarExpr& expr) = 0;
@@ -33,7 +33,7 @@ class ObExprVisitor {
   virtual int visit(const ObColumnRefExpr& expr) = 0;
   virtual int visit(const ObCaseOpExpr& expr) = 0;
 
-  protected:
+protected:
   bool skip_;
 };
 

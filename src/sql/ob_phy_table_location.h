@@ -30,7 +30,7 @@ typedef common::ObSEArray<share::ObPartitionReplicaLocation, 1> ObPartitionRepli
 class ObSplittedRanges {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   const common::ObIArray<common::ObNewRange>& get_ranges() const
   {
     return ranges_;
@@ -58,7 +58,7 @@ class ObSplittedRanges {
 
   TO_STRING_KV(K_(ranges), K_(offsets));
 
-  private:
+private:
   common::ObSEArray<common::ObNewRange, 1> ranges_;
   common::ObSEArray<int64_t, 1> offsets_;
 };
@@ -75,13 +75,13 @@ enum class ObDuplicateType : int64_t {
 class ObPhyTableLocation final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static bool compare_phy_part_loc_info_asc(
       const ObPhyPartitionLocationInfo*& left, const ObPhyPartitionLocationInfo*& right);
   static bool compare_phy_part_loc_info_desc(
       const ObPhyPartitionLocationInfo*& left, const ObPhyPartitionLocationInfo*& right);
 
-  public:
+public:
   ObPhyTableLocation();
   void reset();
   int assign(const ObPhyTableLocation& other);
@@ -159,7 +159,7 @@ class ObPhyTableLocation final {
   static common::ObPartitionType get_partition_type(const common::ObPartitionKey& pkey,
       const common::ObIArray<ObPhyTableLocation>& table_locations, bool is_retry_for_dup_tbl);
 
-  private:
+private:
   uint64_t table_location_key_;
   uint64_t ref_table_id_;
   /* locations */

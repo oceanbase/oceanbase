@@ -39,7 +39,7 @@ class ObRootService;
 // 1. set_freeze_info() used to rs write clog when major freeze
 // 2. get_freeze_info() used to get spec version frozen status
 class ObFreezeInfoManager {
-  public:
+public:
   ObFreezeInfoManager()
       : is_inited_(false),
         freeze_info_proxy_(),
@@ -57,9 +57,9 @@ class ObFreezeInfoManager {
   virtual ~ObFreezeInfoManager()
   {}
 
-  private:
+private:
   struct FreezeInfo {
-    public:
+  public:
     bool is_loaded_;
     bool fast_loaded_;
     // local cached latest freeze info, schema_version is not included.
@@ -100,18 +100,18 @@ class ObFreezeInfoManager {
     int assign(const FreezeInfo& other);
   };
 
-  public:
+public:
   int init(
       common::ObMySQLProxy* proxy, ObZoneManager* zone_manager, obrpc::ObCommonRpcProxy* common_rpc, ObRootService& rs);
   void destroy();
 
-  public:
+public:
   int reload();
   int load_frozen_status();
   void unload();
   int try_reload();
 
-  public:
+public:
   int set_freeze_info(const int64_t frozen_version, const int64_t tenant_id, const common::ObAddr& server_addr,
       const common::ObAddr& rs_addr);
   int try_update_major_schema_version();
@@ -144,7 +144,7 @@ class ObFreezeInfoManager {
   int get_latest_merger_frozen_status(share::ObSimpleFrozenStatus& frozen_status);
   int get_latest_snapshot_gc_ts(int64_t& lastest_snapshot_gc_ts) const;
 
-  private:
+private:
   int check_inner_stat() const;
   int load_multi_version(FreezeInfo& freeze_info);
   bool is_valid_schema(const common::ObIArray<share::TenantIdAndSchemaVersion>& schema_versions);
@@ -175,7 +175,7 @@ class ObFreezeInfoManager {
   int set_latest_multi_versions(const common::ObIArray<share::TenantSnapshot>& snapshot_infos);
   int inner_update_major_schema_version();
 
-  public:
+public:
   // no merge of frozen_version 1 will happen,
   // we stipulate frozen_status of version 1 as follows
   static const int64_t ORIGIN_FROZEN_VERSION = 1;
@@ -185,7 +185,7 @@ class ObFreezeInfoManager {
   static const int64_t SNAPSHOT_GC_TS_WARN = 30LL * 60LL * 1000LL * 1000LL;
   static const int64_t SNAPSHOT_GC_TS_ERROR = 2LL * 60LL * 60LL * 1000LL * 1000LL;
 
-  private:
+private:
   bool is_inited_;
   share::ObFreezeInfoProxy freeze_info_proxy_;
   share::ObSnapshotTableProxy snapshot_proxy_;
@@ -197,7 +197,7 @@ class ObFreezeInfoManager {
   mutable common::SpinRWLock freeze_info_lock_;
   FreezeInfo freeze_info_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFreezeInfoManager);
 };
 

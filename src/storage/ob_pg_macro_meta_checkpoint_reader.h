@@ -26,7 +26,7 @@ namespace oceanbase {
 namespace storage {
 
 struct ObPGMacroMetaPair final {
-  public:
+public:
   ObPGMacroMetaPair() : meta_(nullptr), block_index_(0)
   {}
   ~ObPGMacroMetaPair() = default;
@@ -35,7 +35,7 @@ struct ObPGMacroMetaPair final {
 };
 
 class ObPGMacroMetaCheckpointReader final {
-  public:
+public:
   ObPGMacroMetaCheckpointReader();
   ~ObPGMacroMetaCheckpointReader() = default;
   int init(const blocksstable::MacroBlockId& entry_block, blocksstable::ObStorageFileHandle& file_handle,
@@ -44,10 +44,10 @@ class ObPGMacroMetaCheckpointReader final {
   void reset();
   common::ObIArray<blocksstable::MacroBlockId>& get_meta_block_list();
 
-  private:
+private:
   int read_next_entry(ObPGMacroBlockMetaCheckpointEntry& entry);
 
-  private:
+private:
   ObPGMetaItemReader reader_;
   ObMacroMetaReplayMap* replay_map_;
   bool is_inited_;

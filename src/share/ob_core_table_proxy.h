@@ -71,7 +71,7 @@ namespace share {
 //     }
 //
 class ObCoreTableProxy {
-  public:
+public:
   friend class ObFreezeInfoProxy;
   struct Cell {
     Cell() : is_hex_value_(false)
@@ -110,7 +110,7 @@ class ObCoreTableProxy {
   };
 
   class Row {
-    public:
+  public:
     Row() : inited_(false), row_id_(common::OB_INVALID_INDEX), cells_(NULL), cell_cnt_(0), kv_proxy_(NULL)
     {}
 
@@ -154,10 +154,10 @@ class ObCoreTableProxy {
 
     DECLARE_TO_STRING;
 
-    private:
+  private:
     int extend_cell_array(const int64_t cnt);
 
-    private:
+  private:
     bool inited_;
     int64_t row_id_;
     // cells are sorted by name
@@ -240,7 +240,7 @@ class ObCoreTableProxy {
 
   TO_STRING_KV(K_(table_name), K_(load_for_update), K_(cur_idx), K_(all_row));
 
-  private:
+private:
   int store_string(const common::ObString& src, common::ObString& dest);
 
   int load(const bool for_update, const int64_t frozen_version);
@@ -263,7 +263,7 @@ class ObCoreTableProxy {
   // choose the minimal non exist row_id (started with 0)
   int generate_row_id(int64_t& row_id) const;
 
-  private:
+private:
   const char* table_name_;
   common::ObISQLClient* sql_client_;
 

@@ -30,7 +30,7 @@ class ObRowkeyInfo;
 class ObStoreRowkey;
 
 class ObRowkey {
-  public:
+public:
   ObRowkey() : obj_ptr_(NULL), obj_cnt_(0)
   {}
   ObRowkey(ObObj* ptr, const int64_t cnt) : obj_ptr_(ptr), obj_cnt_(cnt)
@@ -38,7 +38,7 @@ class ObRowkey {
   ~ObRowkey()
   {}
 
-  public:
+public:
   int to_store_rowkey(ObStoreRowkey& store_rowkey) const;
   void reset()
   {
@@ -164,7 +164,7 @@ class ObRowkey {
   }
   static int get_common_prefix_length(const ObRowkey& lhs, const ObRowkey& rhs, int64_t& prefix_len);
 
-  public:
+public:
   int equal(const ObRowkey& rhs, bool& is_equal) const;
   bool simple_equal(const ObRowkey& rhs) const;
   // FIXME temporarily, rowkey compare with column order use seperate func
@@ -286,11 +286,11 @@ class ObRowkey {
     return compare(rhs) != 0;
   }
 
-  private:
+private:
   ObObj* obj_ptr_;
   int64_t obj_cnt_;
 
-  public:
+public:
   static ObObj MIN_OBJECT;
   static ObObj MAX_OBJECT;
   static ObRowkey MIN_ROWKEY;

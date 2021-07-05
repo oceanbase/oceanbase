@@ -26,7 +26,7 @@ using namespace common;
 namespace sql {
 
 class ObTopK::ObTopKCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObTopKCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx), topk_final_count_(-1), output_count_(0)
   {}
   virtual void destroy()
@@ -34,7 +34,7 @@ class ObTopK::ObTopKCtx : public ObPhyOperatorCtx {
     ObPhyOperatorCtx::destroy_base();
   }
 
-  private:
+private:
   int64_t topk_final_count_;  // count of rows that need to be output upforward
   int64_t output_count_;
   friend class ObTopK;

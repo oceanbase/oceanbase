@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace omt {
 const uint64_t RETRY_QUEUE_TIMESTEP = 10 * 1000L;
 class ObRetryQueue {
-  public:
+public:
   ObRetryQueue()
   {
     last_timestamp_ = common::ObTimeUtility::current_time();
@@ -30,7 +30,7 @@ class ObRetryQueue {
   int pop(common::ObLink*& task);
   uint64_t get_last_timestamp() const;
 
-  private:
+private:
   common::ObSpLinkQueue queue_[RETRY_QUEUE_SIZE];
   uint64_t last_timestamp_;
 };

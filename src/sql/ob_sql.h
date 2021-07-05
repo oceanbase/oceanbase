@@ -55,7 +55,7 @@ class ObSql {
   static const int64_t max_error_length;
   static const int64_t SQL_MEM_SIZE_LIMIT;
 
-  public:
+public:
   /// init SQL module
   int init(common::ObStatManager* stat_mgr, common::ObOptStatManager* opt_stat_mgr,
       rpc::frame::ObReqTransport* transport, storage::ObPartitionService* partition_service,
@@ -63,11 +63,11 @@ class ObSql {
       common::ObAddr& addr, share::ObRsMgr& rs_mgr);
   void destroy();
 
-  public:
+public:
   /// print statatistics of SQL module
   void stat();
 
-  public:
+public:
   // These interface are one one mapping whit MySQL request type currently
 
   // Interface of SQL Engine for OB_MYSQL_COM_QUERY request
@@ -166,12 +166,12 @@ class ObSql {
 
   int init_result_set(ObSqlCtx& context, ObResultSet& result_set);
 
-  public:
+public:
   // for sql test only
   friend bool compare_stmt(const char* schema_file, const char* str1, const char* str2);
   int fill_result_set(const ObPsStmtId stmt_id, const ObPsStmtInfo& stmt_info, ObResultSet& result);
 
-  public:
+public:
   ObSql()
       : inited_(false),
         stat_mgr_(NULL),
@@ -199,12 +199,12 @@ class ObSql {
     return partition_service_;
   }
 
-  private:
+private:
   // disallow copy
   ObSql(const ObSql& other);
   ObSql& operator=(const ObSql& other);
 
-  private:
+private:
   int construct_param_store(const ParamStore& params, ParamStore& param_store);
   int do_real_prepare(const ObString& stmt, ObSqlCtx& context, ObResultSet& result, bool is_inner_sql);
 
@@ -307,7 +307,7 @@ class ObSql {
   typedef hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   friend class ::test::TestOptimizerUtils;
 
-  private:
+private:
   bool inited_;
   // BEGIN Global singleton dependent interface
   common::ObStatManager* stat_mgr_;

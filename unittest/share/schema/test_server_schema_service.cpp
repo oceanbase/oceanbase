@@ -25,7 +25,7 @@ namespace share {
 namespace schema {
 using namespace common;
 class TestServerSchemaService : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown()
   {}

@@ -21,16 +21,16 @@ namespace sql {
 class ObAddrsProvider;
 class ObExecContext;
 class ObAddrsProviderFactory {
-  public:
+public:
   ObAddrsProviderFactory();
   virtual ~ObAddrsProviderFactory();
   void reset();
   int create(ObExecContext& exec_ctx, int provider_type, ObAddrsProvider*& servers_provider);
 
-  private:
+private:
   common::ObSEArray<ObAddrsProvider*, 4> store_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAddrsProviderFactory);
 };
 }  // namespace sql

@@ -36,7 +36,7 @@ class ObILogDir;
 class ObIlogFileBuilder;
 
 class PinnedMemory {
-  public:
+public:
   PinnedMemory();
   ~PinnedMemory();
   int init(const int64_t size);
@@ -45,7 +45,7 @@ class PinnedMemory {
   bool is_valid(const int64_t size) const;
   TO_STRING_KV(KP(pinned_memory_), K(size_));
 
-  private:
+private:
   char* pinned_memory_;
   int64_t size_;
   bool is_inited_;
@@ -53,11 +53,11 @@ class PinnedMemory {
 };
 
 class ObIlogStore {
-  public:
+public:
   ObIlogStore();
   ~ObIlogStore();
 
-  public:
+public:
   int init(const file_id_t next_ilog_file_id, common::ObILogFileStore* file_store, ObFileIdCache* file_id_cache,
       ObLogDirectReader* direct_reader, storage::ObPartitionService* partition_service);
   void destroy();
@@ -65,7 +65,7 @@ class ObIlogStore {
   void stop();
   void wait();
 
-  public:
+public:
   // retry inside the function
   // caller guarantees that the same partition_key is called from
   // a single thread, log_id is monotonically increasing.
@@ -110,7 +110,7 @@ class ObIlogStore {
   // ilog writer worker
   void runTimerTask();
 
-  private:
+private:
   const static int64_t DEFAULT_MEMSTORE_COUNT = 16;
   const static int64_t TIMER_TASK_INTERVAL = 2 * 1000 * 1000;
   // PINNED_MEMORY_SIZE should set as ObIlogMemstore::CURSOR_SIZE_TRIGGER(32MB)
@@ -180,19 +180,19 @@ class ObIlogStore {
 
   void alloc_memstore_(ObIlogMemstore*& memstore);
 
-  private:
+private:
   class IlogWriterTask : public common::ObTimerTask {
-    public:
+  public:
     IlogWriterTask() : ilog_store_(NULL)
     {}
     ~IlogWriterTask()
     {}
 
-    public:
+  public:
     int init(ObIlogStore* ilog_store);
     virtual void runTimerTask();
 
-    private:
+  private:
     ObIlogStore* ilog_store_;
   };
 
@@ -232,7 +232,7 @@ class ObIlogStore {
   typedef RWLock::RLockGuard RLockGuard;
   typedef RWLock::WLockGuard WLockGuard;
 
-  private:
+private:
   mutable RWLock lock_;
   bool is_inited_;
   file_id_t next_ilog_file_id_;
@@ -251,7 +251,7 @@ class ObIlogStore {
   PinnedMemory pinned_memory_;
   IlogWriterTask task_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIlogStore);
 };
 }  // namespace clog

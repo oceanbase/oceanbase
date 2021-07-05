@@ -2472,34 +2472,30 @@ Outline Data:
 
 ***************   Case 77   ***************
 SQL: SELECT c1 FROM pullup1 WHERE c1 IN (SELECT pullup2.pk FROM pullup2, pullup3); 
-===============================================================
-|ID|OPERATOR                    |NAME         |EST. ROWS|COST |
----------------------------------------------------------------
-|0 |MERGE SEMI JOIN             |             |100      |10265|
-|1 | SORT                       |             |100      |198  |
-|2 |  TABLE SCAN                |pullup1      |100      |90   |
-|3 | SUBPLAN SCAN               |VIEW1        |10000    |8615 |
-|4 |  NESTED-LOOP JOIN CARTESIAN|             |10000    |7235 |
-|5 |   TABLE SCAN               |pullup2      |100      |88   |
-|6 |   MATERIAL                 |             |100      |71   |
-|7 |    TABLE SCAN              |pullup3(uniq)|100      |52   |
-===============================================================
+==============================================================
+|ID|OPERATOR                    |NAME         |EST. ROWS|COST|
+--------------------------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN       |             |100      |3745|
+|1 | TABLE SCAN                 |pullup1      |100      |90  |
+|2 | SUBPLAN SCAN               |VIEW1        |1        |36  |
+|3 |  NESTED-LOOP JOIN CARTESIAN|             |1        |36  |
+|4 |   TABLE GET                |pullup2      |1        |36  |
+|5 |   TABLE SCAN               |pullup3(uniq)|100      |52  |
+==============================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([pullup1.c1]), filter(nil), 
-      equal_conds([pullup1.c1 = VIEW1.pk]), other_conds(nil)
-  1 - output([pullup1.c1]), filter(nil), sort_keys([pullup1.c1, ASC])
-  2 - output([pullup1.c1]), filter(nil), 
+      conds(nil), nl_params_([pullup1.c1])
+  1 - output([pullup1.c1]), filter(nil), 
       access([pullup1.c1]), partitions(p0)
-  3 - output([VIEW1.pk]), filter(nil), 
+  2 - output([1]), filter(nil), 
       access([VIEW1.pk])
-  4 - output([pullup2.pk]), filter(nil), 
+  3 - output([pullup2.pk]), filter(nil), 
       conds(nil), nl_params_(nil)
-  5 - output([pullup2.pk]), filter(nil), 
+  4 - output([pullup2.pk]), filter(nil), 
       access([pullup2.pk]), partitions(p0)
-  6 - output([1]), filter(nil)
-  7 - output([1]), filter(nil), 
+  5 - output([1]), filter(nil), 
       access([pullup3.uniq_c2]), partitions(p0)
 
 Outline Data:
@@ -2507,11 +2503,12 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       LEADING(@"SEL$1" ("opt.pullup1"@"SEL$1" "VIEW1"@"SEL$1" ))
-      USE_MERGE(@"SEL$1" ("VIEW1"@"SEL$1" ))
+      USE_NL(@"SEL$1" ("VIEW1"@"SEL$1" ))
+      NO_USE_NL_MATERIALIZATION(@"SEL$1" ("VIEW1"@"SEL$1" ))
       FULL(@"SEL$1" "opt.pullup1"@"SEL$1")
       LEADING(@"SEL$2" ("opt.pullup2"@"SEL$2" "opt.pullup3"@"SEL$2" ))
       USE_NL(@"SEL$2" ("opt.pullup3"@"SEL$2" ))
-      USE_NL_MATERIALIZATION(@"SEL$2" ("opt.pullup3"@"SEL$2" ))
+      NO_USE_NL_MATERIALIZATION(@"SEL$2" ("opt.pullup3"@"SEL$2" ))
       FULL(@"SEL$2" "opt.pullup2"@"SEL$2")
       INDEX(@"SEL$2" "opt.pullup3"@"SEL$2" "uniq")
       END_OUTLINE_DATA

@@ -22,15 +22,15 @@ namespace election {
 using namespace oceanbase::common;
 
 class Outage {
-  public:
+public:
   Outage(int64_t start = 0, int64_t end = 0);
   ~Outage();
 
-  public:
+public:
   void set_outage(int64_t start, int64_t end);
   bool in_outage(int64_t ts);
 
-  protected:
+protected:
   int64_t start_;
   int64_t end_;
   mutable ObSpinLock lock_;

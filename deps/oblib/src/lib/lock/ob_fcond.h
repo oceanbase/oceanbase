@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 struct ObFCond {
-  public:
+public:
   ObFCond() : seq_(0), n_waiters_(0)
   {}
   ~ObFCond()
@@ -43,7 +43,7 @@ struct ObFCond {
     return err;
   }
 
-  private:
+private:
   lib::CoFutex futex_;
   uint32_t seq_;
   uint32_t n_waiters_;

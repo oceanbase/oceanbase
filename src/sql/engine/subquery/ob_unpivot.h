@@ -20,10 +20,10 @@ namespace sql {
 class ObUnpivot : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   class ObUnpivotCtx;
 
-  public:
+public:
   explicit ObUnpivot(common::ObIAllocator& alloc);
   virtual ~ObUnpivot();
   virtual void reset();
@@ -35,7 +35,7 @@ class ObUnpivot : public ObSingleChildPhyOperator {
     return init_array_size<>(output_indexs_, count);
   }
 
-  private:
+private:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -67,11 +67,11 @@ class ObUnpivot : public ObSingleChildPhyOperator {
    */
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
 
-  public:
+public:
   common::ObFixedArray<int64_t, common::ObIAllocator> output_indexs_;
   ObUnpivotInfo unpivot_info_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUnpivot);
 };

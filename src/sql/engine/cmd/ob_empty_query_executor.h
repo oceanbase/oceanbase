@@ -20,14 +20,14 @@ class ObExecContext;
 class ObEmptyQueryStmt;
 
 class ObEmptyQueryExecutor {
-  public:
+public:
   ObEmptyQueryExecutor()
   {}
   virtual ~ObEmptyQueryExecutor()
   {}
   int execute(ObExecContext& ctx, ObEmptyQueryStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObEmptyQueryExecutor);
 };
 }  // namespace sql

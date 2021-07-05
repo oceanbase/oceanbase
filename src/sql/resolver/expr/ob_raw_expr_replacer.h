@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObRawExprReplacer : public ObRawExprVisitor {
-  public:
+public:
   ObRawExprReplacer(ObRawExpr* old_expr, ObRawExpr* new_expr);
   virtual ~ObRawExprReplacer();
 
@@ -33,13 +33,13 @@ class ObRawExprReplacer : public ObRawExprVisitor {
   virtual int visit(ObSetOpRawExpr& expr);
   virtual int visit(ObWinFunRawExpr& expr);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprReplacer);
   // function members
-  private:
+private:
   ObRawExpr* old_expr_;
   ObRawExpr* new_expr_;
 };

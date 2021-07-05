@@ -1541,7 +1541,7 @@ int ObPartitionMergeUtil::merge_partition(memtable::ObIMemtableCtxFactory* memct
     STORAGE_LOG(WARN, "Failed to init partition fuser", K(merge_param), K(ret));
   } else if (OB_ISNULL(partition_fuser)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted null partition fuser", K(ret));
+    STORAGE_LOG(WARN, "Unexpected null partition fuser", K(ret));
   } else if (OB_FAIL(ctx.get_merge_range(idx, merge_range, allocator))) {
     STORAGE_LOG(WARN, "Failed to get merge range from merge context", K(ret));
   } else {
@@ -2243,10 +2243,10 @@ int ObPartitionMergeUtil::rewrite_macro_block(ObIPartitionMergeFuser::MERGE_ITER
   ObMacroRowIterator* iter = static_cast<ObMacroRowIterator*>(minimum_iters.at(0));
   if (OB_ISNULL(partition_fuser)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexcepted NULL partition fuser", K(partition_fuser), K(ret));
+    LOG_WARN("Unexpected NULL partition fuser", K(partition_fuser), K(ret));
   } else if (!partition_fuser->is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexcepted partition fuser", K(*partition_fuser), K(ret));
+    LOG_WARN("Unexpected partition fuser", K(*partition_fuser), K(ret));
   } else if (OB_FAIL(iter->open_curr_macro_block())) {
     LOG_WARN("Fail to open the curr macro block", K(ret));
   } else {

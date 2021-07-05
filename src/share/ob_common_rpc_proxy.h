@@ -28,7 +28,7 @@
 namespace oceanbase {
 namespace obrpc {
 class ObCommonRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObCommonRpcProxy);
 
   // rootservice provided
@@ -284,7 +284,7 @@ class ObCommonRpcProxy : public obrpc::ObRpcProxy {
   RPC_S(PRD create_restore_point, obrpc::OB_CREATE_RESTORE_POINT, (ObCreateRestorePointArg));
   RPC_S(PRD drop_restore_point, obrpc::OB_DROP_RESTORE_POINT, (ObDropRestorePointArg));
 
-  public:
+public:
   void set_rs_mgr(share::ObRsMgr& rs_mgr)
   {
     rs_mgr_ = &rs_mgr;
@@ -307,13 +307,13 @@ class ObCommonRpcProxy : public obrpc::ObRpcProxy {
     return proxy;
   }
 
-  private:
+private:
   void reset_rs_mgr()
   {
     rs_mgr_ = NULL;
   }
 
-  protected:
+protected:
 #define CALL_WITH_RETRY(call_stmt)                                                                                    \
   common::ObAddr rs;                                                                                                  \
   do {                                                                                                                \
@@ -392,7 +392,7 @@ class ObCommonRpcProxy : public obrpc::ObRpcProxy {
   }
 #undef CALL_WIRTH_RETRY
 
-  private:
+private:
   share::ObRsMgr* rs_mgr_;
 };  // end of class ObCommonRpcProxy
 

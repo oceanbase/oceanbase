@@ -73,7 +73,7 @@ const static common::ObRegion REGION3("region3");
 // implement ObIPartPropertyGetter for unittesting.
 // all inlined for convenience.
 class FakePartPropertyGetter : public ObIPartPropertyGetter {
-  public:
+public:
   static uint64_t& TEN()
   {
     static uint64_t id = 1;
@@ -163,7 +163,7 @@ class FakePartPropertyGetter : public ObIPartPropertyGetter {
     return replicas_;
   }
 
-  private:
+private:
   ReplicaArray replicas_;
   ObPartitionReplica::MemberList member_list_;
 };

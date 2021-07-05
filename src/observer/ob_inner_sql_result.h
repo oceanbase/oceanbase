@@ -34,7 +34,7 @@ namespace observer {
 class ObInnerSQLResult : public common::sqlclient::ObMySQLResult {
   friend class ObInnerSQLConnection;
 
-  public:
+public:
   explicit ObInnerSQLResult(sql::ObSQLSessionInfo& session);
   virtual ~ObInnerSQLResult();
 
@@ -143,7 +143,7 @@ class ObInnerSQLResult : public common::sqlclient::ObMySQLResult {
     return is_inited_;
   }
 
-  private:
+private:
   virtual int inner_get_number(const int64_t col_idx, common::number::ObNumber& nmb_val, IAllocator& allocator) const;
   virtual int get_number_impl(const int64_t col_idx, common::number::ObNumber& nmb_val) const;
 
@@ -176,9 +176,9 @@ class ObInnerSQLResult : public common::sqlclient::ObMySQLResult {
 
   static inline int check_extend_value(const common::ObObj& obj);
 
-  private:
+private:
   class MemEntifyDestroyGuard {
-    public:
+  public:
     MemEntifyDestroyGuard(lib::MemoryContext*& entity) : ref_(entity)
     {}
     ~MemEntifyDestroyGuard()
@@ -189,7 +189,7 @@ class ObInnerSQLResult : public common::sqlclient::ObMySQLResult {
       }
     }
 
-    private:
+  private:
     lib::MemoryContext*& ref_;
   };
 

@@ -34,7 +34,7 @@ struct FakeMajorFreezePartition {
 
 class FakeMajorFreezePartitionService;
 class ObMajorFreezeTask : public share::ObAsyncTask {
-  public:
+public:
   ObMajorFreezeTask(FakeMajorFreezePartitionService* pt_service, ObIPSFreezeCb* cb,
       const common::ObPartitionKey& partition_key, const int64_t cmd, const int64_t frozen_version,
       const int64_t frozen_timestamp, const int err);
@@ -48,7 +48,7 @@ class ObMajorFreezeTask : public share::ObAsyncTask {
   }
   virtual share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-  private:
+private:
   FakeMajorFreezePartitionService* pt_service_;
   ObIPSFreezeCb* cb_;
   common::ObPartitionKey partition_key_;
@@ -59,7 +59,7 @@ class ObMajorFreezeTask : public share::ObAsyncTask {
 };
 
 class FakeMajorFreezePartitionService : public MockObIPartitionService {
-  public:
+public:
   FakeMajorFreezePartitionService();
   int init();
   // use be test major freeze
@@ -88,7 +88,7 @@ class FakeMajorFreezePartitionService : public MockObIPartitionService {
   int gen_err(const int64_t i);
   FakeMajorFreezePartition* get_partition(const common::ObPartitionKey& pk);
 
-  private:
+private:
   bool inited_;
   ObIPSFreezeCb* major_freeze_cb_;
   common::ObArray<FakeMajorFreezePartition> partitions_;

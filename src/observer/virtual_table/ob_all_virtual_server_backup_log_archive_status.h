@@ -36,20 +36,20 @@ class ObAllVirtualServerBackupLogArchiveStatus : public common::ObVirtualTableIt
     PG_COUNT
   };
 
-  public:
+public:
   ObAllVirtualServerBackupLogArchiveStatus();
   virtual ~ObAllVirtualServerBackupLogArchiveStatus();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   int init(storage::ObPartitionService* partition_service, common::ObAddr& addr);
 
-  private:
+private:
   int fill_rows_();
   int prepare_to_read_();
   void finish_read_();
 
-  private:
+private:
   bool is_inited_;
   bool has_reported_;
   storage::ObPartitionService* ps_;

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 struct ObCtxParallel {
-  public:
+public:
   ObCtxParallel()
   {
     for (int64_t i = 0; i < ObCtxIds::MAX_CTX_ID; i++) {
@@ -41,7 +41,7 @@ struct ObCtxParallel {
     return p;
   }
 
-  private:
+private:
   const static int DEFAULT_CTX_PARALLEL = 8;
   int parallel_[ObCtxIds::MAX_CTX_ID];
 };

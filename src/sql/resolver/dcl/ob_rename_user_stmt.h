@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObRenameUserStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObRenameUserStmt(common::ObIAllocator* name_pool);
   ObRenameUserStmt();
   virtual ~ObRenameUserStmt();
@@ -42,14 +42,14 @@ class ObRenameUserStmt : public ObDDLStmt {
   }
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   // data members
   common::ObStrings rename_infos_;  // (from1_user, from1_host, to1_user, to1_host), (from2_user, from2_host, to2_user,
                                     // to2_host)
   uint64_t tenant_id_;
   obrpc::ObRenameUserArg rename_user_arg_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRenameUserStmt);
 };
 }  // end namespace sql

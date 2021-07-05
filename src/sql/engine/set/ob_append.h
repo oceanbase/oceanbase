@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace sql {
 class ObAppend : public ObMultiChildrenPhyOperator {
-  public:
+public:
   class ObAppendCtx;
   explicit ObAppend(common::ObIAllocator& alloc);
   ~ObAppend();

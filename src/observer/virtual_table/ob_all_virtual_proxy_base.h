@@ -30,7 +30,7 @@ class ObMultiVersionSchemaService;
 namespace observer {
 // this class is just a base class, not for a real virtual table
 class ObAllVirtualProxyBaseIterator : public common::ObVirtualTableIterator {
-  public:
+public:
   ObAllVirtualProxyBaseIterator();
   virtual ~ObAllVirtualProxyBaseIterator();
 
@@ -60,7 +60,7 @@ class ObAllVirtualProxyBaseIterator : public common::ObVirtualTableIterator {
   int get_table_schema(share::schema::ObSchemaGetterGuard& schema_guard, uint64_t table_id,
       const share::schema::ObTableSchema*& table_schema);
 
-  protected:
+protected:
   share::schema::ObMultiVersionSchemaService* schema_service_;
   share::schema::ObSchemaGetterGuard full_schema_guard_;  // Not sure if the incoming SQL is tenant_schema_guard, please
                                                           // try again here for safety

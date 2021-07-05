@@ -31,12 +31,12 @@ using namespace share::schema;
 namespace unittest {
 static const int64_t MACRO_BLOCK_SIZE = 64 * 1024;
 class ObMultiVersionMockIterator {
-  private:
+private:
   int64_t rowkey_cnt_;
 };
 
 class ObMultiVersionSSTableTest : public TestDataFilePrepare {
-  public:
+public:
   ObMultiVersionSSTableTest(const char* file)
       : TestDataFilePrepare(file, MACRO_BLOCK_SIZE), is_open_(false), data_iter_cursor_(0)
   {
@@ -118,13 +118,13 @@ class ObMultiVersionSSTableTest : public TestDataFilePrepare {
     return is_open_;
   }
 
-  private:
+private:
   void prepare_gap_schema();
   void prepare_gap_sstable_data(const int load_type);
   void convert_to_multi_row(const ObStoreRow& org_row, const int64_t snapshot_version, const ObRowDml row_dml,
       const bool is_compacted_row, const bool is_last_row, const bool is_first_row, ObStoreRow& multi_row);
 
-  protected:
+protected:
   static const int64_t DATA_VERSION = 2;
   static const int64_t MICRO_BLOCK_SIZE = 4 * 1024;
   static const int64_t MAX_MICRO_BLOCK_CNT = 20;

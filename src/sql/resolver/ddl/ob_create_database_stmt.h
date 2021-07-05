@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateDatabaseStmt : public ObDDLStmt {
-  public:
+public:
   ObCreateDatabaseStmt();
   explicit ObCreateDatabaseStmt(common::ObIAllocator* name_pool);
   virtual ~ObCreateDatabaseStmt();
@@ -48,7 +48,7 @@ class ObCreateDatabaseStmt : public ObDDLStmt {
 
   TO_STRING_KV(K_(create_database_arg));
 
-  private:
+private:
   bool is_charset_specify_;
   bool is_collation_specify_;
   obrpc::ObCreateDatabaseArg create_database_arg_;

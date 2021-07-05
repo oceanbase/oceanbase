@@ -30,7 +30,7 @@ struct ObSimpleLogFile {
 };
 
 class ObLogDirScanner {
-  public:
+public:
   ObLogDirScanner();
   virtual ~ObLogDirScanner();
 
@@ -66,7 +66,7 @@ class ObLogDirScanner {
   bool has_ckpt() const;
   void reset();
 
-  private:
+private:
   /**
    * Find all log files under directory
    */
@@ -90,7 +90,7 @@ class ObLogDirScanner {
 
   DISALLOW_COPY_AND_ASSIGN(ObLogDirScanner);
 
-  private:
+private:
   uint64_t min_log_id_;
   uint64_t max_log_id_;
   uint64_t max_ckpt_id_;

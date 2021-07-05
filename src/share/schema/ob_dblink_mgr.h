@@ -26,7 +26,7 @@ namespace share {
 namespace schema {
 
 class ObDbLinkNameHashWrapper {
-  public:
+public:
   ObDbLinkNameHashWrapper() : tenant_id_(common::OB_INVALID_ID), dblink_name_()
   {}
   ObDbLinkNameHashWrapper(const uint64_t tenant_id, const common::ObString& dblink_name)
@@ -53,7 +53,7 @@ class ObDbLinkNameHashWrapper {
     return dblink_name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObString dblink_name_;
 };
@@ -110,7 +110,7 @@ class ObDbLinkMgr {
   typedef DbLinkSchemas::iterator DbLinkIter;
   typedef DbLinkSchemas::const_iterator ConstDbLinkIter;
 
-  public:
+public:
   ObDbLinkMgr();
   explicit ObDbLinkMgr(common::ObIAllocator& allocator);
   virtual ~ObDbLinkMgr();
@@ -134,7 +134,7 @@ class ObDbLinkMgr {
   int del_dblink_schemas_in_tenant(const uint64_t tenant_id);
   int get_dblink_schema_count(int64_t& schema_count) const;
 
-  private:
+private:
   inline bool check_inner_stat() const;
   inline static bool compare_dblink(const ObDbLinkSchema* lhs, const ObDbLinkSchema* rhs);
   inline static bool equal_dblink(const ObDbLinkSchema* lhs, const ObDbLinkSchema* rhs);
@@ -142,7 +142,7 @@ class ObDbLinkMgr {
   inline static bool equal_with_tenant_dblink_id(const ObDbLinkSchema* lhs, const ObTenantDbLinkId& tenant_dblink_id);
   int rebuild_dblink_hashmap();
 
-  private:
+private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator& allocator_;
   DbLinkSchemas dblink_schemas_;

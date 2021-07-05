@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace common {
 
 class ObColumnStat : public common::ObIKVCacheValue {
-  public:
+public:
   static const int64_t BUCKET_BITS = 10;        // ln2(1024) = 10;
   static const int64_t TOTAL_BUCKET_BITS = 40;  // 6 groups
   static const int64_t NUM_LLC_BUCKET = (1 << BUCKET_BITS);
@@ -30,7 +30,7 @@ class ObColumnStat : public common::ObIKVCacheValue {
   static const int64_t LARGE_NDV_NUMBER = 2LL << 61;  // 2 << 64 is too large for int64_t, and 2 << 61 is enough for ndv
   static const int64_t MAX_OBJECT_SERIALIZE_SIZE = 512;
 
-  public:
+public:
   struct Key : public common::ObIKVCacheKey {
     uint64_t table_id_;
     uint64_t partition_id_;
@@ -79,7 +79,7 @@ class ObColumnStat : public common::ObIKVCacheValue {
     TO_STRING_KV(K(table_id_), K(partition_id_), K(column_id_));
   };
 
-  public:
+public:
   ObColumnStat();
   // construct object to write, maybe failed when dont't have enough memory for llc_bitmap_ or object_buf_
   explicit ObColumnStat(common::ObIAllocator& allocator);
@@ -230,12 +230,12 @@ class ObColumnStat : public common::ObIKVCacheValue {
     return is_modified_;
   }
 
-  private:
+private:
   inline void calc_llc_value(const common::ObObj& value);
   inline uint64_t trailing_zeroes(const uint64_t num);
   inline double select_alpha_value(const int64_t num_bucket);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObColumnStat);
   uint64_t table_id_;
   uint64_t partition_id_;

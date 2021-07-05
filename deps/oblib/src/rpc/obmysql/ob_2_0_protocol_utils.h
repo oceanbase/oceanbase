@@ -52,7 +52,7 @@ inline const char* get_proto20_encode_step_name(const ObProto20EncodeStep step)
 }
 
 class ObProto20Context {
-  public:
+public:
   ObProto20Context()
       : comp_seq_(0),
         proto20_seq_(0),
@@ -78,7 +78,7 @@ class ObProto20Context {
   TO_STRING_KV(K_(comp_seq), K_(request_id), K_(proto20_seq), K_(header_len), K_(tailer_len), K_(next_step),
       K_(is_proto20_used), K_(is_checksum_off), K_(curr_proto20_packet_start_pos));
 
-  public:
+public:
   uint8_t comp_seq_;
   uint8_t proto20_seq_;
   uint32_t request_id_;
@@ -89,12 +89,12 @@ class ObProto20Context {
   bool is_checksum_off_;
   int64_t curr_proto20_packet_start_pos_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObProto20Context);
 };
 
 struct ObProtoEncodeParam {
-  public:
+public:
   ObProto20Context* proto20_context_;
   easy_buf_t* ez_buf_;
   ObMySQLPacket* pkt_;
@@ -111,7 +111,7 @@ struct ObProtoEncodeParam {
   const static int64_t MAX_PROTO20_PAYLOAD_LEN;
   const static int64_t PROTO20_SPLIT_LEN;
 
-  public:
+public:
   ObProtoEncodeParam()
       : proto20_context_(NULL),
         ez_buf_(NULL),
@@ -180,26 +180,26 @@ struct ObProtoEncodeParam {
   TO_STRING_KV(KP_(proto20_context), KP_(ez_buf), KP_(pkt), K_(seri_size), K_(conn_id), K_(encode_ret), K_(need_flush),
       K_(is_last), K_(is_pkt_encoded), KP_(large_pkt_buf), K_(large_pkt_buf_len), K_(large_pkt_buf_pos));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObProtoEncodeParam);
 };
 
 class ObProto20Utils {
-  public:
+public:
   ObProto20Utils();
   virtual ~ObProto20Utils();
 
   static int fill_proto20_header_and_tailer(ObProtoEncodeParam& param);
   static int do_packet_encode(ObProtoEncodeParam& param);
 
-  private:
+private:
   inline static int do_proto20_packet_encode(ObProtoEncodeParam& param);
   inline static int fill_proto20_payload(ObProtoEncodeParam& param, bool& is_break);
   inline static int fill_proto20_tailer(ObProtoEncodeParam& param);
   inline static int fill_proto20_header(ObProtoEncodeParam& param);
   inline static bool is_the_last_packet(const ObProtoEncodeParam& param);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObProto20Utils);
 };
 

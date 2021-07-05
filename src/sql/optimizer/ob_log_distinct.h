@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogDistinct : public ObLogicalOperator {
-  public:
+public:
   ObLogDistinct(ObLogPlan& plan) : ObLogicalOperator(plan), algo_(AGGREGATE_UNINITIALIZED), is_block_mode_(false)
   {}
   virtual ~ObLogDistinct()
@@ -91,12 +91,12 @@ class ObLogDistinct : public ObLogicalOperator {
   virtual int compute_op_ordering() override;
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
 
-  private:
+private:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;
   AggregateAlgo algo_;
   bool is_block_mode_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogDistinct);
 };
 

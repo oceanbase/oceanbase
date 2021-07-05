@@ -18,14 +18,14 @@
 namespace oceanbase {
 namespace sql {
 class ObEmptyQueryStmt : public ObCMDStmt {
-  public:
+public:
   ObEmptyQueryStmt() : ObCMDStmt(stmt::T_EMPTY_QUERY)
   {}
 
   virtual ~ObEmptyQueryStmt()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObEmptyQueryStmt);
 };
 

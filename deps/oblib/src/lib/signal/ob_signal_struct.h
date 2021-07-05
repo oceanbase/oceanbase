@@ -28,7 +28,7 @@ extern const int MP_SIG;  // MP means MULTI-PURPOSE
 extern const int SIG_STACK_SIZE;
 
 class DTraceId {
-  public:
+public:
   DTraceId() : v_(0)
   {}
   int64_t value()
@@ -37,7 +37,7 @@ class DTraceId {
   }
   static DTraceId gen_trace_id();
 
-  private:
+private:
   int64_t v_;
 };
 extern __thread char tl_trace_id_buf[sizeof(DTraceId)];
@@ -45,7 +45,7 @@ extern __thread DTraceId* tl_trace_id;
 extern DTraceId& get_tl_trace_id();
 extern DTraceId set_tl_trace_id(DTraceId& id);
 class DTraceIdGuard {
-  public:
+public:
   DTraceIdGuard(DTraceId& id) : bak_(set_tl_trace_id(id))
   {}
   ~DTraceIdGuard()
@@ -53,14 +53,14 @@ class DTraceIdGuard {
     set_tl_trace_id(bak_);
   }
 
-  private:
+private:
   DTraceId bak_;
 };
 
 extern int install_ob_signal_handler();
 
 class ObISigHandler {
-  public:
+public:
   virtual void handle() = 0;
   virtual ~ObISigHandler() = 0;
 };

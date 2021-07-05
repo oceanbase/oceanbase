@@ -754,7 +754,7 @@ int ObSSTable::append_bf_macro_blocks(ObMacroBlocksWriteCtx& macro_block_write_c
     // pass
   } else if (macro_block_write_ctx.get_macro_block_count() > 1) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexcepted macro block write ctx count", K(macro_block_write_ctx), K(ret));
+    LOG_WARN("Unexpected macro block write ctx count", K(macro_block_write_ctx), K(ret));
   } else if (OB_FAIL(add_macro_block_meta(
                  macro_block_write_ctx.macro_block_list_.at(0), macro_block_write_ctx.macro_block_meta_list_.at(0)))) {
     LOG_WARN("Failed to add macro block meta", K(macro_block_write_ctx.macro_block_list_.at(0)), K(ret));
@@ -765,7 +765,7 @@ int ObSSTable::append_bf_macro_blocks(ObMacroBlocksWriteCtx& macro_block_write_c
       if (macro_block_write_ctx.file_ctx_.file_list_.count() <= 0 ||
           macro_block_write_ctx.file_ctx_.file_list_.count() > 1) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexcepted macro block file ctx count", K(macro_block_write_ctx.file_ctx_), K(ret));
+        LOG_WARN("Unexpected macro block file ctx count", K(macro_block_write_ctx.file_ctx_), K(ret));
       } else if (OB_FAIL(meta_.bloom_filter_file_ctx_.file_list_.push_back(
                      macro_block_write_ctx.file_ctx_.file_list_.at(0)))) {
         LOG_ERROR("failed to add file list, fatal error", K(ret));

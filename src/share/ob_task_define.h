@@ -32,7 +32,7 @@ class ObTaskController {
   static constexpr auto MAX_TASK_ID = toUType(ObTaskType::MAX);
   static constexpr int64_t LOG_RATE_LIMIT = 10 << 20;
 
-  public:
+public:
   ObTaskController();
   virtual ~ObTaskController();
 
@@ -45,7 +45,7 @@ class ObTaskController {
 
   static ObTaskController& get();
 
-  private:
+private:
   template <ObTaskType id>
   void set_log_rate(int64_t rate)
   {
@@ -69,7 +69,7 @@ class ObTaskController {
     return limiters_[toUType(id)];
   };
 
-  private:
+private:
   RateLimiter* limiters_[MAX_TASK_ID];
   double rate_pctgs_[MAX_TASK_ID];
   int64_t log_rate_limit_;

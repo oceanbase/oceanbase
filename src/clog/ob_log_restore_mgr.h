@@ -34,7 +34,7 @@ class ObILogEngine;
 class ObILogMembershipMgr;
 
 class ObLogRestoreMgr {
-  public:
+public:
   ObLogRestoreMgr()
       : lock_(),
         partition_service_(NULL),
@@ -104,7 +104,7 @@ class ObLogRestoreMgr {
   }
   bool is_standby_restore_state() const;
 
-  private:
+private:
   int leader_takeover_();
   int leader_revoke_();
   int leader_check_role_();
@@ -113,7 +113,7 @@ class ObLogRestoreMgr {
   int try_submit_restore_task_();
   int try_send_alive_req_();
 
-  private:
+private:
   // time threshold that follower judges leader down
   static const int64_t RESTORE_LEADER_TIMEOUT_THRESHOLD = 1 * 60 * 1000 * 1000l;
   // renew location interval
@@ -123,7 +123,7 @@ class ObLogRestoreMgr {
   // interval for follower sending alive req
   static const int64_t RESTORE_ALIVE_REQ_INTERVAL = 5 * 1000 * 1000l;
 
-  private:
+private:
   common::ObSpinLock lock_;
   storage::ObPartitionService* partition_service_;
   ObILogSWForStateMgr* sw_;

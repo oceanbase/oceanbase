@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprBitLength : public ObFuncExprOperator {
-  public:
+public:
   ObExprBitLength();
   explicit ObExprBitLength(common::ObIAllocator& alloc);
   virtual ~ObExprBitLength();
@@ -28,7 +28,7 @@ class ObExprBitLength : public ObFuncExprOperator {
   static int calc_null(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int calc_bit_length(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBitLength);
 };
 }  // namespace sql

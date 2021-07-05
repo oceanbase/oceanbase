@@ -23,7 +23,7 @@ using namespace oceanbase::observer;
 #define OMT_UNITTEST
 
 class TestManageTenant : public ::testing::Test, public ObMultiTenant {
-  public:
+public:
   TestManageTenant() : ObMultiTenant(procor_)
   {
     all_mock_init();
@@ -35,7 +35,7 @@ class TestManageTenant : public ::testing::Test, public ObMultiTenant {
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   ObFakeWorkerProcessor procor_;
   ObGlobalContext gctx_;
 };

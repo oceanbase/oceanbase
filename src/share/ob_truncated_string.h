@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBAE_LIB_OB_TRUNCATED_STRING_H_
-#define OCEANBAE_LIB_OB_TRUNCATED_STRING_H_
+#ifndef OCEANBASE_LIB_OB_TRUNCATED_STRING_H_
+#define OCEANBASE_LIB_OB_TRUNCATED_STRING_H_
 
 #include "lib/string/ob_string.h"
 #include "share/config/ob_server_config.h"
@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 class ObTruncatedString {
-  public:
+public:
   ObTruncatedString(const ObString& str, const int32_t limit)
   {
     const int32_t len = (limit < str.length()) ? (limit < 0 ? 0 : limit) : str.length();
@@ -62,7 +62,7 @@ class ObTruncatedString {
     return pos;
   }
 
-  private:
+private:
   ObString str_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTruncatedString);
@@ -71,4 +71,4 @@ class ObTruncatedString {
 }  // namespace common
 }  // namespace oceanbase
 
-#endif  // OCEANBAE_LIB_OB_TRUNCATED_STRING_H_
+#endif  // OCEANBASE_LIB_OB_TRUNCATED_STRING_H_

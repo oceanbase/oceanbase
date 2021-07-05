@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace observer {
 // this processor always returns NOT_SUPPORTED error to client
 class ObMPDefault : public ObMPBase {
-  public:
+public:
   explicit ObMPDefault(const ObGlobalContext& gctx) : ObMPBase(gctx)
   {}
   virtual ~ObMPDefault()

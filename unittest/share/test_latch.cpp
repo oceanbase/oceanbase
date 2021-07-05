@@ -23,7 +23,7 @@
 namespace oceanbase {
 namespace common {
 class TestLatchStress : public share::ObThreadPool {
-  public:
+public:
   TestLatchStress();
   virtual ~TestLatchStress();
   virtual void run1();

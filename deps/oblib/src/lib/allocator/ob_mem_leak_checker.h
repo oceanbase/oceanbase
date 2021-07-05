@@ -49,7 +49,7 @@ class ObMemLeakChecker {
 
   typedef hash::ObHashMap<PtrKey, Info> mod_alloc_info_t;
 
-  public:
+public:
   typedef hash::ObHashMap<Info, std::pair<int64_t, int64_t>> mod_info_map_t;
   using TCharArray = char[lib::AOBJECT_LABEL_SIZE + 1];
 
@@ -254,7 +254,7 @@ class ObMemLeakChecker {
     return 0 == MEMCMP(&obj.label_[0], label_, len_);
   }
 
-  private:
+private:
   // Limit the memory used by hashmap
   static constexpr int MEMORY_LIMIT = 128L << 20;
   static constexpr int MAP_SIZE_LIMIT = MEMORY_LIMIT / sizeof(Info);
@@ -264,7 +264,7 @@ class ObMemLeakChecker {
     CONTEXT_CHECK,
   };
 
-  private:
+private:
   TCharArray origin_str_;
   union {
     struct {
@@ -282,7 +282,7 @@ class ObMemLeakChecker {
   int len_;
   mod_alloc_info_t malloc_info_;
 
-  private:
+private:
   static lib::ObSimpleRateLimiter rl_;
 };
 };  // end namespace common

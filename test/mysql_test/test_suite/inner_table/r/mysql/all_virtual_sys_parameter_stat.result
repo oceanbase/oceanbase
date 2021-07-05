@@ -347,9 +347,9 @@ __min_full_resource_pool_memory
 __schema_split_mode
 select section,info from oceanbase.__all_virtual_sys_parameter_stat where name like '%major%' group by name;
 section	info
-DAILY_MERGE	the maximum number of kept major versions Range: [1, 16] in integer
+DAILY_MERGE	the maximum number of kept major versions. Range: [1, 16] in integer
 DAILY_MERGE	the start time of system daily merge procedure. Range: [00:00, 24:00)
-OBSERVER	post global major freeze when observer memstore free memory(plus memory hold by frozen memstore and blockcache) reach this limit. Rang:(0, 100)limit calc by (memory_limit - system_memory) * global_major_freeze_residual_memory/100
+OBSERVER	post global major freeze when observer memstore free memory(plus memory held by frozen memstore and blockcache) reach this limit. Rang:(0, 100)limit calc by (memory_limit - system_memory) * global_major_freeze_residual_memory/100
 ROOT_SERVICE	specifies whether major_freeze function is turned on. Value:  True:turned on;  False: turned off
 TENANT	major_compact_trigger alias to minor_freeze_times, Range: [0,65535] in integer
 show parameters;

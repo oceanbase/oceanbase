@@ -24,7 +24,7 @@ class ObSQLSessionInfo;
 class ObSchemaChecker;
 struct ObQualifiedName;
 class ObSequenceNamespaceChecker {
-  public:
+public:
   explicit ObSequenceNamespaceChecker(ObResolverParams& resolver_params) : params_(resolver_params)
   {}
   ~ObSequenceNamespaceChecker(){};
@@ -36,7 +36,7 @@ class ObSequenceNamespaceChecker {
     return 0 == s.case_compare("nextval") || 0 == s.case_compare("currval");
   }
 
-  private:
+private:
   int check_sequence_with_synonym_recursively(const uint64_t tenant_id, const uint64_t database_id,
       const common::ObString& sequence_name, ObSynonymChecker& syn_checker, ObSchemaChecker* schema_checker,
       bool& exists, uint64_t& sequence_id);

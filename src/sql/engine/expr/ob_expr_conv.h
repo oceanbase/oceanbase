@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprConv : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprConv(common::ObIAllocator& alloc);
   virtual ~ObExprConv();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
@@ -27,7 +27,7 @@ class ObExprConv : public ObStringExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_conv(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   static const int16_t MIN_BASE = 2;
   static const int16_t MAX_BASE = 36;
   static const int16_t MAX_LENGTH = 65;

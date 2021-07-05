@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprUserCanAccessObj : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprUserCanAccessObj(common::ObIAllocator& alloc);
   virtual ~ObExprUserCanAccessObj();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& arg1, ObExprResType& arg2, ObExprResType& arg3,
@@ -35,14 +35,14 @@ class ObExprUserCanAccessObj : public ObFuncExprOperator {
   static int eval_user_can_access_obj(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
   static int build_raw_obj_priv(uint64_t obj_type, share::ObRawObjPrivArray& raw_obj_priv_array);
 
-  private:
+private:
   static int build_real_obj_type_for_sym(
       uint64_t tenant_id, share::schema::ObSchemaGetterGuard* schema_guard, uint64_t& obj_type, uint64_t& obj_id);
 
   static int check_user_access_obj(share::schema::ObSchemaGetterGuard* schema_guard, ObSQLSessionInfo* session,
       uint64_t obj_type, uint64_t obj_id, uint64_t owner_id, bool& can_access);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUserCanAccessObj);
 };
 

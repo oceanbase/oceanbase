@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObAlterDatabaseStmt : public ObDDLStmt {
-  public:
+public:
   ObAlterDatabaseStmt();
   explicit ObAlterDatabaseStmt(common::ObIAllocator* name_pool);
   virtual ~ObAlterDatabaseStmt();
@@ -59,7 +59,7 @@ class ObAlterDatabaseStmt : public ObDDLStmt {
 
   TO_STRING_KV(K_(alter_database_arg));
 
-  private:
+private:
   obrpc::ObAlterDatabaseArg alter_database_arg_;
 };
 

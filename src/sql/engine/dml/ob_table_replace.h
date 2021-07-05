@@ -28,7 +28,7 @@ namespace sql {
 class ObTableReplaceInput : public ObTableModifyInput {
   friend class ObTableUpdate;
 
-  public:
+public:
   ObTableReplaceInput() : ObTableModifyInput()
   {}
   virtual ~ObTableReplaceInput()
@@ -38,14 +38,14 @@ class ObTableReplaceInput : public ObTableModifyInput {
     return PHY_REPLACE;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableReplaceInput);
 };
 
 class ObTableReplace : public ObTableModify {
-  protected:
+protected:
   class ObTableReplaceCtx : public ObTableModifyCtx {
-    public:
+  public:
     explicit ObTableReplaceCtx(ObExecContext& ctx)
         : ObTableModifyCtx(ctx),
           insert_row_(),
@@ -68,7 +68,7 @@ class ObTableReplace : public ObTableModify {
       part_infos_.reset();
     }
 
-    public:
+  public:
     common::ObNewRow insert_row_;
     int64_t record_;
     int64_t affected_rows_;
@@ -78,7 +78,7 @@ class ObTableReplace : public ObTableModify {
     common::ObNewRow cast_row_;
   };
 
-  public:
+public:
   explicit ObTableReplace(common::ObIAllocator& alloc)
       : ObTableModify(alloc), only_one_unique_key_(false), res_obj_types_(alloc)
   {}
@@ -113,7 +113,7 @@ class ObTableReplace : public ObTableModify {
   int add_column_res_type(const ObObjType type);
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   int do_table_replace(ObExecContext& ctx) const;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   int try_insert(ObExecContext& ctx, common::ObExprCtx& expr_ctx, const common::ObNewRow* insert_row,
@@ -136,11 +136,11 @@ class ObTableReplace : public ObTableModify {
   int do_type_cast(ObExecContext& ctx, const common::ObNewRow*& row) const;
   int shallow_copy_row(ObExecContext& ctx, const common::ObNewRow*& src_row, common::ObNewRow& dst_row) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableReplace);
   // function members
-  protected:
+protected:
   bool only_one_unique_key_;
   common::ObFixedArray<ObObjType, common::ObIAllocator> res_obj_types_;
 };

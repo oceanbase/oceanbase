@@ -20,7 +20,7 @@ namespace rpc {
 namespace frame {
 
 class ObIEasyPacketHandler {
-  public:
+public:
   virtual ~ObIEasyPacketHandler()
   {}
   virtual void* decode(easy_message_t* m) = 0;

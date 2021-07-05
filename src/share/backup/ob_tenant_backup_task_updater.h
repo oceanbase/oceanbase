@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace share {
 
 class ObTenantBackupTaskUpdater {
-  public:
+public:
   ObTenantBackupTaskUpdater();
   virtual ~ObTenantBackupTaskUpdater() = default;
   int init(common::ObISQLClient& sql_proxy);
@@ -37,18 +37,18 @@ class ObTenantBackupTaskUpdater {
   int remove_task(const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id);
   int insert_tenant_backup_task(const ObTenantBackupTaskInfo& tenant_backup_task);
 
-  private:
+private:
   int check_can_update_backup_task(
       const ObTenantBackupTaskInfo::BackupStatus& src_status, const ObTenantBackupTaskInfo::BackupStatus& dest_status);
 
-  private:
+private:
   bool is_inited_;
   common::ObISQLClient* sql_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantBackupTaskUpdater);
 };
 
 class ObBackupTaskHistoryUpdater {
-  public:
+public:
   ObBackupTaskHistoryUpdater();
   virtual ~ObBackupTaskHistoryUpdater() = default;
   int init(common::ObISQLClient& sql_proxy);
@@ -74,7 +74,7 @@ class ObBackupTaskHistoryUpdater {
   int get_tenant_max_succeed_backup_task(const uint64_t tenant_id, ObTenantBackupTaskInfo& tenant_backup_task);
   int get_all_tenant_backup_tasks(common::ObIArray<ObTenantBackupTaskInfo>& tenant_backup_tasks);
 
-  private:
+private:
   bool is_inited_;
   common::ObISQLClient* sql_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTaskHistoryUpdater);

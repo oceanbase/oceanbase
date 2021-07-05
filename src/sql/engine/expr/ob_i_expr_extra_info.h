@@ -25,7 +25,7 @@ struct ObIExprExtraInfo {
     OB_ASSERT(ObExprExtraInfoFactory::is_registered(type));
   }
 
-  public:
+public:
   virtual int serialize(char* buf, const int64_t len, int64_t& pos) const = 0;
 
   virtual int deserialize(const char* buf, const int64_t len, int64_t& pos) = 0;

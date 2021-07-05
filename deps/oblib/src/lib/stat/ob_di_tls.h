@@ -24,13 +24,13 @@ namespace common {
 
 template <class T>
 class ObDITls {
-  public:
+public:
   static ObDITls& get_di_tls();
   void destroy();
   T* new_instance();
   static T* get_instance();
 
-  private:
+private:
   ObDITls() : key_(INT32_MAX)
   {
     if (0 != pthread_key_create(&key_, destroy_thread_data_)) {}
@@ -41,7 +41,7 @@ class ObDITls {
   }
   static void destroy_thread_data_(void* ptr);
 
-  private:
+private:
   pthread_key_t key_;
   static __thread T* instance_;
 };

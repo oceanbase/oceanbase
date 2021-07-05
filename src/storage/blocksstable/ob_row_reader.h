@@ -29,7 +29,7 @@ namespace blocksstable {
 class ObColumnMap;
 class ObColumnIndexItem;
 class ObIRowReader {
-  public:
+public:
   ObIRowReader();
   virtual ~ObIRowReader();
   // read rowkey with no meta(just column object array)
@@ -78,12 +78,12 @@ class ObIRowReader {
   void reset();
   bool judge_need_setup(const char* buf, const int64_t row_end_pos, const int64_t pos);
 
-  protected:
+protected:
   int read_text_store(const storage::ObStoreMeta& store_meta, common::ObIAllocator& allocator, common::ObObj& obj);
   template <class T>
   static const T* read(const char* row_buf, int64_t& pos);
 
-  protected:
+protected:
   const char* buf_;
   int64_t row_end_pos_;
   int64_t start_pos_;
@@ -105,7 +105,7 @@ inline const T* ObIRowReader::read(const char* row_buf, int64_t& pos)
 }
 
 class ObFlatRowReader : public ObIRowReader {
-  public:
+public:
   ObFlatRowReader();
   virtual ~ObFlatRowReader()
   {}
@@ -130,10 +130,10 @@ class ObFlatRowReader : public ObIRowReader {
   int read_obj(const common::ObObjMeta& src_meta, common::ObIAllocator& allocator, common::ObObj& obj);
   int read_obj_no_meta(const common::ObObjMeta& src_meta, common::ObIAllocator& allocator, common::ObObj& obj);
 
-  protected:
+protected:
   OB_INLINE int analyze_row_header(const int64_t column_cnt, transaction::ObTransID* trans_id_ptr);
 
-  private:
+private:
   int read_flat_row_from_flat_storage(
       const ObColumnMap& column_map, common::ObIAllocator& allocator, storage::ObStoreRow& row);
   int read_sparse_row_from_flat_storage(
@@ -143,7 +143,7 @@ class ObFlatRowReader : public ObIRowReader {
 };
 
 class ObSparseRowReader : public ObIRowReader {
-  public:
+public:
   ObSparseRowReader();
   virtual ~ObSparseRowReader()
   {}
@@ -164,10 +164,10 @@ class ObSparseRowReader : public ObIRowReader {
   int read_compact_rowkey(const common::ObObjMeta* column_types, const int64_t column_count, const char* buf,
       const int64_t row_end_pos, int64_t& pos, common::ObNewRow& row) override;
 
-  protected:
+protected:
   OB_INLINE int analyze_row_header(transaction::ObTransID* trans_id_ptr);
 
-  private:
+private:
   int read_flat_row_from_sparse_storage(
       const ObColumnMap& column_map, common::ObIAllocator& allocator, storage::ObStoreRow& row);
   int read_sparse_row_from_sparse_storage(

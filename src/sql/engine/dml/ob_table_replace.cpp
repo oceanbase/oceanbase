@@ -413,7 +413,7 @@ int ObTableReplace::try_insert(ObExecContext& ctx, ObExprCtx& expr_ctx, const Ob
     }
     SQL_ENG_LOG(DEBUG, "calc row for insert:", K(ret), K(replace_ctx->insert_row_));
     replace_ctx->record_++;
-    NG_TRACE_TIMES(2, repalce_start_insert);
+    NG_TRACE_TIMES(2, replace_start_insert);
     if (OB_SUCC(partition_service->insert_row(my_session->get_trans_desc(),
             dml_param,
             part_key,

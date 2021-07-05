@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObTenantFileMgr final {
-  public:
+public:
   ObTenantFileMgr();
   ~ObTenantFileMgr();
   int init(const uint64_t tenant_id, common::ObConcurrentFIFOAllocator& allocator);
@@ -59,10 +59,10 @@ class ObTenantFileMgr final {
   int clear_replay_map();
   int is_from_svr_ckpt(const ObTenantFileKey& file_key, bool& from_svr_skpt) const;
 
-  public:
+public:
   static const int64_t START_FILE_ID = 1L;
 
-  private:
+private:
   static const int64_t TENANT_MAX_FILE_CNT = 1000;
   static const int64_t TENANT_MIN_FILE_CNT = 10;
   typedef common::hash::ObHashMap<ObTenantFileKey, ObTenantFileValue*> TENANT_FILE_MAP;
@@ -81,7 +81,7 @@ class ObTenantFileMgr final {
   int update_tenant_file_meta_blocks_impl(
       const ObTenantFileKey& file_key, const common::ObIArray<blocksstable::MacroBlockId>& meta_block_list);
 
-  private:
+private:
   common::TCRWLock lock_;
   TENANT_FILE_MAP tenant_file_map_;
   common::ObConcurrentFIFOAllocator* allocator_;
@@ -90,7 +90,7 @@ class ObTenantFileMgr final {
 };
 
 class ObBaseFileMgr : public blocksstable::ObIRedoModule {
-  public:
+public:
   ObBaseFileMgr();
   virtual ~ObBaseFileMgr();
   int init();
@@ -122,7 +122,7 @@ class ObBaseFileMgr : public blocksstable::ObIRedoModule {
   int remove_pg(const ObTenantFileKey& file_key, const common::ObPGKey& pg_key);
   int is_from_svr_ckpt(const ObTenantFileKey& file_key, bool& from_svr_skpt);
 
-  private:
+private:
   typedef common::hash::ObHashMap<int64_t, ObTenantFileMgr*> TENANT_MGR_MAP;
   int get_tenant_mgr(const uint64_t tenant_id, ObTenantFileMgr*& tenant_mgr);
   int replay_update_tenant_file_super_block(const char* buf, const int64_t buf_len);
@@ -131,33 +131,33 @@ class ObBaseFileMgr : public blocksstable::ObIRedoModule {
   int replay_remove_pg_from_file(const char* buf, const int64_t len);
   int replay_update_tenant_file_info(const char* buf, const int64_t buf_len);
 
-  private:
+private:
   static const int64_t MAX_TENANT_CNT = 1000;
   static const int64_t MEM_LIMIT = 10 * 1024 * 1024 * 1024L;
   lib::ObMutex lock_;
   TENANT_MGR_MAP tenant_mgr_map_;
   common::ObConcurrentFIFOAllocator allocator_;
 
-  protected:
+protected:
   bool is_inited_;
 };
 
 class ObFileRecycleTask : public common::ObTimerTask {
-  public:
+public:
   static const int64_t RECYCLE_CYCLE_US = 1000L * 1000L * 10L;  // 10s
-  public:
+public:
   explicit ObFileRecycleTask(ObBaseFileMgr& file_mgr) : file_mgr_(file_mgr)
   {}
   virtual ~ObFileRecycleTask()
   {}
   virtual void runTimerTask() override;
 
-  private:
+private:
   ObBaseFileMgr& file_mgr_;
 };
 
 class ObServerFileMgr : public ObBaseFileMgr {
-  public:
+public:
   static ObServerFileMgr& get_instance();
   int init();
   void destroy();
@@ -165,7 +165,7 @@ class ObServerFileMgr : public ObBaseFileMgr {
   void stop();
   void wait();
 
-  private:
+private:
   ObServerFileMgr() : recycle_timer_(), recycle_task_(*this)
   {}
   virtual ~ObServerFileMgr()
@@ -173,13 +173,13 @@ class ObServerFileMgr : public ObBaseFileMgr {
     destroy();
   }
 
-  private:
+private:
   common::ObTimer recycle_timer_;
   ObFileRecycleTask recycle_task_;
 };
 
 class ObTenantFileSLogFilter : public blocksstable::ObISLogFilter {
-  public:
+public:
   ObTenantFileSLogFilter() = default;
   virtual ~ObTenantFileSLogFilter() = default;
   virtual int filter(const ObISLogFilter::Param& param, bool& is_filtered) const override;

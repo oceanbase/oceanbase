@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogLimit : public ObLogicalOperator {
-  public:
+public:
   ObLogLimit(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         is_calc_found_rows_(false),
@@ -106,7 +106,7 @@ class ObLogLimit : public ObLogicalOperator {
     return is_fetch_with_ties_;
   }
 
-  private:
+private:
   bool is_calc_found_rows_;
   bool has_union_child_;
   bool is_top_limit_;

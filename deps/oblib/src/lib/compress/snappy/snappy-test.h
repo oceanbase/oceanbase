@@ -192,7 +192,7 @@ string StringPrintf(const char* format, ...);
 
 // A simple, non-cryptographically-secure random generator.
 class ACMRandom {
-  public:
+public:
   explicit ACMRandom(uint32 seed) : seed_(seed)
   {}
 
@@ -216,7 +216,7 @@ class ACMRandom {
   // range [0,2^max_log-1] with bias towards smaller numbers.
   int32 Skewed(int max_log);
 
-  private:
+private:
   static const uint32 M = 2147483647L;  // 2^31-1
   uint32 seed_;
 };
@@ -251,7 +251,7 @@ inline int32 ACMRandom::Skewed(int max_log)
 // A wall-time clock. This stub is not super-accurate, nor resistant to the
 // system time changing.
 class CycleTimer {
-  public:
+public:
   CycleTimer() : real_time_us_(0)
   {}
 
@@ -288,7 +288,7 @@ class CycleTimer {
     return real_time_us_ * 1e-6;
   }
 
-  private:
+private:
   int64 real_time_us_;
 #ifdef WIN32
   LARGE_INTEGER start_;
@@ -302,7 +302,7 @@ class CycleTimer {
 typedef void (*BenchmarkFunction)(int, int);
 
 class Benchmark {
-  public:
+public:
   Benchmark(const string& name, BenchmarkFunction function) : name_(name), function_(function)
   {}
 
@@ -315,7 +315,7 @@ class Benchmark {
 
   void Run();
 
-  private:
+private:
   const string name_;
   const BenchmarkFunction function_;
   int start_, stop_;
@@ -337,7 +337,7 @@ void SetBenchmarkBytesProcessed(int64 bytes);
 
 // Object-oriented wrapper around zlib.
 class ZLib {
-  public:
+public:
   ZLib();
   ~ZLib();
 
@@ -401,7 +401,7 @@ class ZLib {
   // call are the footer.  Returns true iff everything looks ok.
   bool UncompressChunkDone();
 
-  private:
+private:
   int InflateInit();  // sets up the zlib inflate structure
   int DeflateInit();  // sets up the zlib deflate structure
 

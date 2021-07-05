@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObKillStmt : public ObCMDStmt {
-  public:
+public:
   ObKillStmt() : ObCMDStmt(stmt::T_KILL), is_query_(false), value_expr_(NULL)
   {}
   virtual ~ObKillStmt()
@@ -40,7 +40,7 @@ class ObKillStmt : public ObCMDStmt {
     return is_query_;
   }
 
-  private:
+private:
   bool is_query_;
   ObRawExpr* value_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObKillStmt);

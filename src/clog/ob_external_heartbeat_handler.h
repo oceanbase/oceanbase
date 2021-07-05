@@ -25,7 +25,7 @@ class ObILogEngine;
 }
 namespace logservice {
 class ObExtHeartbeatHandler {
-  public:
+public:
   ObExtHeartbeatHandler() : partition_service_(NULL), log_engine_(NULL)
   {}
   ~ObExtHeartbeatHandler()
@@ -37,7 +37,7 @@ class ObExtHeartbeatHandler {
   int req_heartbeat_info(
       const obrpc::ObLogReqHeartbeatInfoRequest& req_msg, obrpc::ObLogReqHeartbeatInfoResponse& response);
 
-  private:
+private:
   uint64_t get_last_slide_log_id(const common::ObPartitionKey& pkey);
   int get_leader_info(const common::ObPartitionKey& pkey, common::ObRole& role, int64_t& leader_epoch);
   int get_predict_timestamp(const common::ObPartitionKey& pkey, const uint64_t last_log_id, int64_t& predict_ts);
@@ -46,7 +46,7 @@ class ObExtHeartbeatHandler {
   int do_req_heartbeat_info(
       const obrpc::ObLogReqHeartbeatInfoRequest& req_msg, obrpc::ObLogReqHeartbeatInfoResponse& response);
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   clog::ObILogEngine* log_engine_;
 };

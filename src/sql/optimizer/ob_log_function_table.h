@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogFunctionTable : public ObLogicalOperator {
-  public:
+public:
   ObLogFunctionTable(ObLogPlan& plan) : ObLogicalOperator(plan), table_id_(OB_INVALID_ID), value_expr_(NULL)
   {}
 
@@ -58,10 +58,10 @@ class ObLogFunctionTable : public ObLogicalOperator {
   }
   int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
 
-  private:
+private:
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
 
-  private:
+private:
   uint64_t table_id_;
   ObRawExpr* value_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObLogFunctionTable);

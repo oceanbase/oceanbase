@@ -20,7 +20,7 @@ using namespace oceanbase::clog;
 namespace oceanbase {
 namespace unittest {
 class TestObLogBlockMetaV2 : public ::testing::Test {
-  public:
+public:
   TestObLogBlockMetaV2()
   {}
   ~TestObLogBlockMetaV2()

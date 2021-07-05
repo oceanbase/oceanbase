@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace obrpc {
 
 class ObRpcNetHandler : public rpc::frame::ObReqHandler {
-  public:
+public:
   ObRpcNetHandler()
   {
     ez_handler_.decode = oceanbase::easy::decode;
@@ -43,13 +43,13 @@ class ObRpcNetHandler : public rpc::frame::ObReqHandler {
   int on_disconnect(easy_connection_t* c);
   int on_idle(easy_connection_t* c);
 
-  public:
+public:
   static int64_t CLUSTER_ID;
 
-  protected:
+protected:
   char* easy_alloc(easy_pool_t* pool, int64_t size) const;
 
-  private:
+private:
   ObRpcProtocolProcessor rpc_processor_;
   ObRpcCompressProtocolProcessor rpc_compress_processor_;
 

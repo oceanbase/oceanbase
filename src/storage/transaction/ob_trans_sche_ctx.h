@@ -55,7 +55,7 @@ typedef common::ObSEArray<ObXABranchInfo, 4> ObXABranchInfoArray;
 // one transaction include scheduler context, coordinator context and participant context
 // scheduler transaction context
 class ObScheTransCtx : public ObDistTransCtx, public ObTsCbTask {
-  public:
+public:
   ObScheTransCtx()
       : ObDistTransCtx("scheduler", ObTransCtxType::SCHEDULER),
         last_stmt_participants_(ObModIds::OB_TRANS_PARTITION_ARRAY, OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -77,7 +77,7 @@ class ObScheTransCtx : public ObDistTransCtx, public ObTsCbTask {
   virtual void destroy();
   void reset();
 
-  public:
+public:
   int handle_message(const ObTransMsg& msg);
   bool is_inited() const;
   int handle_timeout(const int64_t delay);
@@ -105,13 +105,13 @@ class ObScheTransCtx : public ObDistTransCtx, public ObTsCbTask {
   }
   int inactive(ObEndTransCallbackArray& cb_array);
 
-  public:
+public:
   static bool need_retry_end_trans(const int retcode)
   {
     return OB_LOCATION_LEADER_NOT_EXIST == retcode || OB_LOCATION_NOT_EXIST == retcode || OB_NOT_MASTER == retcode;
   }
 
-  public:
+public:
   int start_trans(const ObTransDesc& trans_desc);
   int end_trans(const ObTransDesc& trans_desc, const bool is_rollback, sql::ObIEndTransCallback* cb,
       const int64_t trans_expired_time, const int64_t stmt_expired_time, const MonotonicTs commit_time);
@@ -257,7 +257,7 @@ class ObScheTransCtx : public ObDistTransCtx, public ObTsCbTask {
   // this func can only be called in original sche (tighly coupled mode)
   int xa_end_stmt(const ObXATransID& xid, const ObTransDesc& trans_desc, const bool from_remote, const int64_t seq_no);
 
-  public:
+public:
   INHERIT_TO_STRING_KV("ObDistTransCtx", ObDistTransCtx, K_(state), K_(sql_no), K_(is_rollback), K_(session_id),
       K_(proxy_session_id), K_(cluster_id), K_(commit_times), K_(is_tenant_active), K_(app_trace_id_str),
       K_(is_gts_waiting), K_(can_elr), K_(savepoint_sql_no), K_(is_xa_end_trans), K_(is_xa_readonly),
@@ -265,7 +265,7 @@ class ObScheTransCtx : public ObDistTransCtx, public ObTsCbTask {
       K_(is_terminated), K_(stmt_rollback_req_timeout));
   static const int64_t OP_LOCAL_NUM = 16;
 
-  private:
+private:
   int merge_partition_leader_info_(const ObPartitionLeaderArray& partition_leader_arr);
   int merge_stmt_participants_pla_(const ObPartitionLeaderArray& pla);
   int submit_trans_request_(const int64_t msg_type);
@@ -289,7 +289,7 @@ class ObScheTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int handle_savepoint_rollback_response_(const ObTransMsg& msg);
   int get_trans_location_(const ObPartitionKey& partition, ObAddr& addr);
 
-  private:
+private:
   int drive_();
   int drive_(bool& need_callback);
   int end_trans_(const bool is_rollback, bool& need_callback);
@@ -320,9 +320,9 @@ class ObScheTransCtx : public ObDistTransCtx, public ObTsCbTask {
   // get unprepared branch count for tightly coupled xa trans
   int64_t get_unprepared_branch_count_();
 
-  private:
+private:
   class State {
-    public:
+  public:
     static const int64_t INVALID = -1;
     static const int64_t UNKNOWN = 0;
     static const int64_t START_TRANS = 1;
@@ -331,14 +331,14 @@ class ObScheTransCtx : public ObDistTransCtx, public ObTsCbTask {
     static const int64_t END_TRANS = 4;
     static const int64_t MAX = 5;
 
-    public:
+  public:
     static bool is_valid(const int64_t state)
     {
       return state > INVALID && state < MAX;
     }
   };
   class Ops {
-    public:
+  public:
     static const int64_t INVALID = -1;
     static const int64_t START_TRANS = 0;
     static const int64_t START_STMT = 1;
@@ -346,14 +346,14 @@ class ObScheTransCtx : public ObDistTransCtx, public ObTsCbTask {
     static const int64_t END_TRANS = 3;
     static const int64_t MAX = 4;
 
-    public:
+  public:
     static bool is_valid(const int64_t op)
     {
       return op > INVALID && op < MAX;
     }
   };
   class StateHelper {
-    public:
+  public:
     explicit StateHelper(int64_t& state) : state_(state), last_state_(State::INVALID), is_switching_(false)
     {}
     ~StateHelper()
@@ -361,21 +361,21 @@ class ObScheTransCtx : public ObDistTransCtx, public ObTsCbTask {
     int switch_state(const int64_t op);
     void restore_state();
 
-    private:
+  private:
     int64_t& state_;
     int64_t last_state_;
     bool is_switching_;
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObScheTransCtx);
 
-  private:
+private:
   // 0x0078746365686373 means reset schectx
   static const int64_t SCHE_CTX_MAGIC_NUM = 0x0078746365686373;
   static const int64_t RETRY_STMT_ROLLBACK_TASK_INTERVAL_US = 10 * 1000;
 
-  private:
+private:
   bool is_inited_;
   int64_t sql_no_;
   int64_t cur_stmt_snapshot_version_;

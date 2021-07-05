@@ -64,7 +64,7 @@ enum ObEndTransCallbackType {
  *
  */
 class ObIEndTransCallback {
-  public:
+public:
   ObIEndTransCallback()
   {
     reset();
@@ -113,7 +113,7 @@ class ObIEndTransCallback {
     callback_counter_ = 0;
   }
 
-  protected:
+protected:
   inline void CHECK_BALANCE(const char* type) const
   {
     if (OB_UNLIKELY(callback_counter_ != call_counter_)) {
@@ -127,7 +127,7 @@ class ObIEndTransCallback {
     }
   }
 
-  protected:
+protected:
   int last_err_;
   volatile uint64_t call_counter_;
   volatile uint64_t callback_counter_;

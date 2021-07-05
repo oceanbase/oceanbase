@@ -31,7 +31,7 @@ class ObTableSchema;
 class ObColumnSchemaV2;
 
 class ObTableSqlService : public ObDDLSqlService {
-  public:
+public:
   explicit ObTableSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service), sql_proxy_(NULL)
   {}
   virtual ~ObTableSqlService()
@@ -159,7 +159,7 @@ class ObTableSqlService : public ObDDLSqlService {
   int update_check_constraint_state(
       common::ObISQLClient& sql_client, const ObTableSchema& table, const ObConstraint& cst);
 
-  private:
+private:
   int add_table(common::ObISQLClient& sql_client, const ObTableSchema& table, const bool only_history = false);
   int delete_from_all_table(common::ObISQLClient& sql_client, const uint64_t table_id);
   int delete_from_all_table_stat(common::ObISQLClient& sql_client, const uint64_t table_id);
@@ -223,11 +223,11 @@ class ObTableSqlService : public ObDDLSqlService {
       uint64_t child_column_id, uint64_t parent_column_id, int64_t position, share::ObDMLSqlSplicer& dml);
   int check_table_options(const share::schema::ObTableSchema& table_schema);
 
-  public:
+public:
   int log_operation_wrapper(ObSchemaOperation& opt, common::ObISQLClient& sql_client);
   int insert_temp_table_info(common::ObISQLClient& trans, const ObTableSchema& table_schema);
 
-  private:
+private:
   int exec_update(common::ObISQLClient& sql_client, const uint64_t table_id, const char* table_name,
       share::ObDMLSqlSplicer& dml, int64_t& affected_rows);
   int exec_insert(common::ObISQLClient& sql_client, const uint64_t table_id, const char* table_name,
@@ -239,16 +239,16 @@ class ObTableSqlService : public ObDDLSqlService {
   bool is_user_partition_table(const ObTableSchema& table_schema);
   bool is_user_subpartition_table(const ObTableSchema& table);
 
-  public:
+public:
   void init(common::ObMySQLProxy* sql_proxy)
   {
     sql_proxy_ = sql_proxy;
   }
 
-  private:
+private:
   common::ObMySQLProxy* sql_proxy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableSqlService);
 };
 

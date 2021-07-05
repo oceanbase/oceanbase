@@ -38,7 +38,7 @@ using namespace oceanbase::lib;
 namespace oceanbase {
 namespace unittest {
 class MyMetaInfoGenerator : public ObIInfoBlockHandler {
-  public:
+public:
   MyMetaInfoGenerator()
   {}
   virtual ~MyMetaInfoGenerator()
@@ -78,7 +78,7 @@ int64_t MyMetaInfoGenerator::get_entry_cnt() const
 }
 
 class MyCLogItem : public ObICLogItem {
-  public:
+public:
   MyCLogItem() : buf_(NULL), data_len_(0), is_flushed_(false), file_id_(0), offset_(0), err_code_(0)
   {
     cond_.init(1);
@@ -138,13 +138,13 @@ void MyCLogItem::wait()
 }
 
 class TestCLogWriter : public ::testing::Test {
-  public:
+public:
   TestCLogWriter();
   virtual ~TestCLogWriter();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   char log_path_[1024];
   char shm_path_[1024];
   char* log_buf_;

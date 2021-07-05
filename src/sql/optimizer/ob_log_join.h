@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObLogicalOperator;
 class ObLogJoin : public ObLogicalOperator {
-  public:
+public:
   ObLogJoin(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         join_conditions_(),
@@ -291,7 +291,7 @@ class ObLogJoin : public ObLogicalOperator {
     return connect_by_extra_exprs_.assign(exprs);
   }
 
-  private:
+private:
   inline bool can_enable_gi_partition_pruning()
   {
     return (NESTED_LOOP_JOIN == join_algo_) && join_dist_algo_ == JoinDistAlgo::DIST_PARTITION_NONE;
@@ -335,7 +335,7 @@ class ObLogJoin : public ObLogicalOperator {
     return SM_NONE != slave_mapping_type_;
   }
 
-  private:
+private:
   // all join predicates
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> join_conditions_;  // equal join condition, for
                                                                                          // merge-join

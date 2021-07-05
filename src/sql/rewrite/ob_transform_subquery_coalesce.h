@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTransformSubqueryCoalesce : public ObTransformRule {
-  public:
+public:
   ObTransformSubqueryCoalesce(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
   virtual ~ObTransformSubqueryCoalesce()
@@ -29,10 +29,10 @@ class ObTransformSubqueryCoalesce : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  protected:
+protected:
   int adjust_transform_types(uint64_t& transform_types);
 
-  private:
+private:
   enum TransformFlag { DEFAULT, EXISTS_NOT_EXISTS, ANY_ALL };
   struct TransformParam {
     ObRawExpr* exists_expr_;
@@ -83,7 +83,7 @@ class ObTransformSubqueryCoalesce : public ObTransformRule {
   int get_same_classify_exprs(ObIArray<ObRawExpr*>& validity_exprs, ObIArray<ObRawExpr*>& same_classify_exprs,
       ObItemType ctype, ObExprInfoFlag flag);
 
-  private:
+private:
   ObQueryRefRawExpr* get_exists_query_expr(ObRawExpr* expr);
 
   ObQueryRefRawExpr* get_any_all_query_expr(ObRawExpr* expr);

@@ -115,7 +115,7 @@ int ObTransAuditRecord::get_trans_sql_audit_data(
         // Invalid sql record
         continue;
       } else if (OB_FAIL(stmt_info_iter.push(stmt_info_[i]))) {
-        TRANS_LOG(WARN, "iterate sql audit faild", KR(ret));
+        TRANS_LOG(WARN, "iterate sql audit failed", KR(ret));
         break;
       }
     }

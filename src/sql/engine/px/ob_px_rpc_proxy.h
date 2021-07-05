@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace obrpc {
 
 class ObPxRpcProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObPxRpcProxy);
   // init sqc rpc synchronously
   RPC_S(PR5 init_sqc, OB_PX_INIT_SQC, (sql::ObPxRpcInitSqcArgs), sql::ObPxRpcInitSqcResponse);

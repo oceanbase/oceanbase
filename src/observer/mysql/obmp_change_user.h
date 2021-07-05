@@ -23,7 +23,7 @@ class ObBasicSessionInfo;
 }
 namespace observer {
 class ObMPChangeUser : public ObMPBase {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_CHANGE_USER;
   explicit ObMPChangeUser(const ObGlobalContext& gctx)
       : ObMPBase(gctx),
@@ -40,12 +40,12 @@ class ObMPChangeUser : public ObMPBase {
   virtual ~ObMPChangeUser()
   {}
 
-  protected:
+protected:
   int process();
   int deserialize();
   int load_privilege_info(sql::ObSQLSessionInfo* session);
 
-  private:
+private:
   static int decode_string_kv(const char* attrs_end, const char*& pos, obmysql::ObStringKV& kv);
   int decode_session_vars(const char*& pos, const int64_t session_vars_len);
   int replace_user_variables(sql::ObBasicSessionInfo& session) const;
@@ -53,7 +53,7 @@ class ObMPChangeUser : public ObMPBase {
   int handle_user_var(const common::ObString& var, const common::ObString& val, const common::ObObjType type,
       common::ObCastCtx& cast_ctx, sql::ObBasicSessionInfo& session) const;
 
-  private:
+private:
   obmysql::ObMySQLRawPacket pkt_;
   common::ObString username_;
   common::ObString auth_response_;

@@ -22,7 +22,7 @@ class ObSubPlanFilter : public ObMultiChildrenPhyOperator {
   class ObSubPlanFilterCtx;
   class ObSubPlanIterator;
 
-  public:
+public:
   explicit ObSubPlanFilter(common::ObIAllocator& alloc);
   virtual ~ObSubPlanFilter();
 
@@ -68,7 +68,7 @@ class ObSubPlanFilter : public ObMultiChildrenPhyOperator {
   virtual int open(ObExecContext& ctx) const;
   virtual int switch_iterator(ObExecContext& ctx) const override;
 
-  private:
+private:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -105,10 +105,10 @@ class ObSubPlanFilter : public ObMultiChildrenPhyOperator {
   int handle_update_set(ObSubPlanFilterCtx* subplan_ctx, const common::ObNewRow*& row) const;
   int construct_array_params(ObExecContext& ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSubPlanFilter);
 
-  private:
+private:
   common::ObFixedArray<std::pair<ObSqlExpression*, int64_t>, common::ObIAllocator> rescan_params_;
   common::ObFixedArray<std::pair<ObSqlExpression*, int64_t>, common::ObIAllocator> onetime_exprs_;
   common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator> init_plan_idxs_;

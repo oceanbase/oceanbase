@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObCreateResourcePoolStmt : public ObDDLStmt {
-  public:
+public:
   ObCreateResourcePoolStmt(common::ObIAllocator* name_pool)
       : ObDDLStmt(name_pool, stmt::T_CREATE_RESOURCE_POOL), arg_(){};
   ObCreateResourcePoolStmt() : ObDDLStmt(stmt::T_CREATE_RESOURCE_POOL), arg_(){};
@@ -67,7 +67,7 @@ class ObCreateResourcePoolStmt : public ObDDLStmt {
     return arg_;
   }
 
-  private:
+private:
   obrpc::ObCreateResourcePoolArg arg_;
   /* functions */
   /* variables */
@@ -75,7 +75,7 @@ class ObCreateResourcePoolStmt : public ObDDLStmt {
 };
 
 class ObSplitResourcePoolStmt : public ObDDLStmt {
-  public:
+public:
   ObSplitResourcePoolStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_SPLIT_RESOURCE_POOL), arg_()
   {}
   ObSplitResourcePoolStmt() : ObDDLStmt(stmt::T_SPLIT_RESOURCE_POOL), arg_()
@@ -107,13 +107,13 @@ class ObSplitResourcePoolStmt : public ObDDLStmt {
     return arg_;
   }
 
-  private:
+private:
   obrpc::ObSplitResourcePoolArg arg_;
   DISALLOW_COPY_AND_ASSIGN(ObSplitResourcePoolStmt);
 };
 
 class ObMergeResourcePoolStmt : public ObDDLStmt {
-  public:
+public:
   ObMergeResourcePoolStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_MERGE_RESOURCE_POOL), arg_()
   {}
   ObMergeResourcePoolStmt() : ObDDLStmt(stmt::T_MERGE_RESOURCE_POOL), arg_()
@@ -141,13 +141,13 @@ class ObMergeResourcePoolStmt : public ObDDLStmt {
     return arg_;
   }
 
-  private:
+private:
   obrpc::ObMergeResourcePoolArg arg_;
   DISALLOW_COPY_AND_ASSIGN(ObMergeResourcePoolStmt);
 };
 
 class ObAlterResourcePoolStmt : public ObDDLStmt {
-  public:
+public:
   ObAlterResourcePoolStmt(common::ObIAllocator* name_pool)
       : ObDDLStmt(name_pool, stmt::T_ALTER_RESOURCE_POOL), arg_(){};
   ObAlterResourcePoolStmt() : ObDDLStmt(stmt::T_ALTER_RESOURCE_POOL), arg_(){};
@@ -189,7 +189,7 @@ class ObAlterResourcePoolStmt : public ObDDLStmt {
     return arg_;
   }
 
-  private:
+private:
   /* functions */
   /* variables */
   obrpc::ObAlterResourcePoolArg arg_;
@@ -197,7 +197,7 @@ class ObAlterResourcePoolStmt : public ObDDLStmt {
 };
 
 class ObDropResourcePoolStmt : public ObDDLStmt {
-  public:
+public:
   ObDropResourcePoolStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_DROP_RESOURCE_POOL), arg_(){};
   ObDropResourcePoolStmt() : ObDDLStmt(stmt::T_DROP_RESOURCE_POOL), arg_(){};
   virtual ~ObDropResourcePoolStmt(){};
@@ -222,7 +222,7 @@ class ObDropResourcePoolStmt : public ObDDLStmt {
     return arg_;
   }
 
-  private:
+private:
   /* functions */
   /* variables */
   obrpc::ObDropResourcePoolArg arg_;
@@ -230,7 +230,7 @@ class ObDropResourcePoolStmt : public ObDDLStmt {
 };
 
 class ObCreateResourceUnitStmt : public ObDDLStmt {
-  public:
+public:
   ObCreateResourceUnitStmt(common::ObIAllocator* name_pool)
       : ObDDLStmt(name_pool, stmt::T_CREATE_RESOURCE_UNIT), arg_(){};
   ObCreateResourceUnitStmt() : ObDDLStmt(stmt::T_CREATE_RESOURCE_UNIT), arg_(){};
@@ -288,7 +288,7 @@ class ObCreateResourceUnitStmt : public ObDDLStmt {
     return arg_;
   }
 
-  private:
+private:
   /* functions */
   /* variables */
   obrpc::ObCreateResourceUnitArg arg_;
@@ -296,7 +296,7 @@ class ObCreateResourceUnitStmt : public ObDDLStmt {
 };
 
 class ObAlterResourceUnitStmt : public ObDDLStmt {
-  public:
+public:
   ObAlterResourceUnitStmt(common::ObIAllocator* name_pool)
       : ObDDLStmt(name_pool, stmt::T_ALTER_RESOURCE_UNIT), arg_(){};
   ObAlterResourceUnitStmt() : ObDDLStmt(stmt::T_ALTER_RESOURCE_UNIT), arg_(){};
@@ -350,7 +350,7 @@ class ObAlterResourceUnitStmt : public ObDDLStmt {
     return arg_;
   }
 
-  private:
+private:
   /* functions */
   /* variables */
   obrpc::ObAlterResourceUnitArg arg_;
@@ -358,7 +358,7 @@ class ObAlterResourceUnitStmt : public ObDDLStmt {
 };
 
 class ObDropResourceUnitStmt : public ObDDLStmt {
-  public:
+public:
   ObDropResourceUnitStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_DROP_RESOURCE_UNIT), arg_()
   {}
   ObDropResourceUnitStmt() : ObDDLStmt(stmt::T_DROP_RESOURCE_UNIT), arg_()
@@ -385,7 +385,7 @@ class ObDropResourceUnitStmt : public ObDDLStmt {
     return arg_;
   }
 
-  private:
+private:
   /* functions */
   /* variables */
   obrpc::ObDropResourceUnitArg arg_;

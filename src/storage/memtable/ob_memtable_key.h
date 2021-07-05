@@ -24,7 +24,7 @@
 namespace oceanbase {
 namespace memtable {
 class ObMemtableKey {
-  public:
+public:
   ObMemtableKey(uint64_t table_id, const common::ObStoreRowkey* rowkey)
       : table_id_(table_id), rowkey_(const_cast<common::ObStoreRowkey*>(rowkey)), hash_val_(0)
   {
@@ -87,7 +87,7 @@ class ObMemtableKey {
     return key;
   }
 
-  public:
+public:
   int compare(const ObMemtableKey& other, int& cmp) const
   {
     int ret = common::OB_SUCCESS;
@@ -338,7 +338,7 @@ class ObMemtableKey {
     return ret;
   }
 
-  protected:
+protected:
   uint64_t table_id_;
   common::ObStoreRowkey* rowkey_;
   mutable uint64_t hash_val_;  // Perf optimization.
@@ -346,7 +346,7 @@ class ObMemtableKey {
 };
 
 class ObStoreRowkeyWrapper {
-  public:
+public:
   ObStoreRowkeyWrapper() : rowkey_(nullptr)
   {}
   ObStoreRowkeyWrapper(const common::ObStoreRowkey* rowkey) : rowkey_(rowkey)
@@ -405,7 +405,7 @@ class ObStoreRowkeyWrapper {
     return key_wrapper;
   }
 
-  public:
+public:
   const common::ObStoreRowkey* rowkey_;
 };
 

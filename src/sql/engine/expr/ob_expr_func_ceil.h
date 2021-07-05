@@ -22,7 +22,7 @@ class ObExprCeilFloor : public ObFuncExprOperator {
   static const int16_t MAX_LIMIT_WITH_SCALE = 17;
   static const int16_t MAX_LIMIT_WITHOUT_SCALE = 18;
 
-  public:
+public:
   ObExprCeilFloor(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num,
       int32_t dimension = NOT_ROW_DIMENSION);
 
@@ -32,43 +32,43 @@ class ObExprCeilFloor : public ObFuncExprOperator {
       common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx, bool is_ceil) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCeilFloor);
 };
 
 class ObExprFuncCeil : public ObExprCeilFloor {
-  public:
+public:
   explicit ObExprFuncCeil(common::ObIAllocator& alloc);
   virtual ~ObExprFuncCeil();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncCeil);
 };
 
 class ObExprFuncCeiling : public ObExprCeilFloor {
-  public:
+public:
   explicit ObExprFuncCeiling(common::ObIAllocator& alloc);
   virtual ~ObExprFuncCeiling();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncCeiling);
 };
 
 class ObExprFuncFloor : public ObExprCeilFloor {
-  public:
+public:
   explicit ObExprFuncFloor(common::ObIAllocator& alloc);
   virtual ~ObExprFuncFloor();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncFloor);
 };

@@ -39,7 +39,7 @@ class ObjectSet {
   typedef AObject* FreeList;
   typedef ABitSet BitMap;
 
-  public:
+public:
   ObjectSet(MemoryContext* mem_context = nullptr, const uint32_t ablock_size = INTACT_NORMAL_AOBJECT_SIZE);
   ~ObjectSet();
 
@@ -78,7 +78,7 @@ class ObjectSet {
   inline int64_t get_normal_used() const;
   inline int64_t get_normal_alloc() const;
 
-  private:
+private:
   AObject* alloc_normal_object(const uint32_t cls, const ObMemAttr& attr);
   AObject* alloc_big_object(const uint64_t size, const ObMemAttr& attr);
 
@@ -100,7 +100,7 @@ class ObjectSet {
   void do_free_object(AObject* obj);
   void do_free_dirty_list();
 
-  private:
+private:
   MemoryContext* mem_context_;
   ISetLocker* locker_;
   common::ObLocalModSet* mod_set_;

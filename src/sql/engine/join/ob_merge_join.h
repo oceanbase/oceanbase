@@ -25,7 +25,7 @@ class ObMergeJoin : public ObJoin {
   OB_UNIS_VERSION_V(1);
   friend class TestObMergeJoin;
 
-  private:
+private:
   enum ObJoinState {
     // this state need not execute actually.
     JS_JOIN_END = 0,
@@ -58,7 +58,7 @@ class ObMergeJoin : public ObJoin {
   class ObMergeJoinCtx : public ObJoinCtx {
     friend class ObMergeJoin;
 
-    public:
+  public:
     explicit ObMergeJoinCtx(ObExecContext& ctx);
     virtual ~ObMergeJoinCtx()
     {}
@@ -82,7 +82,7 @@ class ObMergeJoin : public ObJoin {
       ObPhyOperatorCtx::destroy_base();
     }
 
-    private:
+  private:
     ObJoinState state_;
     common::ObNewRow right_cache_row_buf_;  // similar with cur_row_, used for iterator of right_cache_.
     common::ObRowStore::StoredRow* stored_row_;
@@ -97,7 +97,7 @@ class ObMergeJoin : public ObJoin {
     bool left_row_matched_;
   };
 
-  public:
+public:
   explicit ObMergeJoin(common::ObIAllocator& alloc);
   virtual ~ObMergeJoin();
   virtual void reset();
@@ -133,7 +133,7 @@ class ObMergeJoin : public ObJoin {
     return merge_directions_.push_back(is_ascending_direction(direction) ? MERGE_DIRECTION_ASC : MERGE_DIRECTION_DESC);
   }
 
-  private:
+private:
   // state operation and transfer functions.
   typedef int (ObMergeJoin::*state_operation_func_type)(ObMergeJoinCtx& join_ctx) const;
   typedef int (ObMergeJoin::*state_function_func_type)(ObMergeJoinCtx& join_ctx, const common::ObNewRow*& row) const;
@@ -151,7 +151,7 @@ class ObMergeJoin : public ObJoin {
   virtual int inner_close(ObExecContext& exec_ctx) const;
   virtual int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const;
 
-  private:
+private:
   // JS_JOIN_END state operation and transfer functions.
   int join_end_operate(ObMergeJoinCtx& join_ctx) const;
   int join_end_func_end(ObMergeJoinCtx& join_ctx, const common::ObNewRow*& row) const;
@@ -199,13 +199,13 @@ class ObMergeJoin : public ObJoin {
     return is_left_unique_ && INNER_JOIN == join_type_;
   }
 
-  private:
+private:
   state_operation_func_type state_operation_func_[JS_STATE_COUNT];
   state_function_func_type state_function_func_[JS_STATE_COUNT][FT_TYPE_COUNT];
   common::ObFixedArray<int64_t, common::ObIAllocator> merge_directions_;
   bool is_left_unique_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeJoin);
 };
 // int ObMergeJoin::set_merge_directions(common::ObIArray &merge_directions)

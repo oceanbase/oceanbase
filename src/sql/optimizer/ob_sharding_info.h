@@ -33,7 +33,7 @@ typedef common::ObSEArray<ObRawExprSet*, 8, common::ModulePageAllocator, true> O
 typedef ObRawExprSets EqualSets;
 
 class ObShardingInfo {
-  public:
+public:
   ObShardingInfo()
       : part_level_(share::schema::PARTITION_LEVEL_ZERO),
         part_func_type_(share::schema::PARTITION_FUNC_TYPE_MAX),
@@ -260,7 +260,7 @@ class ObShardingInfo {
       K_(part_func_type), K_(subpart_func_type), K_(part_num), K_(subpart_num), K_(location_type),
       K_(can_reselect_replica), K_(phy_table_location_info));
 
-  private:
+private:
   int set_partition_key(ObRawExpr* part_expr, const share::schema::ObPartitionFuncType part_func_type,
       common::ObIArray<ObRawExpr*>& partition_keys);
 
@@ -275,7 +275,7 @@ class ObShardingInfo {
   static int is_compatible_partition_key(const common::ObIArray<ObRawExpr*>& first_part_keys,
       const common::ObIArray<ObRawExpr*>& second_part_keys, bool& is_compatible);
 
-  private:
+private:
   share::schema::ObPartitionLevel part_level_;
 
   share::schema::ObPartitionFuncType part_func_type_;

@@ -288,7 +288,7 @@ const int64_t OB_MAX_TRANS_ID_BUFFER_SIZE = 512;
 const int32_t OB_MIN_SAFE_COPY_COUNT = 3;
 const int32_t OB_SAFE_COPY_COUNT = 3;
 const int32_t OB_DEFAULT_REPLICA_NUM = 3;
-const int32_t OB_DEC_AND_LOCK = 2626;                                /* used by remoe_plan in ObPsStore */
+const int32_t OB_DEC_AND_LOCK = 2626;                                /* used by remote_plan in ObPsStore */
 const int32_t OB_MAX_SCHEMA_VERSION_INTERVAL = 40 * 1000 * 1000;     // 40s
 const int64_t UPDATE_SCHEMA_ADDITIONAL_INTERVAL = 5 * 1000 * 1000L;  // 5s
 
@@ -834,7 +834,7 @@ const uint64_t OB_GTS_UNIT_ID = 100;
 const int64_t OB_GTS_QUORUM = 3;
 const char* const OB_ORIGINAL_GTS_NAME = "primary_gts_instance";
 const uint64_t OB_ORIGINAL_GTS_ID = 100;
-// standby unit config tmplate
+// standby unit config template
 const char* const OB_STANDBY_UNIT_CONFIG_TEMPLATE_NAME = "standby_unit_config_template";
 
 const uint64_t OB_SCHEMATA_TID = 2001;
@@ -1494,7 +1494,7 @@ const int64_t OB_MAX_CPU_NUM = 128;
 const int64_t OB_MAX_STATICS_PER_TABLE = 128;
 
 const uint64_t OB_DEFAULT_INDEX_ATTRIBUTES_SET = 0;
-const uint64_t OB_DEFAULT_INDEX_VISIBILITY = 0;  // 0 menas visible;1 means invisible
+const uint64_t OB_DEFAULT_INDEX_VISIBILITY = 0;  // 0 means visible;1 means invisible
 
 const int64_t OB_INDEX_WRITE_START_DELAY = 20 * 1000 * 1000;  // 20s
 
@@ -1655,7 +1655,7 @@ enum ObModifyQuorumType {
 };
 
 class ObModifyQuorumTypeChecker {
-  public:
+public:
   static bool is_valid_type(const ObModifyQuorumType modify_quorum_type)
   {
     return modify_quorum_type >= WITH_MODIFY_QUORUM && modify_quorum_type < MAX_MODIFY_QUORUM_TYPE;
@@ -1705,7 +1705,7 @@ enum ObReplicaType {
 };
 
 class ObReplicaTypeCheck {
-  public:
+public:
   static bool is_replica_type_valid(const int32_t replica_type)
   {
     return REPLICA_TYPE_FULL == replica_type || REPLICA_TYPE_LOGONLY == replica_type ||
@@ -1780,7 +1780,7 @@ class ObReplicaTypeCheck {
 };
 
 class ObMemstorePercentCheck {
-  public:
+public:
   static bool is_memstore_percent_valid(const int64_t memstore_percent)
   {
     return 0 == memstore_percent || 100 == memstore_percent;
@@ -1937,14 +1937,14 @@ struct ObNumberDesc {
 
 #define DEFINE_ALLOCATOR_WRAPPER                                             \
   class IAllocator {                                                         \
-    public:                                                                  \
+  public:                                                                    \
     virtual ~IAllocator(){};                                                 \
     virtual void* alloc(const int64_t size) = 0;                             \
     virtual void* alloc(const int64_t size, const lib::ObMemAttr& attr) = 0; \
   };                                                                         \
   template <class T>                                                         \
   class TAllocator : public IAllocator {                                     \
-    public:                                                                  \
+  public:                                                                    \
     explicit TAllocator(T& allocator) : allocator_(allocator){};             \
     void* alloc(const int64_t size)                                          \
     {                                                                        \
@@ -1956,7 +1956,7 @@ struct ObNumberDesc {
       return alloc(size);                                                    \
     };                                                                       \
                                                                              \
-    private:                                                                 \
+  private:                                                                   \
     T& allocator_;                                                           \
   };
 

@@ -30,7 +30,7 @@ static const int64_t DEFAULT_ARRAY_ARRAY_SIZE = 8;
 template <typename T, int64_t LOCAL_ARRAY_SIZE = DEFAULT_LOCAL_ARRAY_SIZE,
     int64_t ARRAY_ARRAY_SIZE = DEFAULT_ARRAY_ARRAY_SIZE, typename BlockAllocatorT = ModulePageAllocator>
 class ObArrayArray {
-  public:
+public:
   typedef ObSEArray<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, false> LocalArrayT;
   explicit ObArrayArray(const int64_t block_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
       const BlockAllocatorT& alloc = BlockAllocatorT("ObArrayArray"));
@@ -82,11 +82,11 @@ class ObArrayArray {
   }
   int64_t to_string(char* buffer, int64_t length) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObArrayArray);
 
-  private:
+private:
   LocalArrayT* local_array_buf_[ARRAY_ARRAY_SIZE];
   LocalArrayT** array_ptrs_;
   int64_t count_;

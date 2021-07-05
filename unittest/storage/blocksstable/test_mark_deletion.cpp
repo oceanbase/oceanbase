@@ -32,13 +32,13 @@ using namespace share::schema;
 
 namespace unittest {
 class TestMarkDeletion : public TestDataFilePrepare {
-  public:
+public:
   TestMarkDeletion();
   virtual ~TestMarkDeletion();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   void prepare_schema();
   void prepare_data();
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;

@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace lib {
 
 class ObQueryRateLimiter : public lib::ObRateLimiter {
-  public:
+public:
   ObQueryRateLimiter() : last_ship_time_(0)
   {}
 
@@ -37,10 +37,10 @@ class ObQueryRateLimiter : public lib::ObRateLimiter {
   int acquire(int64_t permits = 1) override;
   int try_acquire(int64_t permits = 1) override;
 
-  private:
+private:
   static int64_t current_time();
 
-  private:
+private:
   int64_t last_ship_time_;
 };
 

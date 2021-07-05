@@ -22,7 +22,7 @@ namespace sql {
 class ObOptPartLoc {
   OB_UNIS_VERSION(1);
   // friend class ObPartitionReplicaLocation;
-  public:
+public:
   typedef common::ObSEArray<ObRoutePolicy::CandidateReplica, common::OB_MAX_MEMBER_NUMBER, common::ModulePageAllocator,
       true>
       ObSmartReplicaLocationArray;
@@ -88,7 +88,7 @@ class ObOptPartLoc {
   TO_STRING_KV(KT_(table_id), K_(partition_id), K_(partition_cnt), K_(pg_key), K_(replica_locations), K_(renew_time),
       K_(is_mark_fail));
 
-  private:
+private:
   uint64_t table_id_;
   int64_t partition_id_;
   int64_t partition_cnt_;
@@ -99,7 +99,7 @@ class ObOptPartLoc {
 };
 
 class ObPhyPartitionLocationInfo {
-  public:
+public:
   ObPhyPartitionLocationInfo();
   virtual ~ObPhyPartitionLocationInfo();
 
@@ -144,14 +144,14 @@ class ObPhyPartitionLocationInfo {
   bool is_server_in_replica(const common::ObAddr& server, int64_t& idx) const;
   TO_STRING_KV(K_(partition_location), K_(selected_replica_idx), K_(priority_replica_idxs));
 
-  private:
+private:
   ObOptPartLoc partition_location_;
 
   int64_t selected_replica_idx_;
 
   common::ObSEArray<int64_t, 2, common::ModulePageAllocator, true> priority_replica_idxs_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPhyPartitionLocationInfo);
 };
 
@@ -160,11 +160,11 @@ typedef common::ObSEArray<ObPhyPartitionLocationInfo, 2, common::ModulePageAlloc
     ObPhyPartitionLocationInfoSEArray;
 
 class ObPhyTableLocationInfo {
-  public:
+public:
   ObPhyTableLocationInfo();
   virtual ~ObPhyTableLocationInfo();
 
-  public:
+public:
   void reset();
   int assign(const ObPhyTableLocationInfo& other);
 
@@ -236,7 +236,7 @@ class ObPhyTableLocationInfo {
   TO_STRING_KV(K_(table_location_key), K_(ref_table_id), K_(phy_part_loc_info_list), K_(splitted_range_list),
       K_(duplicate_type));
 
-  private:
+private:
   uint64_t table_location_key_;
 
   uint64_t ref_table_id_;
@@ -248,7 +248,7 @@ class ObPhyTableLocationInfo {
 
   ObDuplicateType duplicate_type_;
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObPhyTableLocationInfo);

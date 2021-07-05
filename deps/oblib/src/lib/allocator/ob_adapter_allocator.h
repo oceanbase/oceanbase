@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace common {
 class AdapterAllocator {
-  public:
+public:
   AdapterAllocator() : buffer_(NULL), pos_(0)
   {}
   ~AdapterAllocator()
@@ -38,7 +38,7 @@ class AdapterAllocator {
     UNUSED(buf);
   }
 
-  private:
+private:
   char* buffer_;
   int64_t pos_;
 };

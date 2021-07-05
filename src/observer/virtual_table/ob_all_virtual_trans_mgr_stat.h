@@ -28,7 +28,7 @@ class ObTransPartitonStat;
 }  // namespace transaction
 namespace observer {
 class ObGVTransPartitionMgrStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   explicit ObGVTransPartitionMgrStat(transaction::ObTransService* trans_service) : trans_service_(trans_service)
   {
     reset();
@@ -38,23 +38,23 @@ class ObGVTransPartitionMgrStat : public common::ObVirtualTableScannerIterator {
     destroy();
   }
 
-  public:
+public:
   int inner_get_next_row(common::ObNewRow*& row);
   void reset();
   void destroy();
 
-  private:
+private:
   int prepare_start_to_read_();
 
-  private:
+private:
   char ip_buffer_[common::OB_IP_STR_BUFF];
   char memstore_version_buffer_[common::MAX_VERSION_LENGTH];
 
-  private:
+private:
   transaction::ObTransService* trans_service_;
   transaction::ObTransPartitionMgrStatIterator trans_partition_mgr_stat_iter_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGVTransPartitionMgrStat);
 };
 

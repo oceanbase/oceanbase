@@ -15,7 +15,7 @@
 执行mysql_test/test_suite下全部的测试，可以使用以下命令：
 
 ```shell
-obd test mysqltest <deploy name> --all --auto-try
+obd test mysqltest <deploy name> --all --auto-retry
 # 如果执行obd命令时不处于当前目录请使用 --suite-dir 选项
 # 一些case中包含是相当路径，不在当前目录执行可能会导致失败
 ```
@@ -27,14 +27,14 @@ obd test mysqltest <deploy name> --all --auto-try
 
 选项 `--all` 为执行 `--suite-dir` 下全部suite。
 
-选项 `--auto-try` 开启后，当case第一次执行失败时会自动重部署集群进行重试。
+选项 `--auto-retry` 开启后，当case第一次执行失败时会自动重部署集群进行重试。
 
 ### 单suite测试
 
 对mysql_test/test_suite下指定suite执行测试，可以使用以下命令：
 
 ```shell
-obd test mysqltest <deploy name> --suite <suite_name>  --auto-try
+obd test mysqltest <deploy name> --suite <suite_name>  --auto-retry
 # 如果执行obd命令时不处于当前目录请使用 --suite-dir 选项
 # 一些case中包含是相当路径，不在当前目录执行可能会导致失败
 ```
@@ -46,13 +46,13 @@ obd test mysqltest <deploy name> --suite <suite_name>  --auto-try
 
 选项 `--suite` 为要执行suite的集合，多个suite之间使用英文逗号`,`间隔
 
-选项 `--auto-try` 开启后，当case第一次执行失败时会自动重部署集群进行重试。
+选项 `--auto-retry` 开启后，当case第一次执行失败时会自动重部署集群进行重试。
 
 ### 单case测试
 
 对特定case进行测试，比如对mysql_test/test_suite/alter/t/alter_log_archive_option.test进行测试，可以使用以下命令：
 ```shell
-obd test mysqltest <deploy name> --test-dir ./mysql_test/test_suite/alter/t --result-dir ./mysql_test/test_suite/alter/r --test-set alter_log_archive_option --auto-try
+obd test mysqltest <deploy name> --test-dir ./mysql_test/test_suite/alter/t --result-dir ./mysql_test/test_suite/alter/r --test-set alter_log_archive_option --auto-retry
 # 如果执行obd命令时不处于当前目录请调整 --test-dir 和 --result-dir
 # 一些case中包含是相当路径，不在当前目录执行可能会导致失败
 ```
@@ -66,6 +66,6 @@ obd test mysqltest <deploy name> --test-dir ./mysql_test/test_suite/alter/t --re
 
 选项 `--test-set` 为要执行case的集合，多个case之间使用英文逗号`,`间隔
 
-选项 `--auto-try` 开启后，当case第一次执行失败时会自动重部署集群进行重试。
+选项 `--auto-retry` 开启后，当case第一次执行失败时会自动重部署集群进行重试。
 
 

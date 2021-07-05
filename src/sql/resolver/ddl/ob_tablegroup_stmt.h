@@ -19,7 +19,7 @@ namespace sql {
 class ObTablegroupStmt : public ObPartitionedStmt {
   const static int OB_DEFAULT_ARRAY_SIZE = 16;
 
-  public:
+public:
   ObTablegroupStmt(common::ObIAllocator* name_pool, stmt::StmtType type)
       : ObPartitionedStmt(name_pool, type),
         part_func_expr_num_(OB_INVALID_INDEX),
@@ -56,11 +56,11 @@ class ObTablegroupStmt : public ObPartitionedStmt {
     sub_part_func_expr_num_ = expr_num;
   }
 
-  private:
+private:
   int64_t part_func_expr_num_;
   int64_t sub_part_func_expr_num_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTablegroupStmt);
 };
 }  // namespace sql

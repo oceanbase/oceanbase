@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObUpdateResolver : public ObDMLResolver {
-  public:
+public:
   static const int64_t TABLE = 0;       /* 0. table node */
   static const int64_t UPDATE_LIST = 1; /* 1. update list */
   static const int64_t WHERE = 2;       /* 2. where node */
@@ -30,7 +30,7 @@ class ObUpdateResolver : public ObDMLResolver {
   static const int64_t HINT = 6;        /* 6. hint node */
   static const int64_t IGNORE = 7;      /*7. ignore node */
   static const int64_t RETURNING = 8;   /*8. returning node */
-  public:
+public:
   explicit ObUpdateResolver(ObResolverParams& params);
   virtual ~ObUpdateResolver();
 
@@ -40,7 +40,7 @@ class ObUpdateResolver : public ObDMLResolver {
     return static_cast<ObUpdateStmt*>(stmt_);
   }
 
-  protected:
+protected:
   /**
    *  For update stmt, we need to add the table to the from_item in order to reuse
    *  the same cost model to generate the access path like in the 'select' stmt case.
@@ -48,7 +48,7 @@ class ObUpdateResolver : public ObDMLResolver {
    */
   virtual int resolve_table_list(const ParseNode& parse_tree);
 
-  private:
+private:
   int add_related_columns_to_stmt();
   int resolve_cascade_updated_global_index(
       const ObTableAssignment& ta, common::ObIArray<uint64_t>& cascade_global_index);
@@ -68,7 +68,7 @@ class ObUpdateResolver : public ObDMLResolver {
   int is_multi_table_update(const ObDMLStmt* stmt, bool& is_multi_table);
   int check_safe_update_mode(ObUpdateStmt* update_stmt);
 
-  private:
+private:
   bool has_add_all_rowkey_;
   bool has_add_all_columns_;
   common::hash::ObPlacementHashSet<uint64_t> update_column_ids_;

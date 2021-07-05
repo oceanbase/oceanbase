@@ -70,7 +70,7 @@ bool ObExternalSortConstant::is_timeout(const int64_t expire_timestamp)
 
 template <typename T>
 class ObFragmentIterator {
-  public:
+public:
   ObFragmentIterator()
   {}
   virtual ~ObFragmentIterator()
@@ -89,7 +89,7 @@ class ObFragmentIterator {
 
 template <typename T>
 class ObMacroBufferWriter {
-  public:
+public:
   ObMacroBufferWriter();
   virtual ~ObMacroBufferWriter();
   int write_item(const T& item);
@@ -98,7 +98,7 @@ class ObMacroBufferWriter {
   bool has_item();
   TO_STRING_KV(KP(buf_), K(buf_pos_), K(buf_cap_));
 
-  private:
+private:
   char* buf_;
   int64_t buf_pos_;
   int64_t buf_cap_;
@@ -157,7 +157,7 @@ bool ObMacroBufferWriter<T>::has_item()
 
 template <typename T>
 class ObFragmentWriterV2 {
-  public:
+public:
   ObFragmentWriterV2();
   virtual ~ObFragmentWriterV2();
   int open(const int64_t buf_size, const int64_t expire_timestamp, const uint64_t tenant_id, const int64_t dir_id);
@@ -177,11 +177,11 @@ class ObFragmentWriterV2 {
     return sample_item_;
   }
 
-  private:
+private:
   int flush_buffer();
   int check_need_flush(bool& need_flush);
 
-  private:
+private:
   bool is_inited_;
   char* buf_;
   int64_t buf_size_;
@@ -378,7 +378,7 @@ void ObFragmentWriterV2<T>::reset()
 
 template <typename T>
 class ObMacroBufferReader {
-  public:
+public:
   ObMacroBufferReader();
   virtual ~ObMacroBufferReader();
   int read_item(T& item);
@@ -386,7 +386,7 @@ class ObMacroBufferReader {
   void assign(const int64_t buf_pos, const int64_t buf_cap, const char* buf);
   TO_STRING_KV(KP(buf_), K(buf_pos_), K(buf_len_), K(buf_cap_));
 
-  private:
+private:
   const char* buf_;
   int64_t buf_pos_;
   int64_t buf_len_;
@@ -446,7 +446,7 @@ void ObMacroBufferReader<T>::assign(const int64_t buf_pos, const int64_t buf_cap
 
 template <typename T>
 class ObFragmentReaderV2 : public ObFragmentIterator<T> {
-  public:
+public:
   ObFragmentReaderV2();
   virtual ~ObFragmentReaderV2();
   int init(const int64_t fd, const int64_t dir_id, const int64_t expire_timestamp, const uint64_t tenant_id,
@@ -455,13 +455,13 @@ class ObFragmentReaderV2 : public ObFragmentIterator<T> {
   virtual int get_next_item(const T*& item);
   virtual int clean_up();
 
-  private:
+private:
   int prefetch();
   int wait();
   int pipeline();
   void reset();
 
-  private:
+private:
   static const int64_t MAX_HANDLE_COUNT = 2;
   bool is_inited_;
   int64_t expire_timestamp_;
@@ -703,7 +703,7 @@ int ObFragmentReaderV2<T>::clean_up()
 
 template <typename T, typename Compare>
 class ObFragmentMerge {
-  public:
+public:
   typedef ObFragmentIterator<T> FragmentIterator;
   static const int64_t DEFAULT_ITERATOR_NUM = 64;
   ObFragmentMerge();
@@ -717,12 +717,12 @@ class ObFragmentMerge {
     return is_opened_;
   }
 
-  private:
+private:
   int direct_get_next_item(const T*& item);
   int heap_get_next_item(const T*& item);
   int build_heap();
 
-  private:
+private:
   struct HeapItem {
     const T* item_;
     int64_t idx_;
@@ -736,7 +736,7 @@ class ObFragmentMerge {
     TO_STRING_KV(K_(item), K_(idx));
   };
   class HeapCompare {
-    public:
+  public:
     HeapCompare(int& ret);
     virtual ~HeapCompare();
     bool operator()(const HeapItem& left_item, const HeapItem& right_item) const;
@@ -749,12 +749,12 @@ class ObFragmentMerge {
       return ret_;
     }
 
-    private:
+  private:
     Compare* compare_;
     int& ret_;
   };
 
-  private:
+private:
   bool is_inited_;
   bool is_opened_;
   HeapCompare compare_;
@@ -1008,7 +1008,7 @@ int ObFragmentMerge<T, Compare>::get_next_item(const T*& item)
 
 template <typename T, typename Compare>
 class ObExternalSortRound {
-  public:
+public:
   ObExternalSortRound();
   virtual ~ObExternalSortRound();
   int init(const int64_t merge_count, const int64_t file_buf_size, const int64_t expire_timestamp,
@@ -1029,7 +1029,7 @@ class ObExternalSortRound {
   int add_fragment_iter(ObFragmentIterator<T>* iter);
   int transfer_final_sorted_fragment_iter(ObExternalSortRound& dest_round);
 
-  private:
+private:
   typedef ObFragmentReaderV2<T> FragmentReader;
   typedef ObFragmentIterator<T> FragmentIterator;
   typedef common::ObArray<FragmentIterator*> FragmentIteratorList;
@@ -1368,7 +1368,7 @@ int ObExternalSortRound<T, Compare>::clean_up()
 
 template <typename T>
 class ObMemoryFragmentIterator : public ObFragmentIterator<T> {
-  public:
+public:
   ObMemoryFragmentIterator();
   virtual ~ObMemoryFragmentIterator();
   int init(common::ObVector<T*>& item_list);
@@ -1378,7 +1378,7 @@ class ObMemoryFragmentIterator : public ObFragmentIterator<T> {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   bool is_inited_;
   int64_t curr_item_index_;
   common::ObVector<T*>* item_list_;
@@ -1424,7 +1424,7 @@ int ObMemoryFragmentIterator<T>::get_next_item(const T*& item)
 
 template <typename T, typename Compare>
 class ObMemorySortRound {
-  public:
+public:
   typedef ObExternalSortRound<T, Compare> ExternalSortRound;
   ObMemorySortRound();
   virtual ~ObMemorySortRound();
@@ -1446,10 +1446,10 @@ class ObMemorySortRound {
   TO_STRING_KV(K(is_inited_), K(is_in_memory_), K(has_data_), K(buf_mem_limit_), K(expire_timestamp_), KP(next_round_),
       KP(compare_), KP(iter_));
 
-  private:
+private:
   int build_iterator();
 
-  private:
+private:
   bool is_inited_;
   bool is_in_memory_;
   bool has_data_;
@@ -1697,7 +1697,7 @@ int ObMemorySortRound<T, Compare>::transfer_final_sorted_fragment_iter(ExternalS
 
 template <typename T, typename Compare>
 class ObExternalSort {
-  public:
+public:
   typedef ObMemorySortRound<T, Compare> MemorySortRound;
   typedef ObExternalSortRound<T, Compare> ExternalSortRound;
   ObExternalSort();
@@ -1714,7 +1714,7 @@ class ObExternalSort {
   TO_STRING_KV(K(is_inited_), K(file_buf_size_), K(buf_mem_limit_), K(expire_timestamp_), K(merge_count_per_round_),
       KP(tenant_id_), KP(compare_));
 
-  private:
+private:
   static const int64_t EXTERNAL_SORT_ROUND_CNT = 2;
   bool is_inited_;
   int64_t file_buf_size_;

@@ -22,7 +22,7 @@ namespace memtable {
 
 template <int64_t N = 0>
 class ObWithArenaT {
-  public:
+public:
   ObWithArenaT(common::ObIAllocator& allocator, const int64_t page_size)
       : page_allocator_(allocator), arena_(page_size, page_allocator_)
   {}
@@ -59,7 +59,7 @@ class ObWithArenaT {
     arena_.set_tenant_id(tenant_id);
   }
 
-  private:
+private:
   common::ModulePageAllocator page_allocator_;
   common::ModuleArena arena_;
 };
@@ -67,7 +67,7 @@ typedef ObWithArenaT<> ObWithArena;
 
 template <int64_t BUF_SIZE>
 class ObWithDataBuffer {
-  public:
+public:
   ObWithDataBuffer() : data_buffer_(memory_, sizeof(memory_))
   {}
   common::ObDataBuffer& get_buf()
@@ -75,7 +75,7 @@ class ObWithDataBuffer {
     return data_buffer_;
   }
 
-  private:
+private:
   char memory_[BUF_SIZE];
   common::ObDataBuffer data_buffer_;
 };

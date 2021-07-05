@@ -23,7 +23,7 @@ class ObTableRowStoreInput : public ObIPhyOperatorInput {
   friend class ObTableRowStore;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableRowStoreInput() : multi_row_store_(), allocator_(NULL)
   {}
   virtual ~ObTableRowStoreInput()
@@ -44,11 +44,11 @@ class ObTableRowStoreInput : public ObIPhyOperatorInput {
    */
   virtual void set_deserialize_allocator(common::ObIAllocator* allocator);
 
-  private:
+private:
   common::ObFixedArray<common::ObRowStore*, common::ObIAllocator> multi_row_store_;
   common::ObIAllocator* allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableRowStoreInput);
 };
 
@@ -56,7 +56,7 @@ class ObTableRowStore : public ObNoChildrenPhyOperator {
   OB_UNIS_VERSION(1);
   class ObTableRowStoreCtx;
 
-  public:
+public:
   explicit ObTableRowStore(common::ObIAllocator& alloc)
       : ObNoChildrenPhyOperator(alloc), table_id_(common::OB_INVALID_ID)
   {}
@@ -74,7 +74,7 @@ class ObTableRowStore : public ObNoChildrenPhyOperator {
   }
   virtual int create_operator_input(ObExecContext& ctx) const;
 
-  private:
+private:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -101,7 +101,7 @@ class ObTableRowStore : public ObNoChildrenPhyOperator {
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
   DISALLOW_COPY_AND_ASSIGN(ObTableRowStore);
 
-  private:
+private:
   uint64_t table_id_;
 };
 }  // namespace sql

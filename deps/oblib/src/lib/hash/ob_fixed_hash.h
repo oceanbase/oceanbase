@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace common {
 template <typename key_t>
 class FixedHash {
-  public:
+public:
   typedef ObLink Link;
   struct node_t : public Link {
     node_t() : hash_(0), key_()
@@ -110,7 +110,7 @@ class FixedHash {
     return node;
   }
 
-  private:
+private:
   node_t* next_node(node_t* node)
   {
     node_t* next = NULL;
@@ -165,7 +165,7 @@ class FixedHash {
     return err;
   }
 
-  private:
+private:
   node_t* nodes_;
   int64_t limit_;
 };

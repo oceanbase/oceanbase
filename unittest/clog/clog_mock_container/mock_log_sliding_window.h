@@ -31,7 +31,7 @@ class ObIOutOfBandLogHandler;
 class ObILogStateMgrForSW;
 
 class MockObSlidingCallBack : public ObILogTaskCallBack {
-  public:
+public:
   MockObSlidingCallBack()
   {}
   virtual ~MockObSlidingCallBack()

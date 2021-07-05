@@ -21,37 +21,37 @@ namespace oceanbase {
 namespace sql {
 
 class ObOptimizeTableResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObOptimizeTableResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
   virtual ~ObOptimizeTableResolver() = default;
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   static const int64_t TABLE_LIST_NODE = 0;
   DISALLOW_COPY_AND_ASSIGN(ObOptimizeTableResolver);
 };
 
 class ObOptimizeTenantResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObOptimizeTenantResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
   virtual ~ObOptimizeTenantResolver() = default;
   virtual int resolve(const ParseNode& parser_tree);
 
-  private:
+private:
   static const int64_t TABLE_LIST_NODE = 0;
   DISALLOW_COPY_AND_ASSIGN(ObOptimizeTenantResolver);
 };
 
 class ObOptimizeAllResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObOptimizeAllResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
   virtual ~ObOptimizeAllResolver() = default;
   virtual int resolve(const ParseNode& parser_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOptimizeAllResolver);
 };
 

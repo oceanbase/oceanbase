@@ -265,7 +265,7 @@ enum StmtType : int32_t {
 };
 
 struct StmtTypeIndex {
-  public:
+public:
   StmtTypeIndex() : stmt_type_idx_()
   {
     int i = 0;

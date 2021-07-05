@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace rootserver {
 class ObFreezeInfoManager;
 class ObFreezeInfoUpdater : public ObRsReentrantThread {
-  public:
+public:
   ObFreezeInfoUpdater();
   ~ObFreezeInfoUpdater();
   int init(ObFreezeInfoManager& freeze_info_manager);
@@ -29,7 +29,7 @@ class ObFreezeInfoUpdater : public ObRsReentrantThread {
   }
   int64_t get_schedule_interval() const;
 
-  private:
+private:
   int try_gc_snapshot();
   int try_update_major_schema_version();
   int try_reload_freeze_info();
@@ -37,7 +37,7 @@ class ObFreezeInfoUpdater : public ObRsReentrantThread {
   int calc_weakread_timestamp();
   int process_invalid_schema_version();
 
-  private:
+private:
   static const int64_t TRY_UPDATER_INTERVAL_US = 1000 * 1000;  // 1s
   bool inited_;
   int64_t last_gc_timestamp_;

@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace common {
 // See https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average
 class ObExponentialMovingAverageV2 {
-  public:
+public:
   ObExponentialMovingAverageV2(const double alpha) : inited_(false), ema_(0.0), alpha_(alpha)
   {}
   ~ObExponentialMovingAverageV2()
@@ -42,7 +42,7 @@ class ObExponentialMovingAverageV2 {
     return ATOMIC_LOAD64(&ema_);
   }
 
-  private:
+private:
   bool inited_;         // atomic
   double ema_;          // atomic
   const double alpha_;  // const

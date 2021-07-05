@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprDesHexStr : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprDesHexStr(common::ObIAllocator& alloc);
   virtual ~ObExprDesHexStr()
   {}
@@ -30,11 +30,11 @@ class ObExprDesHexStr : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_des_hex_str(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   static int deserialize_hex_cstr(
       const char* buf, int64_t buf_len, common::ObExprStringBuf& string_buf, common::ObObj& obj);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDesHexStr);
 };
 }  // namespace sql

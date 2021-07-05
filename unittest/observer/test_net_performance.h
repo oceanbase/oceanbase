@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace obrpc {
 RPC_S_S(@PR5 test, OB_TEST_PCODE);
 class TestProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(TestProxy);
 
   RPC_S_M(@PR5 test, OB_TEST_PCODE);
@@ -37,13 +37,13 @@ namespace oceanbase {
 namespace unittest {
 
 class Client : public share::ObThreadPool {
-  public:
+public:
   Client(const obrpc::TestProxy& proxy) : proxy_(proxy)
   {}
 
   virtual void run1();
 
-  private:
+private:
   const obrpc::TestProxy& proxy_;
 };  // end of class Client
 

@@ -20,7 +20,7 @@ namespace sql {
 class ObAPMiniTaskMgr : public common::ObDLinkBase<ObAPMiniTaskMgr> {
   static const int64_t MAX_FINISH_QUEUE_CAPACITY = 512;
 
-  public:
+public:
   ObAPMiniTaskMgr()
       : ref_count_(0),
         mgr_rcode_(common::OB_SUCCESS),
@@ -77,7 +77,7 @@ class ObAPMiniTaskMgr : public common::ObDLinkBase<ObAPMiniTaskMgr> {
     return trans_result_.wait_all_task(timeout);
   }
 
-  private:
+private:
   int64_t ref_count_;
   int mgr_rcode_;
   common::ObArray<ObAddr> rcode_addrs_;
@@ -126,7 +126,7 @@ inline void ObAPMiniTaskMgr::free(ObAPMiniTaskMgr* item)
 
 class ObSQLSessionInfo;
 class ObMiniTaskExecutor {
-  public:
+public:
   explicit ObMiniTaskExecutor(common::ObIAllocator& allocator) : ap_mini_task_mgr_(NULL)
   {
     UNUSED(allocator);
@@ -142,7 +142,7 @@ class ObMiniTaskExecutor {
   static int add_invalid_servers_to_retry_info(
       const int ret, const ObIArray<ObAddr>& addr, ObQueryRetryInfo& retry_info);
 
-  protected:
+protected:
   int mini_task_local_execute(ObExecContext& query_ctx, ObMiniTask& task, ObMiniTaskResult& task_result);
   int sync_fetch_local_result(ObExecContext& ctx, const ObPhyOperator& root_op, common::ObScanner& result);
   int sync_fetch_local_result(ObExecContext& ctx, const ObOpSpec& root_spec, ObScanner& result);
@@ -152,12 +152,12 @@ class ObMiniTaskExecutor {
       ObExecContext& ctx, int64_t ap_task_cnt, ObMiniTaskResult& result, ObMiniTaskRetryInfo& retry_info);
   int pop_ap_mini_task_event(ObExecContext& ctx, ObMiniTaskEvent*& complete_task);
 
-  protected:
+protected:
   ObAPMiniTaskMgr* ap_mini_task_mgr_;
 };
 
 class ObDMLMiniTaskExecutor : public ObMiniTaskExecutor {
-  public:
+public:
   explicit ObDMLMiniTaskExecutor(common::ObIAllocator& allocator) : ObMiniTaskExecutor(allocator)
   {}
   virtual ~ObDMLMiniTaskExecutor()
@@ -177,7 +177,7 @@ class ObDMLMiniTaskExecutor : public ObMiniTaskExecutor {
 };
 
 class ObLookupMiniTaskExecutor : public ObMiniTaskExecutor {
-  public:
+public:
   explicit ObLookupMiniTaskExecutor(common::ObIAllocator& allocator) : ObMiniTaskExecutor(allocator)
   {}
   virtual ~ObLookupMiniTaskExecutor()

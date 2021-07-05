@@ -18,20 +18,20 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateSequenceResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObCreateSequenceResolver(ObResolverParams& params);
   virtual ~ObCreateSequenceResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateSequenceResolver);
   // function members
 
-  private:
+private:
   // data members
 };
 

@@ -34,9 +34,9 @@ enum ObConnectByPseudoColumn {
 
 typedef common::ObFixedArray<int64_t, common::ObIAllocator> ConnectByRowDesc;
 class ObConnectByPumpBase {
-  private:
+private:
   class MallocWrapper : public common::ObMalloc {
-    public:
+  public:
     explicit MallocWrapper(const char* label) : allocator_(label), alloc_cnt_(0)
     {}
     virtual ~MallocWrapper()
@@ -63,12 +63,12 @@ class ObConnectByPumpBase {
       allocator_.free(ptr);
     }
 
-    private:
+  private:
     common::ObArenaAllocator allocator_;
     int64_t alloc_cnt_;
   };
 
-  public:
+public:
   ObConnectByPumpBase()
       : shallow_row_(),
         pump_row_desc_(NULL),
@@ -93,7 +93,7 @@ class ObConnectByPumpBase {
   }
   virtual int set_connect_by_root_row(const common::ObNewRow* root_row) = 0;
 
-  protected:
+protected:
   int deep_copy_row(const common::ObNewRow& src_row, const common::ObNewRow*& dst_row);
   int alloc_shallow_row_cells(const ObPhyOperator& left_op);
   int alloc_shallow_row_projector(const ObPhyOperator& left_op);
@@ -101,7 +101,7 @@ class ObConnectByPumpBase {
   int check_output_pseudo_columns();
   int check_pump_row_desc();
 
-  protected:
+protected:
   static const int64_t SYS_PATH_BUFFER_INIT_SIZE = 128;
   // for init hash set for loop check
   static const int64_t CONNECT_BY_TREE_HEIGHT = 16;
@@ -127,9 +127,9 @@ class ObConnectBy;
 class ObConnectByPump : public ObConnectByPumpBase {
   friend ObConnectBy;
 
-  private:
+private:
   class ObHashColumn {
-    public:
+  public:
     ObHashColumn() : row_(NULL), expr_ctx_(NULL), hash_val_(0)
     {}
     ObHashColumn(const common::ObNewRow* row, common::ObExprCtx* expr_ctx)
@@ -161,7 +161,7 @@ class ObConnectByPump : public ObConnectByPumpBase {
 
     TO_STRING_KV(K_(row), K_(hash_val));
 
-    public:
+  public:
     const common::ObNewRow* row_;
     common::ObExprCtx* expr_ctx_;
     mutable uint64_t hash_val_;
@@ -292,7 +292,7 @@ class ObConnectByPump : public ObConnectByPumpBase {
   };
 
   class PumpNode {
-    public:
+  public:
     PumpNode()
         : pump_row_(NULL),
           output_row_(NULL),
@@ -327,7 +327,7 @@ class ObConnectByPump : public ObConnectByPumpBase {
 
   typedef common::hash::ObHashSet<ObHashColumn, common::hash::NoPthreadDefendMode> RowMap;
 
-  public:
+public:
   ObConnectByPump()
       : ObConnectByPumpBase(),
         prior_exprs_result_row_(),
@@ -370,7 +370,7 @@ class ObConnectByPump : public ObConnectByPumpBase {
   int calc_hash_value(const ObArray<ObSqlExpression*>& hash_exprs, const ObNewRow& row, ObExprCtx& expr_ctx,
       uint64_t& hash_value) const;
 
-  private:
+private:
   int alloc_prior_row_cells(uint64_t row_count);
   int alloc_iter(PumpNode& node);
   int push_back_node_to_stack(PumpNode& node);
@@ -388,7 +388,7 @@ class ObConnectByPump : public ObConnectByPumpBase {
     return row_store_constructed_;
   }
 
-  private:
+private:
   static const int64_t SYS_PATH_BUFFER_INIT_SIZE = 128;
   static const int64_t CONNECT_BY_MAX_NODE_NUM = (2L << 30) / sizeof(PumpNode);
   // record results of connect by prior expressions

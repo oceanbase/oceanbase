@@ -17,18 +17,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObExprIsTest : public ::testing::Test {
-  public:
+public:
   ObExprIsTest();
   virtual ~ObExprIsTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprIsTest(const ObExprIsTest& other);
   ObExprIsTest& operator=(const ObExprIsTest& other);
 
-  protected:
+protected:
   // data members
 };
 

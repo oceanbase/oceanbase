@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObServerPGMetaCheckpointReader final {
-  public:
+public:
   ObServerPGMetaCheckpointReader();
   ~ObServerPGMetaCheckpointReader() = default;
   int read_checkpoint(ObBaseFileMgr& file_mgr, ObPartitionMetaRedoModule& pg_mgr);

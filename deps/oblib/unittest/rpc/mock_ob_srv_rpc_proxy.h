@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace obrpc {
 class MockObSrvRpcProxy : public ObSrvRpcProxy {
-  public:
+public:
   MockObSrvRpcProxy() : ObSrvRpcProxy(this)
   {}
 

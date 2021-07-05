@@ -18,10 +18,10 @@
 namespace oceanbase {
 namespace observer {
 class ObMPStatistic : public ObMPBase {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_STATISTICS;
 
-  public:
+public:
   explicit ObMPStatistic(const ObGlobalContext& gctx) : ObMPBase(gctx)
   {}
 
@@ -30,7 +30,7 @@ class ObMPStatistic : public ObMPBase {
     return common::OB_SUCCESS;
   }
 
-  protected:
+protected:
   int process();
 
 };  // end of class ObMPStatistic

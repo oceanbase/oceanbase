@@ -34,32 +34,32 @@ class ObBuildIndexDag;
 class ObIPartitionGroupGuard;
 
 class ObBuildIndexBaseTask : public share::ObIDDLTask {
-  public:
+public:
   ObBuildIndexBaseTask(const share::ObIDDLTaskType task_type);
   virtual ~ObBuildIndexBaseTask();
   static int report_index_status(const uint64_t index_table_id, const int64_t partition_id,
       const share::schema::ObIndexStatus index_status, const int build_index_ret, const ObRole role);
 
-  protected:
+protected:
   int check_partition_need_build_index(const common::ObPartitionKey& pkey,
       const share::schema::ObTableSchema& index_schema, const share::schema::ObTableSchema& data_table_schema,
       storage::ObIPartitionGroupGuard& guard, bool& need_build);
 
-  private:
+private:
   int check_partition_exist_in_current_server(const share::schema::ObTableSchema& index_schema,
       const share::schema::ObTableSchema& data_table_schema, const ObPartitionKey& pkey, ObIPartitionGroupGuard& guard,
       bool& exist);
   int check_restore_need_retry(const uint64_t tenant_id, bool& need_retry);
   int check_partition_split_finish(const ObPartitionKey& pkey, bool& is_split_finished);
 
-  protected:
+protected:
   using ObIDDLTask::is_inited_;
   using ObIDDLTask::need_retry_;
   using ObIDDLTask::task_id_;
 };
 
 class ObTenantDDLCheckSchemaTask : public ObBuildIndexBaseTask {
-  public:
+public:
   ObTenantDDLCheckSchemaTask();
   virtual ~ObTenantDDLCheckSchemaTask();
   int init(const uint64_t tenant_id, const int64_t base_version, const int64_t refreshed_version);
@@ -75,7 +75,7 @@ class ObTenantDDLCheckSchemaTask : public ObBuildIndexBaseTask {
   static int generate_schedule_index_task(const common::ObPartitionKey& pkey, const uint64_t index_id,
       const int64_t schema_version, const bool is_unique_index);
 
-  private:
+private:
   int find_build_index_partitions(const share::schema::ObTableSchema* index_schema,
       share::schema::ObSchemaGetterGuard& guard, common::ObIArray<common::ObPartitionKey>& partition_keys);
   int get_candidate_tables(common::ObIArray<uint64_t>& table_ids);
@@ -85,14 +85,14 @@ class ObTenantDDLCheckSchemaTask : public ObBuildIndexBaseTask {
   int process_schedule_build_index_task();
   int process_tenant_memory_task();
 
-  private:
+private:
   int64_t base_version_;
   int64_t refreshed_version_;
   uint64_t tenant_id_;
 };
 
 class ObBuildIndexScheduleTask : public ObBuildIndexBaseTask {
-  public:
+public:
   enum State {
     WAIT_TRANS_END = 0,
     WAIT_SNAPSHOT_READY,
@@ -117,7 +117,7 @@ class ObBuildIndexScheduleTask : public ObBuildIndexBaseTask {
   virtual ObIDDLTask* deep_copy(char* buf, const int64_t size) const override;
   TO_STRING_KV(K_(pkey), K_(index_id), K_(schema_version), K_(state));
 
-  private:
+private:
   int check_trans_end(bool& is_trans_end, int64_t& snapshot_version);
   int report_trans_status(const int trans_status, const int64_t snapshot_version);
   int wait_trans_end(const bool is_leader);
@@ -140,7 +140,7 @@ class ObBuildIndexScheduleTask : public ObBuildIndexBaseTask {
   int unique_index_checking(const bool is_leader);
   int rollback_state(const int state);
 
-  private:
+private:
   static const int64_t COPY_BUILD_INDEX_DATA_TIMEOUT = 10 * 1000 * 1000LL;  // 10s
   static const int64_t REFRESH_CANDIDATE_REPLICA_COUNT = 6;                 // 60s
   common::ObPartitionKey pkey_;
@@ -158,14 +158,14 @@ class ObBuildIndexScheduleTask : public ObBuildIndexBaseTask {
 };
 
 class ObCheckTenantSchemaTask : public common::ObTimerTask {
-  public:
+public:
   ObCheckTenantSchemaTask();
   virtual ~ObCheckTenantSchemaTask();
   int init();
   virtual void runTimerTask() override;
   void destroy();
 
-  private:
+private:
   static const int64_t DEFAULT_TENANT_BUCKET_NUM = 100;
   bool is_inited_;
   lib::ObMutex lock_;
@@ -174,11 +174,11 @@ class ObCheckTenantSchemaTask : public common::ObTimerTask {
 };
 
 class ObBuildIndexScheduler {
-  public:
+public:
   static const int64_t DEFAULT_THREAD_CNT = 4;
   static const int64_t MINI_MODE_THREAD_CNT = 1;
 
-  public:
+public:
   int init();
   static ObBuildIndexScheduler& get_instance();
   int push_task(ObBuildIndexScheduleTask& task);
@@ -187,11 +187,11 @@ class ObBuildIndexScheduler {
   void stop();
   void wait();
 
-  private:
+private:
   ObBuildIndexScheduler();
   virtual ~ObBuildIndexScheduler();
 
-  private:
+private:
   static const int64_t DEFAULT_DDL_BUCKET_NUM = 100000;
   static const int64_t CHECK_TENANT_SCHEMA_INTERVAL_US = 100 * 1000L;
   bool is_inited_;

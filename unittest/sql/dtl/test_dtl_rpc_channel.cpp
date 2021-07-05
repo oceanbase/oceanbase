@@ -31,7 +31,7 @@ ObAddr self_addr;
 class Msg : public ObDtlMsgTemp<ObDtlMsgType::TESTING> {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   void reset()
   {}
   int ret_;

@@ -41,7 +41,7 @@ class ObPartTransCtx;
 namespace transaction {
 
 class ObITransSubmitLogCb : public clog::ObISubmitLogCb {
-  public:
+public:
   virtual int on_submit_log_success(
       const bool with_need_update_version, const uint64_t cur_log_id, const int64_t cur_log_timestamp) = 0;
   virtual int on_submit_log_fail(const int retcode) = 0;
@@ -55,7 +55,7 @@ class ObITransSubmitLogCb : public clog::ObISubmitLogCb {
 };
 
 class ObTransSubmitLogCb : public ObITransSubmitLogCb {
-  public:
+public:
   ObTransSubmitLogCb()
   {
     reset();
@@ -86,7 +86,7 @@ class ObTransSubmitLogCb : public ObITransSubmitLogCb {
     return ctx_;
   }
 
-  public:
+public:
   int on_success(const common::ObPartitionKey& partition_key, const clog::ObLogType clog_log_type,
       const uint64_t log_id, const int64_t timestamp, const bool batch_committed, const bool batch_first_participant);
   int on_submit_log_success(
@@ -97,16 +97,16 @@ class ObTransSubmitLogCb : public ObITransSubmitLogCb {
     return is_callbacking_;
   }
 
-  private:
+private:
   int retry_redo_sync_task_(uint64_t log_id);
 
-  public:
+public:
   TO_STRING_KV(KP_(ts), K_(partition), K_(trans_id), K_(log_type), K_(submit_timestamp), KP_(ctx), K_(have_prev_trans));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransSubmitLogCb);
 
-  private:
+private:
   bool is_inited_;
   ObTransService* ts_;
   common::ObPartitionKey partition_;

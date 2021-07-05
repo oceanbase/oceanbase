@@ -21,13 +21,14 @@
 namespace oceanbase {
 namespace share {
 class ObRemoteSqlProxy : public ObISQLClient {
-  public:
+public:
   ObRemoteSqlProxy();
   ~ObRemoteSqlProxy();
   int init(ObRemoteServerProvider* server_provider);
   int set_login_info(const char* usr_info, const char* passwd);
   void destroy();
-  virtual int escape(const char* from, const int64_t from_size, char* to, const int64_t to_size, int64_t& out_size);
+  virtual int escape(
+      const char* from, const int64_t from_size, char* to, const int64_t to_size, int64_t& out_size) override;
   void signal_refresh()
   {
     connection_pool_.signal_refresh();
@@ -35,14 +36,14 @@ class ObRemoteSqlProxy : public ObISQLClient {
   virtual int read(ReadResult& res, const uint64_t tenant_id, const char* sql) override;
   virtual int read(ReadResult& res, const int64_t cluster_id, const uint64_t tenant_id, const char* sql) override;
   virtual int write(const uint64_t tenant_id, const char* sql, int64_t& affected_rows) override;
-  virtual sqlclient::ObISQLConnectionPool* get_pool();
+  virtual sqlclient::ObISQLConnectionPool* get_pool() override;
 
   virtual bool is_oracle_mode() const override
   {
     return mysql_proxy_.is_oracle_mode();
   }
 
-  private:
+private:
   bool inited_;
   ObMySQLProxy mysql_proxy_;
   common::sqlclient::ObMySQLConnectionPool connection_pool_;

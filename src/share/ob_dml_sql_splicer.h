@@ -49,7 +49,7 @@ struct ObPartitionReplica;
 //   ret = dml_splicer.splice_update_sql("tname", sql);
 //
 class ObRealUInt64 {
-  public:
+public:
   ObRealUInt64(const uint64_t v) : v_(v)
   {}
   uint64_t value() const
@@ -58,12 +58,12 @@ class ObRealUInt64 {
   }
   TO_STRING_KV(K_(v));
 
-  private:
+private:
   uint64_t v_;
 };
 
 class ObDMLSqlSplicer {
-  public:
+public:
   friend class ObPTSqlSplicer;
   // for columns with NULL value
   static const char* const NULL_VALUE;
@@ -145,7 +145,7 @@ class ObDMLSqlSplicer {
   // "(c1, c2, c3) IN ((v11, v12, v13), (v21, v22, v23))"
   int splice_batch_predicates_sql(common::ObSqlString& sql) const;
 
-  private:
+private:
   struct Column {
     const char* name_;
     // end position of %ObDMLSqlSplicer::values_
@@ -220,7 +220,7 @@ class ObDMLSqlSplicer {
   int splice_batch_predicates(const common::ObArray<common::ObString>& all_names,
       const common::ObArray<int64_t>& rows_matrix, common::ObSqlString& sql) const;
 
-  private:
+private:
   Mode mode_;
   common::ObSqlString values_;
   common::ObSEArray<Column, DEF_COLUMN_CNT> columns_;
@@ -233,7 +233,7 @@ class ObDMLSqlSplicer {
 };
 
 class ObPTSqlSplicer : public ObDMLSqlSplicer {
-  public:
+public:
   ObPTSqlSplicer()
   {}
   ~ObPTSqlSplicer()
@@ -244,7 +244,7 @@ class ObPTSqlSplicer : public ObDMLSqlSplicer {
       const char* table_name, const bool with_role, common::ObSqlString& sql) const;
   int splice_insert_update_replica_sql(const char* table_name, common::ObSqlString& sql) const;
 
-  private:
+private:
   int splice_batch_insert_update_replica_column(const bool with_role, const common::ObString& sep,
       const common::ObIArray<common::ObString>& names, common::ObSqlString& sql) const;
   int splice_insert_update_replica_column(const char* sep, common::ObSqlString& sql) const;
@@ -255,7 +255,7 @@ class ObPTSqlSplicer : public ObDMLSqlSplicer {
 
 // help execute dml sql
 class ObDMLExecHelper {
-  public:
+public:
   friend class ObNormalPartitionUpdateHelper;
   ObDMLExecHelper(common::ObISQLClient& sql_client, const uint64_t tenant_id)
       : tenant_id_(tenant_id), sql_client_(sql_client)
@@ -270,7 +270,7 @@ class ObDMLExecHelper {
   int exec_update(const char* table_name, const ObDMLSqlSplicer& splicer, int64_t& affected_rows);
   int exec_delete(const char* table_name, const ObDMLSqlSplicer& splicer, int64_t& affected_rows);
 
-  private:
+private:
   int check_row_exist(const char* table_name, const ObDMLSqlSplicer& splicer, bool& exist);
   uint64_t tenant_id_;
   common::ObISQLClient& sql_client_;

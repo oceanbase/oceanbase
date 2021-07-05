@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogDelete : public ObLogDelUpd {
-  public:
+public:
   ObLogDelete(ObLogPlan& plan) : ObLogDelUpd(plan)
   {}
   virtual ~ObLogDelete()
@@ -43,7 +43,7 @@ class ObLogDelete : public ObLogDelUpd {
   }
   virtual const char* get_name() const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogDelete);
 };
 }  // namespace sql

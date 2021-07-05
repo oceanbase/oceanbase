@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprTime : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprTime(common::ObIAllocator& alloc);
   virtual ~ObExprTime();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
@@ -26,13 +26,13 @@ class ObExprTime : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_time(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTime);
 };
 
 class ObExprTimeBase : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprTimeBase(common::ObIAllocator& alloc, int32_t date_type, ObExprOperatorType type, const char* name);
   virtual ~ObExprTimeBase();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
@@ -41,7 +41,7 @@ class ObExprTimeBase : public ObFuncExprOperator {
   static int calc(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum, int32_t type, bool with_date,
       bool is_dayofmonth = false);
 
-  private:
+private:
   int32_t dt_type_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTimeBase);
@@ -64,73 +64,73 @@ inline int ObExprTimeBase::calc_result_type1(
 }
 
 class ObExprHour : public ObExprTimeBase {
-  public:
+public:
   explicit ObExprHour(common::ObIAllocator& alloc);
   virtual ~ObExprHour();
   static int calc_hour(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprHour);
 };
 
 class ObExprMinute : public ObExprTimeBase {
-  public:
+public:
   ObExprMinute();
   explicit ObExprMinute(common::ObIAllocator& alloc);
   virtual ~ObExprMinute();
   static int calc_minute(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMinute);
 };
 
 class ObExprSecond : public ObExprTimeBase {
-  public:
+public:
   ObExprSecond();
   explicit ObExprSecond(common::ObIAllocator& alloc);
   virtual ~ObExprSecond();
   static int calc_second(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSecond);
 };
 
 class ObExprMicrosecond : public ObExprTimeBase {
-  public:
+public:
   ObExprMicrosecond();
   explicit ObExprMicrosecond(common::ObIAllocator& alloc);
   virtual ~ObExprMicrosecond();
   static int calc_microsecond(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMicrosecond);
 };
 
 class ObExprYear : public ObExprTimeBase {
-  public:
+public:
   ObExprYear();
   explicit ObExprYear(common::ObIAllocator& alloc);
   virtual ~ObExprYear();
   static int calc_year(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprYear);
 };
 
 class ObExprMonth : public ObExprTimeBase {
-  public:
+public:
   ObExprMonth();
   explicit ObExprMonth(common::ObIAllocator& alloc);
   virtual ~ObExprMonth();
   static int calc_month(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMonth);
 };
 
 class ObExprMonthName : public ObExprTimeBase {
-  public:
+public:
   ObExprMonthName();
   explicit ObExprMonthName(common::ObIAllocator& alloc);
   virtual ~ObExprMonthName();
@@ -138,7 +138,7 @@ class ObExprMonthName : public ObExprTimeBase {
   static int calc_month_name(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static const char* get_month_name(int month);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMonthName);
   typedef struct {
     int32_t int_val;

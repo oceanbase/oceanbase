@@ -57,7 +57,7 @@ class ObAllVirtualProxyPartition : public ObAllVirtualProxyBaseIterator {
     ROW_KEY_COUNT,
   };
 
-  public:
+public:
   ObAllVirtualProxyPartition();
   virtual ~ObAllVirtualProxyPartition();
 
@@ -66,7 +66,7 @@ class ObAllVirtualProxyPartition : public ObAllVirtualProxyBaseIterator {
 
   int fill_cells(const share::schema::ObPartition& table_schema);
 
-  private:
+private:
   share::schema::ObPartIteratorV2* iter_;
   share::schema::ObPartitionFuncType part_func_type_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualProxyPartition);

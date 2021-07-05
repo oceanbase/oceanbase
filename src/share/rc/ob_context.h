@@ -52,19 +52,19 @@ class ObTenantSpaceFetcher;
 #define BIND_ENTITY(ENTITY_TYPE, CLS)             \
   template <>                                     \
   class Enum2Entity<ENTITY_TYPE> {                \
-    public:                                       \
+  public:                                         \
     using type = CLS;                             \
   };                                              \
   template <>                                     \
   class Entity2Enum<CLS> {                        \
-    public:                                       \
+  public:                                         \
     const static ObEntityType type = ENTITY_TYPE; \
   };
 
 #define BIND_FETCHER(ENTITY_TYPE, CLS) \
   template <>                          \
   class Type2Fetcher<ENTITY_TYPE> {    \
-    public:                            \
+  public:                              \
     using type = CLS;                  \
   };
 
@@ -88,16 +88,16 @@ class EntityBase {
   template <typename T_Entity>
   friend void destroy_entity(T_Entity* entity);
 
-  public:
+public:
   EntityBase() : need_free_(true)
   {}
 
-  private:
+private:
   bool need_free_;
 };
 
 class ObTenantSpace : public EntityBase {
-  public:
+public:
   ObTenantSpace(ObTenantBase* tenant) : tenant_(tenant)
   {}
   int init()
@@ -115,12 +115,12 @@ class ObTenantSpace : public EntityBase {
   static void guard_deinit_cb(const ObTenantSpace& tenant_space, char* buf);
   static ObTenantSpace& root();
 
-  private:
+private:
   ObTenantBase* tenant_;
 };
 
 class ObResourceOwner : public EntityBase {
-  public:
+public:
   ObResourceOwner(const uint64_t owner_id) : owner_id_(owner_id)
   {}
   int init()
@@ -141,12 +141,12 @@ class ObResourceOwner : public EntityBase {
   {}
   static ObResourceOwner& root();
 
-  private:
+private:
   uint64_t owner_id_;
 };
 
 class ObTableSpace : public EntityBase {
-  public:
+public:
   ObTableSpace(const uint64_t table_id) : table_id_(table_id)
   {}
   int init();
@@ -160,7 +160,7 @@ class ObTableSpace : public EntityBase {
   static void guard_deinit_cb(const ObTableSpace& table_space, char* buf);
   static ObTableSpace& root();
 
-  private:
+private:
   uint64_t table_id_;
   share::ObWorker::CompatMode compat_mode_;
 };
@@ -170,7 +170,7 @@ class ObTableSpace : public EntityBase {
 // TenantGuard, the TenantGuard will do the search, Will destroy the Guard's positioning, we keep the Guard simple
 // (Guard only does the switching function), so the logic of obtaining TenantSpace is placed on the outer layer
 class ObTenantSpaceFetcher {
-  public:
+public:
   ObTenantSpaceFetcher(uint64_t tenant_id);
   ~ObTenantSpaceFetcher();
   int get_ret() const
@@ -183,7 +183,7 @@ class ObTenantSpaceFetcher {
     return *entity_;
   }
 
-  private:
+private:
   int ret_;
   common::ObLDHandle handle_;
   ObTenantSpace* entity_;
@@ -206,7 +206,7 @@ template <ObEntityType et>
 class Guard final {
   using T_Entity = typename Enum2Entity<et>::type;
 
-  public:
+public:
   Guard(T_Entity& ref_entity)
       : ref_entity_(ref_entity), prev_(nullptr), next_(nullptr), is_inited_(false), is_inited_of_cb_(false)
   {}
@@ -271,14 +271,14 @@ class Guard final {
     return *prev_;
   }
 
-  private:
+private:
   static Guard*& g_guard()
   {
     static lib::CoVar<Guard*> g_guard;
     return g_guard;
   }
 
-  private:
+private:
   T_Entity& ref_entity_;
   Guard* prev_;
   Guard* next_;
@@ -337,7 +337,7 @@ inline void destroy_entity(T_Entity* entity)
 }
 
 class _SBase {
-  public:
+public:
   int get_ret() const
   {
     return ret_;
@@ -362,7 +362,7 @@ class _S<ct, EntitySource::WITH> : public _SBase {
   using T_Guard = Guard<ct>;
   using T_Entity = typename Enum2Entity<ct>::type;
 
-  public:
+public:
   _S(const bool condition, T_Entity* entity) : _SBase(), guard_(nullptr)
   {
     int ret = common::OB_SUCCESS;
@@ -394,7 +394,7 @@ class _S<ct, EntitySource::FETCH> : public _SBase {
   using T_Entity = typename Enum2Entity<ct>::type;
   using T_EntityFetcher = typename Type2Fetcher<ct>::type;
 
-  public:
+public:
   template <typename... Args>
   _S(const bool condition, Args&&... args) : _SBase(), fetcher_(nullptr), guard_(nullptr)
   {
@@ -423,7 +423,7 @@ class _S<ct, EntitySource::FETCH> : public _SBase {
     }
   }
 
-  private:
+private:
   char buf0_[sizeof(T_EntityFetcher)] __attribute__((aligned(16)));
   char buf1_[sizeof(T_Guard)] __attribute__((aligned(16)));
   T_EntityFetcher* fetcher_;
@@ -435,7 +435,7 @@ class _S<ct, EntitySource::CREATE> : public _SBase {
   using T_Guard = Guard<ct>;
   using T_Entity = typename Enum2Entity<ct>::type;
 
-  public:
+public:
   template <typename... Args>
   _S(const bool condition, Args&&... args) : _SBase(), entity_(nullptr), guard_(nullptr)
   {

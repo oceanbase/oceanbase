@@ -24,7 +24,7 @@ class ObIAllocator;
 namespace sqlclient {
 class ObMySQLPreparedStatement;
 class ObMySQLPreparedParam {
-  public:
+public:
   explicit ObMySQLPreparedParam(ObMySQLPreparedStatement& stmt);
   ~ObMySQLPreparedParam();
   int init();
@@ -37,7 +37,7 @@ class ObMySQLPreparedParam {
   int bind_param(
       const int64_t col_idx, enum_field_types buf_type, char* out_buf, const int64_t buf_len, unsigned long& res_len);
 
-  private:
+private:
   ObMySQLPreparedStatement& stmt_;
   common::ObIAllocator& alloc_;
   int64_t param_count_;

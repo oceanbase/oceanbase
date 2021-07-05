@@ -108,7 +108,7 @@ struct plan_line {
 
 // explain plan text
 class planText {
-  public:
+public:
   static const int64_t SIMPLE_COLUMN_NUM = 3;
   planText(char* buffer, const int64_t buffer_len, ExplainType type)
       : level(0),
@@ -167,7 +167,7 @@ typedef common::ObSEArray<ObJoinOrder*, 4> JoinOrderArray;
  *  Base class for logical plan for all DML/select statements
  */
 class ObLogPlan {
-  public:
+public:
   friend class ::test::ObLogPlanTest_ob_explain_test_Test;
 
   typedef common::ObList<common::ObAddr, common::ObArenaAllocator> ObAddrList;
@@ -177,7 +177,7 @@ class ObLogPlan {
   static int select_replicas(ObExecContext& exec_ctx, bool is_weak, const common::ObAddr& local_server,
       common::ObIArray<ObPhyTableLocationInfo*>& phy_tbl_loc_info_list);
 
-  public:
+public:
   ObLogPlan(ObOptimizerContext& ctx, const ObDMLStmt* stmt);
   virtual ~ObLogPlan();
 
@@ -531,7 +531,7 @@ class ObLogPlan {
   int check_fullfill_safe_update_mode(ObLogicalOperator* op);
   int do_check_fullfill_safe_update_mode(ObLogicalOperator* top, bool& is_not_fullfill);
 
-  public:
+public:
   struct CandidatePlan {
     CandidatePlan(ObLogicalOperator* plan_tree) : plan_tree_(plan_tree)
     {}
@@ -809,7 +809,7 @@ class ObLogPlan {
     return startup_filters_;
   }
 
-  protected:
+protected:
   int update_plans_interesting_order_info(ObIArray<CandidatePlan>& candidate_plans, const int64_t check_scope);
 
   int prune_and_keep_best_plans(ObIArray<CandidatePlan>& candidate_plans);
@@ -1053,7 +1053,7 @@ class ObLogPlan {
 
   int calc_plan_resource();
 
-  private:  // member functions
+private:  // member functions
   static int set_table_location(
       ObTaskExecutorCtx& task_exec_ctx, common::ObIArray<ObPhyTableLocationInfo*>& phy_tbl_loc_info_list);
 
@@ -1082,10 +1082,10 @@ class ObLogPlan {
       const common::ObIArray<LocationConstraint>& base_location_cons, ObIArray<PwjTable>& pwj_tables,
       ObPwjComparer& pwj_comparer, PWJPartitionIdMap& pwj_map) const;
 
-  private:
+private:
   static const int64_t DEFAULT_SEARCH_SPACE_RELS = 10;
 
-  protected:  // member variable
+protected:  // member variable
   ObOptimizerContext& optimizer_context_;
   common::ObIAllocator& allocator_;
   const ObDMLStmt* stmt_;
@@ -1097,7 +1097,7 @@ class ObLogPlan {
 
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pushdown_filters_;
 
-  private:  // member variable
+private:  // member variable
   ObQueryRefRawExpr* query_ref_;
   ObLogicalOperator* root_;    // root operator
   common::ObString sql_text_;  // SQL string
@@ -1109,7 +1109,7 @@ class ObLogPlan {
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> startup_filters_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> user_var_filters_;
 
-  private:
+private:
   struct LeadingInfo {
     TO_STRING_KV(K_(table_set), K_(left_table_set), K_(right_table_set));
 

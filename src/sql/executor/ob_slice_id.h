@@ -24,7 +24,7 @@ namespace sql {
 class ObSliceID final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSliceID() : ob_task_id_(), slice_id_(common::OB_INVALID_ID){};
 
   inline void set_ob_task_id(const ObTaskID& ob_task_id)
@@ -109,7 +109,7 @@ class ObSliceID final {
 
   TO_STRING_KV(N_OB_TASK_ID, ob_task_id_, N_SLICE_ID, slice_id_);
 
-  private:
+private:
   /* variables */
   ObTaskID ob_task_id_;
   uint64_t slice_id_;

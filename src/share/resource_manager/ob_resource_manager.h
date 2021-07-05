@@ -24,7 +24,7 @@ class ObString;
 namespace share {
 
 class ObResourceManager {
-  public:
+public:
   static ObResourceManager& get_instance();
   int init();
   ObResourcePlanManager& get_plan_mgr()
@@ -36,11 +36,11 @@ class ObResourceManager {
     return res_mapping_rule_mgr_;
   }
 
-  private:
+private:
   ObResourceManager() = default;
   virtual ~ObResourceManager() = default;
 
-  private:
+private:
   /* variables */
   ObResourcePlanManager res_plan_mgr_;
   ObResourceMappingRuleManager res_mapping_rule_mgr_;

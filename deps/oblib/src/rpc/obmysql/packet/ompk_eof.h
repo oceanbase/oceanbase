@@ -24,7 +24,7 @@ namespace obmysql {
 // OK packet (such as session state tracking), and to avoid repeating the changes
 // in the EOF packet, the EOF packet is deprecated as of MySQL 5.7.5.
 class OMPKEOF : public ObMySQLPacket {
-  public:
+public:
   OMPKEOF();
   virtual ~OMPKEOF();
 
@@ -55,7 +55,7 @@ class OMPKEOF : public ObMySQLPacket {
   }
   virtual int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(OMPKEOF);
 
   uint8_t field_count_;  // always 0xfe

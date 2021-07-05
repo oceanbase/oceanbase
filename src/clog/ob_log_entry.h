@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace clog {
 class ObLogEntry {
-  public:
+public:
   ObLogEntry();
   ~ObLogEntry();
   int generate_entry(const ObLogEntryHeader& header, const char* buf);
@@ -59,13 +59,14 @@ class ObLogEntry {
   {
     return header_.update_proposal_id(new_proposal_id);
   }
+  int get_next_replay_ts_for_rg(int64_t& next_replay_ts) const;
   TO_STRING_KV(N_HEADER, header_);
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  protected:
+protected:
   int deep_copy_to_(ObLogEntry& entry) const;
 
-  private:
+private:
   ObLogEntryHeader header_;
   const char* buf_;
   DISALLOW_COPY_AND_ASSIGN(ObLogEntry);
@@ -75,7 +76,7 @@ class ObLogEntry {
 class ObIndexEntry {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObIndexEntry();
   ~ObIndexEntry()
   {
@@ -146,12 +147,12 @@ class ObIndexEntry {
       file_id_, N_OFFSET, offset_, N_SIZE, size_, N_SUBMIT_TIMESTAMP, get_submit_timestamp(), "is_batch_committed",
       is_batch_committed(), K_(accum_checksum));
 
-  private:
+private:
   static const int16_t INDEX_MAGIC = 0x494E;  // IN means index
   static const int16_t INDEX_VERSION = 1;
   static const uint64_t MASK = 1ull << 63;
 
-  private:
+private:
   int16_t magic_;
   int16_t version_;
   common::ObPartitionKey partition_key_;
@@ -167,7 +168,7 @@ class ObIndexEntry {
 };
 
 class ObPaddingEntry {
-  public:
+public:
   ObPaddingEntry();
   ~ObPaddingEntry()
   {}
@@ -177,11 +178,11 @@ class ObPaddingEntry {
   TO_STRING_KV(K(magic_), K(version_), K(entry_size_));
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   static const int16_t PADDING_MAGIC = 0x5044;  // "PD"
   static const int16_t PADDING_VERSION = 1;
 
-  private:
+private:
   int16_t magic_;
   int16_t version_;
   int64_t entry_size_;  // total len of ObPaddingEntry,
@@ -189,7 +190,7 @@ class ObPaddingEntry {
 };
 
 class ObCompressedLogEntryHeader {
-  public:
+public:
   ObCompressedLogEntryHeader();
   ~ObCompressedLogEntryHeader();
   int shallow_copy(const ObCompressedLogEntryHeader& other);
@@ -215,7 +216,7 @@ class ObCompressedLogEntryHeader {
   TO_STRING_KV(K(magic_), K(orig_data_len_), K(compressed_data_len_));
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  public:
+public:
   // attention!!!!: you should modify is_compress_log() in "ob_log_compress.h" and
   // parse_log_item_type() in "ob_raw_entry_iterator.h" when modifing following magic numbers
   // , and also ObCLogItemType in "ob_raw_entry_iterator.h".
@@ -224,7 +225,7 @@ class ObCompressedLogEntryHeader {
   static const int16_t COMPRESS_LZ4_MAGIC = 0x4302;
   static const int16_t COMPRESS_ZSTD_1_3_8_MAGIC = 0x4303;
 
-  private:
+private:
   // Attention!!! Note that the serialization size of this structure should not exceed ObLogEntryHeader
   int16_t magic_;  // The first byte indicates whether to use compression, and the second byte indicates the compression
                    // algorithm
@@ -234,7 +235,7 @@ class ObCompressedLogEntryHeader {
 };
 
 class ObCompressedLogEntry {
-  public:
+public:
   ObCompressedLogEntry();
   ~ObCompressedLogEntry();
   void destroy();
@@ -249,7 +250,7 @@ class ObCompressedLogEntry {
   TO_STRING_KV(N_HEADER, header_);
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   ObCompressedLogEntryHeader header_;
   const char* buf_;  // ObLogEntry's content after compressed
   DISALLOW_COPY_AND_ASSIGN(ObCompressedLogEntry);

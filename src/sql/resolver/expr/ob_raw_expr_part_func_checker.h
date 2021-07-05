@@ -18,7 +18,7 @@ namespace oceanbase {
 
 namespace sql {
 class ObRawExprPartFuncChecker : public ObRawExprVisitor {
-  public:
+public:
   explicit ObRawExprPartFuncChecker(bool gen_col_check = false, bool accept_charset_function = false)
       : ObRawExprVisitor(), gen_col_check_(gen_col_check), accept_charset_function_(accept_charset_function)
   {}
@@ -37,12 +37,12 @@ class ObRawExprPartFuncChecker : public ObRawExprVisitor {
   virtual int visit(ObSetOpRawExpr& expr);
   virtual int visit(ObAliasRefRawExpr& expr);
 
-  private:
+private:
   // types and constants
   bool gen_col_check_;
   bool accept_charset_function_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprPartFuncChecker);
 };

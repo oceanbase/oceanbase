@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLocalTaskExecutor : public ObTaskExecutor {
-  public:
+public:
   ObLocalTaskExecutor();
   virtual ~ObLocalTaskExecutor();
   virtual int execute(ObExecContext& ctx, ObJob* job, ObTaskInfo* task_info);
@@ -26,7 +26,7 @@ class ObLocalTaskExecutor : public ObTaskExecutor {
     ObTaskExecutor::reset();
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLocalTaskExecutor);
 };
 }  // namespace sql

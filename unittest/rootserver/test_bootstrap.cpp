@@ -69,7 +69,7 @@ static int64_t& PID = FakePartPropertyGetter::PID();
 
 namespace rootserver {
 class MockLocalityManager : public ObILocalityManager {
-  public:
+public:
   struct ServerInfo {
     ServerInfo() : server_(), is_local_(false)
     {}
@@ -103,7 +103,7 @@ class MockLocalityManager : public ObILocalityManager {
 };
 
 class TestBootstrap : public ::testing::Test {
-  public:
+public:
   TestBootstrap();
   virtual ~TestBootstrap()
   {}
@@ -112,7 +112,7 @@ class TestBootstrap : public ::testing::Test {
   int init_partition_table();
   void call_execute_bootstrap();
 
-  protected:
+protected:
   DBInitializer db_initer_;
   ObMultiVersionSchemaService schema_service_;
   MockObSrvRpcProxy rpc_proxy_;

@@ -19,7 +19,7 @@ const char* const FMT_STR = "%s%ld";
 const char* const MODEL_STR = "Copyright 2014 Alibaba Inc. All Rights Reserved. ";
 
 class TestProfileUtils {
-  public:
+public:
   TestProfileUtils()
   {}
   ~TestProfileUtils()
@@ -48,7 +48,7 @@ class TestProfileUtils {
     return ret;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestProfileUtils);
 };
 }  // namespace common

@@ -17,10 +17,10 @@
 namespace oceanbase {
 namespace sql {
 class ObLogSequence : public ObLogicalOperator {
-  private:
+private:
   typedef common::ObSEArray<uint64_t, 4> SequenceIdArray;
 
-  public:
+public:
   ObLogSequence(ObLogPlan& plan) : ObLogicalOperator(plan)
   {}
   virtual ~ObLogSequence()
@@ -39,7 +39,7 @@ class ObLogSequence : public ObLogicalOperator {
   }
   virtual int est_cost() override;
 
-  private:
+private:
   SequenceIdArray nextval_seq_ids_;
 };
 }  // namespace sql

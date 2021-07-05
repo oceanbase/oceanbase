@@ -20,19 +20,19 @@ namespace sql {
 class ObExprRandom : public ObFuncExprOperator {
   OB_UNIS_VERSION(1);
   class ObExprRandomCtx : public ObExprOperatorCtx {
-    public:
+  public:
     ObExprRandomCtx();
     virtual ~ObExprRandomCtx();
     void set_seed(uint32_t seed);
     void get_next_random(double& res);
 
-    private:
+  private:
     static const uint64_t max_value_;
     uint64_t seed1_;
     uint64_t seed2_;
   };
 
-  public:
+public:
   explicit ObExprRandom(common::ObIAllocator& alloc);
   virtual ~ObExprRandom();
   virtual int calc_result_typeN(
@@ -50,10 +50,10 @@ class ObExprRandom : public ObFuncExprOperator {
   static int calc_random_expr_const_seed(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
   static int calc_random_expr_nonconst_seed(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  public:
+public:
   virtual int assign(const ObExprOperator& other) override;
 
-  private:
+private:
   bool is_seed_const_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprRandom);

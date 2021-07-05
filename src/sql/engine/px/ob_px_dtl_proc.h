@@ -30,37 +30,37 @@ class ObExecContext;
 ////////////////////////////  FOR QC ////////////////////////////
 
 class ObPxFinishSqcResultP : public dtl::ObDtlPacketProc<ObPxFinishSqcResultMsg> {
-  public:
+public:
   ObPxFinishSqcResultP(ObExecContext& ctx, ObIPxCoordMsgProc& msg_proc) : ctx_(ctx), msg_proc_(msg_proc)
   {}
   virtual ~ObPxFinishSqcResultP() = default;
   int process(const ObPxFinishSqcResultMsg& pkt) override;
 
-  private:
+private:
   ObExecContext& ctx_;
   ObIPxCoordMsgProc& msg_proc_;
 };
 
 class ObPxInitSqcResultP : public dtl::ObDtlPacketProc<ObPxInitSqcResultMsg> {
-  public:
+public:
   ObPxInitSqcResultP(ObExecContext& ctx, ObIPxCoordMsgProc& msg_proc) : ctx_(ctx), msg_proc_(msg_proc)
   {}
   virtual ~ObPxInitSqcResultP() = default;
   int process(const ObPxInitSqcResultMsg& pkt) override;
 
-  private:
+private:
   ObExecContext& ctx_;
   ObIPxCoordMsgProc& msg_proc_;
 };
 
 class ObPxQcInterruptedP : public dtl::ObDtlInterruptProc {
-  public:
+public:
   ObPxQcInterruptedP(ObExecContext& ctx, ObIPxCoordMsgProc& msg_proc) : ctx_(ctx), msg_proc_(msg_proc)
   {}
   virtual ~ObPxQcInterruptedP() = default;
   int process(const common::ObInterruptCode& ic) override;
 
-  private:
+private:
   ObExecContext& ctx_;
   ObIPxCoordMsgProc& msg_proc_;
 };
@@ -68,40 +68,40 @@ class ObPxQcInterruptedP : public dtl::ObDtlInterruptProc {
 ////////////////////////////  FOR SQC ////////////////////////////
 
 class ObPxReceiveDataChannelMsgP : public dtl::ObDtlPacketProc<ObPxReceiveDataChannelMsg> {
-  public:
+public:
   ObPxReceiveDataChannelMsgP(ObIPxSubCoordMsgProc& msg_proc) : msg_proc_(msg_proc)
   {}
   virtual ~ObPxReceiveDataChannelMsgP() = default;
   int process(const ObPxReceiveDataChannelMsg& pkt) override;
 
-  private:
+private:
   ObIPxSubCoordMsgProc& msg_proc_;
 };
 
 class ObPxTransmitDataChannelMsgP : public dtl::ObDtlPacketProc<ObPxTransmitDataChannelMsg> {
-  public:
+public:
   ObPxTransmitDataChannelMsgP(ObIPxSubCoordMsgProc& msg_proc) : msg_proc_(msg_proc)
   {}
   virtual ~ObPxTransmitDataChannelMsgP() = default;
   int process(const ObPxTransmitDataChannelMsg& pkt) override;
 
-  private:
+private:
   ObIPxSubCoordMsgProc& msg_proc_;
 };
 
 class ObPxSqcInterruptedP : public dtl::ObDtlInterruptProc {
-  public:
+public:
   ObPxSqcInterruptedP(ObIPxSubCoordMsgProc& msg_proc) : msg_proc_(msg_proc)
   {}
   virtual ~ObPxSqcInterruptedP() = default;
   int process(const common::ObInterruptCode& ic) override;
 
-  private:
+private:
   ObIPxSubCoordMsgProc& msg_proc_;
 };
 
 class ObPxReceiveRowP : public dtl::ObDtlPacketProc<ObPxNewRow> {
-  public:
+public:
   explicit ObPxReceiveRowP(ObPxNewRow& px_row) : row_allocator_(common::ObModIds::OB_SQL_PX), px_row_(px_row)
   {}
   virtual ~ObPxReceiveRowP() = default;
@@ -120,13 +120,13 @@ class ObPxReceiveRowP : public dtl::ObDtlPacketProc<ObPxNewRow> {
     return px_row_.has_iter();
   }
 
-  private:
+private:
   ObArenaAllocator row_allocator_;
   ObPxNewRow& px_row_;
 };
 
 class ObPxInterruptP : public dtl::ObDtlInterruptProc {
-  public:
+public:
   virtual ~ObPxInterruptP() = default;
   int process(const common::ObInterruptCode& ic) override;
 };

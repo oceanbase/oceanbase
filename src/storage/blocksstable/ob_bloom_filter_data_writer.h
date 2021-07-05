@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObBloomFilterMicroBlockWriter {
-  public:
+public:
   ObBloomFilterMicroBlockWriter();
   virtual ~ObBloomFilterMicroBlockWriter();
   void reset();
@@ -31,17 +31,17 @@ class ObBloomFilterMicroBlockWriter {
   int init(const int64_t micro_block_size);
   int write(const ObBloomFilterCacheValue& bf_cache_value, const char*& block_buf, int64_t& block_size);
 
-  private:
+private:
   int build_micro_block_header(const int64_t rowkey_column_count, const int64_t row_count);
 
-  private:
+private:
   ObBloomFilterMicroBlockHeader* bf_micro_header_;
   ObSelfBufferWriter data_buffer_;
   bool is_inited_;
 };
 
 class ObBloomFilterMacroBlockWriter {
-  public:
+public:
   ObBloomFilterMacroBlockWriter();
   virtual ~ObBloomFilterMacroBlockWriter();
   void reset();
@@ -53,13 +53,13 @@ class ObBloomFilterMacroBlockWriter {
     return block_write_ctx_;
   }
 
-  private:
+private:
   int init_headers(const int64_t row_count);
   int write_micro_block(const char* comp_block_buf, const int64_t comp_block_size, const int64_t orig_block_size);
   int build_macro_meta(ObFullMacroBlockMeta& full_meta);
   int flush_macro_block();
 
-  private:
+private:
   ObSelfBufferWriter data_buffer_;
   ObBloomFilterMacroBlockHeader* bf_macro_header_;
   ObMacroBlockCommonHeader common_header_;
@@ -72,7 +72,7 @@ class ObBloomFilterMacroBlockWriter {
 };
 
 class ObBloomFilterDataWriter {
-  public:
+public:
   ObBloomFilterDataWriter();
   virtual ~ObBloomFilterDataWriter();
   int init(const ObDataStoreDesc& desc);
@@ -95,7 +95,7 @@ class ObBloomFilterDataWriter {
     return bf_cache_value_;
   }
 
-  private:
+private:
   static const int64_t BLOOM_FILTER_MAX_ROW_COUNT = 1500000L;
   ObBloomFilterCacheValue bf_cache_value_;
   ObBloomFilterMacroBlockWriter bf_macro_writer_;

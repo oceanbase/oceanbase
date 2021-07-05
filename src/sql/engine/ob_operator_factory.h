@@ -27,7 +27,7 @@ class ObStaticEngineCG;
 class ObLogicalOperator;
 
 struct ObOperatorFactory {
-  public:
+public:
   // allocate operator specification
   static int alloc_op_spec(
       common::ObIAllocator& alloc, const ObPhyOperatorType type, const int64_t child_cnt, ObOpSpec*& spec);
@@ -60,7 +60,7 @@ struct ObOperatorFactory {
     __typeof__(&ObOperatorFactory::generate_spec) gen_spec_func_;
   };
 
-  private:
+private:
   static AllocFun* G_ALL_ALLOC_FUNS_;
 };
 

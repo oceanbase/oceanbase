@@ -31,18 +31,18 @@ class ObColumnRefRawExpr;
 class ObExprEqualCheckContext;
 typedef common::ObSEArray<int64_t, 1> RowkeyArray;
 class ObPartIdRowMapManager {
-  public:
+public:
   ObPartIdRowMapManager() : manager_(), part_idx_(common::OB_INVALID_INDEX)
   {}
   typedef common::ObSEArray<int64_t, 12> ObRowIdList;
   struct MapEntry {
-    public:
+  public:
     MapEntry() : list_()
     {}
     TO_STRING_KV(K_(list));
     int assign(const MapEntry& entry);
 
-    public:
+  public:
     ObRowIdList list_;
   };
   typedef common::ObSEArray<MapEntry, 1> ObPartRowManager;
@@ -76,12 +76,12 @@ class ObPartIdRowMapManager {
   }
   TO_STRING_KV(K_(manager), K_(part_idx));
 
-  private:
+private:
   ObPartRowManager manager_;
   int64_t part_idx_;  // used for parameter pass only.
   common::ObNewRow part_row_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartIdRowMapManager);
 };
 
@@ -337,7 +337,7 @@ struct TableLocationKey {
 
 class ObOptimizerContext;
 class ObTableLocation {
-  public:
+public:
   enum TablePartType {
     NONE,
     HASH,
@@ -357,7 +357,7 @@ class ObTableLocation {
   class PartProjector {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     PartProjector(common::ObIAllocator& allocator, ObSqlExpressionFactory& sql_expr_factory,
         ObExprOperatorFactory& expr_op_factory)
         : allocator_(allocator), sql_expr_factory_(sql_expr_factory), expr_op_factory_(expr_op_factory)
@@ -388,11 +388,11 @@ class ObTableLocation {
         common::ObArrayWrap<int32_t>(part_projector_, part_projector_size_), "subpart_projector",
         common::ObArrayWrap<int32_t>(subpart_projector_, subpart_projector_size_));
 
-    private:
+  private:
     int init_part_projector(
         const ObRawExpr* part_expr, RowDesc& row_desc, int32_t*& projector, int64_t& projector_size);
 
-    private:
+  private:
     common::ObDList<ObSqlExpression> virtual_column_exprs_;
     int64_t column_cnt_;
     int32_t* part_projector_;
@@ -415,7 +415,7 @@ class ObTableLocation {
       ObExecContext& exec_ctx, const uint64_t ref_table_id, common::ObIArray<int64_t>* partition_ids, int64_t* fake_id);
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // for array: new(&data_[count_]) T();
   // for normal usage, like plan set
   ObTableLocation()
@@ -841,7 +841,7 @@ class ObTableLocation {
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(part_num), K_(is_global_index), K_(duplicate_type),
       K_(part_expr_param_idxs), K_(part_projector), K_(part_expr), K_(gen_col_expr));
 
-  private:
+private:
   // get partition columns and generate partition_expr_
   // partition_columns:partition columns
   // gen_cols: columns dependented by generated partition column
@@ -1037,7 +1037,7 @@ class ObTableLocation {
   int recursive_convert_generated_column(const ObIArray<ObColumnRefRawExpr*>& table_column,
       const ObIArray<ObRawExpr*>& column_conv_exprs, ObRawExpr*& expr);
 
-  private:
+private:
   bool inited_;
   uint64_t table_id_;
   uint64_t ref_table_id_;

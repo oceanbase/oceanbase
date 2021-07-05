@@ -403,7 +403,7 @@ int ObIOChannel::init(const int32_t queue_depth)
     MEMSET(&context_, 0, sizeof(context_));
     if (0 != (io_ret = ob_io_setup(MAX_AIO_EVENT_CNT, &context_))) {
       ret = OB_IO_ERROR;
-      COMMON_LOG(ERROR, "Fail to setup io context, ", K(ret), K(io_ret));
+      COMMON_LOG(ERROR, "Fail to setup io context, check config aio-max-nr of operating system", K(ret), K(io_ret));
     } else {
       submit_cnt_ = 0;
       can_submit_request_ = true;

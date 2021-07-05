@@ -19,12 +19,12 @@ namespace oceanbase {
 namespace common {
 template <uint64_t SIZE, bool IS_USE_LOCK = false>
 class ObConcurrentBitset {
-  private:
+private:
   static const uint64_t PER_WORD_BIT_NUM = 64;
   static const uint64_t FULL_WORD_VALUE = UINT64_MAX;
   static const uint16_t WORD_NUM = (SIZE / PER_WORD_BIT_NUM) + 1;
 
-  public:
+public:
   ObConcurrentBitset() : word_array_(), start_pos_(0), mutex_()
   {
     memset(word_array_, 0, sizeof(word_array_));
@@ -40,7 +40,7 @@ class ObConcurrentBitset {
   int set_start_pos(uint64_t pos);
   uint64_t get_start_pos();
 
-  private:
+private:
   typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
   uint64_t word_array_[WORD_NUM];
   uint64_t start_pos_;  // to record the start of 0bit

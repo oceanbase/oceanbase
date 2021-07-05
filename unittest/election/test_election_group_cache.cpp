@@ -25,7 +25,7 @@ using namespace common;
 using namespace std;
 
 class TestObElectionGroupCache : public ::testing::Test {
-  public:
+public:
   const vector<ObAddr> ADDR = {ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 34500),
       ObAddr(ObAddr::VER::IPV4, "127.0.0.2", 34501),
       ObAddr(ObAddr::VER::IPV4, "127.0.0.3", 34502),
@@ -35,7 +35,7 @@ class TestObElectionGroupCache : public ::testing::Test {
       ObAddr(ObAddr::VER::IPV4, "127.0.0.7", 34506),
       ObAddr(ObAddr::VER::IPV4, "127.0.0.8", 34507)};
 
-  public:
+public:
   TestObElectionGroupCache()
   {}
   ~TestObElectionGroupCache()

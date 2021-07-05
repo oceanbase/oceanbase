@@ -36,7 +36,7 @@ class ObSequenceSchema;
 class ObMultiVersionSchemaService;
 }  // namespace schema
 class ObSequenceDMLProxy {
-  public:
+public:
   ObSequenceDMLProxy();
   virtual ~ObSequenceDMLProxy();
   void init(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy);
@@ -51,7 +51,7 @@ class ObSequenceDMLProxy {
   int prefetch_next_batch(const uint64_t tenant_id, const uint64_t sequence_id, const share::ObSequenceOption& option,
       SequenceCacheNode& cache_range);
 
-  private:
+private:
   /* functions */
   int set_pre_op_timeout(common::ObTimeoutCtx& ctx);
   int init_sequence_value_table(common::ObMySQLTransaction& trans, common::ObSQLClientRetryWeak& sql_client_retry_weak,

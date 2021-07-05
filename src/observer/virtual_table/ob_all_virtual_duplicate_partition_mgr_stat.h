@@ -29,7 +29,7 @@ class ObTransService;
 
 namespace observer {
 class ObGVDuplicatePartitionMgrStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObGVDuplicatePartitionMgrStat(transaction::ObTransService* trans_service) : trans_service_(trans_service)
   {
     reset();
@@ -42,7 +42,7 @@ class ObGVDuplicatePartitionMgrStat : public common::ObVirtualTableScannerIterat
   void reset();
   void destroy();
 
-  private:
+private:
   int prepare_start_to_read_();
   int get_next_duplicate_partition_mgr_stat_(transaction::ObDuplicatePartitionStat& stat);
   static const int64_t OB_MIN_BUFFER_SIZE = 128;
@@ -50,7 +50,7 @@ class ObGVDuplicatePartitionMgrStat : public common::ObVirtualTableScannerIterat
   char ip_buffer_[common::OB_IP_STR_BUFF];
   char dup_table_lease_info_buffer_[OB_MAX_BUFFER_SIZE];
 
-  private:
+private:
   transaction::ObTransService* trans_service_;
   transaction::ObPartitionIterator partition_iter_;
   transaction::ObDuplicatePartitionStatIterator duplicate_partition_stat_iter_;

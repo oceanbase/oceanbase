@@ -30,7 +30,7 @@ using namespace oceanbase::share;
 
 namespace test {
 class MockVisitor : public ObPhyOperatorVisitor {
-  public:
+public:
   MockVisitor() : level_(0)
   {}
   ~MockVisitor()
@@ -101,28 +101,28 @@ class MockVisitor : public ObPhyOperatorVisitor {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   int level_;
 };
 
 class TestCodeGenerator : public TestOptimizerUtils {
-  public:
+public:
   TestCodeGenerator();
   virtual ~TestCodeGenerator();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestCodeGenerator);
 
-  protected:
+protected:
   // function members
   void do_optimize(ObStmt& stmt, ObLogPlan*& plan, ObPhyPlanType distr_method);
   void do_code_generate(const ObLogPlan& log_plan, ObCodeGenerator& code_gen, ObPhysicalPlan& phy_plan);
   int do_rewrite(ObStmt*& stmt, ObPhysicalPlan* phy_plan);
 
-  protected:
+protected:
   // data members
   oceanbase::share::ObLocationFetcher fetcher_;
   ParamStore params_;

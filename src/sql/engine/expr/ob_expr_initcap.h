@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprInitcap : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprInitcap(common::ObIAllocator& alloc);
   virtual ~ObExprInitcap();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
@@ -28,7 +28,7 @@ class ObExprInitcap : public ObStringExprOperator {
   static int initcap_string(const common::ObString& text, const common::ObCollationType cs_type,
       common::ObIAllocator* allocator, common::ObString& res_str);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprInitcap);
 };
 

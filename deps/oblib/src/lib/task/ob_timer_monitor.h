@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace common {
 
 class ObTimerMonitor {
-  public:
+public:
   static ObTimerMonitor& get_instance();
 
   int init();
@@ -37,7 +37,7 @@ class ObTimerMonitor {
   ObTimerMonitor(const ObTimerMonitor&) = delete;
   ObTimerMonitor& operator=(const ObTimerMonitor&) = delete;
 
-  private:
+private:
   ObTimerMonitor();
   ~ObTimerMonitor();
 
@@ -48,12 +48,12 @@ class ObTimerMonitor {
   static const int64_t CHECK_INTERVAL = 10L * 1000L * 1000L;
 
   class ObTimerMonitorTask : public ObTimerTask {
-    public:
+  public:
     ObTimerMonitorTask(ObTimerMonitor& monitor);
     virtual ~ObTimerMonitorTask();
     virtual void runTimerTask() override;
 
-    private:
+  private:
     ObTimerMonitor& monitor_;
     int64_t running_cnt_;
   };

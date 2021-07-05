@@ -102,18 +102,18 @@ struct ObSeqEventRecorder {
     next_idx_ = count;
   }
 
-  public:
+public:
   static const int64_t MAX_EVENT_COUNT = EVENT_COUNT;
   static const int64_t MAX_INFO_BUFFER_SIZE = INFO_BUFFER_SIZE;
 
-  protected:
+protected:
   EventType events_[EVENT_COUNT];
   int64_t next_idx_;
   char buffer_[INFO_BUFFER_SIZE];
   int64_t buffer_pos_;
   int64_t dropped_events_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSeqEventRecorder);
 };
 }  // end namespace common

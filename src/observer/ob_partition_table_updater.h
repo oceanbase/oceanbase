@@ -35,7 +35,7 @@ namespace observer {
 
 // fill partition replica
 class ObIPartitionReplicaFiller {
-  public:
+public:
   ObIPartitionReplicaFiller()
   {}
   ~ObIPartitionReplicaFiller()
@@ -51,10 +51,10 @@ class ObIPartitionReplicaFiller {
 class ObPartitionTableUpdater;
 
 class ObPTUpdateRoleTask : public common::ObDLinkBase<ObPTUpdateRoleTask> {
-  public:
+public:
   friend class ObPartitionTableUpdater;
 
-  public:
+public:
   ObPTUpdateRoleTask() : pkey_(), data_version_(0), first_submit_time_(0)
   {}
   virtual ~ObPTUpdateRoleTask();
@@ -85,7 +85,7 @@ class ObPTUpdateRoleTask : public common::ObDLinkBase<ObPTUpdateRoleTask> {
   }
   TO_STRING_KV(K_(pkey), K_(data_version), K_(first_submit_time));
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   int64_t data_version_;
   // no task with the same pkey shall exist in the task queue,
@@ -96,7 +96,7 @@ class ObPTUpdateRoleTask : public common::ObDLinkBase<ObPTUpdateRoleTask> {
 
 // partition table update task
 class ObPTUpdateTask : public common::ObDLinkBase<ObPTUpdateTask> {
-  public:
+public:
   friend class ObPartitionTableUpdater;
   friend class TestBatchProcessQueue_test_task_Test;
   friend class TestBatchProcessQueue_test_single_update_Test;
@@ -130,7 +130,7 @@ class ObPTUpdateTask : public common::ObDLinkBase<ObPTUpdateTask> {
 
   TO_STRING_KV(K_(part_key), K_(data_version), K_(first_submit_time), K_(is_remove), K_(with_role));
 
-  private:
+private:
   const static int64_t rpc_task_group_id_;
 
   common::ObPartitionKey part_key_;
@@ -147,7 +147,7 @@ typedef ObUniqTaskQueue<ObPTUpdateTask, ObPartitionTableUpdater> ObPTUpdateTaskQ
 typedef ObUniqTaskQueue<ObPTUpdateRoleTask, ObPartitionTableUpdater> ObPTUpdateRoleTaskQueue;
 
 class ObPartitionTableUpdater {
-  public:
+public:
   friend class TestBatchProcessQueue_test_single_update_Test;
   friend class TestBatchProcessQueue_test_update_process_Test;
   friend class TestBatchProcessQueue_test_reput_Test;
@@ -213,7 +213,7 @@ class ObPartitionTableUpdater {
   }
   static int throttle(const bool is_sys_table, const int return_code, const int64_t execute_time_us, bool& stopped);
 
-  private:
+private:
   int get_pg_key(const common::ObPartitionKey& key, common::ObPGKey& pg_key);
   int get_queue(const common::ObPartitionKey& key, ObPTUpdateTaskQueue*& queue);
   int direct_execute(ObPTUpdateTask& task);
@@ -232,7 +232,7 @@ class ObPartitionTableUpdater {
       const common::ObIArray<share::ObPartitionReplica>& replicas, const bool with_role);
   int do_batch_execute(const common::ObIArray<share::ObPartitionReplica>& tasks, const common::ObRole new_role);
 
-  private:
+private:
   bool inited_;
   bool stopped_;
   ObPTUpdateTaskQueue core_table_queue_;

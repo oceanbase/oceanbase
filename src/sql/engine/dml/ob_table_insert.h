@@ -23,7 +23,7 @@ class ObPhyTableLocation;
 class ObTableInsertInput : public ObTableModifyInput {
   friend class ObTableUpdate;
 
-  public:
+public:
   ObTableInsertInput() : ObTableModifyInput()
   {}
   virtual ~ObTableInsertInput()
@@ -33,16 +33,16 @@ class ObTableInsertInput : public ObTableModifyInput {
     return PHY_INSERT;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertInput);
 };
 
 class ObTableInsert : public ObTableModify {
-  public:
+public:
   class ObTableInsertCtx : public ObTableModifyCtx {
     friend class ObTableInsert;
 
-    public:
+  public:
     explicit ObTableInsertCtx(ObExecContext& ctx)
         : ObTableModifyCtx(ctx),
           curr_row_num_(0),
@@ -64,7 +64,7 @@ class ObTableInsert : public ObTableModify {
       part_infos_.reset();
     }
 
-    public:
+  public:
     int64_t curr_row_num_;
     int64_t estimate_rows_;
     bool first_bulk_;
@@ -76,7 +76,7 @@ class ObTableInsert : public ObTableModify {
     int64_t new_row_projector_size_;
   };
 
-  public:
+public:
   explicit ObTableInsert(common::ObIAllocator& alloc);
   ~ObTableInsert();
 
@@ -87,7 +87,7 @@ class ObTableInsert : public ObTableModify {
     return common::OB_ITER_END;
   }
 
-  protected:
+protected:
   /**
    * @brief called by get_next_row(), get a row from the child operator or row_store
    * @param ctx[in], execute context
@@ -128,11 +128,11 @@ class ObTableInsert : public ObTableModify {
   int copy_insert_row(
       ObTableInsertCtx& insert_ctx, const ObNewRow*& input_row, ObNewRow& insert_row, bool need_copy) const;
 
-  private:
+private:
   int do_table_insert(ObExecContext& ctx) const;
   int copy_insert_rows(ObTableInsertCtx& insert_ctx, const ObNewRow*& input_row) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsert);
 };
 }  // namespace sql

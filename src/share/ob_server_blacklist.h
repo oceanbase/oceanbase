@@ -37,7 +37,7 @@ namespace share {
 class ObIPSCb;
 
 struct ObDstServerInfo {
-  public:
+public:
   ObDstServerInfo()
       : last_send_timestamp_(common::OB_INVALID_TIMESTAMP),
         last_recv_timestamp_(common::OB_INVALID_TIMESTAMP),
@@ -66,7 +66,7 @@ struct ObDstServerInfo {
 };
 
 struct ObBlacklistInfo {
-  public:
+public:
   ObBlacklistInfo()
   {}
   ~ObBlacklistInfo()
@@ -91,11 +91,11 @@ struct ObBlacklistInfo {
 };
 
 class ObServerBlacklist : public lib::TGRunnable {
-  public:
+public:
   ObServerBlacklist();
   ~ObServerBlacklist();
 
-  public:
+public:
   typedef common::ObSimpleIterator<ObBlacklistInfo, common::ObModIds::OB_SERVER_BLACKLIST, 64> ObBlacklistInfoIterator;
   static ObServerBlacklist& get_instance();
   int init(const common::ObAddr& self, rpc::frame::ObReqTransport* transport, obrpc::ObBatchRpc* batch_rpc);
@@ -113,17 +113,17 @@ class ObServerBlacklist : public lib::TGRunnable {
   void enable_blacklist();
   void clear_blacklist();
 
-  private:
+private:
   void run1();
   void blacklist_loop_();
   int send_req_(const share::ObCascadMember& member, const obrpc::ObBlacklistReq& req);
   int send_resp_(const common::ObAddr& server, const int64_t dst_cluster_id, const obrpc::ObBlacklistResp& resp);
 
-  private:
+private:
   typedef common::ObLinearHashMap<share::ObCascadMember, ObDstServerInfo> DstInfoMap;
 
   class ObMapRemoveFunctor {
-    public:
+  public:
     ObMapRemoveFunctor(common::ObIArray<share::ObCascadMember>& dst_list) : remove_cnt_(0), dst_list_(dst_list)
     {}
     ~ObMapRemoveFunctor()
@@ -134,13 +134,13 @@ class ObServerBlacklist : public lib::TGRunnable {
       return remove_cnt_;
     }
 
-    private:
+  private:
     int64_t remove_cnt_;
     common::ObIArray<share::ObCascadMember>& dst_list_;
   };
 
   class ObMapResetFunctor {
-    public:
+  public:
     ObMapResetFunctor() : reset_cnt_(0)
     {}
     ~ObMapResetFunctor()
@@ -151,12 +151,12 @@ class ObServerBlacklist : public lib::TGRunnable {
       return reset_cnt_;
     }
 
-    private:
+  private:
     int64_t reset_cnt_;
   };
 
   class ObMapMarkBlackFunctor {
-    public:
+  public:
     explicit ObMapMarkBlackFunctor(const int64_t curr_ts) : mark_cnt_(0), curr_ts_(curr_ts)
     {}
     ~ObMapMarkBlackFunctor()
@@ -167,25 +167,25 @@ class ObServerBlacklist : public lib::TGRunnable {
       return mark_cnt_;
     }
 
-    private:
+  private:
     int64_t mark_cnt_;
     int64_t curr_ts_;
   };
 
   class ObMapRespFunctor {
-    public:
+  public:
     explicit ObMapRespFunctor(const obrpc::ObBlacklistResp& resp) : resp_(resp)
     {}
     ~ObMapRespFunctor()
     {}
     bool operator()(const share::ObCascadMember& member, ObDstServerInfo& info);
 
-    private:
+  private:
     obrpc::ObBlacklistResp resp_;
   };
 
   class ObMapSendReqFunctor {
-    public:
+  public:
     explicit ObMapSendReqFunctor(ObServerBlacklist* blacklist, const common::ObAddr& self)
         : blacklist_(blacklist), self_(self), send_cnt_(0)
     {}
@@ -197,28 +197,28 @@ class ObServerBlacklist : public lib::TGRunnable {
       return send_cnt_;
     }
 
-    private:
+  private:
     ObServerBlacklist* blacklist_;
     common::ObAddr self_;
     int64_t send_cnt_;
   };
 
   class ObMapIterFunctor {
-    public:
+  public:
     ObMapIterFunctor(ObBlacklistInfoIterator& info_iter) : info_iter_(info_iter)
     {}
     ~ObMapIterFunctor()
     {}
     bool operator()(const share::ObCascadMember& ObCascadMember, ObDstServerInfo& info);
 
-    private:
+  private:
     ObBlacklistInfoIterator& info_iter_;
   };
 
-  public:
+public:
   static uint64_t black_svr_cnt_;
 
-  private:
+private:
   // RPC latency threshold
   static const int64_t RPC_TRANS_TIME_THRESHOLD = 500 * 1000;
   // Clock skew threshold
@@ -230,7 +230,7 @@ class ObServerBlacklist : public lib::TGRunnable {
   // Timeout threshold used to mark one server in blacklist
   static const int32_t BLACKLIST_MARK_THRESHOLD = 10 * 1000 * 1000;
 
-  private:
+private:
   bool is_inited_;
   bool is_enabled_;
   common::ObAddr self_;

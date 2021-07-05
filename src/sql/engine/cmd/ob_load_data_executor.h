@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace sql {
 class ObLoadDataStmt;
 class ObLoadDataExecutor {
-  public:
+public:
   ObLoadDataExecutor()
   {}
   virtual ~ObLoadDataExecutor()
@@ -25,11 +25,11 @@ class ObLoadDataExecutor {
 
   int execute(ObExecContext& ctx, ObLoadDataStmt& stmt);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataExecutor);
   // function members
-  private:
+private:
   // data members
 };
 

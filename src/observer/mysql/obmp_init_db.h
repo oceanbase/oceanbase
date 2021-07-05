@@ -20,23 +20,23 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObMPInitDB : public ObMPBase {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_INIT_DB;
 
-  public:
+public:
   explicit ObMPInitDB(const ObGlobalContext& gctx) : ObMPBase(gctx), db_name_()
   {}
   virtual ~ObMPInitDB()
   {}
 
-  protected:
+protected:
   int process();
   int deserialize();
 
-  private:
+private:
   int do_process(sql::ObSQLSessionInfo* session);
 
-  private:
+private:
   common::ObString db_name_;
 };
 

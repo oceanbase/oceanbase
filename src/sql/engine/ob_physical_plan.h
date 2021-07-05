@@ -52,7 +52,7 @@ typedef common::ObFixedArray<ObPlanPwjConstraint, common::ObIAllocator> PlanPwjC
 struct FlashBackQueryItem {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   FlashBackQueryItem()
       : table_id_(common::OB_INVALID_ID),
         time_val_(transaction::ObTransVersion::INVALID_TRANS_VERSION),
@@ -75,7 +75,7 @@ struct FlashBackQueryItem {
 };
 
 class ObPhysicalPlan : public ObCacheObject {
-  public:
+public:
   static const int32_t SLOW_QUERY_TIME = 100000;                // 100ms
   static const int64_t SLOW_QUERY_TIME_FOR_PLAN_EXPIRE = 5000;  // 5ms
   static const int64_t SLOW_QUERY_ROW_COUNT_THRESOLD = 5000;
@@ -84,7 +84,7 @@ class ObPhysicalPlan : public ObCacheObject {
   static const int64_t EXPIRED_PLAN_TABLE_ROW_THRESHOLD = 100;
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObPhysicalPlan(lib::MemoryContext& mem_context = CURRENT_CONTEXT);
   virtual ~ObPhysicalPlan();
 
@@ -603,7 +603,7 @@ class ObPhysicalPlan : public ObCacheObject {
     return has_link_table_;
   }
 
-  public:
+public:
   static void print_tree(char* buf, const int64_t buf_len, int64_t& pos, const ObPhyOperator* op);
   int inc_concurrent_num();
   void dec_concurrent_num();
@@ -757,10 +757,10 @@ class ObPhysicalPlan : public ObCacheObject {
     return need_serial_exec_;
   }
 
-  public:
+public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 
-  private:
+private:
   static const int64_t COMMON_OP_NUM = 16;
   static const int64_t COMMON_SUB_QUERY_NUM = 6;
   static const int64_t COMMON_BASE_TABLE_NUM = 64;
@@ -768,10 +768,10 @@ class ObPhysicalPlan : public ObCacheObject {
   static const int64_t COMMON_PARAM_NUM = 12;
   static const int64_t SAMPLE_TIMES = 10;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalPlan);
 
-  private:
+private:
   ObQueryHint query_hint_;  // hints for this plan
   // root phy operator for the old engine.
   ObPhyOperator* main_query_;
@@ -855,7 +855,7 @@ class ObPhysicalPlan : public ObCacheObject {
   PlanPwjConstraintArray strict_constrinats_;
   PlanPwjConstraintArray non_strict_constrinats_;
 
-  public:
+public:
   ObExprFrameInfo expr_frame_info_;
 
   ObPlanStat stat_;
@@ -863,7 +863,7 @@ class ObPhysicalPlan : public ObCacheObject {
   const int64_t MAX_BINARY_CODE_LEN = 1024 * 256;  // 256k
   ObLoctionSensitiveHint loc_sensitive_hint_;
 
-  private:
+private:
   bool is_returning_;
   bool is_late_materialized_;
   // **** for spm ****
@@ -875,7 +875,7 @@ class ObPhysicalPlan : public ObCacheObject {
   bool need_consistent_snapshot_;
   bool is_batched_multi_stmt_;
 #ifndef NDEBUG
-  public:
+public:
   common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator> bit_set_;
 #endif
   int64_t is_new_engine_;

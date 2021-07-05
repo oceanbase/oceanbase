@@ -21,7 +21,7 @@ namespace sql {
 class ObDMLOpTableDesc {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDMLOpTableDesc() : index_tid_(common::OB_INVALID_ID), partition_cnt_(-1)
   {}
   ~ObDMLOpTableDesc() = default;
@@ -31,7 +31,7 @@ class ObDMLOpTableDesc {
   }
   TO_STRING_KV(K_(index_tid), K_(partition_cnt));
 
-  public:
+public:
   // phy table/index id
   uint64_t index_tid_;
   int64_t partition_cnt_;
@@ -40,7 +40,7 @@ class ObDMLOpTableDesc {
 class ObDMLOpRowDesc {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDMLOpRowDesc() : part_id_index_(common::OB_INVALID_INDEX_INT64)
   {}
   ~ObDMLOpRowDesc() = default;
@@ -60,7 +60,7 @@ class ObDMLOpRowDesc {
 
   TO_STRING_KV(K_(part_id_index));
 
-  private:
+private:
   // part id offset in input row with pseodu column
   int64_t part_id_index_;
 };
@@ -68,7 +68,7 @@ class ObDMLOpRowDesc {
 class ObPxMultiPartModifyOpInput : public ObOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMultiPartModifyOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObOpInput(ctx, spec)
   {}
   virtual int init(ObTaskInfo& task_info) override
@@ -103,7 +103,7 @@ class ObPxMultiPartModifyOpInput : public ObOpInput {
     return dfo_id_;
   }
 
-  protected:
+protected:
   int64_t task_id_;
   int64_t sqc_id_;
   int64_t dfo_id_;

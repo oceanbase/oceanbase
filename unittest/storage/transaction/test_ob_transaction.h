@@ -39,7 +39,7 @@ class ObIMemtableCtxFactory;
 namespace unittest {
 
 class TestServer : public transaction::ObTransService {
-  public:
+public:
   TestServer() : is_inited_(false)
   {}
   ~TestServer()
@@ -51,7 +51,7 @@ class TestServer : public transaction::ObTransService {
       memtable::ObIMemtableCtxFactory* mc_factory, storage::ObPartitionService* partition_service);
   void destroy();
 
-  private:
+private:
   bool is_inited_;
   common::ObAddr self_;
 };

@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace lib {
 
 class TGRunnable {
-  public:
+public:
   virtual void run1() = 0;
   bool has_set_stop() const
   {
@@ -38,13 +38,13 @@ class TGRunnable {
     thread_idx_ = thread_idx;
   }
 
-  private:
+private:
   bool stop_ = true;
   static __thread uint64_t thread_idx_;
 };
 
 class TGTaskHandler {
-  public:
+public:
   virtual void handle(void* task) = 0;
   uint64_t get_thread_idx() const
   {
@@ -63,7 +63,7 @@ class TGTaskHandler {
     return n_threads_;
   }
 
-  private:
+private:
   int64_t n_threads_ = 0;
   static __thread uint64_t thread_idx_;
 };

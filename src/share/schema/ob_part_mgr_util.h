@@ -32,58 +32,58 @@ class ObTableSchema;
 class ObSimpleTableSchemaV2;
 
 class ObIPartIdsGenerator {
-  public:
+public:
   virtual int gen(common::ObIArray<int64_t>& part_ids) = 0;
 };
 
 class ObPartIdsGenerator : public ObIPartIdsGenerator {
-  public:
+public:
   ObPartIdsGenerator(const ObPartitionSchema& partition_schema) : partition_schema_(partition_schema)
   {}
   virtual int gen(common::ObIArray<int64_t>& part_ids);
 
-  private:
+private:
   ObPartIdsGenerator();
 
-  private:
+private:
   const ObPartitionSchema& partition_schema_;
 };
 
 template <typename T>
 class ObPartIdsGeneratorForAdd : public ObIPartIdsGenerator {
-  public:
+public:
   ObPartIdsGeneratorForAdd(const T& table, const T& inc_table) : table_(table), inc_table_(inc_table)
   {}
   virtual int gen(common::ObIArray<int64_t>& part_ids);
 
-  private:
+private:
   ObPartIdsGeneratorForAdd();
 
-  private:
+private:
   const T& table_;
   const T& inc_table_;
 };
 
 class ObPartGetter {
-  public:
+public:
   ObPartGetter(const ObTableSchema& table) : table_(table)
   {}
   int get_part_ids(const common::ObString& part_name, common::ObIArray<int64_t>& part_ids);
   int get_subpart_ids(const common::ObString& part_name, common::ObIArray<int64_t>& part_ids);
 
-  private:
+private:
   ObPartGetter();
   int get_subpart_ids_in_partition(
       const common::ObString& part_name, const ObPartition& partition, common::ObIArray<int64_t>& part_ids, bool& find);
 
-  private:
+private:
   const ObTableSchema& table_;
 };
 
 class ObPartIteratorV2 {
   const static int64_t BUF_LEN = common::OB_MAX_PARTITION_NAME_LENGTH;
 
-  public:
+public:
   ObPartIteratorV2() : is_inited_(false), partition_schema_(NULL), idx_(-1), check_dropped_schema_(false)
   {
     MEMSET(buf_, 0, BUF_LEN);
@@ -102,10 +102,10 @@ class ObPartIteratorV2 {
   }
   int next(const ObPartition*& part);
 
-  private:
+private:
   inline int check_inner_stat();
 
-  private:
+private:
   bool is_inited_;
   const ObPartitionSchema* partition_schema_;
   int64_t idx_;
@@ -119,7 +119,7 @@ class ObPartIteratorV2 {
 class ObSubPartIteratorV2 {
   const static int64_t BUF_LEN = common::OB_MAX_PARTITION_NAME_LENGTH;
 
-  public:
+public:
   ObSubPartIteratorV2()
       : is_inited_(false),
         partition_schema_(NULL),
@@ -157,12 +157,12 @@ class ObSubPartIteratorV2 {
   }
   int next(const ObSubPartition*& subpart);
 
-  private:
+private:
   int next_for_template(const ObSubPartition*& subpart);
   int next_for_nontemplate(const ObSubPartition*& subpart);
   inline int check_inner_stat();
 
-  private:
+private:
   bool is_inited_;
   const ObPartitionSchema* partition_schema_;
   const ObPartition* part_;
@@ -176,7 +176,7 @@ class ObSubPartIteratorV2 {
 
 // FIXME:() Consider integrating with ObPartIteratorV2
 class ObDroppedPartIterator {
-  public:
+public:
   ObDroppedPartIterator() : is_inited_(false), partition_schema_(NULL), idx_(0)
   {}
   ObDroppedPartIterator(const ObPartitionSchema& partition_schema)
@@ -191,19 +191,19 @@ class ObDroppedPartIterator {
   }
   int next(const ObPartition*& part);
 
-  private:
+private:
   inline int check_inner_stat();
 
-  private:
+private:
   bool is_inited_;
   const ObPartitionSchema* partition_schema_;
   int64_t idx_;
 };
 
 class ObPartitionKeyIter {
-  public:
+public:
   struct Info {
-    public:
+  public:
     Info()
         : partition_id_(common::OB_INVALID_ID),
           drop_schema_version_(common::OB_INVALID_VERSION),
@@ -219,7 +219,7 @@ class ObPartitionKeyIter {
     const common::ObIArray<int64_t>* source_part_ids_;
   };
 
-  public:
+public:
   ObPartitionKeyIter() = delete;
   explicit ObPartitionKeyIter(
       const uint64_t schema_id, const ObPartitionSchema& partition_schema, bool check_dropped_schema);
@@ -231,14 +231,14 @@ class ObPartitionKeyIter {
   int next_partition_key_v2(common::ObPartitionKey& pkey);
   int next_partition_info(ObPartitionKeyIter::Info& info);
 
-  public:
+public:
   uint64_t get_schema_id() const
   {
     return schema_id_;
   }
   TO_STRING_KV(K_(schema_id), K_(part_level), KP_(partition_schema), K_(check_dropped_schema));
 
-  private:
+private:
   uint64_t schema_id_;
   ObPartitionLevel part_level_;
   const ObPartitionSchema* partition_schema_;
@@ -251,26 +251,26 @@ class ObPartitionKeyIter {
 
 // FIXME:() Consider integrating with ObPartitionKeyIter
 class ObDroppedPartitionKeyIter {
-  public:
+public:
   ObDroppedPartitionKeyIter() = delete;
   explicit ObDroppedPartitionKeyIter(const uint64_t schema_id, const ObPartitionSchema& partition_schema);
   int next_partition_id(int64_t& partition_id);
   int next_partition_info(ObPartitionKeyIter::Info& info);
 
-  public:
+public:
   uint64_t get_schema_id() const
   {
     return iter_.get_schema_id();
   }
   TO_STRING_KV(K_(iter));
 
-  private:
+private:
   ObPartitionKeyIter iter_;
   DISALLOW_COPY_AND_ASSIGN(ObDroppedPartitionKeyIter);
 };
 
 class ObTablePartitionKeyIter {
-  public:
+public:
   explicit ObTablePartitionKeyIter(const ObSimpleTableSchemaV2& table_schema, bool check_dropped_schema);
   // get partition count of table
   int64_t get_partition_cnt() const
@@ -289,12 +289,12 @@ class ObTablePartitionKeyIter {
   int next_partition_key_v2(common::ObPartitionKey& pkey);
   int next_partition_id_v2(int64_t& partition_id);
 
-  private:
+private:
   ObPartitionKeyIter partition_key_iter_;
 };
 
 class ObTablegroupPartitionKeyIter {
-  public:
+public:
   explicit ObTablegroupPartitionKeyIter(const ObTablegroupSchema& tablegroup_schema, bool check_dropped_schema);
   // get partition count of table
   int64_t get_partition_cnt() const
@@ -313,12 +313,12 @@ class ObTablegroupPartitionKeyIter {
   int next_partition_key_v2(common::ObPGKey& pkey);
   int next_partition_id_v2(int64_t& partition_id);
 
-  private:
+private:
   ObPartitionKeyIter partition_key_iter_;
 };
 
 class ObTablePgKeyIter {
-  public:
+public:
   ObTablePgKeyIter(
       const share::schema::ObSimpleTableSchemaV2& table_schema, const uint64_t tablegroup_id, bool check_dropped_schema)
       : table_schema_(table_schema),
@@ -328,11 +328,11 @@ class ObTablePgKeyIter {
   virtual ~ObTablePgKeyIter()
   {}
 
-  public:
+public:
   int init();
   int next(common::ObPartitionKey& pkey, common::ObPGKey& pgkey);
 
-  private:
+private:
   const share::schema::ObSimpleTableSchemaV2& table_schema_;
   const uint64_t tablegroup_id_;
   ObPartitionKeyIter iter_;
@@ -387,13 +387,13 @@ struct ObPartitionItem {
 };
 
 class ObTablePartItemIterator {
-  public:
+public:
   ObTablePartItemIterator();
   explicit ObTablePartItemIterator(const ObSimpleTableSchemaV2& table_schema);
   void init(const ObSimpleTableSchemaV2& table_schema);
   int next(ObPartitionItem& item);
 
-  private:
+private:
   const ObSimpleTableSchemaV2* table_schema_;
   ObPartIteratorV2 part_iter_;
   ObSubPartIteratorV2 subpart_iter_;
@@ -404,11 +404,11 @@ class ObTablePartItemIterator {
 };
 
 class ObPartMgrUtils {
-  private:
+private:
   ObPartMgrUtils();
   ~ObPartMgrUtils();
 
-  public:
+public:
   static int check_part_exist(const ObPartitionSchema& partition_schema, const int64_t partition_id,
       const bool check_dropped_partition, bool& exist);
   static int get_part_diff(const ObPartitionSchema& old_table, const ObPartitionSchema& new_table,
@@ -422,7 +422,7 @@ class ObPartMgrUtils {
   static int get_partition_entity_schemas_in_tenant(share::schema::ObSchemaGetterGuard& schema_guard,
       const uint64_t tenant_id, common::ObIArray<const share::schema::ObPartitionSchema*>& partition_schemas);
 
-  private:
+private:
   static bool exist_partition_id(common::ObArray<int64_t>& partition_ids, const int64_t& partition_id);
   static bool compare_with_part_id(const ObPartition* lhs, const int64_t part_id)
   {

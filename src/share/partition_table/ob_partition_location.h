@@ -28,7 +28,7 @@ class ObOptPartLoc;
 namespace share {
 
 struct ObPidAddrPair {
-  public:
+public:
   int64_t pid_;
   common::ObAddr addr_;
 
@@ -47,7 +47,7 @@ class ObPartitionReplicaLocation;
 struct ObReplicaLocation {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   common::ObAddr server_;
   common::ObRole role_;
   int64_t sql_port_;
@@ -117,7 +117,7 @@ class ObPartitionLocation {
   friend class ObPartitionReplicaLocation;
   friend class sql::ObOptPartLoc;
 
-  public:
+public:
   typedef common::ObSEArray<ObReplicaLocation, common::OB_DEFAULT_MEMBER_NUMBER> ObReplicaLocationArray;
 
   ObPartitionLocation();
@@ -225,11 +225,11 @@ class ObPartitionLocation {
   TO_STRING_KV(KT_(table_id), K_(partition_id), K_(partition_cnt), K_(pg_key), K_(replica_locations), K_(renew_time),
       K_(sql_renew_time), K_(is_mark_fail));
 
-  private:
+private:
   // return OB_ENTRY_NOT_EXIST for not found.
   int find(const common::ObAddr& server, int64_t& idx) const;
 
-  private:
+private:
   uint64_t table_id_;
   int64_t partition_id_;
   int64_t partition_cnt_;
@@ -244,11 +244,11 @@ class ObPartitionReplicaLocation final {
   OB_UNIS_VERSION(1);
   friend class ObPartitionLocation;
 
-  public:
+public:
   static bool compare_part_loc_asc(const ObPartitionReplicaLocation& left, const ObPartitionReplicaLocation& right);
   static bool compare_part_loc_desc(const ObPartitionReplicaLocation& left, const ObPartitionReplicaLocation& right);
 
-  public:
+public:
   ObPartitionReplicaLocation();
 
   void reset();
@@ -317,7 +317,7 @@ class ObPartitionReplicaLocation final {
 
   TO_STRING_KV(KT_(table_id), K_(partition_id), K_(partition_cnt), K_(pg_key), K_(replica_location), K_(renew_time));
 
-  private:
+private:
   uint64_t table_id_;
   int64_t partition_id_;
   int64_t partition_cnt_;

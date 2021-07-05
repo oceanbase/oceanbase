@@ -25,7 +25,7 @@ namespace lib {
 class CoThreadMgr {
   constexpr static auto MAX_COTH_COUNT = 1024;
 
-  public:
+public:
   CoThreadMgr();
   virtual ~CoThreadMgr();
 
@@ -39,7 +39,7 @@ class CoThreadMgr {
 
   int add_thread(CoThread& th);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(CoThreadMgr);
 
   CoThread* th_vec_[MAX_COTH_COUNT];

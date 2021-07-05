@@ -24,15 +24,15 @@ using namespace oceanbase;
 using namespace common;
 
 class ObLoggerTest : public ::testing::Test {
-  public:
-  private:
+public:
+private:
   ObLoggerTest(const ObLoggerTest& other);
   ObLoggerTest& operator=(const ObLoggerTest& other);
 
-  private:
+private:
 };
 class ObTestLog {
-  public:
+public:
   int64_t to_string(char* buf, int64_t buf_len) const
   {
     int64_t pos = 0;

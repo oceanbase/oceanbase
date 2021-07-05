@@ -48,7 +48,7 @@ union Ob20ProtocolFlags {
 };
 
 class Ob20ProtocolHeader {
-  public:
+public:
   ObMySQLCompressedPacketHeader cp_hdr_;
 
   uint16_t magic_num_;
@@ -61,7 +61,7 @@ class Ob20ProtocolHeader {
   uint16_t version_;
   uint16_t reserved_;
 
-  public:
+public:
   Ob20ProtocolHeader()
       : cp_hdr_(),
         magic_num_(0),
@@ -83,13 +83,13 @@ class Ob20ProtocolHeader {
 };
 
 struct Ob20ExtraInfo {
-  public:
+public:
   uint32_t extra_len_;
   // add others, not supoort yet
   bool exist_trace_info_;
   ObString trace_info_;
 
-  public:
+public:
   Ob20ExtraInfo() : extra_len_(0), exist_trace_info_(false)
   {}
   ~Ob20ExtraInfo()
@@ -98,7 +98,7 @@ struct Ob20ExtraInfo {
 };
 
 class Ob20Packet : public rpc::ObPacket {
-  public:
+public:
   Ob20Packet() : hdr_(), cdata_(NULL)
   {}
   virtual ~Ob20Packet()
@@ -161,7 +161,7 @@ class Ob20Packet : public rpc::ObPacket {
 
   VIRTUAL_TO_STRING_KV("header", hdr_, K_(extra_info));
 
-  protected:
+protected:
   Ob20ProtocolHeader hdr_;
   Ob20ExtraInfo extra_info_;
   const char* cdata_;

@@ -24,7 +24,7 @@ using common::ObArenaAllocator;
 class ObSQLArenaAllocator : public ObIAllocator {
   const static int THRESHOLD_SIZE_ONCE = 1 << 20;            // 1M
   const static int DEFAULT_THRESHOLD_SIZE_TOTAL = 10 << 20;  // 10M
-  public:
+public:
   ObSQLArenaAllocator(const int64_t tenant_id = common::OB_SERVER_TENANT_ID);
   virtual ~ObSQLArenaAllocator();
   void set_tenant_id(const uint64_t tenant_id);
@@ -38,7 +38,7 @@ class ObSQLArenaAllocator : public ObIAllocator {
   bool revert_tracer();
   void reset_remain_one_page();
 
-  private:
+private:
   // Use normal_application when the single and total size does not exceed the threshold
   // Apply for the rest with large_
   ObArenaAllocator normal_;

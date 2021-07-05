@@ -17,13 +17,13 @@
 namespace oceanbase {
 namespace clog {
 class MockObSubmitLogCb : public ObISubmitLogCb {
-  public:
+public:
   MockObSubmitLogCb()
   {}
   virtual ~MockObSubmitLogCb()
   {}
 
-  public:
+public:
   int on_success(const common::ObPartitionKey& partition_key, const clog::ObLogType log_type, const uint64_t log_id,
       const int64_t version, const bool batch_committed, const bool batch_last_succeed)
   {

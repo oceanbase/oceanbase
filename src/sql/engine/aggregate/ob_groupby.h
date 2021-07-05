@@ -32,14 +32,14 @@ typedef common::ObColumnInfo ObGroupColumn;
 //};
 
 class ObGroupBy : public ObSingleChildPhyOperator {
-  public:
+public:
   static const int64_t MIN_BUCKET_COUNT = 100;
   static const int64_t MAX_BUCKET_COUNT = 100000;
   static const int64_t LOCAL_COLUMN_COUNT = 16;
 
-  protected:
+protected:
   class ObGroupByCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     explicit ObGroupByCtx(ObExecContext& exec_ctx) : ObPhyOperatorCtx(exec_ctx), aggr_func_(), child_column_count_(0)
     {}
     virtual ~ObGroupByCtx()
@@ -62,13 +62,13 @@ class ObGroupBy : public ObSingleChildPhyOperator {
       child_column_count_ = child_column_count;
     }
 
-    protected:
+  protected:
     ObAggregateFunction aggr_func_;
     int64_t child_column_count_;
   };
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObGroupBy(common::ObIAllocator& alloc);
   virtual ~ObGroupBy();
   virtual void reset();
@@ -127,7 +127,7 @@ class ObGroupBy : public ObSingleChildPhyOperator {
     est_group_cnt_ = cnt;
   }
 
-  protected:
+protected:
   int is_same_group(const common::ObRowStore::StoredRow& row1, const common::ObNewRow& row2, bool& result,
       int64_t& first_diff_pos) const;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const = 0;
@@ -155,11 +155,11 @@ class ObGroupBy : public ObSingleChildPhyOperator {
    */
   virtual int inner_create_operator_ctx(ObExecContext& ctx, ObPhyOperatorCtx*& op_ctx) const = 0;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObGroupBy);
 
-  protected:
+protected:
   ObAggrExprList aggr_columns_;
   int64_t mem_size_limit_;  // discarded, never assigned
   int32_t prepare_row_num_;

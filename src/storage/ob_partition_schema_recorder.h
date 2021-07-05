@@ -44,7 +44,7 @@ class ObPGPartition;
 
 class ObPartitionSchemaRecorder {
 
-  public:
+public:
   // follower
   int replay_schema_log(const char* buf, const int64_t size, const int64_t log_id);
 

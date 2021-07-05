@@ -26,7 +26,7 @@ template <typename T, int max_block_size = OB_MALLOC_BIG_BLOCK_SIZE, typename Bl
     bool auto_free = false,
     typename BlockPointerArrayT = ObSEArray<T*, OB_BLOCK_POINTER_ARRAY_SIZE, BlockAllocatorT, auto_free> >
 class Ob2DArray {
-  public:
+public:
   Ob2DArray(const BlockAllocatorT& alloc = BlockAllocatorT(ObModIds::OB_2D_ARRAY));
   virtual ~Ob2DArray();
 
@@ -102,7 +102,7 @@ class Ob2DArray {
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   // function members
   template <typename U>
   int inner_assign(const U& other);
@@ -128,11 +128,11 @@ class Ob2DArray {
     return block_alloc_.free(block);
   }
 
-  public:
+public:
   static const int64_t BLOCK_CAPACITY =
       1 << (8 * sizeof(int64_t) - __builtin_clzll(static_cast<int64_t>(max_block_size / sizeof(T))) - 1);
 
-  private:
+private:
   static const int64_t LOCAL_BLOCK_SIZE = sizeof(T) * BLOCK_CAPACITY;
   int32_t magic_;
   BlockAllocatorT block_alloc_;

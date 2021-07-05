@@ -22,7 +22,7 @@ namespace common {
 extern ObBlockAllocMgr default_blk_alloc;
 
 class ObFifoBlock : public common::ObDLink {
-  public:
+public:
   typedef ObFifoBlock Host;
   struct Item {
     Item(Host* host, int64_t size) : host_(host), size_(size)
@@ -72,7 +72,7 @@ class ObFifoBlock : public common::ObDLink {
     return 0 == ATOMIC_AAF(&ref_, val);
   }
 
-  private:
+private:
   int64_t blk_size_ CACHE_ALIGNED;
   int64_t bytes_alloc_ CACHE_ALIGNED;
   int64_t ref_ CACHE_ALIGNED;
@@ -85,13 +85,13 @@ class ObSimpleFifoAlloc {
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
 
-  public:
+public:
   enum { MAX_ARENA_NUM = 32, BLOCK_SIZE = OB_MALLOC_BIG_BLOCK_SIZE };
   typedef ObBlockAllocMgr BlockAlloc;
   typedef ObFifoBlock Block;
   typedef ObSimpleSync Sync;
   class Arena : public Sync {
-    public:
+  public:
     Arena() : blk_(NULL)
     {}
     Block* blk()
@@ -107,11 +107,11 @@ class ObSimpleFifoAlloc {
       return ATOMIC_TAS(&blk_, NULL);
     }
 
-    private:
+  private:
     Block* blk_;
   } CACHE_ALIGNED;
 
-  public:
+public:
   ObSimpleFifoAlloc(const ObMemAttr& attr, int block_size = BLOCK_SIZE, BlockAlloc& blk_alloc = default_blk_alloc)
       : nway_(1), bsize_(block_size), bytes_alloc_(0), mattr_(attr), blk_alloc_(blk_alloc)
   {
@@ -218,7 +218,7 @@ class ObSimpleFifoAlloc {
     }
   }
 
-  private:
+private:
   Block* prepare_block(int64_t blk_size)
   {
     Block* blk = NULL;
@@ -253,7 +253,7 @@ class ObSimpleFifoAlloc {
     return has_reach_limit;
   }
 
-  private:
+private:
   int nway_ CACHE_ALIGNED;
   int64_t bsize_;
   int64_t bytes_alloc_;

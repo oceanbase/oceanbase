@@ -24,7 +24,7 @@
 namespace oceanbase {
 namespace blocksstable {
 class ObMicroBlockCacheKey : public common::ObIKVCacheKey {
-  public:
+public:
   ObMicroBlockCacheKey(const uint64_t table_id, const MacroBlockId& block_id, const int64_t file_id,
       const int64_t offset, const int64_t size);
   ObMicroBlockCacheKey();
@@ -39,7 +39,7 @@ class ObMicroBlockCacheKey : public common::ObIKVCacheKey {
       const int64_t size);
   TO_STRING_KV(K_(table_id), K_(block_id), K_(file_id), K_(offset), K_(size));
 
-  private:
+private:
   uint64_t table_id_;
   MacroBlockId block_id_;
   int64_t file_id_;
@@ -48,7 +48,7 @@ class ObMicroBlockCacheKey : public common::ObIKVCacheKey {
 };
 
 class ObMicroBlockCacheValue : public common::ObIKVCacheValue {
-  public:
+public:
   ObMicroBlockCacheValue(
       const char* buf, const int64_t size, const char* extra_buf = NULL, const int64_t extra_size = 0);
   virtual ~ObMicroBlockCacheValue();
@@ -64,17 +64,17 @@ class ObMicroBlockCacheValue : public common::ObIKVCacheValue {
   }
   TO_STRING_KV(K_(block_data));
 
-  private:
+private:
   ObMicroBlockData block_data_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockCacheValue);
 };
 
 class ObIMicroBlockCache;
 
 class ObMicroBlockBufferHandle {
-  public:
+public:
   ObMicroBlockBufferHandle() : micro_block_(NULL)
   {}
   ~ObMicroBlockBufferHandle()
@@ -94,7 +94,7 @@ class ObMicroBlockBufferHandle {
   }
   TO_STRING_KV(K_(handle), KP_(micro_block));
 
-  private:
+private:
   friend class ObIMicroBlockCache;
   common::ObKVCacheHandle handle_;
   const ObMicroBlockCacheValue* micro_block_;
@@ -150,12 +150,12 @@ struct ObMultiBlockIOResult {
 };
 
 class ObIPutSizeStat {
-  public:
+public:
   virtual int add_put_size(const int64_t put_size) = 0;
 };
 
 class ObIMicroBlockCache : public ObIPutSizeStat {
-  public:
+public:
   typedef common::ObIKVCache<ObMicroBlockCacheKey, ObMicroBlockCacheValue> BaseBlockCache;
   virtual int prefetch(const uint64_t table_id, const ObMacroBlockCtx& block_ctx, const int64_t offset,
       const int64_t size, const common::ObQueryFlag& flag, ObStorageFile* pg_file, ObMacroBlockHandle& handle);
@@ -170,20 +170,20 @@ class ObIMicroBlockCache : public ObIPutSizeStat {
   virtual int get_cache(BaseBlockCache*& cache) = 0;
   virtual int get_allocator(common::ObIAllocator*& allocator) = 0;
 
-  public:
+public:
   class ObIMicroBlockIOCallback : public common::ObIOCallback {
-    public:
+  public:
     ObIMicroBlockIOCallback();
     virtual ~ObIMicroBlockIOCallback();
     virtual int alloc_io_buf(char*& io_buf, int64_t& io_buf_size, int64_t& aligned_offset);
 
-    protected:
+  protected:
     friend class ObIMicroBlockCache;
     virtual int process_block(ObMacroBlockReader* reader, char* buffer,
         const int64_t offset,  // offset means offset in macro_block
         const int64_t size, const ObMicroBlockCacheValue*& micro_block, common::ObKVCacheHandle& handle);
 
-    private:
+  private:
     int put_cache_and_fetch(const ObFullMacroBlockMeta& meta, ObMacroBlockReader& reader, const char* buffer,
         const int64_t offset,  // offset means offset in macro_block
         const int64_t size, const char* payload_buf, const int64_t payload_size,
@@ -191,10 +191,10 @@ class ObIMicroBlockCache : public ObIPutSizeStat {
     static const int64_t ALLOC_BUF_RETRY_INTERVAL = 100 * 1000;
     static const int64_t ALLOC_BUF_RETRY_TIMES = 3;
 
-    protected:
+  protected:
     int assign(const ObIMicroBlockIOCallback& other);
 
-    protected:
+  protected:
     BaseBlockCache* cache_;
     ObIPutSizeStat* put_size_stat_;
     common::ObIAllocator* allocator_;
@@ -209,7 +209,7 @@ class ObIMicroBlockCache : public ObIPutSizeStat {
     storage::ObTableHandle table_handle_;
   };
   class ObMicroBlockIOCallback : public ObIMicroBlockIOCallback {
-    public:
+  public:
     ObMicroBlockIOCallback();
     virtual ~ObMicroBlockIOCallback();
     virtual int64_t size() const;
@@ -218,14 +218,14 @@ class ObIMicroBlockCache : public ObIPutSizeStat {
     virtual const char* get_data();
     TO_STRING_KV(KP_(micro_block));
 
-    private:
+  private:
     friend class ObIMicroBlockCache;
     const ObMicroBlockCacheValue* micro_block_;
     common::ObKVCacheHandle handle_;
   };
 
   class ObMultiBlockIOCallback : public ObIMicroBlockIOCallback {
-    public:
+  public:
     ObMultiBlockIOCallback();
     virtual ~ObMultiBlockIOCallback();
     virtual int64_t size() const;
@@ -234,7 +234,7 @@ class ObIMicroBlockCache : public ObIPutSizeStat {
     virtual const char* get_data();
     TO_STRING_KV(KP_(&io_result));
 
-    private:
+  private:
     friend class ObIMicroBlockCache;
     int set_io_ctx(const ObMultiBlockIOParam& io_param);
     void reset_io_ctx()
@@ -251,7 +251,7 @@ class ObIMicroBlockCache : public ObIPutSizeStat {
 
 class ObMicroBlockCache : public common::ObKVCache<ObMicroBlockCacheKey, ObMicroBlockCacheValue>,
                           public ObIMicroBlockCache {
-  public:
+public:
   typedef ObIKVCache<ObMicroBlockCacheKey, ObMicroBlockCacheValue> BaseBlockCache;
 
   ObMicroBlockCache()
@@ -265,7 +265,7 @@ class ObMicroBlockCache : public common::ObKVCache<ObMicroBlockCacheKey, ObMicro
   virtual int get_allocator(common::ObIAllocator*& allocator);
   virtual int add_put_size(const int64_t put_size);
 
-  private:
+private:
   common::ObConcurrentFIFOAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockCache);
 };

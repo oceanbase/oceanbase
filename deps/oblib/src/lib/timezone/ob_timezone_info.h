@@ -28,7 +28,7 @@ class ObIntervalScaleUtil;
 // timestamp ltz store utc time
 // sizeof()=12
 class ObOTimestampData {
-  public:
+public:
   static const int32_t MIN_OFFSET_MINUTES = -15 * 60 - 59;
   static const int32_t MAX_OFFSET_MINUTES = 15 * 60 + 59;
   static const int32_t MAX_OFFSET_MINUTES_STRICT = 15 * 60;
@@ -104,7 +104,7 @@ class ObOTimestampData {
     };
   } __attribute__((packed));
 
-  public:
+public:
   ObOTimestampData() : time_ctx_(), time_us_(0)
   {}
   ObOTimestampData(const int64_t time_us, const UnionTZCtx tz_ctx) : time_ctx_(tz_ctx), time_us_(time_us)
@@ -188,7 +188,7 @@ class ObOTimestampData {
 
   DECLARE_TO_STRING;
 
-  public:
+public:
   UnionTZCtx time_ctx_;  // time ctx, such as version, tail_ns, tz_id...
   int64_t time_us_;      // full time with usec, same as timestamp
 } __attribute__((packed));
@@ -233,7 +233,7 @@ class ObTenantTimezone;
 
 // wrap ObTZInfoMap with ref count
 class ObTZMapWrap {
-  public:
+public:
   ObTZMapWrap() : tz_info_map_(nullptr)
   {}
   ~ObTZMapWrap();
@@ -243,14 +243,14 @@ class ObTZMapWrap {
   }
   void set_tz_map(const common::ObTZInfoMap* tz_info_map);
 
-  private:
+private:
   ObTZInfoMap* tz_info_map_;
 };
 
 class ObTimeZoneInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTimeZoneInfo() : error_on_overlap_time_(false), tz_map_wrap_(), tz_id_(common::OB_INVALID_TZ_ID), offset_(0)
   {}
   virtual ~ObTimeZoneInfo()
@@ -304,17 +304,17 @@ class ObTimeZoneInfo {
   }
   TO_STRING_KV(N_ID, tz_id_, N_OFFSET, offset_, N_ERROR_ON_OVERLAP_TIME, error_on_overlap_time_);
 
-  private:
+private:
   static ObTimeZoneName TIME_ZONE_NAMES[];
   static ObTimeZoneTrans TIME_ZONE_TRANS[];
 
-  protected:
+protected:
   bool error_on_overlap_time_;
 
   // do not serialize it
   ObTZMapWrap tz_map_wrap_;
 
-  private:
+private:
   int32_t tz_id_;
   int32_t offset_;
 };
@@ -370,7 +370,7 @@ struct ObTZTransitionStruct {
 class ObTZTransitionTypeInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTZTransitionTypeInfo() : lower_time_(common::OB_INVALID_TZ_TRAN_TIME), info_()
   {}
   virtual ~ObTZTransitionTypeInfo()
@@ -398,10 +398,10 @@ class ObTZTransitionTypeInfo {
       const common::ObString& tz_abbr_str, int32_t& offset_sec, int32_t& tran_type_id) const;
   VIRTUAL_TO_STRING_KV(K_(lower_time), K_(info));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTZTransitionTypeInfo);
 
-  public:
+public:
   int64_t lower_time_;
   ObTZTransitionStruct info_;
 };
@@ -409,10 +409,10 @@ class ObTZTransitionTypeInfo {
 class ObTZRevertTypeInfo : public ObTZTransitionTypeInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum TypeInfoClass { NONE = 0, NORMAL, OVERLAP, GAP };
 
-  public:
+public:
   ObTZRevertTypeInfo() : ObTZTransitionTypeInfo(), type_class_(NONE), extra_info_()
   {}
   virtual ~ObTZRevertTypeInfo()
@@ -446,16 +446,16 @@ class ObTZRevertTypeInfo : public ObTZTransitionTypeInfo {
 
   VIRTUAL_TO_STRING_KV(K_(lower_time), K_(info), K_(type_class), K_(extra_info));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTZRevertTypeInfo);
 
-  public:
+public:
   TypeInfoClass type_class_;
   ObTZTransitionStruct extra_info_;
 };
 
 class ObTZIDKey {
-  public:
+public:
   ObTZIDKey() : tz_id_(0)
   {}
   ObTZIDKey(const int64_t tz_id) : tz_id_(tz_id)
@@ -478,12 +478,12 @@ class ObTZIDKey {
   }
   TO_STRING_KV(K_(tz_id));
 
-  public:
+public:
   int64_t tz_id_;
 };
 
 class ObTZNameKey {
-  public:
+public:
   ObTZNameKey(const common::ObString& tz_key_str);
   ObTZNameKey(const ObTZNameKey& key);
   ObTZNameKey()
@@ -508,7 +508,7 @@ class ObTZNameKey {
   uint64_t hash(uint64_t seed = 0) const;
   TO_STRING_KV("tz_name", common::ObString(common::OB_MAX_TZ_NAME_LEN, tz_name_));
 
-  private:
+private:
   char tz_name_[common::OB_MAX_TZ_NAME_LEN];
 };
 
@@ -521,7 +521,7 @@ class ObTimeZoneInfo;
 class ObTimeZoneInfoPos : public ObTimeZoneInfo, public ObTZIDHashValue {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTimeZoneInfoPos()
       : tz_id_(common::OB_INVALID_TZ_ID), default_type_(), tz_tran_types_(), tz_revt_types_(), curr_idx_(0)
   {
@@ -607,7 +607,7 @@ class ObTimeZoneInfoPos : public ObTimeZoneInfo, public ObTZIDHashValue {
       get_tz_revt_types(), K_(curr_idx), "next_tz_transition_types", get_next_tz_tran_types(), "next_tz_revert_types",
       get_next_tz_revt_types());
 
-  private:
+private:
   int find_time_range(
       int64_t value, const common::ObIArray<ObTZTransitionTypeInfo>& tz_tran_types, int64_t& type_idx) const;
   int find_offset_range(const int32_t tran_type_id, const common::ObIArray<ObTZTransitionTypeInfo>& tz_tran_types,
@@ -615,7 +615,7 @@ class ObTimeZoneInfoPos : public ObTimeZoneInfo, public ObTZIDHashValue {
   int find_revt_time_range(
       int64_t value, const common::ObIArray<ObTZRevertTypeInfo>& tz_revt_types, int64_t& type_idx) const;
 
-  private:
+private:
   int64_t tz_id_;
   /*default_type_ is used for times smaller than first transition or if
     there are no transitions at all.*/
@@ -629,7 +629,7 @@ class ObTimeZoneInfoPos : public ObTimeZoneInfo, public ObTZIDHashValue {
 };
 
 class ObTZNameIDInfo : public ObTZNameHashValue {
-  public:
+public:
   ObTZNameIDInfo() : tz_id_(common::OB_INVALID_TZ_ID)
   {
     MEMSET(tz_name_, 0, common::OB_MAX_TZ_NAME_LEN);
@@ -654,13 +654,13 @@ class ObTZNameIDInfo : public ObTZNameHashValue {
   {}
   TO_STRING_KV(K_(tz_id), K_(tz_name));
 
-  public:
+public:
   int64_t tz_id_;
   char tz_name_[common::OB_MAX_TZ_NAME_LEN];
 };
 
 class ObTZIDPosAlloc {
-  public:
+public:
   ObTZIDPosAlloc()
   {}
   ~ObTZIDPosAlloc()
@@ -673,7 +673,7 @@ class ObTZIDPosAlloc {
 };
 
 class ObTZNameIDAlloc {
-  public:
+public:
   ObTZNameIDAlloc()
   {}
   ~ObTZNameIDAlloc()
@@ -689,7 +689,7 @@ typedef common::ObLinkHashMap<ObTZIDKey, ObTimeZoneInfoPos, ObTZIDPosAlloc> ObTZ
 typedef common::ObLinkHashMap<ObTZNameKey, ObTZNameIDInfo, ObTZNameIDAlloc> ObTZInfoNameIDMap;
 
 class ObTZInfoMap {
-  public:
+public:
   ObTZInfoMap() : inited_(false), id_map_(), name_map_(), ref_count_(0)
   {}
   ~ObTZInfoMap()
@@ -721,12 +721,12 @@ class ObTZInfoMap {
     return ATOMIC_LOAD64(&ref_count_);
   }
 
-  public:
+public:
   bool inited_;
   ObTZInfoIDPosMap id_map_;
   ObTZInfoNameIDMap name_map_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTZInfoMap);
   int64_t ref_count_;
 };
@@ -735,7 +735,7 @@ class ObTimeZoneInfoWrap {
   enum ObTZInfoClass { NONE = 0, POSITION = 1, OFFSET = 2 };
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTimeZoneInfoWrap()
       : tz_info_pos_(), tz_info_offset_(), tz_info_(NULL), class_(NONE), cur_version_(0), error_on_overlap_time_(false)
   {}
@@ -794,7 +794,7 @@ class ObTimeZoneInfoWrap {
   VIRTUAL_TO_STRING_KV(
       K_(cur_version), "class", class_, KP_(tz_info), K_(error_on_overlap_time), K_(tz_info_pos), K_(tz_info_offset));
 
-  private:
+private:
   common::ObTimeZoneInfoPos tz_info_pos_;
   common::ObTimeZoneInfo tz_info_offset_;
   common::ObTimeZoneInfo* tz_info_;

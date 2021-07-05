@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprFuncAddrToPartId : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFuncAddrToPartId(common::ObIAllocator& alloc);
   virtual ~ObExprFuncAddrToPartId();
 
@@ -27,7 +27,7 @@ class ObExprFuncAddrToPartId : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_addr_to_part_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncAddrToPartId);
 };
 }  // namespace sql

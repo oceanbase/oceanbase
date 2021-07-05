@@ -32,7 +32,7 @@ class ObIGtsRequestRpc;
 
 namespace transaction {
 class ObHaGtsSource : public ObITsSource {
-  public:
+public:
   ObHaGtsSource() : log_interval_(3 * 1000 * 1000)
   {
     reset();
@@ -54,7 +54,7 @@ class ObHaGtsSource : public ObITsSource {
   int get_latest_srr(MonotonicTs& latest_srr);
   int64_t get_task_count() const;
 
-  public:
+public:
   int update_gts(const int64_t gts, bool& update);
   int get_gts(const MonotonicTs stc, ObTsCbTask* task, int64_t& gts, MonotonicTs& receive_gts_ts);
   int get_gts(ObTsCbTask* task, int64_t& gts);
@@ -74,17 +74,17 @@ class ObHaGtsSource : public ObITsSource {
   int get_publish_version(int64_t& publish_version);
   TO_STRING_KV(K_(tenant_id), K_(gts_local_cache), K_(server));
 
-  private:
+private:
   void statistics_();
   int refresh_gts_(const bool need_refresh);
 
-  public:
+public:
   static const int64_t GET_GTS_QUEUE_COUNT = 1;
   static const int64_t WAIT_GTS_QUEUE_COUNT = 1;
   static const int64_t WAIT_GTS_QUEUE_START_INDEX = GET_GTS_QUEUE_COUNT;
   static const int64_t TOTAL_GTS_QUEUE_COUNT = GET_GTS_QUEUE_COUNT + WAIT_GTS_QUEUE_COUNT;
 
-  private:
+private:
   bool is_inited_;
   int64_t tenant_id_;
   ObGTSLocalCache gts_local_cache_;

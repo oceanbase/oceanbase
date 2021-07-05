@@ -1399,23 +1399,23 @@ int ObPartitionMetaPhysicalReader::read_table_keys_by_table_id(
   return ret;
 }
 
-/************************ObPGMetaPyhsicalReader************************/
-ObPGMetaPyhsicalReader::ObPGMetaPyhsicalReader() : is_inited_(false), data_size_(0), arg_(NULL), meta_indexs_(NULL)
+/************************ObPGMetaPhysicalReader************************/
+ObPGMetaPhysicalReader::ObPGMetaPhysicalReader() : is_inited_(false), data_size_(0), arg_(NULL), meta_indexs_(NULL)
 {}
 
-ObPGMetaPyhsicalReader::~ObPGMetaPyhsicalReader()
+ObPGMetaPhysicalReader::~ObPGMetaPhysicalReader()
 {
   reset();
 }
 
-void ObPGMetaPyhsicalReader::reset()
+void ObPGMetaPhysicalReader::reset()
 {
   arg_ = NULL;
   meta_indexs_ = NULL;
   is_inited_ = false;
 }
 
-int ObPGMetaPyhsicalReader::init(const share::ObPhysicalRestoreArg& arg, const ObPhyRestoreMetaIndexStore& meta_indexs)
+int ObPGMetaPhysicalReader::init(const share::ObPhysicalRestoreArg& arg, const ObPhyRestoreMetaIndexStore& meta_indexs)
 {
   int ret = OB_SUCCESS;
 
@@ -1433,7 +1433,7 @@ int ObPGMetaPyhsicalReader::init(const share::ObPhysicalRestoreArg& arg, const O
   return ret;
 }
 
-int ObPGMetaPyhsicalReader::read_partition_group_meta(ObPartitionGroupMeta& pg_meta)
+int ObPGMetaPhysicalReader::read_partition_group_meta(ObPartitionGroupMeta& pg_meta)
 {
   int ret = OB_SUCCESS;
 
@@ -1465,7 +1465,7 @@ int ObPGMetaPyhsicalReader::read_partition_group_meta(ObPartitionGroupMeta& pg_m
   return ret;
 }
 
-int ObPGMetaPyhsicalReader::read_backup_pg_meta_info(ObBackupPGMetaInfo& backup_pg_meta_info)
+int ObPGMetaPhysicalReader::read_backup_pg_meta_info(ObBackupPGMetaInfo& backup_pg_meta_info)
 {
   int ret = OB_SUCCESS;
 
@@ -2370,7 +2370,7 @@ int ObPartitionGroupMetaRestoreReaderV1::check_backup_partitions_in_pg(
     STORAGE_LOG(WARN, "failed to  get base data restore schema version", K(ret), K(tenant_id), K(restore_info));
   } else if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
                  tenant_id, schema_service, tenant_schema_version, schema_guard))) {
-    STORAGE_LOG(WARN, "failed to get tenant schema gaurd", K(ret), K(restore_info), K(backup_pg_meta));
+    STORAGE_LOG(WARN, "failed to get tenant schema guard", K(ret), K(restore_info), K(backup_pg_meta));
   } else if (!restore_info.pg_key_.is_pg()) {
     if (OB_FAIL(table_ids.push_back(restore_info.pg_key_.get_table_id()))) {
       STORAGE_LOG(WARN, "failed to push table id into array", K(ret), K(restore_info));
@@ -2559,7 +2559,7 @@ int ObPGPartitionBaseDataMetaRestoreReaderV1::check_sstable_table_ids_in_table(
     STORAGE_LOG(WARN, "failed to create table ids set", K(ret));
   } else if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
                  tenant_id, schema_service, schema_version_, schema_guard))) {
-    STORAGE_LOG(WARN, "failed to get tenant schema gaurd", K(ret), K(tenant_id), K(schema_version_));
+    STORAGE_LOG(WARN, "failed to get tenant schema guard", K(ret), K(tenant_id), K(schema_version_));
   } else if (OB_FAIL(schema_guard.get_index_status(data_table_id, false /*with global index*/, index_stats))) {
     STORAGE_LOG(WARN, "failed to get index status", K(ret), K(data_table_id));
   } else {

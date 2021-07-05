@@ -21,7 +21,7 @@ namespace sql {
 
 class Path;
 class ObLogTableLookup : public ObLogicalOperator {
-  public:
+public:
   ObLogTableLookup(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         table_id_(common::OB_INVALID_ID),
@@ -99,7 +99,7 @@ class ObLogTableLookup : public ObLogicalOperator {
   int init_calc_part_id_expr();
   int replace_gen_column(ObRawExpr* part_expr, ObRawExpr*& new_part_expr);
 
-  private:
+private:
   uint64_t table_id_;
   uint64_t ref_table_id_;
   uint64_t index_id_;

@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace share {
 
 class ObListMatchCb {
-  public:
+public:
   virtual int match(const char* value) = 0;
   virtual bool finish()
   {
@@ -28,7 +28,7 @@ class ObListMatchCb {
 };
 
 class ObListParser {
-  public:
+public:
   ObListParser() : SYM_LIST_SEP(','), allow_space_(false), token_(0), cur_(NULL), cb_(NULL)
   {}
   ObListParser(char list_sep) : SYM_LIST_SEP(list_sep), token_(0), cur_(NULL), cb_(NULL)
@@ -45,10 +45,10 @@ class ObListParser {
   }
   int parse(const char* data);
 
-  private:
+private:
   int match(int sym);
   int get_token();  // Pre-reading symbol
-  private:
+private:
   static const int MAX_TOKEN_SIZE = 1024;
   // Symbol table
   static const int SYM_END = 0;

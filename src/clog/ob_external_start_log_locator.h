@@ -79,7 +79,7 @@ typedef obrpc::ObLogReqStartLogIdByTsResponseWithBreakpoint ObLocateByTsResp;
 
 // Qit for quit in time
 class ObExtRpcQit {
-  public:
+public:
   ObExtRpcQit() : deadline_(common::OB_INVALID_TIMESTAMP)
   {}
   int init(const int64_t deadline);
@@ -87,7 +87,7 @@ class ObExtRpcQit {
   bool should_hurry_quit() const;
   TO_STRING_KV(K(deadline_));
 
-  private:
+private:
   static const int64_t RESERVED_INTERVAL = 1 * 1000 * 1000;  // 1 second
   int64_t deadline_;
 };
@@ -151,7 +151,7 @@ struct SearchStatus {
   TO_STRING_KV(K_(start_ts), K_(err), K_(start_log_id), K_(start_log_ts), K_(min_greater_log_id),
       K_(min_greater_log_ts), K_(finished));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(SearchStatus);
 };
 
@@ -160,7 +160,7 @@ typedef common::ObLinearHashMap<common::ObPartitionKey, SearchStatus*> SearchMap
 // SearchParam is to simplify the code structure and avoid passing too many parameters.
 // SearchParam mainly encapsulated some distributors.
 struct SearchParam {
-  public:
+public:
   common::PageArena<>* map_allocator_;
 
   SearchParam() : map_allocator_(NULL)
@@ -182,12 +182,12 @@ struct SearchParam {
   }
   TO_STRING_KV(KP(map_allocator_));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(SearchParam);
 };
 
 class ObExtStartLogLocatorForDir {
-  public:
+public:
   ObExtStartLogLocatorForDir() : is_inited_(false), partition_service_(NULL), log_engine_(NULL)
   {}
   ~ObExtStartLogLocatorForDir()
@@ -198,7 +198,7 @@ class ObExtStartLogLocatorForDir {
   void destroy();
   int locator_req(const ObLocateByTsReq& req_msg, ObLocateByTsResp& result, bool& is_hurry_quit);
 
-  private:
+private:
   inline int64_t get_rpc_deadline() const
   {
     return THIS_WORKER.get_timeout_ts();
@@ -217,17 +217,17 @@ class ObExtStartLogLocatorForDir {
   int do_locator_req(
       const ObLocateByTsReq& req_msg, ObLocateByTsResp& response, const ObExtRpcQit& qit, bool& is_hurry_quit);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExtStartLogLocatorForDir);
 
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* partition_service_;
   clog::ObILogEngine* log_engine_;
 };
 
 class ObExtStartLogLocator {
-  public:
+public:
   ObExtStartLogLocator() : is_inited_(false), partition_service_(NULL), log_engine_(NULL)
   {}
 
@@ -244,13 +244,13 @@ class ObExtStartLogLocator {
   int init(storage::ObPartitionService* partition_service, clog::ObILogEngine* log_engine);
   int req_start_log_id_by_ts_with_breakpoint(const ObLocateByTsReq& req_msg, ObLocateByTsResp& result);
 
-  private:
+private:
   int do_req_start_log_id(const ObLocateByTsReq& req, ObLocateByTsResp& resp);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExtStartLogLocator);
 
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* partition_service_;
   clog::ObILogEngine* log_engine_;

@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace share {
 // sstable data checksum item
 struct ObSSTableDataChecksumItem {
-  public:
+public:
   ObSSTableDataChecksumItem();
   virtual ~ObSSTableDataChecksumItem() = default;
   void reset();
@@ -46,7 +46,7 @@ struct ObSSTableDataChecksumItem {
 };
 
 class ObSSTableDataChecksumOperator {
-  public:
+public:
   ObSSTableDataChecksumOperator() = default;
   virtual ~ObSSTableDataChecksumOperator() = default;
   static int get_checksum(ObSSTableDataChecksumItem& item, common::ObISQLClient& proxy);
@@ -67,7 +67,7 @@ class ObSSTableDataChecksumOperator {
   static int check_table_checksum(
       const uint64_t data_table_id, const uint64_t index_id, common::ObISQLClient& sql_proxy, bool& is_checksum_valid);
 
-  private:
+private:
   static int fill_one_item(const ObSSTableDataChecksumItem& item, share::ObDMLSqlSplicer& dml);
   static int get_checksum(const common::ObSqlString& sql, common::ObIArray<ObSSTableDataChecksumItem>& items,
       common::ObISQLClient& sql_proxy);
@@ -75,7 +75,7 @@ class ObSSTableDataChecksumOperator {
 };
 
 struct ObSSTableColumnChecksumItem {
-  public:
+public:
   ObSSTableColumnChecksumItem()
       : tenant_id_(common::OB_INVALID_ID),
         data_table_id_(common::OB_INVALID_ID),
@@ -115,7 +115,7 @@ struct ObSSTableColumnChecksumItem {
 };
 
 class ObSSTableColumnChecksumOperator {
-  public:
+public:
   ObSSTableColumnChecksumOperator() = default;
   virtual ~ObSSTableColumnChecksumOperator() = default;
   static int batch_report_checksum(
@@ -128,13 +128,13 @@ class ObSSTableColumnChecksumOperator {
       const share::schema::ObTableSchema& index_table_schema, const int64_t global_snapshot_version,
       common::ObMySQLProxy& sql_proxy);
 
-  private:
+private:
   static int fill_one_item(const ObSSTableColumnChecksumItem& item, share::ObDMLSqlSplicer& dml);
   static int remove_one_item(const ObSSTableColumnChecksumItem& item, common::ObMySQLProxy& sql_proxy);
   static int get_checksum(const uint64_t tenant_id, const common::ObSqlString& sql,
       common::ObIArray<ObSSTableColumnChecksumItem>& items, common::ObMySQLProxy& sql_proxy);
 
-  private:
+private:
   static int get_table_column_checksum(const share::schema::ObTableSchema& data_table_schema,
       const share::schema::ObTableSchema& index_table_schema, const int64_t global_snapshot_version,
       common::ObMySQLProxy& mysql_proxy, int64_t& snapshot_version,
@@ -142,7 +142,7 @@ class ObSSTableColumnChecksumOperator {
 };
 
 struct ObSSTableChecksumItem {
-  public:
+public:
   ObSSTableChecksumItem() : data_checksum_(), column_checksum_()
   {}
   ~ObSSTableChecksumItem()

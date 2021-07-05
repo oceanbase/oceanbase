@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualServerClogStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualServerClogStat();
   virtual ~ObAllVirtualServerClogStat();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -29,7 +29,7 @@ class ObAllVirtualServerClogStat : public common::ObVirtualTableScannerIterator 
   }
   virtual int set_ip(common::ObAddr* addr);
 
-  private:
+private:
   enum DISK_COLUMN {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,

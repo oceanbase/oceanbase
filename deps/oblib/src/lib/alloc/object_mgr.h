@@ -27,7 +27,7 @@ namespace lib {
 class SubObjectMgr : public IBlockMgr {
   friend class ObTenantCtxAllocator;
 
-  public:
+public:
   SubObjectMgr(const bool for_logger)
       : mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK),
         mod_set_(),
@@ -85,7 +85,7 @@ class SubObjectMgr : public IBlockMgr {
     return bs_.get_tenant_ctx_allocator();
   }
 
-  private:
+private:
   lib::ObMutex mutex_;
   common::ObLocalModSet mod_set_;
   SetLocker normal_locker_;
@@ -97,7 +97,7 @@ class SubObjectMgr : public IBlockMgr {
 
 template <int N>
 class ObjectMgr : public IBlockMgr {
-  public:
+public:
   ObjectMgr(ObTenantCtxAllocator& allocator, uint64_t tenant_id, uint64_t ctx_id);
   ~ObjectMgr();
 
@@ -113,11 +113,11 @@ class ObjectMgr : public IBlockMgr {
   common::ObModItem get_mod_usage(int mod_id) const;
   void print_usage() const;
 
-  private:
+private:
   SubObjectMgr* create_sub_mgr();
   void destroy_sub_mgr(SubObjectMgr* sub_mgr);
 
-  public:
+public:
   ObTenantCtxAllocator& ta_;
   const ObMemAttr attr_;
   const int sub_cnt_;

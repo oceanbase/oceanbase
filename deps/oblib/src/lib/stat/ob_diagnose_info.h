@@ -53,14 +53,14 @@ struct ObLatchStatArray {
 };
 
 class ObWaitEventHistoryIter {
-  public:
+public:
   ObWaitEventHistoryIter();
   virtual ~ObWaitEventHistoryIter();
   int init(ObWaitEventDesc* items, const int64_t start_pos, int64_t item_cnt);
   int get_next(ObWaitEventDesc*& item);
   void reset();
 
-  private:
+private:
   ObWaitEventDesc* items_;
   int64_t curr_;
   int64_t start_pos_;
@@ -68,7 +68,7 @@ class ObWaitEventHistoryIter {
 };
 
 class ObWaitEventHistory {
-  public:
+public:
   ObWaitEventHistory();
   virtual ~ObWaitEventHistory();
   int push(const int64_t event_no, const uint64_t timeout_ms, const uint64_t p1, const uint64_t p2, const uint64_t p3);
@@ -80,7 +80,7 @@ class ObWaitEventHistory {
   int calc_wait_time(ObWaitEventDesc*& event_desc);
   void reset();
 
-  private:
+private:
   int get_next_and_compare(
       int64_t& iter_1, int64_t& iter_2, int64_t& cnt, const ObWaitEventHistory& other, ObWaitEventDesc* tmp);
   int64_t curr_pos_;
@@ -92,7 +92,7 @@ class ObWaitEventHistory {
 
 class ObDiagnoseTenantInfo;
 class ObDiagnoseSessionInfo {
-  public:
+public:
   ObDiagnoseSessionInfo();
   virtual ~ObDiagnoseSessionInfo();
   int add(ObDiagnoseSessionInfo& other);
@@ -145,7 +145,7 @@ class ObDiagnoseSessionInfo {
   }
   TO_STRING_EMPTY();
 
-  private:
+private:
   ObWaitEventDesc curr_wait_;
   ObWaitEventDesc* max_wait_;
   ObWaitEventStat* total_wait_;
@@ -157,7 +157,7 @@ class ObDiagnoseSessionInfo {
 };
 
 class ObDiagnoseTenantInfo final {
-  public:
+public:
   ObDiagnoseTenantInfo();
   ~ObDiagnoseTenantInfo();
   void add(const ObDiagnoseTenantInfo& other);
@@ -187,7 +187,7 @@ class ObDiagnoseTenantInfo final {
   }
   TO_STRING_EMPTY();
 
-  private:
+private:
   ObWaitEventStatArray event_stats_;
   ObStatEventAddStatArray stat_add_stats_;
   ObStatEventSetStatArray stat_set_stats_;
@@ -195,12 +195,12 @@ class ObDiagnoseTenantInfo final {
 };
 
 class ObWaitEventGuard {
-  public:
+public:
   explicit ObWaitEventGuard(const int64_t event_no, const uint64_t timeout_ms = 0, const int64_t p1 = 0,
       const int64_t p2 = 0, const int64_t p3 = 0, const bool is_atomic = false);
   ~ObWaitEventGuard();
 
-  private:
+private:
   int64_t event_no_;
   uint64_t wait_begin_time_;
   uint64_t timeout_ms_;
@@ -209,21 +209,21 @@ class ObWaitEventGuard {
 };
 
 class ObMaxWaitGuard {
-  public:
+public:
   explicit ObMaxWaitGuard(ObWaitEventDesc* max_wait, ObDiagnoseSessionInfo* di = NULL);
   ~ObMaxWaitGuard();
 
-  private:
+private:
   ObWaitEventDesc* prev_wait_;
   ObDiagnoseSessionInfo* di_;
 };
 
 class ObTotalWaitGuard {
-  public:
+public:
   explicit ObTotalWaitGuard(ObWaitEventStat* total_wait, ObDiagnoseSessionInfo* di = NULL);
   ~ObTotalWaitGuard();
 
-  private:
+private:
   ObWaitEventStat* prev_wait_;
   ObDiagnoseSessionInfo* di_;
 };

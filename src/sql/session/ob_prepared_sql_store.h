@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace sql {
 class ObPreparedSqlValue {
-  public:
+public:
   ObPreparedSqlValue() : ref_count_(0)
   {}
 
@@ -49,7 +49,7 @@ class ObPreparedSqlValue {
 };
 
 class ObPreparedSqlStoreAtomic {
-  public:
+public:
   ObPreparedSqlStoreAtomic() : rc_(common::OB_SUCCESS), value_(NULL)
   {}
 
@@ -76,14 +76,14 @@ class ObPreparedSqlStoreAtomic {
     return value_;
   }
 
-  protected:
+protected:
   int rc_;
   ObPreparedSqlValue* value_;
   common::ObString sql_;
 };
 
 class ObPreparedSqlStoreAddRef : public ObPreparedSqlStoreAtomic {
-  public:
+public:
   ObPreparedSqlStoreAddRef()
   {}
 
@@ -109,7 +109,7 @@ class ObPreparedSqlStoreAddRef : public ObPreparedSqlStoreAtomic {
 };
 
 class ObPreparedSqlStoreDecRef : public ObPreparedSqlStoreAtomic {
-  public:
+public:
   ObPreparedSqlStoreDecRef()
   {}
 
@@ -135,7 +135,7 @@ class ObPreparedSqlStoreDecRef : public ObPreparedSqlStoreAtomic {
 };
 
 class ObPreparedSqlStore {
-  public:
+public:
   ObPreparedSqlStore() : allocator_(common::get_global_tc_allocator())
   {}
 
@@ -144,7 +144,7 @@ class ObPreparedSqlStore {
 
   int init();
 
-  public:
+public:
   int store_sql(const common::ObString& sql, common::ObString& osql);
   int free_sql(const common::ObString& sql);
   // typedef common::ObPooledAllocator<common::hash::HashMapTypes<common::ObString,
@@ -153,10 +153,10 @@ class ObPreparedSqlStore {
   // PreparedSqlMapAllocator;
   typedef common::hash::ObHashMap<common::ObString, ObPreparedSqlValue*> PreparedSqlMap;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPreparedSqlStore);
 
-  private:
+private:
   PreparedSqlMap psmap_;
   //  common::ObBuddyAllocator allocator_;
 };

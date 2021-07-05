@@ -29,7 +29,7 @@ using namespace obrpc;
 using namespace share;
 namespace unittest {
 class MyMockObPartitionService : public MockObIPartitionService {
-  public:
+public:
   MyMockObPartitionService(transaction::ObTransService* trans_service) : trans_service_(trans_service)
   {}
   ~MyMockObPartitionService()
@@ -39,12 +39,12 @@ class MyMockObPartitionService : public MockObIPartitionService {
     return trans_service_;
   }
 
-  private:
+private:
   transaction::ObTransService* trans_service_;
 };
 
 class ProcessorMgr : public ObTransP {
-  public:
+public:
   ProcessorMgr(MyMockObPartitionService* partition_service) : ObTransP(partition_service)
   {}
   int do_response_msg()
@@ -70,7 +70,7 @@ class MockObTransRpcProxy : public ObTransRpcProxy {
 };
 
 class TestObTransRpc : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

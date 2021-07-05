@@ -33,7 +33,7 @@
 namespace oceanbase {
 namespace sql {
 class ObRoutineMatchInfo {
-  public:
+public:
   struct MatchInfo {
     MatchInfo() : need_cast_(false), src_type_(ObMaxType), dest_type_(ObMaxType)
     {}
@@ -80,7 +80,7 @@ class ObRoutineMatchInfo {
     return match_info_.at(i).dest_type_;
   }
 
-  public:
+public:
   common::ObSEArray<MatchInfo, 16> match_info_;
 
   TO_STRING_KV(K_(match_info));
@@ -90,7 +90,7 @@ struct ObResolverUtils {
   static const int NAMENODE = 1;
   static ObItemType item_type_;
 
-  public:
+public:
   static int get_all_function_table_column_names(
       const TableItem& table_item, ObResolverParams& params, ObIArray<ObString>& column_names);
   static int check_function_table_column_exist(
@@ -323,7 +323,7 @@ struct ObResolverUtils {
   static int check_duplicated_column(ObSelectStmt& select_stmt, bool can_skip = false);
   static void escape_char_for_oracle_mode(ObString& str);
 
-  private:
+private:
   static int check_and_generate_column_name(const ObMaterializedViewContext& ctx, char* buf, const int64_t buf_len,
       const uint64_t table_id, const uint64_t column_id, const ObString& col_name, ObString& new_col_name);
 
@@ -349,7 +349,7 @@ struct ObResolverUtils {
     return ret;
   }
 
-  private:
+private:
   static int log_err_msg_for_partition_value(const ObQualifiedName& name);
   static int check_partition_range_value_result_type(const share::schema::ObPartitionFuncType part_type,
       const ObColumnRefRawExpr& part_column_expr, ObRawExpr& part_value_expr);

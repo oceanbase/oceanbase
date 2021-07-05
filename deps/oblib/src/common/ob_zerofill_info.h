@@ -18,13 +18,13 @@
 namespace oceanbase {
 namespace common {
 struct ObZerofillInfo {
-  public:
+public:
   ObZerofillInfo(const bool zf, const ObLength len) : max_length_(len), need_zerofill_(zf)
   {}
   ObZerofillInfo() : max_length_(0), need_zerofill_(false)
   {}
 
-  public:
+public:
   ObLength max_length_;
   bool need_zerofill_;
 };

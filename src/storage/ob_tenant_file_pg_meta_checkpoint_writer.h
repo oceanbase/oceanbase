@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObTenantFilePGMetaCheckpointWriter final {
-  public:
+public:
   ObTenantFilePGMetaCheckpointWriter();
   ~ObTenantFilePGMetaCheckpointWriter() = default;
   int init(ObPartitionMetaRedoModule& partition_meta_mgr, ObBaseFileMgr& pg_super_block_mgr,
@@ -30,7 +30,7 @@ class ObTenantFilePGMetaCheckpointWriter final {
   int get_file_checkpoint_entry(ObTenantFileCheckpointEntry& entry);
   void reset();
 
-  private:
+private:
   ObPartitionMetaRedoModule* partition_meta_mgr_;
   ObBaseFileMgr* server_file_mgr_;
   ObTenantFileKey tenant_file_key_;

@@ -29,7 +29,7 @@ class ObExecContext;
 class ObSQLSessionInfo;
 class ObPhysicalPlanCtx;
 class ObVariableSetExecutor {
-  public:
+public:
   ObVariableSetExecutor();
   virtual ~ObVariableSetExecutor();
   int execute(ObExecContext& ctx, ObVariableSetStmt& stmt);
@@ -43,7 +43,7 @@ class ObVariableSetExecutor {
   static int switch_to_session_variable(
       const common::ObExprCtx& expr_ctx, const common::ObObj& value, ObSessionVariable& sess_var);
 
-  private:
+private:
   int process_session_autocommit_hook(ObExecContext& exec_ctx, const common::ObObj& val);
   int process_auto_increment_hook(const ObSQLMode sql_mode, const common::ObString var_name, common::ObObj& val);
   int process_last_insert_id_hook(
@@ -52,7 +52,7 @@ class ObVariableSetExecutor {
   int update_global_variables(
       ObExecContext& ctx, ObDDLStmt& stmt, const share::ObSetVar& set_var, const common::ObObj& value_obj);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetExecutor);
 };
 }  // namespace sql

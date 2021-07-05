@@ -19,7 +19,7 @@ namespace sql {
 class InsertTableInfo {
   friend class ObMultiTableInsert;
 
-  public:
+public:
   InsertTableInfo() : check_constraint_exprs_(), virtual_column_exprs_(), match_conds_exprs_(), when_conds_idx_(-1)
   {}
   virtual ~InsertTableInfo()
@@ -61,11 +61,11 @@ class ObTableLocation;
 class ObMultiTableInsert : public ObTableInsert, public ObMultiDMLInfo {
   class ObMultiTableInsertCtx;
 
-  public:
+public:
   static const int64_t INSERT_OP = 0;
   static const int64_t DML_OP_CNT = 1;
 
-  public:
+public:
   explicit ObMultiTableInsert(common::ObIAllocator& alloc);
   virtual ~ObMultiTableInsert();
 
@@ -108,7 +108,7 @@ class ObMultiTableInsert : public ObTableInsert, public ObMultiDMLInfo {
     return true;
   }
 
-  protected:
+protected:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -128,7 +128,7 @@ class ObMultiTableInsert : public ObTableInsert, public ObMultiDMLInfo {
   int prepare_insert_row(const ObNewRow* input_row, const DMLSubPlan& insert_dml_sub, ObNewRow& new_row) const;
   int deep_copy_rows(ObMultiTableInsertCtx*& insert_ctx, const ObNewRow& row, ObNewRow& new_row) const;
 
-  private:
+private:
   bool is_multi_insert_first_;
   common::ObFixedArray<InsertTableInfo*, common::ObIAllocator> multi_table_insert_infos_;
 };

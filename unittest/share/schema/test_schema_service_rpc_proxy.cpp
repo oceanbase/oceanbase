@@ -41,7 +41,7 @@ using namespace std;
 #define IO_CNT 1
 
 class QHandler : public ObiReqQHandler {
-  public:
+public:
   QHandler(ObMultiVersionSchemaService* schema_service) : mp_(schema_service)
   {
     mp_.init();
@@ -72,14 +72,14 @@ class QHandler : public ObiReqQHandler {
     return true;
   }
 
-  private:
+private:
   ObGetAllSchemaP mp_;
   ObRpcSessionHandler shandler_;
   ObRpcReqContext ctx_;
 };
 
 class ObTestDeliver : public rpc::frame::ObReqDeliver {
-  public:
+public:
   ObTestDeliver(ObMultiVersionSchemaService* schema_service) : handler_(schema_service)
   {}
   int init()
@@ -101,13 +101,13 @@ class ObTestDeliver : public rpc::frame::ObReqDeliver {
     queue_.wait();
   }
 
-  protected:
+protected:
   ObReqQueueThread queue_;
   QHandler handler_;
 };
 
 class TestSchemaServiceRpcProxy : public ::testing::Test {
-  public:
+public:
   TestSchemaServiceRpcProxy() : port_(3100), handler_(server_), server_(&schema_service_), transport_(NULL)
   {}
 
@@ -199,7 +199,7 @@ class TestSchemaServiceRpcProxy : public ::testing::Test {
     return transport_->send(req, res);
   }
 
-  protected:
+protected:
   int port_;
   rpc::frame::ObNetEasy net_;
   obrpc::ObRpcHandler handler_;

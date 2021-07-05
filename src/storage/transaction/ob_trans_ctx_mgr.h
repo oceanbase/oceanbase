@@ -116,7 +116,7 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
   friend class ObSlaveTransCtx;
   friend class ObTransTimer;
 
-  public:
+public:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
   typedef RWLock::WLockGuard WLockGuard;
@@ -134,7 +134,7 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
   void destroy();
   void reset();
 
-  public:
+public:
   // alloc transaction context if alloc is set true when transaction context not exist
   int get_trans_ctx(const ObTransID& trans_id, const bool for_replay, const bool is_readonly,
       const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx);
@@ -194,7 +194,7 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
   }
   int recover_pg_guard();
 
-  public:
+public:
   void inc_total_ctx_count()
   {
     (void)ATOMIC_AAF(&total_ctx_count_, 1);
@@ -366,21 +366,21 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
       K_(total_ctx_count), K_(restore_snapshot_version), K_(last_restore_log_id), "uref",
       ((ObTransCtxType::SCHEDULER == ctx_type_ || !is_inited_) ? -1 : get_uref()));
 
-  private:
+private:
   bool is_participant_() const
   {
     return ObTransCtxType::PARTICIPANT == ctx_type_ || ObTransCtxType::SLAVE_PARTICIPANT == ctx_type_;
   }
   int get_partition_state_();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionTransCtxMgr);
 
-  private:
+private:
   static const int64_t OB_TRANS_STATISTICS_INTERVAL = 60 * 1000 * 1000;
   static const int64_t OB_PARTITION_AUDIT_LOCAL_STORAGE_COUNT = 4;
 
-  private:
+private:
   // erase transaction context from hashmap
   int erase_trans_ctx_(const ObTransID& trans_id);
   int remove_ctx_from_arr_(ObTransCtx* ctx);
@@ -413,12 +413,12 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
       const transaction::ObTransID& read_trans_id, const transaction::ObTransID& data_trans_id,
       const int32_t sql_sequence, storage::ObStoreRowLockState& lock_state);
 
-  public:
+public:
   static const int64_t MAX_HASH_ITEM_PRINT = 16;
 
-  private:
+private:
   class CtxMapMgr {
-    public:
+  public:
     CtxMapMgr() : ctx_map_(nullptr)
     {
       reset();
@@ -433,20 +433,20 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
     // it is used to filter partition
     template <class Fn>
     class ObPartitionForEachFilterFunctor {
-      public:
+    public:
       explicit ObPartitionForEachFilterFunctor(const ObPartitionKey& partition, Fn& fn) : partition_(partition), fn_(fn)
       {}
       ~ObPartitionForEachFilterFunctor()
       {}
       bool operator()(const ObTransKey& trans_key, ObTransCtx* ctx_base);
 
-      private:
+    private:
       ObPartitionKey partition_;
       Fn& fn_;
     };
     template <class Fn>
     class ObPartitionRemoveIfFilterFunctor {
-      public:
+    public:
       explicit ObPartitionRemoveIfFilterFunctor(const ObPartitionKey& partition, Fn& fn)
           : partition_(partition), fn_(fn)
       {}
@@ -454,7 +454,7 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
       {}
       bool operator()(const ObTransKey& trans_key, ObTransCtx* ctx_base);
 
-      private:
+    private:
       ObPartitionKey partition_;
       Fn& fn_;
     };
@@ -495,12 +495,12 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
       return ret;
     }
 
-    private:
+  private:
     ObPartitionKey partition_;
     CtxMap* ctx_map_;
   };
   class State {
-    public:
+  public:
     static const int64_t INVALID = -1;
     static const int64_t INIT = 0;
     static const int64_t F_WORKING = 1;
@@ -512,14 +512,14 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
     static const int64_t END = 7;
     static const int64_t MAX = 8;
 
-    public:
+  public:
     static bool is_valid(const int64_t state)
     {
       return state > INVALID && state < MAX;
     }
   };
   class Ops {
-    public:
+  public:
     static const int64_t INVALID = -1;
     static const int64_t START = 0;
     static const int64_t LEADER_REVOKE = 1;
@@ -530,14 +530,14 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
     static const int64_t REMOVE = 6;
     static const int64_t MAX = 7;
 
-    public:
+  public:
     static bool is_valid(const int64_t op)
     {
       return op > INVALID && op < MAX;
     }
   };
   class StateHelper {
-    public:
+  public:
     explicit StateHelper(int64_t& state) : state_(state), last_state_(State::INVALID), is_switching_(false)
     {}
     ~StateHelper()
@@ -545,13 +545,13 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
     int switch_state(const int64_t op);
     void restore_state();
 
-    private:
+  private:
     int64_t& state_;
     int64_t last_state_;
     bool is_switching_;
   };
 
-  private:
+private:
   bool is_master_() const
   {
     return State::L_WORKING == state_ || State::L_BLOCKED == state_;
@@ -565,7 +565,7 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
     return State::STOPPED == ATOMIC_LOAD(&state_);
   }
 
-  private:
+private:
   bool is_inited_;
   int64_t ctx_type_;
   int64_t state_;
@@ -623,7 +623,7 @@ class ObPartitionTransCtxMgr : public PartitionTransCtxMgrHashValue {
 };
 
 class PartitionTransCtxMgrAlloc {
-  public:
+public:
   static ObPartitionTransCtxMgr* alloc_value()
   {
     return NULL;
@@ -653,13 +653,13 @@ typedef common::ObLinkHashMap<common::ObPartitionKey, ObPartitionTransCtxMgr, Pa
     PartitionCtxMap;
 
 class ObITransCtxMgr {
-  public:
+public:
   ObITransCtxMgr()
   {}
   virtual ~ObITransCtxMgr()
   {}
 
-  public:
+public:
   // hold lock before revert or release trans_ctx
   virtual int get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, const bool for_replay,
       const bool is_readonly, bool& alloc, ObTransCtx*& ctx) = 0;
@@ -667,7 +667,7 @@ class ObITransCtxMgr {
 };
 
 class ObScheTransCtxMgr : public ObITransCtxMgr {
-  public:
+public:
   friend class ObTransCtx;
   ObScheTransCtxMgr()
   {
@@ -684,7 +684,7 @@ class ObScheTransCtxMgr : public ObITransCtxMgr {
   void destroy();
   void reset();
 
-  public:
+public:
   // hold lock before revert or release trans_ctx
   int get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, const bool for_replay,
       const bool is_readonly, bool& alloc, ObTransCtx*& ctx);
@@ -694,7 +694,7 @@ class ObScheTransCtxMgr : public ObITransCtxMgr {
   void print_all_ctx(const int64_t count);
   int xa_scheduler_hb_req();
 
-  private:
+private:
   ObPartitionTransCtxMgr* get_partition_trans_ctx_mgr_(const common::ObPartitionKey& partition)
   {
     UNUSED(partition);
@@ -702,7 +702,7 @@ class ObScheTransCtxMgr : public ObITransCtxMgr {
   }
   DISALLOW_COPY_AND_ASSIGN(ObScheTransCtxMgr);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   CtxMap ctx_map_;
@@ -713,7 +713,7 @@ class ObScheTransCtxMgr : public ObITransCtxMgr {
 
 template <typename T, int64_t CACHE_NUM>
 class ObPointerCache {
-  public:
+public:
   ObPointerCache()
   {
     reset();
@@ -752,14 +752,14 @@ class ObPointerCache {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   T* cache_[CACHE_NUM];
 };
 
 class ObTransCtxMgrImpl {
   enum { CACHE_NUM = 17313, CONTEXT_MAP_COUNT = 1 << 6 };
 
-  public:
+public:
   ObTransCtxMgrImpl() : ctx_map_(nullptr), ts_mgr_(nullptr)
   {
     reset();
@@ -772,7 +772,7 @@ class ObTransCtxMgrImpl {
   void reset();
   void destroy();
 
-  protected:
+protected:
   int add_partition(const common::ObPartitionKey& partition);
   int block_partition(const common::ObPartitionKey& partition, bool& is_all_trans_clear);
   int stop_partition(const common::ObPartitionKey& partition, const bool graceful);
@@ -794,7 +794,7 @@ class ObTransCtxMgrImpl {
   int leader_takeover(const common::ObPartitionKey& partition, const int64_t checkpoint);
   int leader_active(const common::ObPartitionKey& partition, const storage::LeaderActiveArg& arg);
 
-  public:
+public:
   template <typename Fn>
   int foreach_partition(Fn& fn)
   {
@@ -809,7 +809,7 @@ class ObTransCtxMgrImpl {
   int get_partition_trans_ctx_mgr_with_ref(const ObPartitionKey& partition, ObTransStateTableGuard& guard);
   int revert_partition_trans_ctx_mgr_with_ref(ObPartitionTransCtxMgr* mgr);
 
-  protected:
+protected:
   int64_t ctx_type_;
   PartitionCtxMap partition_ctx_map_;
   ObPointerCache<ObPartitionTransCtxMgr, CACHE_NUM> mgr_cache_;
@@ -820,12 +820,12 @@ class ObTransCtxMgrImpl {
   int64_t partition_alloc_cnt_;
   int64_t partition_del_cnt_;
 
-  protected:
+protected:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObCoordTransCtxMgr : public ObITransCtxMgr, public ObTransCtxMgrImpl {
-  public:
+public:
   ObCoordTransCtxMgr()
   {
     reset();
@@ -841,7 +841,7 @@ class ObCoordTransCtxMgr : public ObITransCtxMgr, public ObTransCtxMgrImpl {
   void destroy();
   void reset();
 
-  public:
+public:
   int get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, const bool for_replay,
       const bool is_readonly, bool& alloc, ObTransCtx*& ctx);
   int add_partition(const common::ObPartitionKey& partition);
@@ -857,17 +857,17 @@ class ObCoordTransCtxMgr : public ObITransCtxMgr, public ObTransCtxMgrImpl {
   int wait_all_trans_clear(const common::ObPartitionKey& partition);
   int wait_1pc_trx_end(const common::ObPartitionKey& partition);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCoordTransCtxMgr);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   mutable common::DRWLock rwlock_;
 };
 
 class ObPartTransCtxMgr : public ObITransCtxMgr, public ObTransCtxMgrImpl {
-  public:
+public:
   ObPartTransCtxMgr()
   {
     reset();
@@ -883,7 +883,7 @@ class ObPartTransCtxMgr : public ObITransCtxMgr, public ObTransCtxMgrImpl {
   int wait();
   void reset();
 
-  public:
+public:
   int get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, const bool for_replay,
       const bool is_readonly, bool& alloc, ObTransCtx*& ctx);
   int get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, const bool for_replay,
@@ -978,10 +978,10 @@ class ObPartTransCtxMgr : public ObITransCtxMgr, public ObTransCtxMgrImpl {
   int get_active_read_write_count(const ObPartitionKey& partition, int64_t& count);
   int init_dup_table_mgr(const ObPartitionKey& partition);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartTransCtxMgr);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   mutable common::DRWLock rwlock_;

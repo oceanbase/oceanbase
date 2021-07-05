@@ -25,17 +25,17 @@ class ObDtlLinkedBuffer;
 class ObDtlChannel;
 
 class ObDtlSendMessageP : public obrpc::ObRpcProcessor<obrpc::ObDtlRpcProxy::ObRpc<obrpc::OB_DTL_SEND> > {
-  public:
+public:
   virtual int process() final;
   static int process_msg(ObDtlRpcDataResponse& response, ObDtlSendArgs& args);
   static int process_interm_result(ObDtlSendArgs& arg);
 
-  private:
+private:
   static int process_px_bloom_filter_data(ObDtlLinkedBuffer*& buffer);
 };
 
 class ObDtlBCSendMessageP : public obrpc::ObRpcProcessor<obrpc::ObDtlRpcProxy::ObRpc<obrpc::OB_DTL_BC_SEND> > {
-  public:
+public:
   virtual int process() final;
 };
 

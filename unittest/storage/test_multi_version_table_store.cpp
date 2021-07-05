@@ -27,7 +27,7 @@ using namespace memtable;
 namespace unittest {
 
 class TestMultiVersionTableStore : public ::testing::Test {
-  public:
+public:
   void fake_sstable(const int64_t base_version, const int64_t snapshot_version, ObSSTable& table);
 };
 

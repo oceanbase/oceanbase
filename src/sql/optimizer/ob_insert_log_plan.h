@@ -24,7 +24,7 @@ typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAlloca
     common::ModulePageAllocator, true>
     RowParamMap;
 class ObInsertLogPlan : public ObLogPlan {
-  public:
+public:
   ObInsertLogPlan(ObOptimizerContext& ctx, const ObDMLStmt* insert_stmt) : ObLogPlan(ctx, insert_stmt), insert_op_(NULL)
   {}
   virtual ~ObInsertLogPlan()
@@ -36,7 +36,7 @@ class ObInsertLogPlan : public ObLogPlan {
     return row_params_map_;
   }
 
-  protected:
+protected:
   int generate_values_op_as_child(ObLogicalOperator*& expr_values);
   bool is_self_part_insert();
   int map_value_param_index();
@@ -47,10 +47,10 @@ class ObInsertLogPlan : public ObLogPlan {
   int allocate_insert_all_op(ObInsertStmt& insert_stmt, ObLogInsert*& insert_op);
   int allocate_pdml_insert_as_top(ObLogicalOperator*& top_op);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObInsertLogPlan);
 
-  private:
+private:
   RowParamMap row_params_map_;
   ObLogInsert* insert_op_;
 };

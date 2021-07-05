@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 class ObLinkArray {
-  public:
+public:
   typedef ObLink Link;
   struct Seg : public Link {
     Seg(int64_t start, int64_t size) : start_(start), end_(start + size)
@@ -87,7 +87,7 @@ class ObLinkArray {
     return NULL != s ? s->base_ + (idx - s->start_) : NULL;
   }
 
-  private:
+private:
   Seg* locate_seg(int64_t idx, bool force_alloc)
   {
     Seg* s = NULL;
@@ -130,7 +130,7 @@ class ObLinkArray {
     ob_free(s);
   }
 
-  private:
+private:
   lib::ObLabel label_;
   int tenant_id_;
   int64_t seg_size_;
@@ -141,7 +141,7 @@ class ObLinkArray {
 // package LinkArray
 template <typename T>
 class ObPtrArrayWrapper {
-  public:
+public:
   typedef ObLinkArray Array;
   typedef Array::Seg Seg;
   typedef hash::HashMapPair<int64_t, T> Pair;
@@ -266,7 +266,7 @@ class ObPtrArrayWrapper {
     return ret;
   }
 
-  public:
+public:
   ObLinkArray array_;
   char lock_[N_LOCK];
 };

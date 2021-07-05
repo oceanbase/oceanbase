@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace blocksstable {
 class ObLobDataWriter;
 class ObLobMicroBlockWriter {
-  public:
+public:
   ObLobMicroBlockWriter();
   virtual ~ObLobMicroBlockWriter() = default;
   int init(const int64_t macro_block_size);
@@ -34,10 +34,10 @@ class ObLobMicroBlockWriter {
   void reset();
   void reuse();
 
-  private:
+private:
   int reserve_header();
 
-  private:
+private:
   bool is_inited_;
   ObLobMicroBlockHeader* header_;
   ObSelfBufferWriter data_buffer_;
@@ -55,7 +55,7 @@ struct ObLobMicroBlockDesc {
 };
 
 class ObLobMacroBlockWriter {
-  public:
+public:
   ObLobMacroBlockWriter();
   virtual ~ObLobMacroBlockWriter() = default;
   int init(const ObDataStoreDesc& store_desc, const int64_t start_seq, ObLobDataWriter* writer);
@@ -65,7 +65,7 @@ class ObLobMacroBlockWriter {
   int close();
   void reset();
 
-  private:
+private:
   void reuse();
   int flush();
   int init_header(
@@ -83,7 +83,7 @@ class ObLobMacroBlockWriter {
   }
   int build_macro_meta(ObFullMacroBlockMeta& meta);
 
-  private:
+private:
   bool is_inited_;
   ObSelfBufferWriter data_;
   ObLobMicroBlockIndexWriter index_;
@@ -112,7 +112,7 @@ class ObLobMacroBlockWriter {
 };
 
 class ObLobDataWriter {
-  public:
+public:
   ObLobDataWriter();
   virtual ~ObLobDataWriter();
   int init(const ObDataStoreDesc& desc, const int64_t start_seq);
@@ -122,7 +122,7 @@ class ObLobDataWriter {
   void reset();
   void reuse();
 
-  private:
+private:
   void clear_macro_block_ref();
   int compress_micro_block(const char*& buf, int64_t& size);
   int write_lob_index(common::ObLobData& lob_data);
@@ -133,7 +133,7 @@ class ObLobDataWriter {
       ObLobMicroBlockDesc& block_desc);
   int check_rowkey(const common::ObStoreRowkey& rowkey, bool& check_ret) const;
 
-  private:
+private:
   static const int64_t DEFAULT_RESERVE_PERCENT = 90;
   bool is_inited_;
   common::ObArray<ObMacroBlockInfoPair> macro_blocks_;

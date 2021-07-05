@@ -51,7 +51,7 @@ class ObHashMap {
       hashmap;
   typedef hashmap_preproc<_key_type, _value_type> preproc;
 
-  public:
+public:
   typedef ObHashTable<_key_type, pair_type, _hashfunc, _equal, pair_first<pair_type>, _allocer, _defendmode,
       _bucket_array, _bucket_allocer>
       hashtable;
@@ -59,7 +59,7 @@ class ObHashMap {
   typedef typename hashtable::iterator iterator;
   typedef typename hashtable::const_iterator const_iterator;
 
-  public:
+public:
   ObHashMap() : ht_()
   {
     // default
@@ -68,7 +68,7 @@ class ObHashMap {
   };
   ~ObHashMap(){};
 
-  public:
+public:
   bucket_iterator bucket_begin()
   {
     return ht_.bucket_begin();
@@ -235,7 +235,7 @@ class ObHashMap {
     return ht_.deserialization(archive, &allocer_);
   };
 
-  private:
+private:
   preproc preproc_;
   _allocer allocer_;
   _bucket_allocer bucket_allocer_;

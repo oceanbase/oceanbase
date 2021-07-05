@@ -22,7 +22,7 @@ namespace common {
 namespace hash {
 template <class K, class V, uint64_t N = 1031, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false>
 class ObPlacementHashMap {
-  public:
+public:
   ObPlacementHashMap()
       : count_(0), keys_(reinterpret_cast<KeyArray&>(keys_buf_)), values_(reinterpret_cast<ValueArray&>(values_buf_))
   {}
@@ -58,14 +58,14 @@ class ObPlacementHashMap {
     return count();
   }
 
-  protected:
+protected:
   template <typename KK, typename VV, uint64_t NN, bool MM>
   friend class ObIteratableHashMap;
   typedef K KeyArray[N];
   typedef K KType;
   typedef V ValueArray[N];
 
-  protected:
+protected:
   int64_t count_;
   ObBitSet<N, BlockAllocatorT, auto_free> flags_;
   char keys_buf_[sizeof(K) * N];

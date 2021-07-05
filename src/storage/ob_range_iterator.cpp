@@ -98,7 +98,7 @@ OB_INLINE static int always_false(const ObStoreRange& range, const ObIArray<ObOr
 }
 
 class RangeCmp {
-  public:
+public:
   RangeCmp(const ObIArray<ObOrderType>* column_orders) : column_orders_(column_orders)
   {}
 
@@ -122,7 +122,7 @@ class RangeCmp {
     return cmp < 0;
   }
 
-  private:
+private:
   const ObIArray<ObOrderType>* column_orders_;
 };
 

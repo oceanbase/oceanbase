@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace rootserver {
 class ObUnitPlacementStrategy {
-  public:
+public:
   struct ObServerResource : public ObIServerResource {
     common::ObAddr addr_;
     double capacity_[RES_MAX];
@@ -55,7 +55,7 @@ class ObUnitPlacementStrategy {
   virtual int choose_server(common::ObArray<ObServerResource>& servers, const share::ObUnitConfig& unit_config,
       common::ObAddr& server, const common::ObZone& zone, int64_t& find_index) = 0;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUnitPlacementStrategy);
 };
@@ -63,7 +63,7 @@ class ObUnitPlacementStrategy {
 // New strategy of V1.4
 // Dot-Product Greedy Vector Balancing
 class ObUnitPlacementDPStrategy : public ObUnitPlacementStrategy {
-  public:
+public:
   ObUnitPlacementDPStrategy(double hard_limit = 1.0) : hard_limit_(hard_limit)
   {}
   virtual ~ObUnitPlacementDPStrategy() = default;
@@ -72,18 +72,18 @@ class ObUnitPlacementDPStrategy : public ObUnitPlacementStrategy {
   virtual int choose_server(common::ObArray<ObServerResource>& servers, const share::ObUnitConfig& unit_config,
       common::ObAddr& server, const common::ObZone& zone, int64_t& find_index) override;
 
-  private:
+private:
   bool have_enough_resource(const ObServerResource& server, const share::ObUnitConfig& unit_config);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUnitPlacementDPStrategy);
 
-  private:
+private:
   double hard_limit_;
 };
 
 // Old Best Fit of V1.3, only consider cpu resource
 class ObUnitPlacementBestFitStrategy : public ObUnitPlacementStrategy {
-  public:
+public:
   ObUnitPlacementBestFitStrategy(double soft_limit) : soft_limit_(soft_limit)
   {}
   virtual ~ObUnitPlacementBestFitStrategy() = default;
@@ -91,44 +91,44 @@ class ObUnitPlacementBestFitStrategy : public ObUnitPlacementStrategy {
   virtual int choose_server(common::ObArray<ObServerResource>& servers, const share::ObUnitConfig& unit_config,
       common::ObAddr& server, const common::ObZone& zone, int64_t& find_index) override;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUnitPlacementBestFitStrategy);
   // function members
   bool have_enough_resource(const ObServerResource& server, const share::ObUnitConfig& unit_config);
 
-  private:
+private:
   // data members
   double soft_limit_;
 };
 
 // Old Least Load First of V1.3, only consider cpu resource
 class ObUnitPlacementFFDStrategy : public ObUnitPlacementStrategy {
-  public:
+public:
   ObUnitPlacementFFDStrategy(double hard_limit) : hard_limit_(hard_limit)
   {}
   virtual ~ObUnitPlacementFFDStrategy() = default;
   virtual int choose_server(common::ObArray<ObServerResource>& servers, const share::ObUnitConfig& unit_config,
       common::ObAddr& server, const common::ObZone& zone, int64_t& find_index) override;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUnitPlacementFFDStrategy);
   // function members
   bool have_enough_resource(const ObServerResource& server, const share::ObUnitConfig& unit_config);
 
-  private:
+private:
   // data members
   double hard_limit_;
 };
 
 // Old strategy of V1.3
 class ObUnitPlacementHybridStrategy : public ObUnitPlacementStrategy {
-  public:
+public:
   ObUnitPlacementHybridStrategy(double soft_limit, double hard_limit)
       : best_fit_first_(soft_limit), least_load_first_(hard_limit)
   {}
@@ -138,13 +138,13 @@ class ObUnitPlacementHybridStrategy : public ObUnitPlacementStrategy {
   virtual int choose_server(common::ObArray<ObServerResource>& servers, const share::ObUnitConfig& unit_config,
       common::ObAddr& server, const common::ObZone& zone, int64_t& find_index) override;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUnitPlacementHybridStrategy);
   // function members
-  private:
+private:
   // data members
   ObUnitPlacementBestFitStrategy best_fit_first_;
   ObUnitPlacementFFDStrategy least_load_first_;

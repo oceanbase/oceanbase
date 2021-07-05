@@ -44,7 +44,7 @@ int64_t allocate_sql_id()
 }
 
 class TestPlanSet : public ::testing::Test {
-  public:
+public:
   TestPlanSet()
   {}
   virtual ~TestPlanSet()
@@ -54,7 +54,7 @@ class TestPlanSet : public ::testing::Test {
   void TearDown()
   {}
 
-  private:
+private:
   // disallow copy
   TestPlanSet(const TestPlanSet& other);
   TestPlanSet& operator=(const TestPlanSet& other);

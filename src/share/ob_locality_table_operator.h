@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace share {
 class ObLocalityTableOperator {
-  public:
+public:
   int load_region(const common::ObAddr& addr, const bool& is_self_cluster, common::ObISQLClient& sql_client,
       ObLocalityInfo& locality_info, ObServerLocalityCache& server_locality_cache);
   int load_zone(const common::ObAddr& addr, common::ObISQLClient& sql_client, ObLocalityInfo& locality_info);

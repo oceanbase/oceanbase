@@ -20,7 +20,7 @@ namespace sql {
 class ObLogExchange : public ObLogicalOperator {
   typedef common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> RepartColumnExprs;
 
-  public:
+public:
   ObLogExchange(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         is_producer_(false),
@@ -233,14 +233,14 @@ class ObLogExchange : public ObLogicalOperator {
   }
   int update_sharding_conds(AllocExchContext& ctx);
 
-  private:
+private:
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
   virtual int print_plan_head_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
   virtual int inner_replace_generated_agg_expr(
       const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& to_replace_exprs) override;
 
-  private:
+private:
   // the 'partition key' expressions
   bool is_producer_;    /* true if the exchange the producer */
   bool is_remote_;      /* true if the exchange is remote single-server */

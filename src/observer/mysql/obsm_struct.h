@@ -29,7 +29,7 @@ class ObTenant;
 namespace observer {
 
 struct ObSMConnection {
-  public:
+public:
   static const uint32_t INITIAL_SESSID = 0;
   static const int64_t SCRAMBLE_BUF_SIZE = 20;
 
@@ -131,7 +131,7 @@ struct ObSMConnection {
     connection_phase_ = rpc::ConnectionPhaseEnum::CPE_AUTHED;
   }
 
-  public:
+public:
   obmysql::ObMySQLCapabilityFlags cap_flags_;
   bool is_proxy_;
   bool is_java_client_;

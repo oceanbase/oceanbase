@@ -24,7 +24,7 @@ namespace common {
 #if USE_TCRWLOCK
 
 class LWaitCond {
-  public:
+public:
   LWaitCond() : futex_()
   {}
   ~LWaitCond()
@@ -47,12 +47,12 @@ class LWaitCond {
     return ready;
   }
 
-  private:
+private:
   lib::CoFutex futex_;
 };
 
 class TCRWLock {
-  public:
+public:
   enum { WRITE_MASK = 1 << 31 };
   struct RLockGuard {
     explicit RLockGuard(TCRWLock& lock) : lock_(lock)
@@ -274,7 +274,7 @@ class TCRWLock {
     return tcref_;
   }
 
-  private:
+private:
   ObLatch latch_;
   uint32_t latch_id_;
   TCRef& tcref_;
@@ -284,7 +284,7 @@ class TCRWLock {
 };
 
 class TCWLockGuard {
-  public:
+public:
   explicit TCWLockGuard(const TCRWLock& lock) : lock_(const_cast<TCRWLock&>(lock)), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock()))) {
@@ -304,16 +304,16 @@ class TCWLockGuard {
     return ret_;
   }
 
-  private:
+private:
   TCRWLock& lock_;
   int ret_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TCWLockGuard);
 };
 
 class TCRLockGuard {
-  public:
+public:
   explicit TCRLockGuard(const TCRWLock& lock) : lock_(const_cast<TCRWLock&>(lock)), ret_(OB_SUCCESS), slot_id_(0)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock(INT64_MAX, slot_id_)))) {
@@ -333,19 +333,19 @@ class TCRLockGuard {
     return ret_;
   }
 
-  private:
+private:
   TCRWLock& lock_;
   int ret_;
   int64_t slot_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TCRLockGuard);
 };
 
 typedef TCRWLock RWLock;
 #else
 class RWLock {
-  public:
+public:
   struct RLockGuard {
     explicit RLockGuard(RWLock& lock) : lock_(lock)
     {
@@ -469,7 +469,7 @@ class RWLock {
     return OB_LIKELY(latch_.try_wrlock(latch_id_) == OB_SUCCESS);
   }
 
-  private:
+private:
   ObLatch latch_;
   uint32_t latch_id_;
 };

@@ -29,7 +29,7 @@ namespace sql {
 class ObPhyPartitionLocationInfo;
 class ObPhyTableLocationInfo;
 class ObIntersectRoutePolicy : public ObRoutePolicy {
-  public:
+public:
   using ObRoutePolicy::ObRoutePolicy;
   int init_candidate_replicas(const common::ObList<common::ObAddr, common::ObArenaAllocator>& candidate_server_list,
       common::ObIArray<CandidateReplica>& candi_replicas);

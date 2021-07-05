@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprSysConnectByPath : public ObExprOperator {
-  public:
+public:
   explicit ObExprSysConnectByPath(common::ObIAllocator& alloc);
   virtual ~ObExprSysConnectByPath()
   {}
@@ -32,7 +32,7 @@ class ObExprSysConnectByPath : public ObExprOperator {
   static int eval_sys_connect_by_path(
       const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum, ObNLConnectByOpBase* connect_by_op);
 
-  private:
+private:
   static int StringContain(const common::ObString& src_str, const common::ObString& sub_str, bool& is_contain,
       common::ObCollationType cs_type);
   DISALLOW_COPY_AND_ASSIGN(ObExprSysConnectByPath) const;

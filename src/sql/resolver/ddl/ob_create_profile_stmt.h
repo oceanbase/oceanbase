@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObUserProfileStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObUserProfileStmt(common::ObIAllocator* name_pool);
   ObUserProfileStmt();
   virtual ~ObUserProfileStmt();
@@ -35,11 +35,11 @@ class ObUserProfileStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(create_profile_arg));
 
-  private:
+private:
   // data members
   obrpc::ObProfileDDLArg create_profile_arg_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUserProfileStmt);
 };
 }  // end namespace sql

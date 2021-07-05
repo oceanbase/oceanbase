@@ -23,18 +23,18 @@ using namespace common;
 #define OK(value) ASSERT_EQ(OB_SUCCESS, (value))
 
 class ObSerialzationHelper : public ::testing::Test {
-  public:
+public:
   ObSerialzationHelper();
   virtual ~ObSerialzationHelper();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObSerialzationHelper(const ObSerialzationHelper& other);
   ObSerialzationHelper& operator=(const ObSerialzationHelper& other);
 
-  protected:
+protected:
   // data members
 };
 

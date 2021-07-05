@@ -22,12 +22,12 @@ class ObCreateDatabaseResolver : public ObDDLResolver {
   static const int64_t DATABASE_OPTION = 2;
   static const int64_t DATABASE_NODE_COUNT = 3;
 
-  public:
+public:
   explicit ObCreateDatabaseResolver(ObResolverParams& params);
   virtual ~ObCreateDatabaseResolver();
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateDatabaseResolver);
 };

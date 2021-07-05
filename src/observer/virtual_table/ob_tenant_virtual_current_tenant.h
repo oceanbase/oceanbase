@@ -24,7 +24,7 @@ class ObNewRow;
 }  // namespace common
 namespace observer {
 class ObTenantVirtualCurrentTenant : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObTenantVirtualCurrentTenant();
   virtual ~ObTenantVirtualCurrentTenant();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -34,7 +34,7 @@ class ObTenantVirtualCurrentTenant : public common::ObVirtualTableScannerIterato
     sql_proxy_ = sql_proxy;
   }
 
-  private:
+private:
   common::ObMySQLProxy* sql_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantVirtualCurrentTenant);
 };

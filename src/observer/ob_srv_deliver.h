@@ -35,13 +35,13 @@ using rpc::frame::ObiReqQHandler;
 using rpc::frame::ObReqQueue;
 
 class QueueThread {
-  public:
+public:
   QueueThread(const char* thread_name = nullptr) : thread_(queue_, thread_name)
   {}
 
-  public:
+public:
   class Thread : public lib::TGRunnable {
-    public:
+  public:
     Thread(ObReqQueue& queue, const char* thread_name) : queue_(queue), thread_name_(thread_name)
     {}
     void run1()
@@ -52,7 +52,7 @@ class QueueThread {
       queue_.loop();
     }
 
-    private:
+  private:
     ObReqQueue& queue_;
     const char* thread_name_;
   } thread_;
@@ -60,7 +60,7 @@ class QueueThread {
 };
 
 class ObSrvDeliver : public rpc::frame::ObReqQDeliver {
-  public:
+public:
   ObSrvDeliver(ObiReqQHandler& qhandler, ObRpcSessionHandler& session_handler, ObGlobalContext& gctx);
 
   int init();
@@ -75,14 +75,14 @@ class ObSrvDeliver : public rpc::frame::ObReqQDeliver {
 
   int create_queue_thread(int tg_id, const char* thread_name, QueueThread*& qthread);
 
-  private:
+private:
   int init_queue_threads();
 
   int deliver_rpc_request(rpc::ObRequest& req);
 
   int deliver_mysql_request(rpc::ObRequest& req);
 
-  private:
+private:
   bool is_inited_;
   bool stop_;
   common::ObAddr host_;
@@ -95,7 +95,7 @@ class ObSrvDeliver : public rpc::frame::ObReqQDeliver {
 
   DISALLOW_COPY_AND_ASSIGN(ObSrvDeliver);
 
-  public:
+public:
   static const int64_t MAX_QUEUE_LEN = 10000;
   static const int LEASE_TASK_THREAD_CNT = 3;
   static const int MINI_MODE_LEASE_TASK_THREAD_CNT = 1;

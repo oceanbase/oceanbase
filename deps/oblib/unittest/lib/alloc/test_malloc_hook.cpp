@@ -28,7 +28,7 @@ int main(int argc, char* argv[])
 }
 
 class TestMallocHook : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
 

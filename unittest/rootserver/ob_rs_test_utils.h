@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace rootserver {
 class ObFakeCB : public ObIStatusChangeCallback {
-  public:
+public:
   ObFakeCB()
   {}
   int wakeup_balancer()
@@ -50,7 +50,7 @@ class ObFakeCB : public ObIStatusChangeCallback {
 };
 
 class ObFakeServerChangeCB : public ObIServerChangeCallback {
-  public:
+public:
   ObFakeServerChangeCB()
   {}
   virtual ~ObFakeServerChangeCB()
@@ -62,7 +62,7 @@ class ObFakeServerChangeCB : public ObIServerChangeCallback {
 };
 
 class ObNeverStopForTestOnly : public share::ObCheckStopProvider {
-  public:
+public:
   ObNeverStopForTestOnly()
   {}
   virtual ~ObNeverStopForTestOnly()

@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprUserEnv : public ObFuncExprOperator {
-  public:
+public:
   ObExprUserEnv();
   explicit ObExprUserEnv(common::ObIAllocator& alloc);
   virtual ~ObExprUserEnv();
@@ -44,7 +44,7 @@ class ObExprUserEnv : public ObFuncExprOperator {
   static int eval_schemaid_result1(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
   static int eval_sessionid_result1(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   int check_arg_valid(const common::ObObj& value, UserEnvParameter& para) const;
   static UserEnvParameter parameters_[];
   static const int DEFAULT_LENGTH = 64;

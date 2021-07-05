@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace share {
 
 class ObUniqueIndexRowTransformer {
-  public:
+public:
   static int check_need_shadow_columns(const common::ObNewRow& row, const common::ObCompatibilityMode sql_mode,
       const int64_t unique_key_cnt, const common::ObIArray<int64_t>* projector, bool& need_shadow_columns);
   static int convert_to_unique_index_row(const common::ObNewRow& row, const common::ObCompatibilityMode sql_mode,
@@ -30,7 +30,7 @@ class ObUniqueIndexRowTransformer {
       const int64_t unique_key_cnt, const int64_t shadow_column_cnt, const common::ObIArray<int64_t>* projector,
       bool& need_shadow_columns, common::ObNewRow& result_row, const bool need_copy_cell = false);
 
-  private:
+private:
   static int check_oracle_need_shadow_columns(const common::ObNewRow& row, const int64_t unique_key_cnt,
       const common::ObIArray<int64_t>* projector, bool& need_shadow_columns);
   static int check_mysql_need_shadow_columns(const common::ObNewRow& row, const int64_t unique_key_cnt,

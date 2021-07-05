@@ -25,13 +25,13 @@ template <typename Key, typename Value, typename AllocHandle = AllocHandle<Key, 
 class ObLinkHashMapWithHazardValue {
   enum { RETIRE_LIMIT = 1024 };
 
-  protected:
+protected:
   typedef DCArrayAlloc ArrayAlloc;
   typedef DCHash<Key, SHRINK_THRESHOLD> Hash;
   typedef typename Hash::Node Node;
   typedef LinkHashNode<Key> HashNode;
   class Iterator {
-    public:
+  public:
     explicit Iterator(ObLinkHashMapWithHazardValue& hash) : hash_(hash), next_(hash_.next(NULL))
     {}
     ~Iterator()
@@ -47,12 +47,12 @@ class ObLinkHashMapWithHazardValue {
       return ret;
     }
 
-    private:
+  private:
     ObLinkHashMapWithHazardValue& hash_;
     HashNode* next_;
   };
 
-  public:
+public:
   explicit ObLinkHashMapWithHazardValue(int64_t min_size = 1 << 16) : alloc_handle_(), hash_(array_alloc_, min_size)
   {}
   explicit ObLinkHashMapWithHazardValue(AllocHandle& alloc_handle, int64_t min_size = 1 << 16)
@@ -270,7 +270,7 @@ class ObLinkHashMapWithHazardValue {
     return map(remove_if);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLinkHashMapWithHazardValue);
   static int err_code_map(int err)
   {
@@ -324,10 +324,10 @@ class ObLinkHashMapWithHazardValue {
     return OB_ISNULL(iter) ? nullptr : next_node;
   }
 
-  private:
+private:
   template <typename Function>
   class HandleOn {
-    public:
+  public:
     HandleOn(ObLinkHashMapWithHazardValue& hash, Function& fn) : hash_(hash), handle_(fn)
     {}
     bool operator()(Key& key, Value* value)
@@ -337,13 +337,13 @@ class ObLinkHashMapWithHazardValue {
       return need_continue;
     }
 
-    private:
+  private:
     ObLinkHashMapWithHazardValue& hash_;
     Function& handle_;
   };
   template <typename Function>
   class RemoveIf {
-    public:
+  public:
     RemoveIf(ObLinkHashMapWithHazardValue& hash, Function& fn) : hash_(hash), predicate_(fn)
     {}
     bool operator()(Key& key, Value* value)
@@ -357,7 +357,7 @@ class ObLinkHashMapWithHazardValue {
       return true;
     }
 
-    private:
+  private:
     ObLinkHashMapWithHazardValue& hash_;
     Function& predicate_;
   };
@@ -420,7 +420,7 @@ class ObLinkHashMapWithHazardValue {
     return retire_station;
   }
 
-  private:
+private:
   CountHandle count_handle_;
   AllocHandle alloc_handle_;
   ArrayAlloc array_alloc_;

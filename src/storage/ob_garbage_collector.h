@@ -40,11 +40,11 @@ namespace storage {
 class ObIPartitionGroup;
 class ObPartitionService;
 class ObGarbageCollector : public share::ObThreadPool {
-  public:
+public:
   ObGarbageCollector();
   ~ObGarbageCollector();
 
-  public:
+public:
   int init(ObPartitionService* partition_service, transaction::ObTransService* trans_service,
       share::schema::ObMultiVersionSchemaService* schema_service, obrpc::ObSrvRpcProxy* rpc_proxy,
       common::ObMySQLProxy* sql_proxy, const common::ObAddr& self_addr);
@@ -54,7 +54,7 @@ class ObGarbageCollector : public share::ObThreadPool {
   void destroy();
   void run1();
 
-  private:
+private:
   class InsertPGFunctor;
   class QueryPGIsValidMemberFunctor;
   class QueryPGFlushedIlogIDFunctor;
@@ -95,17 +95,17 @@ class ObGarbageCollector : public share::ObThreadPool {
   static const int64_t GC_SCHEMA_DROP_DELAY = 1800 * 1000 * 1000;  // 30 minutes
   static const int64_t LOG_ARCHIVE_DROP_DELAY = GC_SCHEMA_DROP_DELAY;
 
-  private:
+private:
   int gc_check_member_list_(ObGCCandidateArray& gc_candidates);
   int construct_server_pg_map_for_member_list_(ServerPGMap& server_pg_map) const;
   int handle_each_pg_for_member_list_(ServerPGMap& server_pg_map, ObGCCandidateArray& gc_candidates);
 
-  private:
+private:
   int gc_check_schema_(ObGCCandidateArray& gc_candidates, TenantSet& gc_tenant_set);
   int gc_check_schema_(storage::ObIPartitionGroup* pg, share::schema::ObSchemaGetterGuard& schema_guard,
       TenantSet& gc_tenant_set, NeedGCReason& gc_reason);
 
-  private:
+private:
   static bool is_gc_reason_leader_schema_drop_(const NeedGCReason& gc_reason);
   int execute_gc_except_leader_schema_drop_(const ObGCCandidateArray& gc_candidates);
   int execute_gc_for_leader_schema_drop_(const ObGCCandidateArray& gc_candidates);
@@ -121,7 +121,7 @@ class ObGarbageCollector : public share::ObThreadPool {
   int execute_gc_tenant_tmp_file_(TenantSet& gc_tenant_set);
   bool check_gc_condition_() const;
 
-  private:
+private:
   int gc_check_pg_schema_(
       storage::ObIPartitionGroup* pg, share::schema::ObSchemaGetterGuard& schema_guard, NeedGCReason& gc_reason);
   int handle_schema_drop_pg_(storage::ObIPartitionGroup* pg, const bool is_physical_removed, NeedGCReason& gc_reason);
@@ -130,7 +130,7 @@ class ObGarbageCollector : public share::ObThreadPool {
   int follower_handle_schema_drop_pg_(storage::ObIPartitionGroup* pg, NeedGCReason& gc_reason);
   int gc_check_log_archive_(storage::ObIPartitionGroup* pg, const bool is_physical_removed, NeedGCReason& gc_reason);
 
-  private:
+private:
   int gc_check_partition_schema_(storage::ObIPartitionGroup* pg, share::schema::ObSchemaGetterGuard& schema_guard,
       const common::ObPartitionKey& partition_key);
   int handle_schema_drop_partition_(storage::ObIPartitionGroup* pg, const common::ObPartitionKey& partition_key);
@@ -138,11 +138,11 @@ class ObGarbageCollector : public share::ObThreadPool {
   int follower_handle_schema_drop_partition_(
       storage::ObIPartitionGroup* pg, const common::ObPartitionKey& partition_key);
 
-  private:
+private:
   int construct_server_pg_map_(
       ServerPGMap& server_pg_map, const common::ObAddr& server, const common::ObPGKey& pg_key) const;
 
-  private:
+private:
   bool is_inited_;
   ObPartitionService* partition_service_;
   transaction::ObTransService* trans_service_;
@@ -152,7 +152,7 @@ class ObGarbageCollector : public share::ObThreadPool {
   common::ObAddr self_addr_;
   int64_t seq_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGarbageCollector);
 };
 }  // namespace storage

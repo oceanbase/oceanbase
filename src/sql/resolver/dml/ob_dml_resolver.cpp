@@ -268,7 +268,7 @@ int ObDMLResolver::resolve_sql_expr(
     if (OB_SUCC(ret) && op_exprs.count() > 0) {
       if (OB_FAIL(ObRawExprUtils::resolve_op_exprs_for_oracle_implicit_cast(
               ctx.expr_factory_, ctx.session_info_, op_exprs))) {
-        LOG_WARN("implicit cast faild", K(ret));
+        LOG_WARN("implicit cast failed", K(ret));
       }
     }
 

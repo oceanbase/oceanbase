@@ -188,7 +188,7 @@ struct ObBackupMetaIndex {
   static const uint8_t META_INDEX_VERSION = 1;
   OB_UNIS_VERSION(META_INDEX_VERSION);
 
-  public:
+public:
   ObBackupMetaIndex();
   void reset();
   int check_valid() const;
@@ -205,7 +205,7 @@ struct ObBackupMacroIndex {
   static const int64_t MACRO_INDEX_VERSION = 1;
   OB_UNIS_VERSION(MACRO_INDEX_VERSION);
 
-  public:
+public:
   ObBackupMacroIndex();
   void reset();
   int check_valid() const;
@@ -276,7 +276,7 @@ struct ObLogArchiveStatus final {
 struct ObGetTenantLogArchiveStatusArg final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   uint64_t incarnation_;
   uint64_t round_;
   bool is_valid() const
@@ -293,7 +293,7 @@ struct ObTenantLogArchiveStatus final {
 
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantLogArchiveStatus();
   void reset();
   bool is_valid() const;
@@ -312,7 +312,7 @@ struct ObTenantLogArchiveStatus final {
   TO_STRING_KV(K_(tenant_id), K_(start_ts), K_(checkpoint_ts), K_(status), K_(incarnation), K_(round), "status_str",
       ObLogArchiveStatus::get_str(status_), K_(is_mark_deleted), K_(is_mount_file_created), K_(compatible));
 
-  private:
+private:
   int update_stop_(const ObTenantLogArchiveStatus& new_status);
   int update_beginning_(const ObTenantLogArchiveStatus& new_status);
   int update_doing_(const ObTenantLogArchiveStatus& new_status);
@@ -323,7 +323,7 @@ struct ObTenantLogArchiveStatus final {
 struct ObTenantLogArchiveStatusWrapper final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantLogArchiveStatusWrapper();
   int32_t result_code_;
   common::ObSArray<ObTenantLogArchiveStatus> status_array_;
@@ -490,7 +490,7 @@ struct ObBackupDeviceType final {
 };
 
 struct ObBaseBackupInfoStruct {
-  public:
+public:
   typedef common::ObFixedLengthString<common::OB_MAX_URI_LENGTH> BackupDest;
   ObBaseBackupInfoStruct();
   virtual ~ObBaseBackupInfoStruct() = default;
@@ -523,7 +523,7 @@ struct ObBaseBackupInfoStruct {
 // TODO() add compatible and cluster_version
 // to TenantBackupTaskItem
 struct ObTenantBackupTaskItem {
-  public:
+public:
   enum BackupStatus {
     GENERATE = 0,
     DOING = 1,
@@ -532,7 +532,7 @@ struct ObTenantBackupTaskItem {
     MAX,
   };
 
-  public:
+public:
   ObTenantBackupTaskItem();
   virtual ~ObTenantBackupTaskItem() = default;
   void reset();
@@ -586,7 +586,7 @@ typedef ObTenantBackupTaskItem ObTenantBackupTaskInfo;
 
 // pg backup task item
 struct ObPGBackupTaskItem {
-  public:
+public:
   enum BackupStatus {
     PENDING = 0,
     DOING = 1,
@@ -595,7 +595,7 @@ struct ObPGBackupTaskItem {
     MAX,
   };
 
-  public:
+public:
   ObPGBackupTaskItem();
   virtual ~ObPGBackupTaskItem() = default;
   void reset();
@@ -653,7 +653,7 @@ struct ObBackupValidateTenant {
 };
 
 struct ObBackupValidateTaskItem {
-  public:
+public:
   enum ValidateStatus {
     SCHEDULE = 0,
     DOING = 1,
@@ -662,7 +662,7 @@ struct ObBackupValidateTaskItem {
     MAX,
   };
 
-  public:
+public:
   ObBackupValidateTaskItem();
   virtual ~ObBackupValidateTaskItem();
   void reset();
@@ -687,7 +687,7 @@ struct ObBackupValidateTaskItem {
 typedef ObBackupValidateTaskItem ObBackupValidateTaskInfo;
 
 struct ObTenantValidateTaskItem {
-  public:
+public:
   enum ValidateStatus {
     SCHEDULE = 0,
     DOING = 1,
@@ -696,7 +696,7 @@ struct ObTenantValidateTaskItem {
     MAX,
   };
 
-  public:
+public:
   ObTenantValidateTaskItem();
   virtual ~ObTenantValidateTaskItem();
   void reset();
@@ -734,7 +734,7 @@ struct ObTenantValidateTaskItem {
 typedef ObTenantValidateTaskItem ObTenantValidateTaskInfo;
 
 struct ObPGValidateTaskItem {
-  public:
+public:
   enum ValidateStatus {
     PENDING = 0,
     DOING = 1,
@@ -742,7 +742,7 @@ struct ObPGValidateTaskItem {
     MAX,
   };
 
-  public:
+public:
   ObPGValidateTaskItem();
   virtual ~ObPGValidateTaskItem();
   void reset();
@@ -782,7 +782,7 @@ struct ObPGValidateTaskItem {
 typedef ObPGValidateTaskItem ObPGValidateTaskInfo;
 
 struct ObPGValidateTaskRowKey {
-  public:
+public:
   ObPGValidateTaskRowKey();
   virtual ~ObPGValidateTaskRowKey();
   int set(const ObPGValidateTaskInfo* pg_task);
@@ -825,7 +825,7 @@ struct ObBackupBackupsetType final {
 };
 
 struct ObBackupBackupsetJobItem {
-  public:
+public:
   enum JobStatus {
     SCHEDULE,
     BACKUP,
@@ -834,7 +834,7 @@ struct ObBackupBackupsetJobItem {
     MAX,
   };
 
-  public:
+public:
   ObBackupBackupsetJobItem();
   virtual ~ObBackupBackupsetJobItem();
 
@@ -860,7 +860,7 @@ struct ObBackupBackupsetJobItem {
 typedef ObBackupBackupsetJobItem ObBackupBackupsetJobInfo;
 
 struct ObTenantBackupBackupsetTaskItem {
-  public:
+public:
   enum TaskStatus {
     GENERATE,
     BACKUP,
@@ -869,7 +869,7 @@ struct ObTenantBackupBackupsetTaskItem {
     MAX,
   };
 
-  public:
+public:
   ObTenantBackupBackupsetTaskItem();
   virtual ~ObTenantBackupBackupsetTaskItem();
 
@@ -921,7 +921,7 @@ struct ObTenantBackupBackupsetTaskItem {
 typedef ObTenantBackupBackupsetTaskItem ObTenantBackupBackupsetTaskInfo;
 
 struct ObPGBackupBackupsetTaskRowKey {
-  public:
+public:
   ObPGBackupBackupsetTaskRowKey();
   ~ObPGBackupBackupsetTaskRowKey();
 
@@ -943,7 +943,7 @@ struct ObPGBackupBackupsetTaskRowKey {
 };
 
 struct ObPGBackupBackupsetTaskStat {
-  public:
+public:
   ObPGBackupBackupsetTaskStat();
   ~ObPGBackupBackupsetTaskStat();
 
@@ -962,7 +962,7 @@ struct ObPGBackupBackupsetTaskStat {
 };
 
 struct ObPGBackupBackupsetTaskItem {
-  public:
+public:
   enum TaskStatus {
     PENDING,
     DOING,
@@ -970,7 +970,7 @@ struct ObPGBackupBackupsetTaskItem {
     MAX,
   };
 
-  public:
+public:
   ObPGBackupBackupsetTaskItem();
   virtual ~ObPGBackupBackupsetTaskItem();
 
@@ -1008,7 +1008,7 @@ typedef ObPGBackupBackupsetTaskItem ObPGBackupBackupsetTaskInfo;
 class ObBackupPath;
 class ObIBackupLeaseService;
 class ObBackupUtils {
-  public:
+public:
   ObBackupUtils()
   {}
   virtual ~ObBackupUtils()
@@ -1020,7 +1020,7 @@ class ObBackupUtils {
       schema::ObMultiVersionSchemaService& schema_service, const int64_t tenant_schema_version,
       schema::ObSchemaGetterGuard& schema_guard);
 
-  private:
+private:
   static const int64_t RETRY_INTERVAL = 10 * 1000 * 1000;
   static const int64_t MAX_RETRY_TIMES = 3;
 };
@@ -1062,7 +1062,7 @@ struct ObBackupBaseDataPathInfo final {
 struct ObPhysicalRestoreInfo final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   char backup_dest_[OB_MAX_BACKUP_DEST_LENGTH];
   char cluster_name_[common::OB_MAX_CLUSTER_NAME_LENGTH];
   int64_t cluster_id_;
@@ -1107,7 +1107,7 @@ struct ObRestoreBackupInfo final {
 struct ObPhysicalRestoreArg final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPhysicalRestoreArg();
   ObPhysicalRestoreArg(const ObPhysicalRestoreArg& other);
   virtual ~ObPhysicalRestoreArg()
@@ -1128,7 +1128,7 @@ struct ObPhysicalRestoreArg final {
   }
   TO_STRING_KV(K_(restore_info), K_(pg_key), K_(restore_data_version));
 
-  public:
+public:
   ObPhysicalRestoreInfo restore_info_;
   common::ObPartitionKey pg_key_;
   int64_t restore_data_version_;
@@ -1137,7 +1137,7 @@ struct ObPhysicalRestoreArg final {
 struct ObPhysicalValidateArg final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPhysicalValidateArg();
   virtual ~ObPhysicalValidateArg()
   {}
@@ -1156,7 +1156,7 @@ struct ObPhysicalValidateArg final {
       K_(clog_end_timestamp), K_(start_log_id), K_(end_log_id), K_(log_size), K_(is_dropped_tenant),
       K_(need_validate_clog), K_(full_backup_set_id), K_(inc_backup_set_id), K_(cluster_version));
 
-  public:
+public:
   char backup_dest_[OB_MAX_BACKUP_DEST_LENGTH];
   char cluster_name_[common::OB_MAX_CLUSTER_NAME_LENGTH];
   char uri_header_[common::OB_MAX_URI_HEADER_LENGTH];
@@ -1189,7 +1189,7 @@ struct ObPhysicalValidateArg final {
 struct ObPhysicalBackupArg final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPhysicalBackupArg();
   void reset();
   bool is_valid() const;
@@ -1217,7 +1217,7 @@ struct ObPhysicalBackupArg final {
 struct ObBackupBackupsetArg final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBackupBackupsetArg();
   void reset();
   bool is_valid() const;
@@ -1255,14 +1255,14 @@ struct ObBackupBackupsetArg final {
 struct ObExternBackupInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum ExternBackupInfoStatus {
     SUCCESS = 0,
     DOING = 1,
     FAILED = 2,
   };
 
-  public:
+public:
   ObExternBackupInfo();
   virtual ~ObExternBackupInfo()
   {}
@@ -1297,7 +1297,7 @@ struct ObExternBackupInfo {
 struct ObExternBackupSetInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObExternBackupSetInfo();
   virtual ~ObExternBackupSetInfo() = default;
   void reset();
@@ -1321,7 +1321,7 @@ struct ObExternBackupSetInfo {
 struct ObExternTenantInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObExternTenantInfo();
   virtual ~ObExternTenantInfo() = default;
   void reset();
@@ -1341,7 +1341,7 @@ struct ObExternTenantInfo {
 struct ObExternTenantLocalityInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObExternTenantLocalityInfo();
   virtual ~ObExternTenantLocalityInfo() = default;
   void reset();
@@ -1363,7 +1363,7 @@ struct ObExternTenantLocalityInfo {
 };
 
 struct ObExternBackupDiagnoseInfo {
-  public:
+public:
   ObExternBackupDiagnoseInfo();
   virtual ~ObExternBackupDiagnoseInfo() = default;
   void reset();
@@ -1408,7 +1408,7 @@ struct ObBackupCleanType final {
 };
 
 struct ObBackupCleanInfo {
-  public:
+public:
   ObBackupCleanInfo();
   virtual ~ObBackupCleanInfo() = default;
   void reset();

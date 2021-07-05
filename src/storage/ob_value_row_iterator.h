@@ -26,7 +26,7 @@ class ObValueRowIterator : public common::ObNewRowIterator {
   static const int64_t DEFAULT_ROW_NUM = 2;
   typedef common::ObSEArray<common::ObNewRow, DEFAULT_ROW_NUM> RowArray;
 
-  public:
+public:
   ObValueRowIterator();
   virtual ~ObValueRowIterator();
   virtual int init(bool unique);
@@ -35,14 +35,14 @@ class ObValueRowIterator : public common::ObNewRowIterator {
   virtual int add_row(common::ObNewRow& row);
   virtual void reset();
 
-  private:
+private:
   bool is_inited_;
   bool unique_;
   common::ObArenaAllocator allocator_;
   RowArray rows_;
   int64_t cur_idx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObValueRowIterator);
 };
 

@@ -29,7 +29,7 @@ class ObDtlLocalFirstBufferCache;
 }  // namespace dtl
 
 class ObSqcLeaderTokenGuard {
-  public:
+public:
   ObSqcLeaderTokenGuard(common::ObSpinLock& lock) : lock_(lock), hold_lock_(false)
   {
     if (common::OB_SUCCESS == lock_.trylock()) {
@@ -47,14 +47,14 @@ class ObSqcLeaderTokenGuard {
     return hold_lock_;
   }
 
-  private:
+private:
   common::ObSpinLock& lock_;
   bool hold_lock_;
 };
 
 class ObSqcCtx;
 class ObPxSQCProxy {
-  public:
+public:
   ObPxSQCProxy(ObSqcCtx& sqc_ctx, ObPxRpcInitSqcArgs& arg);
   virtual ~ObPxSQCProxy();
 
@@ -107,7 +107,7 @@ class ObPxSQCProxy {
     return sqc_arg_.sqc_.get_dfo_id();
   }
 
-  private:
+private:
   /* functions */
   int setup_loop_proc(ObSqcCtx& sqc_ctx) const;
   int process_dtl_msg(int64_t timeout_ts);

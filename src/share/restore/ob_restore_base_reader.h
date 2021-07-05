@@ -25,7 +25,7 @@ namespace share {
 namespace restore {
 
 class ObRestoreBaseReader {
-  public:
+public:
   ObRestoreBaseReader(ObRestoreArgs& args);
   virtual ~ObRestoreBaseReader() = default;
   int init(const common::ObString& oss_uri);
@@ -45,7 +45,7 @@ class ObRestoreBaseReader {
   int get_recycle_objects(common::ObIArray<schema::ObRecycleObject>& objects);
   int get_create_all_timezone_stmts(common::ObIArray<common::ObString>& stmts);
 
-  private:
+private:
   int get_one_object_from_oss(
       const char* last_name, const bool allow_not_exist, common::ObIArray<common::ObString>& stmts);
   int get_create_table_stmt(
@@ -55,7 +55,7 @@ class ObRestoreBaseReader {
 
   int read_one_file(const common::ObStoragePath& path, common::ObIAllocator& allocator, char*& buf, int64_t& read_size);
 
-  private:
+private:
   // oss path: "oss://runiu1/ob1.XX/3/1001"
   // file path: "file:///mnt/test_nfs_runiu/ob1.XX/3/1001"
   common::ObStoragePath common_path_;

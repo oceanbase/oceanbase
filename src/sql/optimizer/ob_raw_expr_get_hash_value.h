@@ -23,7 +23,7 @@ namespace sql {
  *  during output expr allocation.
  */
 class ObRawExprGetHashValue : public ObRawExprVisitor {
-  public:
+public:
   ObRawExprGetHashValue(uint64_t seed) : seed_(seed)
   {}
   virtual ~ObRawExprGetHashValue()
@@ -45,10 +45,10 @@ class ObRawExprGetHashValue : public ObRawExprVisitor {
   virtual int visit(ObSysFunRawExpr& expr);
   virtual int visit(ObSetOpRawExpr& expr);
 
-  private:
+private:
   int add_expr(ObRawExpr& expr);
 
-  private:
+private:
   uint64_t seed_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprGetHashValue);

@@ -17,13 +17,13 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateUserResolver : public ObDCLResolver {
-  public:
+public:
   explicit ObCreateUserResolver(ObResolverParams& params);
   virtual ~ObCreateUserResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateUserResolver);
 };

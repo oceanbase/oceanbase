@@ -23,7 +23,7 @@ namespace obmysql {
 using common::ObString;
 
 class OMPKSSLRequest : public ObMySQLPacket {
-  public:
+public:
   OMPKSSLRequest() : capability_(), max_packet_size_(0), character_set_(0)
   {}
 
@@ -70,10 +70,10 @@ class OMPKSSLRequest : public ObMySQLPacket {
 
   VIRTUAL_TO_STRING_KV("header", hdr_, K_(capability_.capability), K_(max_packet_size), K_(character_set));
 
-  private:
+private:
   uint64_t get_connect_attrs_len() const;
 
-  private:
+private:
   // capability flags of the client as defined in Protocol::CapabilityFlags.
   ObMySQLCapabilityFlags capability_;
   // max size of a command packet that the client wants to send to the server.

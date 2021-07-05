@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObLogCount : public ObLogicalOperator {
-  public:
+public:
   ObLogCount(ObLogPlan& plan) : ObLogicalOperator(plan), rownum_limit_expr_(NULL)
   {}
   virtual ~ObLogCount()
@@ -43,7 +43,7 @@ class ObLogCount : public ObLogicalOperator {
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
 
-  private:
+private:
   ObRawExpr* rownum_limit_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObLogCount);
 };

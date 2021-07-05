@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObWhereSubQueryPullup : public ObTransformRule {
-  public:
+public:
   ObWhereSubQueryPullup(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
   virtual ~ObWhereSubQueryPullup()
@@ -37,7 +37,7 @@ class ObWhereSubQueryPullup : public ObTransformRule {
     return allocator;
   }
 
-  private:
+private:
   struct TransformParam {
     TransformParam()
         : op_(NULL),
@@ -219,7 +219,7 @@ class ObWhereSubQueryPullup : public ObTransformRule {
   int add_limit_for_exists_subquery(ObDMLStmt* stmt, bool& trans_happened);
   int recursive_add_limit_for_exists_expr(ObRawExpr* expr, bool& trans_happened);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObWhereSubQueryPullup);
 };
 

@@ -22,16 +22,16 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObTenantVirtualWarning : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObTenantVirtualWarning();
   virtual ~ObTenantVirtualWarning();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   int fill_scanner();
 
-  private:
+private:
   static const char* const SHOW_WARNING_STR;
   static const char* const SHOW_NOTE_STR;
   static const char* const SHOW_ERROR_STR;

@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace rootserver {
 class ObRecoveryHelper {
 
-  public:
+public:
   struct PkeyInfo {
     int64_t pkey_index_;
     bool part_valid_;
@@ -43,7 +43,7 @@ class ObRecoveryHelper {
   };
 
   struct ObMemberListPkeyInfo {
-    public:
+  public:
     ObMemberListPkeyInfo()
     {
       reset();
@@ -56,7 +56,7 @@ class ObRecoveryHelper {
     common::ObArray<PkeyInfo> pkey_info_;
   };
   struct ObMemberListPkeyList {
-    public:
+  public:
     ObMemberListPkeyList()
     {
       reset();
@@ -73,13 +73,13 @@ class ObRecoveryHelper {
 
     TO_STRING_KV(K_(epoch), K_(pkey_array), K_(ml_pk_array));
 
-    public:
+  public:
     common::ObArray<common::ObPartitionKey> pkey_array_;
     common::ObArray<ObMemberListPkeyInfo> ml_pk_array_;
     int64_t epoch_;
   };
   struct ObLeaderPkeyList {
-    public:
+  public:
     ObLeaderPkeyList() : leader_(), pkey_list_()
     {}
     ~ObLeaderPkeyList()
@@ -87,13 +87,13 @@ class ObRecoveryHelper {
     void reset();
     TO_STRING_KV(K_(leader), K_(pkey_list));
 
-    public:
+  public:
     ObAddr leader_;
     common::ObArray<common::ObPartitionKey> pkey_list_;
   };
 
   struct ObLeaderPkeyLists {
-    public:
+  public:
     ObLeaderPkeyLists() : user_leader_pkeys_(), inner_leader_pkeys_()
     {}
     ~ObLeaderPkeyLists()
@@ -110,20 +110,20 @@ class ObRecoveryHelper {
       return inner_leader_pkeys_.count();
     }
 
-    public:
+  public:
     common::ObArray<ObLeaderPkeyList> user_leader_pkeys_;
     common::ObArray<ObLeaderPkeyList> inner_leader_pkeys_;
   };
 };
 
 class ObRestoreUtil {
-  public:
+public:
   ObRestoreUtil();
   ~ObRestoreUtil();
   int init(observer::ObRestoreCtx& restore_ctx, int64_t job_id);
   int execute(const obrpc::ObRestoreTenantArg& arg);
 
-  public:
+public:
   static int check_has_job(common::ObMySQLProxy* sql_client, const obrpc::ObRestoreTenantArg& arg, bool& has_job);
   static int check_has_job(common::ObMySQLProxy* sql_client, bool& has_job);
   static int fill_physical_restore_job(
@@ -134,12 +134,12 @@ class ObRestoreUtil {
   static int check_has_physical_restore_job(
       common::ObISQLClient& sql_client, const common::ObString& tenant_name, bool& has_job);
 
-  private:
+private:
   int record_job(const obrpc::ObRestoreTenantArg& arg);
   static int check_has_job_without_lock(
       common::ObISQLClient& sql_client, const common::ObString& tenant_name, bool& has_job);
 
-  private:
+private:
   /* variables */
   bool inited_;
   int64_t job_id_;

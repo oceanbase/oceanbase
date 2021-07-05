@@ -37,7 +37,7 @@ typedef common::Ob2DArray<common::ObObjParam, common::OB_MALLOC_BIG_BLOCK_SIZE, 
 struct ObDynamicParamSetter {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDynamicParamSetter() : param_idx_(common::OB_INVALID_ID), src_(NULL), dst_(NULL)
   {}
 
@@ -50,10 +50,10 @@ struct ObDynamicParamSetter {
   int set_dynamic_param(ObEvalCtx& eval_ctx) const;
   int update_dynamic_param(ObEvalCtx& eval_ctx, common::ObDatum& datum) const;
 
-  private:
+private:
   void clear_parent_evaluated_flag(ObEvalCtx& eval_ctx, ObExpr& expr) const;
 
-  public:
+public:
   int64_t param_idx_;  // param idx in param store
   ObExpr* src_;        // original expr which replaced by param expr
   ObExpr* dst_;        // dynamic param expr
@@ -67,7 +67,7 @@ class ObOpSpecVisitor;
 class ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObOpSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   virtual ~ObOpSpec();
 
@@ -207,12 +207,12 @@ class ObOpSpec {
     return get_serialize_size();
   }
 
-  private:
+private:
   int create_operator_recursive(ObExecContext& exec_ctx, ObOperator*& op) const;
   int create_op_input_recursive(ObExecContext& exec_ctx) const;
 
   // Data members are accessed in ObOperator class, exposed for convenience.
-  public:
+public:
   // Operator type, serializing externally.
   ObPhyOperatorType type_;
   // Operator id, unique in DFO
@@ -221,7 +221,7 @@ class ObOpSpec {
 
   // The %child_, %left_, %right_ should be set when set %children_,
   // make it protected and exposed by interface.
-  protected:
+protected:
   ObOpSpec* parent_;
   ObOpSpec** children_;
   uint32_t child_cnt_;
@@ -231,7 +231,7 @@ class ObOpSpec {
   };
   ObOpSpec* right_;
 
-  public:
+public:
   // Operator output expressions
   ExprFixedArray output_;
   // Startup filter expressions
@@ -249,12 +249,12 @@ class ObOpSpec {
   PxOpSizeFactor px_est_size_factor_;
   int64_t plan_depth_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOpSpec);
 };
 
 class ObOpSpecVisitor {
-  public:
+public:
   virtual int pre_visit(const ObOpSpec& spec) = 0;
   virtual int post_visit(const ObOpSpec& spec) = 0;
 };
@@ -262,10 +262,10 @@ class ObOpSpecVisitor {
 // Physical operator, mutable in execution.
 // (same with the old ObPhyOperatorCtx)
 class ObOperator {
-  public:
+public:
   const static uint64_t CHECK_STATUS_TRY_TIMES = 1024;
 
-  public:
+public:
   ObOperator(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObOperator();
 
@@ -375,7 +375,7 @@ class ObOperator {
     return op_monitor_info_;
   }
 
-  protected:
+protected:
   int init_evaluated_flags();
   // Execute filter
   // Calc buffer does not reset internally, you need to reset it appropriately.
@@ -399,7 +399,7 @@ class ObOperator {
   // Drain exchange in data for PX, or producer DFO will be blocked.
   virtual int drain_exch();
 
-  protected:
+protected:
   const ObOpSpec& spec_;
   ObExecContext& ctx_;
   ObEvalCtx& eval_ctx_;
@@ -427,7 +427,7 @@ class ObOperator {
   // gv$sql_plan_monitor
   ObMonitorNode op_monitor_info_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
 
@@ -441,7 +441,7 @@ class ObOperator {
 class ObOpInput {
   OB_UNIS_VERSION_PV();
 
-  public:
+public:
   ObOpInput(ObExecContext& ctx, const ObOpSpec& spec) : exec_ctx_(ctx), spec_(spec)
   {}
   virtual ~ObOpInput()
@@ -463,7 +463,7 @@ class ObOpInput {
     return spec_;
   }
 
-  protected:
+protected:
   ObExecContext& exec_ctx_;
   const ObOpSpec& spec_;
 };

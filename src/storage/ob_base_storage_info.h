@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace common {
 class ObBaseStorageInfo {
-  public:
+public:
   ObBaseStorageInfo();
   virtual ~ObBaseStorageInfo();
   int init(const int64_t epoch_id, const ObProposalID& proposal_id, const uint64_t last_replay_log_id,
@@ -102,7 +102,7 @@ class ObBaseStorageInfo {
       const common::ObMemberList& mlist, const common::ObProposalID& ms_proposal_id);
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   static const int16_t STORAGE_INFO_VERSION = 1;
 
   int16_t version_;
@@ -117,7 +117,7 @@ class ObBaseStorageInfo {
   common::ObMemberList curr_member_list_;
   ObProposalID ms_proposal_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBaseStorageInfo);
 };
 }  // namespace common

@@ -74,7 +74,7 @@ void* ob_malloc_align(const int64_t alignment, const int64_t nbyte, const lib::O
 
 ////////////////////////////////////////////////////////////////
 class ObMalloc : public ObIAllocator {
-  public:
+public:
   ObMalloc(){};
   explicit ObMalloc(const lib::ObLabel& label)
   {
@@ -84,7 +84,7 @@ class ObMalloc : public ObIAllocator {
   {}
   virtual ~ObMalloc(){};
 
-  public:
+public:
   void set_label(const lib::ObLabel& label)
   {
     memattr_.label_ = label;
@@ -106,13 +106,13 @@ class ObMalloc : public ObIAllocator {
     ob_free(ptr);
   };
 
-  private:
+private:
   ObMemAttr memattr_;
 };
 typedef ObMalloc ObTCMalloc;
 
 class ObMemBuf {
-  public:
+public:
   ObMemBuf() : buf_ptr_(NULL), buf_size_(OB_MALLOC_NORMAL_BLOCK_SIZE), label_(ObModIds::OB_MOD_DO_NOT_USE_ME)
   {}
 
@@ -140,18 +140,18 @@ class ObMemBuf {
 
   int ensure_space(const int64_t size, const lib::ObLabel& label = nullptr);
 
-  private:
+private:
   char* buf_ptr_;
   int64_t buf_size_;
   lib::ObLabel label_;
 };
 
 class ObMemBufAllocatorWrapper : public ObIAllocator {
-  public:
+public:
   ObMemBufAllocatorWrapper(ObMemBuf& mem_buf, const lib::ObLabel& label = nullptr) : mem_buf_(mem_buf), label_(label)
   {}
 
-  public:
+public:
   virtual void* alloc(int64_t sz)
   {
     char* ptr = NULL;
@@ -170,17 +170,17 @@ class ObMemBufAllocatorWrapper : public ObIAllocator {
     UNUSED(ptr);
   }
 
-  private:
+private:
   ObMemBuf& mem_buf_;
   lib::ObLabel label_;
 };
 
 class ObRawBufAllocatorWrapper : public ObIAllocator {
-  public:
+public:
   ObRawBufAllocatorWrapper(char* mem_buf, int64_t mem_buf_len) : mem_buf_(mem_buf), mem_buf_len_(mem_buf_len)
   {}
 
-  public:
+public:
   virtual void* alloc(int64_t sz)
   {
     char* ptr = NULL;
@@ -199,7 +199,7 @@ class ObRawBufAllocatorWrapper : public ObIAllocator {
     UNUSED(ptr);
   }
 
-  private:
+private:
   char* mem_buf_;
   int64_t mem_buf_len_;
 };

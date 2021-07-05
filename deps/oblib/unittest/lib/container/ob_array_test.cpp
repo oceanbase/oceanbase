@@ -81,7 +81,7 @@ TEST(ObArrayTest, serialize)
 }
 
 class TestItem {
-  public:
+public:
   static int64_t construct_cnt_;
   static int64_t copy_construct_cnt_;
   static int64_t destruct_cnt_;

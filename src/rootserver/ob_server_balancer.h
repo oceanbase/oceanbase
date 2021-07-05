@@ -17,14 +17,14 @@ namespace oceanbase {
 namespace rootserver {
 template <typename T>
 class Matrix {
-  public:
+public:
   Matrix() : inner_array_(), row_count_(0), column_count_(0), is_inited_(false)
   {}
   virtual ~Matrix()
   {}
   int init(const int64_t row_count, const int64_t column_count);
 
-  public:
+public:
   int set(const int64_t row, const int64_t column, const T& element);
   int get(const int64_t row, const int64_t column, T& element) const;
   const T* get(const int64_t row, const int64_t column) const;
@@ -38,7 +38,7 @@ class Matrix {
   int sort_column_group(const int64_t start_column_idx, const int64_t column_count, Func& func);
   TO_STRING_KV(K(is_inited_), K(row_count_), K(column_count_), K(inner_array_));
 
-  private:
+private:
   ObArray<T> inner_array_;
   int64_t row_count_;
   int64_t column_count_;
@@ -210,7 +210,7 @@ class ObZoneManager;
 class ObUnitStatManager;
 // To balance the load of servers by migrating units.
 class ObServerBalancer {
-  public:
+public:
   struct UnitMigrateStat {
     UnitMigrateStat() : tenant_id_(common::OB_INVALID_ID), original_pos_(), arranged_pos_(), unit_load_()
     {}
@@ -224,7 +224,7 @@ class ObServerBalancer {
     TO_STRING_KV(K(tenant_id_), K(original_pos_), K(arranged_pos_), K(unit_load_));
   };
 
-  public:
+public:
   ObServerBalancer();
   virtual ~ObServerBalancer();
 
@@ -247,7 +247,7 @@ class ObServerBalancer {
   int check_tenant_group_config_legality(
       common::ObIArray<ObTenantGroupParser::TenantNameGroup>& tenant_groups, bool& legal);
 
-  private:
+private:
   bool check_inner_stat() const
   {
     return inited_;
@@ -278,7 +278,7 @@ class ObServerBalancer {
   int try_cancel_migrate_unit(const share::ObUnit& unit, bool& is_canceled);
 
   // the new version server balance
-  private:
+private:
   static const double CPU_EPSILON;
   static const double EPSILON;
   struct UnitMigrateStatCmp {
@@ -652,7 +652,7 @@ class ObServerBalancer {
   };
 
   class InnerTenantGroupBalanceStrategy {
-    public:
+  public:
     InnerTenantGroupBalanceStrategy(ObServerBalancer& host) : host_(host)
     {}
     virtual ~InnerTenantGroupBalanceStrategy()
@@ -665,7 +665,7 @@ class ObServerBalancer {
     int coordinate_all_column_unit_group(const common::ObIArray<int64_t>& column_unit_num_array,
         Matrix<UnitMigrateStat>& unit_migrate_stat_matrix, const common::ObIArray<UnitGroupLoad>& unitgroup_loads);
 
-    protected:
+  protected:
     int coordinate_single_column_unit_group(const int64_t start_column_idx, const int64_t column_count,
         Matrix<UnitMigrateStat>& unit_migrate_stat_matrix, const common::ObIArray<UnitGroupLoad>& unitgroup_loads);
     int do_coordinate_single_column_unit_group(const int64_t start_column_idx, const int64_t column_count,
@@ -681,12 +681,12 @@ class ObServerBalancer {
     int exchange_ug_between_server_loads(UnitGroupLoad& left_ug, const int64_t left_idx, ServerLoad& left_server,
         UnitGroupLoad& right_ug, const int64_t right_idx, ServerLoad& right_server);
 
-    protected:
+  protected:
     ObServerBalancer& host_;
   };
 
   class CountBalanceStrategy : public InnerTenantGroupBalanceStrategy {
-    public:
+  public:
     CountBalanceStrategy(ObServerBalancer& host) : InnerTenantGroupBalanceStrategy(host)
     {}
     virtual ~CountBalanceStrategy()
@@ -697,7 +697,7 @@ class ObServerBalancer {
     virtual int amend_ug_inter_ttg_server_load(ServerLoad* over_server_load, ServerLoad* under_server_load,
         TenantGroupBalanceInfo* balance_info, const double inter_ttg_upper_limit) override;
 
-    private:
+  private:
     int make_count_balanced(TenantGroupBalanceInfo& balance_info, Matrix<UnitMigrateStat>& unit_migrate_stat_matrix,
         common::ObIArray<UnitGroupLoad>& unitgroup_loads, common::ObIArray<ServerLoad>& server_loads);
     int do_make_count_balanced(
@@ -730,7 +730,7 @@ class ObServerBalancer {
         UnitGroupLoad& right_ug, ServerLoad& right_server, bool& can_exchange);
   };
 
-  protected:
+protected:
   int check_can_execute_rebalance(const common::ObZone& zone, bool& can_execute_rebalance);
   int rebalance_servers_v2(const common::ObZone& zone);
   int generate_single_tenant_group(
@@ -1022,7 +1022,7 @@ class ObServerBalancer {
   int get_server_balance_critical_disk_waterlevel(double& server_balance_critical_disk_waterlevel) const;
   int get_server_data_disk_usage_limit(double& data_disk_usage_limit) const;
 
-  protected:
+protected:
   bool inited_;
   bool unit_migrated_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

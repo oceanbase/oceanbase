@@ -17,14 +17,14 @@ using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
 
 class TestProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(TestProxy);
 
   RPC_S(PR5 test, OB_TEST_PCODE, (int));
 };
 
 class Processor : public TestProxy::Processor<OB_TEST_PCODE> {
-  public:
+public:
   int process()
   {
     return arg_;

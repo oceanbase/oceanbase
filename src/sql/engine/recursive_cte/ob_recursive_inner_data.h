@@ -31,12 +31,12 @@ class ObRecursiveInnerData {
   friend class ObRecursiveUnionAllOperatorCtx;
   friend class ObRecursiveUnionAll;
 
-  public:
+public:
   struct RowComparer;
   enum RecursiveUnionState { R_UNION_BEGIN, R_UNION_READ_LEFT, R_UNION_READ_RIGHT, R_UNION_END, R_UNION_STATE_COUNT };
   enum SearchStrategyType { DEPTH_FRIST, BREADTH_FRIST };
 
-  public:
+public:
   explicit ObRecursiveInnerData(common::ObIAllocator& alloc)
       : state_(RecursiveUnionState::R_UNION_READ_LEFT),
         stored_row_buf_(ObModIds::OB_SQL_CTE_ROW),
@@ -89,7 +89,7 @@ class ObRecursiveInnerData {
     calc_buf_ = calc_buf;
   }
 
-  private:
+private:
   void destroy();
   int add_pseudo_column(const ObNewRow* row, bool cycle = false);
   int try_get_left_rows(ObExecContext& exec_ctx, const ObNewRow*& row);
@@ -110,7 +110,7 @@ class ObRecursiveInnerData {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRecursiveInnerData);
 
-  private:
+private:
   RecursiveUnionState state_;
   common::ObArenaAllocator stored_row_buf_;
   const ObFakeCTETable* pump_operator_;

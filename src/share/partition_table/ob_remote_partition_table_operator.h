@@ -31,19 +31,19 @@ namespace schema {
 class ObMultiVersionSchemaService;
 }
 class ObRemotePartitionTableOperator : public ObPartitionTableOperator {
-  public:
+public:
   explicit ObRemotePartitionTableOperator(ObIPartPropertyGetter& prop_getter);
   virtual ~ObRemotePartitionTableOperator()
   {}
   int init(share::schema::ObMultiVersionSchemaService* schema_service, ObRemoteSqlProxy* remote_sql_proxy);
   virtual int get(const uint64_t table_id, const int64_t partition_id, ObPartitionInfo& partition_info,
-      const bool need_fetch_faillist = false, const int64_t cluster_id = common::OB_INVALID_ID);
+      const bool need_fetch_faillist = false, const int64_t cluster_id = common::OB_INVALID_ID) override;
   virtual int batch_fetch_partition_infos(const common::ObIArray<common::ObPartitionKey>& keys,
       common::ObIAllocator& allocator, common::ObArray<ObPartitionInfo*>& partitions,
       const int64_t cluster_id = common::OB_INVALID_ID) override;
 
   // not supported interface
-  virtual int batch_execute(const common::ObIArray<ObPartitionReplica>& replicas);
+  virtual int batch_execute(const common::ObIArray<ObPartitionReplica>& replicas) override;
   virtual int prefetch_by_table_id(const uint64_t tenant_id, const uint64_t table_id, const int64_t partition_id,
       common::ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist = false) override;
 
@@ -55,26 +55,27 @@ class ObRemotePartitionTableOperator : public ObPartitionTableOperator {
       const int64_t partition_id, common::ObIArray<ObPartitionInfo>& partition_infos,
       const bool need_fetch_faillist = false) override;
 
-  virtual int update(const ObPartitionReplica& replica);
+  virtual int update(const ObPartitionReplica& replica) override;
 
-  virtual int remove(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server);
+  virtual int remove(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server) override;
 
-  virtual int set_unit_id(
-      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const uint64_t unit_id);
+  virtual int set_unit_id(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server,
+      const uint64_t unit_id) override;
 
-  virtual int set_original_leader(const uint64_t table_id, const int64_t partition_id, const bool is_original_leader);
+  virtual int set_original_leader(
+      const uint64_t table_id, const int64_t partition_id, const bool is_original_leader) override;
 
   virtual int update_rebuild_flag(
-      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const bool rebuild);
+      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const bool rebuild) override;
 
   virtual int update_fail_list(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server,
-      const ObPartitionReplica::FailList& fail_list);
+      const ObPartitionReplica::FailList& fail_list) override;
 
-  private:
+private:
   int get_partition_info(const uint64_t table_id, const int64_t partition_id, const bool filter_flag_replica,
       ObPartitionInfo& partition_info, common::ObConsistencyLevel consistency);
 
-  private:
+private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   ObPartitionTableOperator pt_;

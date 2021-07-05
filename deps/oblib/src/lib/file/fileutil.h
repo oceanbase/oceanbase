@@ -27,7 +27,7 @@ namespace obsys {
 #endif
 
 class CFileUtil {
-  public:
+public:
   /** Create a multi-level directory */
   static bool mkdirs(char* szDirPath);
   /** Is it a directory */

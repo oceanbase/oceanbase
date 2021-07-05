@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObIRSCb {
-  public:
+public:
   virtual int submit_pt_update_task(const common::ObPartitionKey& part_key, const int64_t data_version) = 0;
 };
 }  // namespace common

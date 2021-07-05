@@ -76425,9 +76425,9 @@ YY_BUFFER_STATE obsql_mysql_yy_scan_bytes  (yyconst char * yybytes, int  _yybyte
 #define YY_EXIT_FAILURE 2
 #endif
 
-static void yy_fatal_error (yyconst char* msg , yyscan_t yyscanner)
+static void yy_fatal_error (yyconst char* msg , yyscan_t yyscanner __attribute__((unused)))
 {
-    	(void) fprintf( stderr, "%s\n", msg );
+  (void) fprintf( stderr, "%s\n", msg );
 	exit( YY_EXIT_FAILURE );
 }
 

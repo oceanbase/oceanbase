@@ -21,18 +21,18 @@ using namespace oceanbase::sql;
 using namespace oceanbase::blocksstable;
 
 class ObMergeGroupbyTest : public TestDataFilePrepare {
-  public:
+public:
   ObMergeGroupbyTest();
   virtual ~ObMergeGroupbyTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObMergeGroupbyTest(const ObMergeGroupbyTest& other);
   ObMergeGroupbyTest& operator=(const ObMergeGroupbyTest& other);
 
-  private:
+private:
   // data members
 };
 
@@ -55,7 +55,7 @@ void ObMergeGroupbyTest::TearDown()
   TestDataFilePrepare::TearDown();
 }
 class TestMergeGroupBy : public ObMergeGroupBy {
-  public:
+public:
   TestMergeGroupBy() : ObMergeGroupBy(alloc_)
   {}
   ~TestMergeGroupBy()

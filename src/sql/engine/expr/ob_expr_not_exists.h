@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprNotExists : public ObSubQueryRelationalExpr {
-  public:
+public:
   explicit ObExprNotExists(common::ObIAllocator& alloc);
   virtual ~ObExprNotExists();
 
@@ -27,7 +27,7 @@ class ObExprNotExists : public ObSubQueryRelationalExpr {
 
   static int not_exists_eval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprNotExists);
 };
 }  // namespace sql

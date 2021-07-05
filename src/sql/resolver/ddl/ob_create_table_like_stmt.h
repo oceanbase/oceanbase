@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObCreateTableLikeStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObCreateTableLikeStmt(common::ObIAllocator* name_pool);
   ObCreateTableLikeStmt();
   virtual ~ObCreateTableLikeStmt();
@@ -90,7 +90,7 @@ class ObCreateTableLikeStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(create_table_like_arg));
 
-  private:
+private:
   obrpc::ObCreateTableLikeArg create_table_like_arg_;
 };
 

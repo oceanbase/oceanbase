@@ -23,12 +23,12 @@ using namespace common;
 using namespace share::schema;
 
 class TestZoneInfo : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   DBInitializer db_initer_;
   ObGlobalInfo global_info_;
 };

@@ -27,7 +27,7 @@ namespace oceanbase {
 namespace common {
 
 class TestObDList : public ::testing::Test {
-  public:
+public:
   TestObDList()
   {}
 

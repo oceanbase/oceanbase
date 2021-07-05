@@ -24,7 +24,7 @@ namespace sql {
 class ObNLConnectBySpecBase : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObNLConnectBySpecBase(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   virtual ~ObNLConnectBySpecBase()
   {}
@@ -33,7 +33,7 @@ class ObNLConnectBySpecBase : public ObOpSpec {
     return sys_connect_exprs_.count();
   }
 
-  protected:
+protected:
   enum ObCnntByOpState {
     CNTB_STATE_JOIN_END = 0,
     CNTB_STATE_READ_OUTPUT,
@@ -44,7 +44,7 @@ class ObNLConnectBySpecBase : public ObOpSpec {
   };
   enum ObFuncType { FT_ITER_GOING = 0, FT_ITER_END, FT_TYPE_COUNT };
 
-  public:
+public:
   common::ObCmpFuncs cmp_funcs_;
   ExprFixedArray sort_siblings_exprs_;
   ExprFixedArray connect_by_root_exprs_;
@@ -70,7 +70,7 @@ class ObNLConnectBySpecBase : public ObOpSpec {
 };
 
 class ObNLConnectByOpBase : public ObOperator {
-  protected:
+protected:
   enum ObConnectByPseudoColumn {
     LEVEL = 0,
     CONNECT_BY_ISCYCLE = 1,
@@ -88,7 +88,7 @@ class ObNLConnectByOpBase : public ObOperator {
   };
   enum ObFuncType { FT_ITER_GOING = 0, FT_ITER_END, FT_TYPE_COUNT };
 
-  public:
+public:
   ObNLConnectByOpBase(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input), sys_connect_by_path_id_(INT64_MAX)
   {}
@@ -109,13 +109,13 @@ class ObNLConnectByOpBase : public ObOperator {
 class ObNLConnectBySpec : public ObNLConnectBySpecBase {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObNLConnectBySpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObNLConnectBySpecBase(alloc, type)
   {}
 };
 
 class ObNLConnectByOp : public ObNLConnectByOpBase {
-  public:
+public:
   ObNLConnectByOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObNLConnectByOp();
 
@@ -147,7 +147,7 @@ class ObNLConnectByOp : public ObNLConnectByOpBase {
   }
   int calc_pseudo_flags(ObConnectByOpPump::PumpNode& node);
 
-  private:
+private:
   typedef int (ObNLConnectByOp::*state_operation_func_type)();
   typedef int (ObNLConnectByOp::*state_function_func_type)();
 
@@ -182,10 +182,10 @@ class ObNLConnectByOp : public ObNLConnectByOpBase {
 
   int init();
 
-  public:
+public:
   ObConnectByOpPump connect_by_pump_;
 
-  private:
+private:
   // state operations and transfer functions array.
   state_operation_func_type state_operation_func_[CNTB_STATE_STATE_COUNT];
   state_function_func_type state_function_func_[CNTB_STATE_STATE_COUNT][FT_TYPE_COUNT];

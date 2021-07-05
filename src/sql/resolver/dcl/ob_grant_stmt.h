@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObGrantStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObGrantStmt(common::ObIAllocator* name_pool);
   ObGrantStmt();
   virtual ~ObGrantStmt();
@@ -176,7 +176,7 @@ class ObGrantStmt : public ObDDLStmt {
   }
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   // data members
   ObPrivSet priv_set_;
   share::schema::ObPrivLevel grant_level_;
@@ -201,7 +201,7 @@ class ObGrantStmt : public ObDDLStmt {
   ObSEArray<uint64_t, 4> ref_col_ids_;
   ObSelectStmt* ref_query_;  // when grant, check table,view privs.
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGrantStmt);
 };
 }  // end namespace sql

@@ -25,75 +25,75 @@ class ObAlterResourceUnitStmt;
 class ObDropResourceUnitStmt;
 
 class ObCreateResourcePoolExecutor {
-  public:
+public:
   ObCreateResourcePoolExecutor();
   virtual ~ObCreateResourcePoolExecutor();
   int execute(ObExecContext& ctx, ObCreateResourcePoolStmt& stmt);
 
-  private:
+private:
 };
 
 class ObDropResourcePoolExecutor {
-  public:
+public:
   ObDropResourcePoolExecutor();
   virtual ~ObDropResourcePoolExecutor();
   int execute(ObExecContext& ctx, ObDropResourcePoolStmt& stmt);
 
-  private:
+private:
 };
 
 class ObSplitResourcePoolExecutor {
-  public:
+public:
   ObSplitResourcePoolExecutor();
   virtual ~ObSplitResourcePoolExecutor();
   int execute(ObExecContext& ctx, ObSplitResourcePoolStmt& stmt);
 
-  private:
+private:
 };
 
 class ObMergeResourcePoolExecutor {
-  public:
+public:
   ObMergeResourcePoolExecutor();
   virtual ~ObMergeResourcePoolExecutor();
   int execute(ObExecContext& ctx, ObMergeResourcePoolStmt& stmt);
 
-  private:
+private:
 };
 
 class ObAlterResourcePoolExecutor {
-  public:
+public:
   ObAlterResourcePoolExecutor();
   virtual ~ObAlterResourcePoolExecutor();
   int execute(ObExecContext& ctx, ObAlterResourcePoolStmt& stmt);
 
-  private:
+private:
 };
 
 class ObCreateResourceUnitExecutor {
-  public:
+public:
   ObCreateResourceUnitExecutor();
   virtual ~ObCreateResourceUnitExecutor();
   int execute(ObExecContext& ctx, ObCreateResourceUnitStmt& stmt);
 
-  private:
+private:
 };
 
 class ObAlterResourceUnitExecutor {
-  public:
+public:
   ObAlterResourceUnitExecutor();
   virtual ~ObAlterResourceUnitExecutor();
   int execute(ObExecContext& ctx, ObAlterResourceUnitStmt& stmt);
 
-  private:
+private:
 };
 
 class ObDropResourceUnitExecutor {
-  public:
+public:
   ObDropResourceUnitExecutor();
   virtual ~ObDropResourceUnitExecutor();
   int execute(ObExecContext& ctx, ObDropResourceUnitStmt& stmt);
 
-  private:
+private:
 };
 
 }  // namespace sql

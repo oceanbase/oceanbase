@@ -234,7 +234,7 @@ struct ObTableAccessContext;
 struct ObTableIterParam;
 
 struct ObMultiVersionRowkeyHelpper {
-  public:
+public:
   enum MultiVersionRowkeyType {
     MVRC_NONE = 0,
     MVRC_OLD_VERSION = 1,        // TransVersion:Use Before Version3.0
@@ -414,7 +414,7 @@ struct ObStoreRowDml {
 };
 
 class ObFastQueryContext {
-  public:
+public:
   ObFastQueryContext() : timestamp_(-1), memtable_(nullptr), mvcc_row_(nullptr), row_version_(0)
   {}
   ObFastQueryContext(const int64_t timestamp, void* memtable, void* mvcc_row, const int64_t row_version)
@@ -459,7 +459,7 @@ class ObFastQueryContext {
   }
   TO_STRING_KV(K_(timestamp), KP_(memtable), KP_(mvcc_row), K_(row_version));
 
-  private:
+private:
   int64_t timestamp_;
   void* memtable_;
   void* mvcc_row_;
@@ -509,7 +509,7 @@ struct ObRowPositionFlag {
 };
 
 struct ObStoreRowLockState {
-  public:
+public:
   ObStoreRowLockState() : is_locked_(false), trans_version_(0), lock_trans_id_()
   {}
   void reset();
@@ -522,7 +522,7 @@ struct ObStoreRowLockState {
 struct ObStoreRow {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStoreRow()
       : flag_(-1),
         capacity_(0),
@@ -666,7 +666,7 @@ struct ObStoreRow {
 };
 
 struct ObMagicRowManager {
-  public:
+public:
   ObMagicRowManager() = delete;
   ~ObMagicRowManager() = delete;
   static int make_magic_row(
@@ -776,7 +776,7 @@ void free_store_row(AllocatorT& allocator, ObStoreRow*& row)
 }
 
 class ObIStoreRowIterator {
-  public:
+public:
   ObIStoreRowIterator()
   {}
   virtual ~ObIStoreRowIterator()
@@ -785,7 +785,7 @@ class ObIStoreRowIterator {
 };
 
 class ObStoreRowIterator : public ObIStoreRowIterator {
-  public:
+public:
   ObStoreRowIterator() : type_(0)
   {}
   virtual ~ObStoreRowIterator()
@@ -854,10 +854,10 @@ class ObStoreRowIterator : public ObIStoreRowIterator {
   }
   VIRTUAL_TO_STRING_KV(K_(type));
 
-  protected:
+protected:
   int type_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStoreRowIterator);
 };
 
@@ -870,7 +870,7 @@ enum ObQRIterType {
 };
 
 class ObQueryRowIterator : public ObIStoreRowIterator {
-  public:
+public:
   ObQueryRowIterator() : type_(T_INVALID_ITER_TYPE)
   {}
   explicit ObQueryRowIterator(const ObQRIterType type) : type_(type)
@@ -894,21 +894,21 @@ class ObQueryRowIterator : public ObIStoreRowIterator {
   }
   VIRTUAL_TO_STRING_KV(K_(type));
 
-  public:
+public:
   ObQRIterType get_type() const
   {
     return type_;
   }
 
-  protected:
+protected:
   ObQRIterType type_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRowIterator);
 };
 
 class ObQueryRowIteratorAdapter : public ObQueryRowIterator {
-  public:
+public:
   ObQueryRowIteratorAdapter(const ObQRIterType type, ObIStoreRowIterator& iter);
   virtual ~ObQueryRowIteratorAdapter();
 
@@ -922,7 +922,7 @@ class ObQueryRowIteratorAdapter : public ObQueryRowIterator {
 
   virtual void reset() override;
 
-  private:
+private:
   ObIStoreRowIterator& iter_;
   ObStoreRow row_;
   common::ObIAllocator* allocator_;
@@ -933,13 +933,13 @@ class ObQueryRowIteratorAdapter : public ObQueryRowIterator {
 };
 
 class ObVPCompactIter : public storage::ObIStoreRowIterator {
-  public:
+public:
   ObVPCompactIter();
   virtual ~ObVPCompactIter();
   int init(const int64_t rowkey_cnt, ObIStoreRowIterator* scan_iter);
   virtual int get_next_row(const storage::ObStoreRow*& row) override;
 
-  private:
+private:
   ObIStoreRowIterator* scan_iter_;
   int64_t rowkey_cnt_;
   bool is_inited_;
@@ -1048,7 +1048,7 @@ struct ObTableAccessStat {
 };
 
 struct ObGetTableParam {
-  public:
+public:
   ObGetTableParam() : partition_store_(NULL), frozen_version_(-1), sample_info_(), tables_handle_(NULL)
   {}
   ~ObGetTableParam() = default;
@@ -1067,7 +1067,7 @@ struct ObGetTableParam {
 // Parameters for row iteration like ObITable get, scan, multi_get, multi_scan
 // and ObStoreRowIterator::init
 struct ObTableIterParam {
-  public:
+public:
   // only use in mini merge
   enum ObIterTransNodeMode {
     OIM_ITER_OVERFLOW_TO_COMPLEMENT = 1,
@@ -1075,7 +1075,7 @@ struct ObTableIterParam {
     OIM_ITER_FULL = 3,
   };
 
-  public:
+public:
   ObTableIterParam();
   virtual ~ObTableIterParam();
   void reset();
@@ -1092,7 +1092,7 @@ struct ObTableIterParam {
       KP_(full_projector), KP_(out_cols_project), KP_(out_cols_param), KP_(full_out_cols_param),
       K_(is_multi_version_minor_merge), KP_(full_out_cols), KP_(full_cols_id_map), K_(need_scn), K_(iter_mode));
 
-  public:
+public:
   uint64_t table_id_;
   int64_t schema_version_;
   int64_t rowkey_cnt_;
@@ -1112,7 +1112,7 @@ struct ObTableIterParam {
 };
 
 class ObColDescArrayParam final {
-  public:
+public:
   ObColDescArrayParam() : local_cols_(), ref_cols_(nullptr), col_cnt_(0), is_local_(false), is_inited_(false)
   {}
   ~ObColDescArrayParam() = default;
@@ -1137,7 +1137,7 @@ class ObColDescArrayParam final {
 
   TO_STRING_KV(K(local_cols_), KPC_(ref_cols), K_(col_cnt), K(is_local_), K(is_inited_));
 
-  private:
+private:
   ObColDescArray local_cols_;
   const ObColDescIArray* ref_cols_;
   uint16_t col_cnt_;  // max column == 512
@@ -1201,7 +1201,7 @@ struct ObFastAggProjectCell {
 };
 
 struct ObTableAccessParam {
-  public:
+public:
   ObTableAccessParam();
   virtual ~ObTableAccessParam();
   void reset();
@@ -1232,14 +1232,14 @@ struct ObTableAccessParam {
     return NULL != index_back_project_;
   }
 
-  public:
+public:
   TO_STRING_KV(K_(iter_param), K_(reserve_cell_cnt), K_(out_col_desc_param), KP_(full_out_cols), KP_(out_cols_param),
       KP_(index_back_project), KP_(join_key_project), KP_(right_key_project), KP_(padding_cols), KP_(filters),
       KP_(virtual_column_exprs), KP_(index_projector), K_(projector_size), KP_(output_exprs), KP_(op), KP_(op_filters),
       KP_(row2exprs_projector), KP_(join_key_project), KP_(right_key_project), KP_(fast_agg_project),
       K_(enable_fast_skip), K_(need_fill_scale), K_(col_scale_info));
 
-  public:
+public:
   // 1. Basic Param for Table Iteration
   ObTableIterParam iter_param_;
   int64_t reserve_cell_cnt_;
@@ -1275,7 +1275,7 @@ struct ObTableAccessParam {
 };
 
 class ObLobLocatorHelper {
-  public:
+public:
   ObLobLocatorHelper();
   virtual ~ObLobLocatorHelper();
   void reset();
@@ -1288,14 +1288,14 @@ class ObLobLocatorHelper {
   TO_STRING_KV(
       K_(table_id), K_(snapshot_version), K_(rowid_version), KPC(rowid_project_), K_(rowid_objs), K_(is_inited));
 
-  private:
+private:
   static const int64_t DEFAULT_LOCATOR_OBJ_ARRAY_SIZE = 8;
   int init_rowid_version(const share::schema::ObTableSchema& table_schema);
   int build_rowid_obj(common::ObNewRow& row, common::ObString& rowid_str, bool is_projected_row,
       const common::ObIArray<int32_t>& out_project);
   int build_lob_locator(common::ObObj& lob_obj, const uint64_t column_id, const common::ObString& rowid_str);
 
-  private:
+private:
   uint64_t table_id_;
   int64_t snapshot_version_;
   int64_t rowid_version_;
@@ -1366,10 +1366,10 @@ struct ObTableAccessContext {
       KP_(block_cache_ws), K_(out_cnt), K_(is_end), K_(trans_version_range), KP_(row_filter), K_(merge_log_ts),
       K_(read_out_type), K_(lob_locator_helper));
 
-  private:
+private:
   int build_lob_locator_helper(ObTableScanParam& scan_param, const common::ObVersionRange& trans_version_range);
 
-  public:
+public:
   bool is_inited_;
   int64_t timeout_;
   common::ObPartitionKey pkey_;
@@ -1405,7 +1405,7 @@ struct ObTableAccessContext {
 };
 
 struct ObRowsInfo final {
-  public:
+public:
   explicit ObRowsInfo();
   ~ObRowsInfo();
   OB_INLINE bool is_valid() const
@@ -1446,7 +1446,7 @@ struct ObRowsInfo final {
   TO_STRING_KV(K_(ext_rowkeys), K_(min_key), K_(table_id), K_(row_count), K_(delete_count),
       K_(collation_free_transformed), K_(exist_helper));
 
-  public:
+public:
   struct ExistHelper final {
     ExistHelper();
     ~ExistHelper();
@@ -1470,7 +1470,7 @@ struct ObRowsInfo final {
     bool is_inited_;
   };
 
-  private:
+private:
   struct RowsCompare {
     RowsCompare(common::ObIArray<ObRowkeyObjComparer*>* cmp_funcs, common::ObStoreRowkey& dup_key, const bool check_dup,
         int16_t& max_prefix_length, int& ret);
@@ -1498,10 +1498,10 @@ struct ObRowsInfo final {
     int& ret_;
   };
 
-  private:
+private:
   int ensure_space(const int64_t row_count);
 
-  public:
+public:
   ObStoreRow* rows_;
   int64_t row_count_;
   common::ObArray<common::ObExtStoreRowkey> ext_rowkeys_;
@@ -1509,7 +1509,7 @@ struct ObRowsInfo final {
   common::ObExtStoreRowkey prefix_rowkey_;
   uint64_t table_id_;
 
-  private:
+private:
   common::ObStoreRowkey min_key_;
   lib::MemoryContext* scan_mem_;  // scan/rescan level memory entity, only for query
   int64_t delete_count_;

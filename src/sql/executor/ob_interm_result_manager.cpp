@@ -25,7 +25,7 @@ using namespace oceanbase::common;
 using namespace common::hash;
 
 class ObUpdateIRExpireTime {
-  public:
+public:
   ObUpdateIRExpireTime(const int64_t expire_time) : ret_(OB_SUCCESS), expire_time_(expire_time)
   {}
 
@@ -39,10 +39,10 @@ class ObUpdateIRExpireTime {
     }
   }
 
-  public:
+public:
   int ret_;
 
-  private:
+private:
   const int64_t expire_time_;
 };
 

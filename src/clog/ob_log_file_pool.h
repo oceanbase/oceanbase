@@ -25,7 +25,7 @@
 namespace oceanbase {
 namespace clog {
 class IFilePool {
-  public:
+public:
   IFilePool()
   {}
   virtual ~IFilePool()
@@ -37,11 +37,11 @@ class IFilePool {
 };
 
 class ObLogWriteFilePool : public IFilePool {
-  public:
+public:
   ObLogWriteFilePool();
   virtual ~ObLogWriteFilePool();
 
-  public:
+public:
   int init(ObILogDir* log_dir, const int64_t file_size, const ObLogWritePoolType type);
   void destroy();
   int get_fd(const file_id_t dest_file_id, int& fd);
@@ -78,7 +78,7 @@ class ObLogWriteFilePool : public IFilePool {
   TO_STRING_KV(K_(is_inited), K_(log_dir), K_(file_size), K_(free_quota), K_(limit_free_quota), K_(type),
       K_(min_file_id), K_(min_using_file_id), K_(max_file_id));
 
-  protected:
+protected:
   int create_new_file(const int dest_dir_fd, const int dest_file_id, const char* dest_file, int& fd);
   int create_tmp_file(const file_id_t file_id, char* fname, const int64_t size, int& fd, int& dir_fd);
   int update_free_quota(const char* dir, const int64_t percent, const int64_t limit_percent);
@@ -91,7 +91,7 @@ class ObLogWriteFilePool : public IFilePool {
   int get_dir_name(const char* fname, char* dir_name, const int64_t len);
   int rename_file(const int src_dir_fd, const char* srcfile, const int dest_dir_fd, const char* destfile);
 
-  private:
+private:
   static const int TASK_NUM = 1024;
   static const int OPEN_FLAG_WITH_SYNC = O_RDWR | O_DIRECT | O_SYNC;
   static const int OPEN_FLAG_WITHOUT_SYNC = O_RDWR | O_DIRECT;
@@ -105,7 +105,7 @@ class ObLogWriteFilePool : public IFilePool {
   static const int64_t MIN_ILOG_CACHE_FILE_COUNT = 1;
   static const int64_t INIT_CACHE_FILE_COUNT = 1;
 
-  private:
+private:
   bool is_inited_;
   int64_t file_size_;
   common::ObSpinLock lock_;
@@ -122,7 +122,7 @@ class ObLogWriteFilePool : public IFilePool {
   struct iocb iocb_;
   struct io_event ioevent_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogWriteFilePool);
 };
 }  // end namespace clog

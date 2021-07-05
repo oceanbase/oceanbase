@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObSqlExpressionFactory {
-  public:
+public:
   explicit ObSqlExpressionFactory(common::ObIAllocator& alloc) : alloc_(alloc)
   {}
   ~ObSqlExpressionFactory()
@@ -65,10 +65,10 @@ class ObSqlExpressionFactory {
   //        sql_expression = NULL;
   //      }
   //    }
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlExpressionFactory);
 
-  private:
+private:
   common::ObIAllocator& alloc_;
 };
 }  // namespace sql

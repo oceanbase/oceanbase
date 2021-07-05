@@ -19,13 +19,13 @@
 namespace oceanbase {
 namespace clog {
 class ObLogReplayEngineWrapper {
-  public:
+public:
   ObLogReplayEngineWrapper() : is_inited_(false), log_replay_engine_(NULL)
   {}
   virtual ~ObLogReplayEngineWrapper()
   {}
 
-  public:
+public:
   virtual int init(replayengine::ObILogReplayEngine* log_replay_engine);
   virtual int is_replay_finished(const common::ObPartitionKey& partition_key, bool& is_finished) const;
 
@@ -39,7 +39,7 @@ class ObLogReplayEngineWrapper {
   virtual int reset_partition(const common::ObPartitionKey& partition_key);
   virtual int is_tenant_out_of_memory(const common::ObPartitionKey& partition_key, bool& is_out_of_mem);
 
-  private:
+private:
   bool is_inited_;
   replayengine::ObILogReplayEngine* log_replay_engine_;
 

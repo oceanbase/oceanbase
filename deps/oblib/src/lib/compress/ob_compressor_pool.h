@@ -30,7 +30,7 @@ namespace oceanbase {
 namespace common {
 
 class ObCompressorPool {
-  public:
+public:
   static ObCompressorPool& get_instance();
   int get_compressor(const char* compressor_name, ObCompressor*& compressor);
   int get_compressor(const ObCompressorType& compressor_type, ObCompressor*& compressor);
@@ -54,7 +54,7 @@ class ObCompressorPool {
   }
   int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size);
 
-  private:
+private:
   ObCompressorPool();
   virtual ~ObCompressorPool()
   {}

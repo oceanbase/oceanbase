@@ -25,7 +25,7 @@ namespace election {
 class ObElectionGroupPriority {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionGroupPriority()
   {
     reset();
@@ -35,7 +35,7 @@ class ObElectionGroupPriority {
   {}
   void reset();
 
-  public:
+public:
   void set_candidate(const bool is_candidate)
   {
     is_candidate_ = is_candidate;
@@ -58,12 +58,12 @@ class ObElectionGroupPriority {
 
   DECLARE_TO_STRING_AND_YSON;
 
-  private:
+private:
   const static int64_t SYSTEM_SCORE_CLOG_DISK_ERROR = (1 << 6);
   const static int64_t SYSTEM_SCORE_DATA_DISK_ERROR = (1 << 4);
   const static int64_t SYSTEM_SCORE_SERVICE_NOT_STARTED = (1 << 1);
 
-  private:
+private:
   bool is_candidate_;
   int64_t system_score_;  // lower score means higher priority
 };

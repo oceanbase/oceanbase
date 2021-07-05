@@ -25,7 +25,7 @@ namespace sql {
  *  [2] Eager Aggregation and Lazy Aggregation
  */
 class ObTransformGroupByPlacement : public ObTransformRule {
-  public:
+public:
   ObTransformGroupByPlacement(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
 
@@ -35,10 +35,10 @@ class ObTransformGroupByPlacement : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  protected:
+protected:
   virtual int adjust_transform_types(uint64_t& transform_types) override;
 
-  private:
+private:
   struct PullupHelper {
     PullupHelper()
         : parent_table_(NULL),
@@ -188,7 +188,7 @@ class ObTransformGroupByPlacement : public ObTransformRule {
 
   int wrap_case_when(ObSelectStmt& child_stmt, ObRawExpr* not_null_column, ObRawExpr*& expr);
 
-  private:
+private:
   // help functions
   int64_t get_count_sum_num(const ObIArray<ObRawExpr*>& exprs)
   {

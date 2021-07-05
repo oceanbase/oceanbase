@@ -1844,7 +1844,7 @@ int ObTableStore::refine_mini_merge_result_in_reboot_phase(ObITable& last_table,
     if (result.version_range_.snapshot_version_ > last_snapshot_version) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR(
-          "Unexcepted chaos snapshot_version and log_ts", K(ret), K(result), K(last_end_log_ts), K(PRETTY_TS(*this)));
+          "Unexpected chaos snapshot_version and log_ts", K(ret), K(result), K(last_end_log_ts), K(PRETTY_TS(*this)));
     } else {
       ret = OB_NEED_REMOVE_UNNEED_TABLE;
       LOG_WARN("No need mini merge memtable which is covered by existing sstable",
@@ -1856,7 +1856,7 @@ int ObTableStore::refine_mini_merge_result_in_reboot_phase(ObITable& last_table,
   } else if (result.version_range_.snapshot_version_ <= last_snapshot_version) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR(
-        "Unexcepted chaos snapshot_version and log_ts", K(ret), K(result), K(last_end_log_ts), K(PRETTY_TS(*this)));
+        "Unexpected chaos snapshot_version and log_ts", K(ret), K(result), K(last_end_log_ts), K(PRETTY_TS(*this)));
   } else {
     // fix start_log_ts to make log_ts_range continuous
     result.log_ts_range_.start_log_ts_ = MAX(last_end_log_ts, result.log_ts_range_.start_log_ts_);

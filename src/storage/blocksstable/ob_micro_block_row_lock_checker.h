@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObMicroBlockRowLockChecker : public ObIMicroBlockRowFetcher {
-  public:
+public:
   ObMicroBlockRowLockChecker();
   virtual ~ObMicroBlockRowLockChecker();
   int check_row_locked(const transaction::ObTransStateTableGuard& trans_table_guard,

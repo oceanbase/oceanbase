@@ -25,13 +25,13 @@ using namespace transaction;
 using namespace sql;
 namespace unittest {
 class TestObTransDefine : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
   {}
 
-  public:
+public:
   // valid partition parameters
   static const int64_t VALID_TABLE_ID = 1;
   static const int32_t VALID_PARTITION_ID = 1;

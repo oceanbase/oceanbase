@@ -26,7 +26,7 @@ class ObTableSchema;
 class ObConstraint : public ObSchema {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObConstraint();
   explicit ObConstraint(common::ObIAllocator* allocator);
   ObConstraint(const ObConstraint& src_schema) = delete;
@@ -186,7 +186,7 @@ class ObConstraint : public ObSchema {
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t table_id_;
   uint64_t constraint_id_;

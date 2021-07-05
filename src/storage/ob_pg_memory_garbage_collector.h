@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObPGRecycleNode : public common::ObDLinkBase<ObPGRecycleNode> {
-  public:
+public:
   ObPGRecycleNode() : pg_(nullptr)
   {}
   virtual ~ObPGRecycleNode() = default;
@@ -32,19 +32,19 @@ class ObPGRecycleNode : public common::ObDLinkBase<ObPGRecycleNode> {
     return pg_;
   }
 
-  private:
+private:
   ObIPartitionGroup* pg_;
 };
 
 class ObPGMemoryGCTask : public common::ObTimerTask {
-  public:
+public:
   ObPGMemoryGCTask() = default;
   virtual ~ObPGMemoryGCTask() = default;
   virtual void runTimerTask() override;
 };
 
 class ObPGMemoryGarbageCollector {
-  public:
+public:
   ObPGMemoryGarbageCollector();
   ~ObPGMemoryGarbageCollector() = default;
   static ObPGMemoryGarbageCollector& get_instance();
@@ -56,7 +56,7 @@ class ObPGMemoryGarbageCollector {
   void wait();
   void destroy();
 
-  private:
+private:
   static const int64_t GC_INTERVAL_US = 10 * 1000 * 1000L;
   common::ObDList<ObPGRecycleNode> pg_list_;
   common::ObArray<ObPGRecycleNode*> pg_node_pool_;

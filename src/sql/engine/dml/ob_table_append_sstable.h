@@ -22,7 +22,7 @@ namespace sql {
 class ObTableAppendSSTableInput : public ObTableAppendInput {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTableAppendSSTableInput() : ObTableAppendInput(), task_id_()
   {}
   virtual ~ObTableAppendSSTableInput()
@@ -42,17 +42,17 @@ class ObTableAppendSSTableInput : public ObTableAppendInput {
     task_id_.reset();
   }
 
-  private:
+private:
   ObTaskID task_id_;
   DISALLOW_COPY_AND_ASSIGN(ObTableAppendSSTableInput);
 };
 
 class ObTableAppendSSTable : public ObTableAppend {
-  public:
+public:
   class ObTableAppendSSTableCtx : public ObPhyOperatorCtx {
     friend class ObTableAppendSSTable;
 
-    public:
+  public:
     explicit ObTableAppendSSTableCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
     {}
     virtual ~ObTableAppendSSTableCtx() = default;
@@ -67,7 +67,7 @@ class ObTableAppendSSTable : public ObTableAppend {
   virtual int init_op_ctx(ObExecContext& ctx) const override;
   virtual int create_operator_input(ObExecContext& ctx) const override;
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const override;
   virtual int inner_close(ObExecContext& ctx) const override;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;

@@ -24,13 +24,13 @@ using namespace oceanbase::common;
 static const int64_t PAGE_SIZE = 64 * 1024;
 
 class TestC {
-  public:
+public:
   TestC()
   {}
   virtual ~TestC()
   {}
 
-  public:
+public:
   // a successful virtual function invoking represents a good vtable
   virtual void set_mem_a(int64_t value)
   {
@@ -49,7 +49,7 @@ class TestC {
     return mem_b_;
   }
 
-  private:
+private:
   int64_t mem_a_;
   int64_t mem_b_;
 };

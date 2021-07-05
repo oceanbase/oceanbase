@@ -18,7 +18,7 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 
 struct Key {
-  public:
+public:
   Key() : key_(0)
   {}
   explicit Key(int64_t k) : key_(k)
@@ -36,7 +36,7 @@ struct Key {
 };
 
 struct MacroKey {
-  public:
+public:
   static const uint64_t HASH_MAGIC_NUM = 2654435761;
   MacroKey() : key_(0)
   {}
@@ -55,7 +55,7 @@ struct MacroKey {
 };
 
 struct BadKey {
-  public:
+public:
   BadKey() : key_(0)
   {}
   explicit BadKey(int64_t k) : key_(k)
@@ -73,7 +73,7 @@ struct BadKey {
 };
 
 struct ModKey {
-  public:
+public:
   ModKey() : key_(0)
   {}
   explicit ModKey(int64_t k) : key_(k)
@@ -91,7 +91,7 @@ struct ModKey {
 };
 
 struct Value {
-  public:
+public:
   Value() : value_(0)
   {}
   explicit Value(int64_t v) : value_(v)
@@ -109,7 +109,7 @@ struct Value {
 };
 
 class TestCuckooHashMap : public ::testing::Test {
-  public:
+public:
   TestCuckooHashMap();
   virtual ~TestCuckooHashMap();
 };

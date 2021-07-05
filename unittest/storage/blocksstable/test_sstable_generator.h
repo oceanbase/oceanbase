@@ -23,7 +23,7 @@ class ObDataFile;
 }
 namespace unittest {
 class TestSSTableGenerator {
-  public:
+public:
   TestSSTableGenerator();
   int open(blocksstable::ObDataStoreDesc& desc, const char* path, const int64_t row_count);
   int generate();
@@ -33,10 +33,10 @@ class TestSSTableGenerator {
     return &data_file_;
   }
 
-  private:
+private:
   int generate_row(const int64_t index);
 
-  private:
+private:
   char path_[OB_MAX_FILE_NAME_LENGTH];
   blocksstable::ObDataStoreDesc desc_;
   blocksstable::ObDataFile data_file_;

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprOrahash : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprOrahash(common::ObIAllocator& alloc);
   virtual ~ObExprOrahash();
   virtual int calc_resultN(
@@ -29,7 +29,7 @@ class ObExprOrahash : public ObFuncExprOperator {
   static int eval_orahash(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprOrahash);
 
   int get_int64_value(const common::ObObj& obj, common::ObExprCtx& expr_ctx, int64_t& val) const;

@@ -95,7 +95,7 @@ struct ObBeginTransLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   virtual int64_t get_serialize_size() const override;
   virtual int64_t to_string(char* buf, const int64_t buf_len) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBeginTransLogEntry);
 };
 
@@ -103,7 +103,7 @@ struct ObChangePartitionLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   // For compatibility, the variables in this struct MUST NOT be deleted or moved.
   // You should ONLY add variables at the end.
   // Note that if you use complex structure as variables, the complex structure should also keep compatibility.
-  public:
+public:
   static const int64_t CHANGE_PARTITION_LOG_VERSION = 1;
   common::ObPartitionKey partition_key_;
   common::ObReplicaType replica_type_;
@@ -116,7 +116,7 @@ struct ObChangePartitionLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   virtual bool is_valid() const;
   OB_UNIS_VERSION_V(CHANGE_PARTITION_LOG_VERSION);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObChangePartitionLogEntry);
 };
 
@@ -124,7 +124,7 @@ struct ObChangePartitionStorageLogEntry : public blocksstable::ObIBaseStorageLog
   // For compatibility, the variables in this struct MUST NOT be deleted or moved.
   // You should ONLY add variables at the end.
   // Note that if you use complex structure as variables, the complex structure should also keep compatibility.
-  public:
+public:
   static const int64_t CHANGE_PARTITION_STORAGE_LOG_VERSION = 1;
   common::ObPartitionKey partition_key_;
 
@@ -134,7 +134,7 @@ struct ObChangePartitionStorageLogEntry : public blocksstable::ObIBaseStorageLog
   virtual bool is_valid() const;
   OB_UNIS_VERSION_V(CHANGE_PARTITION_STORAGE_LOG_VERSION);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObChangePartitionStorageLogEntry);
 };
 
@@ -166,7 +166,7 @@ struct ObDeleteSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
 };
 
 struct ObAddSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t ADD_SSTABLE_LOG_VERSION = 1;
   ObAddSSTableLogEntry(const common::ObPGKey& pg_key, ObSSTable& sstable);
   explicit ObAddSSTableLogEntry(ObSSTable& sstable);
@@ -175,13 +175,13 @@ struct ObAddSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   TO_STRING_KV(K_(pg_key), K_(sstable));
   OB_UNIS_VERSION_V(ADD_SSTABLE_LOG_VERSION);
 
-  public:
+public:
   common::ObPGKey pg_key_;
   ObSSTable& sstable_;
 };
 
 struct ObRemoveSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t REMOVE_SSTABLE_LOG_VERSION = 1;
   ObRemoveSSTableLogEntry();
   ObRemoveSSTableLogEntry(const ObPGKey& pg_key, const ObITable::TableKey& table_key);
@@ -190,7 +190,7 @@ struct ObRemoveSSTableLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   TO_STRING_KV(K_(pg_key), K_(table_key));
   OB_UNIS_VERSION_V(REMOVE_SSTABLE_LOG_VERSION);
 
-  public:
+public:
   common::ObPGKey pg_key_;
   ObITable::TableKey table_key_;
 };
@@ -238,7 +238,7 @@ struct ObUpdatePartitionMetaLogEntry : public blocksstable::ObIBaseStorageLogEnt
 struct ObSplitPartitionStateLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObSplitPartitionStateLogEntry() : pkey_(), state_(UNKNOWN_SPLIT_STATE)
   {}
   ~ObSplitPartitionStateLogEntry()
@@ -258,7 +258,7 @@ struct ObSplitPartitionStateLogEntry : public blocksstable::ObIBaseStorageLogEnt
   }
   TO_STRING_KV(K_(pkey), "state", to_state_str(static_cast<ObPartitionSplitStateEnum>(state_)));
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   int64_t state_;
 };
@@ -266,7 +266,7 @@ struct ObSplitPartitionStateLogEntry : public blocksstable::ObIBaseStorageLogEnt
 struct ObSplitPartitionInfoLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObSplitPartitionInfoLogEntry() : pkey_(), split_info_()
   {}
   ~ObSplitPartitionInfoLogEntry()
@@ -286,7 +286,7 @@ struct ObSplitPartitionInfoLogEntry : public blocksstable::ObIBaseStorageLogEntr
   }
   TO_STRING_KV(K_(pkey), K_(split_info));
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   ObPartitionSplitInfo split_info_;
 };
@@ -294,7 +294,7 @@ struct ObSplitPartitionInfoLogEntry : public blocksstable::ObIBaseStorageLogEntr
 struct ObUpdateTenantConfigLogEntry : public blocksstable::ObIBaseStorageLogEntry {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObUpdateTenantConfigLogEntry(share::TenantUnits& units);
   virtual ~ObUpdateTenantConfigLogEntry()
   {}
@@ -304,7 +304,7 @@ struct ObUpdateTenantConfigLogEntry : public blocksstable::ObIBaseStorageLogEntr
   }
   TO_STRING_KV(K_(units));
 
-  private:
+private:
   share::TenantUnits& units_;
 };
 
@@ -347,7 +347,7 @@ struct ObUpdatePGPartitionMetaLogEntry : public blocksstable::ObIBaseStorageLogE
 };
 
 struct ObPGMacroBlockMetaLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t PG_MACRO_BLOCK_META_VERSION = 1;
   ObPGMacroBlockMetaLogEntry(const common::ObPGKey& pg_key, const ObITable::TableKey& table_key,
       const int64_t data_file_id, const int64_t disk_no, const blocksstable::MacroBlockId& macro_block_id,
@@ -361,7 +361,7 @@ struct ObPGMacroBlockMetaLogEntry : public blocksstable::ObIBaseStorageLogEntry 
   TO_STRING_KV(K_(pg_key), K_(table_key), K_(data_file_id), K_(disk_no), K_(macro_block_id), K_(meta));
   OB_UNIS_VERSION_V(PG_MACRO_BLOCK_META_VERSION);
 
-  public:
+public:
   ObPGKey pg_key_;
   ObITable::TableKey table_key_;
   int64_t data_file_id_;
@@ -372,7 +372,7 @@ struct ObPGMacroBlockMetaLogEntry : public blocksstable::ObIBaseStorageLogEntry 
 };
 
 struct ObSetStartLogTsAfterMajorLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t SET_START_LOG_TS_AFTER_MAJOR_VERSION = 1;
   explicit ObSetStartLogTsAfterMajorLogEntry(
       const common::ObPGKey& pg_key, const ObITable::TableKey& table_key, const int64_t start_log_ts_after_major);
@@ -383,17 +383,17 @@ struct ObSetStartLogTsAfterMajorLogEntry : public blocksstable::ObIBaseStorageLo
   TO_STRING_KV(K_(pg_key), K_(table_key), K_(start_log_ts_after_major));
   OB_UNIS_VERSION(SET_START_LOG_TS_AFTER_MAJOR_VERSION);
 
-  public:
+public:
   ObPGKey pg_key_;
   ObITable::TableKey table_key_;
   int64_t start_log_ts_after_major_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSetStartLogTsAfterMajorLogEntry);
 };
 
 struct ObAddRecoveryPointDataLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t ADD_RECOVERY_POINT_DATA_LOG_VERSION = 1;
   explicit ObAddRecoveryPointDataLogEntry(const ObRecoveryPointType point_type, ObRecoveryPointData& point_data);
   virtual ~ObAddRecoveryPointDataLogEntry() = default;
@@ -401,16 +401,16 @@ struct ObAddRecoveryPointDataLogEntry : public blocksstable::ObIBaseStorageLogEn
   TO_STRING_KV(K_(point_type), K_(point_data));
   OB_UNIS_VERSION(ADD_RECOVERY_POINT_DATA_LOG_VERSION);
 
-  public:
+public:
   ObRecoveryPointType point_type_;
   ObRecoveryPointData& point_data_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAddRecoveryPointDataLogEntry);
 };
 
 struct ObRemoveRecoveryPointDataLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t REMOVE_RECOVERY_POINT_DATA_LOG_VERSION = 1;
   ObRemoveRecoveryPointDataLogEntry();
   explicit ObRemoveRecoveryPointDataLogEntry(
@@ -420,12 +420,12 @@ struct ObRemoveRecoveryPointDataLogEntry : public blocksstable::ObIBaseStorageLo
   TO_STRING_KV(K_(point_type), K_(pg_key), K_(snapshot_version));
   OB_UNIS_VERSION(REMOVE_RECOVERY_POINT_DATA_LOG_VERSION);
 
-  public:
+public:
   ObRecoveryPointType point_type_;
   ObPGKey pg_key_;
   int64_t snapshot_version_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRemoveRecoveryPointDataLogEntry);
 };
 

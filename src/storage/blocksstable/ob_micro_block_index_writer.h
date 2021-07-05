@@ -25,7 +25,7 @@ namespace blocksstable {
 
 template <int64_t BUFFER_COUNT>
 class ObCommonMicroBlockIndexWriter {
-  public:
+public:
   ObCommonMicroBlockIndexWriter();
   virtual ~ObCommonMicroBlockIndexWriter();
   virtual int init(const int64_t max_buffer_size);
@@ -35,7 +35,7 @@ class ObCommonMicroBlockIndexWriter {
   int write(const int64_t buffer_idx, const T& value);
   int write(const int64_t buffer_idx, const char* buf, const int64_t buf_len);
 
-  protected:
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObCommonMicroBlockIndexWriter);
   bool is_inited_;
   ObSelfBufferWriter buffer_[BUFFER_COUNT];
@@ -128,7 +128,7 @@ int ObCommonMicroBlockIndexWriter<BUFFER_COUNT>::write(const int64_t buffer_idx,
 }
 
 class ObMicroBlockIndexWriter : public ObCommonMicroBlockIndexWriter<4L> {
-  public:
+public:
   static const int64_t INDEX_ENTRY_SIZE = sizeof(int32_t) * 2;
   static const int64_t MARK_DELETION_ENRTRY_SIZE = sizeof(uint8_t);
   static const int64_t DELTA_ENTRY_SIZE = sizeof(int32_t);
@@ -170,10 +170,10 @@ class ObMicroBlockIndexWriter : public ObCommonMicroBlockIndexWriter<4L> {
   inline int64_t get_block_size() const;
   static int64_t get_entry_size(bool is_multi_version_minor_merge);
 
-  protected:
+protected:
   bool is_multi_version_minor_merge_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockIndexWriter);
   typedef ObCommonMicroBlockIndexWriter<4L> BaseWriter;
   static const int64_t ENDKEY_BUFFER_IDX = 0;
@@ -197,7 +197,7 @@ inline int64_t ObMicroBlockIndexWriter::get_entry_size(bool is_multi_version_min
 }
 
 class ObLobMicroBlockIndexWriter : public ObCommonMicroBlockIndexWriter<2L> {
-  public:
+public:
   static const int64_t INDEX_ENTRY_SIZE = 3 * sizeof(int32_t) + sizeof(int64_t) * 2;
   ObLobMicroBlockIndexWriter();
   virtual ~ObLobMicroBlockIndexWriter() = default;
@@ -214,7 +214,7 @@ class ObLobMicroBlockIndexWriter : public ObCommonMicroBlockIndexWriter<2L> {
   }
   int64_t get_block_size() const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLobMicroBlockIndexWriter);
   typedef ObCommonMicroBlockIndexWriter<2L> BaseWriter;
   static const int64_t INDEX_BUFFER_IDX = 0;

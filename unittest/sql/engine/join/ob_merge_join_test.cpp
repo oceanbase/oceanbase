@@ -32,7 +32,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::observer;
 using namespace oceanbase::share;
 class MockSqlExpression : public ObSqlExpression {
-  public:
+public:
   MockSqlExpression() : ObSqlExpression(alloc_)
   {
     set_item_count(10);
@@ -42,11 +42,11 @@ class MockSqlExpression : public ObSqlExpression {
 };
 
 class ObMergeJoinTest : public ::testing::Test {
-  public:
+public:
   ObMergeJoinTest();
   virtual ~ObMergeJoinTest();
 
-  protected:
+protected:
   void join_test(int64_t case_id, ObJoinType join_type);
   void serialize_test();
   void join_exception_test(int expect_ret);
@@ -55,12 +55,12 @@ class ObMergeJoinTest : public ::testing::Test {
   ObMergeJoinTest(const ObMergeJoinTest& other);
   ObMergeJoinTest& operator=(const ObMergeJoinTest& other);
 
-  private:
+private:
   // data members
 };
 
 class ObMergeJoinPlan {
-  public:
+public:
   static ObMergeJoin& get_instance()
   {
     return merge_join_;
@@ -131,7 +131,7 @@ class ObMergeJoinPlan {
     allocator_.reuse();
   }
 
-  private:
+private:
   static void set_id()
   {
     merge_join_.set_id(0);
@@ -203,10 +203,10 @@ class ObMergeJoinPlan {
     return ret;
   }
 
-  private:
+private:
   ObMergeJoinPlan();
 
-  private:
+private:
   static ObPhysicalPlan phy_plan_;
   static MockSqlExpression equal_expr_[2];
   static MockSqlExpression other_expr_[2];

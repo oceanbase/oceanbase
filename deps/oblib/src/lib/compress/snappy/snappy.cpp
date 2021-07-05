@@ -813,7 +813,7 @@ REGISTER_MODULE_INITIALIZER(snappy, ComputeTable());
 
 // Helper class for decompression
 class SnappyDecompressor {
-  private:
+private:
   Source* reader_;        // Underlying source of bytes to decompress
   const char* ip_;        // Points to next buffered byte
   const char* ip_limit_;  // Points just past buffered bytes
@@ -828,7 +828,7 @@ class SnappyDecompressor {
   // Returns true on success, false on error or end of input.
   bool RefillTag();
 
-  public:
+public:
   explicit SnappyDecompressor(Source* reader) : reader_(reader), ip_(NULL), ip_limit_(NULL), peeked_(0), eof_(false)
   {}
 
@@ -1102,12 +1102,12 @@ size_t Compress(Source* reader, Sink* writer)
 // Note that this is not a "ByteSink", but a type that matches the
 // Writer template argument to SnappyDecompressor::DecompressAllTags().
 class SnappyArrayWriter {
-  private:
+private:
   char* base_;
   char* op_;
   char* op_limit_;
 
-  public:
+public:
   inline explicit SnappyArrayWriter(char* dst) : base_(dst), op_(dst)
   {}
 
@@ -1195,11 +1195,11 @@ bool Uncompress(const char* compressed, size_t n, string* uncompressed)
 
 // A Writer that drops everything on the floor and just does validation
 class SnappyDecompressionValidator {
-  private:
+private:
   size_t expected_;
   size_t produced_;
 
-  public:
+public:
   inline SnappyDecompressionValidator() : produced_(0)
   {}
   inline void SetExpectedLength(size_t len)

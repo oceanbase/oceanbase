@@ -150,7 +150,7 @@ struct ObPhyOperatorTypeDescSet {
   void set_type_str(ObPhyOperatorType type, const char* type_str);
   const char* get_type_str(ObPhyOperatorType type) const;
 
-  private:
+private:
   ObPhyOperatorTypeDesc set_[PHY_END];
 };
 

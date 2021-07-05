@@ -56,10 +56,10 @@ class ObPhysicalPlan;
 class ObSqlExpression : public common::ObISqlExpression, public common::ObDLinkBase<ObSqlExpression> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   enum ExpressionType { EXPR_TYPE_SQL = 0, EXPR_TYPE_COLUMN, EXPR_TYPE_AGGREGATE, EXPR_TYPE_MAX };
 
-  public:
+public:
   ObSqlExpression(common::ObIAllocator& alloc, int64_t item_count = 0);
   virtual ~ObSqlExpression();
 
@@ -141,10 +141,10 @@ class ObSqlExpression : public common::ObISqlExpression, public common::ObDLinkB
     fast_expr_ = fast_expr;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlExpression);
 
-  protected:
+protected:
   friend class ::ObAggregateFunctionTest;
   common::ObIAllocator& inner_alloc_;
   // data members
@@ -177,7 +177,7 @@ inline bool ObSqlExpression::is_empty() const
 class ObColumnExpression : public ObSqlExpression, public common::ObIColumnExpression {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObColumnExpression(common::ObIAllocator& alloc, int64_t item_count = 0);
   virtual ~ObColumnExpression();
 
@@ -215,10 +215,10 @@ class ObColumnExpression : public ObSqlExpression, public common::ObIColumnExpre
   }
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObColumnExpression);
 
-  protected:
+protected:
   int64_t result_index_;  // result's index in output row
   common::ObCollationType cs_type_;
   common::ObAccuracy accuracy_;
@@ -233,7 +233,7 @@ inline void ObColumnExpression::reset()
 class ObAggregateExpression : public ObColumnExpression {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObAggregateExpression(common::ObIAllocator& alloc, int64_t item_count = 0);
   virtual ~ObAggregateExpression();
 
@@ -324,20 +324,20 @@ class ObAggregateExpression : public ObColumnExpression {
     separator_param_expr_.start_gen_infix_exr();
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAggregateExpression);
 
-  protected:
+protected:
   ObItemType aggr_func_;
   bool is_distinct_;
   common::ObFixedArray<ObSortColumn, common::ObIAllocator> sort_columns_;
   ObSqlExpression separator_param_expr_;
   int64_t real_param_col_count_;
 
-  public:
+public:
   common::ObFixedArray<common::ObCollationType, common::ObIAllocator> aggr_cs_types_;
 
-  protected:
+protected:
   int64_t output_column_count_;
   common::ObFixedArray<ObOpSchemaObj, common::ObIAllocator> extra_infos_;
 };
@@ -373,7 +373,7 @@ inline int ObAggregateExpression::get_aggr_column(
 // ObExprOperatorFetcher is used fetch the ObExprOperator of ObExprGeneratorImpl.
 // only override the add_expr_item.
 struct ObExprOperatorFetcher : public ObSqlExpression {
-  public:
+public:
   ObExprOperatorFetcher()
       //  the allocator is never used
       : ObSqlExpression(*lib::ObMallocAllocator::get_instance(), 0)
@@ -395,7 +395,7 @@ struct ObExprOperatorFetcher : public ObSqlExpression {
     return ret;
   }
 
-  void reset()
+  void reset() override
   {
     op_ = NULL;
   }
@@ -404,7 +404,7 @@ struct ObExprOperatorFetcher : public ObSqlExpression {
 };
 
 class ObSqlExpressionUtil {
-  public:
+public:
   static int make_sql_expr(ObPhysicalPlan* physical_plan, ObSqlExpression*& expr);
   static int make_sql_expr(ObPhysicalPlan* physical_plan, ObColumnExpression*& expr);
   static int make_sql_expr(ObPhysicalPlan* physical_plan, ObAggregateExpression*& expr);
@@ -417,7 +417,7 @@ class ObSqlExpressionUtil {
       common::ObExprCtx& expr_ctx, const common::ObObj& src_param, const common::ObObj*& result);
   static bool should_gen_postfix_expr();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlExpressionUtil);
   ObSqlExpressionUtil();
   ~ObSqlExpressionUtil();

@@ -21,9 +21,9 @@
 namespace oceanbase {
 namespace sql {
 class ObVariableSetStmt : public ObDDLStmt {
-  public:
+public:
   class VariableSetNode {
-    public:
+  public:
     VariableSetNode()
         : variable_name_(),
           is_system_variable_(false),
@@ -96,7 +96,7 @@ class ObVariableSetStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(actual_tenant_id), K_(variable_nodes));
 
-  private:
+private:
   uint64_t actual_tenant_id_;
   common::ObArray<VariableSetNode, common::ModulePageAllocator, true> variable_nodes_;
   bool has_global_variable_;

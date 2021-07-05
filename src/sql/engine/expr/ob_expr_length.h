@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprLength : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprLength(common::ObIAllocator& alloc);
   virtual ~ObExprLength();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
@@ -29,7 +29,7 @@ class ObExprLength : public ObFuncExprOperator {
   static int calc_oracle_mode(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int calc_mysql_mode(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLength);
 };
 }  // namespace sql

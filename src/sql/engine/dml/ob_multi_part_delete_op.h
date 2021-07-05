@@ -19,7 +19,7 @@ namespace sql {
 class ObMultiPartDeleteSpec : public ObTableDeleteSpec, public ObMultiDMLInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMultiPartDeleteSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableDeleteSpec(alloc, type), ObMultiDMLInfo(alloc)
   {}
@@ -37,19 +37,19 @@ class ObMultiPartDeleteSpec : public ObTableDeleteSpec, public ObMultiDMLInfo {
 };
 
 class ObMultiPartDeleteOp : public ObTableDeleteOp, public ObMultiDMLCtx {
-  public:
+public:
   static const int64_t DELETE_OP = 0;
   // There is only one dml operation in multi table delete
   static const int64_t DML_OP_CNT = 1;
 
-  public:
+public:
   ObMultiPartDeleteOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableDeleteOp(ctx, spec, input), ObMultiDMLCtx(ctx.get_allocator())
   {}
   ~ObMultiPartDeleteOp()
   {}
 
-  public:
+public:
   virtual int inner_open() override;
   virtual int get_next_row() override;
   virtual int inner_close();

@@ -27,7 +27,7 @@ class ObExecContext;
 class ObFakeCTETableSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObFakeCTETableSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type), column_involved_offset_(alloc), column_involved_exprs_(alloc)
   {}
@@ -40,7 +40,7 @@ class ObFakeCTETableSpec : public ObOpSpec {
 };
 
 class ObFakeCTETableOp : public ObOperator {
-  public:
+public:
   explicit ObFakeCTETableOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input), empty_(false), pump_row_(nullptr), allocator_(exec_ctx.get_allocator())
   {}
@@ -70,7 +70,7 @@ class ObFakeCTETableOp : public ObOperator {
       const common::ObIArray<int64_t>& chosen_index, int64_t extra_size, common::ObIAllocator& allocator);
   const static int64_t ROW_EXTRA_SIZE = 0;
 
-  private:
+private:
   bool empty_;
   const ObChunkDatumStore::StoredRow* pump_row_;
   ObIAllocator& allocator_;

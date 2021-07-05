@@ -47,7 +47,7 @@ struct HashMapMeta {
  */
 template <class T>
 class Row {
-  public:
+public:
   Row() : elems_(NULL)
   {}
   ~Row()
@@ -66,12 +66,12 @@ class Row {
   }
   TO_STRING_KV(KP(elems_));
 
-  private:
+private:
   T* elems_;
 };
 template <class T>
 struct RowKey {
-  public:
+public:
   RowKey() : row_(), meta_(NULL)
   {}
   ~RowKey()
@@ -84,7 +84,7 @@ struct RowKey {
 
 template <class T>
 class ObExprInHashMap {
-  public:
+public:
   const static int HASH_CMP_TRUE = 0;
   const static int HASH_CMP_FALSE = -1;
   const static int HASH_CMP_UNKNOWN = 1;
@@ -124,14 +124,14 @@ class ObExprInHashMap {
     meta_.cmp_funcs_ = cmp_funcs;
   }
 
-  private:
+private:
   common::hash::ObHashMap<RowKey<T>, common::ObArray<Row<T>>, common::hash::NoPthreadDefendMode> map_;
   HashMapMeta meta_;
 };
 
 template <class T>
 class ObExprInHashSet {
-  public:
+public:
   ObExprInHashSet() : set_(), meta_()
   {}
   ~ObExprInHashSet()
@@ -169,7 +169,7 @@ class ObExprInHashSet {
     meta_.cmp_funcs_ = cmp_funcs;
   }
 
-  private:
+private:
   common::hash::ObHashSet<RowKey<T>, common::hash::NoPthreadDefendMode> set_;
   HashMapMeta meta_;
 };
@@ -179,7 +179,7 @@ class ObSubQueryIterator;
 
 class ObExprInOrNotIn : public ObVectorExprOperator {
   class ObExprInCtx : public ObExprOperatorCtx {
-    public:
+  public:
     ObExprInCtx()
         : ObExprOperatorCtx(),
           right_has_null(false),
@@ -217,7 +217,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator {
       }
     }
 
-    public:
+  public:
     int init_hashset(int64_t param_num);
     int init_hashset_vecs(int64_t param_num, int64_t row_dimension, ObExecContext* exec_ctx);
     int init_static_engine_hashset(int64_t param_num);
@@ -287,7 +287,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator {
     bool funcs_ptr_set;
     bool ctx_hash_null_;
 
-    private:
+  private:
     common::ObObj** right_objs_;
     common::ObDatum** right_datums_;
     common::hash::ObHashSet<common::ObObj, common::hash::NoPthreadDefendMode> hashset_;
@@ -311,7 +311,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator {
 
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObExprInOrNotIn(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name);
   virtual ~ObExprInOrNotIn(){};
   virtual int calc_resultN(
@@ -332,7 +332,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator {
     return true;
   }
 
-  public:
+public:
   static int eval_in_with_row(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int eval_in_without_row(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int eval_in_with_row_fallback(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
@@ -341,7 +341,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator {
   static int eval_in_with_subquery(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int calc_for_row_static_engine(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum, ObExpr** l_row);
 
-  public:
+public:
   inline void set_param_all_const(bool all_const);
   inline void set_param_all_same_type(bool all_same_type);
   inline void set_param_all_same_cs_type(bool all_same_cs_type);
@@ -349,7 +349,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator {
   // for func visit_in_expr , when left param is subquery set true
   inline void set_param_is_subquery();
   // static bool nd_hash_;
-  protected:
+protected:
   int calc(common::ObObj& result, const common::ObObj* objs, const common::ObIArray<ObExprCalcType>& cmp_types,
       int64_t param_num, common::ObCompareCtx& cmp_ctx, common::ObExprCtx& expr_ctx, common::ObCastCtx& cast_ctx) const;
   // like "select 1 from dual where (select 1, 2) in ((1,2), (3,4))"
@@ -384,7 +384,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator {
   static int setup_row(ObExpr** expr, ObEvalCtx& ctx, const bool is_iter, const int64_t cmp_func_cnt,
       ObSubQueryIterator*& iter, ObExpr**& row);
 
-  protected:
+protected:
   typedef uint32_t ObExprInParamFlag;
   static const uint32_t IN_PARAM_ALL_CONST = 1U << 0;
   static const uint32_t IN_PARAM_ALL_SAME_TYPE = 1U << 1;
@@ -396,20 +396,20 @@ class ObExprInOrNotIn : public ObVectorExprOperator {
 };
 
 class ObExprIn : public ObExprInOrNotIn {
-  public:
+public:
   explicit ObExprIn(common::ObIAllocator& alloc);
   virtual ~ObExprIn(){};
 
-  protected:
+protected:
   virtual void set_result(common::ObObj& result, bool is_exist, bool param_exist_null) const;
 };
 
 class ObExprNotIn : public ObExprInOrNotIn {
-  public:
+public:
   explicit ObExprNotIn(common::ObIAllocator& alloc);
   virtual ~ObExprNotIn(){};
 
-  protected:
+protected:
   virtual void set_result(common::ObObj& result, bool is_exist, bool param_exist_null) const;
 };
 

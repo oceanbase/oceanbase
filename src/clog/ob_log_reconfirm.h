@@ -34,7 +34,7 @@ class ObILogEngine;
 class ObLogEntry;
 
 struct ObReconfirmLogInfo {
-  public:
+public:
   ObReconfirmLogInfo()
       : leader_ts_(common::OB_INVALID_TIMESTAMP),
         confirmed_log_ts_(common::OB_INVALID_TIMESTAMP),
@@ -113,7 +113,7 @@ struct ObReconfirmLogInfo {
   }
   TO_STRING_KV(K_(leader_ts), K_(ack_list), K_(status_map), K_(log_entry));
 
-  private:
+private:
   int64_t leader_ts_;
   // The confirmed log's submit_timestamp is maintained by this field and used to advance the last_ts
   int64_t confirmed_log_ts_;
@@ -123,7 +123,7 @@ struct ObReconfirmLogInfo {
 };
 
 class ObReconfirmLogInfoArray {
-  public:
+public:
   ObReconfirmLogInfoArray() : start_id_(OB_INVALID_ID), alloc_mgr_(NULL), array_ptr_(NULL), is_inited_(false)
   {}
   ~ObReconfirmLogInfoArray()
@@ -141,7 +141,7 @@ class ObReconfirmLogInfoArray {
     return start_id_ + RECONFIRM_LOG_ARRAY_LENGTH;
   }
 
-  private:
+private:
   uint64_t start_id_;
   common::ObILogAllocator* alloc_mgr_;
   ObReconfirmLogInfo* array_ptr_;
@@ -149,13 +149,13 @@ class ObReconfirmLogInfoArray {
 };
 
 class ObILogReconfirm {
-  public:
+public:
   ObILogReconfirm()
   {}
   virtual ~ObILogReconfirm()
   {}
 
-  public:
+public:
   virtual int reconfirm() = 0;
   virtual bool need_start_up() = 0;
   virtual int receive_log(const ObLogEntry& log_entry, const common::ObAddr& server) = 0;
@@ -166,12 +166,12 @@ class ObILogReconfirm {
 class ObLogReconfirm : public ObILogReconfirm {
   friend class unittest::ReconfirmStateAccessorForTest;
 
-  public:
+public:
   ObLogReconfirm();
   virtual ~ObLogReconfirm()
   {}
 
-  public:
+public:
   int init(ObILogSWForReconfirm* sw, ObILogStateMgrForReconfirm* state_mgr, ObILogMembershipMgr* mm,
       ObLogCascadingMgr* cascading_mgr, ObILogEngine* log_engine, common::ObILogAllocator* alloc_mgr,
       const common::ObPartitionKey& partition_key, const common::ObAddr& self,
@@ -192,7 +192,7 @@ class ObLogReconfirm : public ObILogReconfirm {
     return ATOMIC_LOAD(&next_id_);
   }
 
-  private:
+private:
   enum State {
     INITED = 0,
     FLUSHING_PREPARE_LOG = 1,
@@ -206,7 +206,7 @@ class ObLogReconfirm : public ObILogReconfirm {
   // The status that the log has been confirmed is recorded in the mark index of the bitmap
   static const int64_t CONFIRMED_TAG_BIT = 1;
 
-  private:
+private:
   // generate new proposal_id and flush it to disk
   int init_reconfirm_();
   // check whether new proposal_id has been flushed to disk
@@ -235,7 +235,7 @@ class ObLogReconfirm : public ObILogReconfirm {
   int try_update_last_ts_(const int64_t log_ts);
   int try_update_failover_truncate_log_id_(ObLogEntryHeader* header);
 
-  private:
+private:
   static const int64_t BUF_SIZE = 2048;
   static const int64_t RECEIVE_PREVIOUS_NEXT_REPLAY_LOG_INFO_INTERVAL = 1 * 1000 * 1000;  // 1s
   static const int64_t REPEATED_FETCH_LOG_INTERVAL = 1 * 1000 * 1000;                     // 1s
@@ -274,7 +274,7 @@ class ObLogReconfirm : public ObILogReconfirm {
   bool receive_previous_max_log_ts_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogReconfirm);
 };
 }  // namespace clog

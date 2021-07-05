@@ -19,7 +19,7 @@ namespace sql {
 class ObTableDeleteInput : public ObTableModifyInput {
   friend class ObTableDelete;
 
-  public:
+public:
   ObTableDeleteInput() : ObTableModifyInput()
   {}
   virtual ~ObTableDeleteInput()
@@ -29,16 +29,16 @@ class ObTableDeleteInput : public ObTableModifyInput {
     return PHY_DELETE;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDeleteInput);
 };
 
 class ObTableDelete : public ObTableModify {
-  protected:
+protected:
   class ObTableDeleteCtx : public ObTableModifyCtx {
     friend class ObTableDelete;
 
-    public:
+  public:
     explicit ObTableDeleteCtx(ObExecContext& ctx) : ObTableModifyCtx(ctx), part_row_cnt_(0), dml_param_()
     {}
     ~ObTableDeleteCtx()
@@ -50,19 +50,19 @@ class ObTableDelete : public ObTableModify {
       part_infos_.reset();
     }
 
-    protected:
+  protected:
     int64_t part_row_cnt_;
     storage::ObDMLBaseParam dml_param_;
     common::ObSEArray<DMLPartInfo, 4> part_infos_;
   };
 
-  public:
+public:
   explicit ObTableDelete(common::ObIAllocator& alloc);
   ~ObTableDelete();
 
   int add_compute(ObColumnExpression* expr);
 
-  protected:
+protected:
   /**
    * @brief called by get_next_row(), get a row from the child operator or row_store
    * @param ctx[in], execute context
@@ -76,7 +76,7 @@ class ObTableDelete : public ObTableModify {
    */
   virtual int inner_open(ObExecContext& ctx) const;
 
-  private:
+private:
   /**
    * @brief close operator, not including children operators.
    * Every op should implement this method.
@@ -94,7 +94,7 @@ class ObTableDelete : public ObTableModify {
       const common::ObIArray<DMLPartInfo>& part_infos, int64_t& affected_rows) const;
   inline int do_table_delete(ObExecContext& ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDelete);
 };
 }  // namespace sql

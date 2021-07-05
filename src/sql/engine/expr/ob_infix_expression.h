@@ -23,7 +23,7 @@ namespace sql {
 class ObInfixExprItem : public ObPostExprItem {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObInfixExprItem() : ObPostExprItem(), param_idx_(0), param_num_(0), param_lazy_eval_(false)
   {}
 
@@ -58,7 +58,7 @@ class ObInfixExprItem : public ObPostExprItem {
 
   INHERIT_TO_STRING_KV("parent", ObPostExprItem, K(param_idx_), K(param_num_), K(param_lazy_eval_));
 
-  protected:
+protected:
   // index of first parameter
   uint16_t param_idx_;
   // number of parameter
@@ -77,7 +77,7 @@ class ObInfixExprItem : public ObPostExprItem {
 class ObInfixExpression {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   const static int64_t TSI_STACK_IDENTIFIER = 3;  // 1 and 2 used in ob_postfix_expression.cpp
   const static int64_t STACK_ALLOC_STACK_SIZE = 128;
 
@@ -137,7 +137,7 @@ class ObInfixExpression {
 
   TO_STRING_KV(K_(exprs));
 
-  private:
+private:
   OB_INLINE static int64_t& global_stack_top()
   {
     static RLOCAL(int64_t, val);
@@ -150,7 +150,7 @@ class ObInfixExpression {
 
   int eval(common::ObExprCtx& expr_ctx, const common::ObNewRow& row, common::ObObj* stack, const int64_t pos) const;
 
-  private:
+private:
   common::ObIAllocator& alloc_;
   ExprItemArray exprs_;
   // output_column_count_ ?

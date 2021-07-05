@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 class ObSafeArena : public ObIAllocator {
-  public:
+public:
   ObSafeArena(const lib::ObLabel& label, const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE)
       : arena_alloc_(label, page_size), lock_()
   {}
@@ -27,7 +27,7 @@ class ObSafeArena : public ObIAllocator {
   virtual ~ObSafeArena()
   {}
 
-  public:
+public:
   virtual void* alloc(const int64_t sz) override
   {
     return alloc(sz, default_memattr);
@@ -78,11 +78,11 @@ class ObSafeArena : public ObIAllocator {
     return arena_alloc_.get_arena();
   }
 
-  private:
+private:
   ObArenaAllocator arena_alloc_;
   ObSpinLock lock_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSafeArena);
 };
 }  // namespace common

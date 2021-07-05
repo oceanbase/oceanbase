@@ -26,7 +26,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObInMemoryTopnSort : public ObBaseSort {
-  public:
+public:
   ObInMemoryTopnSort();
   virtual ~ObInMemoryTopnSort();
   virtual void reset();
@@ -51,7 +51,7 @@ class ObInMemoryTopnSort : public ObBaseSort {
     return iter_end_;
   }
   // TO_STRING_KV(K_(sort_array_pos));
-  private:
+private:
   // Optimize mem usage/performance of top-n sort:
   // Record buf_len of each allocated row. When old row pop-ed out of the heap
   // and has enough space for new row, use the space of old row to store new row
@@ -78,10 +78,10 @@ class ObInMemoryTopnSort : public ObBaseSort {
     const common::ObIArray<ObSortColumn>* sort_columns_;
   };
 
-  private:
+private:
   int adjust_topn_heap(const common::ObNewRow& row);
 
-  private:
+private:
   // data members
   int64_t topn_sort_array_pos_;
   bool is_fetch_with_ties_;  // for fetch with ties

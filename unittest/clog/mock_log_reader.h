@@ -21,7 +21,7 @@ namespace oceanbase {
 using namespace clog;
 namespace clog {
 class MockFilePool : public IFilePool {
-  public:
+public:
   virtual int get_fid_range(int64_t& min_fid, int64_t& max_fid)
   {
     UNUSED(min_fid);
@@ -37,7 +37,7 @@ class MockFilePool : public IFilePool {
 };
 
 class MockLogDirectReader : public ObILogDirectReader {
-  public:
+public:
   virtual int init(IFilePool* reader_pool)
   {
     UNUSED(reader_pool);
@@ -70,7 +70,7 @@ class MockLogDirectReader : public ObILogDirectReader {
 };
 
 class MockRawLogIterator : public ObIRawLogIterator {
-  public:
+public:
   int init()
   {
     num_ = 0;
@@ -175,7 +175,7 @@ class MockRawLogIterator : public ObIRawLogIterator {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   int num_;
   ObLogEntry log_entry1;
   ObLogEntry log_entry2;

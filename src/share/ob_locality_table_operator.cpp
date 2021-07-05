@@ -30,7 +30,7 @@ using namespace common::sqlclient;
 namespace share {
 
 class LocalityQueryResult {
-  public:
+public:
   LocalityQueryResult()
       : svr_ip_(""),
         svr_port_(0),

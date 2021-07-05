@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObMergeLogPlan : public ObInsertLogPlan {
-  public:
+public:
   ObMergeLogPlan(ObOptimizerContext& ctx, const ObDMLStmt* merge_stmt) : ObInsertLogPlan(ctx, merge_stmt)
   {}
   virtual ~ObMergeLogPlan()
@@ -26,7 +26,7 @@ class ObMergeLogPlan : public ObInsertLogPlan {
   int generate_raw_plan();
   virtual int generate_plan();
 
-  private:
+private:
   int allocate_merge_operator_as_top(ObLogicalOperator*& top);
   int allocate_merge_subquery();
   int get_update_insert_condition_subquery(ObRawExpr* matched_expr, ObRawExpr* null_expr, bool& update_has_subquery,

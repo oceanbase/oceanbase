@@ -41,7 +41,7 @@ struct EqualSetKey {
   TO_STRING_KV(K_(expr));
 };
 class ObEqualAnalysis {
-  public:
+public:
   explicit ObEqualAnalysis();
 
   virtual ~ObEqualAnalysis();
@@ -64,11 +64,11 @@ class ObEqualAnalysis {
   static int compute_equal_set(ObIAllocator* allocator, const ObIArray<ObRawExpr*>& eset_conditions,
       const EqualSets& input_equal_sets, EqualSets& output_equal_sets);
 
-  protected:
+protected:
   // types and constants
   typedef common::hash::ObHashMap<EqualSetKey, int64_t, common::hash::NoPthreadDefendMode> ColumnSet;
 
-  protected:
+protected:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObEqualAnalysis);
   // function members
@@ -81,7 +81,7 @@ class ObEqualAnalysis {
   int check_whether_can_be_merged(
       const ObExprEqualSet& equal_set, const ObExprEqualSet& another_set, bool& can_be) const;
 
-  protected:
+protected:
   // data members
   common::ObArenaAllocator equal_set_alloc_;
   ColumnSet column_set_;

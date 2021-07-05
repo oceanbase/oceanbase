@@ -17,13 +17,13 @@
 namespace oceanbase {
 namespace clog {
 class ObDiskBufferTask : public ObIBufferTask {
-  public:
+public:
   ObDiskBufferTask() : proposal_id_(), buf_(NULL), len_(0), offset_(0)
   {
     need_callback_ = true;
   }
 
-  public:
+public:
   void reset();
   void set(char* buf, const int64_t len);
   common::ObProposalID get_proposal_id() const
@@ -45,27 +45,27 @@ class ObDiskBufferTask : public ObIBufferTask {
   // st == single thread
   virtual int st_after_consume(const int handle_err) = 0;
 
-  protected:
+protected:
   int fill_buffer(char* buf, const offset_t offset);
 
-  protected:
+protected:
   common::ObProposalID proposal_id_;
   char* buf_;
   int64_t len_;
   offset_t offset_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDiskBufferTask);
 };
 
 class ObIDiskLogBuffer {
-  public:
+public:
   ObIDiskLogBuffer()
   {}
   virtual ~ObIDiskLogBuffer()
   {}
 
-  private:
+private:
   virtual int submit(ObIBufferTask* task) = 0;
 };
 };  // end namespace clog

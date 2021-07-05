@@ -20,7 +20,7 @@ namespace sql {
 class ObTaskLocation final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTaskLocation(const common::ObAddr& server, const ObTaskID& ob_task_id);
   ObTaskLocation();
 
@@ -97,7 +97,7 @@ class ObTaskLocation final {
   }
   TO_STRING_KV(N_SERVER, server_, N_OB_TASK_ID, ob_task_id_);
 
-  private:
+private:
   common::ObAddr server_;  // immediate result server address
   ObTaskID ob_task_id_;
 };

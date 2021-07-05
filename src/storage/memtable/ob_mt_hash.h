@@ -147,15 +147,15 @@ OB_INLINE static int compare_node(const ObHashNode* n1, const ObHashNode* n2, in
 // ---------------- array implementation ----------------
 template <int64_t PAGE_SIZE>
 class ObMtArrayBase {
-  private:
+private:
   static const int64_t DIR_SIZE = PAGE_SIZE / sizeof(ObHashNode*);
   static const int64_t SEG_SIZE = PAGE_SIZE / sizeof(ObHashNode);
   static ObHashNode* const PLACE_HOLDER;
 
-  public:
+public:
   static const int64_t ARRAY_CAPABILITY = DIR_SIZE * SEG_SIZE;
 
-  public:
+public:
   explicit ObMtArrayBase(common::ObIAllocator& allocator) : allocator_(allocator), dir_(nullptr), alloc_memory_(0)
   {}
   ~ObMtArrayBase()
@@ -188,7 +188,7 @@ class ObMtArrayBase {
     return snprintf(buf, buf_len, ", dir_=%p", dir_);
   }
 
-  private:
+private:
   // return values:
   //   OB_ALLOCATE_MEMORY_FAILED : no memory
   //   OB_ENTRY_NOT_EXIST : current node is allocating
@@ -252,7 +252,7 @@ class ObMtArrayBase {
     return ret;
   }
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   ObHashNode** dir_;
   int64_t alloc_memory_;
@@ -262,7 +262,7 @@ template <int64_t PAGE_SIZE>
 ObHashNode* const ObMtArrayBase<PAGE_SIZE>::PLACE_HOLDER = (ObHashNode*)0x1;
 
 class ObMtArray {
-  public:
+public:
   explicit ObMtArray(common::ObIAllocator& allocator) : small_arr_(allocator), large_arr_(allocator)
   {}
   ~ObMtArray()
@@ -296,17 +296,17 @@ class ObMtArray {
     return len;
   }
 
-  private:
+private:
   // TODO memstore_allocator misc
   static const int64_t MY_NORMAL_BLOCK_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t MY_BIG_BLOCK_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE - 64;
 
-  public:
+public:
   // SMALL_CAPABILITY 520,000, TOTAL_CAPABILITY 34.3 billion
   static const int64_t SMALL_CAPABILITY = ObMtArrayBase<MY_NORMAL_BLOCK_SIZE>::ARRAY_CAPABILITY;
   static const int64_t TOTAL_CAPABILITY = ObMtArrayBase<MY_BIG_BLOCK_SIZE>::ARRAY_CAPABILITY + SMALL_CAPABILITY;
 
-  private:
+private:
   ObMtArrayBase<MY_NORMAL_BLOCK_SIZE> small_arr_;
   ObMtArrayBase<MY_BIG_BLOCK_SIZE> large_arr_;
 };
@@ -316,7 +316,7 @@ class ObMtArray {
 // uses the type directly here
 // consider to remove generic from QueryEgnine<ObMemtableKey> in the future
 class ObMtHash {
-  private:
+private:
   // bucket link of parent-child relation
   static const int64_t GENEALOGY_LEN = 64;
   struct Parent {
@@ -350,7 +350,7 @@ class ObMtHash {
     TO_STRING_KV(K(depth_), K(list_));
   };
 
-  public:
+public:
   explicit ObMtHash(common::ObIAllocator& allocator) : allocator_(allocator), arr_(allocator), arr_size_(INIT_HASH_SIZE)
   {
     // tail_node_ is a sentinel node, there will be no problem
@@ -430,7 +430,7 @@ class ObMtHash {
     dump_list(fd, print_bucket, print_row_value, print_row_value_verbose);
   }
 
-  private:
+private:
   OB_INLINE bool is_empty() const
   {
     return ATOMIC_LOAD(&(zero_node_.next_)) == &tail_node_;
@@ -449,7 +449,7 @@ class ObMtHash {
     // if the insert position is very forward and arr_size is big, there is no
     // need to access the same element repeatedly when recursively looking up, just decrease by half.
     // Note: bucket_count can decrease more rapidly, but as long as not access array elements,
-    // it's accesptabale to loop multiple times(< 64) to decreasse by half.
+    // it's acceptable to loop multiple times(< 64) to decrease by half.
     int64_t last_arr_idx = arr_idx;
 
     while (OB_SUCC(ret) && arr_idx > 0) {
@@ -730,10 +730,10 @@ class ObMtHash {
     }
   }
 
-  private:
+private:
   static const int64_t INIT_HASH_SIZE = 128;
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   ObHashNode zero_node_;  // for idx=0, always available
   ObHashNode tail_node_;  // tail node, a sentinel node, never be accessed

@@ -65,7 +65,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObBatchPacket)
 }
 
 class BatchCallBack : public ObBatchRpcProxy::AsyncCB<OB_BATCH> {
-  public:
+public:
   BatchCallBack()
   {}
   virtual ~BatchCallBack()
@@ -84,7 +84,7 @@ class BatchCallBack : public ObBatchRpcProxy::AsyncCB<OB_BATCH> {
     return newcb;
   }
 
-  public:
+public:
   int process()
   {
     return common::OB_SUCCESS;
@@ -96,7 +96,7 @@ class BatchCallBack : public ObBatchRpcProxy::AsyncCB<OB_BATCH> {
     RPC_LOG(WARN, "batch rpc timeout", K(dst), K(error));
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(BatchCallBack);
 };
 

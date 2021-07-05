@@ -42,21 +42,21 @@ class ObZoneManager;
 
 // this is used for replica_creator/root_balancer
 struct ZoneReplicaDistTask {
-  public:
+public:
   enum class ReplicaNature {
     PAXOS = 0,
     NON_PAXOS,
     INVALID,
   };
 
-  public:
+public:
   ZoneReplicaDistTask()
       : replica_nature_(ReplicaNature::INVALID), zone_set_(), replica_task_set_(), multi_zone_dist_(false)
   {}
   virtual ~ZoneReplicaDistTask()
   {}
 
-  public:
+public:
   int tmp_compatible_generate(const ReplicaNature replica_nature, const common::ObZone& zone,
       const ObReplicaType replica_type, const int64_t memstore_percent);
   int generate(const ReplicaNature replica_nature, const share::ObZoneReplicaAttrSet& zone_replica_attr_set,
@@ -81,13 +81,13 @@ struct ZoneReplicaDistTask {
     return replica_task_set_;
   }
 
-  private:
+private:
   int generate_paxos_replica_dist_task(const share::ObZoneReplicaAttrSet& zone_replica_attr_set,
       const common::ObIArray<rootserver::ObReplicaAddr>& exist_addr);
   int generate_non_paxos_replica_dist_task(const share::ObZoneReplicaAttrSet& zone_replica_attr_set,
       const common::ObIArray<rootserver::ObReplicaAddr>& exist_addr);
 
-  private:
+private:
   ReplicaNature replica_nature_;
   common::ObSEArray<common::ObZone, 7, common::ObNullAllocator> zone_set_;
   share::ObReplicaAttrSet replica_task_set_;
@@ -98,14 +98,14 @@ struct ZoneReplicaDistTask {
 // typedef common::ObArray<share::ObUnitInfo> UnitArray;
 // typedef common::ObSEArray<UnitArray, common::MAX_ZONE_NUM> ZoneUnitArray;
 class ObLocalityUtility {
-  public:
+public:
   ObLocalityUtility(const ObZoneManager& zone_mgr, const share::schema::ZoneLocalityIArray& zloc,
       const common::ObIArray<common::ObZone>& zone_list);
   virtual ~ObLocalityUtility();
   int init(bool with_paxos, bool with_readonly);
   void reset();
 
-  protected:
+protected:
   template <typename Scope>
   struct AllocTask {
     AllocTask() : replica_type_(common::REPLICA_TYPE_MAX), memstore_percent_(100)
@@ -139,10 +139,10 @@ class ObLocalityUtility {
   };
   typedef AllocTask<common::ObZone> ZoneTask;
 
-  protected:
+protected:
   int init_zone_task(const bool with_paxos, const bool with_readonly);
 
-  protected:
+protected:
   const share::schema::ZoneLocalityIArray& zloc_;
   // By corresponding idx to record
   // how many replicas the current partition has allocated according to locality
@@ -154,21 +154,21 @@ class ObLocalityUtility {
 };
 
 class ObAllocReplicaByLocality : public ObLocalityUtility {
-  public:
+public:
   ObAllocReplicaByLocality(const ObZoneManager& zone_mgr, ObZoneUnitsProvider& zone_units_provider,
       const share::schema::ZoneLocalityIArray& zloc, obrpc::ObCreateTableMode create_mode,
       const common::ObIArray<common::ObZone>& zone_list);
   virtual ~ObAllocReplicaByLocality();
 
-  public:
+public:
   void reset();
 
-  protected:
+protected:
   int init(bool with_paxos, bool with_readonly);
   int alloc_replica_in_zone(const int64_t pos, const common::ObZone& zone, const common::ObReplicaType replica_type,
       const int64_t memstore_percent, ObReplicaAddr& replica_addr);
 
-  protected:
+protected:
   obrpc::ObCreateTableMode create_mode_;
   ObZoneUnitsProvider& zone_units_provider_;
   // Constraint: no two partition replicas will be allocated on the same server
@@ -226,7 +226,7 @@ struct SingleReplicaSort {
 };
 
 class ObCreateTableReplicaByLocality : public ObAllocReplicaByLocality {
-  public:
+public:
   ObCreateTableReplicaByLocality(const ObZoneManager& zone_mgr, ObZoneUnitsProvider& zone_units_provider,
       const share::schema::ZoneLocalityIArray& zloc, obrpc::ObCreateTableMode create_mode,
       const common::ObIArray<common::ObZone>& zone_list, const int64_t seed,
@@ -240,7 +240,7 @@ class ObCreateTableReplicaByLocality : public ObAllocReplicaByLocality {
       const bool non_partition_table, ObReplicaAddr& replica_addr);
   int fill_all_rest_server_with_replicas(ObPartitionAddr& paddr);
 
-  private:
+private:
   int prepare_for_next_task(const ZoneTask& zone_task);
   int get_xy_index(const bool is_multiple_zone, const common::ObPartitionKey& pkey,
       const common::ObIArray<common::ObZone>& zone_array, int64_t& x_index, int64_t& y_index);
@@ -335,14 +335,14 @@ class ObCreateTableReplicaByLocality : public ObAllocReplicaByLocality {
     }
   };
 
-  private:
+private:
   balancer::ObSinglePtBalanceContainer* pt_balance_container_;
   common::ObSEArray<common::ObZone, 7>* high_priority_zone_array_;
   common::ObArray<common::ObZone> curr_part_zone_array_;
   common::ObArray<SingleReplica> curr_part_task_array_;
   int64_t curr_part_task_idx_;
   int64_t seed_;  // table-level seed
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateTableReplicaByLocality);
 };
 
@@ -353,7 +353,7 @@ class ObCreateTableReplicaByLocality : public ObAllocReplicaByLocality {
 // This strategy is used to supplement copies of this logonly_task
 // TODO: Unprocessed region_task
 class ObAddSpecificReplicaByLocality : public ObAllocReplicaByLocality {
-  public:
+public:
   ObAddSpecificReplicaByLocality(const ObZoneManager& zone_mgr, TenantBalanceStat& ts,
       ObZoneUnitsProvider& zone_units_provider, const share::schema::ZoneLocalityIArray& zloc,
       const common::ObIArray<common::ObZone>& zone_list);
@@ -365,7 +365,7 @@ class ObAddSpecificReplicaByLocality : public ObAllocReplicaByLocality {
   int align_add_replica(const common::ObArray<Partition*>::iterator& p, ObReplicaAddr& replica_addr,
       const int64_t& next, bool& need_random_add_replica);
 
-  private:
+private:
   TenantBalanceStat& ts_;
   common::ObArray<ObZone> logonly_zones_;              // The zone where the logonly unit is located
   common::ObArray<ZoneTask> shadow_zone_tasks_local_;  // logonly task located on logonly unit
@@ -377,7 +377,7 @@ class ObAddSpecificReplicaByLocality : public ObAllocReplicaByLocality {
 };
 
 class ObAddPaxosReplicaByLocality : public ObAllocReplicaByLocality {
-  public:
+public:
   ObAddPaxosReplicaByLocality(const ObZoneManager& zone_mgr, TenantBalanceStat& ts,
       ObZoneUnitsProvider& zone_units_provider, ObZoneUnitsProvider& logonly_zone_units_provider,
       const share::schema::ZoneLocalityIArray& zloc, const common::ObIArray<common::ObZone>& zone_list);
@@ -389,7 +389,7 @@ class ObAddPaxosReplicaByLocality : public ObAllocReplicaByLocality {
   int align_add_replica(const common::ObArray<Partition*>::iterator& pp, ObReplicaAddr& replica_addr,
       const int64_t& next, bool& need_random_add_replica);
 
-  private:
+private:
   TenantBalanceStat& ts_;
   ObZoneUnitsProvider& logonly_zone_unit_provider_;
 
@@ -397,7 +397,7 @@ class ObAddPaxosReplicaByLocality : public ObAllocReplicaByLocality {
 };
 
 class ObAddReadonlyReplicaByLocality : public ObAllocReplicaByLocality {
-  public:
+public:
   ObAddReadonlyReplicaByLocality(const ObZoneManager& zone_mgr, TenantBalanceStat& ts,
       ObZoneUnitsProvider& zone_units_provider, const share::schema::ZoneLocalityIArray& zloc,
       const common::ObIArray<common::ObZone>& zone_list);
@@ -409,13 +409,13 @@ class ObAddReadonlyReplicaByLocality : public ObAllocReplicaByLocality {
   int align_add_replica(const common::ObArray<Partition*>::iterator& p, ObReplicaAddr& replica_addr,
       const int64_t& next, bool& need_random_add_replica);
 
-  private:
+private:
   TenantBalanceStat& ts_;
   DISALLOW_COPY_AND_ASSIGN(ObAddReadonlyReplicaByLocality);
 };
 
 struct FilterResult {
-  public:
+public:
   FilterResult()
       : cmd_type_(ObRebalanceTaskType::MAX_TYPE),
         replica_(),
@@ -475,7 +475,7 @@ struct FilterResult {
   int build_task(const Partition& partition, ObReplicaTask& task) const;
   TO_STRING_KV(K_(cmd_type), K_(replica), K_(zone), K_(dest_type));
 
-  private:
+private:
   ObRebalanceTaskType cmd_type_;
   Replica replica_;
   common::ObZone zone_;
@@ -489,7 +489,7 @@ struct FilterResult {
 // By comparing locality and replica one by one,
 // what is finally returned to the user is where the replica and locality are inconsistent
 class ObFilterLocalityUtility : public ObLocalityUtility {
-  public:
+public:
   struct ZoneReplicaInfo {
     common::ObZone zone_;
     int64_t non_readonly_replica_count_;
@@ -521,7 +521,7 @@ class ObFilterLocalityUtility : public ObLocalityUtility {
   // Determine whether there is a task of type_transform in results;
   static bool has_type_transform_task(ObIArray<FilterResult>& results);
 
-  private:
+private:
   int inner_init(const Partition& partition);
   int inner_init(const share::ObPartitionInfo& partition_info);
   int filter_readonly_at_all();
@@ -529,10 +529,10 @@ class ObFilterLocalityUtility : public ObLocalityUtility {
   int delete_redundant_replica(const ObZone& zone, const int64_t delete_cnt);
   int choose_one_replica_to_delete(const ObZone& zone);
 
-  protected:
+protected:
   int get_readonly_replica_count(const common::ObZone& zone, int64_t& readonly_count);
 
-  private:
+private:
   int build_readonly_info();
   int get_non_readonly_replica_count(const common::ObZone& zone, int64_t& non_readonly_replica_count);
   int get_unit_count(const common::ObZone& zone, int64_t& unit_count);
@@ -542,10 +542,10 @@ class ObFilterLocalityUtility : public ObLocalityUtility {
       const common::ObReplicaType& type, const int64_t memstore_percent);
   int add_remove_task(const Replica& replica, bool invalid_unit = false);
 
-  public:
+public:
   static const int64_t SAFE_REMOVE_REDUNDANCY_REPLICA_TIME = 60 * 1000 * 1000L;
 
-  protected:
+protected:
   TenantBalanceStat* ts_;
   int64_t table_id_;
   int64_t partition_id_;
@@ -560,7 +560,7 @@ class ObFilterLocalityUtility : public ObLocalityUtility {
 };
 
 class ObDeleteReplicaUtility : public ObFilterLocalityUtility {
-  public:
+public:
   ObDeleteReplicaUtility(const ObZoneManager& zone_mgr, TenantBalanceStat& ts,
       const share::schema::ZoneLocalityIArray& zloc, const common::ObIArray<common::ObZone>& zone_list);
   virtual ~ObDeleteReplicaUtility()
@@ -572,15 +572,15 @@ class ObDeleteReplicaUtility : public ObFilterLocalityUtility {
 
   void reset();
 
-  private:
+private:
   int get_one_delete_task(const ObIArray<FilterResult>& results, FilterResult& result);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDeleteReplicaUtility);
 };
 
 class ObReplicaTypeTransformUtility : public ObFilterLocalityUtility {
-  public:
+public:
   ObReplicaTypeTransformUtility(const ObZoneManager& zone_mgr, TenantBalanceStat& ts,
       const share::schema::ZoneLocalityIArray& zloc, const common::ObIArray<common::ObZone>& zone_list,
       const ObServerManager& server_mgr);
@@ -592,7 +592,7 @@ class ObReplicaTypeTransformUtility : public ObFilterLocalityUtility {
       int64_t& dest_memstore_percent);
   static int get_one_type_transform_task(const ObIArray<FilterResult>& results, FilterResult& result);
 
-  private:
+private:
   int get_unit_count(const ObZone& zone, int64_t& active_unit_count, int64_t& inactive_unit_count);
 
   bool can_migrate_unit(const ObZone& zone);
@@ -608,7 +608,7 @@ class ObReplicaTypeTransformUtility : public ObFilterLocalityUtility {
   int choose_replica_for_type_transform(
       const Partition& partition, const common::ObZone& zone, const ObReplicaType& dest_replica_type, Replica& replica);
 
-  private:
+private:
   const ObServerManager* server_mgr_;
 };
 }  // namespace rootserver

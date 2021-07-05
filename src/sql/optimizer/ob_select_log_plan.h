@@ -34,7 +34,7 @@ struct MergeKeyInfo;
 class ObSelectLogPlan : public ObLogPlan {
   friend class ::test::ObLogPlanTest_ob_explain_test_Test;
 
-  public:
+public:
   ObSelectLogPlan(ObOptimizerContext& ctx, const ObSelectStmt* select_stmt);
   virtual ~ObSelectLogPlan();
 
@@ -66,7 +66,7 @@ class ObSelectLogPlan : public ObLogPlan {
     return const_cast<ObSelectStmt*>(static_cast<const ObSelectLogPlan&>(*this).get_stmt());
   }
 
-  private:
+private:
   // @brief Allocate a hash group by on top of a plan tree
   // ObLogicalOperator * candi_allocate_hash_group_by();
 
@@ -175,7 +175,7 @@ class ObSelectLogPlan : public ObLogPlan {
   int allocate_distinct_as_top(ObLogicalOperator*& top, const AggregateAlgo algo, ObIArray<ObRawExpr*>& distinct_exprs,
       const ObIArray<OrderItem>& expected_ordering);
 
-  private:
+private:
   int decide_sort_keys_for_runion(
       const common::ObIArray<OrderItem>& order_items, common::ObIArray<OrderItem>& new_order_items);
   int init_merge_set_structure(common::ObIAllocator& allocator, const common::ObIArray<CandidatePlan>& plans,

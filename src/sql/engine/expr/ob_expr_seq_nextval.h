@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObPhysicalPlanCtx;
 class ObExprSeqNextval : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSeqNextval(common::ObIAllocator& alloc);
   virtual ~ObExprSeqNextval();
   int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
@@ -27,7 +27,7 @@ class ObExprSeqNextval : public ObFuncExprOperator {
   int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_sequence_nextval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprSeqNextval);
 };

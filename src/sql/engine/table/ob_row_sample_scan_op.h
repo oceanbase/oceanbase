@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObRowSampleScanOpInput : public ObTableScanOpInput {
-  public:
+public:
   ObRowSampleScanOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableScanOpInput(ctx, spec)
   {}
 };
@@ -27,7 +27,7 @@ class ObRowSampleScanOpInput : public ObTableScanOpInput {
 class ObRowSampleScanSpec : public ObTableScanSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObRowSampleScanSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObTableScanSpec(alloc, type)
   {}
   virtual ~ObRowSampleScanSpec()
@@ -46,12 +46,12 @@ class ObRowSampleScanSpec : public ObTableScanSpec {
     return sample_info_;
   }
 
-  private:
+private:
   common::SampleInfo sample_info_;
 };
 
 class ObRowSampleScanOp : public ObTableScanOp {
-  public:
+public:
   ObRowSampleScanOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableScanOp(exec_ctx, spec, input)
   {}

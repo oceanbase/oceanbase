@@ -52,7 +52,7 @@ class ObExprCast : public ObFuncExprOperator {
   OB_UNIS_VERSION_V(1);
   const static int32_t OB_LITERAL_MAX_INT_LEN = 21;
 
-  public:
+public:
   ObExprCast();
   explicit ObExprCast(common::ObIAllocator& alloc);
   virtual ~ObExprCast(){};
@@ -71,13 +71,13 @@ class ObExprCast : public ObFuncExprOperator {
     extra_serialize_ = v ? 1 : 0;
   }
 
-  private:
+private:
   int check_target_type_precision_valid(const ObExprResType& type, const common::ObCastMode cast_mode) const;
   int get_cast_type(const ObExprResType param_type2, ObExprResType& dst_type) const;
   int get_explicit_cast_cm(const ObExprResType& src_type, const ObExprResType& dst_type,
       const ObSQLSessionInfo& session, const ObRawExpr& cast_raw_expr, common::ObCastMode& cast_mode) const;
 
-  private:
+private:
   int get_cast_string_len(ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx, int32_t& res_len,
       int16_t& length_semantics, common::ObCollationType conn) const;
   int get_cast_inttc_len(ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx, int32_t& res_len,

@@ -411,7 +411,7 @@ void ObPlanCacheManager::ObPlanCacheEliminationTask::run_free_cache_obj_task()
             ObCacheObject* to_del_obj = NULL;
             for (int j = 0; j < deleted_objs.count(); j++) {
               if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true, deleted_objs.at(j).obj_id_, plan_cache))) {
-                LOG_WARN("failde to destroy cache obj", K(ret));
+                LOG_WARN("failed to destroy cache obj", K(ret));
               }
             }  // end inner loop
           }

@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace common {
 template <class T>
 class ObArrayHelper final : public ObIArray<T> {
-  public:
+public:
   using ObIArray<T>::count;
   using ObIArray<T>::at;
 
@@ -193,17 +193,17 @@ class ObArrayHelper final : public ObIArray<T> {
     return *this;
   }
 
-  protected:
+protected:
   using ObIArray<T>::data_;
   using ObIArray<T>::count_;
 
-  private:
+private:
   int64_t capacity_;
 };
 
 template <class T>
 class ObArrayHelpers {
-  public:
+public:
   ObArrayHelpers()
   {
     memset(arrs_, 0x00, sizeof(arrs_));
@@ -263,7 +263,7 @@ class ObArrayHelpers {
     return counter;
   }
 
-  private:
+private:
   static const int MAX_ARR_COUNT = 16;
   ObArrayHelper<T>* arrs_[MAX_ARR_COUNT];
   int64_t arr_count_;

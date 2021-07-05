@@ -62,11 +62,11 @@ namespace observer {
 //   server.destory();
 //
 class ObServer {
-  public:
+public:
   static const int64_t DEFAULT_ETHERNET_SPEED = 1000 / 8 * 1024 * 1024;  // default 125m/s  1000Mbit
   static ObServer& get_instance();
 
-  public:
+public:
   int init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg);
   void destroy();
 
@@ -76,10 +76,10 @@ class ObServer {
   int wait();
   void set_stop();
 
-  public:
+public:
   // Refer to ObPurgeCompletedMonitorInfoTask
   class ObCTASCleanUpTask : public common::ObTimerTask {
-    public:
+  public:
     ObCTASCleanUpTask();
     virtual ~ObCTASCleanUpTask()
     {}
@@ -87,14 +87,14 @@ class ObServer {
     void destroy();
     virtual void runTimerTask() override;
 
-    private:
+  private:
     const static int64_t CLEANUP_INTERVAL = 60L * 1000L * 1000L;  // 60s
     ObServer* obs_;
     bool is_inited_;
   };
 
   class ObRefreshTimeTask : public common::ObTimerTask {
-    public:
+  public:
     ObRefreshTimeTask();
     virtual ~ObRefreshTimeTask()
     {}
@@ -102,27 +102,27 @@ class ObServer {
     void destroy();
     virtual void runTimerTask() override;
 
-    private:
+  private:
     const static int64_t REFRESH_INTERVAL = 60L * 60L * 1000L * 1000L;  // 1hr
     ObServer* obs_;
     bool is_inited_;
   };
 
   class ObRefreshTime {
-    public:
+  public:
     explicit ObRefreshTime(ObServer* obs) : obs_(obs)
     {}
     virtual ~ObRefreshTime()
     {}
     bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo* sess_info);
 
-    private:
+  private:
     ObServer* obs_;
     DISALLOW_COPY_AND_ASSIGN(ObRefreshTime);
   };
 
   class ObCTASCleanUp {
-    public:
+  public:
     explicit ObCTASCleanUp(ObServer* obs, bool drop_flag) : obs_(obs), drop_flag_(drop_flag)
     {}
     virtual ~ObCTASCleanUp()
@@ -166,7 +166,7 @@ class ObServer {
       TEMP_TAB_PROXY_RULE  // Temporary table cleanup rules (PROXY)
     };
 
-    private:
+  private:
     ObServer* obs_;
     uint64_t session_id_;     // Determine whether the sesion_id of the table schema needs to be dropped
     int64_t schema_version_;  // Determine whether the version number of the table schema that needs to be dropped
@@ -221,10 +221,10 @@ class ObServer {
     return sql_proxy_;
   }
 
-  private:
+private:
   int stop();
 
-  private:
+private:
   ObServer();
   ~ObServer();
 
@@ -271,10 +271,10 @@ class ObServer {
   int set_running_mode();
   int check_server_can_start_service();
 
-  public:
+public:
   volatile bool need_ctas_cleanup_;  // true: ObCTASCleanUpTask should traverse all table schemas to find the one need
                                      // be dropped
-  private:
+private:
   // thread to deal signals
   ObSignalHandle signal_handle_;
 

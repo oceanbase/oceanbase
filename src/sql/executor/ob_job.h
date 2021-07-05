@@ -38,7 +38,7 @@ class ObAddrsProvider;
 class ObExecContext;
 class ObOpSpec;
 class ObMiniJob {
-  public:
+public:
   ObMiniJob() : phy_plan_(NULL), root_op_(NULL), extend_op_(NULL), root_spec_(NULL), extend_spec_(NULL)
   {}
 
@@ -86,7 +86,7 @@ class ObMiniJob {
 
   DECLARE_TO_STRING;
 
-  private:
+private:
   const ObPhysicalPlan* phy_plan_;
   const ObPhyOperator* root_op_;
   const ObPhyOperator* extend_op_;
@@ -96,7 +96,7 @@ class ObMiniJob {
 };
 
 class ObJob {
-  public:
+public:
   ObJob();
   virtual ~ObJob();
   // different task needs different spliter
@@ -245,7 +245,7 @@ class ObJob {
 
   DECLARE_TO_STRING;
 
-  private:
+private:
   int prepare_task_control(const ObExecContext& exec_ctx);
   int get_parallel_degree(const ObExecContext& exec_ctx, int64_t& stmt_parallel_degree);
   int is_valid_finished_task_infos(const common::ObIArray<ObTaskInfo*>& task_infos, bool& is_valid) const;
@@ -253,7 +253,7 @@ class ObJob {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObJob);
 
-  private:
+private:
   static const int64_t MAX_CHILD_JOB_NUM = 16;
   ObJobID ob_job_id_;
   bool is_root_job_;

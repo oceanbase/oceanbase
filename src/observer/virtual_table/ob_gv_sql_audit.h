@@ -34,7 +34,7 @@ class ObTenantSpaceFetcher;
 
 namespace observer {
 class ObGvSqlAudit : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObGvSqlAudit();
   virtual ~ObGvSqlAudit();
 
@@ -56,12 +56,12 @@ class ObGvSqlAudit : public common::ObVirtualTableScannerIterator {
     return is_use_index_;
   }
 
-  private:
+private:
   int fill_cells(obmysql::ObMySQLRequestRecord& record);
   int extract_tenant_ids();
   int extract_request_ids(const uint64_t tenant_id, int64_t& start_id, int64_t& end_id, bool& is_valid);
 
-  private:
+private:
   enum WAIT_COLUMN {
     SERVER_IP = common::OB_APP_MIN_COLUMN_ID,
     SERVER_PORT,

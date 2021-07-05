@@ -25,7 +25,7 @@ using namespace oceanbase::common;
 using oceanbase::sql::test::ObFakeTable;
 
 class TestInMemorySortTest : public ::testing::Test {
-  public:
+public:
   struct ColumnOpt {
     int64_t col;
     ObCollationType cs_type;
@@ -34,12 +34,12 @@ class TestInMemorySortTest : public ::testing::Test {
   TestInMemorySortTest();
   virtual ~TestInMemorySortTest();
 
-  private:
+private:
   // disallow copy
   TestInMemorySortTest(const TestInMemorySortTest& other);
   TestInMemorySortTest& operator=(const TestInMemorySortTest& other);
 
-  protected:
+protected:
   typedef ObSArray<ObSortColumn> ObSortColumns;
   void sort_test(
       int64_t row_count, ObArray<const ColumnOpt*>& columns, ObBaseSort* base_sort, int64_t column_keys_pos = -1);
@@ -48,7 +48,7 @@ class TestInMemorySortTest : public ::testing::Test {
   void serialize_test(int expect_ret);
   void sort_exception_test(int expect_ret);
 
-  private:
+private:
   int init(ObBaseSort* base_sort, ObFakeTable& input_table, int64_t row_count, ObArray<const ColumnOpt*>& columns,
       ObSortColumns& sort_columns);
   void cons_sort_columns(ObArray<const ColumnOpt*>& columns, ObSortColumns& sort_columns);

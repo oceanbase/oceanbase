@@ -28,17 +28,17 @@ class ObTableSchema;
 }  // namespace share
 namespace observer {
 class ObShowCreateTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObShowCreateTable();
   virtual ~ObShowCreateTable();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   int calc_show_table_id(uint64_t& show_table_id);
   int fill_row_cells(uint64_t show_table_id, const share::schema::ObTableSchema& table_schema);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObShowCreateTable);
 };
 }  // namespace observer

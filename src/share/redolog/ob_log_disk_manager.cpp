@@ -192,7 +192,7 @@ ObLogDiskManager::ObLogDiskManager()
       rst_pro_(),
       rst_fd_(-1)
 {
-  log_dir_[0] = '\0';
+  MEMSET(log_dir_, 0, sizeof(log_dir_));
   for (int32_t i = 0; i < MAX_DISK_COUNT; i++) {
     disk_slots_[i].reuse();
     // disk id is also the index of array, it is decided during construction
@@ -220,7 +220,7 @@ int ObLogDiskManager::init(const char* log_dir, const int64_t file_size, const O
   } else if (OB_ISNULL(log_dir) || file_size <= 0 || ObLogWritePoolType::INVALID_WRITE_POOL == type) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", K(ret), KP(log_dir), K(file_size), K(type));
-  } else if (STRLEN(log_dir) > OB_MAX_FILE_NAME_LENGTH) {
+  } else if (STRLEN(log_dir) >= OB_MAX_FILE_NAME_LENGTH) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "log dir name too long", K(ret), KP(log_dir));
   } else {
@@ -251,7 +251,7 @@ int ObLogDiskManager::init(const char* log_dir, const int64_t file_size, const O
       } else if (OB_FAIL(get_total_disk_space_(total_disk_space_))) {
         COMMON_LOG(ERROR, "failed to get total_disk_space", K(ret));
       } else {
-        STRNCPY(log_dir_, log_dir, sizeof(log_dir_));
+        STRNCPY(log_dir_, log_dir, sizeof(log_dir_) - 1);
         file_size_ = file_size;
         pool_type_ = type;
         if (OB_FAIL(TG_SCHEDULE(tg_id_,

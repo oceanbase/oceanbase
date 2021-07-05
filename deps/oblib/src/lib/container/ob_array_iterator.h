@@ -52,7 +52,7 @@ template <class ObArray, class T>
 class Iterator {
   typedef Iterator<ObArray, T> self_t;
 
-  public:
+public:
   typedef typename std::random_access_iterator_tag iterator_category;
   typedef int64_t difference_type;
   typedef T value_type;
@@ -60,7 +60,7 @@ class Iterator {
   typedef T* pointer;
   typedef T& reference;
 
-  public:
+public:
   Iterator() : value_ptr_(NULL){};
   Iterator(const self_t& other)
   {
@@ -76,7 +76,7 @@ class Iterator {
     value_ptr_ = value_ptr;
   };
 
-  public:
+public:
   reference operator*() const
   {
     return *value_ptr_;
@@ -146,7 +146,7 @@ class Iterator {
     return tmp;
   };
 
-  private:
+private:
   value_ptr_t value_ptr_;
 };
 

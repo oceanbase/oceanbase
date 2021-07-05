@@ -22,16 +22,16 @@ namespace oceanbase {
 namespace sql {
 
 class ObLocalScheduler : public ObSqlScheduler {
-  public:
+public:
   ObLocalScheduler();
   virtual ~ObLocalScheduler();
   virtual int schedule(ObExecContext& ctx, ObPhysicalPlan* phy_plan);
 
-  private:
+private:
   int direct_generate_task_and_execute(
       ObExecContext& ctx, const ObExecutionID& ob_execution_id, ObPhyOperator* root_op);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLocalScheduler);
 };

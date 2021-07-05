@@ -22,17 +22,17 @@ class ObString;
 }
 namespace observer {
 class ObShowCreateTablegroup : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObShowCreateTablegroup();
   virtual ~ObShowCreateTablegroup();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   int calc_show_tablegroup_id(uint64_t& show_tablegroup_id);
   int fill_row_cells(uint64_t show_tablegroup_id, const common::ObString& tablegroup_name);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObShowCreateTablegroup);
 };
 }  // namespace observer

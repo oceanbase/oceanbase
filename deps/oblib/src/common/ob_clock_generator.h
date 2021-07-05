@@ -26,7 +26,7 @@ namespace oceanbase {
 namespace common {
 
 class ObClockGenerator : public lib::ThreadPool {
-  private:
+private:
   ObClockGenerator() : inited_(false), ready_(false), cur_ts_(0), last_used_time_(0)
   {}
   ~ObClockGenerator()
@@ -34,7 +34,7 @@ class ObClockGenerator : public lib::ThreadPool {
     destroy();
   }
 
-  public:
+public:
   static int init();
   static void destroy();
   static int64_t getClock();
@@ -43,11 +43,11 @@ class ObClockGenerator : public lib::ThreadPool {
   static void msleep(const int64_t ms);
   static void usleep(const int64_t us);
 
-  private:
+private:
   int64_t get_us();
   void run1() final;
 
-  private:
+private:
   bool inited_;
   bool ready_;
   int64_t cur_ts_;

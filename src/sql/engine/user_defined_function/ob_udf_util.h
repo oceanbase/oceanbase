@@ -33,7 +33,7 @@ class ObPhysicalPlanCtx;
 class obUdfConstArgs;
 class ObUdfFunction;
 class ObUdfUtil {
-  public:
+public:
   /*
    * for example, if the defined func named 'my_udf_add', we wanna load the auxiliary function.
    * then we use 'my_udf_add_init' 'my_udf_add_deinit' 'my_udf_add_clear' or 'my_udf_add_add' to load
@@ -49,7 +49,7 @@ class ObUdfUtil {
       (UDF_DECIMAL_BUFF_LENGTH * 9); /* the number of digits that my_decimal can possibly contain */
   static const int UDF_DECIMAL_MAX_STR_LENGTH = (UDF_DECIMAL_MAX_POSSIBLE_PRECISION + 2);
 
-  public:
+public:
   enum load_function_type {
     UDF_ORIGIN,
     UDF_INIT,
@@ -63,7 +63,7 @@ class ObUdfUtil {
     return load_function_postfix[type];
   }
 
-  public:
+public:
   /*
    *  calc udf's result type
    * */

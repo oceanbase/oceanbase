@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 class ObFakePriorityQueue {
-  public:
+public:
   typedef ObLink Link;
   enum { Q_CAPACITY = 1 << 16, PRIO_CNT = 2 };
 
@@ -46,7 +46,7 @@ class ObFakePriorityQueue {
     return queue_.pop((void*&)data, timeout_us);
   }
 
-  private:
+private:
   ObFutexQueue queue_;
 };
 

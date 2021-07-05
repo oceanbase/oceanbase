@@ -27,7 +27,7 @@ namespace StatId {
 enum StatId { INPUT_ROWS = 0, RESCAN_TIMES, OUTPUT_ROWS, MAX_STAT };
 }
 class ObPhyOperatorStats {
-  public:
+public:
   friend class TestPhyOperatorStats_init_Test;
   friend class TestPhyOperatorStats_test_add_Test;
   friend class TestPhyOperatorStats_test_accumulation_Test;
@@ -52,7 +52,7 @@ class ObPhyOperatorStats {
     return execution_times_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPhyOperatorStats);
   int64_t* op_stats_array_;
   int64_t op_count_;

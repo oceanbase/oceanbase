@@ -19,7 +19,7 @@ class ObJob;
 class ObTaskExecutor;
 class ObExecContext;
 class ObLocalJobExecutor {
-  public:
+public:
   ObLocalJobExecutor();
   virtual ~ObLocalJobExecutor();
   void set_job(ObJob& job)
@@ -37,14 +37,14 @@ class ObLocalJobExecutor {
     executor_ = NULL;
   }
 
-  private:
+private:
   // disallow copy
   ObLocalJobExecutor(const ObLocalJobExecutor& other);
   ObLocalJobExecutor& operator=(const ObLocalJobExecutor& ohter);
 
   int get_executable_task(ObExecContext& ctx, ObTaskInfo*& task);
 
-  private:
+private:
   ObJob* job_;
   ObTaskExecutor* executor_;
 };

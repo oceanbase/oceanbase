@@ -46,7 +46,7 @@ struct ObMacroBlockDesc {
 };
 
 class ObMacroBlockRowComparor {
-  public:
+public:
   ObMacroBlockRowComparor();
   virtual ~ObMacroBlockRowComparor();
   bool operator()(const blocksstable::MacroBlockId& block_id, const common::ObStoreRowkey& rowkey);
@@ -73,10 +73,10 @@ class ObMacroBlockRowComparor {
     return ret_;
   }
 
-  private:
+private:
   int compare_(const blocksstable::MacroBlockId& block_id, const common::ObStoreRowkey& rowkey, int32_t& cmp_ret);
 
-  private:
+private:
   int ret_;
   bool use_collation_free_;
   bool is_prefix_check_;
@@ -86,7 +86,7 @@ class ObMacroBlockRowComparor {
 };
 
 class ObMacroBlockIterator {
-  public:
+public:
   ObMacroBlockIterator();
   virtual ~ObMacroBlockIterator();
   void reset();
@@ -108,7 +108,7 @@ class ObMacroBlockIterator {
     return (cur_idx_ < begin_ || cur_idx_ > end_);
   }
 
-  private:
+private:
   int locate_macro_block(const common::ObExtStoreRowkey& ext_rowkey, int64_t& block_idx);
   int locate_macro_block_without_helper(const common::ObExtStoreRowkey& ext_rowkey, int64_t& block_idx);
   ObSSTable* sstable_;

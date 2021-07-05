@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace transaction {
 
 class ObTenantWeakReadServerVersionMgr {
-  public:
+public:
   ObTenantWeakReadServerVersionMgr();
   ~ObTenantWeakReadServerVersionMgr();
 
@@ -40,10 +40,10 @@ class ObTenantWeakReadServerVersionMgr {
   int generate_new_version(const uint64_t tenant_id, const int64_t epoch_tstamp,
       const int64_t base_version_when_no_valid_partition, const bool need_print_status);
 
-  public:
+public:
   TO_STRING_KV(K_(server_version), K_(server_version_for_stat));
 
-  public:
+public:
   struct ServerVersion {
     int64_t version_;                 // server version, including inner and user partitions
     int64_t total_part_count_;        // total partition count
@@ -73,7 +73,7 @@ class ObTenantWeakReadServerVersionMgr {
     TO_STRING_KV(K_(version), K_(total_part_count), K_(valid_inner_part_count), K_(valid_user_part_count));
   };
 
-  private:
+private:
   // Server local version
   struct ServerVersionInner : public ServerVersion {
     // server version update epoch, indicate server version generation epoch
@@ -105,7 +105,7 @@ class ObTenantWeakReadServerVersionMgr {
         K_(version), K_(total_part_count), K_(valid_inner_part_count), K_(valid_user_part_count), K_(epoch_tstamp));
   };
 
-  private:
+private:
   ServerVersionInner server_version_;  // SERVER level VERSION
 
   mutable common::SpinRWLock rwlock_;  // Lock
@@ -117,7 +117,7 @@ class ObTenantWeakReadServerVersionMgr {
   // Assumption: Single thread update
   ServerVersionInner server_version_for_stat_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantWeakReadServerVersionMgr);
 };
 

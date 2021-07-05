@@ -29,7 +29,7 @@ class ObDMLOpTableDesc;
 
 // The core classes that operate ObBatchRowCache and the storage layer
 class ObPDMLOpDataDriver {
-  public:
+public:
   ObPDMLOpDataDriver(ObEvalCtx* eval_ctx, ObIAllocator& allocator, ObMonitorNode& op_monitor_info)
       : returning_ctx_(),
         op_monitor_info_(op_monitor_info),
@@ -57,7 +57,7 @@ class ObPDMLOpDataDriver {
 
   int get_next_row(ObExecContext& ctx, const ObExprPtrIArray& row);
 
-  private:
+private:
   int fill_cache_unitl_cache_full_or_child_iter_end(ObExecContext& ctx);
   inline int try_write_last_pending_row();
   int switch_to_returning_state(ObExecContext& ctx);
@@ -66,7 +66,7 @@ class ObPDMLOpDataDriver {
   int next_row_from_cache(const ObExprPtrIArray& row);
   int write_partitions(ObExecContext& ctx);
 
-  private:
+private:
   // Because the data of multiple partitions will be cached in the cache, it is necessary in the process of iteration
   // Record the current status of which partition it is iterated to, which row in the partition it is iterated to, etc.
   // So, introduce ReturningCtx
@@ -122,7 +122,7 @@ class ObPDMLOpDataDriver {
                      and automatically switch to the state of filling cache after all rows are returned*/
   };
 
-  private:
+private:
   ReturningCtx returning_ctx_;
   ObMonitorNode& op_monitor_info_;
   ObPDMLOpBatchRowCache cache_;  // cache data

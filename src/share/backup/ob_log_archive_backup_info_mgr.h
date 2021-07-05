@@ -28,7 +28,7 @@ class ObExternLogArchiveBackupInfo final {
   static const uint8_t LOG_ARCHIVE_BACKUP_INFO_CONTENT_VERSION = 1;
   OB_UNIS_VERSION(VERSION);
 
-  public:
+public:
   ObExternLogArchiveBackupInfo();
   ~ObExternLogArchiveBackupInfo();
 
@@ -47,13 +47,13 @@ class ObExternLogArchiveBackupInfo final {
 
   TO_STRING_KV(K_(status_array));
 
-  private:
+private:
   common::ObSArray<ObTenantLogArchiveStatus> status_array_;
   DISALLOW_COPY_AND_ASSIGN(ObExternLogArchiveBackupInfo);
 };
 
 class ObLogArchiveBackupInfoMgr final {
-  public:
+public:
   ObLogArchiveBackupInfoMgr();
   ~ObLogArchiveBackupInfoMgr();
 
@@ -91,7 +91,7 @@ class ObLogArchiveBackupInfoMgr final {
   int delete_marked_extern_log_archive_backup_info(const ObClusterBackupDest& cluster_backup_dest,
       const uint64_t tenant_id, share::ObIBackupLeaseService& backup_lease_service);
 
-  private:
+private:
   int get_log_archive_backup_info_with_lock_(
       common::ObISQLClient& sql_client, const uint64_t tenant_id, ObLogArchiveBackupInfo& info);
   int get_log_archive_status_(
@@ -113,11 +113,11 @@ class ObLogArchiveBackupInfoMgr final {
   const char* get_cur_table_name_() const;
   const char* get_his_table_name_() const;
 
-  private:
+private:
   bool deal_with_copy_;
   int64_t copy_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogArchiveBackupInfoMgr);
 };
 

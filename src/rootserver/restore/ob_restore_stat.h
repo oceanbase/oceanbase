@@ -30,7 +30,7 @@ namespace rootserver {
 struct PhysicalRestorePartition {
   friend class ObPhysicalRestoreStat;
 
-  public:
+public:
   PhysicalRestorePartition()
       : schema_id_(common::OB_INVALID_ID),
         partition_id_(common::OB_INVALID_INDEX),
@@ -54,7 +54,7 @@ struct PhysicalRestorePartition {
     return end_ - begin_;
   }
 
-  public:
+public:
   uint64_t schema_id_;
   int64_t partition_id_;
   int64_t partition_cnt_;  // partition_cnt in meta_table
@@ -65,16 +65,16 @@ struct PhysicalRestorePartition {
 };
 
 class ObRestoreStat {
-  public:
+public:
   ObRestoreStat(RestoreJob& job_info, common::ObMySQLProxy* sql_proxy);
   virtual ~ObRestoreStat();
   int gather_stat();
 
-  public:
+public:
   RestoreJob& job_info_;
   common::ObArray<PartitionRestoreTask> partition_task_;
 
-  private:
+private:
   /* functions */
   int fill_partitions();
   /* variables */
@@ -84,15 +84,15 @@ class ObRestoreStat {
 };
 
 class ObPhysicalRestoreStat {
-  public:
-  public:
+public:
+public:
   ObPhysicalRestoreStat(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy,
       share::ObPartitionTableOperator& pt_operator, const share::ObPhysicalRestoreJob& job_info, bool sys_only,
       volatile bool& stop);
   virtual ~ObPhysicalRestoreStat();
   int gather_stat();
 
-  private:
+private:
   int check_stop();
   int fill_sys_partitions();
   int fill_user_partitions();
@@ -101,14 +101,14 @@ class ObPhysicalRestoreStat {
   int add_partition(const int64_t partition_cnt, const int64_t paxos_replica_cnt, const int64_t table_cnt,
       const share::ObPartitionInfo& info);
 
-  public:
+public:
   const share::ObPhysicalRestoreJob& job_info_;
   common::ObArray<PhysicalRestorePartition> partitions_;
   common::ObArray<share::ObPartitionReplica> replicas_;
   share::ObRestoreProgressInfo statistic_;
   bool only_sys_;
 
-  private:
+private:
   common::ObMySQLProxy& sql_proxy_;
   share::schema::ObSchemaGetterGuard guard_;
   share::schema::ObMultiVersionSchemaService& schema_service_;

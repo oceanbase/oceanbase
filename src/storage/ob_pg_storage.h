@@ -51,7 +51,7 @@ class ObIPartitionComponentFactory;
 class ObPartitionMigrateCtx;
 
 struct ObPGCreateSSTableParam final {
-  public:
+public:
   ObPGCreateSSTableParam()
       : with_partition_param_(nullptr),
         with_table_param_(nullptr),
@@ -82,7 +82,7 @@ struct ObPGCreateSSTableParam final {
 class ObPGStorage {
   friend class ObPGPartitionArrayGuard;
 
-  public:
+public:
   ObPGStorage();
   ~ObPGStorage();
   int init(const ObPartitionKey& key, ObIPartitionComponentFactory* cp_fty,
@@ -396,9 +396,9 @@ class ObPGStorage {
 
   TO_STRING_KV(KP(this), K_(pkey), KP_(meta), K_(log_seq_num), K_(last_freeze_ts));
 
-  private:
+private:
   class GetPGPartitionCountFunctor {
-    public:
+  public:
     GetPGPartitionCountFunctor(const bool include_trans_table, int64_t& count)
         : include_trans_table_(include_trans_table), count_(count)
     {}
@@ -419,12 +419,12 @@ class ObPGStorage {
       return ret;
     }
 
-    private:
+  private:
     bool include_trans_table_;
     int64_t& count_;
   };
   class GetAllPGPartitionKeyFunctor {
-    public:
+  public:
     explicit GetAllPGPartitionKeyFunctor(ObPartitionArray& arr) : pkeys_(arr)
     {}
     ~GetAllPGPartitionKeyFunctor()
@@ -441,11 +441,11 @@ class ObPGStorage {
       return ret;
     }
 
-    private:
+  private:
     ObPartitionArray& pkeys_;
   };
   class RemovePGIndexFunctor {
-    public:
+  public:
     explicit RemovePGIndexFunctor(ObPartitionGroupIndex& pg_index) : pg_index_(pg_index)
     {}
     ~RemovePGIndexFunctor()
@@ -462,12 +462,12 @@ class ObPGStorage {
       return ret;
     }
 
-    private:
+  private:
     ObPartitionGroupIndex& pg_index_;
   };
 
   class GetAllPGPartitionFunctor {
-    public:
+  public:
     explicit GetAllPGPartitionFunctor(ObPGPartitionArrayGuard& guard) : guard_(guard)
     {}
     int operator()(const common::ObPartitionKey& pkey)
@@ -492,11 +492,11 @@ class ObPGStorage {
       return ret;
     }
 
-    private:
+  private:
     ObPGPartitionArrayGuard& guard_;
   };
   class RemovePGPartitionFunctor {
-    public:
+  public:
     RemovePGPartitionFunctor(ObPGPartitionMap& map) : map_(map)
     {}
     void operator()(const common::ObPartitionKey& pkey)
@@ -508,7 +508,7 @@ class ObPGStorage {
       }
     }
 
-    private:
+  private:
     ObPGPartitionMap& map_;
   };
   struct SerializePair {
@@ -521,7 +521,7 @@ class ObPGStorage {
     int64_t size_;
   };
 
-  private:
+private:
   int register_pg_partition_(const common::ObPartitionKey& pkey, ObPGPartition* pg_info);
   int create_pg_memtable_(ObPGPartition* pg_partition);
   int get_all_pg_partition_keys_(common::ObPartitionArray& pkeys, const bool include_trans_table = false);
@@ -613,10 +613,10 @@ class ObPGStorage {
   int get_restore_point_max_schema_version_(
       const int64_t publish_version, const ObPartitionArray& partitions, int64_t& schema_version);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPGStorage);
 
-  private:
+private:
   static const int64_t MAGIC_NUM_BEFORE_2_2_70 = -0xBCDE;
   static const int64_t MAGIC_NUM_2_2_70 = -0xBCDF;
   static const int64_t MAGIC_NUM = -0xBCE0;

@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObMemstoreInfoRecord {
-  public:
+public:
   int push(const ObDataStorageInfo& data_info, const int64_t readable_ts);
   int front(ObDataStorageInfo& data_info) const;
   void reset();
@@ -33,7 +33,7 @@ class ObMemstoreInfoRecord {
   ObMemstoreInfoRecord(const ObMemstoreInfoRecord&) = delete;
   ObMemstoreInfoRecord& operator=(const ObMemstoreInfoRecord&) = delete;
 
-  private:
+private:
   int64_t get_next_pos() const
   {
     return 1L - head_;

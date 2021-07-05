@@ -30,7 +30,7 @@ class ObWriteCheckpointDag;
 }  // namespace storage
 namespace storage {
 class ObBloomFilterLoadTask : public common::IObDedupTask {
-  public:
+public:
   ObBloomFilterLoadTask(
       const uint64_t table_id, const blocksstable::MacroBlockId& macro_id, const ObITable::TableKey& table_key);
   virtual ~ObBloomFilterLoadTask();
@@ -44,18 +44,18 @@ class ObBloomFilterLoadTask : public common::IObDedupTask {
   }
   virtual int process();
 
-  private:
+private:
   int load_bloom_filter();
   uint64_t table_id_;
   blocksstable::MacroBlockId macro_id_;
   ObITable::TableKey table_key_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilterLoadTask);
 };
 
 class ObBloomFilterBuildTask : public common::IObDedupTask {
-  public:
+public:
   ObBloomFilterBuildTask(const uint64_t table_id, const blocksstable::MacroBlockId& macro_id, const int64_t prefix_len,
       const ObITable::TableKey& table_key);
   virtual ~ObBloomFilterBuildTask();
@@ -69,7 +69,7 @@ class ObBloomFilterBuildTask : public common::IObDedupTask {
   }
   virtual int process();
 
-  private:
+private:
   int build_bloom_filter();
   uint64_t table_id_;
   blocksstable::MacroBlockId macro_id_;
@@ -79,7 +79,7 @@ class ObBloomFilterBuildTask : public common::IObDedupTask {
   ObTableAccessContext access_context_;
   common::ObArenaAllocator allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilterBuildTask);
 };
 
@@ -92,43 +92,43 @@ struct ObMergeStatEntry {
 };
 
 class ObMergeStatistic {
-  public:
+public:
   ObMergeStatistic();
   virtual ~ObMergeStatistic();
   int notify_merge_start(const int64_t frozen_version);
   int notify_merge_finish(const int64_t frozen_version);
   int get_entry(const int64_t frozen_version, ObMergeStatEntry& entry);
 
-  private:
+private:
   int search_entry(const int64_t frozen_version, ObMergeStatEntry*& pentry);
   static const int64_t MAX_KEPT_HISTORY = 16;
   obsys::CRWLock lock_;
   ObMergeStatEntry stats_[MAX_KEPT_HISTORY];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeStatistic);
 };
 
 class ObMinorMergeHistory {
-  public:
+public:
   explicit ObMinorMergeHistory(const uint64_t tenant_id);
   virtual ~ObMinorMergeHistory();
   int notify_minor_merge_start(const int64_t snapshot_version);
   int notify_minor_merge_finish(const int64_t snapshot_version);
 
-  private:
+private:
   static const int64_t MAX_MINOR_HISTORY = 16;
   lib::ObMutex mutex_;
   int64_t count_;
   uint64_t tenant_id_;
   int64_t snapshot_history_[MAX_MINOR_HISTORY];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMinorMergeHistory);
 };
 
 class ObFastFreezeChecker {
-  public:
+public:
   explicit ObFastFreezeChecker(const int64_t tenant_id);
   virtual ~ObFastFreezeChecker();
   void reset();
@@ -139,18 +139,18 @@ class ObFastFreezeChecker {
   int check_hotspot_need_fast_freeze(ObIPartitionGroup& pg, bool& need_fast_freeze);
   TO_STRING_KV(K_(tenant_id), K_(enable_fast_freeze));
 
-  private:
+private:
   // the minimum schedule interval of fast freeze is 2min
   static const int64_t FAST_FREEZE_INTERVAL_US = 120 * 1000 * 1000;
   ObFastFreezeChecker() = default;
 
-  private:
+private:
   int64_t tenant_id_;
   bool enable_fast_freeze_;
 };
 
 class ObClearTransTableTask : public common::ObTimerTask {
-  public:
+public:
   ObClearTransTableTask();
   virtual ~ObClearTransTableTask();
   virtual void runTimerTask() override;
@@ -166,7 +166,7 @@ struct ObMergePriorityCompare {
 class ObPartitionScheduler {
   friend ObClearTransTableTask;
 
-  public:
+public:
   static ObPartitionScheduler& get_instance();
   // NOT thread safe.
   // There is a timer in the ObPartitionScheduler, which will be scheduled periodically after
@@ -232,15 +232,15 @@ class ObPartitionScheduler {
   }
   int64_t get_min_schema_version(const int64_t tenant_id);
 
-  private:
+private:
   class MergeRetryTask : public common::ObTimerTask {
-    public:
+  public:
     MergeRetryTask();
     virtual ~MergeRetryTask();
     virtual void runTimerTask();
   };
   class WriteCheckpointTask : public common::ObTimerTask {
-    public:
+  public:
     WriteCheckpointTask() : is_enable_(false)
     {}
     virtual ~WriteCheckpointTask()
@@ -253,25 +253,25 @@ class ObPartitionScheduler {
     bool is_enable_;
   };
   class MinorMergeScanTask : public common::ObTimerTask {
-    public:
+  public:
     MinorMergeScanTask();
     virtual ~MinorMergeScanTask() override;
     virtual void runTimerTask() override;
   };
   class MergeCheckTask : public common::ObTimerTask {
-    public:
+  public:
     MergeCheckTask() = default;
     virtual ~MergeCheckTask() = default;
     virtual void runTimerTask() override;
   };
   class UpdateCacheInfoTask : public common::ObTimerTask {
-    public:
+  public:
     UpdateCacheInfoTask() = default;
     virtual ~UpdateCacheInfoTask() = default;
     virtual void runTimerTask() override;
   };
 
-  private:
+private:
   friend class ObBuildIndexDag;
   static const int64_t DEFAULT_FAILURE_FAST_RETRY_INTERVAL_US = 1000L * 1000L * 60L;
   static const int64_t DEFAULT_WRITE_CHECKPOINT_INTERVAL_US = 1000L * 1000L * 60L;
@@ -351,7 +351,7 @@ class ObPartitionScheduler {
   int check_partition_exist(const ObPartitionKey& pkey, bool& exist);
   int can_schedule_partition(const ObMergeType merge_type, bool& can_schedule);
 
-  private:
+private:
   typedef common::hash::ObHashMap<uint64_t, ObMinorMergeHistory*, common::hash::NoPthreadDefendMode>
       MinorMergeHistoryMap;
   typedef common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> TenantSnapshotMap;
@@ -388,7 +388,7 @@ class ObPartitionScheduler {
   TenantMinSSTableSchemaVersionMap min_sstable_schema_version_map_;
   UpdateCacheInfoTask update_cache_info_task_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionScheduler);
 };
 

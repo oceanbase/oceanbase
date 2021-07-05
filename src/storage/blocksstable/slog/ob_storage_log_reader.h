@@ -23,7 +23,7 @@ class ObILogFileStore;
 }
 namespace blocksstable {
 class ObStorageLogReader {
-  public:
+public:
   ObStorageLogReader();
   virtual ~ObStorageLogReader();
 
@@ -52,7 +52,7 @@ class ObStorageLogReader {
   int get_cursor(common::ObLogCursor& cursor) const;
   int get_next_cursor(common::ObLogCursor& cursor) const;
 
-  private:
+private:
   int open();
   int close();
   int seek(uint64_t log_seq);
@@ -64,7 +64,7 @@ class ObStorageLogReader {
   int tackle_less_header_len(const common::ObLogEntry& entry);
   int tackle_less_data_len(const common::ObLogEntry& entry);
 
-  private:
+private:
   static const int64_t LOG_FILE_MAX_SIZE = 256 << 20;
 
   bool is_inited_;

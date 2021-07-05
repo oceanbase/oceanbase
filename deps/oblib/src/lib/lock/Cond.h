@@ -24,7 +24,7 @@ class RecMutex;
  * @brief Condition variable of linux-thread
  */
 class Cond {
-  public:
+public:
   Cond();
   ~Cond();
 
@@ -73,10 +73,10 @@ class Cond {
     return timedWaitImpl(lock._mutex, timeout);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(Cond);
 
-  private:
+private:
   friend class Monitor<Mutex>;
   friend class Monitor<RecMutex>;
 

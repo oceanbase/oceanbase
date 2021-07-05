@@ -28,7 +28,7 @@ namespace archive {
 //================ start of structs for backup============//
 
 struct ObArchiveReadBuf {
-  public:
+public:
   ObArchiveReadBuf()
   {
     reset();
@@ -48,14 +48,14 @@ struct ObArchiveReadBuf {
   }
   TO_STRING_KV(K(data_len_));
 
-  public:
+public:
   static const int64_t CLOG_BUF_SIZE = common::OB_MAX_LOG_BUFFER_SIZE;
   int64_t data_len_;
   char buf_[CLOG_BUF_SIZE];
 };
 
 struct ObArchiveLogCursor {
-  public:
+public:
   ObArchiveLogCursor()
   {
     reset();
@@ -115,7 +115,7 @@ struct ObArchiveLogCursor {
   TO_STRING_KV(
       K_(file_id), K_(offset), K_(size), K_(is_batch_committed), K_(log_id), K_(log_submit_ts), K_(accum_checksum));
 
-  public:
+public:
   file_id_t file_id_;
   offset_t offset_;
   int32_t size_;
@@ -126,7 +126,7 @@ struct ObArchiveLogCursor {
 };
 
 struct ObArchiveRoundStartInfo {
-  public:
+public:
   ObArchiveRoundStartInfo()
   {
     reset();
@@ -138,11 +138,11 @@ struct ObArchiveRoundStartInfo {
   void reset();
   bool is_valid() const;
 
-  public:
+public:
   TO_STRING_KV(
       K(start_ts_), K(start_log_id_), K(snapshot_version_), K(log_submit_ts_), K(clog_epoch_id_), K(accum_checksum_));
 
-  public:
+public:
   int64_t start_ts_;       // round_start_ts_
   uint64_t start_log_id_;  // round_start_log_id_
   int64_t snapshot_version_;
@@ -152,7 +152,7 @@ struct ObArchiveRoundStartInfo {
 };
 
 struct ObPGArchiveCLogTask : public common::ObLink {
-  public:
+public:
   ObPGArchiveCLogTask() : read_buf_(NULL)
   {
     reset();
@@ -173,7 +173,7 @@ struct ObPGArchiveCLogTask : public common::ObLink {
     ;
   }
 
-  public:
+public:
   clog::ObLogType get_log_type() const;
   int64_t get_clog_count() const
   {
@@ -221,7 +221,7 @@ struct ObPGArchiveCLogTask : public common::ObLink {
       K_(log_submit_ts), K_(clog_epoch_id), K_(accum_checksum), K_(processed_log_count), K_(incarnation),
       K_(log_archive_round), K_(task_type), K_(compressor_type), K_(pg_key), K_(clog_pos_list));
 
-  public:
+public:
   int64_t epoch_id_;
   bool need_update_log_ts_;
   union {
@@ -258,7 +258,7 @@ struct ObPGArchiveCLogTask : public common::ObLink {
 };
 
 struct ObArchiveSendTaskMeta {
-  public:
+public:
   ObArchiveSendTaskMeta()
   {
     reset();
@@ -270,7 +270,7 @@ struct ObArchiveSendTaskMeta {
   virtual void reset();
   int assign(const ObArchiveSendTaskMeta& other);
 
-  public:
+public:
   virtual bool is_valid() const;
   int64_t get_data_len() const
   {
@@ -289,7 +289,7 @@ struct ObArchiveSendTaskMeta {
       K_(log_archive_round), K_(start_log_id), K_(start_log_ts), K_(end_log_id), K_(end_log_submit_ts),
       K_(checkpoint_ts), K_(pos), K_(block_meta));
 
-  public:
+public:
   // attention!!!!:do not forget to modify assign() when adding new members
   common::ObPGKey pg_key_;
   ObLogArchiveContentType task_type_;
@@ -311,7 +311,7 @@ struct ObArchiveSendTaskMeta {
 };
 
 struct ObTSIArchiveReadBuf : public ObArchiveSendTaskMeta {
-  public:
+public:
   ObTSIArchiveReadBuf()
   {
     reset();
@@ -322,7 +322,7 @@ struct ObTSIArchiveReadBuf : public ObArchiveSendTaskMeta {
   }
   void reset_log_related_info();
 
-  public:
+public:
   int64_t get_buf_len() const
   {
     return READ_BUF_SIZE;
@@ -336,14 +336,14 @@ struct ObTSIArchiveReadBuf : public ObArchiveSendTaskMeta {
     return buf_;
   }
 
-  private:
+private:
   // max size of each clog read
   static const int64_t READ_BUF_SIZE = common::OB_MAX_LOG_BUFFER_SIZE;
   char buf_[READ_BUF_SIZE];
 };
 
 struct ObTSIArchiveCompressBuf {
-  public:
+public:
   ObTSIArchiveCompressBuf()
   {
     reset();
@@ -357,7 +357,7 @@ struct ObTSIArchiveCompressBuf {
     pos_ = 0;
   }
 
-  public:
+public:
   int64_t get_buf_len() const
   {
     return COMPRESSED_BUF_SIZE;
@@ -375,7 +375,7 @@ struct ObTSIArchiveCompressBuf {
     return pos_;
   }
 
-  public:
+public:
   static const int64_t MAX_COMPRESS_OVERFLOW_SIZE = 20 * 1024L;  // 20K reserved
   static const int64_t COMPRESSED_BUF_SIZE = common::OB_MAX_LOG_BUFFER_SIZE + MAX_COMPRESS_OVERFLOW_SIZE;
   int64_t pos_;
@@ -383,7 +383,7 @@ struct ObTSIArchiveCompressBuf {
 };
 
 struct ObArchiveSendTask : public ObArchiveSendTaskMeta, public common::ObLink {
-  public:
+public:
   ObArchiveSendTask()
   {
     reset();
@@ -394,7 +394,7 @@ struct ObArchiveSendTask : public ObArchiveSendTaskMeta, public common::ObLink {
   }
   void reset();
 
-  public:
+public:
   bool has_enough_space(const int64_t data_size) const;
   int assign_meta(const ObTSIArchiveReadBuf& send_buf);
   bool is_valid() const
@@ -419,14 +419,14 @@ struct ObArchiveSendTask : public ObArchiveSendTaskMeta, public common::ObLink {
   }
   INHERIT_TO_STRING_KV("ObArchiveSendTaskMeta", ObArchiveSendTaskMeta, K_(archive_data_len), K_(buf_len), KP(buf_));
 
-  public:
+public:
   int64_t buf_len_;
   int64_t archive_data_len_;  // data len if archive block
   char* buf_;
 };
 
 struct ObArchiveIndexFileInfo {
-  public:
+public:
   ObArchiveIndexFileInfo()
   {
     reset();
@@ -447,14 +447,14 @@ struct ObArchiveIndexFileInfo {
       K(round_snapshot_version_), K(round_log_submit_ts_), K(round_clog_epoch_id_), K(round_accum_checksum_),
       K(checksum_));
 
-  private:
+private:
   int64_t calc_checksum_() const;
 
-  public:
+public:
   static const int16_t MAGIC_NUM = share::ObBackupFileType::BACKUP_ARCHIVE_INDEX_FILE;  // AI means ARCHIVE INDEX
   static const int16_t INDEX_FILE_VERSION = 1;
 
-  public:
+public:
   int16_t magic_;
   int16_t record_len_;
   int16_t version_;
@@ -486,7 +486,7 @@ struct ObArchiveIndexFileInfo {
 };
 
 struct MaxArchivedIndexInfo {
-  public:
+public:
   MaxArchivedIndexInfo();
   ~MaxArchivedIndexInfo();
   void reset();
@@ -515,7 +515,7 @@ struct MaxArchivedIndexInfo {
 };
 
 struct ObArchiveStartTimestamp {
-  public:
+public:
   ObArchiveStartTimestamp() : archive_round_(-1), timestamp_(-1), checksum_(0)
   {}
   int set(const int64_t archive_round, const int64_t timestamp);
@@ -523,17 +523,17 @@ struct ObArchiveStartTimestamp {
   NEED_SERIALIZE_AND_DESERIALIZE;
   TO_STRING_KV(K(archive_round_), K(timestamp_), K(checksum_));
 
-  private:
+private:
   int64_t calc_checksum_() const;
 
-  public:
+public:
   int64_t archive_round_;
   int64_t timestamp_;
   int64_t checksum_;
 };
 
 class ObArchiveCompressedChunkHeader {
-  public:
+public:
   ObArchiveCompressedChunkHeader()
   {
     reset();
@@ -544,7 +544,7 @@ class ObArchiveCompressedChunkHeader {
   }
   void reset();
 
-  public:
+public:
   bool is_valid() const;
   int generate_header(
       const common::ObCompressorType compressor_type, const int32_t orig_data_len, const int32_t compress_data_len);
@@ -580,10 +580,10 @@ class ObArchiveCompressedChunkHeader {
     return ARCHIVE_COMPRESSED_CHUNK_MAGIC == magic_number;
   }
 
-  private:
+private:
   static const int16_t ARCHIVE_COMPRESSED_CHUNK_MAGIC = 0x4343;  // CC means compressed chunk
   static const int16_t ARCHIVE_COMPRESSED_CHUNK_VERSION = 1;     // for compat
-  private:
+private:
   int16_t magic_;    // COMPRESSED_LOG_CHUNK_MAGIC
   int16_t version_;  // for compactibility
   common::ObCompressorType compressor_type_;
@@ -593,12 +593,12 @@ class ObArchiveCompressedChunkHeader {
 };
 
 class ObArchiveCompressedChunk {
-  public:
+public:
   ObArchiveCompressedChunk() : header_(), buf_(NULL)
   {}
   virtual ~ObArchiveCompressedChunk();
 
-  public:
+public:
   const ObArchiveCompressedChunkHeader& get_header() const
   {
     return header_;
@@ -610,10 +610,10 @@ class ObArchiveCompressedChunk {
   TO_STRING_KV(K(header_));
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObArchiveCompressedChunk);
 
-  private:
+private:
   ObArchiveCompressedChunkHeader header_;
   const char* buf_;
 };
@@ -639,7 +639,7 @@ struct ObArchiveReadParam {
   void reset();
   TO_STRING_KV(K(pg_key_), K(file_id_), K(offset_), K(read_len_), K(timeout_));
 
-  private:
+private:
   static const int64_t OB_ARCHIVE_READ_TIMEOUT = 5000000;  // 5s
 };
 

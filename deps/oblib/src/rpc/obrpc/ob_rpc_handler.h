@@ -21,17 +21,17 @@ namespace obrpc {
 // Collection of easy callback functions, implement of OceanBase RPC
 // processing. Pass to deliverer once RPC packet comes.
 class ObRpcHandler : public ObRpcNetHandler {
-  public:
+public:
   explicit ObRpcHandler(rpc::frame::ObReqDeliver& deliver);
   virtual ~ObRpcHandler();
 
   int init();
   int process(easy_request_t* r);
 
-  private:
+private:
   rpc::frame::ObReqDeliver& deliver_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcHandler);
 };  // end of class ObRpcHandler
 

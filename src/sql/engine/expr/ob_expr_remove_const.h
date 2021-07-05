@@ -32,7 +32,7 @@ namespace sql {
 //
 //
 class ObExprRemoveConst : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprRemoveConst(common::ObIAllocator& alloc);
   virtual ~ObExprRemoveConst()
   {}
@@ -46,7 +46,7 @@ class ObExprRemoveConst : public ObFuncExprOperator {
 
   static int eval_remove_const(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRemoveConst);
 };
 

@@ -31,7 +31,7 @@ using obmysql::ObMySQLField;
 using obmysql::ObMySQLRow;
 
 class ObMySQLResultSet : public ObResultSet, public common::ObDLinkBase<ObMySQLResultSet> {
-  public:
+public:
   /**
    * construct
    *
@@ -98,7 +98,7 @@ class ObMySQLResultSet : public ObResultSet, public common::ObDLinkBase<ObMySQLR
   };
   static int to_mysql_field(const ObField& field, ObMySQLField& mfield);
 
-  private:
+private:
   int64_t field_index_; /**< The sequence number of the next field to be read */
   int64_t param_index_; /* < The serial number of the next parameter to be read*/
   bool has_more_result_;

@@ -16,11 +16,11 @@
 namespace oceanbase {
 namespace sql {
 class ObExprAggParamList : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprAggParamList(common::ObIAllocator& alloc);
   virtual ~ObExprAggParamList();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprAggParamList);
 };
 }  // namespace sql

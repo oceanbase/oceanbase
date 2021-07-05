@@ -23,7 +23,7 @@ namespace share {
 
 // trace server alive status
 class ObIServerTrace {
-  public:
+public:
   ObIServerTrace()
   {}
   virtual ~ObIServerTrace(){};
@@ -37,7 +37,7 @@ class ObIServerTrace {
 };
 
 class ObIZoneTrace {
-  public:
+public:
   ObIZoneTrace()
   {}
   virtual ~ObIZoneTrace()

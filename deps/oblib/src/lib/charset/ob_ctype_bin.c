@@ -547,7 +547,7 @@ size_t ob_max_bytes_charpos_8bit(const ObCharsetInfo* cs __attribute__((unused))
   return max_bytes;
 }
 
-size_t ob_well_formed_len_8bit(const char* str, size_t len, size_t nchars, int* error)
+size_t ob_well_formed_len_8bit(const char* str __attribute__((unused)), size_t len, size_t nchars, int* error)
 {
   size_t nbytes = len;
   *error = 0;
@@ -636,8 +636,8 @@ static int ob_strnncollsp_binary(const ObCharsetInfo* cs __attribute__((unused))
   return ob_strnncoll_binary(cs, s, slen, t, tlen);
 }
 
-static size_t ob_strnxfrm_8bit_bin(const ObCharsetInfo* cs, unsigned char* dst, size_t dstlen, uint32_t nweights,
-    const unsigned char* src, size_t srclen, int* is_valid_unicode)
+static size_t ob_strnxfrm_8bit_bin(const ObCharsetInfo* cs __attribute__((unused)), unsigned char* dst, size_t dstlen,
+    uint32_t nweights, const unsigned char* src, size_t srclen, int* is_valid_unicode)
 {
   *is_valid_unicode = 1;
   srclen = (srclen < dstlen ? srclen : dstlen);

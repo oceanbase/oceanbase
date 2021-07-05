@@ -51,7 +51,7 @@ class ObDtlFlowControl;
 //   }
 //
 class ObDtlChannelGroup {
-  public:
+public:
   static int make_channel(const uint64_t tenant_id, const common::ObAddr& addr1, const common::ObAddr& addr2,
       ObDtlChannelInfo& ci1, ObDtlChannelInfo& ci2);
   static int make_channel(ObDtlChSet& producer, ObDtlChSet& consumer);

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace obrpc {
 class MockObCommonRpcProxy : public ObCommonRpcProxy {
-  public:
+public:
   MockObCommonRpcProxy() : ObCommonRpcProxy(this)
   {}
   MOCK_METHOD3(

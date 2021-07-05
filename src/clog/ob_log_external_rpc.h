@@ -59,7 +59,7 @@ class ObLogLeaderHeartbeatReq;
 class ObLogLeaderHeartbeatResp;
 
 class ObLogExternalProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObLogExternalProxy);
 
   // req_start_log_id_by_ts()
@@ -107,7 +107,7 @@ class ObLogExternalProxy : public ObRpcProxy {
 class ObLogReqStartLogIdByTsRequest {
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 400kb for cur version.
-  public:
+public:
   struct Param {
     common::ObPartitionKey pkey_;
     int64_t start_tstamp_;
@@ -117,11 +117,11 @@ class ObLogReqStartLogIdByTsRequest {
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
 
-  public:
+public:
   ObLogReqStartLogIdByTsRequest();
   ~ObLogReqStartLogIdByTsRequest();
 
-  public:
+public:
   void reset();
   bool is_valid() const;
   int set_params(const ParamArray& params);
@@ -132,18 +132,18 @@ class ObLogReqStartLogIdByTsRequest {
   TO_STRING_KV(K_(rpc_ver), K_(params));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   ParamArray params_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogReqStartLogIdByTsRequest);
 };
 
 class ObLogReqStartLogIdByTsResponse {
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 400kb for cur version.
-  public:
+public:
   // Stored in the same order as Request's params.
   struct Result {
     // Partition specific error code.
@@ -156,11 +156,11 @@ class ObLogReqStartLogIdByTsResponse {
   };
   typedef common::ObSEArray<Result, 16> ResultArray;
 
-  public:
+public:
   ObLogReqStartLogIdByTsResponse();
   ~ObLogReqStartLogIdByTsResponse();
 
-  public:
+public:
   void reset();
   void set_err(const int err);
   int set_results(const ResultArray& results);
@@ -172,18 +172,18 @@ class ObLogReqStartLogIdByTsResponse {
   TO_STRING_KV(K_(rpc_ver), K_(err), K_(res));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   int err_;
   ResultArray res_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogReqStartLogIdByTsResponse);
 };
 
 class ObLogReqStartLogIdByTsProcessor
     : public ObRpcProcessor<ObLogExternalProxy::ObRpc<OB_LOG_REQ_START_LOG_ID_BY_TS> > {
-  public:
+public:
   ObLogReqStartLogIdByTsProcessor(storage::ObPartitionService* partition_service)
       : partition_service_(partition_service)
   {}
@@ -192,10 +192,10 @@ class ObLogReqStartLogIdByTsProcessor
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
@@ -217,7 +217,7 @@ class ObLogReqStartLogIdByTsProcessor
 class ObLogReqStartPosByLogIdRequest {
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 400kb for cur version.
-  public:
+public:
   struct Param {
     common::ObPartitionKey pkey_;
     uint64_t start_log_id_;
@@ -229,11 +229,11 @@ class ObLogReqStartPosByLogIdRequest {
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
 
-  public:
+public:
   ObLogReqStartPosByLogIdRequest();
   ~ObLogReqStartPosByLogIdRequest();
 
-  public:
+public:
   void reset();
   bool is_valid() const;
   int set_params(const ParamArray& params);
@@ -243,18 +243,18 @@ class ObLogReqStartPosByLogIdRequest {
   TO_STRING_KV(K_(rpc_ver), K_(params));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   ParamArray params_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogReqStartPosByLogIdRequest);
 };
 
 class ObLogReqStartPosByLogIdResponse {
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 500kb for cur version.
-  public:
+public:
   // Stored in the same order as Request's params.
   struct Result {
     // Partition specific error code.
@@ -270,11 +270,11 @@ class ObLogReqStartPosByLogIdResponse {
   };
   typedef common::ObSEArray<Result, 16> ResultArray;
 
-  public:
+public:
   ObLogReqStartPosByLogIdResponse();
   ~ObLogReqStartPosByLogIdResponse();
 
-  public:
+public:
   void reset();
   void set_err(const int err);
   int set_results(const ResultArray& results);
@@ -286,18 +286,18 @@ class ObLogReqStartPosByLogIdResponse {
   TO_STRING_KV(K_(rpc_ver), K_(err), K_(res));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   int err_;
   ResultArray res_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogReqStartPosByLogIdResponse);
 };
 
 class ObLogReqStartPosByLogIdProcessor
     : public ObRpcProcessor<ObLogExternalProxy::ObRpc<OB_LOG_REQ_START_POS_BY_LOG_ID> > {
-  public:
+public:
   ObLogReqStartPosByLogIdProcessor(storage::ObPartitionService* partition_service)
       : partition_service_(partition_service)
   {}
@@ -306,10 +306,10 @@ class ObLogReqStartPosByLogIdProcessor
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
@@ -324,7 +324,7 @@ class ObLogExternalFetchLogRequest {
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 500kb for cur version.
   static const int64_t DEFAULT_OFFLINE_TIMEOUT = 5 * 1000 * 1000;
 
-  public:
+public:
   struct Param {
     common::ObPartitionKey pkey_;
     uint64_t start_log_id_;
@@ -337,11 +337,11 @@ class ObLogExternalFetchLogRequest {
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
 
-  public:
+public:
   ObLogExternalFetchLogRequest();
   ~ObLogExternalFetchLogRequest();
 
-  public:
+public:
   void reset();
   bool is_valid() const;
   int set_params(const ParamArray& params);
@@ -357,9 +357,9 @@ class ObLogExternalFetchLogRequest {
   TO_STRING_KV(K_(rpc_ver), K_(params), K_(file_id), K_(offset), K_(offline_timeout));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   static const int64_t MAX_OFFLINE_TIMEOUT = 100 * 1000 * 1000;  // 100 second
-  private:
+private:
   int64_t rpc_ver_;
   ParamArray params_;
   clog::file_id_t file_id_;
@@ -370,7 +370,7 @@ class ObLogExternalFetchLogRequest {
 class ObLogExternalFetchLogResponse {
   static const int64_t CUR_RPC_VER = 1;
 
-  public:
+public:
   struct OfflinePartition {
     common::ObPartitionKey pkey_;
     int64_t sync_ts_;
@@ -380,11 +380,11 @@ class ObLogExternalFetchLogResponse {
   };
   typedef common::ObSEArray<OfflinePartition, 16> OfflinePartitionArray;
 
-  public:
+public:
   ObLogExternalFetchLogResponse();
   ~ObLogExternalFetchLogResponse();
 
-  public:
+public:
   void reset();
   int set_offline_partitions(const OfflinePartitionArray& offlines);
   int append_offline_partition(const common::ObPartitionKey& pkey, const int64_t sync_ts);
@@ -407,14 +407,14 @@ class ObLogExternalFetchLogResponse {
   TO_STRING_KV(K_(rpc_ver), K_(err), K_(offline_partitions), K_(file_id), K_(offset), K_(log_num), K_(pos));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t offline_partition_cnt_lmt_();
   int64_t cur_ver_offline_partition_cnt_lmt_();
 
-  private:
+private:
   static const int64_t FETCH_BUF_LEN = common::OB_MAX_LOG_BUFFER_SIZE;
 
-  private:
+private:
   int64_t rpc_ver_;
   int err_;
   OfflinePartitionArray offline_partitions_;
@@ -426,7 +426,7 @@ class ObLogExternalFetchLogResponse {
 };
 
 class ObLogExternalFetchLogProcessor : public ObRpcProcessor<ObLogExternalProxy::ObRpc<OB_LOG_FETCH_LOG_EXTERNAL> > {
-  public:
+public:
   ObLogExternalFetchLogProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObLogExternalFetchLogProcessor()
@@ -434,10 +434,10 @@ class ObLogExternalFetchLogProcessor : public ObRpcProcessor<ObLogExternalProxy:
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
@@ -449,7 +449,7 @@ class ObLogExternalFetchLogProcessor : public ObRpcProcessor<ObLogExternalProxy:
 class ObLogReqHeartbeatInfoRequest {
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 300kb for cur version.
-  public:
+public:
   struct Param {
     common::ObPartitionKey pkey_;
     uint64_t log_id_;
@@ -459,11 +459,11 @@ class ObLogReqHeartbeatInfoRequest {
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
 
-  public:
+public:
   ObLogReqHeartbeatInfoRequest();
   ~ObLogReqHeartbeatInfoRequest();
 
-  public:
+public:
   void reset();
   bool is_valid() const;
   int set_params(const ParamArray& params);
@@ -473,7 +473,7 @@ class ObLogReqHeartbeatInfoRequest {
   TO_STRING_KV(K_(rpc_ver), K_(params));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   ParamArray params_;
 };
@@ -481,7 +481,7 @@ class ObLogReqHeartbeatInfoRequest {
 class ObLogReqHeartbeatInfoResponse {
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 300kb for cur version.
-  public:
+public:
   struct Result {
     int err_;
     int64_t tstamp_;
@@ -491,11 +491,11 @@ class ObLogReqHeartbeatInfoResponse {
   };
   typedef common::ObSEArray<Result, 16> ResultArray;
 
-  public:
+public:
   ObLogReqHeartbeatInfoResponse();
   ~ObLogReqHeartbeatInfoResponse();
 
-  public:
+public:
   void reset();
   void set_err(const int err);
   int set_results(const ResultArray& results);
@@ -507,7 +507,7 @@ class ObLogReqHeartbeatInfoResponse {
   TO_STRING_KV(K_(rpc_ver), K_(err), K_(res));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   int err_;
   ResultArray res_;
@@ -515,7 +515,7 @@ class ObLogReqHeartbeatInfoResponse {
 
 class ObLogReqHeartbeatInfoProcessor
     : public ObRpcProcessor<ObLogExternalProxy::ObRpc<OB_LOG_REQUEST_HEARTBEAT_INFO> > {
-  public:
+public:
   ObLogReqHeartbeatInfoProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObLogReqHeartbeatInfoProcessor()
@@ -523,17 +523,17 @@ class ObLogReqHeartbeatInfoProcessor
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 // check ps & ps->clog_mgr not null
 // to simplify code
 class ObExternalProcessorHelper {
-  public:
+public:
   static int get_clog_mgr(storage::ObPartitionService* ps, clog::ObICLogMgr*& clog_mgr);
 };
 
@@ -565,11 +565,11 @@ struct BreakInfo {
 };
 
 class ObLogReqStartLogIdByTsRequestWithBreakpoint {
-  public:
+public:
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 400kb for cur version.
 
-  public:
+public:
   struct Param {
     common::ObPartitionKey pkey_;
     int64_t start_tstamp_;
@@ -590,11 +590,11 @@ class ObLogReqStartLogIdByTsRequestWithBreakpoint {
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
 
-  public:
+public:
   ObLogReqStartLogIdByTsRequestWithBreakpoint();
   ~ObLogReqStartLogIdByTsRequestWithBreakpoint();
 
-  public:
+public:
   void reset();
   bool is_valid() const;
   int set_params(const ParamArray& params);
@@ -605,11 +605,11 @@ class ObLogReqStartLogIdByTsRequestWithBreakpoint {
   TO_STRING_KV(K_(rpc_ver), "param_count", params_.count(), K_(params));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   ParamArray params_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogReqStartLogIdByTsRequestWithBreakpoint);
 };
 
@@ -623,7 +623,7 @@ class ObLogReqStartLogIdByTsRequestWithBreakpoint {
 class ObLogReqStartLogIdByTsResponseWithBreakpoint {
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 400kb for cur version.
-  public:
+public:
   // Stored in the same order as Request's params.
   struct Result {
     // Partition specific error code.
@@ -646,11 +646,11 @@ class ObLogReqStartLogIdByTsResponseWithBreakpoint {
   };
   typedef common::ObSEArray<Result, 16> ResultArray;
 
-  public:
+public:
   ObLogReqStartLogIdByTsResponseWithBreakpoint();
   ~ObLogReqStartLogIdByTsResponseWithBreakpoint();
 
-  public:
+public:
   void reset();
   void set_err(const int err);
   int set_results(const ResultArray& results);
@@ -662,18 +662,18 @@ class ObLogReqStartLogIdByTsResponseWithBreakpoint {
   TO_STRING_KV(K_(rpc_ver), K_(err), "result_count", res_.count(), "result", res_);
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   int err_;
   ResultArray res_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogReqStartLogIdByTsResponseWithBreakpoint);
 };
 
 class ObLogReqStartLogIdByTsProcessorWithBreakpoint
     : public ObRpcProcessor<ObLogExternalProxy::ObRpc<OB_LOG_REQ_START_LOG_ID_BY_TS_WITH_BREAKPOINT> > {
-  public:
+public:
   ObLogReqStartLogIdByTsProcessorWithBreakpoint(storage::ObPartitionService* partition_service)
       : partition_service_(partition_service)
   {}
@@ -682,17 +682,17 @@ class ObLogReqStartLogIdByTsProcessorWithBreakpoint
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObLogReqStartPosByLogIdRequestWithBreakpoint {
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 400kb for cur version.
-  public:
+public:
   struct Param {
     common::ObPartitionKey pkey_;
     uint64_t start_log_id_;
@@ -707,11 +707,11 @@ class ObLogReqStartPosByLogIdRequestWithBreakpoint {
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
 
-  public:
+public:
   ObLogReqStartPosByLogIdRequestWithBreakpoint();
   ~ObLogReqStartPosByLogIdRequestWithBreakpoint();
 
-  public:
+public:
   void reset();
   bool is_valid() const;
   int set_params(const ParamArray& params);
@@ -721,18 +721,18 @@ class ObLogReqStartPosByLogIdRequestWithBreakpoint {
   TO_STRING_KV(K(rpc_ver_), K(params_));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   ParamArray params_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogReqStartPosByLogIdRequestWithBreakpoint);
 };
 
 class ObLogReqStartPosByLogIdResponseWithBreakpoint {
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 500kb for cur version.
-  public:
+public:
   // Stored in the same order as Request's params.
   struct Result {
     // Partition specific error code.
@@ -749,11 +749,11 @@ class ObLogReqStartPosByLogIdResponseWithBreakpoint {
   };
   typedef common::ObSEArray<Result, 16> ResultArray;
 
-  public:
+public:
   ObLogReqStartPosByLogIdResponseWithBreakpoint();
   ~ObLogReqStartPosByLogIdResponseWithBreakpoint();
 
-  public:
+public:
   void reset();
   void set_err(const int err);
   int set_results(const ResultArray& results);
@@ -765,18 +765,18 @@ class ObLogReqStartPosByLogIdResponseWithBreakpoint {
   TO_STRING_KV(K_(rpc_ver), K_(err), K_(res));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   int err_;
   ResultArray res_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogReqStartPosByLogIdResponseWithBreakpoint);
 };
 
 class ObLogReqStartPosByLogIdProcessorWithBreakpoint
     : public ObRpcProcessor<ObLogExternalProxy::ObRpc<OB_LOG_REQ_START_POS_BY_LOG_ID_WITH_BREAKPOINT> > {
-  public:
+public:
   ObLogReqStartPosByLogIdProcessorWithBreakpoint(storage::ObPartitionService* partition_service)
       : partition_service_(partition_service)
   {}
@@ -785,10 +785,10 @@ class ObLogReqStartPosByLogIdProcessorWithBreakpoint
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
@@ -826,7 +826,7 @@ struct ObStreamSeq {
 class ObLogOpenStreamReq {
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 400kb for cur version.
-  public:
+public:
   struct Param {
     common::ObPartitionKey pkey_;
     uint64_t start_log_id_;
@@ -844,7 +844,7 @@ class ObLogOpenStreamReq {
   };
   typedef common::ObSEArray<Param, 16> ParamArray;
 
-  public:
+public:
   ObLogOpenStreamReq()
   {
     reset();
@@ -852,7 +852,7 @@ class ObLogOpenStreamReq {
   ~ObLogOpenStreamReq()
   {}
 
-  public:
+public:
   void reset()
   {
     rpc_ver_ = CUR_RPC_VER;
@@ -923,24 +923,24 @@ class ObLogOpenStreamReq {
       K_(rpc_ver), K_(stream_lifetime), K_(liboblog_pid), K_(stale_stream), "param_count", params_.count(), K_(params));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   inline static bool is_valid_stream_lifetime(const int64_t lifetime)
   {
     // 0 means stream can be washed immediately
     return lifetime >= 0;
   }
 
-  private:
+private:
   static const int64_t INVALID_STREAM_LIFETIME = -1;
 
-  private:
+private:
   int64_t rpc_ver_;
   ParamArray params_;
   int64_t stream_lifetime_;  // us
   uint64_t liboblog_pid_;    // Process ID.
   ObStreamSeq stale_stream_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogOpenStreamReq);
 };
 
@@ -953,7 +953,7 @@ class ObLogOpenStreamReq {
 class ObLogOpenStreamResp {
   static const int64_t CUR_RPC_VER = 1;
 
-  public:
+public:
   ObLogOpenStreamResp()
   {
     reset();
@@ -961,7 +961,7 @@ class ObLogOpenStreamResp {
   ~ObLogOpenStreamResp()
   {}
 
-  public:
+public:
   int assign(const ObLogOpenStreamResp& other)
   {
     if (this != &other) {
@@ -1022,18 +1022,18 @@ class ObLogOpenStreamResp {
   TO_STRING_KV(K(rpc_ver_), K(err_), K(debug_err_), K(seq_));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   int err_;
   int debug_err_;
   ObStreamSeq seq_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogOpenStreamResp);
 };
 
 class ObLogOpenStreamProcessor : public ObRpcProcessor<ObLogExternalProxy::ObRpc<OB_LOG_OPEN_STREAM> > {
-  public:
+public:
   ObLogOpenStreamProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObLogOpenStreamProcessor()
@@ -1041,17 +1041,17 @@ class ObLogOpenStreamProcessor : public ObRpcProcessor<ObLogExternalProxy::ObRpc
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObLogStreamFetchLogReq {
   static const int64_t CUR_RPC_VER = 1;
 
-  public:
+public:
   ObLogStreamFetchLogReq()
   {
     reset();
@@ -1059,7 +1059,7 @@ class ObLogStreamFetchLogReq {
   ~ObLogStreamFetchLogReq()
   {}
 
-  public:
+public:
   void reset()
   {
     rpc_ver_ = CUR_RPC_VER;
@@ -1168,7 +1168,7 @@ class ObLogStreamFetchLogReq {
   TO_STRING_KV(K_(rpc_ver), K_(seq), K_(upper_limit_ts), K_(log_cnt_per_part_per_round), K_(enable_feedback));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t rpc_ver_;
   ObStreamSeq seq_;
   bool enable_feedback_;
@@ -1224,7 +1224,7 @@ struct ObFetchStatus {
 class ObLogStreamFetchLogResp {
   static const int64_t CUR_RPC_VER = 1;
 
-  public:
+public:
   enum FeedbackType {
     INVALID_FEEDBACK = -1,
     LAGGED_FOLLOWER = 0,         // lagged follower
@@ -1267,14 +1267,14 @@ class ObLogStreamFetchLogResp {
   };
   typedef common::ObSEArray<FetchLogHeartbeatItem, 16> FetchLogHeartbeatArray;
 
-  public:
+public:
   ObLogStreamFetchLogResp();
   ~ObLogStreamFetchLogResp()
   {
     reset();
   }
 
-  public:
+public:
   int assign(const ObLogStreamFetchLogResp& other);
 
   void reset()
@@ -1408,7 +1408,7 @@ class ObLogStreamFetchLogResp {
       feedback_partition_arr_, "heartbeat_array", fetch_log_heartbeat_arr_);
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t feedback_array_cnt_lmt_()
   {
     return CUR_RPC_VER == rpc_ver_ ? (cur_ver_array_cnt_lmt_() / 2) : 0;
@@ -1419,10 +1419,10 @@ class ObLogStreamFetchLogResp {
   }
   int64_t cur_ver_array_cnt_lmt_();
 
-  private:
+private:
   static const int64_t FETCH_BUF_LEN = common::OB_MAX_LOG_BUFFER_SIZE;
 
-  private:
+private:
   int64_t rpc_ver_;
   int err_;
   int debug_err_;
@@ -1433,12 +1433,12 @@ class ObLogStreamFetchLogResp {
   int64_t pos_;
   char log_entry_buf_[FETCH_BUF_LEN];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogStreamFetchLogResp);
 };
 
 class ObLogStreamFetchLogProcessor : public ObRpcProcessor<ObLogExternalProxy::ObRpc<OB_LOG_STREAM_FETCH_LOG> > {
-  public:
+public:
   ObLogStreamFetchLogProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObLogStreamFetchLogProcessor()
@@ -1446,15 +1446,15 @@ class ObLogStreamFetchLogProcessor : public ObRpcProcessor<ObLogExternalProxy::O
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObLogLeaderHeartbeatReq {
-  public:
+public:
   struct Param {
     common::ObPartitionKey pkey_;
     uint64_t next_log_id_;  // Do not rely on the log_id, only used for debugging
@@ -1476,7 +1476,7 @@ class ObLogLeaderHeartbeatReq {
   };
   typedef common::ObSEArray<Param, 256> ParamArray;
 
-  public:
+public:
   ObLogLeaderHeartbeatReq()
   {
     reset();
@@ -1524,10 +1524,10 @@ class ObLogLeaderHeartbeatReq {
   TO_STRING_KV(K_(rpc_ver), "param_count", params_.count(), K_(params));
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 300kb for cur version.
-  private:
+private:
   int64_t rpc_ver_;
   ParamArray params_;
 };
@@ -1541,7 +1541,7 @@ largest log_id that has been served + 1, next_served_ts_ is the timestamp corres
 served + 1 OB_PARTITION_NOT_EXIST: next_served_log_id_/next_served_ts_ is an invalid value
 */
 class ObLogLeaderHeartbeatResp {
-  public:
+public:
   struct Result {
     int err_;
     uint64_t next_served_log_id_;
@@ -1558,7 +1558,7 @@ class ObLogLeaderHeartbeatResp {
   };
   typedef common::ObSEArray<Result, 256> ResultArray;
 
-  public:
+public:
   ObLogLeaderHeartbeatResp()
   {
     reset();
@@ -1566,7 +1566,7 @@ class ObLogLeaderHeartbeatResp {
   ~ObLogLeaderHeartbeatResp()
   {}
 
-  public:
+public:
   void reset()
   {
     rpc_ver_ = CUR_RPC_VER;
@@ -1613,10 +1613,10 @@ class ObLogLeaderHeartbeatResp {
   TO_STRING_KV(K_(rpc_ver), K_(err), K_(debug_err), "result_count", res_.count(), "result", res_);
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   static const int64_t CUR_RPC_VER = 1;
   static const int64_t ITEM_CNT_LMT = 10000;  // Around 300kb for cur version.
-  private:
+private:
   int64_t rpc_ver_;
   int err_;
   int debug_err_;  // For debugging, liboblog does not rely on this field
@@ -1624,7 +1624,7 @@ class ObLogLeaderHeartbeatResp {
 };
 
 class ObLogLeaderHeartbeatProcessor : public ObRpcProcessor<ObLogExternalProxy::ObRpc<OB_LOG_LEADER_HEARTBEAT> > {
-  public:
+public:
   ObLogLeaderHeartbeatProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObLogLeaderHeartbeatProcessor()
@@ -1632,10 +1632,10 @@ class ObLogLeaderHeartbeatProcessor : public ObRpcProcessor<ObLogExternalProxy::
     partition_service_ = NULL;
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 

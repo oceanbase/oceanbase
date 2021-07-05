@@ -20,17 +20,17 @@
 using namespace oceanbase::common;
 
 class TestObObj : public ::testing::Test {
-  public:
+public:
   TestObObj();
   virtual ~TestObObj();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestObObj);
 
-  protected:
+protected:
   // function members
   void test_obj_serialize(ObObj& obj1, ObObj& obj2, char* buff, int64_t buff_len);
   void parse_line(const char* line, char* res, int& res_len);
@@ -42,7 +42,7 @@ class TestObObj : public ::testing::Test {
   int random_range(const int low, const int high);
   void print_obj(const ObObj& obj);
 
-  protected:
+protected:
   // data members
 };
 

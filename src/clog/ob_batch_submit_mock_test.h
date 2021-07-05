@@ -43,7 +43,7 @@ static void statistics()
 }
 
 class MockSubmitCb : public ObISubmitLogCb {
-  public:
+public:
   MockSubmitCb()
   {}
   int on_success(const common::ObPartitionKey& partition_key, const clog::ObLogType log_type, const uint64_t log_id,
@@ -69,7 +69,7 @@ class MockSubmitCb : public ObISubmitLogCb {
 };
 
 class ObBatchSubmitMockTest : public share::ObThreadPool {
-  public:
+public:
   const static int64_t SIG_START_STRESS = 57;
   const static int64_t THREAD_NUM = 1;
   const static int64_t MAX_SUBMIT_CNT = 100 * 1000 * 1000;
@@ -125,7 +125,7 @@ class ObBatchSubmitMockTest : public share::ObThreadPool {
     (new (std::nothrow) ObBatchSubmitMockTest())->start_stress();
   }
 
-  private:
+private:
   int batch_submit_log()
   {
     int ret = OB_SUCCESS;

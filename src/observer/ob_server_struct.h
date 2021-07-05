@@ -86,7 +86,7 @@ class ObService;
 class ObVTIterCreator;
 
 class ObServerOptions {
-  public:
+public:
   ObServerOptions()
       : rpc_port_(0),
         elect_port_(0),
@@ -321,7 +321,7 @@ struct ObGlobalContext {
     return ATOMIC_LOAD(&sync_standby_redo_options_.net_timeout_);
   }
 
-  private:
+private:
   common::SpinRWLock cluster_info_rwlock_;
   share::ObClusterInfo cluster_info_;
   int64_t cluster_idx_;  // Internal identification of cluster
@@ -345,7 +345,7 @@ struct ObUseWeakGuard {
   ~ObUseWeakGuard();
   static bool did_use_weak();
 
-  private:
+private:
   struct TSIUseWeak {
     bool inited_;
     bool did_use_weak_;

@@ -21,7 +21,7 @@ namespace sql {
 class ObResultSet;
 class ObSQLSessionInfo;
 class ObEndTransCbPacketParam {
-  public:
+public:
   ObEndTransCbPacketParam()
       : affected_rows_(0), last_insert_id_to_client_(0), is_partition_hit_(true), trace_id_(), is_valid_(false)
   {
@@ -74,7 +74,7 @@ class ObEndTransCbPacketParam {
   TO_STRING_KV(
       K_(message), K_(affected_rows), K_(last_insert_id_to_client), K_(is_partition_hit), K_(trace_id), K_(is_valid));
 
-  private:
+private:
   char message_[common::MSG_SIZE];  // null terminated message string
   int64_t affected_rows_;           // number of rows affected by INSERT/UPDATE/DELETE
   uint64_t last_insert_id_to_client_;

@@ -128,7 +128,8 @@ struct ObParentDMLStmt {
 };
 
 class ObTransformRule {
-  public:
+public:
+  static constexpr const double COST_BASE_TRANSFORM_THRESHOLD = 0.999;
   static const int64_t TRANSFORMER_DEFAULT_MAX_RECURSIVE_LEVEL = 150;
   static const uint64_t ALL_TRANSFORM_RULES = TRANSFORM_TYPE_COUNT_PLUS_ONE - 1;
   static const uint64_t ALL_HEURISTICS_RULES = SIMPLIFY | ANYALL | AGGR | ELIMINATE_OJ | VIEW_MERGE | WHERE_SQ_PULL_UP |
@@ -172,7 +173,7 @@ class ObTransformRule {
     return transformer_type_;
   }
 
-  protected:
+protected:
   /*
    * This function tries to recursively transform all statements including its child statements
    * By default, there are two options, pre-order transformation and post-order transformation
@@ -202,7 +203,7 @@ class ObTransformRule {
    */
   virtual int adjust_transform_types(uint64_t& transform_types);
 
-  private:
+private:
   // pre-order transformation
   int transform_pre_order(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, const int64_t current_level, ObDMLStmt*& stmt);
@@ -227,14 +228,14 @@ class ObTransformRule {
 
   DISALLOW_COPY_AND_ASSIGN(ObTransformRule);
 
-  protected:
+protected:
   ObTransformerCtx* ctx_;
   TransMethod transform_method_;
   uint64_t transformer_type_;
   bool trans_happened_;
   bool cost_based_trans_tried_;
 
-  private:
+private:
   double stmt_cost_;
 };
 

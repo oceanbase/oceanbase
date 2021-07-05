@@ -26,13 +26,13 @@ class ObElectionPriority;
 class ObElectionGroupPriority;
 
 class ObIElectionCallback {
-  public:
+public:
   ObIElectionCallback()
   {}
   virtual ~ObIElectionCallback()
   {}
 
-  public:
+public:
   // when role change
   // virtual int on_role_change(const ObElectionRole &role) = 0;
   // when get election priority
@@ -48,13 +48,13 @@ class ObIElectionCallback {
 };
 
 class ObIElectionGroupPriorityGetter {
-  public:
+public:
   ObIElectionGroupPriorityGetter()
   {}
   virtual ~ObIElectionGroupPriorityGetter()
   {}
 
-  public:
+public:
   virtual int get_election_group_priority(const uint64_t tenant_id, ObElectionGroupPriority& priority) const = 0;
 };
 

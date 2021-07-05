@@ -44,7 +44,7 @@ using namespace share::schema;
 class ObIndexSSTableBuilder::BuildParam {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   BuildParam(
       uint64_t& data_table_id, RangeArrayArray& data_ranges, RangeArrayArray& index_ranges, common::ObIAllocator& alloc)
       : scan_table_id_(data_table_id), scan_ranges_(data_ranges), index_ranges_(index_ranges), alloc_(alloc)
@@ -52,7 +52,7 @@ class ObIndexSSTableBuilder::BuildParam {
 
   TO_STRING_KV(K(scan_table_id_), K(scan_ranges_), K(index_ranges_));
 
-  private:
+private:
   uint64_t& scan_table_id_;
   RangeArrayArray& scan_ranges_;
   RangeArrayArray& index_ranges_;
@@ -60,7 +60,7 @@ class ObIndexSSTableBuilder::BuildParam {
 };
 
 class ObIndexSSTableBuilder::ObBuildExecutor : public sqlclient::ObIExecutor {
-  public:
+public:
   ObBuildExecutor(ObIndexSSTableBuilder& builder) : ObIExecutor(), builder_(builder)
   {}
   virtual ~ObBuildExecutor()
@@ -95,12 +95,12 @@ class ObIndexSSTableBuilder::ObBuildExecutor : public sqlclient::ObIExecutor {
   }
   INHERIT_TO_STRING_KV("build index sstable", ObIExecutor, "job", builder_.job_);
 
-  private:
+private:
   ObIndexSSTableBuilder& builder_;
 };
 
 class ObIndexSSTableBuilder::ObClearExecutor : public sqlclient::ObIExecutor {
-  public:
+public:
   ObClearExecutor(int64_t job_id) : ObIExecutor(), job_id_(job_id)
   {}
   virtual ~ObClearExecutor()
@@ -114,12 +114,12 @@ class ObIndexSSTableBuilder::ObClearExecutor : public sqlclient::ObIExecutor {
   }
   INHERIT_TO_STRING_KV("clear index sstable builder intermediate result", ObIExecutor, K(job_id_));
 
-  private:
+private:
   int64_t job_id_;
 };
 
 class ObIndexSSTableBuilder::BuildIndexGuard : public common::ObDLinkBase<ObIndexSSTableBuilder::BuildIndexGuard> {
-  public:
+public:
   typedef ObIndexSSTableBuilder::BuildIndexGuard self_t;
   BuildIndexGuard(const uint64_t index_table_id) : unique_(true), index_table_id_(index_table_id)
   {
@@ -148,7 +148,7 @@ class ObIndexSSTableBuilder::BuildIndexGuard : public common::ObDLinkBase<ObInde
     return unique_;
   }
 
-  private:
+private:
   static ObLatch& get_lock()
   {
     static ObLatch latch;

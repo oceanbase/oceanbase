@@ -26,7 +26,7 @@ namespace sql {
 // dml resolver structure to the subquery parsing function
 // Avoid seeing too many attributes during the call, reducing coupling
 class ObChildStmtResolver {
-  public:
+public:
   ObChildStmtResolver() : parent_aggr_level_(-1)
   {}
   virtual int resolve_child_stmt(const ParseNode& parse_tree) = 0;
@@ -37,7 +37,7 @@ class ObChildStmtResolver {
     parent_aggr_level_ = parent_aggr_level;
   }
 
-  protected:
+protected:
   // When this level is not -1, it means that the child stmt is a subquery in the aggregate function
   // Note that at this time, the aggregate function has not been pushed up, this level is not the
   // final level of the aggregate function
@@ -48,7 +48,7 @@ class ObSelectResolver : public ObDMLResolver, public ObChildStmtResolver {
   class ObCteResolverCtx {
     friend class ObSelectResolver;
 
-    public:
+  public:
     ObCteResolverCtx()
         : left_select_stmt_(NULL),
           left_select_stmt_parse_node_(NULL),
@@ -151,7 +151,7 @@ class ObSelectResolver : public ObDMLResolver, public ObChildStmtResolver {
     TO_STRING_KV(K_(is_with_clause_resolver), K_(current_cte_table_name), K_(is_recursive_cte), K_(is_cte_subquery),
         K_(cte_resolve_level), K_(cte_col_names));
 
-    private:
+  private:
     ObSelectStmt* left_select_stmt_;
     const ParseNode* left_select_stmt_parse_node_;
     const ParseNode* opt_col_alias_parse_node_;
@@ -166,7 +166,7 @@ class ObSelectResolver : public ObDMLResolver, public ObChildStmtResolver {
     bool is_set_all_;
   };
 
-  public:
+public:
   explicit ObSelectResolver(ObResolverParams& params);
   virtual ~ObSelectResolver();
 
@@ -230,7 +230,7 @@ class ObSelectResolver : public ObDMLResolver, public ObChildStmtResolver {
   // function members
   TO_STRING_KV(K_(has_calc_found_rows), K_(has_top_limit), K_(in_set_query), K_(in_subquery));
 
-  protected:
+protected:
   int resolve_set_query(const ParseNode& parse_node);
   int do_resolve_set_query_in_cte(const ParseNode& parse_tree);
   int do_resolve_set_query(const ParseNode& parse_tree);
@@ -383,7 +383,7 @@ class ObSelectResolver : public ObDMLResolver, public ObChildStmtResolver {
       ObSelectResolver& identify_anchor_resolver, bool& need_swap_child, const ParseNode& parse_tree);
   int resolve_fetch_clause(const ParseNode* node);
 
-  private:
+private:
   int parameterize_fields_name(const ParseNode* project_node, const ObString& org_alias_name, ObString& paramed_name,
       common::ObIArray<int64_t>& questions_pos, common::ObIArray<int64_t>& params_idx,
       common::ObBitSet<>& neg_param_idx, bool& is_cp_str_value);
@@ -414,7 +414,7 @@ class ObSelectResolver : public ObDMLResolver, public ObChildStmtResolver {
 
   int recursive_check_grouping_columns(ObSelectStmt* stmt, ObRawExpr* expr);
 
-  protected:
+protected:
   // data members
   /*these member is only for with clause*/
   ObCteResolverCtx cte_ctx_;
@@ -435,7 +435,7 @@ class ObSelectResolver : public ObDMLResolver, public ObChildStmtResolver {
   ObStandardGroupChecker standard_group_checker_;
   const TransposeItem* transpose_item_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSelectResolver);
 };

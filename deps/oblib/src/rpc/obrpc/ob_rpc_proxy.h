@@ -54,10 +54,10 @@ struct ObRpcOpts {
 };
 
 class ObRpcProxy {
-  public:
+public:
   class PCodeGuard;
 
-  public:
+public:
   static const int64_t MAX_RPC_TIMEOUT = 9000 * 1000;
   static common::ObAddr myaddr_;
   struct NoneT {
@@ -78,18 +78,18 @@ class ObRpcProxy {
     TO_STRING_EMPTY();
   };
 
-  public:
+public:
   template <ObRpcPacketCode pcode, typename IGNORE = void>
   struct ObRpc {};
 
   // asynchronous callback
   template <class pcodeStruct>
   class AsyncCB : public rpc::frame::ObReqTransport::AsyncCB {
-    protected:
+  protected:
     using Request = typename pcodeStruct::Request;
     using Response = typename pcodeStruct::Response;
 
-    public:
+  public:
     int decode(void* pkt);
 
     virtual void do_first();
@@ -97,15 +97,15 @@ class ObRpcProxy {
     virtual void destroy()
     {}
 
-    protected:
+  protected:
     void check_request_rt(const bool force_print = false);
 
-    protected:
+  protected:
     Response result_;
     ObRpcResultCode rcode_;
   };
 
-  public:
+public:
   ObRpcProxy();
 
   int init(const rpc::frame::ObReqTransport* transport, const common::ObAddr& dst = common::ObAddr());
@@ -201,7 +201,7 @@ class ObRpcProxy {
       const common::ObAddr& local_addr, const common::ObString& ssl_invited_nodes,
       const rpc::frame::ObReqTransport::AsyncCB* cb = NULL);
 
-  protected:
+protected:
   // we can definitely judge input or output argument by their
   // constant specifier since they're only called by our wrapper
   // function where input argument is always const-qualified whereas
@@ -218,13 +218,13 @@ class ObRpcProxy {
   int rpc_post(const typename pcodeStruct::Request& args, AsyncCB<pcodeStruct>* cb, const ObRpcOpts& opts);
   int rpc_post(ObRpcPacketCode pcode, rpc::frame::ObReqTransport::AsyncCB* cb, const ObRpcOpts& opts);
 
-  private:
+private:
   int send_request(const rpc::frame::ObReqTransport::Request<ObRpcPacket>& req,
       rpc::frame::ObReqTransport::Result<ObRpcPacket>& result) const;
 
   int log_user_error_and_warn(const ObRpcResultCode& rcode) const;
 
-  protected:
+protected:
   const rpc::frame::ObReqTransport* transport_;
   common::ObAddr dst_;
   int64_t timeout_;
@@ -240,7 +240,7 @@ class ObRpcProxy {
 };
 
 class ObRpcProxy::PCodeGuard {
-  public:
+public:
   PCodeGuard(const obrpc::ObRpcPacketCode pcode)
   {
     last_pcode_ = obrpc::current_pcode();
@@ -251,7 +251,7 @@ class ObRpcProxy::PCodeGuard {
     obrpc::set_current_pcode(last_pcode_);
   }
 
-  private:
+private:
   obrpc::ObRpcPacketCode last_pcode_;
 };
 
@@ -259,14 +259,14 @@ class ObRpcProxy::PCodeGuard {
 class Handle {
   friend class ObRpcProxy;
 
-  public:
+public:
   Handle();
   const common::ObAddr& get_dst_addr() const
   {
     return dst_;
   }
 
-  protected:
+protected:
   bool has_more_;
   common::ObAddr dst_;
   int64_t sessid_;
@@ -275,7 +275,7 @@ class Handle {
   ObRpcProxy proxy_;
   ObRpcPacketCode pcode_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(Handle);
 };
 
@@ -284,13 +284,13 @@ template <class pcodeStruct>
 class SSHandle : public Handle {
   friend class ObRpcProxy;
 
-  public:
+public:
   bool has_more() const;
   int get_more(typename pcodeStruct::Response& result);
   int abort();
   const ObRpcResultCode& get_result_code() const;
 
-  protected:
+protected:
   ObRpcResultCode rcode_;
 };
 

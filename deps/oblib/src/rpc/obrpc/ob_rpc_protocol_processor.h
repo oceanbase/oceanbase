@@ -24,7 +24,7 @@ class ObTimeGuard;
 namespace obrpc {
 
 class ObRpcProtocolProcessor : public ObVirtualRpcProtocolProcessor {
-  public:
+public:
   ObRpcProtocolProcessor()
   {}
   virtual ~ObRpcProtocolProcessor()
@@ -33,7 +33,7 @@ class ObRpcProtocolProcessor : public ObVirtualRpcProtocolProcessor {
   virtual int encode(easy_request_t* req, ObRpcPacket* pkt);
   virtual int decode(easy_message_t* ms, ObRpcPacket*& pkt);
 
-  private:
+private:
   /*
    *@param [out] is_demand_data_enough:  true  if  length of received data is enough to decode a packet, or false
    *@param [out]  preceding_data_len: data len need skip when decode packet, when beginnign with a cmdPacket,

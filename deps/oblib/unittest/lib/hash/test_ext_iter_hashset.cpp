@@ -17,21 +17,21 @@
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 class ObExtIterHashSetTest : public ::testing::Test {
-  public:
+public:
   ObExtIterHashSetTest();
   virtual ~ObExtIterHashSetTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  public:
+public:
   ObArenaAllocator allocator_;
 
-  private:
+private:
   // disallow copy
   ObExtIterHashSetTest(const ObExtIterHashSetTest& other);
   ObExtIterHashSetTest& operator=(const ObExtIterHashSetTest& other);
 
-  protected:
+protected:
   // data members
 };
 

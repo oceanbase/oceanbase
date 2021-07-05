@@ -25,21 +25,21 @@ using namespace oceanbase::lib;
 using namespace oceanbase;
 
 class TestRawExprResolver : public ::testing::Test {
-  public:
+public:
   TestRawExprResolver();
   virtual ~TestRawExprResolver();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRawExprResolver);
 
-  protected:
+protected:
   // function members
   void resolve(const char* expr, const char*& json_expr);
 
-  protected:
+protected:
   // data members
 };
 

@@ -19,24 +19,24 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualTransAudit : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualTransAudit();
   virtual ~ObAllVirtualTransAudit()
   {
     reset();
   }
 
-  public:
+public:
   virtual int inner_open() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
   virtual void reset() override;
 
-  private:
+private:
   int fill_cells_(
       const transaction::ObTransAuditCommonInfo& common_info, const transaction::ObTransAuditInfo& trans_info);
   int extract_tenant_ids_();
 
-  private:
+private:
   static const int64_t OB_MAX_BUFFER_SIZE = 2048;
   static const int64_t OB_MIN_BUFFER_SIZE = 128;
   char ip_buffer_[common::OB_IP_STR_BUFF];
@@ -52,7 +52,7 @@ class ObAllVirtualTransAudit : public common::ObVirtualTableScannerIterator {
   share::ObTenantSpaceFetcher* with_tenant_ctx_;
   transaction::ObTransAuditDataIterator audit_iter_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTransAudit);
 };
 

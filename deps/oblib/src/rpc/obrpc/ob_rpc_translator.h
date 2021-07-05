@@ -33,16 +33,16 @@ namespace obrpc {
 class ObRpcStreamCond;
 
 class ObRpcTranslator : public rpc::frame::ObReqTranslator {
-  public:
+public:
   int th_init();
   int th_destroy();
 
   inline ObRpcSessionHandler& get_session_handler();
 
-  protected:
+protected:
   rpc::frame::ObReqProcessor* get_processor(rpc::ObRequest& req) = 0;
 
-  protected:
+protected:
   ObRpcSessionHandler session_handler_;
 };  // end of class ObRpcTranslator
 

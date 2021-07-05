@@ -25,7 +25,7 @@ class ObMonitoringDump : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION(1);
   class ObMonitoringDumpCtx;
 
-  public:
+public:
   explicit ObMonitoringDump(common::ObIAllocator& alloc) : ObSingleChildPhyOperator(alloc), flags_(0), dst_op_id_(-1)
   {}
   virtual ~ObMonitoringDump() = default;
@@ -39,7 +39,7 @@ class ObMonitoringDump : public ObSingleChildPhyOperator {
     dst_op_id_ = dst_op_id;
   }
 
-  private:
+private:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -66,7 +66,7 @@ class ObMonitoringDump : public ObSingleChildPhyOperator {
 
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   uint64_t flags_;
   uint64_t dst_op_id_;
   DISALLOW_COPY_AND_ASSIGN(ObMonitoringDump);

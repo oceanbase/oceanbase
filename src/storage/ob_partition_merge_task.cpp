@@ -1046,7 +1046,7 @@ int ObSSTableMergePrepareTask::process()
   } else if (ctx->param_.is_multi_version_minor_merge()) {
     if (ctx->log_ts_range_.is_empty()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("Unexcepted empty log ts range in minor merge", K(ret), K(ctx->log_ts_range_));
+      LOG_ERROR("Unexpected empty log ts range in minor merge", K(ret), K(ctx->log_ts_range_));
     } else {
       ctx->merge_log_ts_ = ctx->log_ts_range_.end_log_ts_;
     }
@@ -1819,7 +1819,7 @@ int ObTransTableMergeTask::get_merged_trans_sstable(ObTableHandle& table_handle,
       if (OB_FAIL(tables_handle_.get_first_sstable(sstable))) {
         LOG_WARN("failed to get fist sstable", K(ret), K_(pg_key), K(table_key));
       } else if (OB_FAIL(table_handle.set_table(sstable))) {
-        LOG_WARN("failde to set table", K(ret), K_(pg_key), K(table_key));
+        LOG_WARN("failed to set table", K(ret), K_(pg_key), K(table_key));
       }
     } else if (OB_FAIL(data_blocks.push_back(&writer.get_macro_block_write_ctx()))) {
       LOG_WARN("fail to push back data block", K(ret));

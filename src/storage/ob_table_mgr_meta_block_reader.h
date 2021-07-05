@@ -19,15 +19,15 @@
 namespace oceanbase {
 namespace storage {
 class ObTableMgrMetaBlockReader : public blocksstable::ObMetaBlockReader {
-  public:
+public:
   ObTableMgrMetaBlockReader();
   virtual ~ObTableMgrMetaBlockReader();
 
-  protected:
+protected:
   virtual int parse(const blocksstable::ObMacroBlockCommonHeader& common_header,
       const blocksstable::ObLinkedMacroBlockHeader& linked_header, const char* buf, const int64_t buf_len);
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   char* read_buf_;
   int64_t offset_;

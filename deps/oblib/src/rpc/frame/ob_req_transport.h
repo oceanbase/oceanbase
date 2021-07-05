@@ -34,7 +34,7 @@ namespace frame {
 using common::ObAddr;
 
 class SPAlloc {
-  public:
+public:
   explicit SPAlloc(easy_pool_t* pool) : pool_(pool)
   {}
   void* operator()(uint32_t size) const
@@ -42,18 +42,18 @@ class SPAlloc {
     return easy_pool_alloc(pool_, size);
   }
 
-  private:
+private:
   easy_pool_t* pool_;
 };
 
 class ObReqTransport {
-  public:
+public:
   // asynchronous callback class.
   //
   // Every asynchronous request will hold an object of this class that
   // been called after easy has detected the response packet.
   class AsyncCB {
-    public:
+  public:
     AsyncCB() : dst_(), timeout_(0), tenant_id_(0), req_(NULL), send_ts_(0), payload_(0)
     {}
     virtual ~AsyncCB()
@@ -112,9 +112,9 @@ class ObReqTransport {
       return payload_;
     }
 
-    private:
+  private:
     static const int64_t REQUEST_ITEM_COST_RT = 100 * 1000;  // 100ms
-    protected:
+  protected:
     ObAddr dst_;
     int64_t timeout_;
     uint64_t tenant_id_;
@@ -127,7 +127,7 @@ class ObReqTransport {
   class Request {
     friend class ObReqTransport;
 
-    public:
+  public:
     Request()
     {
       reset();
@@ -192,12 +192,12 @@ class ObReqTransport {
 
     TO_STRING_KV("pkt", *pkt_);
 
-    public:
+  public:
     easy_session_t* s_;
     T* pkt_;
     AsyncCB* cb_;
 
-    private:
+  private:
     char* buf_;
     int64_t buf_len_;
     bool async_;
@@ -207,7 +207,7 @@ class ObReqTransport {
   class Result {
     friend class ObReqTransport;
 
-    public:
+  public:
     Result() : pkt_(NULL)
     {}
 
@@ -216,11 +216,11 @@ class ObReqTransport {
       return pkt_;
     }
 
-    private:
+  private:
     T* pkt_;
   };
 
-  public:
+public:
   ObReqTransport(easy_io_t* eio, easy_io_handler_pt* handler);
   void set_sgid(int32_t sgid)
   {
@@ -246,17 +246,17 @@ class ObReqTransport {
       const ObAddr& local_addr, const common::ObString& ssl_invited_nodes, const AsyncCB* cb = NULL,
       AsyncCB** newcb = NULL) const;
 
-  private:
+private:
   int balance_assign() const;
   ObPacket* send_session(easy_session_t* s) const;
   int post_session(easy_session_t* s) const;
 
   easy_addr_t to_ez_addr(const ObAddr& addr) const;
 
-  private:
+private:
   static const int32_t OB_RPC_CONNECTION_COUNT_PER_THREAD = 1;
 
-  private:
+private:
   easy_io_t* eio_;
   easy_io_handler_pt* handler_;
   int32_t sgid_;

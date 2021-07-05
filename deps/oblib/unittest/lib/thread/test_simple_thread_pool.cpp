@@ -25,7 +25,7 @@ TEST(DISABLED_TestSimpleThreadPool, Basic)
       ATOMIC_INC(&handle_cnt_);
     }
 
-    public:
+  public:
     int handle_cnt_ = 0;
   } pool;
   EXPECT_NE(OB_SUCCESS, pool.init(0, 10));

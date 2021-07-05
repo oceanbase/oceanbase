@@ -1248,7 +1248,7 @@ struct ObModItem {
 class ObLocalModSet {
   enum { MOD_COUNT_LIMIT = ObNewModIds::OB_MOD_END };
 
-  public:
+public:
   ObLocalModSet()
   {
     reset();
@@ -1286,7 +1286,7 @@ class ObLocalModSet {
     mods_[(mod_id >= 0 && mod_id < MOD_COUNT_LIMIT) ? mod_id : 0].update(hold, used);
   }
 
-  private:
+private:
   ObModItem mods_[MOD_COUNT_LIMIT];
 };
 
@@ -1299,7 +1299,7 @@ struct ObCtxIds {
 };
 
 class ObCtxInfo {
-  public:
+public:
   enum { CTX_COUNT_LIMIT = ObCtxIds::MAX_CTX_ID };
 
   ObCtxInfo() : ctx_names_()
@@ -1314,7 +1314,7 @@ class ObCtxInfo {
     return ctx_id < ObCtxIds::MAX_CTX_ID ? ctx_names_[ctx_id] : name;
   }
 
-  private:
+private:
   void set_ctx_name(uint64_t ctx_id, const char* ctx_name)
   {
     if (ctx_id < ObCtxIds::MAX_CTX_ID) {
@@ -1322,7 +1322,7 @@ class ObCtxInfo {
     }
   }
 
-  private:
+private:
   const char* ctx_names_[CTX_COUNT_LIMIT];
 };
 
@@ -1332,7 +1332,7 @@ inline bool is_valid_mod_id(int64_t mod_id)
 }
 
 class ObModSet {
-  public:
+public:
   enum { MOD_COUNT_LIMIT = ObNewModIds::OB_MOD_END };
   // You can pass the string uniformly where mod_id is used
   // No need to modify the ob_mod_define.h file
@@ -1361,7 +1361,7 @@ class ObModSet {
     return t;
   }
 
-  private:
+private:
   void set_mod_name(int64_t mod_id, const char* name)
   {
     if (mod_id >= 0 && mod_id < ObModSet::MOD_COUNT_LIMIT) {
@@ -1369,7 +1369,7 @@ class ObModSet {
     }
   }
 
-  private:
+private:
   const char* mod_names_[MOD_COUNT_LIMIT];
 };
 

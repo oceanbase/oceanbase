@@ -29,7 +29,7 @@ class ObObj;
 namespace observer {
 
 class ObInfoSchemaKvCacheTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObInfoSchemaKvCacheTable();
   virtual ~ObInfoSchemaKvCacheTable();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -40,7 +40,7 @@ class ObInfoSchemaKvCacheTable : public common::ObVirtualTableScannerIterator {
   }
   virtual int set_ip(common::ObAddr* addr);
 
-  private:
+private:
   enum CACHE_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,

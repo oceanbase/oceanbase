@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace transaction {
 class ObTransMemoryStat {
-  public:
+public:
   ObTransMemoryStat()
   {
     reset();
@@ -47,10 +47,10 @@ class ObTransMemoryStat {
 
   TO_STRING_KV(K_(addr), "type", type_, K_(alloc_count), K_(release_count));
 
-  public:
+public:
   static const int64_t OB_TRANS_MEMORY_MOD_TYPE_SIZE = 64;
 
-  private:
+private:
   common::ObAddr addr_;
   char type_[OB_TRANS_MEMORY_MOD_TYPE_SIZE];
   int64_t alloc_count_;

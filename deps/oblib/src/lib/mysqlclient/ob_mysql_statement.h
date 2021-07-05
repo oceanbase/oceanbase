@@ -21,7 +21,7 @@ namespace sqlclient {
 class ObMySQLConnection;
 
 class ObMySQLStatement {
-  public:
+public:
   ObMySQLStatement();
   ~ObMySQLStatement();
   ObMySQLConnection* get_connection();
@@ -54,7 +54,7 @@ class ObMySQLStatement {
    */
   ObMySQLResult* execute_query();
 
-  private:
+private:
   ObMySQLConnection* conn_;
   ObMySQLResultImpl result_;
   MYSQL* stmt_;

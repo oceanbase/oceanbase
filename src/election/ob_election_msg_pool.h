@@ -27,7 +27,7 @@ namespace oceanbase {
 namespace election {
 class ObIElection;
 class ObElectionVoteMsgPool {
-  public:
+public:
   ObElectionVoteMsgPool()
       : election_(nullptr),
         deprepare_recorder_(election_, partition_),
@@ -60,11 +60,11 @@ class ObElectionVoteMsgPool {
   int get_centralized_candidate(common::ObAddr& cur_leader, common::ObAddr& new_leader,  // get the leader vote for
       const int64_t t1);
 
-  private:
+private:
   class MsgRecorder {
     static const int64_t OB_MAX_ELECTION_MSG_COUNT = common::OB_MAX_MEMBER_NUMBER / 2 + 1;
 
-    public:
+  public:
     MsgRecorder(ObIElection*& election, const common::ObPartitionKey& partition)
         : cur_idx_(0), record_T1_timestamp_(common::OB_INVALID_TIMESTAMP), election_(election), partition_(partition)
     {}
@@ -77,7 +77,7 @@ class ObElectionVoteMsgPool {
     int size() const;
     const common::ObAddr& get_new_leader() const;
 
-    private:
+  private:
     common::ObAddr record_member_[OB_MAX_ELECTION_MSG_COUNT];
     common::ObAddr new_leader_;
     int cur_idx_;

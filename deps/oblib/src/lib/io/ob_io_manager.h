@@ -38,7 +38,7 @@ struct ObIOPointRetCode {
  *
  */
 class ObIOHandle {
-  public:
+public:
   ObIOHandle();
   virtual ~ObIOHandle();
   ObIOHandle(const ObIOHandle& other);
@@ -64,13 +64,13 @@ class ObIOHandle {
   }
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   static const int64_t LONG_IO_PRINT_TRIGGER_US = 3000 * 1000;
   ObIOMaster* master_;
 };
 
 class ObIOCallbackRunner {
-  public:
+public:
   ObIOCallbackRunner();
   virtual ~ObIOCallbackRunner();
   int init(const int32_t queue_depth);
@@ -80,7 +80,7 @@ class ObIOCallbackRunner {
   int dequeue_callback(int64_t queue_idx, ObIOMaster*& master);
   void do_callback(const int64_t queue_idx);
 
-  private:
+private:
   static const int64_t CALLBACK_WAIT_PERIOD_US = 1000 * 1000;
   bool inited_;
   int64_t callback_thread_cnt_;
@@ -90,7 +90,7 @@ class ObIOCallbackRunner {
 };
 
 class ObIOManager : public lib::TGRunnable {
-  public:
+public:
   static const int64_t DEFAULT_IO_MANAGER_MEMORY_LIMIT = 10L * 1024L * 1024L * 1024L;
   static const int64_t MAX_MEMORY_PERCENT_PER_DISK = 50;
   static const int64_t MAX_CALLBACK_THREAD_CNT = 64;
@@ -186,14 +186,14 @@ class ObIOManager : public lib::TGRunnable {
     return callback_mgr_;
   }
 
-  private:
+private:
   ObIOManager();
   virtual ~ObIOManager();
   int inner_aio(
       const ObIOMode mode, const ObIOInfo& info, ObIOCallback* callback, ObIOMaster* master, ObIOHandle& handle);
   int check_disk_error();
 
-  private:
+private:
   bool inited_;
   bool is_working_;
   bool is_disk_error_;

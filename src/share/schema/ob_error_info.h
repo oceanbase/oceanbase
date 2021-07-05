@@ -46,7 +46,7 @@ class ObSchemaService;
 class ObErrorInfo : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObErrorInfo();
   ObErrorInfo(const ObErrorInfo& src_schema);
   explicit ObErrorInfo(common::ObIAllocator* allocator);
@@ -119,12 +119,12 @@ class ObErrorInfo : public ObSchema {
 
   TO_STRING_KV(K_(tenant_id), K_(obj_id), K_(obj_type), K_(obj_seq), K_(line), K_(position), K_(text_length), K_(text),
       K_(property), K_(error_number), K_(database_id), K_(schema_version), K_(error_status))
-  private:
+private:
   int gen_error_dml(const uint64_t exec_tenant_id, oceanbase::share::ObDMLSqlSplicer& dml);
   uint64_t extract_tenant_id() const;
   uint64_t extract_obj_id() const;
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t obj_id_;  // errorinfo from which object. such as package etc.
   uint64_t obj_type_;

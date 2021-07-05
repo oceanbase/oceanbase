@@ -18,7 +18,7 @@ namespace oceanbase {
 using namespace clog;
 namespace unittest {
 class TestObIndexEntry : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown()
   {}
@@ -28,7 +28,7 @@ class TestObIndexEntry : public ::testing::Test {
     return index_;
   }
 
-  private:
+private:
   ObIndexEntry index_;
 
   ObPartitionKey partition_key_;

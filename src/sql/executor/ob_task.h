@@ -36,7 +36,7 @@ class ObOpSpec;
 class ObTask {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTask();
   virtual ~ObTask();
   void set_ob_task_id(const ObTaskID& ob_task_id)
@@ -139,12 +139,12 @@ class ObTask {
       N_OB_TASK_ID, ob_task_id_, K_(runner_svr), K_(ctrl_svr), K_(partition_keys), K_(ranges), K_(location_idx));
   DECLARE_TO_YSON_KV;
 
-  protected:
+protected:
   int serialize_tree(char* buf, int64_t buf_len, int64_t& pos, const ObPhyOperator& root) const;
   int deserialize_tree(const char* buf, int64_t data_len, int64_t& pos, ObPhysicalPlan& phy_plan, ObPhyOperator*& root);
   int64_t get_tree_serialize_size(const ObPhyOperator& root) const;
 
-  protected:
+protected:
   ObExecContext* exec_ctx_;
   const ObPhysicalPlan* ser_phy_plan_;
   ObPhysicalPlan* des_phy_plan_;
@@ -190,7 +190,7 @@ inline void ObTask::set_deserialize_param(ObExecContext& exec_ctx, ObPhysicalPla
 class ObMiniTask : public ObTask {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMiniTask() : ObTask(), extend_root_(NULL), extend_root_spec_(NULL)
   {}
   ~ObMiniTask()
@@ -217,7 +217,7 @@ class ObMiniTask : public ObTask {
   TO_STRING_KV(K_(ob_task_id), K_(runner_svr), K_(ctrl_svr), K_(partition_keys), K_(ranges), K_(location_idx),
       KPC_(extend_root), KP_(extend_root_spec));
 
-  private:
+private:
   // For mini tasks, it is allowed to execute an extended plan when the main plan is executed,
   // this is mainly used to obtain the primary key of the conflict row of the unique index when
   // the conflict is checked. you can also bring back other column information of the conflicting
@@ -229,12 +229,12 @@ class ObMiniTask : public ObTask {
 class ObPingSqlTask {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPingSqlTask();
   virtual ~ObPingSqlTask();
   TO_STRING_KV(K(trans_id_), K(sql_no_), K(task_id_), K(exec_svr_), K(part_keys_), K(cur_status_));
 
-  public:
+public:
   transaction::ObTransID trans_id_;
   uint64_t sql_no_;
   ObTaskID task_id_;
@@ -246,12 +246,12 @@ class ObPingSqlTask {
 class ObPingSqlTaskResult {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPingSqlTaskResult();
   virtual ~ObPingSqlTaskResult();
   TO_STRING_KV(K(err_code_), K(ret_status_));
 
-  public:
+public:
   int err_code_;
   int64_t ret_status_;
 };
@@ -260,7 +260,7 @@ class ObDesExecContext;
 class ObRemoteTask : public obrpc::ObIFill {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRemoteTask()
       : tenant_schema_version_(-1),
         sys_schema_version_(-1),
@@ -346,7 +346,7 @@ class ObRemoteTask : public obrpc::ObIFill {
       KPC_(remote_sql_info));
   DECLARE_TO_YSON_KV;
 
-  private:
+private:
   int64_t tenant_schema_version_;
   int64_t sys_schema_version_;
   common::ObAddr runner_svr_;

@@ -37,14 +37,14 @@ namespace test {
 const char* SQL_DIR = "sql";
 const char* RESULT_DIR = "result";
 class TestResolver : public TestSqlUtils, public ::testing::Test {
-  public:
+public:
   TestResolver();
   virtual ~TestResolver()
   {}
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   void do_equal_test();
   void do_stmt_copy_test();
   void do_padding_test();
@@ -56,7 +56,7 @@ class TestResolver : public TestSqlUtils, public ::testing::Test {
   bool is_show_sql(const ParseNode& node) const;
   static void get_index_name(std::string& str, const ObTableSchema& idx_schema);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestResolver);
 };

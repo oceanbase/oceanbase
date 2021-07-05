@@ -318,7 +318,7 @@ int ObMicroBlockIndexMgr::cal_border_row_count(const ObStoreRange& range, const 
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObMicroBlockIndexMgr is not inited", K(ret));
   } else if (OB_UNLIKELY(NULL == delta_array_ || NULL == mark_deletion_array_)) {
-    // this block index does not have row count delta or mark deletion arary
+    // this block index does not have row count delta or mark deletion array
   } else if (OB_UNLIKELY(!range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "range is not valid", K(ret), K(range));

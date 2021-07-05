@@ -22,12 +22,12 @@ namespace oceanbase {
 using namespace common;
 namespace transaction {
 class ObTenantWeakReadStat {
-  public:
+public:
   ObTenantWeakReadStat();
   virtual ~ObTenantWeakReadStat();
   void destroy();
 
-  public:
+public:
   uint64_t tenant_id_;
   // server level weak read info stat
   int64_t server_version_;          // server level weak read version

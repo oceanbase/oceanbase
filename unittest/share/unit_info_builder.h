@@ -25,7 +25,7 @@ const ObZone ZONE = "test_zone";
 const ObZone ZONE11 = "zone1";
 static int64_t TEST_UNIT_MEMORY = OB_UNIT_MIN_MEMORY * 3;
 class UnitInfoBuilder {
-  public:
+public:
   UnitInfoBuilder(common::ObMySQLProxy& proxy) : proxy_(proxy)
   {
     int ret = OB_SUCCESS;
@@ -72,7 +72,7 @@ class UnitInfoBuilder {
     return pools_;
   }
 
-  private:
+private:
   common::ObMySQLProxy& proxy_;
   ObUnitTableOperator ut_operator_;
   common::ObArray<ObUnitConfig> configs_;

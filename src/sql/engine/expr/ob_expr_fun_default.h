@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprFunDefault : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFunDefault(common::ObIAllocator& alloc);
   virtual ~ObExprFunDefault();
   virtual int calc_result_typeN(
@@ -28,7 +28,7 @@ class ObExprFunDefault : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_default_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprFunDefault);
 };
 

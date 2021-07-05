@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDropUserStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObDropUserStmt(common::ObIAllocator* name_pool);
   ObDropUserStmt();
   virtual ~ObDropUserStmt();
@@ -46,12 +46,12 @@ class ObDropUserStmt : public ObDDLStmt {
   }
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   // data members
   common::ObStrings users_;  // user1,host1; usr2,host2;...
   uint64_t tenant_id_;
   obrpc::ObDropUserArg drop_user_arg_;  // for returning exec_tenant_id_
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDropUserStmt);
 };
 }  // end namespace sql

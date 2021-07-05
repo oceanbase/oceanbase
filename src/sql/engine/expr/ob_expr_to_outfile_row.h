@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprToOutfileRow : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprToOutfileRow(common::ObIAllocator& alloc);
   virtual ~ObExprToOutfileRow();
   virtual int calc_result_typeN(
@@ -31,7 +31,7 @@ class ObExprToOutfileRow : public ObStringExprOperator {
   static int copy_string_to_buf(char* buf, const int64_t buf_len, int64_t& pos, const common::ObString& str);
   static int copy_char_to_buf(char* buf, const int64_t buf_len, int64_t& pos, const char c);
 
-  private:
+private:
   enum ParameterEnum { PARAM_FIELD = 0, PARAM_LINE, PARAM_ENCLOSED, PARAM_OPTIONAL, PARAM_SELECT_ITEM };
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprToOutfileRow) const;

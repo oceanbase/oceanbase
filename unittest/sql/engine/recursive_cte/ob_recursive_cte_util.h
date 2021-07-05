@@ -43,7 +43,7 @@
   }
 
 class TestRecursiveCTEFactory {
-  public:
+public:
   TestRecursiveCTEFactory()
   {}
   ~TestRecursiveCTEFactory()
@@ -355,7 +355,7 @@ class TestRecursiveCTEFactory {
     return physical_plan_;
   }
 
-  private:
+private:
   static ObPhysicalPlan physical_plan_;
   static ObFakeTable fake_table1_planA_;
   static ObFakeTable fake_table2_PlanB_;

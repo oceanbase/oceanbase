@@ -24,7 +24,7 @@ ObMemAttr attr;
 
 class TestObjectSet : public ::testing::Test {
   class ObjecSetLocker : public ISetLocker {
-    public:
+  public:
     ObjecSetLocker()
     {}
     void lock() override
@@ -37,7 +37,7 @@ class TestObjectSet : public ::testing::Test {
     }
   };
 
-  public:
+public:
   TestObjectSet() : tallocator_(500), os_locker_(), bs_(), os_()
   {}
 
@@ -96,7 +96,7 @@ class TestObjectSet : public ::testing::Test {
     UNUSED(ptr);
   }
 
-  protected:
+protected:
   ObTenantCtxAllocator tallocator_;
   ObjecSetLocker os_locker_;
   BlockSet bs_;

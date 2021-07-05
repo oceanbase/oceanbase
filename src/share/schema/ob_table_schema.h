@@ -112,7 +112,7 @@ enum ObTablePKMode {
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   static const int32_t TM_MODE_FLAG_BITS = 8;
   static const int32_t TM_PK_MODE_OFFSET = 8;
   static const int32_t TM_PK_MODE_BITS = 4;
@@ -121,7 +121,7 @@ struct ObTableMode {
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
 
-  public:
+public:
   ObTableMode()
   {
     reset();
@@ -202,7 +202,7 @@ struct ObBackUpTableModeOp {
 };
 
 class ObSimpleTableSchemaV2 : public ObPartitionSchema {
-  public:
+public:
   ObSimpleTableSchemaV2();
   explicit ObSimpleTableSchemaV2(common::ObIAllocator* allocator);
   ObSimpleTableSchemaV2(const ObSimpleTableSchemaV2& src_schema) = delete;
@@ -210,11 +210,11 @@ class ObSimpleTableSchemaV2 : public ObPartitionSchema {
   ObSimpleTableSchemaV2& operator=(const ObSimpleTableSchemaV2& other) = delete;
   int assign(const ObSimpleTableSchemaV2& src_schema);
   bool operator==(const ObSimpleTableSchemaV2& other) const;
-  void reset();
+  void reset() override;
   void reset_partition_schema();
-  bool is_valid() const;
+  bool is_valid() const override;
   bool is_link_valid() const;
-  int64_t get_convert_size() const;
+  int64_t get_convert_size() const override;
   inline void set_tenant_id(const uint64_t tenant_id) override
   {
     tenant_id_ = tenant_id;
@@ -369,7 +369,7 @@ class ObSimpleTableSchemaV2 : public ObPartitionSchema {
     return deep_copy_str(primary_zone, primary_zone_);
   }
   int set_primary_zone_array(const common::ObIArray<ObZoneScore>& primary_zone_array);
-  inline virtual void set_min_partition_id(uint64_t partition_id)
+  inline virtual void set_min_partition_id(uint64_t partition_id) override
   {
     min_partition_id_ = partition_id;
   }
@@ -377,7 +377,7 @@ class ObSimpleTableSchemaV2 : public ObPartitionSchema {
   {
     session_id_ = id;
   }
-  inline virtual uint64_t get_min_partition_id() const
+  inline virtual uint64_t get_min_partition_id() const override
   {
     return min_partition_id_;
   }
@@ -721,7 +721,7 @@ class ObSimpleTableSchemaV2 : public ObPartitionSchema {
   }
   DECLARE_VIRTUAL_TO_STRING;
 
-  public:
+public:
   // pkey->pgkey
   // Note that the following two methods rely on sorted_part_id_partition_array_ and
   // sorted_part_id_def_subpartition_array_ arrays, These two arrays are generated when the schema is refreshed, so the
@@ -731,7 +731,7 @@ class ObSimpleTableSchemaV2 : public ObPartitionSchema {
   int get_pg_key(const common::ObPartitionKey& pkey, common::ObPGKey& pg_key) const;
   int get_pg_key(const uint64_t table_id, const int64_t partition_id, common::ObPGKey& pg_key) const;
 
-  public:
+public:
   bool is_mock_global_index_invalid() const
   {
     return is_mock_global_index_invalid_;
@@ -741,11 +741,11 @@ class ObSimpleTableSchemaV2 : public ObPartitionSchema {
     is_mock_global_index_invalid_ = is_invalid;
   }
 
-  private:
+private:
   static bool compare_part_id(const ObPartition* part, const int64_t part_id);
   static bool compare_sub_part_id(const ObSubPartition* part, const int64_t sub_part_id);
 
-  protected:
+protected:
   uint64_t tenant_id_;
   uint64_t table_id_;
   int64_t schema_version_;
@@ -804,7 +804,7 @@ class ObSimpleTableSchemaV2 : public ObPartitionSchema {
 class ObTableSchema : public ObSimpleTableSchemaV2 {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   friend class AlterTableSchema;
   friend class ObPrintableTableSchema;
   enum ObIndexAttributesFlag {
@@ -828,7 +828,7 @@ class ObTableSchema : public ObSimpleTableSchemaV2 {
   static int create_new_idx_name_after_flashback(ObTableSchema& new_table_schema, common::ObString& new_idx_name,
       common::ObIAllocator& allocator, ObSchemaGetterGuard& guard);
 
-  public:
+public:
   typedef ObColumnSchemaV2* const* const_column_iterator;
   typedef ObConstraint* const* const_constraint_iterator;
   typedef ObConstraint** constraint_iterator;
@@ -1575,7 +1575,7 @@ class ObTableSchema : public ObSimpleTableSchemaV2 {
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  protected:
+protected:
   int add_col_to_id_hash_array(ObColumnSchemaV2* column);
   int remove_col_from_id_hash_array(const ObColumnSchemaV2* column);
   int add_col_to_name_hash_array(ObColumnSchemaV2* column);
@@ -1586,12 +1586,12 @@ class ObTableSchema : public ObSimpleTableSchemaV2 {
   int delete_column_update_prev_id(ObColumnSchemaV2* column);
   int64_t column_cnt_;
 
-  protected:
+protected:
   // constraint related
   int add_cst_to_cst_array(ObConstraint* cst);
   int remove_cst_from_cst_array(const ObConstraint* cst);
 
-  private:
+private:
   int get_default_row(
       get_default_value func, const common::ObIArray<ObColDesc>& column_ids, common::ObNewRow& default_row) const;
   inline int64_t get_id_hash_array_mem_size(const int64_t column_cnt) const;
@@ -1605,10 +1605,10 @@ class ObTableSchema : public ObSimpleTableSchemaV2 {
   ObConstraint* get_constraint_internal(std::function<bool(const ObConstraint* val)> func);
   const ObConstraint* get_constraint_internal(std::function<bool(const ObConstraint* val)> func) const;
 
-  protected:
+protected:
   int add_mv_tid(const uint64_t mv_tid);
 
-  protected:
+protected:
   uint64_t max_used_column_id_;
   uint64_t max_used_constraint_id_;
   // Only temporary table settings, according to the last active time of the session
@@ -1707,10 +1707,10 @@ class ObTableSchema : public ObSimpleTableSchemaV2 {
 };
 
 class ObPrintableTableSchema final : public ObTableSchema {
-  public:
+public:
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   ObPrintableTableSchema() = delete;
 };
 
@@ -2009,7 +2009,7 @@ int ObTableSchema::add_column(const ColumnType& column)
 }
 
 class ObColumnIterByPrevNextID {
-  public:
+public:
   explicit ObColumnIterByPrevNextID(const ObTableSchema& table_schema)
       : is_end_(false), table_schema_(table_schema), last_column_schema_(NULL), last_iter_(NULL)
   {}
@@ -2018,7 +2018,7 @@ class ObColumnIterByPrevNextID {
   int next(const ObColumnSchemaV2*& column_schema);
   const ObColumnSchemaV2* get_first_column() const;
 
-  private:
+private:
   bool is_end_;
   const ObTableSchema& table_schema_;
   const ObColumnSchemaV2* last_column_schema_;

@@ -19,13 +19,13 @@ namespace oceanbase {
 namespace sql {
 
 class ObUserProfileResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObUserProfileResolver(ObResolverParams& params);
   virtual ~ObUserProfileResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int fill_arg(int64_t type, ObObj& value, obrpc::ObProfileDDLArg& arg);
   int resolver_password_verify_function(const ParseNode* node, obrpc::ObProfileDDLArg& arg);
   // disallow copy

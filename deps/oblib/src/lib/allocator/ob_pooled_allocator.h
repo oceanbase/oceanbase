@@ -20,7 +20,7 @@ namespace common {
 // @note thread-safe depends on LockT
 template <typename T, typename BlockAllocatorT = ObMalloc, typename LockT = ObNullLock>
 class ObPooledAllocator {
-  public:
+public:
   ObPooledAllocator(int64_t block_size = common::OB_MALLOC_NORMAL_BLOCK_SIZE,
       const BlockAllocatorT& alloc = BlockAllocatorT(ObModIds::OB_POOL));
   virtual ~ObPooledAllocator();
@@ -35,11 +35,11 @@ class ObPooledAllocator {
   void inc_ref(){};
   void dec_ref(){};
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObPooledAllocator);
 
-  private:
+private:
   // data members
   ObPool<BlockAllocatorT, LockT> the_pool_;
 };

@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace rootserver {
 class FakeServerMgr : public ObServerManager {
-  public:
+public:
   FakeServerMgr() : server_id_(0)
   {}
   ~FakeServerMgr()
@@ -37,7 +37,7 @@ class FakeServerMgr : public ObServerManager {
     return server_statuses.assign(server_statuses_);
   }
 
-  private:
+private:
   int64_t server_id_;
   ObZoneManager* zone_mgr_;
 };
@@ -91,7 +91,7 @@ int FakeServerMgr::add_server(const common::ObAddr& server, const ObZone& zone)
 }
 
 class FakeServerManager : public ObServerManager {
-  public:
+public:
   void set_is_inited(bool is_inited)
   {
     UNUSED(is_inited);
@@ -370,7 +370,7 @@ class FakeServerManager : public ObServerManager {
     inited_ = inited;
   }
 
-  public:
+public:
   common::ObArray<share::ObServerStatus> all_;
 };
 

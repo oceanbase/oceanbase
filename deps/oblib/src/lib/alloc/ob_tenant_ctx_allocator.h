@@ -45,7 +45,7 @@ class ObTenantCtxAllocator : public common::ObIAllocator, private common::ObLink
   };
   using InvokeFunc = std::function<int(const ObTenantMemoryMgr*)>;
 
-  public:
+public:
   explicit ObTenantCtxAllocator(uint64_t tenant_id, uint64_t ctx_id = 0)
       : resource_handle_(),
         tenant_id_(tenant_id),
@@ -268,7 +268,7 @@ class ObTenantCtxAllocator : public common::ObIAllocator, private common::ObLink
     return &w_mod_set_;
   }
 
-  private:
+private:
   void print_usage() const;
   AChunk* pop_chunk();
   void push_chunk(AChunk* chunk);
@@ -284,7 +284,7 @@ class ObTenantCtxAllocator : public common::ObIAllocator, private common::ObLink
     return ret;
   }
 
-  private:
+private:
   ObTenantResourceMgrHandle resource_handle_;
   uint64_t tenant_id_;
   uint64_t ctx_id_;

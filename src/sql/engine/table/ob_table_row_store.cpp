@@ -106,7 +106,7 @@ OB_DEF_DESERIALIZE(ObTableRowStoreInput)
 OB_SERIALIZE_MEMBER((ObTableRowStore, ObNoChildrenPhyOperator));
 
 class ObTableRowStore::ObTableRowStoreCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObTableRowStoreCtx(ObExecContext& ctx)
       : ObPhyOperatorCtx(ctx), row_store_it_(), row_store_idx_(OB_INVALID_INDEX)
   {}
@@ -115,7 +115,7 @@ class ObTableRowStore::ObTableRowStoreCtx : public ObPhyOperatorCtx {
     ObPhyOperatorCtx::destroy_base();
   }
 
-  private:
+private:
   ObRowStore::Iterator row_store_it_;
   int64_t row_store_idx_;
   friend class ObTableRowStore;

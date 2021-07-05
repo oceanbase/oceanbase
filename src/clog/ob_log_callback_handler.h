@@ -28,20 +28,20 @@ namespace clog {
 class ObIMembershipCallback;
 class ObIRoleChangeCb;
 class ObLogCallbackHandler {
-  public:
+public:
   ObLogCallbackHandler() : is_inited_(false), partition_service_(NULL), callback_engine_(NULL)
   {}
   ~ObLogCallbackHandler()
   {}
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service, ObILogCallbackEngine* callback_engine);
 
-  public:
+public:
   void handle(void* task);
   void handle_pop_task_(const common::ObPartitionKey& partition_key);
 
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* partition_service_;
   ObILogCallbackEngine* callback_engine_;

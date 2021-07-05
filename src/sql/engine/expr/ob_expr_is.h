@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace sql {
 class ObConstRawExpr;
 class ObExprIsBase : public ObRelationalExprOperator {
-  public:
+public:
   //  ObExprIsBase();
   explicit ObExprIsBase(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name);
   virtual ~ObExprIsBase(){};
@@ -43,17 +43,17 @@ class ObExprIsBase : public ObRelationalExprOperator {
   template <typename T>
   static int is_zero(T number);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIsBase);
   // function members
-  private:
+private:
   // data members
 };
 
 class ObExprIs : public ObExprIsBase {
-  public:
+public:
   //  ObExprIs() {}
   explicit ObExprIs(common::ObIAllocator& alloc) : ObExprIsBase(alloc, T_OP_IS, N_IS){};
   virtual ~ObExprIs(){};
@@ -74,17 +74,17 @@ class ObExprIs : public ObExprIsBase {
   static int number_is_true(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int number_is_false(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIs);
   // function members
-  private:
+private:
   // data members
 };
 
 class ObExprIsNot : public ObExprIsBase {
-  public:
+public:
   explicit ObExprIsNot(common::ObIAllocator& alloc) : ObExprIsBase(alloc, T_OP_IS_NOT, N_IS_NOT){};
   virtual ~ObExprIsNot(){};
 
@@ -103,12 +103,12 @@ class ObExprIsNot : public ObExprIsBase {
   static int number_is_not_true(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int number_is_not_false(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIsNot);
   // function members
-  private:
+private:
   // data members
 };
 

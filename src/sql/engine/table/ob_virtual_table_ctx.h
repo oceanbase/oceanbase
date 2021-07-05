@@ -28,7 +28,7 @@ namespace sql {
 class ObIVirtualTableIteratorFactory;
 class ObSQLSessionInfo;
 class ObVirtualTableCtx {
-  public:
+public:
   ObVirtualTableCtx() : vt_iter_factory_(NULL), schema_guard_(NULL), partition_table_operator_(NULL), session_(NULL)
   {}
   ~ObVirtualTableCtx()

@@ -255,7 +255,7 @@ enum ObAlterColumnMode {
 };
 
 struct ObRefreshSchemaStatus {
-  public:
+public:
   ObRefreshSchemaStatus()
       : tenant_id_(common::OB_INVALID_TENANT_ID),
         snapshot_timestamp_(common::OB_INVALID_TIMESTAMP),
@@ -294,7 +294,7 @@ struct ObRefreshSchemaStatus {
 
   TO_STRING_KV(K_(tenant_id), K_(snapshot_timestamp), K_(readable_schema_version), K_(created_schema_version));
 
-  public:
+public:
   // tenant_id_ is OB_INVALID_TENANT_ID which means non-split mode, effectively means split mode
   uint64_t tenant_id_;
   // snapshot_timestamp_ > 0 Indicates that a weakly consistent read is required, and is used in standalone cluster mode
@@ -306,7 +306,7 @@ struct ObRefreshSchemaStatus {
 struct ObRefreshSchemaInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRefreshSchemaInfo()
       : schema_version_(common::OB_INVALID_VERSION),
         tenant_id_(common::OB_INVALID_TENANT_ID),
@@ -353,7 +353,7 @@ struct ObRefreshSchemaInfo {
   }
   TO_STRING_KV(K_(schema_version), K_(tenant_id), K_(sequence_id), K_(split_schema_version));
 
-  private:
+private:
   int64_t schema_version_;
   uint64_t tenant_id_;
   uint64_t sequence_id_;
@@ -361,7 +361,7 @@ struct ObRefreshSchemaInfo {
 };
 
 class ObDropTenantInfo {
-  public:
+public:
   ObDropTenantInfo() : tenant_id_(common::OB_INVALID_TENANT_ID), schema_version_(common::OB_INVALID_VERSION)
   {}
   virtual ~ObDropTenantInfo(){};
@@ -385,7 +385,7 @@ class ObDropTenantInfo {
   }
   TO_STRING_KV(K_(tenant_id), K_(schema_version));
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t schema_version_;
 };
@@ -611,35 +611,35 @@ struct ObSchemaStatisticsInfo {
 
 class ObPartition;
 class PartIdPartitionArrayCmp {
-  public:
+public:
   PartIdPartitionArrayCmp() : ret_(common::OB_SUCCESS)
   {}
   bool operator()(const share::schema::ObPartition* left, const share::schema::ObPartition* right);
 
-  public:
+public:
   int get_ret() const
   {
     return ret_;
   }
 
-  private:
+private:
   int ret_;
 };
 
 class ObSubPartition;
 class SubPartIdPartitionArrayCmp {
-  public:
+public:
   SubPartIdPartitionArrayCmp() : ret_(common::OB_SUCCESS)
   {}
   bool operator()(const share::schema::ObSubPartition* left, const share::schema::ObSubPartition* right);
 
-  public:
+public:
   int get_ret() const
   {
     return ret_;
   }
 
-  private:
+private:
   int ret_;
 };
 
@@ -1021,7 +1021,7 @@ typedef common::ObIArray<share::ObZoneReplicaAttrSet> ZoneLocalityIArray;
 typedef common::ObArrayHelper<share::SchemaZoneReplicaAttrSet> ZoneLocalityArray;
 
 class ObCompareNameWithTenantID {
-  public:
+public:
   ObCompareNameWithTenantID()
       : tenant_id_(common::OB_INVALID_ID),
         name_case_mode_(common::OB_NAME_CASE_INVALID),
@@ -1040,14 +1040,14 @@ class ObCompareNameWithTenantID {
   {}
   int compare(const common::ObString& str1, const common::ObString& str2);
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObNameCaseMode name_case_mode_;
   uint64_t database_id_;
 };
 
 class ObSchema {
-  public:
+public:
   friend class ObLocality;
   friend class ObPrimaryZone;
   ObSchema();
@@ -1093,7 +1093,7 @@ class ObSchema {
     return error_ret_;
   }
 
-  protected:
+protected:
   static const int64_t STRING_ARRAY_EXTEND_CNT = 7;
   void* alloc(const int64_t size);
   void free(void* ptr);
@@ -1156,7 +1156,7 @@ int ObSchema::set_charset_and_collation_options(
 class ObLocality {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObLocality(ObSchema* schema) : schema_(schema)
   {}
   int assign(const ObLocality& other);
@@ -1174,7 +1174,7 @@ class ObLocality {
   void reset();
   TO_STRING_KV(K_(locality_str), K_(zone_replica_attr_array));
 
-  public:
+public:
   common::ObString locality_str_;
   ZoneLocalityArray zone_replica_attr_array_;
   ObSchema* schema_;
@@ -1183,7 +1183,7 @@ class ObLocality {
 class ObPrimaryZone {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObPrimaryZone(ObSchema* schema) : schema_(schema)
   {}
   int assign(const ObPrimaryZone& other);
@@ -1201,7 +1201,7 @@ class ObPrimaryZone {
   void reset();
   TO_STRING_KV(K_(primary_zone_str), K_(primary_zone_array));
 
-  public:
+public:
   common::ObString primary_zone_str_;
   common::ObSEArray<ObZoneScore, common::MAX_ZONE_NUM, common::ObNullAllocator> primary_zone_array_;
   ObSchema* schema_;
@@ -1210,7 +1210,7 @@ class ObPrimaryZone {
 class ObSysVarSchema : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSysVarSchema() : ObSchema()
   {
     reset();
@@ -1346,7 +1346,7 @@ class ObSysVarSchema : public ObSchema {
   TO_STRING_KV(K_(tenant_id), K_(name), K_(data_type), K_(value), K_(min_val), K_(max_val), K_(info), K_(zone),
       K_(schema_version), K_(flags));
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObString name_;
   common::ObObjType data_type_;
@@ -1362,7 +1362,7 @@ class ObSysVarSchema : public ObSchema {
 class ObSysVariableSchema : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // base methods
   ObSysVariableSchema();
   explicit ObSysVariableSchema(common::ObIAllocator* allocator);
@@ -1423,7 +1423,7 @@ class ObSysVariableSchema : public ObSchema {
       common::ObArrayWrap<ObSysVarSchema*>(sysvar_array_, ObSysVarFactory::ALL_SYS_VARS_COUNT), K_(read_only),
       K_(name_case_mode));
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t schema_version_;
   ObSysVarSchema* sysvar_array_[ObSysVarFactory::ALL_SYS_VARS_COUNT];
@@ -1446,7 +1446,7 @@ int get_tenant_status(const common::ObString& str, ObTenantStatus& status);
 class ObTenantSchema : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // base methods
   ObTenantSchema();
   explicit ObTenantSchema(common::ObIAllocator* allocator);
@@ -1724,7 +1724,7 @@ class ObTenantSchema : public ObSchema {
       K_(default_tablegroup_id), K_(default_tablegroup_name), K_(compatibility_mode), K_(drop_tenant_time), K_(status),
       K_(in_recyclebin));
 
-  private:
+private:
   int add_sysvar_schema(const share::schema::ObSysVarSchema& sysvar_schema);
   int64_t get_sysvar_count() const
   {
@@ -1732,7 +1732,7 @@ class ObTenantSchema : public ObSchema {
   }
   const ObSysVarSchema* get_sysvar_schema(int64_t idx) const;
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t schema_version_;
   common::ObString tenant_name_;
@@ -1792,7 +1792,7 @@ inline void ObTenantSchema::set_storage_format_work_version(const int64_t storag
 class ObDatabaseSchema : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // base methods
   ObDatabaseSchema();
   explicit ObDatabaseSchema(common::ObIAllocator* allocator);
@@ -1977,7 +1977,7 @@ class ObDatabaseSchema : public ObSchema {
       K_(default_tablegroup_id), K_(default_tablegroup_name), K_(in_recyclebin), K_(primary_zone_array),
       K_(drop_schema_version));
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   int64_t schema_version_;
@@ -2017,7 +2017,7 @@ inline int ObDatabaseSchema::add_zone(const common::ObString& zone)
 class ObPartitionOption : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartitionOption();
   explicit ObPartitionOption(common::ObIAllocator* allocator);
   virtual ~ObPartitionOption();
@@ -2143,7 +2143,7 @@ class ObPartitionOption : public ObSchema {
   TO_STRING_KV(K_(part_func_type), K_(part_func_expr), K_(part_num), K_(partition_cnt_within_partition_table),
       K_(max_used_part_id), K_(auto_part), K_(auto_part_size));
 
-  private:
+private:
   ObPartitionFuncType part_func_type_;
   common::ObString part_func_expr_;
   int64_t part_num_;
@@ -2160,7 +2160,7 @@ class ObPartitionOption : public ObSchema {
 
 // For any questions about the role of this structure, please contact @jiage
 class ObSchemaAllocator : public common::ObIAllocator {
-  public:
+public:
   ObSchemaAllocator() : allocator_(NULL)
   {}
   ObSchemaAllocator(common::ObIAllocator& allocator) : allocator_(&allocator)
@@ -2182,7 +2182,7 @@ class ObSchemaAllocator : public common::ObIAllocator {
 
   virtual ~ObSchemaAllocator(){};
 
-  private:
+private:
   common::ObIAllocator* allocator_;
 };
 
@@ -2191,11 +2191,11 @@ class ObSchemaAllocator : public common::ObIAllocator {
 // This level is added. Indicates that the partition level is considered.
 // Then it is to modify the subpartition of a single primary partition without affecting other things
 struct InnerPartListVectorCmp {
-  public:
+public:
   InnerPartListVectorCmp() : ret_(common::OB_SUCCESS)
   {}
 
-  public:
+public:
   bool operator()(const common::ObNewRow& left, const common::ObNewRow& right)
   {
     bool bool_ret = false;
@@ -2214,7 +2214,7 @@ struct InnerPartListVectorCmp {
     return ret_;
   }
 
-  private:
+private:
   int ret_;
 };
 
@@ -2222,7 +2222,7 @@ class ObPartitionUtils;
 struct ObBasePartition : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   friend class ObPartitionUtils;
   friend class sql::ObPartitionExecutorUtils;
   ObBasePartition();
@@ -2353,7 +2353,7 @@ struct ObBasePartition : public ObSchema {
     return is_empty_partition_name_;
   }
 
-  protected:
+protected:
   uint64_t tenant_id_;
   uint64_t table_id_;
   int64_t part_id_;
@@ -2386,7 +2386,7 @@ struct ObBasePartition : public ObSchema {
 struct ObPartition : public ObBasePartition {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartition();
   explicit ObPartition(common::ObIAllocator* allocator);
   int assign(const ObPartition& src_part);
@@ -2483,14 +2483,14 @@ struct ObPartition : public ObBasePartition {
       common::ObArrayWrap<ObSubPartition*>(dropped_subpartition_array_, dropped_subpartition_num_),
       K_(dropped_subpartition_array_capacity));
 
-  private:
+private:
   int inner_add_partition(
       const ObSubPartition& part, ObSubPartition**& part_array, int64_t& part_array_capacity, int64_t& part_num);
 
-  protected:
+protected:
   static const int64_t DEFAULT_ARRAY_CAPACITY = 128;
 
-  private:
+private:
   // The 14x branch gz_commmon cluster once supported ob_admin to increase the function of subpartition
   // However, this function does not modify sub_part_num, so it is not assumed that the sub_part_num column value
   // of __all_part_history of the templated subpartition table is correct, which is corrected when the schema is
@@ -2520,11 +2520,11 @@ struct ObPartition : public ObBasePartition {
 struct ObSubPartition : public ObBasePartition {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // For template, because it does not belong to any part, we set part_id to -1
   static const int64_t TEMPLATE_PART_ID = -1;
 
-  public:
+public:
   ObSubPartition();
   explicit ObSubPartition(common::ObIAllocator* allocator);
   int assign(const ObSubPartition& src_part);
@@ -2580,7 +2580,7 @@ struct ObSubPartition : public ObBasePartition {
   INHERIT_TO_STRING_KV("BasePartition", ObBasePartition, K_(subpart_id), K_(subpart_idx), K_(mapping_pg_sub_part_id),
       K_(drop_schema_version));
 
-  private:
+private:
   int64_t subpart_id_;
   int64_t subpart_idx_;             // Valid for hash partition;
   int64_t mapping_pg_sub_part_id_;  // nontemplate table, is partition_id of pg.
@@ -2591,7 +2591,7 @@ struct ObSubPartition : public ObBasePartition {
 class ObPartitionSchema : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // base methods
   ObPartitionSchema();
   explicit ObPartitionSchema(common::ObIAllocator* allocator);
@@ -2930,7 +2930,7 @@ class ObPartitionSchema : public ObSchema {
   int try_assign_part_array(const share::schema::ObPartitionSchema& that);
   int try_assign_def_subpart_array(const share::schema::ObPartitionSchema& that);
 
-  protected:
+protected:
   int inner_add_partition(const ObPartition& part);
   int inner_add_partition(const ObSubPartition& part);
   template <class T>
@@ -2939,10 +2939,10 @@ class ObPartitionSchema : public ObSchema {
       int64_t* pos /* = NULL*/) const;
   int get_def_subpart_name(const int64_t subpart_id, char* buf, const int64_t buf_size, int64_t* pos /* = NULL*/) const;
 
-  protected:
+protected:
   static const int64_t DEFAULT_ARRAY_CAPACITY = 128;
 
-  protected:
+protected:
   int64_t part_num_;
   // Redundant value, derived from sub_part_option_, valid when is_sub_part_template = true
   int64_t def_subpart_num_;
@@ -2979,7 +2979,7 @@ class ObPartitionSchema : public ObSchema {
 class ObTablegroupSchema : public ObPartitionSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // base methods
   ObTablegroupSchema();
   explicit ObTablegroupSchema(common::ObIAllocator* allocator);
@@ -3209,19 +3209,19 @@ class ObTablegroupSchema : public ObPartitionSchema {
   {
     tablegroup_id_ = tablegroup_id;
   }
-  inline int64_t get_part_func_expr_num() const
+  inline int64_t get_part_func_expr_num() const override
   {
     return part_func_expr_num_;
   }
-  inline void set_part_func_expr_num(const int64_t part_func_expr_num)
+  inline void set_part_func_expr_num(const int64_t part_func_expr_num) override
   {
     part_func_expr_num_ = part_func_expr_num;
   }
-  inline int64_t get_sub_part_func_expr_num() const
+  inline int64_t get_sub_part_func_expr_num() const override
   {
     return sub_part_func_expr_num_;
   }
-  inline void set_sub_part_func_expr_num(const int64_t sub_part_func_expr_num)
+  inline void set_sub_part_func_expr_num(const int64_t sub_part_func_expr_num) override
   {
     sub_part_func_expr_num_ = sub_part_func_expr_num;
   }
@@ -3232,13 +3232,13 @@ class ObTablegroupSchema : public ObPartitionSchema {
   virtual int calc_part_func_expr_num(int64_t& part_func_expr_num) const;
   virtual int calc_subpart_func_expr_num(int64_t& subpart_func_expr_num) const;
   // other methods
-  virtual void reset();
-  int64_t get_convert_size() const;
+  virtual void reset() override;
+  int64_t get_convert_size() const override;
   virtual bool has_self_partition() const override
   {
     return get_binding();
   }
-  virtual bool is_valid() const;
+  virtual bool is_valid() const override;
   bool is_mock_global_index_invalid() const
   {
     return is_mock_global_index_invalid_;
@@ -3258,7 +3258,7 @@ class ObTablegroupSchema : public ObPartitionSchema {
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t tablegroup_id_;
   int64_t schema_version_;
@@ -3281,7 +3281,7 @@ class ObTablegroupSchema : public ObPartitionSchema {
 };
 
 class ObPartitionUtils {
-  public:
+public:
   /// Get part ids through range of partition_column
 
   // Get hash(FUNC_HASH/FUNC_KEY) part type ids
@@ -3383,7 +3383,7 @@ class ObPartitionUtils {
 
   static bool is_types_equal_for_partition_check(const common::ObObjType& typ1, const common::ObObjType& type2);
 
-  private:
+private:
   // Get level-one range part_ids
   // The meaning of get_part_index can refer to get_hash_part_ids()
   static int get_range_part_ids(ObPartition& start, ObPartition& end, const common::ObBorderFlag& border_flag,
@@ -3551,7 +3551,7 @@ int ObPartitionUtils::get_end(const T* const* partition_array, const int64_t par
 class ObViewSchema : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObViewSchema();
   explicit ObViewSchema(common::ObIAllocator* allocator);
   virtual ~ObViewSchema();
@@ -3628,7 +3628,7 @@ class ObViewSchema : public ObSchema {
       N_IS_UPDATABLE, STR_BOOL(view_is_updatable_), N_IS_MATERIALIZED, STR_BOOL(materialized_),
       K_(character_set_client), K_(collation_connection));
 
-  private:
+private:
   common::ObString view_definition_;
   ViewCheckOption view_check_option_;
   bool view_is_updatable_;
@@ -3638,7 +3638,7 @@ class ObViewSchema : public ObSchema {
 };
 
 class ObColumnSchemaHashWrapper {
-  public:
+public:
   ObColumnSchemaHashWrapper()
   {}
   explicit ObColumnSchemaHashWrapper(const common::ObString& str) : column_name_(str)
@@ -3658,7 +3658,7 @@ class ObColumnSchemaHashWrapper {
   common::ObString column_name_;
 };
 class ObColumnSchemaWrapper {
-  public:
+public:
   ObColumnSchemaWrapper() : column_name_(), prefix_len_(0)
   {}
   explicit ObColumnSchemaWrapper(const common::ObString& str, int32_t prefix_len)
@@ -3699,7 +3699,7 @@ inline uint64_t ObColumnSchemaHashWrapper::hash() const
   return hash_ret;
 }
 class ObIndexSchemaHashWrapper {
-  public:
+public:
   ObIndexSchemaHashWrapper() : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID)
   {}
   ObIndexSchemaHashWrapper(uint64_t tenant_id, const uint64_t database_id, const common::ObString& index_name)
@@ -3723,7 +3723,7 @@ class ObIndexSchemaHashWrapper {
     return index_name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString index_name_;
@@ -3749,7 +3749,7 @@ inline bool ObIndexSchemaHashWrapper::operator==(const ObIndexSchemaHashWrapper&
 }
 
 class ObTableSchemaHashWrapper {
-  public:
+public:
   ObTableSchemaHashWrapper()
       : tenant_id_(common::OB_INVALID_ID),
         database_id_(common::OB_INVALID_ID),
@@ -3786,7 +3786,7 @@ class ObTableSchemaHashWrapper {
     return table_name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   uint64_t session_id_;
@@ -3815,7 +3815,7 @@ inline bool ObTableSchemaHashWrapper::operator==(const ObTableSchemaHashWrapper&
 }
 
 class ObDatabaseSchemaHashWrapper {
-  public:
+public:
   ObDatabaseSchemaHashWrapper() : tenant_id_(common::OB_INVALID_ID), name_case_mode_(common::OB_NAME_CASE_INVALID)
   {}
   ObDatabaseSchemaHashWrapper(
@@ -3840,7 +3840,7 @@ class ObDatabaseSchemaHashWrapper {
     return database_name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObNameCaseMode name_case_mode_;
   common::ObString database_name_;
@@ -3863,7 +3863,7 @@ inline bool ObDatabaseSchemaHashWrapper::operator==(const ObDatabaseSchemaHashWr
 }
 
 class ObTablegroupSchemaHashWrapper {
-  public:
+public:
   ObTablegroupSchemaHashWrapper() : tenant_id_(common::OB_INVALID_ID)
   {}
   ObTablegroupSchemaHashWrapper(uint64_t tenant_id, const common::ObString& tablegroup_name)
@@ -3883,13 +3883,13 @@ class ObTablegroupSchemaHashWrapper {
     return tablegroup_name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObString tablegroup_name_;
 };
 
 class ObForeignKeyInfoHashWrapper {
-  public:
+public:
   ObForeignKeyInfoHashWrapper()
   {
     tenant_id_ = common::OB_INVALID_ID;
@@ -3916,7 +3916,7 @@ class ObForeignKeyInfoHashWrapper {
     return foreign_key_name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString foreign_key_name_;
@@ -3942,7 +3942,7 @@ inline bool ObForeignKeyInfoHashWrapper::operator==(const ObForeignKeyInfoHashWr
 }
 
 class ObConstraintInfoHashWrapper {
-  public:
+public:
   ObConstraintInfoHashWrapper()
   {
     tenant_id_ = common::OB_INVALID_ID;
@@ -3969,7 +3969,7 @@ class ObConstraintInfoHashWrapper {
     return constraint_name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString constraint_name_;
@@ -4010,7 +4010,7 @@ inline bool ObTablegroupSchemaHashWrapper::operator==(const ObTablegroupSchemaHa
 struct ObTenantPlanBaselineId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantPlanBaselineId() : tenant_id_(common::OB_INVALID_ID), plan_baseline_id_(common::OB_INVALID_ID)
   {}
   ObTenantPlanBaselineId(const uint64_t tenant_id, const uint64_t plan_baseline_id)
@@ -4051,7 +4051,7 @@ struct ObTenantPlanBaselineId {
 struct ObTenantOutlineId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantOutlineId() : tenant_id_(common::OB_INVALID_ID), outline_id_(common::OB_INVALID_ID)
   {}
   ObTenantOutlineId(const uint64_t tenant_id, const uint64_t outline_id)
@@ -4093,7 +4093,7 @@ struct ObTenantOutlineId {
 struct ObTenantUserId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantUserId() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID)
   {}
   ObTenantUserId(const uint64_t tenant_id, const uint64_t user_id) : tenant_id_(tenant_id), user_id_(user_id)
@@ -4134,7 +4134,7 @@ struct ObTenantUserId {
 struct ObTenantUrObjId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantUrObjId()
       : tenant_id_(common::OB_INVALID_ID),
         grantee_id_(common::OB_INVALID_ID),
@@ -4197,31 +4197,31 @@ struct ObTenantUrObjId {
 };
 
 class ObPrintPrivSet {
-  public:
+public:
   explicit ObPrintPrivSet(ObPrivSet priv_set) : priv_set_(priv_set)
   {}
 
   DECLARE_TO_STRING;
 
-  private:
+private:
   ObPrivSet priv_set_;
 };
 
 class ObPrintPackedPrivArray {
-  public:
+public:
   explicit ObPrintPackedPrivArray(const ObPackedPrivArray& packed_priv_array) : packed_priv_array_(packed_priv_array)
   {}
 
   DECLARE_TO_STRING;
 
-  private:
+private:
   const ObPackedPrivArray& packed_priv_array_;
 };
 
 class ObPriv {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPriv()
       : tenant_id_(common::OB_INVALID_ID),
         user_id_(common::OB_INVALID_ID),
@@ -4330,7 +4330,7 @@ class ObPriv {
 
   TO_STRING_KV(K_(tenant_id), K_(user_id), K_(schema_version), "privileges", ObPrintPrivSet(priv_set_));
 
-  protected:
+protected:
   uint64_t tenant_id_;
   uint64_t user_id_;
   int64_t schema_version_;
@@ -4341,7 +4341,7 @@ class ObPriv {
 
 // Not used now
 class ObUserInfoHashWrapper {
-  public:
+public:
   ObUserInfoHashWrapper() : tenant_id_(common::OB_INVALID_ID)
   {}
   ObUserInfoHashWrapper(uint64_t tenant_id, const common::ObString& user_name)
@@ -4361,7 +4361,7 @@ class ObUserInfoHashWrapper {
     return user_name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObString user_name_;
 };
@@ -4412,7 +4412,7 @@ enum ObUserType {
 class ObUserInfo : public ObSchema, public ObPriv {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObUserInfo()
       : ObSchema(),
         ObPriv(),
@@ -4657,7 +4657,7 @@ class ObUserInfo : public ObSchema, public ObPriv {
   bool role_exists(const uint64_t role_id, const uint64_t option) const;
   int get_seq_by_role_id(uint64_t role_id, uint64_t& seq) const;
 
-  private:
+private:
   common::ObString user_name_;
   common::ObString host_name_;
   common::ObString passwd_;
@@ -4791,7 +4791,7 @@ struct ObSysPrivKey {
 class ObDBPriv : public ObSchema, public ObPriv {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDBPriv() : ObPriv(), db_(), sort_(0)
   {}
   explicit ObDBPriv(common::ObIAllocator* allocator) : ObSchema(allocator), ObPriv(allocator), db_(), sort_(0)
@@ -4858,7 +4858,7 @@ class ObDBPriv : public ObSchema, public ObPriv {
   int64_t get_convert_size() const;
   TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db), "privileges", ObPrintPrivSet(priv_set_));
 
-  private:
+private:
   common::ObString db_;
   uint64_t sort_;
 };
@@ -5022,7 +5022,7 @@ typedef common::ObSEArray<share::schema::ObObjPrivSortKey, 4> ObObjPrivSortKeyAr
 class ObTablePriv : public ObSchema, public ObPriv {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // constructor and destructor
   ObTablePriv() : ObSchema(), ObPriv()
   {}
@@ -5111,7 +5111,7 @@ class ObTablePriv : public ObSchema, public ObPriv {
   virtual void reset();
   int64_t get_convert_size() const;
 
-  private:
+private:
   common::ObString db_;
   common::ObString table_;
 };
@@ -5119,7 +5119,7 @@ class ObTablePriv : public ObSchema, public ObPriv {
 class ObObjPriv : public ObSchema, public ObPriv {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // constructor and destructor
   ObObjPriv() : ObSchema(), ObPriv()
   {}
@@ -5222,7 +5222,7 @@ class ObObjPriv : public ObSchema, public ObPriv {
   virtual void reset();
   int64_t get_convert_size() const;
 
-  private:
+private:
   uint64_t obj_id_;
   uint64_t obj_type_;
   uint64_t col_id_;
@@ -5454,7 +5454,7 @@ struct ObUserLoginInfo {
 class ObSysPriv : public ObSchema, public ObPriv {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSysPriv() : ObPriv(), grantee_id_(common::OB_INVALID_ID)
   {}
   explicit ObSysPriv(common::ObIAllocator* allocator) : ObSchema(allocator), ObPriv(allocator)
@@ -5526,14 +5526,14 @@ class ObSysPriv : public ObSchema, public ObPriv {
   TO_STRING_KV(K_(tenant_id), K_(user_id), K_(grantee_id), "privileges", ObPrintPrivSet(priv_set_), "packedprivarray",
       ObPrintPackedPrivArray(priv_array_));
 
-  private:
+private:
   uint64_t grantee_id_;
 };
 
 int get_int_value(const common::ObString& str, int64_t& value);
 
 class ObHostnameStuct {
-  public:
+public:
   ObHostnameStuct()
   {}
   ~ObHostnameStuct()
@@ -5554,7 +5554,7 @@ enum ObHintFormat {
 };
 
 class ObFixedParam {
-  public:
+public:
   ObFixedParam() : offset_(common::OB_INVALID_INDEX), value_()
   {}
   virtual ~ObFixedParam()
@@ -5569,7 +5569,7 @@ class ObFixedParam {
 class ObMaxConcurrentParam {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t UNLIMITED = -1;
   typedef common::ObArray<ObFixedParam, common::ObWrapperAllocator> FixParamStore;
   explicit ObMaxConcurrentParam(common::ObIAllocator* allocator, const common::ObMemAttr& attr = common::ObMemAttr());
@@ -5598,18 +5598,18 @@ class ObMaxConcurrentParam {
   }
   VIRTUAL_TO_STRING_KV(K_(concurrent_num), K_(outline_content), K_(fixed_param_store));
 
-  private:
+private:
   int deep_copy_outline_content(const common::ObString& src);
   int deep_copy_param_value(const common::ObObj& src, common::ObObj& dest);
 
-  public:
+public:
   common::ObIAllocator* allocator_;
   int64_t concurrent_num_;
   common::ObString outline_content_;
   common::ObMemAttr mem_attr_;
   FixParamStore fixed_param_store_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMaxConcurrentParam);
 };
 
@@ -5618,7 +5618,7 @@ class ObOutlineParamsWrapper {
   typedef common::ObArray<ObMaxConcurrentParam*, common::ObWrapperAllocator> OutlineParamsArray;
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObOutlineParamsWrapper();
   explicit ObOutlineParamsWrapper(common::ObIAllocator* allocator);
   ~ObOutlineParamsWrapper();
@@ -5657,19 +5657,19 @@ class ObOutlineParamsWrapper {
   };
   TO_STRING_KV(K_(outline_params));
 
-  private:
+private:
   common::ObIAllocator* allocator_;
   OutlineParamsArray outline_params_;
   common::ObMemAttr mem_attr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOutlineParamsWrapper);
 };
 
 struct BaselineKey {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   BaselineKey() : tenant_id_(common::OB_INVALID_ID), db_id_(common::OB_INVALID_ID)
   {}
 
@@ -5708,7 +5708,7 @@ struct BaselineKey {
 class ObPlanBaselineInfo : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPlanBaselineInfo();
   explicit ObPlanBaselineInfo(common::ObIAllocator* allocator);
   virtual ~ObPlanBaselineInfo();
@@ -5903,7 +5903,7 @@ class ObPlanBaselineInfo : public ObSchema {
   VIRTUAL_TO_STRING_KV(K_(key), K_(plan_baseline_id), K_(schema_version), K_(outline_data), K_(plan_hash_value),
       K_(fixed), K_(enabled), K_(executions), K_(cpu_time), K_(hints_info), K_(hints_all_worked));
 
-  public:
+public:
   BaselineKey key_;
   uint64_t plan_baseline_id_;
   int64_t schema_version_;         // the last modify timestamp of this version
@@ -5921,7 +5921,7 @@ class ObPlanBaselineInfo : public ObSchema {
 class ObOutlineInfo : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObOutlineInfo();
   explicit ObOutlineInfo(common::ObIAllocator* allocator);
   virtual ~ObOutlineInfo();
@@ -6176,13 +6176,13 @@ class ObOutlineInfo : public ObSchema {
       K_(format), K_(outline_params_wrapper), K_(outline_target));
   static bool is_sql_id_valid(const common::ObString& sql_id);
 
-  private:
+private:
   static int replace_question_mark(const common::ObString& not_param_sql, const ObMaxConcurrentParam& concurrent_param,
       int64_t start_pos, int64_t cur_pos, int64_t& question_mark_offset, common::ObSqlString& string_helper);
   static int replace_not_param(const common::ObString& not_param_sql, const ParseNode& node, int64_t start_pos,
       int64_t cur_pos, common::ObSqlString& string_helper);
 
-  protected:
+protected:
   uint64_t tenant_id_;
   uint64_t database_id_;
   uint64_t outline_id_;
@@ -6204,7 +6204,7 @@ class ObOutlineInfo : public ObSchema {
 };
 
 class ObDbLinkBaseInfo : public ObSchema {
-  public:
+public:
   ObDbLinkBaseInfo() : ObSchema()
   {
     reset();
@@ -6320,7 +6320,7 @@ class ObDbLinkBaseInfo : public ObSchema {
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(owner_id), K_(dblink_id), K_(dblink_name), K_(cluster_name), K_(tenant_name),
       K_(user_name), K_(host_addr));
 
-  protected:
+protected:
   uint64_t tenant_id_;
   uint64_t owner_id_;
   uint64_t dblink_id_;
@@ -6334,7 +6334,7 @@ class ObDbLinkBaseInfo : public ObSchema {
 };
 
 struct ObTenantDbLinkId {
-  public:
+public:
   ObTenantDbLinkId() : tenant_id_(common::OB_INVALID_ID), dblink_id_(common::OB_INVALID_ID)
   {}
   ObTenantDbLinkId(uint64_t tenant_id, uint64_t dblink_id) : tenant_id_(tenant_id), dblink_id_(dblink_id)
@@ -6380,7 +6380,7 @@ struct ObTenantDbLinkId {
   }
   TO_STRING_KV(K_(tenant_id), K_(dblink_id));
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t dblink_id_;
 };
@@ -6388,7 +6388,7 @@ struct ObTenantDbLinkId {
 class ObDbLinkInfo : public ObDbLinkBaseInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDbLinkInfo() : ObDbLinkBaseInfo()
   {}
   explicit ObDbLinkInfo(common::ObIAllocator* allocator) : ObDbLinkBaseInfo(allocator)
@@ -6398,7 +6398,7 @@ class ObDbLinkInfo : public ObDbLinkBaseInfo {
 };
 
 class ObDbLinkSchema : public ObDbLinkBaseInfo {
-  public:
+public:
   ObDbLinkSchema() : ObDbLinkBaseInfo()
   {}
   explicit ObDbLinkSchema(common::ObIAllocator* allocator) : ObDbLinkBaseInfo(allocator)
@@ -6423,7 +6423,7 @@ class ObDbLinkSchema : public ObDbLinkBaseInfo {
 class ObSynonymInfo : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSynonymInfo();
   explicit ObSynonymInfo(common::ObIAllocator* allocator);
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(database_id), K_(synonym_id), K_(schema_version));
@@ -6521,9 +6521,9 @@ class ObSynonymInfo : public ObSchema {
   }
   void reset();
 
-  private:
+private:
   // void *alloc(int64_t size);
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   uint64_t synonym_id_;
@@ -6538,7 +6538,7 @@ class ObSynonymInfo : public ObSchema {
 struct ObTenantUDFId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantUDFId() : tenant_id_(common::OB_INVALID_ID), udf_name_()
   {}
   ObTenantUDFId(const uint64_t tenant_id, const common::ObString& name) : tenant_id_(tenant_id), udf_name_(name)
@@ -6578,7 +6578,7 @@ struct ObTenantUDFId {
 struct ObTenantSynonymId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantSynonymId() : tenant_id_(common::OB_INVALID_ID), synonym_id_(common::OB_INVALID_ID)
   {}
   ObTenantSynonymId(const uint64_t tenant_id, const uint64_t synonym_id)
@@ -6619,7 +6619,7 @@ struct ObTenantSynonymId {
 struct ObTenantSequenceId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantSequenceId() : tenant_id_(common::OB_INVALID_ID), sequence_id_(common::OB_INVALID_ID)
   {}
   ObTenantSequenceId(const uint64_t tenant_id, const uint64_t sequence_id)
@@ -6660,7 +6660,7 @@ struct ObTenantSequenceId {
 class ObAlterOutlineInfo : public ObOutlineInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAlterOutlineInfo() : ObOutlineInfo(), alter_option_bitset_()
   {}
   virtual ~ObAlterOutlineInfo()
@@ -6680,12 +6680,12 @@ class ObAlterOutlineInfo : public ObOutlineInfo {
   }
   INHERIT_TO_STRING_KV("ObOutlineInfo", ObOutlineInfo, K_(alter_option_bitset));
 
-  private:
+private:
   common::ObBitSet<> alter_option_bitset_;
 };
 
 class ObOutlineNameHashWrapper {
-  public:
+public:
   ObOutlineNameHashWrapper() : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID), name_()
   {}
   ObOutlineNameHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const common::ObString& name_)
@@ -6721,7 +6721,7 @@ class ObOutlineNameHashWrapper {
     return name_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString name_;
@@ -6742,7 +6742,7 @@ inline bool ObOutlineNameHashWrapper::operator==(const ObOutlineNameHashWrapper&
 }
 
 class ObOutlineSignatureHashWrapper {
-  public:
+public:
   ObOutlineSignatureHashWrapper() : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID), signature_()
   {}
   ObOutlineSignatureHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const common::ObString& signature)
@@ -6778,14 +6778,14 @@ class ObOutlineSignatureHashWrapper {
     return signature_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString signature_;
 };
 
 class ObOutlineSqlIdHashWrapper {
-  public:
+public:
   ObOutlineSqlIdHashWrapper() : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID), sql_id_()
   {}
   ObOutlineSqlIdHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const common::ObString& sql_id)
@@ -6821,7 +6821,7 @@ class ObOutlineSqlIdHashWrapper {
     return sql_id_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString sql_id_;
@@ -6856,7 +6856,7 @@ inline bool ObOutlineSignatureHashWrapper::operator==(const ObOutlineSignatureHa
 }
 
 class ObSysTableChecker {
-  private:
+private:
   ObSysTableChecker();
   ~ObSysTableChecker();
 
@@ -6866,7 +6866,7 @@ class ObSysTableChecker {
   int check_sys_table_name(const uint64_t database_id, const common::ObString& table_name, bool& is_tenant_space_table);
   int ob_write_string(const common::ObString& src, common::ObString& dst);
 
-  public:
+public:
   static ObSysTableChecker& instance();
   int init();
   int destroy();
@@ -6886,9 +6886,9 @@ class ObSysTableChecker {
   static bool is_rs_restart_related_table_id(const uint64_t table_id);
   static bool is_rs_restart_related_partition(const uint64_t table_id, const int64_t partition_id);
 
-  public:
+public:
   class TableNameWrapper {
-    public:
+  public:
     TableNameWrapper()
         : database_id_(common::OB_INVALID_ID), name_case_mode_(common::OB_NAME_CASE_INVALID), table_name_()
     {}
@@ -6901,17 +6901,17 @@ class ObSysTableChecker {
     bool operator==(const TableNameWrapper& rv) const;
     TO_STRING_KV(K_(database_id), K_(name_case_mode), K_(table_name));
 
-    private:
+  private:
     uint64_t database_id_;  // pure_database_id
     common::ObNameCaseMode name_case_mode_;
     common::ObString table_name_;
   };
   typedef common::ObSEArray<TableNameWrapper, 2> TableNameWrapperArray;
 
-  private:
+private:
   static const int64_t TABLE_BUCKET_NUM = 300;
 
-  private:
+private:
   common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> tenant_space_table_id_map_;
   common::hash::ObHashMap<uint64_t, TableNameWrapperArray*, common::hash::NoPthreadDefendMode> sys_table_name_map_;
   int64_t tenant_space_sys_table_num_;  // Number of tenant-level system tables (including system table indexes)
@@ -6924,7 +6924,7 @@ class ObTableSchema;
 class ObRecycleObject : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum RecycleObjType {
     INVALID = 0,
     TABLE,
@@ -7033,7 +7033,7 @@ class ObRecycleObject : public ObSchema {
   TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(tablegroup_id), K_(object_name), K_(original_name),
       K_(type), K_(tablegroup_name), K_(database_name));
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   uint64_t table_id_;
@@ -7059,7 +7059,7 @@ typedef common::hash::ObPlacementHashSet<common::ObString, common::OB_MAX_USER_D
 struct ObBasedSchemaObjectInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBasedSchemaObjectInfo()
       : schema_id_(common::OB_INVALID_ID), schema_type_(OB_MAX_SCHEMA), schema_version_(common::OB_INVALID_VERSION)
   {}
@@ -7085,7 +7085,7 @@ struct ObBasedSchemaObjectInfo {
 struct ObAuxTableMetaInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObAuxTableMetaInfo()
       : table_id_(common::OB_INVALID_ID), table_type_(MAX_TABLE_TYPE), drop_schema_version_(common::OB_INVALID_VERSION)
   {}
@@ -7134,7 +7134,7 @@ enum ObReferenceAction {
 class ObForeignKeyInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObForeignKeyInfo()
       : table_id_(common::OB_INVALID_ID),
         foreign_key_id_(common::OB_INVALID_ID),
@@ -7159,7 +7159,7 @@ class ObForeignKeyInfo {
   virtual ~ObForeignKeyInfo()
   {}
 
-  public:
+public:
   inline void set_table_id(uint64_t table_id)
   {
     table_id_ = table_id;
@@ -7276,7 +7276,7 @@ class ObForeignKeyInfo {
       K_(is_modify_enable_flag), K_(validate_flag), K_(is_modify_validate_flag), K_(rely_flag), K_(is_modify_rely_flag),
       K_(is_modify_fk_state), K_(ref_cst_type), K_(ref_cst_id));
 
-  public:
+public:
   uint64_t table_id_;  // table_id is not in __all_foreign_key.
   uint64_t foreign_key_id_;
   uint64_t child_table_id_;
@@ -7296,14 +7296,14 @@ class ObForeignKeyInfo {
   ObConstraintType ref_cst_type_;
   uint64_t ref_cst_id_;
 
-  private:
+private:
   static const char* reference_action_str_[ACTION_MAX + 1];
 };
 
 struct ObSimpleForeignKeyInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSimpleForeignKeyInfo()
   {
     tenant_id_ = common::OB_INVALID_ID;
@@ -7351,7 +7351,7 @@ struct ObSimpleForeignKeyInfo {
 struct ObSimpleConstraintInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSimpleConstraintInfo()
   {
     tenant_id_ = common::OB_INVALID_ID;
@@ -7500,7 +7500,7 @@ int ObPartitionUtils::check_partition_value(
 class ObSequenceSchema : public ObSchema {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSequenceSchema();
   explicit ObSequenceSchema(common::ObIAllocator* allocator);
   virtual ~ObSequenceSchema();
@@ -7654,11 +7654,11 @@ class ObSequenceSchema : public ObSchema {
 
   VIRTUAL_TO_STRING_KV(K_(name), K_(tenant_id), K_(database_id), K_(sequence_id), K_(schema_version), K_(option));
 
-  private:
+private:
   // void *alloc(int64_t size);
   // int get_value(const common::ObString &str, int64_t &val);
   // int get_value(const common::number::ObNumber &num, int64_t &val);
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   uint64_t sequence_id_;
@@ -7673,7 +7673,7 @@ typedef ObSequenceSchema ObSequenceInfo;
 class ObTenantCommonSchemaId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantCommonSchemaId() : tenant_id_(common::OB_INVALID_TENANT_ID), schema_id_(common::OB_INVALID_ID)
   {}
   ObTenantCommonSchemaId(const uint64_t tenant_id, const uint64_t schema_id)
@@ -7714,7 +7714,7 @@ class ObTenantCommonSchemaId {
 class ObTenantProfileId : public ObTenantCommonSchemaId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTenantProfileId() : ObTenantCommonSchemaId()
   {}
   ObTenantProfileId(const uint64_t tenant_id, const uint64_t profile_id) : ObTenantCommonSchemaId(tenant_id, profile_id)
@@ -7724,7 +7724,7 @@ class ObTenantProfileId : public ObTenantCommonSchemaId {
 class ObProfileSchema : public ObSchema {  // simple schema
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t INVALID_VALUE = -1;
 
   enum PARAM_TYPES {
@@ -7868,7 +7868,7 @@ class ObProfileSchema : public ObSchema {  // simple schema
     return deep_copy_str(name, password_verify_function_);
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t profile_id_;
   int64_t schema_version_;
@@ -7895,7 +7895,7 @@ struct ObObjectStruct {
 
 //
 class IObErrorInfo {
-  public:
+public:
   IObErrorInfo()
   {}
   virtual ~IObErrorInfo() = 0;

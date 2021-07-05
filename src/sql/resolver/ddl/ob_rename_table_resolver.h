@@ -24,7 +24,7 @@ class ObRenameTableResolver : public ObDDLResolver {
   static const int64_t NEW_NAME_NODE = 1;
   static const int64_t NAME_NODE_COUNT = 2;
 
-  public:
+public:
   explicit ObRenameTableResolver(ObResolverParams& params);
   virtual ~ObRenameTableResolver();
   virtual int resolve(const ParseNode& parse_tree);
@@ -33,7 +33,7 @@ class ObRenameTableResolver : public ObDDLResolver {
     return static_cast<ObRenameTableStmt*>(stmt_);
   };
 
-  private:
+private:
   int resolve_rename_action(const ParseNode& rename_action_node);
   DISALLOW_COPY_AND_ASSIGN(ObRenameTableResolver);
 };

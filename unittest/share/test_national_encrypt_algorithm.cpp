@@ -18,7 +18,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 
 class TestNationalEncrypt : public ::testing::Test {
-  public:
+public:
   bool equal(char* A, char* B, int len);
 };
 

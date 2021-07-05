@@ -21,7 +21,7 @@ namespace common {
 namespace hash {
 template <typename HashMap>
 class ObIteratableHashMapConstIterator {
-  public:
+public:
   typedef typename HashMap::const_key_pointer_t const_key_pointer_t;
   typedef typename HashMap::const_value_pointer_t const_value_pointer_t;
   typedef typename HashMap::const_key_t const_key_t;
@@ -32,7 +32,7 @@ class ObIteratableHashMapConstIterator {
   typedef ObIteratableHashMapConstIterator<HashMap> self_t;
   typedef typename HashMap::inner_key_t inner_key_t;
 
-  public:
+public:
   ObIteratableHashMapConstIterator() : map_(NULL), cur_(NULL)
   {}
   ObIteratableHashMapConstIterator(const HashMap* map, const inner_key_t* cur) : map_(map), cur_(cur)
@@ -68,7 +68,7 @@ class ObIteratableHashMapConstIterator {
     return const_iter_value_t(cur_->get_data(), map_->values_[pos]);
   }
 
-  private:
+private:
   // data members
   const HashMap* map_;
   const inner_key_t* cur_;
@@ -76,7 +76,7 @@ class ObIteratableHashMapConstIterator {
 
 template <typename K, typename V, uint64_t N = 1031, bool auto_free = false>
 class ObIteratableHashMap {
-  public:
+public:
   typedef K key_t;
   typedef const K const_key_t;
   typedef K* key_pointer_t;
@@ -92,7 +92,7 @@ class ObIteratableHashMap {
   typedef ObIteratableHashMapConstIterator<ObIteratableHashMap> const_iterator_t;
   typedef common::ObDLinkNode<K> inner_key_t;
 
-  public:
+public:
   ObIteratableHashMap() : flags_(), keys_(), values_(), count_(0), list_()
   {}
   ~ObIteratableHashMap()
@@ -155,16 +155,16 @@ class ObIteratableHashMap {
   }
   DECLARE_TO_STRING;
 
-  private:
+private:
   // types and constants
   template <typename HashMap>
   friend class ObIteratableHashMapConstIterator;
 
-  private:
+private:
   // disallow copy
   ObIteratableHashMap(const ObIteratableHashMap& other);
   // function members
-  private:
+private:
   // data members
   ObBitSet<N, ModulePageAllocator, auto_free> flags_;
   inner_key_t keys_[N];

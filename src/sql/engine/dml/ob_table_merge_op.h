@@ -28,7 +28,7 @@ namespace sql {
 class ObTableMergeOpInput : public ObTableModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableMergeOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableModifyOpInput(ctx, spec)
   {}
   virtual ~ObTableMergeOpInput()
@@ -38,17 +38,17 @@ class ObTableMergeOpInput : public ObTableModifyOpInput {
 class ObTableMergeSpec : public ObTableModifySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableMergeSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(has_insert_clause), K_(has_update_clause), K_(delete_conds),
       K_(update_conds), K_(insert_conds), K_(update_conds), K_(rowkey_exprs));
 
-  private:
+private:
   template <class T>
   inline int add_id_to_array(T& array, uint64_t id);
 
-  public:
+public:
   inline int add_delete_column_id(uint64_t column_id)
   {
     return add_id_to_array(delete_column_ids_, column_id);
@@ -57,7 +57,7 @@ class ObTableMergeSpec : public ObTableModifySpec {
       int64_t array_index, uint64_t column_id, uint64_t project_index, bool auto_filled_timestamp);
   int init_updated_column_count(common::ObIAllocator& allocator, int64_t count);
 
-  public:
+public:
   bool has_insert_clause_;
   bool has_update_clause_;
 
@@ -76,7 +76,7 @@ class ObTableMergeSpec : public ObTableModifySpec {
 
 ////////////////////////////////////// ObTableMergeOp //////////////////////////////////////
 class ObTableMergeOp : public ObTableModifyOp {
-  public:
+public:
   ObTableMergeOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObTableMergeOp()
   {}
@@ -106,10 +106,10 @@ class ObTableMergeOp : public ObTableModifyOp {
   void inc_changed_rows()
   {}
 
-  protected:
+protected:
   int generate_origin_row(bool& conflict);
 
-  private:
+private:
   int process_update(storage::ObPartitionService* partition_service, const common::ObPartitionKey& pkey,
       storage::ObDMLBaseParam& dml_param);
   int update_row(storage::ObPartitionService* partition_service, const common::ObPartitionKey& pkey,
@@ -123,7 +123,7 @@ class ObTableMergeOp : public ObTableModifyOp {
   }
   int do_table_merge();
 
-  protected:
+protected:
   common::ObNewRow insert_row_;
   common::ObRowStore insert_row_store_;
   common::ObNewRow old_row_;

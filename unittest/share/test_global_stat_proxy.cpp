@@ -23,12 +23,12 @@ using namespace common;
 using namespace share::schema;
 
 class TestGlobalStatProxy : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   schema::DBInitializer initer_;
 };
 

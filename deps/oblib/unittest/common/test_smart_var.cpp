@@ -93,7 +93,7 @@ void* test(void*)
   {
     // scalar
     class S {
-      public:
+    public:
       S(int& k) : k_(k)
       {
         k_ += 1;
@@ -115,7 +115,7 @@ void* test(void*)
 
     // array
     class V {
-      public:
+    public:
       V() : self_k_(2), k_(nullptr)
       {}
       ~V()

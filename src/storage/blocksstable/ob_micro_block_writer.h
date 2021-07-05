@@ -42,14 +42,14 @@ class ObMicroBlockWriter : public ObIMicroBlockWriter {
   static const int64_t DEFAULT_DATA_BUFFER_SIZE = common::OB_DEFAULT_MACRO_BLOCK_SIZE;
   static const int64_t DEFAULT_INDEX_BUFFER_SIZE = 2 * 1024;
   static const int64_t MIN_RESERVED_SIZE = 1024;  // 1KB;
-  public:
+public:
   ObMicroBlockWriter();
   virtual ~ObMicroBlockWriter();
   int init(const int64_t micro_block_size_limit, const int64_t rowkey_column_count, const int64_t column_count = 0,
       const common::ObRowStoreType row_store_type = common::FLAT_ROW_STORE);
-  virtual int append_row(const storage::ObStoreRow& row);
-  virtual int build_block(char*& buf, int64_t& size);
-  virtual void reuse();
+  virtual int append_row(const storage::ObStoreRow& row) override;
+  virtual int build_block(char*& buf, int64_t& size) override;
+  virtual void reuse() override;
 
   virtual int64_t get_block_size() const override;
   virtual int64_t get_row_count() const override;
@@ -58,7 +58,7 @@ class ObMicroBlockWriter : public ObIMicroBlockWriter {
   virtual common::ObString get_last_rowkey() const override;
   void reset();
 
-  private:
+private:
   inline int64_t get_index_size() const;
   int check_input_param(const int64_t macro_block_size, const int64_t column_count, const int64_t rowkey_column_count,
       const ObRowStoreType row_store_type);
@@ -66,7 +66,7 @@ class ObMicroBlockWriter : public ObIMicroBlockWriter {
   int reserve_header(const int64_t column_count);
   bool is_exceed_limit(const int64_t row_length, const int64_t rowkey_length);
 
-  private:
+private:
   int64_t micro_block_size_limit_;
   int64_t column_count_;
   ObRowWriter row_writer_;

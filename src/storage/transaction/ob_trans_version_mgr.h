@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace transaction {
 
 class ObITransVersionMgr {
-  public:
+public:
   ObITransVersionMgr()
   {}
   virtual ~ObITransVersionMgr()
@@ -32,7 +32,7 @@ class ObITransVersionMgr {
   virtual void destroy() = 0;
   virtual void reset() = 0;
 
-  public:
+public:
   virtual int get_and_update_local_trans_version(int64_t& local_trans_version) = 0;
   virtual int get_local_trans_version(int64_t& local_trans_version) = 0;
   virtual int update_local_trans_version(const int64_t local_trans_version) = 0;
@@ -41,7 +41,7 @@ class ObITransVersionMgr {
 };
 
 class ObTransVersionMgr : public ObITransVersionMgr {
-  public:
+public:
   ObTransVersionMgr()
   {
     reset();
@@ -53,24 +53,24 @@ class ObTransVersionMgr : public ObITransVersionMgr {
   void destroy();
   void reset();
 
-  public:
+public:
   int get_and_update_local_trans_version(int64_t& local_trans_version);
   int get_local_trans_version(int64_t& local_trans_version);
   int update_local_trans_version(const int64_t local_trans_version);
   int get_publish_version(int64_t& publish_version);
   int update_publish_version(const int64_t publish_version);
 
-  public:
+public:
   static ObTransVersionMgr& get_instance();
 
-  private:
+private:
   int update_local_trans_version_(const int64_t local_trans_version);
   int update_publish_version_(const int64_t publish_version);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransVersionMgr);
 
-  private:
+private:
   int64_t publish_version_;
   int64_t local_trans_version_;
 };

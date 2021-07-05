@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace share {
 class ObPartitionInfo;
 class ObUnitedPtOperator {
-  public:
+public:
   ObUnitedPtOperator();
   virtual ~ObUnitedPtOperator()
   {}
@@ -28,14 +28,14 @@ class ObUnitedPtOperator {
   // when on primary cluster, return only the partition infos of the primary cluster, remote_partition is reset
   virtual int united_get(const uint64_t table_id, const int64_t partition_id, ObPartitionInfo& partition_info);
 
-  private:
+private:
   // specify a specific  table_id/partition_id to get partition info
   // when on standby cluster, return the partition infos both on primary and standby clusters.
   // when on primary cluster, return only the partition infos of the primary cluster, remote_partition is reset
   int get(const uint64_t table_id, const int64_t partition_id, ObPartitionInfo& local_partition,
       ObPartitionInfo& remote_partition);
 
-  private:
+private:
   bool inited_;
   ObPartitionTableOperator* pt_operator_;
   ObRemotePartitionTableOperator* remote_pt_operator_;

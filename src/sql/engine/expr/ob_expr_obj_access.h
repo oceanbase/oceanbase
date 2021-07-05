@@ -23,7 +23,7 @@ typedef Ob2DArray<ObObjParam, OB_MALLOC_BIG_BLOCK_SIZE, ObWrapperAllocator, fals
 class ObExprObjAccess : public ObExprOperator {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObExprObjAccess(common::ObIAllocator& alloc);
   virtual ~ObExprObjAccess();
 
@@ -78,14 +78,14 @@ class ObExprObjAccess : public ObExprOperator {
       row_dimension_, N_REAL_PARAM_NUM, real_param_num_, K_(get_attr_func), K_(param_idxs), K_(access_idx_cnt),
       K_(for_write), K_(coll_idx));
 
-  private:
+private:
   typedef common::ObFastArray<int64_t, 4> ParamArray;
   int init_param_array(
       const ParamStore& param_store, const common::ObObj* objs_stack, int64_t param_num, ParamArray& param_array) const;
 
   DISALLOW_COPY_AND_ASSIGN(ObExprObjAccess);
 
-  private:
+private:
   uint64_t get_attr_func_;
   common::ObFixedArray<int64_t, common::ObIAllocator> param_idxs_;
   int64_t access_idx_cnt_;

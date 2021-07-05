@@ -26,7 +26,7 @@ namespace rootserver {
 namespace balancer {
 
 class IdMapBalancer {
-  public:
+public:
   IdMapBalancer()
   {}
   virtual ~IdMapBalancer()
@@ -35,10 +35,10 @@ class IdMapBalancer {
 };
 
 class BalanceStat {
-  public:
+public:
   static const double EPSILON;
 
-  public:
+public:
   BalanceStat(SquareIdMap& map, IUnitProvider& unit) : map_(map), unit_(unit), row_unit_()
   {}
   virtual int init();
@@ -62,7 +62,7 @@ class BalanceStat {
   virtual const SquareIdMap::Item* end() = 0;
   TO_STRING_KV(K_(row_unit));
 
-  protected:
+protected:
   struct UnitCounter {
     UnitCounter() : unit_id_(common::OB_INVALID_ID), count_(0)
     {}
@@ -77,14 +77,14 @@ class BalanceStat {
   int get_unit_cnt_value_if_move(const uint64_t left_unit_id, const uint64_t right_unit_id, double& new_left_cnt_value,
       double& new_right_cnt_value);
 
-  protected:
+protected:
   SquareIdMap& map_;
   IUnitProvider& unit_;
   common::ObSEArray<UnitCounter, 16> row_unit_;
 };
 
 class RowBalanceStat : public BalanceStat {
-  public:
+public:
   RowBalanceStat(SquareIdMap& map, IUnitProvider& unit, int64_t row_idx) : BalanceStat(map, unit), row_idx_(row_idx)
   {}
   virtual const SquareIdMap::Item* begin()
@@ -97,12 +97,12 @@ class RowBalanceStat : public BalanceStat {
   }
   INHERIT_TO_STRING_KV("stat", BalanceStat, K_(row_idx));
 
-  private:
+private:
   int64_t row_idx_;
 };
 
 class OverallBalanceStat : public BalanceStat {
-  public:
+public:
   OverallBalanceStat(SquareIdMap& map, IUnitProvider& unit) : BalanceStat(map, unit)
   {}
   virtual const SquareIdMap::Item* begin()
@@ -116,7 +116,7 @@ class OverallBalanceStat : public BalanceStat {
 };
 
 class AverageCountBalancer : public IdMapBalancer {
-  public:
+public:
   AverageCountBalancer(SquareIdMap& map, IUnitProvider& unit_provider) : map_(map), unit_(unit_provider)
   {}
   virtual ~AverageCountBalancer()
@@ -125,11 +125,11 @@ class AverageCountBalancer : public IdMapBalancer {
   // Balance by number partition map
   virtual int balance() override;
 
-  private:
+private:
   int one_row_balance(int64_t row_idx, bool& balanced);
   int overall_balance(bool& balanced);
 
-  protected:
+protected:
   SquareIdMap& map_;
   IUnitProvider& unit_;
 };

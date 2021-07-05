@@ -29,7 +29,7 @@ class ObLGIInput : public ObIPhyOperatorInput {
   struct ObArrayParamInfo {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     ObArrayParamInfo() : param_store_idx_(common::OB_INVALID_INDEX), array_param_()
     {}
     TO_STRING_KV(K_(param_store_idx), K_(array_param));
@@ -41,7 +41,7 @@ class ObLGIInput : public ObIPhyOperatorInput {
   friend class ObLGICtx;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObLGIInput() : location_idx_list_(), part_stmt_ids_(), deserialize_allocator_(nullptr)
   {}
   virtual ~ObLGIInput()
@@ -58,25 +58,25 @@ class ObLGIInput : public ObIPhyOperatorInput {
   int assign_pkeys(const common::ObIArray<common::ObPartitionKey>& pkeys);
   TO_STRING_KV(K_(location_idx_list), K_(param_array_list), K_(part_stmt_ids));
 
-  private:
+private:
   int init_param_array_list(ObPhysicalPlanCtx& plan_ctx, ObPhyTableLocation& table_loc, ObTaskInfo& task_info,
       const ObLightGranuleIterator& op);
 
-  private:
+private:
   ObFixedArray<uint64_t, common::ObIAllocator> location_idx_list_;
   // nested table param for every partition.
   common::ObSEArray<ObArrayParamInfo, 32> param_array_list_;
   // stmt_id for every partition.
   common::ObFixedArray<ObSEArray<int64_t, 32>, common::ObIAllocator> part_stmt_ids_;
 
-  private:
+private:
   common::ObIAllocator* deserialize_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObLGIInput);
 };
 class ObLightGranuleIterator : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   enum ObGranuleIteratorState {
     LGI_UNINITIALIZED,
     LGI_PREPARED,
@@ -85,11 +85,11 @@ class ObLightGranuleIterator : public ObSingleChildPhyOperator {
     LGI_END,
   };
 
-  public:
+public:
   struct ObLGIScanInfo {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     ObLGIScanInfo()
         : ref_table_id_(common::OB_INVALID_ID),
           table_location_key_(common::OB_INVALID_ID),
@@ -103,7 +103,7 @@ class ObLightGranuleIterator : public ObSingleChildPhyOperator {
   class ObLGICtx : public ObPhyOperatorCtx {
     friend class ObLightGranuleIterator;
 
-    public:
+  public:
     ObLGICtx(ObExecContext& exec_ctx)
         : ObPhyOperatorCtx(exec_ctx),
           cur_granule_pos_(0),
@@ -122,14 +122,14 @@ class ObLightGranuleIterator : public ObSingleChildPhyOperator {
     }
     TO_STRING_KV(K_(cur_granule_pos), K_(cur_part_id), K_(cur_param_idx), K_(state));
 
-    private:
+  private:
     int64_t cur_granule_pos_;
     int64_t cur_part_id_;
     int64_t cur_param_idx_;
     ObGranuleIteratorState state_;
   };
 
-  public:
+public:
   explicit ObLightGranuleIterator(common::ObIAllocator& alloc);
   virtual ~ObLightGranuleIterator();
   virtual void reset() override;
@@ -152,7 +152,7 @@ class ObLightGranuleIterator : public ObSingleChildPhyOperator {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLightGranuleIterator);
 
-  public:
+public:
   void set_dml_location_key(uint64_t table_location_key)
   {
     dml_location_key_ = table_location_key;
@@ -186,7 +186,7 @@ class ObLightGranuleIterator : public ObSingleChildPhyOperator {
     return array_param_idxs_;
   }
 
-  private:
+private:
   int try_fetch_task(ObExecContext& ctx, ObGranuleTaskInfo& info) const;
   int try_fetch_task_with_pwj(ObExecContext& ctx, common::ObIArray<ObGranuleTaskInfo>& lgi_tasks) const;
   int try_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
@@ -195,7 +195,7 @@ class ObLightGranuleIterator : public ObSingleChildPhyOperator {
   int handle_batch_stmt_implicit_cursor(ObExecContext& ctx) const;
   static bool is_task_end(ObLGICtx& lgi_ctx, ObLGIInput& lgi_input);
 
-  private:
+private:
   uint64_t dml_location_key_;
   uint64_t dml_op_id_;
   bool is_pwj_;

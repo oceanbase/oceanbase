@@ -28,14 +28,14 @@ class ObRawExpr;
 
 #define DEF_SIMPLE_EXECUTOR(name)                      \
   class name##Executor {                               \
-    public:                                            \
+  public:                                              \
     name##Executor()                                   \
     {}                                                 \
     virtual ~name##Executor()                          \
     {}                                                 \
     int execute(ObExecContext& ctx, name##Stmt& stmt); \
                                                        \
-    private:                                           \
+  private:                                             \
     DISALLOW_COPY_AND_ASSIGN(name##Executor);          \
   }
 
@@ -48,14 +48,14 @@ DEF_SIMPLE_EXECUTOR(ObDropTablegroup);
 
 class ObAlterTablegroupStmt;
 class ObAlterTablegroupExecutor {
-  public:
+public:
   ObAlterTablegroupExecutor()
   {}
   virtual ~ObAlterTablegroupExecutor()
   {}
   int execute(ObExecContext& ctx, ObAlterTablegroupStmt& stmt);
 
-  private:
+private:
   int check_alter_partition(ObExecContext& ctx, ObAlterTablegroupStmt& stmt, const obrpc::ObAlterTablegroupArg& arg);
   DISALLOW_COPY_AND_ASSIGN(ObAlterTablegroupExecutor);
 };

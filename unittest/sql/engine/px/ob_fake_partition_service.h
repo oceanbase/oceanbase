@@ -23,7 +23,7 @@ namespace oceanbase {
 
 namespace sql {
 class ObFakeTableScanIterator : public common::ObNewRowIterator {
-  public:
+public:
   ObFakeTableScanIterator() : col_num_(0)
   {}
   virtual ~ObFakeTableScanIterator()
@@ -42,18 +42,18 @@ class ObFakeTableScanIterator : public common::ObNewRowIterator {
     col_num_ = col_num;
   }
 
-  private:
+private:
   common::ObRowStore::Iterator row_store_it_;
   int64_t col_num_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFakeTableScanIterator);
 };
 }  // namespace sql
 
 namespace storage {
 class ObFakePartitionServiceForSQL : public oceanbase::storage::ObPartitionService {
-  public:
+public:
   ObFakePartitionServiceForSQL();
   virtual ~ObFakePartitionServiceForSQL();
   virtual int init(const blocksstable::ObStorageEnv& env, const common::ObAddr& self_addr,
@@ -1298,21 +1298,21 @@ class ObFakePartitionServiceForSQL : public oceanbase::storage::ObPartitionServi
     return OB_SUCCESS;
   }
 
-  private:
+private:
   common::ObScanner scanner_;
   int64_t col_num_;
   obrpc::ObCommonRpcProxy* rs_rpc_proxy_;
   ObPartitionServiceRpc* pts_rpc_;
   ObAddr addr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFakePartitionServiceForSQL);
 };
 
 class ObFakePartitionServiceForGI : public ObFakePartitionServiceForSQL {
-  public:
+public:
   class ObGIResult {
-    public:
+  public:
     ObGIResult() : macros_count_idx_(), pkeys_(), macros_count_(){};
     virtual ~ObGIResult() = default;
     int macros_count_idx_;
@@ -1321,7 +1321,7 @@ class ObFakePartitionServiceForGI : public ObFakePartitionServiceForSQL {
     TO_STRING_KV(K(macros_count_), K(pkeys_));
   };
 
-  public:
+public:
   ObFakePartitionServiceForGI() : ObFakePartitionServiceForSQL(), result_set_(), case_idx_(), pkey_idx_()
   {}
   virtual ~ObFakePartitionServiceForGI() = default;
@@ -1330,13 +1330,13 @@ class ObFakePartitionServiceForGI : public ObFakePartitionServiceForSQL {
       const int64_t* total_task_count, ObIArray<common::ObStoreRange>* splitted_ranges,
       common::ObIArray<int64_t>* split_index) override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFakePartitionServiceForGI);
 
-  public:
+public:
   ObSEArray<ObGIResult, 32> result_set_;
 
-  private:
+private:
   int case_idx_;
   int pkey_idx_;
 };

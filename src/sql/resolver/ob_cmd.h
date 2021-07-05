@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObICmd {
-  public:
+public:
   virtual int get_cmd_type() const = 0;
   virtual bool cause_implicit_commit() const
   {

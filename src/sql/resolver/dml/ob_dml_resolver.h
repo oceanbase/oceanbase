@@ -47,7 +47,7 @@ struct IndexDMLInfo;
 class ObDelUpdStmt;
 
 class ObDMLResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObDMLResolver(ObResolverParams& params);
   virtual ~ObDMLResolver();
   friend class ObDefaultValueUtils;
@@ -135,7 +135,7 @@ class ObDMLResolver : public ObStmtResolver {
   virtual int resolve_column_ref_expr(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
   int resolve_sql_expr(const ParseNode& node, ObRawExpr*& expr, ObArray<ObQualifiedName>* input_columns = NULL);
 
-  protected:
+protected:
   ObDMLStmt* get_stmt();
   int resolve_into_variables(const ParseNode* node, ObIArray<ObString>& user_vars, ObIArray<ObRawExpr*>& pl_vars);
   int resolve_sequence_object(const ObQualifiedName& q_name, ObRawExpr*& expr);
@@ -483,7 +483,7 @@ class ObDMLResolver : public ObStmtResolver {
     return ObString();
   }
 
-  private:
+private:
   int add_column_ref_to_set(ObRawExpr*& expr, ObIArray<TableItem*>* table_list);
   int check_table_exist_or_not(
       uint64_t tenant_id, uint64_t& database_id, common::ObString& table_name, common::ObString& db_name);
@@ -531,7 +531,7 @@ class ObDMLResolver : public ObStmtResolver {
   int resolve_dblink_with_synonym(
       uint64_t tenant_id, ObString& table_name, ObString& dblink_name, ObString& db_name, uint64_t& dblink_id);
 
-  protected:
+protected:
   typedef std::pair<TableItem, common::ObString> GenColumnNamePair;
   typedef std::pair<const ObRawExpr*, GenColumnNamePair> GenColumnExprPair;
   ObStmtScope current_scope_;
@@ -562,7 +562,7 @@ class ObDMLResolver : public ObStmtResolver {
    * */
   bool with_clause_without_record_;
 
-  protected:
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObDMLResolver);
 };
 

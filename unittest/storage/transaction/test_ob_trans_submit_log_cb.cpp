@@ -35,7 +35,7 @@ namespace unittest {
 LeaderActiveArg leader_active_arg;
 
 class MyMockObPartitionService2 : public MockObIPartitionService {
-  public:
+public:
   MyMockObPartitionService2()
   {}
 
@@ -65,12 +65,12 @@ class MyMockObPartitionService2 : public MockObIPartitionService {
     return &txs_;
   }
 
-  private:
+private:
   transaction::ObTransService txs_;
 };
 
 class MockObPartTransCtx : public ObPartTransCtx {
-  public:
+public:
   MockObPartTransCtx()
   {}
   virtual ~MockObPartTransCtx()
@@ -89,7 +89,7 @@ class MockObPartTransCtx : public ObPartTransCtx {
 };
 
 class MockObLocationAdapter : public ObILocationAdapter {
-  public:
+public:
   MockObLocationAdapter()
   {}
   ~MockObLocationAdapter()
@@ -125,7 +125,7 @@ class MockObLocationAdapter : public ObILocationAdapter {
   }
 };
 class MockObTransRpc : public ObITransRpc {
-  public:
+public:
   MockObTransRpc()
   {}
   virtual ~MockObTransRpc()
@@ -187,13 +187,13 @@ class MockObTransRpc : public ObITransRpc {
 };
 
 class TestObTransSubmitLogCb : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
   {}
 
-  public:
+public:
   static const int64_t PARTITION_KEY_COUNT = 16;
   static const int64_t TENANT_ID = 1001;
   // valid parameter partition

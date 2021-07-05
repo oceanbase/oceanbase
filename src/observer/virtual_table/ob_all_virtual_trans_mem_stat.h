@@ -27,7 +27,7 @@ class ObTransMemoryStat;
 }  // namespace transaction
 namespace observer {
 class ObGVTransMemoryStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   explicit ObGVTransMemoryStat(transaction::ObTransService* trans_service) : trans_service_(trans_service)
   {
     reset();
@@ -37,23 +37,23 @@ class ObGVTransMemoryStat : public common::ObVirtualTableScannerIterator {
     destroy();
   }
 
-  public:
+public:
   int inner_get_next_row(common::ObNewRow*& row);
   void reset();
   void destroy();
 
-  private:
+private:
   int prepare_start_to_read_();
 
-  private:
+private:
   char ip_buffer_[common::OB_IP_STR_BUFF];
   char mod_type_[transaction::ObTransMemoryStat::OB_TRANS_MEMORY_MOD_TYPE_SIZE];
 
-  private:
+private:
   transaction::ObTransService* trans_service_;
   transaction::ObTransMemStatIterator mem_iter_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGVTransMemoryStat);
 };
 }  // namespace observer

@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogSubPlanScan : public ObLogicalOperator {
-  public:
+public:
   ObLogSubPlanScan(ObLogPlan& plan)
       : ObLogicalOperator(plan), subquery_id_(common::OB_INVALID_ID), subquery_name_(), access_exprs_()
   {}
@@ -60,12 +60,12 @@ class ObLogSubPlanScan : public ObLogicalOperator {
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
 
-  private:
+private:
   virtual int print_operator_for_outline(planText& plan_text);
   virtual int is_used_join_type_hint(JoinAlgo join_algo, bool& is_used);
   virtual int is_used_in_leading_hint(bool& is_used);
 
-  private:
+private:
   uint64_t subquery_id_;
   common::ObString subquery_name_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> access_exprs_;

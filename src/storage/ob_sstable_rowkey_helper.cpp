@@ -269,7 +269,7 @@ int ObSSTableRowkeyHelper::get_macro_block_meta(
   } else if (OB_UNLIKELY(macro_meta.meta_->rowkey_column_number_ < schema_rowkey_column_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN,
-        "Unexcepted mis matched rowkey column number",
+        "Unexpected mis matched rowkey column number",
         K(macro_meta.meta_->rowkey_column_number_),
         K(schema_rowkey_column_cnt),
         K(ret));

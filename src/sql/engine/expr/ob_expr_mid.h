@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprMid : public ObExprSubstr {
-  public:
+public:
   explicit ObExprMid(common::ObIAllocator& alloc) : ObExprSubstr(alloc)
   {
     *(const_cast<ObExprOperatorType*>(&type_)) = T_FUN_SYS_MID;
@@ -27,7 +27,7 @@ class ObExprMid : public ObExprSubstr {
   };
   virtual ~ObExprMid(){};
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprMid);
 };

@@ -32,7 +32,7 @@ namespace share {
 class ObZoneItemTransUpdater;
 
 struct ObZoneInfoItem : public common::ObDLinkBase<ObZoneInfoItem> {
-  public:
+public:
   typedef common::ObFixedLengthString<common::MAX_ZONE_INFO_LENGTH> Info;
   typedef common::ObDList<ObZoneInfoItem> ItemList;
 
@@ -60,7 +60,7 @@ struct ObZoneInfoItem : public common::ObDLinkBase<ObZoneInfoItem> {
   // update %value_ and %info_. (set %info_ to empty)
   int update(ObZoneItemTransUpdater& updater, const common::ObZone& zone, const int64_t value);
 
-  public:
+public:
   const char* name_;
   int64_t value_;
   Info info_;
@@ -69,7 +69,7 @@ struct ObZoneInfoItem : public common::ObDLinkBase<ObZoneInfoItem> {
 // Update item in transaction, if transaction rollback or commit failed the item value
 // value will be rollback too.
 class ObZoneItemTransUpdater {
-  public:
+public:
   ObZoneItemTransUpdater();
   ~ObZoneItemTransUpdater();
 
@@ -81,7 +81,7 @@ class ObZoneItemTransUpdater {
     return trans_;
   }
 
-  private:
+private:
   const static int64_t PTR_OFFSET = sizeof(void*);
 
   bool started_;
@@ -93,7 +93,7 @@ class ObZoneItemTransUpdater {
 };
 
 struct ObGlobalInfo {
-  public:
+public:
   ObGlobalInfo();
   ObGlobalInfo(const ObGlobalInfo& other);
   ObGlobalInfo& operator=(const ObGlobalInfo& other);
@@ -101,7 +101,7 @@ struct ObGlobalInfo {
   bool is_valid() const;
   DECLARE_TO_STRING;
 
-  public:
+public:
   const common::ObZone zone_;  // always be default value
   ObZoneInfoItem::ItemList list_;
 
@@ -125,7 +125,7 @@ struct ObGlobalInfo {
 };
 
 struct ObZoneInfo {
-  public:
+public:
   enum MergeStatus {
     MERGE_STATUS_IDLE,
     MERGE_STATUS_MERGING,
@@ -171,7 +171,7 @@ struct ObZoneInfo {
   static const char* get_storage_type_str(const StorageType storage_type);
   static StorageType get_storage_type(const char* storage_type_str);
 
-  public:
+public:
   common::ObZone zone_;
   ObZoneInfoItem::ItemList list_;
 

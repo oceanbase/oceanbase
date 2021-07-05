@@ -33,7 +33,7 @@ static const char* dev_name = "bond0";
 static const int timeout = 300000; /*us*/
 
 class TEST_CASE_NAME : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
@@ -41,7 +41,7 @@ class TEST_CASE_NAME : public ::testing::Test {
 
   int routine(int loop);
 
-  protected:
+protected:
   ObServer self_;
 };
 

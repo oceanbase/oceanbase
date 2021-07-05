@@ -23,13 +23,13 @@
 namespace oceanbase {
 namespace common {
 class SpinRWLock {
-  public:
+public:
   explicit SpinRWLock(uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_RWLOCK) : latch_(), latch_id_(latch_id)
   {}
   ~SpinRWLock()
   {}
 
-  public:
+public:
   void set_latch_id(const uint32_t latch_id)
   {
     latch_id_ = latch_id;
@@ -55,16 +55,16 @@ class SpinRWLock {
     return latch_.unlock();
   }
 
-  private:
+private:
   ObLatch latch_;
   uint32_t latch_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(SpinRWLock);
 };
 
 class SpinRLockGuard {
-  public:
+public:
   explicit SpinRLockGuard(const SpinRWLock& lock) : lock_(const_cast<SpinRWLock&>(lock)), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock()))) {
@@ -84,16 +84,16 @@ class SpinRLockGuard {
     return ret_;
   }
 
-  private:
+private:
   SpinRWLock& lock_;
   int ret_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(SpinRLockGuard);
 };
 
 class SpinWLockGuard {
-  public:
+public:
   explicit SpinWLockGuard(const SpinRWLock& lock) : lock_(const_cast<SpinRWLock&>(lock)), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock()))) {
@@ -113,11 +113,11 @@ class SpinWLockGuard {
     return ret_;
   }
 
-  private:
+private:
   SpinRWLock& lock_;
   int ret_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(SpinWLockGuard);
 };
 }  // namespace common

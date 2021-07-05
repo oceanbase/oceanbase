@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDropRestorePointStmt : public ObSystemCmdStmt {
-  public:
+public:
   explicit ObDropRestorePointStmt(common::ObIAllocator* name_pool)
       : ObSystemCmdStmt(name_pool, stmt::T_DROP_RESTORE_POINT), drop_restore_point_arg_(), restore_point_name_()
   {}
@@ -48,7 +48,7 @@ class ObDropRestorePointStmt : public ObSystemCmdStmt {
     return restore_point_name_;
   }
 
-  private:
+private:
   obrpc::ObDropRestorePointArg drop_restore_point_arg_;
   ObString restore_point_name_;
   DISALLOW_COPY_AND_ASSIGN(ObDropRestorePointStmt);

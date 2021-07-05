@@ -26,7 +26,7 @@ class ObHashExcept::ObHashExceptCtx : public ObHashSetOperatorCtx {
   ~ObHashExceptCtx()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHashExceptCtx);
   friend class ObHashExcept;
 };

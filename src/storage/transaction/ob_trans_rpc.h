@@ -58,7 +58,7 @@ namespace obrpc {
 class ObTransRpcResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTransRpcResult()
   {
     reset();
@@ -78,16 +78,16 @@ class ObTransRpcResult {
   void reset();
   TO_STRING_KV(K_(status), K_(send_timestamp));
 
-  public:
+public:
   static const int64_t OB_TRANS_RPC_TIMEOUT_THRESHOLD = 3 * 1000 * 1000;
 
-  private:
+private:
   int status_;
   int64_t send_timestamp_;
 };
 
 class ObTransRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObTransRpcProxy);
 
   RPC_AP(PR3 post_trans_msg, OB_TRANS, (transaction::ObTransMsg), ObTransRpcResult);
@@ -95,38 +95,38 @@ class ObTransRpcProxy : public obrpc::ObRpcProxy {
 };
 
 class ObTransP : public ObRpcProcessor<obrpc::ObTransRpcProxy::ObRpc<OB_TRANS> > {
-  public:
+public:
   ObTransP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransP);
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 class ObTransRespP : public ObRpcProcessor<obrpc::ObTransRpcProxy::ObRpc<OB_TRANS_RESP> > {
-  public:
+public:
   ObTransRespP(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransRespP);
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 
 template <ObRpcPacketCode PC>
 class ObTransRPCCB : public ObTransRpcProxy::AsyncCB<PC> {
-  public:
+public:
   ObTransRPCCB()
       : is_inited_(false),
         msg_type_(transaction::OB_TRANS_MSG_UNKNOWN),
@@ -161,11 +161,11 @@ class ObTransRPCCB : public ObTransRpcProxy::AsyncCB<PC> {
     return newcb;
   }
 
-  public:
+public:
   int process();
   void on_timeout();
 
-  private:
+private:
   bool is_inited_;
   common::ObPartitionKey pkey_;
   transaction::ObTransID trans_id_;
@@ -302,7 +302,7 @@ void ObTransRPCCB<PC>::on_timeout()
       // 2. for read-only transaction, if remote server crash stop when tranaction commit,
       //    scheduler no need to retry the request
       // 3. for read-write transaction, if need to rollback, location cache will be refreshed after timeout reached
-      //    clean cache of current transaction and resend reqeust to new leader
+      //    clean cache of current transaction and resend request to new leader
       // 4. for other type of messsage, don't handle but register asynchronouse task
       if (OB_SUCCESS != (tmp_ret = transaction::handle_trans_msg_callback(trans_service_,
                              pkey_,
@@ -337,7 +337,7 @@ void ObTransRPCCB<PC>::on_timeout()
 
 namespace transaction {
 class TransRpcTask : public ObTransTask {
-  public:
+public:
   TransRpcTask()
   {
     reset();
@@ -395,7 +395,7 @@ class TransRpcTask : public ObTransTask {
   TO_STRING_KV(K_(partition), K_(trans_id), K_(msg_type), K_(status), K_(msg), K_(task_type), K_(addr), K_(request_id),
       K_(sql_no), K_(task_timeout));
 
-  public:
+public:
   ObPartitionKey partition_;
   ObTransID trans_id_;
   int64_t msg_type_;
@@ -408,7 +408,7 @@ class TransRpcTask : public ObTransTask {
 };
 
 class ObITransRpc {
-  public:
+public:
   ObITransRpc()
   {}
   virtual ~ObITransRpc()
@@ -418,7 +418,7 @@ class ObITransRpc {
   virtual void wait() = 0;
   virtual void destroy() = 0;
 
-  public:
+public:
   virtual int post_trans_msg(
       const uint64_t tenant_id, const common::ObAddr& server, const ObTransMsg& msg, const int64_t msg_type) = 0;
   virtual int post_trans_msg(
@@ -427,7 +427,7 @@ class ObITransRpc {
 };
 
 class ObTransRpc : public ObITransRpc {
-  public:
+public:
   ObTransRpc()
       : is_inited_(false),
         is_running_(false),
@@ -448,20 +448,20 @@ class ObTransRpc : public ObITransRpc {
   void wait();
   void destroy();
 
-  public:
+public:
   int post_trans_msg(
       const uint64_t tenant_id, const common::ObAddr& server, const ObTransMsg& msg, const int64_t msg_type);
   int post_trans_msg(
       const uint64_t tenant_id, const common::ObAddr& server, const ObTrxMsgBase& msg, const int64_t msg_type);
   int post_trans_resp_msg(const uint64_t tenant_id, const ObAddr& server, const ObTransMsg& msg);
 
-  private:
+private:
   void statistics_();
 
-  private:
+private:
   static const int64_t STAT_INTERVAL = 1 * 1000 * 1000;
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   obrpc::ObTransRpcProxy* rpc_proxy_;
@@ -474,7 +474,7 @@ class ObTransRpc : public ObITransRpc {
 };
 
 class ObTransBatchRpc : public ObITransRpc {
-  public:
+public:
   ObTransBatchRpc() : trx_rpc_(), batch_rpc_(NULL)
   {}
   ~ObTransBatchRpc()
@@ -488,14 +488,14 @@ class ObTransBatchRpc : public ObITransRpc {
   void wait();
   void destroy();
 
-  public:
+public:
   int post_trans_msg(
       const uint64_t tenant_id, const common::ObAddr& server, const ObTransMsg& msg, const int64_t msg_type);
   int post_trans_msg(
       const uint64_t tenant_id, const common::ObAddr& server, const ObTrxMsgBase& msg, const int64_t msg_type);
   int post_trans_resp_msg(const uint64_t tenant_id, const ObAddr& server, const ObTransMsg& msg);
 
-  private:
+private:
   ObTransRpc trx_rpc_;
   obrpc::ObBatchRpc* batch_rpc_;
   DISALLOW_COPY_AND_ASSIGN(ObTransBatchRpc);

@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObAlterUserProfileStmt : public ObDDLStmt {
-  public:
+public:
   ObAlterUserProfileStmt();
   explicit ObAlterUserProfileStmt(common::ObIAllocator* name_pool);
   virtual ~ObAlterUserProfileStmt();
@@ -37,12 +37,12 @@ class ObAlterUserProfileStmt : public ObDDLStmt {
     return set_role_flag_;
   }
 
-  private:
+private:
   // data members
   obrpc::ObAlterUserProfileArg arg_;
   int set_role_flag_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterUserProfileStmt);
 };
 }  // end namespace sql

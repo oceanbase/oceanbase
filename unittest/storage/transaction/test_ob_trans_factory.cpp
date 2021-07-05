@@ -23,19 +23,19 @@ using namespace common;
 using namespace transaction;
 namespace unittest {
 class TestObTransFactory : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
   {}
 
-  public:
+public:
   static void* alloc_partition_mgr(void* args);
   static void* alloc_clog_buf(void* args);
   static void* alloc_trans_rpc(void* args);
   static void* alloc_mutator_buf(void* args);
 
-  public:
+public:
   static const char* LOCAL_IP;
   static const int32_t PORT = 8080;
   static const ObAddr::VER IP_TYPE = ObAddr::IPV4;

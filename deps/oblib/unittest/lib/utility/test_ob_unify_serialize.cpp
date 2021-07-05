@@ -27,14 +27,14 @@ using namespace oceanbase::common::serialization;
 ObRandom Random;
 
 class TestObUnifySerialize : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
 
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   template <class T>
   int64_t do_test(const T& t)
   {
@@ -49,7 +49,7 @@ class TestObUnifySerialize : public ::testing::Test {
     return len;
   }
 
-  protected:
+protected:
   const static int64_t LEN = 1024;
   char buf_[LEN];
 };
@@ -77,7 +77,7 @@ OB_SERIALIZE_MEMBER(CEmptyTest);
 struct CIntTest : public CPureTest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   CIntTest()
   {
     b_ = false;
@@ -142,7 +142,7 @@ struct CIntTest : public CPureTest {
     return t1;
   }
 
-  public:
+public:
   bool b_;
   int8_t vi8_;
   uint8_t vu8_;
@@ -159,7 +159,7 @@ OB_SERIALIZE_MEMBER(CIntTest, b_, vi8_, vu8_, vi16_, vu16_, vi32_, vu32_, vi64_,
 struct CDerived : public CIntTest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   CDerived()
   {
     i64_ = 0;
@@ -173,7 +173,7 @@ struct CDerived : public CIntTest {
     return n;
   }
 
-  private:
+private:
   int64_t i64_;
 };
 
@@ -182,7 +182,7 @@ OB_SERIALIZE_MEMBER((CDerived, CIntTest), i64_);
 struct CCharTest : public CPureTest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   CCharTest()
   {
     memset(buf_, 0, 8);
@@ -204,7 +204,7 @@ struct CCharTest : public CPureTest {
     return n;
   }
 
-  private:
+private:
   char buf_[32];
 };
 
@@ -213,7 +213,7 @@ OB_SERIALIZE_MEMBER(CCharTest, buf_);
 struct CArrayTest : public CPureTest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   CArrayTest()
   {
     memset(ia_, 0, sizeof(int32_t) * SIZE);
@@ -264,10 +264,10 @@ struct CArrayTest : public CPureTest {
     return n;
   }
 
-  private:
+private:
   static const int SIZE = 32;
 
-  private:
+private:
   int32_t ia_[SIZE];
   uint32_t uia_[SIZE];
   int64_t i64a_[SIZE];
@@ -280,7 +280,7 @@ OB_SERIALIZE_MEMBER(CArrayTest, ia_, uia_, i64a_, ui64a_, ita_);
 struct CEnumTest : public CPureTest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   CEnumTest()
   {
     eval = E0;
@@ -300,7 +300,7 @@ struct CEnumTest : public CPureTest {
     return et;
   }
 
-  private:
+private:
   enum Eval { E0, E1, E2, E3, EMAX } eval;
 };
 
@@ -309,7 +309,7 @@ OB_SERIALIZE_MEMBER(CEnumTest, eval);
 struct CNested {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   bool operator==(const CNested& other) const
   {
     return t1_ == other.t1_ && t2_ == other.t2_ && ct_ == other.ct_ && at_ == other.at_ && et_ == other.et_ &&
@@ -328,7 +328,7 @@ struct CNested {
     return n;
   }
 
-  public:
+public:
   CIntTest t1_;
   CIntTest t2_;
   CCharTest ct_;
@@ -342,7 +342,7 @@ OB_SERIALIZE_MEMBER(CNested, t1_, t2_, ct_, at_, et_, t3_);
 struct CNestedAddOne {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   bool operator==(const CNestedAddOne& other) const
   {
     return t1_ == other.t1_ && t2_ == other.t2_ && ct_ == other.ct_ && at_ == other.at_ && et_ == other.et_ &&
@@ -362,7 +362,7 @@ struct CNestedAddOne {
     return n;
   }
 
-  public:
+public:
   CIntTest t1_;
   CIntTest t2_;
   CCharTest ct_;
@@ -377,7 +377,7 @@ OB_SERIALIZE_MEMBER(CNestedAddOne, t1_, t2_, ct_, at_, et_, t3_, t4_);
 struct CNestedStub {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   bool operator==(const CNestedStub&) const
   {
     return true;
@@ -388,7 +388,7 @@ struct CNestedStub {
     return CNestedStub();
   }
 
-  public:
+public:
   CEmptyTest t1_;
   CEmptyTest t2_;
   CCharTest ct_;
@@ -556,7 +556,7 @@ TEST_F(TestObUnifySerialize, Dummy)
 struct COptInt {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   COptInt() : valid_(true), value_(0)
   {}
 
@@ -565,7 +565,7 @@ struct COptInt {
     return valid_ == rhs.valid_ && value_ == rhs.value_;
   }
 
-  public:
+public:
   bool valid_;
   int value_;
 };
@@ -618,13 +618,13 @@ class CCompat {
   OB_UNIS_VERSION(1);
   OB_UNIS_COMPAT(VER(2, 2, 3));
 
-  public:
+public:
   bool operator==(const CCompat& rhs) const
   {
     return i1_ == rhs.i1_ && i2_ == rhs.i2_;
   }
 
-  public:
+public:
   int i1_;
   int i2_;
 };
@@ -636,7 +636,7 @@ class CCompat2 : public CCompat {
   OB_UNIS_VERSION(1);
   OB_UNIS_COMPAT(VER(2, 2, 3));
 
-  public:
+public:
   CCompat2()
   {
     at_ = CArrayTest::RAND();
@@ -651,7 +651,7 @@ class CCompat2 : public CCompat {
     return !operator==(rhs);
   }
 
-  public:
+public:
   CArrayTest at_;
   long l1_;
   long l2_;
@@ -663,7 +663,7 @@ OB_SERIALIZE_MEMBER_COMPAT(VER(2, 2, 3), CCompat2, i1_, i2_, at_, l1_, l2_);
 class CNoCompat : public CCompat {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   CNoCompat()
   {
     v_ = (int)Random.get(0, 127);
@@ -673,7 +673,7 @@ class CNoCompat : public CCompat {
     return v_ == rhs.v_ && static_cast<const CCompat&>(*this) == static_cast<const CCompat&>(rhs);
   }
 
-  private:
+private:
   int v_;
 };
 

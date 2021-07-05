@@ -26,15 +26,15 @@ class ObConnectByBase : public ObBasicNestedLoopJoin {
   friend ObConnectByPumpBase;
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   enum ObJoinState { JS_JOIN_END = 0, JS_READ_LEFT, JS_READ_RIGHT, JS_READ_OUTPUT, JS_READ_PUMP, JS_STATE_COUNT };
   enum ObFuncType { FT_ITER_GOING = 0, FT_ITER_END, FT_TYPE_COUNT };
 
-  public:
+public:
   class ObConnectByBaseCtx : public ObBasicNestedLoopJoinCtx {
     friend ObConnectByBase;
     // friend ObConnectByPumpBase;
-    public:
+  public:
     ObConnectByBaseCtx(ObExecContext& ctx)
         : ObBasicNestedLoopJoinCtx(ctx),
           state_(JS_READ_LEFT),
@@ -55,12 +55,12 @@ class ObConnectByBase : public ObBasicNestedLoopJoin {
     virtual int set_sys_current_path(
         int64_t sys_connect_by_path_id, const ObString& cur_str, const ObString& res_path) = 0;
 
-    protected:
+  protected:
     int create_null_cell_row(const ObConnectByBase& connect_by);
     int create_mock_right_row(const ObConnectByBase& connect_by);
     int init(const ObConnectByBase& connect_by, common::ObExprCtx* join_ctx);
 
-    protected:
+  protected:
     ObJoinState state_;
     const common::ObNewRow* root_row_;
     common::ObNewRow null_cell_row_;   // used for root row output
@@ -68,7 +68,7 @@ class ObConnectByBase : public ObBasicNestedLoopJoin {
     bool is_inited_;
   };
 
-  public:
+public:
   explicit ObConnectByBase(common::ObIAllocator& alloc);
   virtual ~ObConnectByBase();
   virtual void reset();
@@ -96,14 +96,14 @@ class ObConnectByBase : public ObBasicNestedLoopJoin {
       N_ROOT_ROW_DESC, root_row_desc_, N_PSEUDO_COLUMN_ROW_DESC, pseudo_column_row_desc_, N_CONNECT_BY_PRIOR_EXPRS,
       connect_by_prior_exprs_);
 
-  protected:
+protected:
   int construct_mock_right_row(const ObNewRow& root_row, ObNewRow& mock_right_row) const;
   int construct_root_output_row(ObConnectByBaseCtx& join_ctx, const ObNewRow*& output_row) const;
 
   int calc_connect_by_root_exprs(ObConnectByBaseCtx& join_ctx, ObNewRow* root_row, const ObNewRow* output_row) const;
   int calc_sys_connect_by_path(ObConnectByBaseCtx& join_ctx, ObNewRow* output_row) const;
 
-  protected:
+protected:
   // idx, used  to get param from phy plan.
   common::ObFixedArray<int64_t, common::ObIAllocator> level_params_;
   // Use to store sys connect by path sql expression.
@@ -115,14 +115,14 @@ class ObConnectBy : public ObConnectByBase {
   friend ObConnectByPump;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   class ObConnectByCtx : public ObConnectByBaseCtx {
     friend ObConnectBy;
     friend ObExprSysConnectByPath;
     friend ObExprPrior;
     friend ObConnectByPump;
 
-    public:
+  public:
     ObConnectByCtx(ObExecContext& ctx)
         : ObConnectByBaseCtx(ctx),
           connect_by_pump_(),
@@ -156,10 +156,10 @@ class ObConnectBy : public ObConnectByBase {
       return sql_mem_processor_.get_data_size() > sql_mem_processor_.get_mem_bound();
     }
 
-    private:
+  private:
     int init(const ObConnectBy& connect_by, common::ObExprCtx* join_ctx);
 
-    private:
+  private:
     ObConnectByPump connect_by_pump_;
     lib::MemoryContext* mem_context_;
     ObSqlWorkAreaProfile profile_;
@@ -185,7 +185,7 @@ class ObConnectBy : public ObConnectByBase {
     common::ObCollationType ctype_;  // collation type
   };
 
-  public:
+public:
   explicit ObConnectBy(common::ObIAllocator& alloc);
   virtual ~ObConnectBy();
   virtual int rescan(ObExecContext& exec_ctx) const override;
@@ -207,7 +207,7 @@ class ObConnectBy : public ObConnectByBase {
     return equal_cond_infos_.push_back(EqualConditionInfo(cmp_type, ctype));
   }
 
-  private:
+private:
   int inner_open(ObExecContext& exec_ctx) const override;
   int inner_get_next_row(ObExecContext& exec_ctx, const ObNewRow*& row) const override;
   int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const override;
@@ -244,7 +244,7 @@ class ObConnectBy : public ObConnectByBase {
 
   int add_pseudo_column(ObConnectByCtx& join_ctx, ObConnectByPump::PumpNode& node) const;
 
-  private:
+private:
   // state operations and transfer functions array.
   state_operation_func_type state_operation_func_[JS_STATE_COUNT];
   state_function_func_type state_function_func_[JS_STATE_COUNT][FT_TYPE_COUNT];

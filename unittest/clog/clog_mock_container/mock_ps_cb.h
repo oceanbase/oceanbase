@@ -20,13 +20,13 @@
 namespace oceanbase {
 namespace common {
 class MockObPSCb : public share::ObIPSCb {
-  public:
+public:
   MockObPSCb()
   {}
   virtual ~MockObPSCb()
   {}
 
-  public:
+public:
   int64_t get_min_using_file_id() const
   {
     return 0;

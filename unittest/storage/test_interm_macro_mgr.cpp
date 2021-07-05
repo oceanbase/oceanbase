@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace unittest {
 
 class ObIntermMacroMgrTest : public TestDataFilePrepare {
-  public:
+public:
   ObIntermMacroMgrTest();
   virtual ~ObIntermMacroMgrTest();
   virtual void SetUp();
@@ -33,7 +33,7 @@ class ObIntermMacroMgrTest : public TestDataFilePrepare {
     return storage_file_;
   }
 
-  private:
+private:
   ObStorageFile* storage_file_;
   ObStorageFileWithRef file_with_ref_;
 };

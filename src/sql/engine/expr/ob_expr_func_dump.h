@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprFuncDump : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprFuncDump(common::ObIAllocator& alloc);
   virtual ~ObExprFuncDump();
   virtual int calc_resultN(
@@ -30,7 +30,7 @@ class ObExprFuncDump : public ObStringExprOperator {
 
   static int eval_dump(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   int calc_params(const common::ObObj* objs, const int64_t param_num, int64_t& fmt_enum, int64_t& start_pos,
       int64_t& print_value_len) const;
   int calc_number(const common::ObObj& input, const int64_t fmt_enum, int64_t& start_pos, int64_t& print_value_len,

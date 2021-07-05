@@ -43,7 +43,7 @@ struct DLogLevel {
 extern int g_log_level_;
 
 class LoggerSwitchGuard {
-  public:
+public:
   static __thread bool g_logger_open_;
   LoggerSwitchGuard(bool open) : bak_(g_logger_open_)
   {
@@ -54,7 +54,7 @@ class LoggerSwitchGuard {
     g_logger_open_ = bak_;
   }
 
-  private:
+private:
   bool bak_;
 };
 

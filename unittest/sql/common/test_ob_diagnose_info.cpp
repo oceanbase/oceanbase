@@ -19,18 +19,18 @@ using namespace common;
 #define OK(value) ASSERT_EQ(OB_SUCCESS, (value))
 
 class ObDiagnoseInfoTest : public ::testing::Test {
-  public:
+public:
   ObDiagnoseInfoTest();
   virtual ~ObDiagnoseInfoTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObDiagnoseInfoTest(const ObDiagnoseInfoTest& other);
   ObDiagnoseInfoTest& operator=(const ObDiagnoseInfoTest& other);
 
-  protected:
+protected:
   // data members
 };
 

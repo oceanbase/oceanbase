@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogUpdate : public ObLogDelUpd {
-  public:
+public:
   ObLogUpdate(ObLogPlan& plan) : ObLogDelUpd(plan), tables_assignments_(NULL), update_set_(false)
   {}
   virtual ~ObLogUpdate()
@@ -54,14 +54,14 @@ class ObLogUpdate : public ObLogDelUpd {
 
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
 
-  private:
+private:
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
 
   int get_update_table(ObDMLStmt* stmt, ObColumnRefRawExpr* col_expr, uint64_t& ref_id);
 
   virtual int need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sharding_info, bool& is_needed) override;
 
-  private:
+private:
   // MySQL only, https://dev.mysql.com/doc/refman/8.0/en/update.html
   const ObTablesAssignments* tables_assignments_;
   // update ... set (a,b) = (subquery), (d,e) = (subquery)

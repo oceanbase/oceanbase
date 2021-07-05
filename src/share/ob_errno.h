@@ -203,7 +203,7 @@ constexpr int OB_ERR_DIVISOR_IS_ZERO = -4333;
 constexpr int OB_ERR_AES_IV_LENGTH = -4336;
 constexpr int OB_STORE_DIR_ERROR = -4337;
 constexpr int OB_OPEN_TWICE = -4338;
-constexpr int OB_RAID_SUPER_BLOCK_NOT_MACTH = -4339;
+constexpr int OB_RAID_SUPER_BLOCK_NOT_MATCH = -4339;
 constexpr int OB_NOT_OPEN = -4340;
 constexpr int OB_NOT_IN_SERVICE = -4341;
 constexpr int OB_RAID_DISK_NOT_NORMAL = -4342;
@@ -1526,7 +1526,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
   "The initialization vector supplied to aes_encrypt is too short. Must be at least 16 bytes long"
 #define OB_STORE_DIR_ERROR__USER_ERROR_MSG "store directory structure error"
 #define OB_OPEN_TWICE__USER_ERROR_MSG "open twice"
-#define OB_RAID_SUPER_BLOCK_NOT_MACTH__USER_ERROR_MSG "raid super block not match"
+#define OB_RAID_SUPER_BLOCK_NOT_MATCH__USER_ERROR_MSG "raid super block not match"
 #define OB_NOT_OPEN__USER_ERROR_MSG "not opened"
 #define OB_NOT_IN_SERVICE__USER_ERROR_MSG "target module is not in service"
 #define OB_RAID_DISK_NOT_NORMAL__USER_ERROR_MSG "raid disk not in normal status"
@@ -3255,7 +3255,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_STORE_DIR_ERROR__ORA_USER_ERROR_MSG \
   "ORA-00600: internal error code, arguments: -4337, store directory structure error"
 #define OB_OPEN_TWICE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4338, open twice"
-#define OB_RAID_SUPER_BLOCK_NOT_MACTH__ORA_USER_ERROR_MSG \
+#define OB_RAID_SUPER_BLOCK_NOT_MATCH__ORA_USER_ERROR_MSG \
   "ORA-00600: internal error code, arguments: -4339, raid super block not match"
 #define OB_NOT_OPEN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4340, not opened"
 #define OB_NOT_IN_SERVICE__ORA_USER_ERROR_MSG \

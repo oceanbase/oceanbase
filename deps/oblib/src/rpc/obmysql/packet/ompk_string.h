@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace obmysql {
 
 class OMPKString : public ObMySQLPacket {
-  public:
+public:
   explicit OMPKString(const common::ObString& str) : str_(str)
   {}
 
@@ -45,7 +45,7 @@ class OMPKString : public ObMySQLPacket {
 
   VIRTUAL_TO_STRING_KV("header", hdr_, K_(str));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(OMPKString);
   const common::ObString& str_;
 };  // end of class OMPKString

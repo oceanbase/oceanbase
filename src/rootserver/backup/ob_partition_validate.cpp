@@ -841,6 +841,8 @@ int ObPartitionValidate::build_physical_validate_arg(const bool is_dropped_tenan
     } else {
       STRNCPY(arg.backup_dest_, tenant_task_info.backup_dest_, OB_MAX_BACKUP_DEST_LENGTH);
       STRNCPY(arg.storage_info_, storage_info, OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
+      arg.backup_dest_[OB_MAX_BACKUP_DEST_LENGTH - 1] = '\0';
+      arg.storage_info_[OB_MAX_BACKUP_STORAGE_INFO_LENGTH - 1] = '\0';
       arg.job_id_ = tenant_task_info.job_id_;
       arg.task_id_ = tenant_task_info.task_id_;
       arg.trace_id_.set(trace_id);

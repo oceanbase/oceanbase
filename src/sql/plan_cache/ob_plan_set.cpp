@@ -901,14 +901,18 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan& plan, ObPlanCacheCtx& pc_ctx, int64_t
               array_binding_plan_ = &plan;
             }
           } else {
-            local_plan_ = &plan;
-            local_phy_locations_.reset();
-            if (OB_FAIL(init_phy_location(phy_locations.count()))) {
-              SQL_PC_LOG(WARN, "init phy location failed");
-            } else if (OB_FAIL(local_phy_locations_.assign(phy_locations))) {
-              SQL_PC_LOG(WARN, "fail to assign phy locations");
+            if (NULL != local_plan_) {
+              ret = OB_SQL_PC_PLAN_DUPLICATE;
+            } else {
+              local_plan_ = &plan;
+              local_phy_locations_.reset();
+              if (OB_FAIL(init_phy_location(phy_locations.count()))) {
+                SQL_PC_LOG(WARN, "init phy location failed");
+              } else if (OB_FAIL(local_phy_locations_.assign(phy_locations))) {
+                SQL_PC_LOG(WARN, "fail to assign phy locations");
+              }
+              LOG_DEBUG("local phy locations", K(local_phy_locations_));
             }
-            LOG_DEBUG("local phy locations", K(local_phy_locations_));
           }
         } break;
         case OB_PHY_PLAN_REMOTE: {

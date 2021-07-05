@@ -22,7 +22,7 @@ using namespace oceanbase::common;
 ObMemAttr attr;
 
 class TestBlockSet : public ::testing::Test {
-  public:
+public:
   TestBlockSet() : tallocator_(500)
   {}
   virtual void SetUp()
@@ -53,7 +53,7 @@ class TestBlockSet : public ::testing::Test {
     // ASSERT_EQ(56, (uint64_t)p & 0xFF) << ((uint64_t)p & 0xFF);
   }
 
-  protected:
+protected:
   ObTenantCtxAllocator tallocator_;
   BlockSet cs_;
 };

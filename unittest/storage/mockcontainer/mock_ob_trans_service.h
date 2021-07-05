@@ -63,13 +63,13 @@ namespace transaction {
 class KillTransArg;
 
 class MockObTsMgr : public ObITsMgr {
-  public:
+public:
   MockObTsMgr(ObLtsSource& source) : source_(source)
   {}
   virtual ~MockObTsMgr()
   {}
 
-  public:
+public:
   virtual int update_gts(const uint64_t tenant_id, const int64_t gts, bool& update)
   {
     UNUSED(tenant_id);
@@ -163,12 +163,12 @@ class MockObTsMgr : public ObITsMgr {
     return source_.get_gts(stc, NULL, gts, unused);
   }
 
-  private:
+private:
   ObLtsSource& source_;
 };
 
 class MockObTransService : public ObTransService {
-  public:
+public:
   memtable::ObMemtableCtxFactory mt_ctx_factory_def_;
   memtable::ObMemtableCtxFactory* mt_ctx_factory_;
   memtable::ObIMemtableCtx* mt_ctx_;
@@ -374,7 +374,7 @@ class MockObTransService : public ObTransService {
     return OB_SUCCESS;
   }
 
-  public:
+public:
   virtual memtable::ObIMemtableCtxFactory* get_mem_ctx_factory()
   {
     return mt_ctx_factory_;
@@ -775,7 +775,7 @@ class MockObTransService : public ObTransService {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   ObLtsSource lts_source;
   MockObTsMgr* ts_mgr;
 };

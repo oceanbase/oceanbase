@@ -22,7 +22,7 @@ using common::ObString;
 namespace obmysql {
 
 class OMPKChangeUser : public ObMySQLRawPacket {
-  public:
+public:
   OMPKChangeUser();
 
   virtual ~OMPKChangeUser()
@@ -90,12 +90,12 @@ class OMPKChangeUser : public ObMySQLRawPacket {
   }
   virtual int64_t get_serialize_size() const;
 
-  private:
+private:
   uint64_t get_session_vars_len() const;
   uint64_t get_connect_attrs_len() const;
   int serialize_session_vars(char* buffer, const int64_t length, int64_t& pos) const;
 
-  private:
+private:
   uint8_t cmd_;
   uint8_t character_set_;
   ObMySQLCapabilityFlags mysql_cap_;

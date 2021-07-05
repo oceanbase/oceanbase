@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace unittest {
 
 class TestObLogFileTrailer : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

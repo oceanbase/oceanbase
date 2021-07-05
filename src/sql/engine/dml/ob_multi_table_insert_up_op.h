@@ -21,7 +21,7 @@ namespace sql {
 class ObMultiTableInsertUpSpec : public ObTableInsertUpSpec, public ObMultiDMLInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMultiTableInsertUpSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableInsertUpSpec(alloc, type), ObMultiDMLInfo(alloc), table_column_exprs_(alloc)
   {}
@@ -37,19 +37,19 @@ class ObMultiTableInsertUpSpec : public ObTableInsertUpSpec, public ObMultiDMLIn
     return true;
   }
 
-  public:
+public:
   ObDuplicatedKeyChecker duplicate_key_checker_;
   ExprFixedArray table_column_exprs_;
 };
 
 class ObMultiTableInsertUpOp : public ObTableInsertUpOp, public ObMultiDMLCtx {
-  public:
+public:
   static const int64_t DELETE_OP = 0;
   static const int64_t INSERT_OP = 1;
   static const int64_t UPDATE_OP = 2;
   static const int64_t DML_OP_CNT = 3;
 
-  public:
+public:
   ObMultiTableInsertUpOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableInsertUpOp(ctx, spec, input),
         ObMultiDMLCtx(ctx.get_allocator()),
@@ -91,7 +91,7 @@ class ObMultiTableInsertUpOp : public ObTableInsertUpOp, public ObMultiDMLCtx {
   int convert_exprs_to_stored_row(common::ObIAllocator& allocator, ObEvalCtx& eval_ctx, const ObExprPtrIArray& exprs,
       ObChunkDatumStore::StoredRow*& new_row);
 
-  private:
+private:
   ObChunkDatumStore replace_row_store_;
   ObDupKeyCheckerCtx dupkey_checker_ctx_;
   int64_t changed_rows_;

@@ -28,7 +28,7 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObGlobalVariables : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObGlobalVariables();
   virtual ~ObGlobalVariables();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -42,7 +42,7 @@ class ObGlobalVariables : public common::ObVirtualTableScannerIterator {
     sql_proxy_ = sql_proxy;
   }
 
-  private:
+private:
   common::ObMySQLProxy* sql_proxy_;
   const share::schema::ObSysVariableSchema* sys_variable_schema_;
   DISALLOW_COPY_AND_ASSIGN(ObGlobalVariables);

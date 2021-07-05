@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace common {
 
 class HashAlloc : public IAlloc {
-  public:
+public:
   HashAlloc() : is_inited_(false), label_(ObModIds::OB_CONCURRENT_HASH_MAP), tenant_id_(OB_SERVER_TENANT_ID), size_(0)
   {}
   virtual ~HashAlloc()
@@ -30,10 +30,10 @@ class HashAlloc : public IAlloc {
   void* alloc(const int64_t sz);
   void free(void* p);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(HashAlloc);
 
-  private:
+private:
   bool is_inited_;
   lib::ObLabel label_;
   uint64_t tenant_id_;
@@ -42,7 +42,7 @@ class HashAlloc : public IAlloc {
 };
 
 class ArrayAlloc : public IAlloc {
-  public:
+public:
   ArrayAlloc() : label_(ObModIds::OB_CONCURRENT_HASH_MAP), tenant_id_(OB_SERVER_TENANT_ID)
   {}
   virtual ~ArrayAlloc()
@@ -51,17 +51,17 @@ class ArrayAlloc : public IAlloc {
   void* alloc(const int64_t sz);
   void free(void* p);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ArrayAlloc);
 
-  private:
+private:
   lib::ObLabel label_;
   uint64_t tenant_id_;
 };
 
 template <typename Key, typename Value>
 class ObConcurrentHashMap {
-  private:
+private:
   typedef HashRoot SHashRoot;
   typedef HashBase<Key, Value> SHash;
   typedef typename SHash::Iterator SScanIterator;
@@ -69,7 +69,7 @@ class ObConcurrentHashMap {
   typedef typename SHash::Handle SGetHandle;
   typedef typename SHash::Handle SPutHandle;
 
-  public:
+public:
   ObConcurrentHashMap();
   ObConcurrentHashMap(IHashAlloc& hash_alloc, IArrayAlloc& array_alloc);
   int init(
@@ -90,13 +90,13 @@ class ObConcurrentHashMap {
   template <typename Function>
   int remove_if(Function& fn);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObConcurrentHashMap);
   int err_code_map(int err) const;
 
-  private:
+private:
   class ReclaimCallback : public SHash::IKVRCallback {
-    public:
+  public:
     virtual void reclaim_key_value(Key& key, Value& value)
     {
       UNUSED(key);
@@ -105,12 +105,12 @@ class ObConcurrentHashMap {
   };
   template <typename Function>
   class RemoveIf {
-    public:
+  public:
     RemoveIf(ObConcurrentHashMap& hash, Function& fn) : hash_(hash), predicate_(fn)
     {}
     bool operator()(Key& key, Value& value);
 
-    private:
+  private:
     ObConcurrentHashMap& hash_;
     Function& predicate_;
   };
@@ -121,7 +121,7 @@ class ObConcurrentHashMap {
     return true;
   }
 
-  private:
+private:
   HashAlloc hash_alloc_;
   ArrayAlloc array_alloc_;
   ReclaimCallback relaim_callback_;

@@ -21,7 +21,7 @@ namespace clog {
 // Not thread safe
 template <typename T>
 class ObLog2FileList : public ObISegArray<T> {
-  public:
+public:
   ObLog2FileList() : is_inited_(false), item_cnt_(0), allocator_(NULL), head_(NULL), tail_(NULL)
   {}
 
@@ -34,7 +34,7 @@ class ObLog2FileList : public ObISegArray<T> {
     tail_ = NULL;
   }
 
-  public:
+public:
   virtual int init(ObSmallAllocator* allocator) override
   {
     int ret = OB_SUCCESS;
@@ -185,7 +185,7 @@ class ObLog2FileList : public ObISegArray<T> {
     return sizeof(DListNode);
   }
 
-  private:
+private:
   bool is_empty_() const
   {
     return head_ == NULL && tail_ == NULL;
@@ -243,27 +243,27 @@ class ObLog2FileList : public ObISegArray<T> {
     return ret;
   }
 
-  private:
+private:
   friend class ObFileIdList;
   class DListNode {
-    public:
+  public:
     DListNode() : value_(), next_(NULL), prev_(NULL)
     {}
 
-    public:
+  public:
     T value_;
     DListNode* next_;
     DListNode* prev_;
   };
 
-  private:
+private:
   bool is_inited_;
   int32_t item_cnt_;
   ObSmallAllocator* allocator_;
   DListNode* head_;
   DListNode* tail_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLog2FileList);
 };
 
@@ -789,6 +789,8 @@ int ObFileIdList::prepare_container_()
         container_ptr_->destroy();
         log2file_list_allocator_->free(container_ptr_);
         container_ptr_ = tmp_container_ptr;
+        use_seg_array_ = true;
+        CSR_LOG(INFO, "use seg array in prepare_container_ function");
       }
     }
   } else {

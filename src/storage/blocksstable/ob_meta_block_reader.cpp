@@ -157,11 +157,11 @@ int ObMetaBlockReader::get_meta_blocks(const int64_t entry_block)
   int64_t cur_pos = 0;
   int64_t block_idx = entry_block;
   int64_t pos = 0;
-  ObMacroBlockCommonHeader comon_header;
+  ObMacroBlockCommonHeader common_header;
   ObMacroBlockHandleV1 block_handle[2];
   ObMacroBlockReadInfo read_info;
   read_info.offset_ = 0;
-  read_info.size_ = comon_header.get_serialize_size();
+  read_info.size_ = common_header.get_serialize_size();
   read_info.io_desc_ = io_desc_;
 
   if (block_idx > 0) {
@@ -175,19 +175,19 @@ int ObMetaBlockReader::get_meta_blocks(const int64_t entry_block)
       STORAGE_LOG(WARN, "Fail to async read meta block, ", K(ret), K(block_idx));
     } else {
       do {
-        comon_header.reset();
+        common_header.reset();
         pos = 0;
         if (OB_FAIL(block_handle[cur_pos].wait(io_timeout_ms))) {
           STORAGE_LOG(WARN, "Fail to wait meta block io, ", K(ret));
         } else if (OB_FAIL(macro_blocks_.push_back(macro_block_ctx.get_macro_block_id()))) {
           STORAGE_LOG(WARN, "Fail to push block index", K(ret), K(block_idx));
-        } else if (OB_FAIL(comon_header.deserialize(
+        } else if (OB_FAIL(common_header.deserialize(
                        block_handle[cur_pos].get_buffer(), block_handle[cur_pos].get_data_size(), pos))) {
           STORAGE_LOG(
-              WARN, "Fail to deserialize common header", K(ret), K(pos), K(block_handle[cur_pos]), K(comon_header));
+              WARN, "Fail to deserialize common header", K(ret), K(pos), K(block_handle[cur_pos]), K(common_header));
         } else {
           buf_ = block_handle[cur_pos].get_buffer();
-          block_idx = comon_header.get_previous_block_index();
+          block_idx = common_header.get_previous_block_index();
 
           if (block_idx > 0) {
             cur_pos = 1 - cur_pos;
@@ -199,9 +199,9 @@ int ObMetaBlockReader::get_meta_blocks(const int64_t entry_block)
           }
 
           if (OB_SUCC(ret)) {
-            if (OB_UNLIKELY(!comon_header.is_valid())) {
+            if (OB_UNLIKELY(!common_header.is_valid())) {
               ret = OB_INVALID_DATA;
-              STORAGE_LOG(WARN, "Invalid data, ", K(ret), K(comon_header));
+              STORAGE_LOG(WARN, "Invalid data, ", K(ret), K(common_header));
             }
           }
         }

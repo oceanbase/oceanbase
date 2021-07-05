@@ -20,7 +20,7 @@ namespace unittest {
 using namespace oceanbase::common;
 
 class ObModAllocator : public DefaultPageAllocator {
-  public:
+public:
   void* mod_alloc(const int64_t size, const char* label)
   {
     set_label(label);

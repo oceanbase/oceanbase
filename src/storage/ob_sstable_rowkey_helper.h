@@ -26,7 +26,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObRowkeyObjComparer {
-  public:
+public:
   enum ObjComparerType {
     COMPARER_MYSQL = 0,
     COMPARER_ORACLE = 1,
@@ -48,7 +48,7 @@ class ObRowkeyObjComparer {
   static int sstable_oracle_collation_free_cmp_func(
       const common::ObObj& obj1, const common::ObObj& obj2, const common::ObCompareCtx& cmp_ctx);
 
-  public:
+public:
   ObRowkeyObjComparer();
   virtual ~ObRowkeyObjComparer() = default;
   virtual void reset();
@@ -87,7 +87,7 @@ class ObRowkeyObjComparer {
   }
   TO_STRING_KV(K_(type), K_(is_collation_free), K_(cmp_ctx));
 
-  protected:
+protected:
   rowkey_obj_comp_func cmp_func_;
   common::ObCompareCtx cmp_ctx_;
   bool is_collation_free_;
@@ -95,14 +95,14 @@ class ObRowkeyObjComparer {
 };
 
 class ObRowkeyObjComparerOracle : public ObRowkeyObjComparer {
-  public:
+public:
   ObRowkeyObjComparerOracle()
   {
     type_ = COMPARER_ORACLE;
     cmp_ctx_.null_pos_ = NULL_LAST;
   }
   virtual ~ObRowkeyObjComparerOracle() = default;
-  virtual int init_compare_func_collation_free(const common::ObObjMeta& obj_meta);
+  virtual int init_compare_func_collation_free(const common::ObObjMeta& obj_meta) override;
   virtual OB_INLINE int32_t compare_semi_nullsafe(const common::ObObj& obj1, const common::ObObj& obj2) override
   {
     int32_t cmp_ret = ObObjCmpFuncs::CR_EQ;
@@ -116,7 +116,7 @@ class ObRowkeyObjComparerOracle : public ObRowkeyObjComparer {
 };
 
 class ObRowkeyObjComparerNullsafeMysql : public ObRowkeyObjComparer {
-  public:
+public:
   ObRowkeyObjComparerNullsafeMysql()
   {
     type_ = COMPARER_MYSQL_NULLSAFE;
@@ -124,7 +124,7 @@ class ObRowkeyObjComparerNullsafeMysql : public ObRowkeyObjComparer {
     cmp_ctx_.null_pos_ = NULL_FIRST;
   }
   virtual ~ObRowkeyObjComparerNullsafeMysql() = default;
-  virtual OB_INLINE int32_t compare(const common::ObObj& obj1, const common::ObObj& obj2)
+  virtual OB_INLINE int32_t compare(const common::ObObj& obj1, const common::ObObj& obj2) override
   {
     int32_t cmp_ret = 0;
     if (OB_UNLIKELY(obj1.is_null() || obj2.is_null())) {
@@ -147,7 +147,7 @@ class ObRowkeyObjComparerNullsafeMysql : public ObRowkeyObjComparer {
 };
 
 class ObRowkeyObjComparerNullsafeOracle : public ObRowkeyObjComparerOracle {
-  public:
+public:
   ObRowkeyObjComparerNullsafeOracle()
   {
     type_ = COMPARER_ORACLE_NULLSAFE;
@@ -155,7 +155,7 @@ class ObRowkeyObjComparerNullsafeOracle : public ObRowkeyObjComparerOracle {
     cmp_ctx_.null_pos_ = NULL_LAST;
   }
   virtual ~ObRowkeyObjComparerNullsafeOracle() = default;
-  virtual OB_INLINE int32_t compare(const common::ObObj& obj1, const common::ObObj& obj2)
+  virtual OB_INLINE int32_t compare(const common::ObObj& obj1, const common::ObObj& obj2) override
   {
     int32_t cmp_ret = 0;
     if (OB_UNLIKELY(obj1.is_null() || obj2.is_null())) {
@@ -178,7 +178,7 @@ class ObRowkeyObjComparerNullsafeOracle : public ObRowkeyObjComparerOracle {
 };
 
 class ObSSTableRowkeyHelper {
-  public:
+public:
   typedef common::ObFixedArray<common::ObStoreRowkey, common::ObIAllocator> RowkeyArray;
   typedef common::ObFixedArray<ObRowkeyObjComparer*, common::ObIAllocator> RowkeyCmpFuncArray;
   ObSSTableRowkeyHelper();
@@ -288,9 +288,9 @@ class ObSSTableRowkeyHelper {
     return cmp_ret;
   }
 
-  public:
+public:
   class RowkeyComparor {
-    public:
+  public:
     RowkeyComparor() = delete;
     RowkeyComparor(RowkeyCmpFuncArray& cmp_funcs, const bool prefix_check)
         : cmp_funcs_(cmp_funcs), prefix_check_(prefix_check)
@@ -308,7 +308,7 @@ class ObSSTableRowkeyHelper {
     const bool prefix_check_;
   };
 
-  private:
+private:
   int get_macro_block_meta(const blocksstable::MacroBlockId& macro_id, blocksstable::ObFullMacroBlockMeta& macro_meta,
       const int64_t schema_rowkey_column_cnt);
   int build_macro_endkeys(const common::ObIArray<blocksstable::MacroBlockId>& macro_ids, ObIAllocator& allocator,
@@ -323,7 +323,7 @@ class ObSSTableRowkeyHelper {
   int locate_block_idx_(const ObExtStoreRowkey& ext_rowkey, const int64_t cmp_rowkey_col_cnt,
       const bool use_lower_bound, const int64_t last_block_idx, int64_t& block_idx);
 
-  private:
+private:
   RowkeyArray endkeys_;
   RowkeyArray collation_free_endkeys_;
   RowkeyCmpFuncArray cmp_funcs_;

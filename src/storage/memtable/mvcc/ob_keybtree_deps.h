@@ -43,7 +43,7 @@ struct CompHelper {
 };
 
 class RWLock {
-  public:
+public:
   RWLock() : lock_(0)
   {}
   ~RWLock()
@@ -67,7 +67,7 @@ class RWLock {
     ATOMIC_STORE(&lock_, 0);
   }
 
-  private:
+private:
   union {
     struct {
       int16_t read_ref_;
@@ -80,7 +80,7 @@ class RWLock {
 class KVQueue {
   enum { capacity = 64 };
 
-  public:
+public:
   KVQueue() : push_(0), pop_(0)
   {}
   ~KVQueue()
@@ -93,13 +93,13 @@ class KVQueue {
     return push_ - pop_;
   }
 
-  private:
+private:
   int64_t idx(const int64_t x)
   {
     return x % capacity;
   }
 
-  private:
+private:
   int64_t push_;
   int64_t pop_;
   BtreeKV items_[capacity];
@@ -108,7 +108,7 @@ class KVQueue {
 class MultibitSet {
   enum { LEN_OF_COUNTER = 4, LEN_OF_PER_INDEX = 4, LEN_OF_TOTAL_INDEX = 64 };
 
-  public:
+public:
   MultibitSet() : data_(0)
   {}
   MultibitSet(RawType d) : data_(d)
@@ -156,7 +156,7 @@ class MultibitSet {
     return ATOMIC_LOAD(&data_);
   }
 
-  private:
+private:
   OB_INLINE RawType cal_index_(MultibitSet& old, int index, uint8_t value)
   {
     uint8_t offset = LEN_OF_COUNTER + index * LEN_OF_PER_INDEX;
@@ -173,11 +173,11 @@ class MultibitSet {
     };
   };
 
-  public:
+public:
 };
 
 class WeightEstimate {
-  public:
+public:
   enum { MAX_LEVEL = 64 };
   WeightEstimate(int64_t node_cnt);
   int64_t get_weight(int64_t level)
@@ -185,19 +185,19 @@ class WeightEstimate {
     return weight_[level];
   }
 
-  private:
+private:
   int64_t weight_[MAX_LEVEL];
 };
 
 struct BtreeNode : public common::ObLink {
   friend class ScanHandle;
 
-  private:
+private:
   enum {
     MAGIC_NUM = 0xb7ee  // 47086
   };
 
-  public:
+public:
   BtreeNode() : host_(nullptr), max_del_version_(0), level_(0), magic_num_(MAGIC_NUM), index_()
   {}
   ~BtreeNode()
@@ -332,7 +332,7 @@ struct BtreeNode : public common::ObLink {
     set_key_value(pos, key, val);
   }
 
-  protected:
+protected:
   OB_INLINE int binary_search_upper_bound(
       CompHelper& nh, BtreeKey key, bool& is_equal, int& pos, MultibitSet* index = nullptr)
   {
@@ -371,7 +371,7 @@ struct BtreeNode : public common::ObLink {
   void copy_and_insert(BtreeNode& dest_node, const int start, const int end, int pos, BtreeKey key_1, BtreeVal val_1,
       BtreeKey key_2, BtreeVal val_2);
 
-  public:
+public:
   uint64_t get_tag(int pos, MultibitSet* index = nullptr) const;
   uint64_t check_tag(MultibitSet* index = nullptr) const;
   void replace_child(BtreeNode* new_node, const int pos, BtreeNode* child, int64_t del_version);
@@ -381,7 +381,7 @@ struct BtreeNode : public common::ObLink {
   void split_child_cause_recursive_split(BtreeNode* new_node_1, BtreeNode* new_node_2, const int pos, BtreeKey key_1,
       BtreeVal val_1, BtreeKey key_2, BtreeVal val_2, int64_t del_version);
 
-  private:
+private:
   void* host_;
   int64_t max_del_version_;
   RWLock lock_;
@@ -403,7 +403,7 @@ struct Item {
 class Path {
   enum { MAX_DEPTH = 32 };
 
-  public:
+public:
   Path() : depth_(0), is_found_(false)
   {}
   ~Path()
@@ -460,14 +460,14 @@ class Path {
     return is_found_;
   }
 
-  private:
+private:
   int64_t depth_;
   Item path_[MAX_DEPTH];
   bool is_found_;
 };
 
 class OptimisticScanCompHelper {
-  public:
+public:
   explicit OptimisticScanCompHelper(CompHelper& comp)
       : enable_optimistic_comp_(true),
         comp_(comp),
@@ -483,7 +483,7 @@ class OptimisticScanCompHelper {
   // cmp < 0: iter end
   int comp(BtreeKey& cur_key, BtreeKey* jump_key, int& cmp);
 
-  private:
+private:
   bool enable_optimistic_comp_;
   CompHelper& comp_;
   bool is_backward_;
@@ -493,7 +493,7 @@ class OptimisticScanCompHelper {
 };
 
 class BaseHandle {
-  public:
+public:
   BaseHandle(QClock& qclock) : index_(), qclock_(qclock), qc_slot_(UINT64_MAX), comp_()
   {}
   ~BaseHandle()
@@ -510,18 +510,18 @@ class BaseHandle {
     return comp_;
   }
 
-  protected:
+protected:
   // record leaf index
   MultibitSet index_;
 
-  private:
+private:
   QClock& qclock_;
   uint64_t qc_slot_;
   CompHelper comp_;
 };
 
 class GetHandle : public BaseHandle {
-  public:
+public:
   GetHandle(ObKeyBtree& tree) : BaseHandle(tree.get_qclock())
   {
     UNUSED(tree);
@@ -532,11 +532,11 @@ class GetHandle : public BaseHandle {
 };
 
 class ScanHandle : public BaseHandle {
-  private:
+private:
   Path path_;
   int64_t version_;
 
-  public:
+public:
   explicit ScanHandle(ObKeyBtree& tree) : BaseHandle(tree.get_qclock()), version_(INT64_MAX)
   {
     UNUSED(tree);
@@ -565,13 +565,13 @@ class ScanHandle : public BaseHandle {
 };
 
 class WriteHandle : public BaseHandle {
-  private:
+private:
   ObKeyBtree& base_;
   Path path_;
   HazardList retire_list_;
   HazardList alloc_list_;
 
-  public:
+public:
   explicit WriteHandle(ObKeyBtree& tree) : BaseHandle(tree.get_qclock()), base_(tree)
   {}
   ~WriteHandle()
@@ -635,12 +635,12 @@ class WriteHandle : public BaseHandle {
     return ret;
   }
 
-  public:
+public:
   int insert_and_split_upward(BtreeKey key, BtreeVal val, BtreeNode*& new_root);
   int tag_delete(BtreeKey key, BtreeVal& val, int64_t version, BtreeNode*& new_root);
   int tag_insert(BtreeKey key, BtreeNode*& new_root);
 
-  private:
+private:
   uint64_t check_tag(BtreeNode* node)
   {
     return OB_ISNULL(node) ? 0 : node->check_tag();
@@ -673,7 +673,7 @@ class WriteHandle : public BaseHandle {
 };
 
 class Iterator {
-  public:
+public:
   explicit Iterator(ObKeyBtree& btree)
       : btree_(btree),
         scan_handle_(btree),
@@ -715,13 +715,13 @@ class Iterator {
   // while element_count is the count of btree node
   int estimate_element_count(int64_t& physical_row_count, int64_t& element_count, const double ratio);
 
-  private:
+private:
   int iter_next(BtreeKey& key, BtreeVal& value);
   // for estimate row count in range
   int iter_next_batch_level_node(int64_t& element_count, const int64_t batch_count, const int64_t level,
       int64_t& gap_size, const int64_t gap_limit, int64_t& phy_element_count, const double ratio);
 
-  private:
+private:
   ObKeyBtree& btree_;
   ScanHandle scan_handle_;
   OptimisticScanCompHelper optimistic_comp_helper_;
@@ -736,7 +736,7 @@ class Iterator {
 };
 
 class HazardLessIterator {
-  public:
+public:
   explicit HazardLessIterator(ObKeyBtree& btree)
       : iter_(btree),
         root_(NULL),
@@ -761,10 +761,10 @@ class HazardLessIterator {
   }
   int get_next(BtreeKey& key, BtreeVal& value);
 
-  private:
+private:
   int scan_batch();
 
-  private:
+private:
   Iterator iter_;
   BtreeNode** root_;
   bool scan_backward_;

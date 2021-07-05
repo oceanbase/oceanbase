@@ -36,7 +36,7 @@ using namespace lib;
 namespace unittest {
 
 class ObPartitionMigratorTest : public ::testing::Test {
-  public:
+public:
   void init()
   {
     ASSERT_EQ(OB_SUCCESS, a_.parse_from_cstring("10.10.10.1:1001"));
@@ -81,7 +81,7 @@ class ObPartitionMigratorTest : public ::testing::Test {
     return ret;
   }
 
-  protected:
+protected:
   ObAddr a_;
   ObAddr b_;
   ObAddr c_;

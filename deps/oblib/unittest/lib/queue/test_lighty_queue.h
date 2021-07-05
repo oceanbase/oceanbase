@@ -17,21 +17,21 @@ using oceanbase::common::LightyQueue;
 using oceanbase::lib::ThreadPool;
 
 class Productor : public ThreadPool {
-  public:
+public:
   Productor(LightyQueue& q, int th_cnt) : q_(q)
   {
     set_thread_count(th_cnt);
   }
 
-  private:
+private:
   void run1() override;
 
-  private:
+private:
   LightyQueue& q_;
 };  // end of class Productor
 
 class Consumer : public ThreadPool {
-  public:
+public:
   Consumer(LightyQueue& q, int th_cnt) : q_(q), cnt_(0)
   {
     set_thread_count(th_cnt);
@@ -42,10 +42,10 @@ class Consumer : public ThreadPool {
     return cnt_;
   }
 
-  private:
+private:
   void run1() override;
 
-  private:
+private:
   LightyQueue& q_;
   uint64_t cnt_;
 };  // end of class Consumer

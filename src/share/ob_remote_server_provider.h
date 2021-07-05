@@ -29,7 +29,7 @@ namespace share {
 // fetch remote server list across cluster
 class ObRemoteServerProvider : public common::sqlclient::ObMySQLServerProvider {
   struct ServerAddr {
-    public:
+  public:
     ServerAddr() : server_(), sql_port_(common::OB_INVALID_ID)
     {}
     virtual ~ServerAddr()
@@ -37,13 +37,13 @@ class ObRemoteServerProvider : public common::sqlclient::ObMySQLServerProvider {
     void reset();
     TO_STRING_KV(K_(server), K_(sql_port));
 
-    public:
+  public:
     common::ObAddr server_;
     int64_t sql_port_;
   };
   typedef common::ObSEArray<ServerAddr, common::MAX_ZONE_NUM> ServerAddrList;
   struct ServerInfo {
-    public:
+  public:
     ServerInfo() = delete;
     ServerInfo(common::ObIAllocator& allocator)
         : server_list_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator)),
@@ -53,25 +53,25 @@ class ObRemoteServerProvider : public common::sqlclient::ObMySQLServerProvider {
     {}
     TO_STRING_KV("server_cnt", server_list_.count(), K_(cluster_id));
 
-    public:
+  public:
     ServerAddrList server_list_;
     int64_t cluster_id_;
     DISALLOW_COPY_AND_ASSIGN(ServerInfo);
   };
 
-  public:
+public:
   ObRemoteServerProvider();
   virtual ~ObRemoteServerProvider();
   int init(obrpc::ObCommonRpcProxy& rpc_proxy, common::ObMySQLProxy& sql_proxy);
-  virtual int get_cluster_list(common::ObIArray<int64_t>& cluster_list);
-  virtual int get_server(const int64_t cluster_id, const int64_t svr_idx, common::ObAddr& server);
-  virtual int64_t get_cluster_count() const;
-  virtual int64_t get_server_count() const;
-  virtual int64_t get_server_count(const int64_t cluster_id) const;
-  virtual int refresh_server_list(void);
+  virtual int get_cluster_list(common::ObIArray<int64_t>& cluster_list) override;
+  virtual int get_server(const int64_t cluster_id, const int64_t svr_idx, common::ObAddr& server) override;
+  virtual int64_t get_cluster_count() const override;
+  virtual int64_t get_server_count() const override;
+  virtual int64_t get_server_count(const int64_t cluster_id) const override;
+  virtual int refresh_server_list(void) override;
   virtual int prepare_refresh() override;
   int64_t get_primary_cluster_id() const;
-  bool need_refresh();
+  bool need_refresh() override;
 };
 }  // namespace share
 }  // namespace oceanbase

@@ -21,11 +21,11 @@
 namespace oceanbase {
 namespace clog {
 class ObMaxLogMetaInfo {
-  public:
+public:
   ObMaxLogMetaInfo();
   ~ObMaxLogMetaInfo();
 
-  public:
+public:
   int init(const common::ObPartitionKey& partition_key, const uint64_t log_id, const int64_t timestamp);
   void reset();
   uint64_t get_log_id() const;
@@ -39,7 +39,7 @@ class ObMaxLogMetaInfo {
   int try_update_timestamp(const int64_t base_timestamp);
   int try_update_log_id(const uint64_t log_id);
 
-  private:
+private:
   void check_log_id_range_(const uint64_t log_id) const;
   // a.v128_.lo = ((log_id & MASK) << 16) + offset;
   // a.v128_.hi = ts;
@@ -55,7 +55,7 @@ class ObMaxLogMetaInfo {
     } __attribute__((__aligned__(16)));
   };
 
-  private:
+private:
   common::ObPartitionKey partition_key_;
   MetaInfo meta_info_;
   int64_t saved_last_gts_;
@@ -64,16 +64,16 @@ class ObMaxLogMetaInfo {
   int64_t total_log_cnt_;
   int64_t total_commit_log_cnt_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMaxLogMetaInfo);
 };
 
 class ObAggreBuffer {
-  public:
+public:
   ObAggreBuffer();
   ~ObAggreBuffer();
 
-  public:
+public:
   int init(const uint64_t id, const uint64_t tenant_id);
   void reset();
   void destroy();
@@ -89,10 +89,10 @@ class ObAggreBuffer {
   void wait(const uint64_t id, int64_t& wait_times);
   void reuse(const uint64_t id);
 
-  private:
+private:
   void add_callback_to_list_(ObISubmitLogCb* cb);
 
-  private:
+private:
   uint64_t id_;
   int64_t ref_;
   char* data_;
@@ -105,7 +105,7 @@ class ObAggreBuffer {
   // lock for cb_list_head_ and cb_list_tail_
   common::ObSpinLock lock_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAggreBuffer);
 } CACHE_ALIGNED;
 }  // namespace clog

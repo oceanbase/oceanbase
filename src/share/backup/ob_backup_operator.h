@@ -27,7 +27,7 @@ namespace oceanbase {
 namespace share {
 
 class ObITenantBackupTaskOperator {
-  public:
+public:
   ObITenantBackupTaskOperator() = default;
   virtual ~ObITenantBackupTaskOperator() = default;
   static int get_tenant_backup_task(const uint64_t tenant_id, const common::ObSqlString& sql,
@@ -40,12 +40,12 @@ class ObITenantBackupTaskOperator {
   static int fill_task_clean_history(const ObTenantBackupTaskItem& item, ObDMLSqlSplicer& dml);
   static int extract_tenant_backup_task(sqlclient::ObMySQLResult* result, ObTenantBackupTaskItem& item);
 
-  private:
+private:
   static int fill_one_item(const ObTenantBackupTaskItem& item, ObDMLSqlSplicer& dml);
 };
 
 class ObTenantBackupTaskOperator {
-  public:
+public:
   ObTenantBackupTaskOperator() = default;
   virtual ~ObTenantBackupTaskOperator() = default;
   static int get_tenant_backup_task(const uint64_t tenant_id, const int64_t backup_set_id, const int64_t incarnation,
@@ -57,13 +57,13 @@ class ObTenantBackupTaskOperator {
   static int get_tenant_backup_task(
       const uint64_t tenant_id, ObTenantBackupTaskItem& item, common::ObISQLClient& proxy);
 
-  private:
+private:
   static int remove_one_item(const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id,
       common::ObISQLClient& sql_proxy);
 };
 
 class ObPGBackupTaskOperator {
-  public:
+public:
   ObPGBackupTaskOperator() = default;
   virtual ~ObPGBackupTaskOperator() = default;
   static int get_pg_backup_task(ObPGBackupTaskItem& item, common::ObISQLClient& sql_proxy);
@@ -96,7 +96,7 @@ class ObPGBackupTaskOperator {
   static int update_result_and_status_and_statics(
       common::ObISQLClient& sql_proxy, const ObPGBackupTaskInfo& pg_task_info);
 
-  private:
+private:
   static int fill_one_item(const ObPGBackupTaskItem& item, ObDMLSqlSplicer& dml);
   static int get_pg_backup_task(const uint64_t tenant_id, const common::ObSqlString& sql,
       common::ObIArray<ObPGBackupTaskItem>& items, common::ObISQLClient& sql_proxy);
@@ -105,7 +105,7 @@ class ObPGBackupTaskOperator {
 };
 
 class ObTenantBackupInfoOperation {
-  public:
+public:
   static int update_info_item(common::ObISQLClient& sql_client, const uint64_t tenant_id, const ObBackupInfoItem& item);
   static int get_tenant_list(common::ObISQLClient& sql_client, common::ObIArray<uint64_t>& tenant_id_list);
   static int load_base_backup_info(common::ObISQLClient& sql_client, ObBaseBackupInfo& info);
@@ -124,7 +124,7 @@ class ObTenantBackupInfoOperation {
   static int clean_backup_scheduler_leader(
       common::ObISQLClient& sql_client, const uint64_t tenant_id, const common::ObAddr& scheduler_leader);
 
-  private:
+private:
   template <typename T>
   static int set_info_item(const char* name, const char* info_str, T& info);
   template <typename T>
@@ -135,7 +135,7 @@ class ObTenantBackupInfoOperation {
 };
 
 class ObBackupTaskHistoryOperator {
-  public:
+public:
   ObBackupTaskHistoryOperator() = default;
   virtual ~ObBackupTaskHistoryOperator() = default;
   static int get_tenant_backup_task(const uint64_t tenant_id, const int64_t backup_set_id, const int64_t incarnation,
@@ -168,13 +168,13 @@ class ObBackupTaskHistoryOperator {
       const uint64_t tenant_id, common::ObISQLClient& proxy, ObTenantBackupTaskItem& item);
   static int get_all_tenant_backup_tasks(common::ObISQLClient& proxy, common::ObIArray<ObTenantBackupTaskItem>& items);
 
-  private:
+private:
   static int remove_one_item(const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id,
       common::ObISQLClient& sql_proxy);
 };
 
 class ObTenantBackupCleanInfoOperator {
-  public:
+public:
   ObTenantBackupCleanInfoOperator() = default;
   virtual ~ObTenantBackupCleanInfoOperator() = default;
   static int insert_clean_info(
@@ -189,7 +189,7 @@ class ObTenantBackupCleanInfoOperator {
   static int get_deleted_tenant_clean_infos(
       common::ObISQLClient& sql_proxy, common::ObIArray<ObBackupCleanInfo>& deleted_tenant_clean_infos);
 
-  private:
+private:
   static int fill_one_item(const ObBackupCleanInfo& clean_info, ObDMLSqlSplicer& dml);
   static int get_tenant_clean_info(const uint64_t tenant_id, const common::ObSqlString& sql,
       common::ObIArray<ObBackupCleanInfo>& clean_infos, common::ObISQLClient& sql_proxy);
@@ -198,26 +198,26 @@ class ObTenantBackupCleanInfoOperator {
 };
 
 class ObBackupCleanInfoHistoryOperator {
-  public:
+public:
   ObBackupCleanInfoHistoryOperator() = default;
   virtual ~ObBackupCleanInfoHistoryOperator() = default;
   static int insert_clean_info(const ObBackupCleanInfo& clean_info, common::ObISQLClient& proxy);
   static int remove_tenant_clean_info(const uint64_t tenant_id, common::ObISQLClient& sql_proxy);
 
-  private:
+private:
   static int fill_one_item(const ObBackupCleanInfo& clean_info, ObDMLSqlSplicer& dml);
   static int remove_one_item(const uint64_t tenant_id, common::ObISQLClient& sql_proxy);
 };
 
 class ObBackupTaskCleanHistoryOpertor {
-  public:
+public:
   ObBackupTaskCleanHistoryOpertor() = default;
   virtual ~ObBackupTaskCleanHistoryOpertor() = default;
   static int insert_task_info(
       const int64_t job_id, const ObTenantBackupTaskInfo& tenant_backup_task, common::ObISQLClient& proxy);
   static int remove_task_info(const uint64_t tenant_id, const int64_t job_id, common::ObISQLClient& sql_proxy);
 
-  private:
+private:
   static int fill_one_item(
       const int64_t job_id, const ObTenantBackupTaskInfo& tenant_backup_task, ObDMLSqlSplicer& dml);
   static int remove_one_item(const uint64_t tenant_id, const int64_t job_id, common::ObISQLClient& sql_proxy);

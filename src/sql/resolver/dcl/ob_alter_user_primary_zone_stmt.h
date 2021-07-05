@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObAlterUserPrimaryZoneStmt : public ObDDLStmt {
-  public:
+public:
   ObAlterUserPrimaryZoneStmt();
   explicit ObAlterUserPrimaryZoneStmt(common::ObIAllocator* name_pool);
   virtual ~ObAlterUserPrimaryZoneStmt();
@@ -44,11 +44,11 @@ class ObAlterUserPrimaryZoneStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(arg));
 
-  public:
+public:
   // data members
   obrpc::ObAlterDatabaseArg arg_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterUserPrimaryZoneStmt);
 };
 }  // end namespace sql

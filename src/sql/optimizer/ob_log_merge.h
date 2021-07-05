@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogMerge : public ObLogInsert {
-  public:
+public:
   ObLogMerge(ObLogPlan& plan)
       : ObLogInsert(plan),
         match_condition_exprs_(NULL),
@@ -89,13 +89,13 @@ class ObLogMerge : public ObLogInsert {
   int classify_merge_subquery_expr(const ObIArray<ObRawExpr*>& exprs, ObIArray<ObRawExpr*>& subquery_exprs,
       ObIArray<ObRawExpr*>& non_subquery_exprs);
 
-  private:
+private:
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
   virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
   int add_all_source_table_columns_to_ctx(ObAllocExprContext& ctx);
   DISALLOW_COPY_AND_ASSIGN(ObLogMerge);
 
-  private:
+private:
   const common::ObIArray<ObRawExpr*>* match_condition_exprs_;
   const common::ObIArray<ObRawExpr*>* insert_condition_exprs_;
   const common::ObIArray<ObRawExpr*>* update_condition_exprs_;

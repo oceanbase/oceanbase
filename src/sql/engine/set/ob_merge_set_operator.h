@@ -26,9 +26,9 @@ enum ObCTEPseudoColumn { CTE_SEARCH = 0, CTE_CYCLE = 1, CTE_PSEUDO_COLUMN_CNT = 
 class ObMergeSetOperator : public ObSetOperator {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class ObMergeSetOperatorCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     explicit ObMergeSetOperatorCtx(ObExecContext& ctx)
         : ObPhyOperatorCtx(ctx), last_output_row_(), last_row_buf_(nullptr), need_skip_init_row_(false)
     {}
@@ -92,14 +92,14 @@ class ObMergeSetOperator : public ObSetOperator {
       need_skip_init_row_ = b;
     }
 
-    protected:
+  protected:
     common::ObNewRow last_output_row_;
     void* last_row_buf_;
     static const int64_t OB_ROW_BUF_SIZE;
     bool need_skip_init_row_;
   };
 
-  public:
+public:
   explicit ObMergeSetOperator(common::ObIAllocator& alloc);
   ~ObMergeSetOperator();
   virtual void reset();
@@ -111,7 +111,7 @@ class ObMergeSetOperator : public ObSetOperator {
   int init_cte_pseudo_column();
   int set_map_array(const ObIArray<int64_t>& map_array);
 
-  protected:
+protected:
   int init_set_directions(int64_t count);
   int strict_compare(const common::ObNewRow& row1, const common::ObNewRow& row2, int& cmp) const;
   int strict_compare(const common::ObNewRow& row1, const common::ObNewRow& row2, bool& equal) const;
@@ -149,10 +149,10 @@ class ObMergeSetOperator : public ObSetOperator {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMergeSetOperator);
 
-  public:
+public:
   static const int64_t UNUSED_POS;
 
-  protected:
+protected:
   static const int32_t CMP_DIRECTION_ASC = 1;
   static const int32_t CMP_DIRECTION_DESC = -1;
   common::ObFixedArray<int32_t, common::ObIAllocator> set_directions_;

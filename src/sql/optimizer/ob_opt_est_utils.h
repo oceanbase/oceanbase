@@ -35,7 +35,7 @@ struct RangeExprs {
 };
 
 class ObOptEstUtils {
-  public:
+public:
   // check if op is monotonic, some type may not considered.
   static bool is_monotonic_op(const ObItemType type);
 
@@ -91,7 +91,7 @@ class ObOptEstUtils {
 };
 
 class ObOptEstObjToScalar {
-  public:
+public:
   // Functionality: convert objs to scalars(double).
   // One Optimization : Limited precision of double type cannot distinguish long strs using
   // a static base of 256 (max distinguishable length is 6). We need to firstly truncate the
@@ -120,7 +120,7 @@ class ObOptEstObjToScalar {
 
   static int convert_string_to_scalar_for_number(const common::ObString& str, double& scala);
 
-  private:
+private:
   static int add_to_string_conversion_array(
       const common::ObObj& strobj, common::ObIArray<common::ObString>& arr, uint64_t& convertable_map, int64_t pos);
   // 1, find common prefix length of strings

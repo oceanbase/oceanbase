@@ -30,7 +30,7 @@ class ObServerManager;
 class ObMultiClusterManager;
 class ObZoneManager;
 class ObUpdateRsListTask : public share::ObAsyncTask {
-  public:
+public:
   ObUpdateRsListTask();
   virtual ~ObUpdateRsListTask();
 
@@ -47,21 +47,21 @@ class ObUpdateRsListTask : public share::ObAsyncTask {
   static int check_rs_list_diff(const share::ObIAddrList& l, const share::ObIAddrList& r, bool& different);
   static int check_rs_list_subset(const share::ObIAddrList& l, const share::ObIAddrList& r, bool& is_subset);
 
-  private:
+private:
   int check_need_update(const share::ObIAddrList& rs_list, const share::ObIAddrList& readonly_rs_list,
       const common::ObClusterType cluster_type, const bool rs_list_diff_member_list, bool& need_update,
       bool& inner_need_update);
 
-  public:
+public:
   // encapsulate the operation of g_wait_cnt_
   static bool try_lock();
   static void unlock();
   static void clear_lock();
 
-  private:
+private:
   static volatile int64_t g_wait_cnt_;
 
-  private:
+private:
   bool inited_;
   share::ObPartitionTableOperator* pt_operator_;
   share::ObRootAddrAgent* root_addr_agent_;
@@ -71,12 +71,12 @@ class ObUpdateRsListTask : public share::ObAsyncTask {
   bool force_update_;
   common::ObAddr self_addr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUpdateRsListTask);
 };
 
 class ObUpdateRsListTimerTask : public common::ObAsyncTimerTask {
-  public:
+public:
   const static int64_t RETRY_INTERVAL = 600 * 1000L * 1000L;  // 10min
   ObUpdateRsListTimerTask(ObRootService& rs);
   virtual ~ObUpdateRsListTimerTask()
@@ -90,7 +90,7 @@ class ObUpdateRsListTimerTask : public common::ObAsyncTimerTask {
   }
   virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-  private:
+private:
   ObRootService& rs_;
   DISALLOW_COPY_AND_ASSIGN(ObUpdateRsListTimerTask);
 };

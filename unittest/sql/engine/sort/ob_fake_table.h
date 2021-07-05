@@ -21,7 +21,7 @@ namespace test {
 static common::ObArenaAllocator alloc_;
 // fake table to feed input for testing
 class ObFakeTable : public ObPhyOperator {
-  public:
+public:
   const static int64_t COL0_RAND_STR = 0;
   const static int64_t COL1_ROW_ID = 1;
   const static int64_t COL2_ROW_ID_MOD_2 = 2;
@@ -39,11 +39,11 @@ class ObFakeTable : public ObPhyOperator {
   const static int64_t COL14_RAND_INT = 14;
   const static int64_t COL15_RAND_INT = 15;
 
-  protected:
+protected:
   class ObFakeTableCtx : public ObPhyOperatorCtx {
     friend class ObFakeTable;
 
-    public:
+  public:
     ObFakeTableCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx), get_count_(0)
     {
       buf_[0] = '\0';
@@ -55,15 +55,15 @@ class ObFakeTable : public ObPhyOperator {
       return ObPhyOperatorCtx::destroy_base();
     }
 
-    private:
+  private:
     static const int VARCHAR_CELL_BUF_SIZE = 32;
 
-    private:
+  private:
     int64_t get_count_;
     char buf_[VARCHAR_CELL_BUF_SIZE];
   };
 
-  public:
+public:
   ObFakeTable();
   virtual ~ObFakeTable();
   virtual ObPhyOperatorType get_type() const
@@ -86,16 +86,16 @@ class ObFakeTable : public ObPhyOperator {
     n_segments_local_merge_sort_ = n_segments_local_merge_sort;
   }
 
-  protected:
+protected:
   virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
   virtual int init_op_ctx(ObExecContext& ctx) const;
 
-  private:
+private:
   // types and constants
   // static const int COLUMN_COUNT = 16;
   static const int COLUMN_COUNT = 32;
 
-  private:
+private:
   // disallow copy
   ObFakeTable(const ObFakeTable& other);
   ObFakeTable& operator=(const ObFakeTable& other);
@@ -106,7 +106,7 @@ class ObFakeTable : public ObPhyOperator {
   int rand_int(int max) const;
   virtual int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const;
 
-  protected:
+protected:
   int64_t row_count_;
   int64_t n_segments_local_merge_sort_;
 };

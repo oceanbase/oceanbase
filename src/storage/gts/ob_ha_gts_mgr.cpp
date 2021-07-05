@@ -105,13 +105,13 @@ void ObHaGtsManager::CheckMemberStatusTask::runTimerTask()
 }
 
 class ObHaGtsManager::GCFunctor {
-  public:
+public:
   GCFunctor(const ObGtsInfoArray& gts_info_array) : gts_info_array_(gts_info_array)
   {}
   ~GCFunctor()
   {}
 
-  public:
+public:
   bool operator()(const ObGtsID& gts_id, ObHaGts*& ha_gts)
   {
     UNUSED(ha_gts);
@@ -119,7 +119,7 @@ class ObHaGtsManager::GCFunctor {
     return !is_gts_exist_(gts);
   }
 
-  private:
+private:
   bool is_gts_exist_(const uint64_t gts_id) const
   {
     bool bool_ret = false;
@@ -132,13 +132,13 @@ class ObHaGtsManager::GCFunctor {
 };
 
 class ObHaGtsManager::HeartbeatFunctor {
-  public:
+public:
   HeartbeatFunctor()
   {}
   ~HeartbeatFunctor()
   {}
 
-  public:
+public:
   bool operator()(const ObGtsID& gts_id, ObHaGts*& ha_gts)
   {
     UNUSED(gts_id);
@@ -148,13 +148,13 @@ class ObHaGtsManager::HeartbeatFunctor {
 };
 
 class ObHaGtsManager::CheckMemberStatusFunctor {
-  public:
+public:
   CheckMemberStatusFunctor(ObHaGtsManager* ha_gts_mgr) : host_(ha_gts_mgr)
   {}
   ~CheckMemberStatusFunctor()
   {}
 
-  public:
+public:
   bool operator()(const ObGtsID& gts_id, ObHaGts*& ha_gts)
   {
     int ret = OB_SUCCESS;
@@ -180,7 +180,7 @@ class ObHaGtsManager::CheckMemberStatusFunctor {
     return true;
   }
 
-  private:
+private:
   ObHaGtsManager* host_;
 };
 

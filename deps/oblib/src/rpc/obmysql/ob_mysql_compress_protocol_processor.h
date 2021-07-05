@@ -22,7 +22,7 @@ class ObPacket;
 namespace obmysql {
 
 class ObMysqlCompressProtocolProcessor : public ObMysqlProtocolProcessor {
-  public:
+public:
   ObMysqlCompressProtocolProcessor(ObMySQLHandler& handler) : ObMysqlProtocolProcessor(handler)
   {}
   virtual ~ObMysqlCompressProtocolProcessor()
@@ -31,7 +31,7 @@ class ObMysqlCompressProtocolProcessor : public ObMysqlProtocolProcessor {
   virtual int decode(easy_message_t* m, rpc::ObPacket*& pkt);
   virtual int process(easy_request_t* r, bool& is_going_on);
 
-  private:
+private:
   int decode_compressed_body(easy_message_t& m, const uint32_t comp_pktlen, const uint8_t comp_pktseq,
       const uint32_t pktlen_before_compress, rpc::ObPacket*& pkt);
 
@@ -40,7 +40,7 @@ class ObMysqlCompressProtocolProcessor : public ObMysqlProtocolProcessor {
 
   int process_compressed_packet(easy_connection_t& c, easy_pool_t& pool, void*& ipacket, bool& need_decode_more);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMysqlCompressProtocolProcessor);
 };
 

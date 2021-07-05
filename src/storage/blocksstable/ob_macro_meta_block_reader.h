@@ -19,11 +19,11 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObMacroMetaBlockReader : public ObMetaBlockReader {
-  public:
+public:
   ObMacroMetaBlockReader();
   virtual ~ObMacroMetaBlockReader();
 
-  protected:
+protected:
   virtual int parse(const ObMacroBlockCommonHeader& common_header, const ObLinkedMacroBlockHeader& linked_header,
       const char* buf, const int64_t buf_len);
 };

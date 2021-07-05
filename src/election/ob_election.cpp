@@ -758,8 +758,8 @@ int ObElection::process_vote_prepare_(const ObElectionMsgPrepare& msg)
         ELECT_ASYNC_LOG_(WARN, "store prepare message error", K(ret), K(*this), K(msg));
       } else {
         // T1_timestamp_ = msg.get_T1_timestamp();
-        if (OB_FAIL(try_centrialized_voting_(now_lease_time, msg.get_T1_timestamp()))) {
-          ELECT_ASYNC_LOG_(WARN, "try centrialized voting error", K(ret), K(*this), K(msg), K(now_lease_time));
+        if (OB_FAIL(try_centralized_voting_(now_lease_time, msg.get_T1_timestamp()))) {
+          ELECT_ASYNC_LOG_(WARN, "try centralized voting error", K(ret), K(*this), K(msg), K(now_lease_time));
         }
       }
     }
@@ -895,8 +895,8 @@ int ObElection::process_vote_vote_(const ObElectionMsgVote& msg)
         ELECT_ASYNC_LOG_(WARN, "collect_valid_candidates error", K(ret), K_(partition), K(msg));
       } else if (OB_FAIL(msg_pool_.store(msg))) {
         ELECT_ASYNC_LOG_(WARN, "store vote message error", K(ret), K(*this), K(msg));
-      } else if (OB_FAIL(check_centrialized_majority_())) {
-        ELECT_ASYNC_LOG_(WARN, "check_centrialized_majority error", K(ret), K(*this), K(msg));
+      } else if (OB_FAIL(check_centralized_majority_())) {
+        ELECT_ASYNC_LOG_(WARN, "check_centralized_majority error", K(ret), K(*this), K(msg));
       } else {
         // do nothing
       }
@@ -3186,7 +3186,7 @@ int ObElection::send_devote_vote_(const ObAddr& server, const ObElectionMsgDEVot
   return ret;
 }
 
-int ObElection::try_centrialized_voting_(const int64_t lease_time, int64_t msg_t1)
+int ObElection::try_centralized_voting_(const int64_t lease_time, int64_t msg_t1)
 {
   int ret = OB_SUCCESS;
   ObAddr msg_cur_leader;
@@ -3255,7 +3255,7 @@ int ObElection::try_centrialized_voting_(const int64_t lease_time, int64_t msg_t
 //   if self is in reappointing, need majority's message
 //   if self is in changing leader, need majority's message and new leader's message
 // 2.if there are enough messages, send vote success message
-int ObElection::check_centrialized_majority_()
+int ObElection::check_centralized_majority_()
 {
   int ret = OB_SUCCESS;
   ObAddr cur_leader;
@@ -3625,7 +3625,7 @@ int ObElection::post_election_msg_(
   common::ObAddr server;
 
   /**********should removed after a barrier version bigger than 3.1**********/
-  insert_pyhsical_condition_into_msg_(msg);
+  insert_physical_condition_into_msg_(msg);
   /*************************************************************************************/
   if (mlist.get_member_number() <= 0 || !partition.is_valid() || !msg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -3658,7 +3658,7 @@ int ObElection::post_election_msg_(
   const int64_t dst_cluster_id = obrpc::ObRpcNetHandler::CLUSTER_ID;
 
   /**********should removed after a barrier version bigger than 3.1**********/
-  insert_pyhsical_condition_into_msg_(msg);
+  insert_physical_condition_into_msg_(msg);
   /*************************************************************************************/
   if (!server.is_valid() || !partition.is_valid() || !msg.is_valid() || self_ == server) {
     ret = OB_INVALID_ARGUMENT;
@@ -3786,7 +3786,7 @@ int64_t ObElection::logic_ts_(int64_t real_ts) const
 }
 
 /**********should removed after a barrier version bigger than 3.1**********/
-void ObElection::insert_pyhsical_condition_into_msg_(const ObElectionMsg& msg)
+void ObElection::insert_physical_condition_into_msg_(const ObElectionMsg& msg)
 {
   if (OB_SYS_TENANT_ID != extract_tenant_id(partition_.get_table_id())) {
     int64_t send_timestamp = msg.get_send_timestamp();

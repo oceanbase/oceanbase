@@ -53,7 +53,7 @@ int ObBloomFilterMacroBlockReader::read_macro_block(
   } else if (OB_FAIL(decompress_micro_block(full_meta, block_buf, block_size))) {
     STORAGE_LOG(WARN, "Failed to decompress micro block", K(ret));
   } else if (OB_FAIL(read_micro_block(block_buf, block_size, bf_buf, bf_size))) {
-    STORAGE_LOG(WARN, "Faild to read micro block to bloom filter", K(ret));
+    STORAGE_LOG(WARN, "Failed to read micro block to bloom filter", K(ret));
   }
 
   return ret;
@@ -69,11 +69,11 @@ int ObBloomFilterMacroBlockReader::check_macro_meta(const ObFullMacroBlockMeta& 
     STORAGE_LOG(WARN, "Invalid macro meta", K(macro_meta), K(ret));
   } else if (macro_meta->attr_ != ObMacroBlockCommonHeader::BloomFilterData) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted macro meta type", K(macro_meta), K(ret));
+    STORAGE_LOG(WARN, "Unexpected macro meta type", K(macro_meta), K(ret));
   } else if (macro_meta->column_number_ != 0 || macro_meta->rowkey_column_number_ <= 0 || macro_meta->row_count_ <= 0 ||
              macro_meta->micro_block_count_ != 1 || macro_meta->micro_block_data_offset_ <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted macro meta for bloomfilter", K(*macro_meta), K(ret));
+    STORAGE_LOG(WARN, "Unexpected macro meta for bloomfilter", K(*macro_meta), K(ret));
   }
 
   return ret;
@@ -116,7 +116,7 @@ int ObBloomFilterMacroBlockReader::decompress_micro_block(
     STORAGE_LOG(WARN, "invalid arguments", K(ret), K(full_meta));
   } else if (OB_ISNULL(macro_handle_.get_buffer()) || 0 == macro_meta->micro_block_data_offset_) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Unexcepted null data buffer", K(ret));
+    STORAGE_LOG(WARN, "Unexpected null data buffer", K(ret));
   } else if (FALSE_IT(data_buffer = macro_handle_.get_buffer() + macro_meta->micro_block_data_offset_)) {
   } else {
     const int64_t data_size = macro_meta->micro_block_index_offset_ - macro_meta->micro_block_data_offset_;
@@ -144,7 +144,7 @@ int ObBloomFilterMacroBlockReader::read_micro_block(
     const ObBloomFilterMicroBlockHeader* bf_micro_header = reinterpret_cast<const ObBloomFilterMicroBlockHeader*>(buf);
     if (OB_UNLIKELY(!bf_micro_header->is_valid())) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexcepted bloomfilter micro block header", K(*bf_micro_header), K(ret));
+      STORAGE_LOG(WARN, "Unexpected bloomfilter micro block header", K(*bf_micro_header), K(ret));
     } else {
       bf_buf = buf + bf_micro_header->header_size_;
       bf_size = buf_size - bf_micro_header->header_size_;
@@ -180,7 +180,7 @@ int ObBloomFilterDataReader::read_bloom_filter(
     STORAGE_LOG(WARN, "Failed to deserialize bloomfilter cache", K(ret));
   } else if (OB_UNLIKELY(!bf_cache_value.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted invalid bloomfilter cache", K(bf_cache_value), K(ret));
+    STORAGE_LOG(WARN, "Unexpected invalid bloomfilter cache", K(bf_cache_value), K(ret));
   }
   bf_macro_reader_.reset();
 

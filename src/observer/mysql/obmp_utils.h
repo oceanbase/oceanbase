@@ -32,7 +32,7 @@ class ObObj;
 }  // namespace common
 namespace observer {
 class ObMPUtils {
-  public:
+public:
   static int add_changed_session_info(obmysql::OMPKOK& ok_pkt, sql::ObSQLSessionInfo& session);
   static int add_session_info_on_connect(obmysql::OMPKOK& okp, sql::ObSQLSessionInfo& session);
   static int add_client_feedback(obmysql::OMPKOK& ok_pkt, sql::ObSQLSessionInfo& session);
@@ -40,7 +40,7 @@ class ObMPUtils {
       obmysql::OMPKOK& pk_pkt, sql::ObSQLSessionInfo& session, share::ObFeedbackRerouteInfo& reroute_info);
   static int add_nls_format(obmysql::OMPKOK& pk_pkt, sql::ObSQLSessionInfo& session, const bool only_changed = false);
 
-  private:
+private:
   static int get_plain_str_literal(
       common::ObIAllocator& allocator, const common::ObObj& obj, common::ObString& value_str);
 

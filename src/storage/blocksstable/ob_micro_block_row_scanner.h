@@ -34,7 +34,7 @@ namespace blocksstable {
 class ObColumnMap;
 
 class ObIMicroBlockRowScanner {
-  public:
+public:
   ObIMicroBlockRowScanner()
       : param_(NULL),
         context_(NULL),
@@ -67,7 +67,7 @@ class ObIMicroBlockRowScanner {
   int alloc_row(ObIAllocator& allocator, const int64_t cell_cnt, storage::ObStoreRow& row);
   virtual int get_cur_micro_row_count(int64_t& row_count) const;
 
-  protected:
+protected:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row) = 0;
   virtual int inner_get_next_rows(const storage::ObStoreRow*& rows, int64_t& count) = 0;
   int set_reader(const ObRowStoreType store_type);
@@ -90,7 +90,7 @@ class ObIMicroBlockRowScanner {
     return common::ObActionFlag::OP_ROW_DOES_NOT_EXIST == row.flag_;
   }
 
-  protected:
+protected:
   // assigned in init func
   const storage::ObTableIterParam* param_;
   storage::ObTableAccessContext* context_;
@@ -117,7 +117,7 @@ class ObIMicroBlockRowScanner {
 
 // major sstable micro block scanner for query and merge
 class ObMicroBlockRowScanner : public ObIMicroBlockRowScanner {
-  public:
+public:
   ObMicroBlockRowScanner()
   {}
   virtual ~ObMicroBlockRowScanner()
@@ -128,11 +128,11 @@ class ObMicroBlockRowScanner : public ObIMicroBlockRowScanner {
       const ObMicroBlockData& block_data, const bool is_left_border, const bool is_right_border) override;
   void reset();
 
-  protected:
+protected:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row) override;
   virtual int inner_get_next_rows(const storage::ObStoreRow*& rows, int64_t& count) override;
 
-  protected:
+protected:
   storage::ObStoreRow rows_[ObIMicroBlockReader::OB_MAX_BATCH_ROW_COUNT];
   char obj_buf_[common::OB_ROW_MAX_COLUMNS_COUNT * sizeof(ObObj) * ObIMicroBlockReader::OB_MAX_BATCH_ROW_COUNT];
 };
@@ -178,7 +178,7 @@ index | rowkey | version | flag | c1 | c2 | c3
 
 // multi version sstable micro block scanner for query and major merge
 class ObMultiVersionMicroBlockRowScanner : public ObIMicroBlockRowScanner {
-  public:
+public:
   ObMultiVersionMicroBlockRowScanner()
       : cell_allocator_(common::ObModIds::OB_SSTABLE_READER),
         reserved_pos_(ObIMicroBlockReader::INVALID_ROW_INDEX),
@@ -198,11 +198,11 @@ class ObMultiVersionMicroBlockRowScanner : public ObIMicroBlockRowScanner {
   void reset();
   void rescan() override;
 
-  protected:
+protected:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row) override;
   virtual int inner_get_next_rows(const storage::ObStoreRow*& rows, int64_t& count) override;
 
-  private:
+private:
   OB_INLINE void inner_reset();
   OB_INLINE int inner_get_next_row_impl(const storage::ObStoreRow*& ret_row);
   void reuse_cur_micro_row();
@@ -215,7 +215,7 @@ class ObMultiVersionMicroBlockRowScanner : public ObIMicroBlockRowScanner {
   int lock_for_read(const transaction::ObLockForReadArg& lock_for_read_arg, bool& can_read, int64_t& trans_version,
       bool& is_determined_state);
 
-  private:
+private:
   storage::ObStoreRow prev_micro_row_;
   storage::ObStoreRow cur_micro_row_;
   storage::ObNopPos nop_pos_;
@@ -240,7 +240,7 @@ class ObMultiVersionMicroBlockRowScanner : public ObIMicroBlockRowScanner {
 
 // multi version sstable micro block scanner for minor merge
 class ObMultiVersionMicroBlockMinorMergeRowScanner : public ObIMicroBlockRowScanner {
-  public:
+public:
   ObMultiVersionMicroBlockMinorMergeRowScanner();
   virtual ~ObMultiVersionMicroBlockMinorMergeRowScanner();
 
@@ -256,11 +256,11 @@ class ObMultiVersionMicroBlockMinorMergeRowScanner : public ObIMicroBlockRowScan
   TO_STRING_KV(K_(macro_id), K_(is_last_multi_version_row), K_(is_row_queue_ready), "row_queue_count",
       row_queue_.count(), K_(start), K_(current), K_(last));
 
-  protected:
+protected:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row) override;
   virtual int inner_get_next_rows(const storage::ObStoreRow*& rows, int64_t& count) override;
 
-  private:
+private:
   enum ScanState {
     SCAN_START = 0,
     GET_RUNNING_TRANS_ROW = 1,
@@ -271,7 +271,7 @@ class ObMultiVersionMicroBlockMinorMergeRowScanner : public ObIMicroBlockRowScan
     LOCATE_LAST_COMMITTED_ROW = 6,
   };
 
-  private:
+private:
   int init_row_queue(const int64_t row_col_cnt);
   void init_multi_version_rowkey_info(const int multi_version_rowkey_type, int64_t& expect_multi_version_col_cnt);
   int locate_last_committed_row();
@@ -302,7 +302,7 @@ class ObMultiVersionMicroBlockMinorMergeRowScanner : public ObIMicroBlockRowScan
   void complete_row_queue();
   int filter_unneeded_row(bool& add_row_queue_flag, bool& is_magic_row_flag);
 
-  private:
+private:
   enum RowCompactInfoIndex {
     RNPI_FIRST_ROW = 0,
     RNPI_TRANS_COMPACT_ROW = 1,

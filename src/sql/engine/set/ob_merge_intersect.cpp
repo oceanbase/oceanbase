@@ -19,7 +19,7 @@ using namespace common;
 
 namespace sql {
 class ObMergeIntersect::ObMergeIntersectCtx : public ObMergeSetOperatorCtx {
-  public:
+public:
   explicit ObMergeIntersectCtx(ObExecContext& ctx)
       : ObMergeSetOperatorCtx(ctx), right_iter_end_(false), right_row_(NULL)
   {
@@ -39,7 +39,7 @@ class ObMergeIntersect::ObMergeIntersectCtx : public ObMergeSetOperatorCtx {
     ObMergeSetOperatorCtx::destroy();
   }
 
-  private:
+private:
   bool right_iter_end_;
   const ObNewRow* right_row_;
 
