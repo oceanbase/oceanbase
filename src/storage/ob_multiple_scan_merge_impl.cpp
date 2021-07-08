@@ -133,7 +133,6 @@ int ObMultipleScanMergeImpl::reset_range(
   gap_item.iter_idx_ = idx;
   gap_item.row_ = &row;
   int64_t remain_item = 0;
-  bool compare_result = false;
   const ObIArray<ObITable*>& tables = tables_handle_.get_tables();
   const int64_t tables_cnt = tables.count();
   const ObScanMergeLoserTreeItem* top_item = nullptr;
@@ -145,10 +144,12 @@ int ObMultipleScanMergeImpl::reset_range(
       STORAGE_LOG(WARN, "item or row is null", K(ret), KP(top_item));
     } else {
       const bool is_memtable = tables.at(tables_cnt - top_item->iter_idx_ - 1)->is_memtable();
-      if (top_item->iter_idx_ < idx ||
-          (!is_memtable &&
-              (compare_result = (tree_cmp_(gap_item, *top_item) < 0 || (!include_gap_key && 0 == compare_result))) &&
-              OB_SUCCESS == tree_cmp_.get_error_code())) {
+      const int64_t tree_ret = tree_cmp_(gap_item, *top_item);
+      if (top_item->iter_idx_ < idx
+          || (!is_memtable
+              // row in sstable is equal to or beyond gap row should be remained 
+              && (tree_ret < 0 || (include_gap_key && 0 == tree_ret))
+              && OB_SUCCESS == tree_cmp_.get_error_code())) {
         items[remain_item++] = *top_item;
       }
       if (OB_FAIL(tree_cmp_.get_error_code())) {
@@ -167,7 +168,7 @@ int ObMultipleScanMergeImpl::reset_range(
             "reset range compare",
             K(*gap_item.row_),
             K(*top_item->row_),
-            K(compare_result),
+            K(tree_ret),
             K(top_item->iter_idx_),
             K(idx),
             K(is_memtable));
