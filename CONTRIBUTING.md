@@ -28,7 +28,7 @@ Please follow these steps to create your Pull Request to this repository.
 working_dir=$HOME/Workspace
 
 # Configure GitHub
-user={your Github profile name}
+user={your GitHub profile name}
 
 # Create your clone
 mkdir -p $working_dir

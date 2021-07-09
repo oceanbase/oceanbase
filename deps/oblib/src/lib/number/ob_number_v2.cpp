@@ -656,26 +656,38 @@ int ObNumber::find_point_range_(const char* str, const int64_t length, int64_t& 
 
       for (; str_ptr != str_end && *str_ptr == '0'; ++str_ptr)
         ; /* ignore leading zero */
-      start_idx = str_ptr - str;
-      tmp_start_idx = ((*str_ptr == '.') ? (start_idx - 1) : start_idx);
+      if (str_ptr == str_end) {
+          // all zero cases:
+          // start_idx should points to the last '0'.
+          // start_idx and end_idx point to the same position,
+          // so that the 'construct_digits_()' would generate
+          // number '0' in the end
+          start_idx = str_ptr - 1 - str;
+          tmp_start_idx = start_idx;
+          floating_point = start_idx;
+          end_idx = start_idx;
+      } else {
+        start_idx = str_ptr - str;
+        tmp_start_idx = ((*str_ptr == '.') ? (start_idx - 1) : start_idx);
 
-      for (; str_ptr != str_end && ('0' <= *str_ptr && *str_ptr <= '9'); ++str_ptr)
-        ;
-
-      if (str_ptr != str_end && *str_ptr == '.') { /* find floating point */
-        int64_t non_zero_end = 0;
-        floating_point = str_ptr - str;
-        ++str_ptr;
         for (; str_ptr != str_end && ('0' <= *str_ptr && *str_ptr <= '9'); ++str_ptr)
           ;
-        end_idx = str_ptr - str;
-      } else {
-        floating_point = str_ptr - str;
-        end_idx = floating_point;
-      }
 
-      if (str_ptr != str_end) {
-        warning = OB_INVALID_NUMERIC;
+        if (str_ptr != str_end && *str_ptr == '.') { /* find floating point */
+          int64_t non_zero_end = 0;
+          floating_point = str_ptr - str;
+          ++str_ptr;
+          for (; str_ptr != str_end && ('0' <= *str_ptr && *str_ptr <= '9'); ++str_ptr)
+            ;
+          end_idx = str_ptr - str;
+        } else {
+          floating_point = str_ptr - str;
+          end_idx = floating_point;
+        }
+
+        if (str_ptr != str_end) {
+          warning = OB_INVALID_NUMERIC;
+        }
       }
     }
     if (NULL != precision && NULL != scale) {

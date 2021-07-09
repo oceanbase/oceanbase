@@ -638,67 +638,6 @@ int ObObj::check_collation_free_and_compare(const ObObj& other, int& cmp) const
   return ret;
 }
 
-// TODO : remove this function
-int ObObj::check_collation_free_and_compare(const ObObj& other) const
-{
-  int cmp = 0;
-  if (CS_TYPE_COLLATION_FREE != get_collation_type() && CS_TYPE_COLLATION_FREE != other.get_collation_type()) {
-    cmp = compare(other, CS_TYPE_INVALID);
-  } else if (is_null() || other.is_null() || is_min_value() || is_max_value() || other.is_min_value() ||
-             other.is_max_value()) {
-    cmp = ObObjCmpFuncs::compare_nullsafe(*this, other, CS_TYPE_INVALID);
-  } else if (OB_UNLIKELY(get_collation_type() != other.get_collation_type()) ||
-             CS_TYPE_COLLATION_FREE != get_collation_type() || get_type() != other.get_type() || !is_character_type()) {
-    LOG_ERROR("unexpected error, invalid argument", K(*this), K(other));
-    right_to_die_or_duty_to_live();
-  } else {
-    const int32_t lhs_len = get_val_len();
-    const int32_t rhs_len = other.get_val_len();
-    const int32_t cmp_len = std::min(lhs_len, rhs_len);
-    const bool is_oracle = lib::is_oracle_mode();
-    bool need_skip_tail_space = false;
-    cmp = memcmp(get_string_ptr(), other.get_string_ptr(), cmp_len);
-    // if two strings only have different trailing spaces:
-    // 1. in oracle varchar mode, the strings are considered to be different,
-    // 2. in oracle char mode, the strings are considered to be same,
-    // 3. in mysql mode, the strings are considered to be different.
-    if (is_oracle) {
-      if (0 == cmp) {
-        if (!is_varying_len_char_type()) {
-          need_skip_tail_space = true;
-        } else if (lhs_len != cmp_len || rhs_len != cmp_len) {
-          cmp = lhs_len > cmp_len ? 1 : -1;
-        }
-      }
-    } else if (0 == cmp && (lhs_len != cmp_len || rhs_len != cmp_len)) {
-      need_skip_tail_space = true;
-    }
-    if (need_skip_tail_space) {
-      bool has_non_space = false;
-      const int32_t left_len = (lhs_len > cmp_len) ? lhs_len - cmp_len : rhs_len - cmp_len;
-      const char* ptr = (lhs_len > cmp_len) ? get_string_ptr() : other.get_string_ptr();
-      const unsigned char* uptr = reinterpret_cast<const unsigned char*>(ptr);
-      int32_t i = 0;
-      uptr += cmp_len;
-      for (; i < left_len; ++i) {
-        if (*(uptr + i) != ' ') {
-          has_non_space = true;
-          break;
-        }
-      }
-      if (has_non_space) {
-        // special behavior of mysql: a\1 < a, but ab > a
-        if (*(uptr + i) < ' ') {
-          cmp = lhs_len > cmp_len ? -1 : 1;
-        } else {
-          cmp = lhs_len > cmp_len ? 1 : -1;
-        }
-      }
-    }
-  }
-  return cmp;
-}
-
 /*
  * ATTENTION:
  *

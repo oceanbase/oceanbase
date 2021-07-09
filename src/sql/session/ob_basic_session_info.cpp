@@ -2970,6 +2970,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
   int64_t unused_inner_safe_weak_read_snapshot = safe_weak_read_snapshot_;
 
   bool need_serial_exec = trans_flags_.need_serial_exec();
+  uint64_t sql_scope_flags = 0;
   LST_DO_CODE(OB_UNIS_ENCODE,
       sys_vars_cache_.inc_data_,
       trans_consistency_type_,
@@ -2996,7 +2997,9 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
       is_foreign_key_cascade_,
       sys_var_in_pc_str_,
       is_foreign_key_check_exist_,
-      need_serial_exec);
+      need_serial_exec,
+      sql_scope_flags,
+      stmt_type_);
   return ret;
 }
 
@@ -3140,6 +3143,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   int64_t unused_inner_safe_weak_read_snapshot = 0;
   bool unused_literal_query = false;
   bool need_serial_exec = false;
+  uint64_t sql_scope_flags = 0;
 
   // sys_var_in_pc_str_ may be set when deserialize system variables,
   // so reset it before deserialization of itself.
@@ -3171,7 +3175,9 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
       is_foreign_key_cascade_,
       sys_var_in_pc_str_,
       is_foreign_key_check_exist_,
-      need_serial_exec);
+      need_serial_exec,
+      sql_scope_flags,
+      stmt_type_);
   trans_flags_.set_need_serial_exec(need_serial_exec);
   is_deserialized_ = true;
   tz_info_wrap_.set_tz_info_map(tz_info_map);
@@ -3422,6 +3428,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   bool unused_literal_query = false;
   int64_t unused_inner_safe_weak_read_snapshot = safe_weak_read_snapshot_;
   bool need_serial_exec = trans_flags_.need_serial_exec();
+  uint64_t sql_scope_flags = 0;
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
       sys_vars_cache_.inc_data_,
@@ -3449,7 +3456,9 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
       is_foreign_key_cascade_,
       sys_var_in_pc_str_,
       is_foreign_key_check_exist_,
-      need_serial_exec);
+      need_serial_exec,
+      sql_scope_flags,
+      stmt_type_);
   return len;
 }
 

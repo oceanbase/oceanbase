@@ -2041,7 +2041,6 @@ public:
   bool can_compare(const ObObj& other) const;
   inline bool strict_equal(const ObObj& other) const;
   int check_collation_free_and_compare(const ObObj& other, int& cmp) const;
-  int check_collation_free_and_compare(const ObObj& other) const;
   int compare(const ObObj& other, int& cmp) const;
   int compare(const ObObj& other) const;
   int compare(const ObObj& other, ObCollationType cs_type, int& cmp) const;
