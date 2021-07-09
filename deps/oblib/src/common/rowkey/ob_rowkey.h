@@ -189,7 +189,9 @@ public:
     if (obj_ptr_ == rhs.obj_ptr_) {
       cmp = static_cast<int32_t>(obj_cnt_ - rhs.obj_cnt_);
     } else {
-      cmp = compare_prefix(rhs);
+      // Ignore return code because this version of compare does not have
+      // return code. The whole function will be removed later.
+      compare_prefix(rhs, cmp);
       if (0 == cmp) {
         cmp = static_cast<int32_t>(obj_cnt_ - rhs.obj_cnt_);
       }
@@ -225,36 +227,6 @@ public:
       cmp = lv - rv;
     }
     return ret;
-  }
-
-  // TODO : remove this function
-  OB_INLINE int compare_prefix(const ObRowkey& rhs) const
-  {
-    int cmp = 0;
-    int lv = 0;
-    int rv = 0;
-    // TODO remove disgusting loop, useless max min judge
-    if (is_min_row()) {
-      lv = -1;
-    } else if (is_max_row()) {
-      lv = 1;
-    }
-    if (rhs.is_min_row()) {
-      rv = -1;
-    } else if (rhs.is_max_row()) {
-      rv = 1;
-    }
-    if (0 == lv && 0 == rv) {
-      int64_t i = 0;
-      int64_t cmp_cnt = std::min(obj_cnt_, rhs.obj_cnt_);
-      for (; i < cmp_cnt && 0 == cmp; ++i) {
-        // TODO remove collation free check
-        cmp = obj_ptr_[i].check_collation_free_and_compare(rhs.obj_ptr_[i]);
-      }
-    } else {
-      cmp = lv - rv;
-    }
-    return cmp;
   }
 
   inline bool operator<(const ObRowkey& rhs) const
