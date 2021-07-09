@@ -325,7 +325,7 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
         }
         // At this time, only db_name is specified, and the db push_back is directly entered into
         // filter_database_schema_array
-      } else if (OB_FAIL(database_schema_array_.push_back(filter_database_schema))) {
+      } else if (OB_FAIL(add_var_to_array_no_dup(database_schema_array_, filter_database_schema))) {
         SERVER_LOG(WARN, "push_back failed", K(filter_database_schema->get_database_name()));
       }
     }

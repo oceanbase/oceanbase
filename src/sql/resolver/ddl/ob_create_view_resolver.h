@@ -42,9 +42,15 @@ public:
   virtual int resolve(const ParseNode& parse_tree);
 
 private:
-  int resolve_column_list(ParseNode* view_columns_node, common::ObIArray<common::ObString>& column_list);
-  int check_select_stmt_col_name(SelectItem& select_item, ObArray<int64_t>& index_array, int64_t pos,
-      common::hash::ObHashSet<ObString>& view_col_names);
+  int resolve_column_list(ParseNode *view_columns_node,
+                          common::ObIArray<common::ObString> &column_list);
+  int check_select_stmt_col_name(
+      SelectItem &select_item,
+      ObArray<int64_t> &index_array,
+      int64_t pos,
+      common::hash::ObHashSet<ObString> &view_col_names,
+      bool &is_expr_or_col_dup,
+      ObString &dup_col_name);
   int create_alias_names_auto(
       ObArray<int64_t>& index_array, ObSelectStmt* select_stmt, common::hash::ObHashSet<ObString>& view_col_names);
   /**
