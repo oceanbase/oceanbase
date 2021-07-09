@@ -1619,7 +1619,7 @@ int ObTableLocation::calculate_partition_id_by_row(
   if (OB_FAIL(calculate_partition_ids_by_row(exec_ctx, part_mgr, row, part_ids, part_idx))) {
     LOG_WARN("calculate partition ids by row failed", K(ret));
   } else if (OB_UNLIKELY(part_ids.count() != 1) && OB_UNLIKELY(part_idx != 0)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
     LOG_WARN("part ids is invalid", K(part_ids), K(part_idx));
   } else {
     part_id = part_ids.at(0);
