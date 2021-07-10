@@ -131,6 +131,7 @@ int ObBasicNestedLoopJoin::open_right_child(ObBasicNestedLoopJoinCtx& join_ctx) 
     join_ctx.set_open_right_child();
   } else if (OB_FAIL(open_child(join_ctx.exec_ctx_, SECOND_CHILD))) {
     LOG_WARN("fail to open right child", K(ret));
+    join_ctx.set_open_right_child();
   } else {
     join_ctx.set_open_right_child();
   }
