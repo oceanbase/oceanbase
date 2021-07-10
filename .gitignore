@@ -84,3 +84,4 @@ deps/3rd
 compile_commands.json
 test/tmp
 test/var
+*.ccls-cache/
