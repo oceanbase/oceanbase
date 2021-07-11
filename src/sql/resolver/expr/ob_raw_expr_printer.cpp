@@ -1284,6 +1284,42 @@ int ObRawExprPrinter::print(ObSysFunRawExpr* expr)
         }
         break;
       }
+      case T_FUN_SYS_POSITION: {
+        DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+        if (2 != expr->get_param_count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param count should be equal 2", K(ret), K(expr->get_param_count()));
+        } else {
+          DATA_PRINTF("(");
+          PRINT_EXPR(expr->get_param_expr(0));
+          DATA_PRINTF(" in ");
+          PRINT_EXPR(expr->get_param_expr(1));
+          DATA_PRINTF(")");
+        }
+        break;
+      }
+      case T_FUN_SYS_CHAR: {
+        DATA_PRINTF("%.*s(", LEN_AND_PTR(func_name));
+        if (OB_SUCC(ret)) {
+          if (expr->get_param_count() < 2) {
+            ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param count should be great or equ 2", K(ret), K(expr->get_param_count()));
+          } else {
+            int64_t i = 0;
+            for (; OB_SUCC(ret) && i < expr->get_param_count() - 1; ++i) {
+              PRINT_EXPR(expr->get_param_expr(i));
+              DATA_PRINTF(",");
+            }
+            if (OB_SUCC(ret)) {
+              --*pos_;
+              DATA_PRINTF(" using ");
+              PRINT_EXPR(expr->get_param_expr(expr->get_param_count() - 1));
+              DATA_PRINTF(")");
+            }
+          }
+        }
+        break;
+      }
       default: {
         // substr
         // date, month

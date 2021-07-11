@@ -1608,7 +1608,7 @@ int ObRawExprResolverImpl::process_char_charset_node(const ParseNode* node, ObRa
       LOG_WARN("invalid character set", K(charset_str), K(ret));
       LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset_str.length(), charset_str.ptr());
     } else {
-      ObCollationType coll_type = ObCharset::get_default_collation(charset_type);
+      ObCollationType coll_type = ObCharset::get_system_collation();
       ObObj val;
       val.set_varchar(charset_str);
       val.set_collation_type(coll_type);
