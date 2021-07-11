@@ -9365,12 +9365,12 @@ int ObPartitionService::xa_rollback_all_changes(ObTransDesc& trans_desc, const O
   return ret;
 }
 
-int ObPartitionService::get_pg_key(const ObPartitionKey& pkey, ObPGKey& pg_key)
+int ObPartitionService::get_pg_key(const ObPartitionKey& pkey, ObPGKey& pg_key) const
 {
   return get_pg_key_(pkey, pg_key);
 }
 
-int ObPartitionService::get_pg_key_(const ObPartitionKey& pkey, ObPGKey& pg_key)
+int ObPartitionService::get_pg_key_(const ObPartitionKey& pkey, ObPGKey& pg_key) const
 {
   int ret = OB_SUCCESS;
   if (pkey.is_trans_table()) {
@@ -9401,7 +9401,7 @@ int ObPartitionService::get_pg_key_(const ObPartitionKey& pkey, ObPGKey& pg_key)
   return ret;
 }
 
-int ObPartitionService::get_pg_key_from_index_schema_(const ObPartitionKey& pkey, ObPGKey& pg_key)
+int ObPartitionService::get_pg_key_from_index_schema_(const ObPartitionKey& pkey, ObPGKey& pg_key) const
 {
   int ret = OB_SUCCESS;
 

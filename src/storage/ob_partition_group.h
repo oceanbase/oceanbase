@@ -135,9 +135,9 @@ public:
       const common::ObIArray<uint64_t>& column_ids, const common::ObIArray<uint64_t>& updated_column_ids,
       const common::ObNewRow& old_row, const common::ObNewRow& new_row) override;
   virtual int lock_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param, const int64_t abs_lock_timeout,
-      common::ObNewRowIterator* row_iter, ObLockFlag lock_flag, int64_t& affected_rows);
+      common::ObNewRowIterator* row_iter, const ObLockFlag lock_flag, int64_t& affected_rows) override;
   virtual int lock_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param, const int64_t abs_lock_timeout,
-      const common::ObNewRow& row, ObLockFlag lock_flag);
+      const common::ObNewRow& row, ObLockFlag lock_flag) override;
 
   virtual int get_role(common::ObRole& role) const;
   virtual int get_role_for_partition_table(common::ObRole& role) const;

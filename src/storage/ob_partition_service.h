@@ -758,7 +758,7 @@ public:
   int process_migrate_retry_task(const ObMigrateRetryTask& task);
   bool reach_tenant_partition_limit(const int64_t batch_cnt, const uint64_t tenant_id, const bool is_pg_arg);
   int retry_rebuild_loop();
-  VIRTUAL_FOR_UNITTEST int get_pg_key(const ObPartitionKey& pkey, ObPGKey& pg_key);
+  VIRTUAL_FOR_UNITTEST int get_pg_key(const ObPartitionKey& pkey, ObPGKey& pg_key) const override;
   static int mtl_init(ObTenantStorageInfo*& tenant_store_info)
   {
     int ret = common::OB_SUCCESS;
@@ -986,8 +986,8 @@ private:
   int handle_rebuild_result_(
       const common::ObPartitionKey pkey, const common::ObReplicaType replica_type, const int ret_val);
   bool reach_tenant_partition_limit_(const int64_t batch_cnt, const uint64_t tenant_id, const bool is_pg_arg);
-  int get_pg_key_(const ObPartitionKey& pkey, ObPGKey& pg_key);
-  int get_pg_key_from_index_schema_(const ObPartitionKey& pkey, ObPGKey& pg_key);
+  int get_pg_key_(const ObPartitionKey& pkey, ObPGKey& pg_key) const;
+  int get_pg_key_from_index_schema_(const ObPartitionKey& pkey, ObPGKey& pg_key) const;
   int submit_add_partition_to_pg_clog_(const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg,
       const int64_t timeout, common::ObIArray<uint64_t>& log_id_arr);
   int write_partition_schema_version_change_clog_(const common::ObPGKey& pg_key, const common::ObPartitionKey& pkey,
