@@ -4594,6 +4594,7 @@ int ObTransformUtils::extract_column_exprs(ObDMLStmt* stmt, const int64_t stmt_l
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 16> relation_exprs;
+  ObSEArray<ObSelectStmt*, 16> child_stmts;
   bool is_stack_overflow = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4609,7 +4610,19 @@ int ObTransformUtils::extract_column_exprs(ObDMLStmt* stmt, const int64_t stmt_l
     LOG_WARN("failed to get relation exprs", K(ret));
   } else if (OB_FAIL(SMART_CALL(extract_column_exprs(relation_exprs, stmt_level, table_set, ignore_stmts, columns)))) {
     LOG_WARN("failed to extract column exprs", K(ret));
-  } else { /*do nothing*/
+  } else if (OB_FAIL(stmt->get_from_subquery_stmts(child_stmts))) {
+    LOG_WARN("get child stmt failed", K(ret));  
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      ObSelectStmt* child_stmt = child_stmts.at(i);
+      if (OB_ISNULL(child_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid stmt", K(ret));
+      } else if (OB_FAIL(SMART_CALL(extract_column_exprs(child_stmt, stmt_level, table_set,
+                                                          ignore_stmts, columns)))) {
+        LOG_WARN("failed to extract column exprs", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -6545,7 +6558,7 @@ int ObTransformUtils::convert_select_expr_to_column_expr(const common::ObIArray<
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to find select expr inner stmt", K(ret));
     } else if (OB_ISNULL(col = outer_stmt.get_column_expr_by_id(table_id, column_id))) {
-      LOG_WARN("failed to get column expr by id", K(ret));
+      //do nothing
     } else if (OB_FAIL(column_exprs.push_back(col))) {
       LOG_WARN("failed to push back column expr", K(ret));
     }
