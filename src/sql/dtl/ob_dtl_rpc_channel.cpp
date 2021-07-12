@@ -80,8 +80,10 @@ void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
   LOG_WARN("SendBCMsgCB invalid, check object serialization impl or oom", K_(trace_id));
   AsyncCB::on_invalid();
   ObIArray<ObDtlRpcDataResponse>& resps = result_.resps_;
-  for (int64_t i = 0; i < resps.count() && i < responses_.count(); ++i) {
-    int ret = responses_.at(i)->on_finish(resps.at(i).is_block_, OB_RPC_PACKET_INVALID);
+  for (int64_t i = 0; i < responses_.count(); ++i) {
+    int ret_code = (OB_SUCCESS != rcode_.rcode_) ? rcode_.rcode_
+                    : (i < resps.count() ? resps.at(i).recode_ : OB_RPC_PACKET_INVALID);
+    int ret = responses_.at(i)->on_finish(false, ret_code);
     if (OB_FAIL(ret)) {
       LOG_WARN("set finish failed", K(ret), K(resps.count()), K(responses_.count()), K(trace_id_));
     }
@@ -93,7 +95,9 @@ void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
   LOG_WARN("SendBCMsgCB timeout, if negative timeout, check peer cpu load, network packet drop rate", K_(trace_id));
   ObIArray<ObDtlRpcDataResponse>& resps = result_.resps_;
   for (int64_t i = 0; i < resps.count() && i < responses_.count(); ++i) {
-    int ret = responses_.at(i)->on_finish(resps.at(i).is_block_, OB_TIMEOUT);
+    int ret_code = (OB_SUCCESS != rcode_.rcode_) ? rcode_.rcode_
+                    : (i < resps.count() ? resps.at(i).recode_ : OB_TIMEOUT);
+    int ret = responses_.at(i)->on_finish(false, ret_code);
     if (OB_FAIL(ret)) {
       LOG_WARN("set finish failed", K(ret), K(resps.count()), K(responses_.count()), K(trace_id_));
     }

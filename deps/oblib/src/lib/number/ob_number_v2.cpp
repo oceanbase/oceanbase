@@ -344,7 +344,9 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
     }
   }
 
-  if (OB_SUCC(ret) && (has_digit || 0 < i_nth) && ('e' == cur || 'E' == cur)) {
+  if (OB_SUCC(ret) && (has_digit || 0 < i_nth) 
+                   && ('e' == cur || 'E' == cur) 
+                   && is_valid_sci_tail_(str, length, i)) {
     LOG_DEBUG("ObNumber from sci",
         K(ret),
         K(i),
@@ -6627,6 +6629,36 @@ int ObNumber::cast_to_int64(int64_t& value) const
     LOG_DEBUG("this is not valid integer number", KPC(this), K(ret));
   }
   return ret;
+}
+
+/**
+ * check whether a sci format string has a valid exponent part
+ * valid : 1.8E-1/1.8E1   invalid : 1.8E, 1.8Ea, 1.8E-a
+ * @param str     string need to parse
+ * @param length  length of str
+ * @param e_pos   index of 'E'
+ */
+bool ObNumber::is_valid_sci_tail_(const char *str, 
+                                 const int64_t length, 
+                                 const int64_t e_pos)
+{
+  bool res = false;
+  if (e_pos == length - 1) {
+    //like 1.8e, false
+  } else if (e_pos < length - 1) {
+    if ('+' == str[e_pos + 1] || '-' == str[e_pos + 1]) {
+      if (e_pos < length - 2 && str[e_pos + 2] >= '0' && str[e_pos + 2] <= '9') {
+        res = true;
+      } else {
+        //like 1.8e+, false
+      }
+    } else if (str[e_pos + 1] >= '0' && str[e_pos + 1] <= '9') {
+      res = true;
+    } else {
+      //like 1.8ea, false
+    }
+  }
+  return res;
 }
 
 void ObNumber::set_one()

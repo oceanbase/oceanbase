@@ -28,7 +28,7 @@ public:
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(distinct_exprs), K_(is_block_mode), K_(cmp_funcs));
 
   // data members
-  common::ObSEArray<ObExpr*, 4> distinct_exprs_;
+  common::ObFixedArray<ObExpr*, common::ObIAllocator> distinct_exprs_;
   common::ObCmpFuncs cmp_funcs_;
   bool is_block_mode_;
 };
