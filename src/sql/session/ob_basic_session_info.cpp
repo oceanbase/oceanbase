@@ -937,7 +937,7 @@ int ObBasicSessionInfo::update_query_sensitive_system_variable(ObSchemaGetterGua
   return ret;
 }
 
-// used for bootstarp, in which we can not get system variables from inner table.
+// used for bootstrap, in which we can not get system variables from inner table.
 int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant)
 {
   int ret = OB_SUCCESS;

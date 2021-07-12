@@ -10685,7 +10685,7 @@ int ObRootService::update_table_schema_version(const ObUpdateTableSchemaVersionA
       LOG_WARN("invalid schema service", KR(ret), KP(schema_service));
     } else if (!schema_service->is_in_bootstrap()) {
       ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("not allow to update table schema while not in bootstarp");
+      LOG_WARN("not allow to update table schema while not in bootstrap");
     } else if (OB_FAIL(
                    ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
       LOG_WARN("get_schema_guard with version in inner table failed", K(ret), K(arg));
