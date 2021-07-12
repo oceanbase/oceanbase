@@ -133,7 +133,7 @@ int ObPartitionGroupIndex::remove_partition(const ObPartitionKey& pkey)
   return ret;
 }
 
-int ObPartitionGroupIndex::get_pg_key(const common::ObPartitionKey& pkey, common::ObPGKey& pg_key)
+int ObPartitionGroupIndex::get_pg_key(const common::ObPartitionKey& pkey, common::ObPGKey& pg_key) const
 {
   int ret = OB_SUCCESS;
   ObPGKeyWrap* pg_key_wrap = NULL;

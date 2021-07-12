@@ -176,7 +176,7 @@ public:
   MOCK_METHOD2(get_partitions_by_file_key, int(const ObTenantFileKey& file_key, ObIPartitionArrayGuard& partitions));
   MOCK_CONST_METHOD1(get_partition_count, int(int64_t& partition_count));
 
-  virtual int get_pg_key(const ObPartitionKey& pkey, ObPGKey& pg_key)
+  virtual int get_pg_key(const ObPartitionKey& pkey, ObPGKey& pg_key) const override
   {
     pg_key = pkey;
     return common::OB_SUCCESS;

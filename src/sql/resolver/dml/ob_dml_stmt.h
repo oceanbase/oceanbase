@@ -887,6 +887,7 @@ public:
   virtual int clear_sharable_expr_reference();
   virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*>& child_stmts) const;
   int is_referred_by_partitioning_expr(const ObRawExpr* expr, bool& is_referred);
+  int get_table_rel_ids(const TableItem &target, ObSqlBitSet<> &table_set) const;
   int64_t get_table_size() const
   {
     return table_items_.count();

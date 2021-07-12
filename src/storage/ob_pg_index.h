@@ -96,14 +96,14 @@ public:
 
   int add_partition(const common::ObPartitionKey& pkey, const common::ObPGKey& pg_key);
   int remove_partition(const common::ObPartitionKey& pkey);
-  int get_pg_key(const common::ObPartitionKey& pkey, common::ObPGKey& pg_key);
+  int get_pg_key(const common::ObPartitionKey& pkey, common::ObPGKey& pg_key) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionGroupIndex);
 
 private:
   bool is_inited_;
-  ObPGIndexMap pg_index_map_;
+  mutable ObPGIndexMap pg_index_map_;
   mutable lib::ObMutex change_mutex_;
 };
 

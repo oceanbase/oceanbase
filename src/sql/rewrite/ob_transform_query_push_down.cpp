@@ -342,6 +342,10 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt* select_s
   if (OB_ISNULL(select_stmt) || OB_ISNULL(view_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(select_stmt), K(view_stmt), K(ret));
+  } else if (OB_FAIL(check_select_item_subquery(*select_stmt, *view_stmt, check_status))) {
+    LOG_WARN("failed to check select item has subquery", K(ret));
+  } else if (!check_status) {
+    can_be = false;  
   } else if (view_stmt->is_contains_assignment() || select_stmt->is_contains_assignment()) {
     can_be = false;
   } else if (OB_FAIL(is_select_item_same(select_stmt, view_stmt, check_status, select_offset, const_select_items))) {
@@ -354,6 +358,58 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt* select_s
     can_be = false;
   } else {
     can_be = true;
+  }
+  return ret;
+}
+
+int ObTransformQueryPushDown::check_select_item_subquery(ObSelectStmt &select_stmt,
+                                                         ObSelectStmt &view,
+                                                         bool &can_be)
+{
+  int ret = OB_SUCCESS;
+  can_be = true;
+  ObSEArray<ObRawExpr*, 4> column_exprs_from_subquery;
+  ObRawExpr *expr = NULL;
+  TableItem *table = NULL;
+  ObSqlBitSet<> table_set;
+  if (OB_UNLIKELY(1 != select_stmt.get_table_items().count())
+      || OB_ISNULL(table = select_stmt.get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect select stmt", K(ret), K(select_stmt.get_from_item_size()), K(table));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < view.get_select_item_size(); ++i) {
+    if (OB_ISNULL(expr = view.get_select_item(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (!expr->has_flag(CNT_SUB_QUERY)) {
+      /* do nothing */
+    } else if (OB_ISNULL(expr = select_stmt.get_column_expr_by_id(table->table_id_,
+                                                                  i + OB_APP_MIN_COLUMN_ID))) {
+      /* do nothing */
+    } else if (OB_FAIL(column_exprs_from_subquery.push_back(expr))) {
+      LOG_WARN("failed to push back column expr", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (column_exprs_from_subquery.empty()) {
+    /* do nothing */
+  } else if (OB_FAIL(select_stmt.get_table_rel_ids(*table, table_set))) {
+    LOG_WARN("failed to get rel ids", K(ret));
+  } else {
+    ObIArray<ObQueryRefRawExpr*> &subquery_exprs = select_stmt.get_subquery_exprs();
+    ObSEArray<ObDMLStmt *, 4> ignore_stmts;
+    ObSEArray<ObRawExpr*, 4> column_exprs;
+    for (int64_t i = 0; OB_SUCC(ret) && can_be && i < subquery_exprs.count(); ++i) {
+      column_exprs.reuse();
+      if(OB_FAIL(ObTransformUtils::extract_column_exprs(subquery_exprs.at(i),
+                                                        select_stmt.get_current_level(),
+                                                        table_set, ignore_stmts,
+                                                        column_exprs))) {
+        LOG_WARN("extract column exprs failed", K(ret));
+      } else if (ObOptimizerUtil::overlap(column_exprs, column_exprs_from_subquery)) {
+        can_be = false;
+      }
+    }
   }
   return ret;
 }

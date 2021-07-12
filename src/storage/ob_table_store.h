@@ -163,6 +163,7 @@ public:
 
 private:
   // Common Section
+  void adjust_minor_merge_boundary(int64_t &min_snapshot, int64_t &max_snapshot);
   bool is_multi_version_break(const ObVersionRange& new_version_range, const int64_t last_snapshot_vesion);
   int classify_tables(const ObTablesHandle& old_handle, common::ObArray<ObITable*>& major_tables,
       common::ObArray<ObITable*>& inc_tables);
@@ -237,10 +238,13 @@ private:
       const ObTablesHandle& old_handle, int64_t& first_reference_pos, int64_t& last_reference_pos);
   int get_major_split_table_pos(const ObTablesHandle& old_handle, int64_t& pos);
 
+
 protected:
   static const int64_t INVAID_TABLE_POS = -1;
   static const int64_t DEFAULT_SSTABLE_CNT = 6;
   static const int64_t OB_HIST_MINOR_FACTOR = 3;
+  static const int64_t OB_UNSAFE_TABLE_CNT = 48;
+  static const int64_t OB_EMERGENCY_TABLE_CNT = 52;
   // No Need Persistence
   bool is_inited_;
   ObFreezeInfoSnapshotMgr* freeze_info_mgr_;

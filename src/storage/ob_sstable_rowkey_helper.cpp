@@ -120,7 +120,12 @@ int ObRowkeyObjComparer::sstable_oracle_collation_free_cmp_func(
         // int32_t is always capable of stroing the max lenth of varchar or char
         for (int32_t i = 0; i < left_len; ++i) {
           if (*(uptr + i) != ' ') {
-            cmp = lhs_len > cmp_len ? ObObjCmpFuncs::CR_GT : ObObjCmpFuncs::CR_LT;
+            // mysql特殊行为：a\1 < a，但ab > a
+            if (*(uptr + i) < ' ') {
+              cmp = lhs_len > cmp_len ? ObObjCmpFuncs::CR_LT : ObObjCmpFuncs::CR_GT;
+            } else {
+              cmp = lhs_len > cmp_len ? ObObjCmpFuncs::CR_GT : ObObjCmpFuncs::CR_LT;
+            }
             break;
           }
         }

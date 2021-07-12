@@ -38,12 +38,12 @@ public:
   {
     UNUSED(allocator);
   }
-  virtual void* alloc(int64_t sz)
+  virtual void* alloc(const int64_t sz) override
   {
     UNUSEDx(sz);
     return nullptr;
   }
-  virtual void* alloc(int64_t sz, const ObMemAttr& attr)
+  virtual void* alloc(const int64_t sz, const ObMemAttr& attr) override
   {
     UNUSEDx(sz, attr);
     return nullptr;
