@@ -541,6 +541,8 @@ int ObRawExprPrinter::print(ObOpRawExpr* expr)
           PRINT_EXPR(expr->get_param_expr(0));
           DATA_PRINTF(" %.*s ", LEN_AND_PTR(symbol));
           PRINT_EXPR(expr->get_param_expr(1));
+          DATA_PRINTF(" escape ");
+          PRINT_EXPR(expr->get_param_expr(2));
           DATA_PRINTF(")");
         }
         break;
