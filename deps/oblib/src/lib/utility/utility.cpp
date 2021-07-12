@@ -1149,7 +1149,7 @@ static int pidfile_test(const char* pidfile)
   int ret = OB_SUCCESS;
   int fd = open(pidfile, O_RDONLY);
 
-  if (fd < 0) {    
+  if (fd < 0) {
     ret = OB_FILE_NOT_EXIST;
   } else {
     if (lockf(fd, F_TEST, 0) != 0) {
