@@ -720,7 +720,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr* l_expr, const ObRawExpr* 
             if (escape_val.is_unknown() && OB_ISNULL(query_range_ctx_->params_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get unexpected null", K(ret));
-            } else if (escape_val.is_unknown() && OB_FAIL(get_param_value(val, *query_range_ctx_->params_))) {
+            } else if (escape_val.is_unknown() && OB_FAIL(get_param_value(escape_val, *query_range_ctx_->params_))) {
               LOG_WARN("failed to get param value", K(ret));
             } else if (OB_FAIL(get_like_range(val, escape_val, *out_key_part, dtc_params))) {
               LOG_WARN("get like range failed", K(ret));
