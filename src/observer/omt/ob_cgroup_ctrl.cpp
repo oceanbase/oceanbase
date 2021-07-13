@@ -584,7 +584,7 @@ int ObCgroupCtrl::write_string_to_file_(const char* filename, const char* conten
   int ret = OB_SUCCESS;
   int fd = -1;
   int tmp_ret = -1;
-  if ((fd = ::open(filename, O_WRONLY)) < 0) {
+  if ((fd = ::open(filename, O_WRONLY | O_CREAT)) < 0) {
     ret = OB_IO_ERROR;
     LOG_WARN("open file error", K(filename), K(errno), KERRMSG, K(ret));
   } else if ((tmp_ret = write(fd, content, strlen(content))) < 0) {
