@@ -58,6 +58,7 @@ static void print_help()
 {
   MPRINT("observer [OPTIONS]");
   MPRINT("  -h,--help                print this help");
+  MPRINT("  -v,--version             print the information of version");
   MPRINT("  -z,--zone ZONE           zone");
   MPRINT("  -p,--mysql_port PORT     mysql port");
   MPRINT("  -P,--rpc_port PORT       rpc port");
