@@ -38,16 +38,16 @@ using oceanbase::sql::test::ObFakeTable;
 #define TEST_SORT_DUMP_SET_HASH_AREA_SIZE(size) (set_sort_area_size(size))
 
 class ObSortTest : public blocksstable::TestDataFilePrepare {
-  public:
+public:
   ObSortTest();
   virtual ~ObSortTest();
 
-  private:
+private:
   // disallow copy
   ObSortTest(const ObSortTest& other);
   ObSortTest& operator=(const ObSortTest& other);
 
-  protected:
+protected:
   virtual void SetUp() override
   {
     GCONF.enable_sql_operator_dump.set_value("True");
@@ -100,7 +100,7 @@ class ObSortTest : public blocksstable::TestDataFilePrepare {
   void serialize_test();
   void sort_exception_test(int expect_ret);
 
-  private:
+private:
   static void copy_cell_varchar(ObObj& cell, char* buf, int64_t buf_size)
   {
     ObString str;
@@ -127,7 +127,7 @@ class ObSortTest : public blocksstable::TestDataFilePrepare {
 };
 
 class ObSortPlan {
-  public:
+public:
   static ObSort& get_instance()
   {
     return *sort_;
@@ -192,7 +192,7 @@ class ObSortPlan {
     row_count_ = -1;
   }
 
-  private:
+private:
   ObSortPlan();
   static void cons_run_filename(ObString& filename)
   {
@@ -201,8 +201,8 @@ class ObSortPlan {
     return;
   }
 
-  public:
-  private:
+public:
+private:
   static ObPhysicalPlan* physical_plan_;
   static ObFakeTable* input_table_;
   static ObSort* sort_;
@@ -549,7 +549,7 @@ TEST_F(ObSortTest, prefix_merge_sort_test)
 }
 
 class MockExpr : public ObSqlExpression {
-  public:
+public:
   MockExpr(ObIAllocator& alloc, int64_t cnt) : ObSqlExpression(alloc)
   {
     set_item_count(1);

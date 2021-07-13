@@ -18,14 +18,14 @@ namespace oceanbase {
 namespace sql {
 class ObCreateOutlineStmt;
 class ObCreateOutlineResolver : public ObOutlineResolver {
-  public:
+public:
   explicit ObCreateOutlineResolver(ObResolverParams& params) : ObOutlineResolver(params)
   {}
   virtual ~ObCreateOutlineResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int resolve_sql_id(const ParseNode* node, ObCreateOutlineStmt& create_outline_stmt);
   int resolve_hint(const ParseNode* node, ObCreateOutlineStmt& create_outline_stmt);
   static const int64_t OUTLINE_CHILD_COUNT = 5;

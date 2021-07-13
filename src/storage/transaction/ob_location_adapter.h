@@ -40,7 +40,7 @@ class ObPartitionLocation;
 namespace transaction {
 
 class ObILocationAdapter {
-  public:
+public:
   ObILocationAdapter()
   {}
   virtual ~ObILocationAdapter()
@@ -49,7 +49,7 @@ class ObILocationAdapter {
       share::ObIPartitionLocationCache* location_cache, share::schema::ObMultiVersionSchemaService* schema_service) = 0;
   virtual void destroy() = 0;
 
-  public:
+public:
   virtual int get_strong_leader(const common::ObPartitionKey& partition, common::ObAddr& server) = 0;
   virtual int nonblock_get_strong_leader(const common::ObPartitionKey& partition, common::ObAddr& server) = 0;
   virtual int nonblock_renew(const common::ObPartitionKey& partition, const int64_t expire_renew_time) = 0;
@@ -58,7 +58,7 @@ class ObILocationAdapter {
 };
 
 class ObLocationAdapter : public ObILocationAdapter {
-  public:
+public:
   ObLocationAdapter();
   ~ObLocationAdapter()
   {}
@@ -67,18 +67,18 @@ class ObLocationAdapter : public ObILocationAdapter {
       share::ObIPartitionLocationCache* location_cache, share::schema::ObMultiVersionSchemaService* schema_service);
   void destroy();
 
-  public:
+public:
   int get_strong_leader(const common::ObPartitionKey& partition, common::ObAddr& server);
   int nonblock_get_strong_leader(const common::ObPartitionKey& partition, common::ObAddr& server);
   int nonblock_renew(const common::ObPartitionKey& partition, const int64_t expire_renew_time);
   int nonblock_get(const uint64_t table_id, const int64_t partition_id, share::ObPartitionLocation& location);
 
-  private:
+private:
   int get_strong_leader_(const common::ObPartitionKey& partition, const bool is_sync, common::ObAddr& server);
   void reset_statistics();
   void statistics();
 
-  private:
+private:
   bool is_inited_;
   share::ObIPartitionLocationCache* location_cache_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

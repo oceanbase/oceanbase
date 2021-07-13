@@ -39,7 +39,7 @@
 namespace oceanbase {
 namespace blocksstable {
 class ObSSTablePrinter {
-  public:
+public:
   static void print_title(const char* name, const int64_t value, const int64_t level = 1);
   static void print_title(const char* name, const int64_t level = 1);
   static void print_line(const char* name, const int32_t value, const int64_t level = 1);

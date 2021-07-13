@@ -95,7 +95,7 @@ struct ObOperatorKit {
 
 // Physical operator kit store
 class ObOpKitStore {
-  public:
+public:
   ObOpKitStore() : size_(0), kits_(NULL)
   {}
 
@@ -123,12 +123,12 @@ class ObPhyOperator;
 // ObExecContext serialize
 // ObDesExecContext for deseralize
 class ObExecContext {
-  public:
+public:
   /**
    * some operator need different rescan logic for GI
    */
   class ObPlanRestartGuard {
-    public:
+  public:
     explicit ObPlanRestartGuard(ObExecContext& ctx) : restart_plan_(ctx.get_restart_plan())
     {
       restart_plan_ = true;
@@ -138,11 +138,11 @@ class ObExecContext {
       restart_plan_ = false;
     }
 
-    private:
+  private:
     bool& restart_plan_;
   };
 
-  public:
+public:
   ObExecContext();
   explicit ObExecContext(common::ObIAllocator& allocator);
   virtual ~ObExecContext();
@@ -367,12 +367,12 @@ class ObExecContext {
 
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 
-  protected:
+protected:
   uint64_t get_ser_version() const;
   const static uint64_t SER_VERSION_0 = 0;
   const static uint64_t SER_VERSION_1 = 1;
 
-  public:
+public:
   ObPlanCacheManager* get_plan_cache_manager()
   {
     return plan_cache_manager_;
@@ -662,7 +662,7 @@ class ObExecContext {
     return expr_partition_id_;
   }
 
-  private:
+private:
   int set_phy_op_ctx_ptr(uint64_t index, void* phy_op);
   void* get_phy_op_ctx_ptr(uint64_t index) const;
   /**
@@ -676,7 +676,7 @@ class ObExecContext {
       int32_t& real_input_count, bool is_full_tree) const;
   int serialize_operator_input_len_recursively(const ObPhyOperator* op, int64_t& len, bool is_full_tree) const;
 
-  protected:
+protected:
   /**
    * @brief the memory of exec context.
    * ------------------------------------------------
@@ -806,7 +806,7 @@ class ObExecContext {
   // for expr values op use
   int64_t expr_partition_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };
 

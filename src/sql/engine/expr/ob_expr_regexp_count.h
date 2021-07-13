@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprRegexpCount : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprRegexpCount(common::ObIAllocator& alloc);
   virtual ~ObExprRegexpCount();
   virtual int calc_result_typeN(
@@ -34,12 +34,12 @@ class ObExprRegexpCount : public ObFuncExprOperator {
   static int get_regexp_flags(
       const common::ObCollationType calc_cs_type, const common::ObString& match_param, int& flags, int& multi_flag);
 
-  private:
+private:
   static int calc(int64_t& ret_count, const common::ObString& text, const common::ObString& pattern, int64_t position,
       const common::ObCollationType calc_cs_type, const common::ObString& match_param, int64_t subexpr,
       bool has_null_argument, ObExprRegexContext* regexp_ptr, common::ObExprStringBuf& string_buf);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpCount);
 };
 }  // namespace sql

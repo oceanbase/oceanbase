@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObTenantVirtualStatname : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObTenantVirtualStatname();
   virtual ~ObTenantVirtualStatname();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -30,7 +30,7 @@ class ObTenantVirtualStatname : public common::ObVirtualTableScannerIterator {
   }
   virtual void reset();
 
-  private:
+private:
   enum SYS_COLUMN { TENANT_ID = common::OB_APP_MIN_COLUMN_ID, STAT_ID, STATISTIC_NO, NAME, DISPLAY_NAME, CLASS };
   int32_t stat_iter_;
   uint64_t tenant_id_;

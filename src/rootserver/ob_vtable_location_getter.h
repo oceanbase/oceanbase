@@ -25,12 +25,12 @@ class ObServerManager;
 class ObUnitManager;
 
 class ObVTableLocationGetter {
-  public:
+public:
   ObVTableLocationGetter(ObServerManager& server_mgr, ObUnitManager& unit_mgr);
   virtual ~ObVTableLocationGetter();
   int get(const uint64_t table_id, common::ObSArray<share::ObPartitionLocation>& locations);
 
-  private:
+private:
   int get_only_rs_vtable_location(const uint64_t table_id, common::ObSArray<share::ObPartitionLocation>& locations);
   int get_global_vtable_location(const uint64_t table_id, common::ObSArray<share::ObPartitionLocation>& locations);
   int get_tenant_vtable_location(const uint64_t table_id, common::ObSArray<share::ObPartitionLocation>& locations);
@@ -40,7 +40,7 @@ class ObVTableLocationGetter {
   ObServerManager& server_mgr_;
   ObUnitManager& unit_mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObVTableLocationGetter);
 };
 

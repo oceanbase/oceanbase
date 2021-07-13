@@ -28,7 +28,7 @@ using namespace oceanbase::common;
 #define STD_RESULT_FILE_SUFFIX ".result"
 
 class TestCharset : public ::testing::Test {
-  public:
+public:
   TestCharset();
   virtual ~TestCharset();
   virtual void SetUp();
@@ -36,7 +36,7 @@ class TestCharset : public ::testing::Test {
   template <typename func>
   void for_each_utf8(func handle);
 
-  protected:
+protected:
   void gen_random_unicode_string(const int len, char* res, int& real_len);
   int random_range(const int low, const int high);
 };

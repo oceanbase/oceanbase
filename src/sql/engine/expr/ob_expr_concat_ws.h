@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace sql {
 // stands for Concatenate With Separator and is a special form of CONCAT()
 class ObExprConcatWs : public ObStringExprOperator {
-  public:
+public:
   ObExprConcatWs();
   explicit ObExprConcatWs(common::ObIAllocator& alloc);
   virtual ~ObExprConcatWs();
@@ -36,7 +36,7 @@ class ObExprConcatWs : public ObStringExprOperator {
   static int calc(const common::ObString& sep_str, const common::ObIArray<common::ObString>& words,
       common::ObIAllocator& alloc, common::ObString& res_str);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprConcatWs);
 };

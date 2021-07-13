@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace common {
 class ObGtsInfo {
-  public:
+public:
   ObGtsInfo();
   ~ObGtsInfo()
   {}
@@ -28,7 +28,7 @@ class ObGtsInfo {
   bool is_valid() const;
   int assign(const ObGtsInfo& that);
 
-  public:
+public:
   uint64_t gts_id_;
   common::ObGtsName gts_name_;
   common::ObRegion region_;
@@ -41,14 +41,14 @@ class ObGtsInfo {
 };
 
 class ObGtsTenantInfo {
-  public:
+public:
   ObGtsTenantInfo();
   ~ObGtsTenantInfo()
   {}
   void reset();
   bool is_valid() const;
 
-  public:
+public:
   uint64_t gts_id_;
   uint64_t tenant_id_;
   common::ObMemberList member_list_;

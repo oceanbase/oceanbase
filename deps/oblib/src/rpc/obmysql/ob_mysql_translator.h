@@ -22,7 +22,7 @@ namespace obmysql {
 using rpc::frame::ObReqProcessor;
 
 class ObMySQLTranslator : public rpc::frame::ObReqTranslator {
-  public:
+public:
   ObMySQLTranslator()
   {}
   virtual ~ObMySQLTranslator()

@@ -21,19 +21,19 @@ namespace common {
 namespace zstd_1_3_8 {
 
 class ObZstdCtxAllocator {
-  public:
+public:
   ObZstdCtxAllocator();
   virtual ~ObZstdCtxAllocator();
   void* alloc(size_t size);
   void free(void* addr);
   void reuse();
 
-  private:
+private:
   ObArenaAllocator allocator_;
 };
 
 class __attribute__((visibility("default"))) ObZstdCompressor_1_3_8 : public ObCompressor {
-  public:
+public:
   explicit ObZstdCompressor_1_3_8()
   {}
   virtual ~ObZstdCompressor_1_3_8()
@@ -45,7 +45,7 @@ class __attribute__((visibility("default"))) ObZstdCompressor_1_3_8 : public ObC
   const char* get_compressor_name() const;
   int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const;
 
-  private:
+private:
   static const char* compressor_name;
 };
 }  // namespace zstd_1_3_8

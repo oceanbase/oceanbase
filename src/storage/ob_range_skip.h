@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace storage {
 class ObRangeSkip {
-  public:
+public:
   ObRangeSkip() : iters_(NULL)
   {}
   ~ObRangeSkip()
@@ -37,7 +37,7 @@ class ObRangeSkip {
   int inspect_gap(int idx, const bool is_memtable, uint8_t in_gap_flag, int64_t& range_idx,
       const ObStoreRowkey*& rowkey, int64_t limit);
 
-  private:
+private:
   ObMultipleMerge::MergeIterators* iters_;
 };
 

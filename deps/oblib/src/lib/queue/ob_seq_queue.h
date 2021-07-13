@@ -54,11 +54,11 @@ class ObSeqQueue {
     void* volatile data_;
   };
 
-  public:
+public:
   ObSeqQueue();
   ~ObSeqQueue();
 
-  public:
+public:
   int init(const int64_t limit, SeqItem* buf = NULL);
   int start(const int64_t seq);
   int add(const int64_t seq, void* data);
@@ -67,11 +67,11 @@ class ObSeqQueue {
   bool next_is_ready() const;
   int64_t get_seq();
 
-  protected:
+protected:
   bool is_inited() const;
   ObThreadCond* get_cond(const int64_t seq);
 
-  private:
+private:
   BufHolder buf_holder_;
   volatile int64_t seq_;
   SeqItem* items_ CACHE_ALIGNED;

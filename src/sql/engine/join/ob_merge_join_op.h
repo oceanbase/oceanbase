@@ -22,11 +22,11 @@ namespace sql {
 class ObMergeJoinSpec : public ObJoinSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   struct EqualConditionInfo {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     EqualConditionInfo() : expr_(NULL), ns_cmp_func_(NULL), is_opposite_(false)
     {}
     TO_STRING_KV(K(expr_), KP(ns_cmp_func_), K(is_opposite_));
@@ -40,7 +40,7 @@ class ObMergeJoinSpec : public ObJoinSpec {
     bool is_opposite_;
   };
 
-  public:
+public:
   ObMergeJoinSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObJoinSpec(alloc, type), equal_cond_infos_(alloc), merge_directions_(alloc), is_left_unique_(false)
   {}
@@ -67,7 +67,7 @@ class ObMergeJoinSpec : public ObJoinSpec {
     return ret;
   }
 
-  private:
+private:
   static const int64_t MERGE_DIRECTION_ASC;
   static const int64_t MERGE_DIRECTION_DESC;
   int add_merge_direction(ObOrderDirection direction)
@@ -75,17 +75,17 @@ class ObMergeJoinSpec : public ObJoinSpec {
     return merge_directions_.push_back(is_ascending_direction(direction) ? MERGE_DIRECTION_ASC : MERGE_DIRECTION_DESC);
   }
 
-  public:
+public:
   common::ObFixedArray<EqualConditionInfo, common::ObIAllocator> equal_cond_infos_;
   common::ObFixedArray<int64_t, common::ObIAllocator> merge_directions_;
   bool is_left_unique_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeJoinSpec);
 };
 
 class ObMergeJoinOp : public ObJoinOp {
-  private:
+private:
   struct ObStoredJoinRow : public ObChunkDatumStore::StoredRow {
     bool& get_extra_info()
     {
@@ -226,7 +226,7 @@ class ObMergeJoinOp : public ObJoinOp {
   // iter ate side for JS_EMPTY_CACHE state.
   enum ObMJIterateSide { ITER_LEFT = 0b01, ITER_RIGHT = 0b10, ITER_BOTH = 0b11 };
 
-  public:
+public:
   ObMergeJoinOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObMergeJoinOp()
   {
@@ -263,7 +263,7 @@ class ObMergeJoinOp : public ObJoinOp {
     ObJoinOp::destroy();
   }
 
-  private:
+private:
   // JS_JOIN_END state operation and transfer functions.
   int join_end_operate();
   int join_end_func_end();
@@ -333,11 +333,11 @@ class ObMergeJoinOp : public ObJoinOp {
   typedef int (ObMergeJoinOp::*state_operation_func_type)();
   typedef int (ObMergeJoinOp::*state_function_func_type)();
 
-  private:
+private:
   state_operation_func_type state_operation_func_[JS_STATE_COUNT];
   state_function_func_type state_function_func_[JS_STATE_COUNT][FT_TYPE_COUNT];
 
-  private:
+private:
   ObJoinState state_;
 
   lib::MemoryContext* mem_context_;
@@ -354,7 +354,7 @@ class ObMergeJoinOp : public ObJoinOp {
   // for semi join, if equal_condition and other_condition matched, output this row, else not output
   bool left_row_matched_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeJoinOp);
 };
 

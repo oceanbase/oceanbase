@@ -37,7 +37,7 @@ class ObServerManager;
 class ObUnitManager;
 
 class ObRootMinorFreeze {
-  public:
+public:
   ObRootMinorFreeze();
   virtual ~ObRootMinorFreeze();
 
@@ -50,7 +50,7 @@ class ObRootMinorFreeze {
   int try_minor_freeze(const common::ObIArray<uint64_t>& tenant_ids, const common::ObPartitionKey& partition_key_,
       const common::ObIArray<common::ObAddr>& server_list, const common::ObZone& zone) const;
 
-  private:
+private:
   typedef struct MinorFreezeParam {
     common::ObAddr server;
     obrpc::ObMinorFreezeArg arg;
@@ -59,7 +59,7 @@ class ObRootMinorFreeze {
   } MinorFreezeParam;
 
   class ParamsContainer {
-    public:
+  public:
     void reset()
     {
       params_.reset();
@@ -79,7 +79,7 @@ class ObRootMinorFreeze {
 
     TO_STRING_KV(K_(params));
 
-    private:
+  private:
     common::ObSEArray<MinorFreezeParam, 256> params_;
   };
 

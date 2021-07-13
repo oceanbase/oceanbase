@@ -344,7 +344,9 @@ int ObNumber::from_sci_(const char* str, const int64_t length, IAllocator& alloc
     }
   }
 
-  if (OB_SUCC(ret) && (has_digit || 0 < i_nth) && ('e' == cur || 'E' == cur)) {
+  if (OB_SUCC(ret) && (has_digit || 0 < i_nth) 
+                   && ('e' == cur || 'E' == cur) 
+                   && is_valid_sci_tail_(str, length, i)) {
     LOG_DEBUG("ObNumber from sci",
         K(ret),
         K(i),
@@ -656,26 +658,38 @@ int ObNumber::find_point_range_(const char* str, const int64_t length, int64_t& 
 
       for (; str_ptr != str_end && *str_ptr == '0'; ++str_ptr)
         ; /* ignore leading zero */
-      start_idx = str_ptr - str;
-      tmp_start_idx = ((*str_ptr == '.') ? (start_idx - 1) : start_idx);
+      if (str_ptr == str_end) {
+          // all zero cases:
+          // start_idx should points to the last '0'.
+          // start_idx and end_idx point to the same position,
+          // so that the 'construct_digits_()' would generate
+          // number '0' in the end
+          start_idx = str_ptr - 1 - str;
+          tmp_start_idx = start_idx;
+          floating_point = start_idx;
+          end_idx = start_idx;
+      } else {
+        start_idx = str_ptr - str;
+        tmp_start_idx = ((*str_ptr == '.') ? (start_idx - 1) : start_idx);
 
-      for (; str_ptr != str_end && ('0' <= *str_ptr && *str_ptr <= '9'); ++str_ptr)
-        ;
-
-      if (str_ptr != str_end && *str_ptr == '.') { /* find floating point */
-        int64_t non_zero_end = 0;
-        floating_point = str_ptr - str;
-        ++str_ptr;
         for (; str_ptr != str_end && ('0' <= *str_ptr && *str_ptr <= '9'); ++str_ptr)
           ;
-        end_idx = str_ptr - str;
-      } else {
-        floating_point = str_ptr - str;
-        end_idx = floating_point;
-      }
 
-      if (str_ptr != str_end) {
-        warning = OB_INVALID_NUMERIC;
+        if (str_ptr != str_end && *str_ptr == '.') { /* find floating point */
+          int64_t non_zero_end = 0;
+          floating_point = str_ptr - str;
+          ++str_ptr;
+          for (; str_ptr != str_end && ('0' <= *str_ptr && *str_ptr <= '9'); ++str_ptr)
+            ;
+          end_idx = str_ptr - str;
+        } else {
+          floating_point = str_ptr - str;
+          end_idx = floating_point;
+        }
+
+        if (str_ptr != str_end) {
+          warning = OB_INVALID_NUMERIC;
+        }
       }
     }
     if (NULL != precision && NULL != scale) {
@@ -6615,6 +6629,36 @@ int ObNumber::cast_to_int64(int64_t& value) const
     LOG_DEBUG("this is not valid integer number", KPC(this), K(ret));
   }
   return ret;
+}
+
+/**
+ * check whether a sci format string has a valid exponent part
+ * valid : 1.8E-1/1.8E1   invalid : 1.8E, 1.8Ea, 1.8E-a
+ * @param str     string need to parse
+ * @param length  length of str
+ * @param e_pos   index of 'E'
+ */
+bool ObNumber::is_valid_sci_tail_(const char *str, 
+                                 const int64_t length, 
+                                 const int64_t e_pos)
+{
+  bool res = false;
+  if (e_pos == length - 1) {
+    //like 1.8e, false
+  } else if (e_pos < length - 1) {
+    if ('+' == str[e_pos + 1] || '-' == str[e_pos + 1]) {
+      if (e_pos < length - 2 && str[e_pos + 2] >= '0' && str[e_pos + 2] <= '9') {
+        res = true;
+      } else {
+        //like 1.8e+, false
+      }
+    } else if (str[e_pos + 1] >= '0' && str[e_pos + 1] <= '9') {
+      res = true;
+    } else {
+      //like 1.8ea, false
+    }
+  }
+  return res;
 }
 
 void ObNumber::set_one()

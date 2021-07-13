@@ -20,7 +20,7 @@ namespace sql {
 #define ROUND_MIN_SCALE -30
 #define ROUND_MAX_SCALE 30
 class ObExprFuncRound : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFuncRound(common::ObIAllocator& alloc);
   virtual ~ObExprFuncRound();
   virtual int calc_result_typeN(
@@ -29,7 +29,7 @@ class ObExprFuncRound : public ObFuncExprOperator {
       common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const;
   int calc_result2(
       common::ObObj& result, const common::ObObj& input, const common::ObObj& param, common::ObExprCtx& expr_ctx) const;

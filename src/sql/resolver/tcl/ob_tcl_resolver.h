@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTCLResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObTCLResolver(ObResolverParams& params);
   virtual ~ObTCLResolver();
 
@@ -28,7 +28,7 @@ class ObTCLResolver : public ObStmtResolver {
       const common::ObIArray<ObSubQueryInfo>& subquery_info, const ObStmtScope upper_scope);
   virtual int resolve_columns(ObRawExpr*& expr, common::ObArray<ObQualifiedName>& columns);
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObTCLResolver);

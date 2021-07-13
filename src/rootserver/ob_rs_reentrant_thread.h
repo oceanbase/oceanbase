@@ -22,7 +22,7 @@ namespace rootserver {
 // before real running and after running
 class CheckThreadSet;
 class ObRsReentrantThread : public share::ObReentrantThread {
-  public:
+public:
   ObRsReentrantThread();
   explicit ObRsReentrantThread(bool need_check);
   virtual ~ObRsReentrantThread();
@@ -38,13 +38,13 @@ class ObRsReentrantThread : public share::ObReentrantThread {
   virtual void run3() = 0;
 
   // Set RS thread properties
-  virtual int before_blocking_run()
+  virtual int before_blocking_run() override
   {
     common::ObThreadFlags::set_rs_flag();
     return common::OB_SUCCESS;
   }
 
-  virtual int after_blocking_run()
+  virtual int after_blocking_run() override
   {
     common::ObThreadFlags::cancel_rs_flag();
     return common::OB_SUCCESS;
@@ -65,11 +65,11 @@ class ObRsReentrantThread : public share::ObReentrantThread {
 
   int create(const int64_t thread_cnt, const char* name = nullptr);
   int destroy();
-  void stop();
-  void wait();
+  void stop() override;
+  void wait() override;
   TO_STRING_KV("name", get_thread_name());
 
-  private:
+private:
   // >0 :last run timestamp;
   // =0 :pause check thread;
   // =-1 :close check thread;
@@ -82,7 +82,7 @@ class ObRsReentrantThread : public share::ObReentrantThread {
 };
 
 class CheckThreadSet {
-  public:
+public:
   CheckThreadSet();
   virtual ~CheckThreadSet();
   void reset();
@@ -90,7 +90,7 @@ class CheckThreadSet {
   int add(ObRsReentrantThread* thread);
   void loop_operation(void (*func)(const ObRsReentrantThread&));
 
-  private:
+private:
   static const int MAX_LEN = 16;
   const ObRsReentrantThread* arr_[MAX_LEN];
   common::SpinRWLock rwlock_;

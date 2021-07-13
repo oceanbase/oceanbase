@@ -91,7 +91,7 @@ int ObMacroBlockBuilder::open(storage::ObSSTableMergeCtx& ctx, const int64_t idx
     if (desc_.need_prebuild_bloomfilter_) {
       ObIPartitionGroup* pg = ctx.pg_guard_.get_partition_group();
       if (OB_ISNULL(pg)) {
-        STORAGE_LOG(WARN, "Unexcepted null partition group", K(ctx));
+        STORAGE_LOG(WARN, "Unexpected null partition group", K(ctx));
         desc_.need_prebuild_bloomfilter_ = false;
       } else if (is_follower_state(pg->get_partition_state())) {
         desc_.need_prebuild_bloomfilter_ = false;
@@ -263,7 +263,7 @@ int ObMacroBlockBuilder::init_bloomfilter_if_need(storage::ObSSTableMergeCtx& ct
     for (int64_t i = 0; OB_SUCC(ret) && need_build_bloom_filter_ && i < ctx.tables_handle_.get_tables().count(); i++) {
       if (OB_ISNULL(table = ctx.tables_handle_.get_tables().at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexcepted null table", KP(table), K(ret));
+        STORAGE_LOG(WARN, "Unexpected null table", KP(table), K(ret));
       } else if (!table->is_sstable()) {
         break;
       } else if (FALSE_IT(sstable = reinterpret_cast<ObSSTable*>(table))) {
@@ -272,7 +272,7 @@ int ObMacroBlockBuilder::init_bloomfilter_if_need(storage::ObSSTableMergeCtx& ct
       } else if (!sstable->has_bloom_filter_macro_block()) {
         need_build_bloom_filter_ = false;
       } else if (OB_FAIL(sstable->get_bf_macro_block_ctx(bf_block_ctx))) {
-        STORAGE_LOG(WARN, "Faild to get bloomfilter block ctx", K(ret));
+        STORAGE_LOG(WARN, "Failed to get bloomfilter block ctx", K(ret));
       } else if (nullptr == file && OB_ISNULL(file = desc_.file_handle_.get_storage_file())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "fail to get pg_file", K(ret), K(desc_.file_handle_));
@@ -425,7 +425,7 @@ int ObMacroBlockBuilder::check_flat_row_columns(const ObStoreRow& row)
   if (ObActionFlag::OP_ROW_EXIST != row.flag_) {
   } else if (row.row_val_.count_ != desc_.row_column_count_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("Unexcepte column count of store row", K(row), K_(desc), K(ret));
+    LOG_ERROR("Unexpected column count of store row", K(row), K_(desc), K(ret));
   } else {
     const int64_t interval = 4;
     int64_t i = 0;
@@ -460,7 +460,7 @@ OB_INLINE int ObMacroBlockBuilder::check_row_column(const storage::ObStoreRow& r
     // pass
   } else if (obj.get_type() != desc_.column_types_[idx].get_type()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("Unexcepte column type of store row",
+    LOG_ERROR("Unexpected column type of store row",
         K(ret),
         K(idx),
         K(obj),
@@ -482,7 +482,7 @@ OB_INLINE int ObMacroBlockBuilder::check_sparse_row_column(const ObObj& obj, con
     // pass
   } else if (obj.get_type() != desc_.column_types_[idx].get_type()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("Unexcepte column type of store row",
+    LOG_ERROR("Unexpected column type of store row",
         K(ret),
         K(idx),
         K(obj),
@@ -511,7 +511,7 @@ int ObMacroBlockBuilder::append_bloom_filter(const ObStoreRow& row)
     LOG_WARN("Major merge should not build bloomfilter for sstable", K(ret));
   } else if (OB_UNLIKELY(!need_build_bloom_filter_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexcepted status for append bloomfilter", K_(need_build_bloom_filter), K(ret));
+    LOG_WARN("Unexpected status for append bloomfilter", K_(need_build_bloom_filter), K(ret));
   } else if (OB_FAIL(bf_macro_writer_.append(row))) {
     if (OB_NOT_SUPPORTED == ret) {
       ret = OB_SUCCESS;
@@ -568,7 +568,7 @@ int ObMacroBlockBuilder::process(const ObStoreRow& row, const ObCompactRowType::
     } else if (OB_FAIL(writer_->append_row(row))) {  // del_row need been stored when minor merge
       STORAGE_LOG(WARN, "Fail to append row to builder_", K(ret), K_(merge_type));
     } else if (need_build_bloom_filter_ && OB_FAIL(append_bloom_filter(row))) {
-      STORAGE_LOG(WARN, "Faild to append row to bloomfilter", K(ret));
+      STORAGE_LOG(WARN, "Failed to append row to bloomfilter", K(ret));
     } else {
       STORAGE_LOG(DEBUG, "Success to append row to builder_", K(ret), K_(merge_type), K(row));
     }
@@ -604,7 +604,7 @@ int ObMacroBlockBuilder::close()
         STORAGE_LOG(WARN, "Failed to flush bloomfilter macro block", K(ret));
       } else if (OB_UNLIKELY(bf_macro_writer_.get_block_write_ctx().is_empty())) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexcepted macro block write ctx", K(ret));
+        STORAGE_LOG(WARN, "Unexpected macro block write ctx", K(ret));
       } else if (OB_FAIL(ObStorageCacheSuite::get_instance().get_bf_cache().put_bloom_filter(desc_.table_id_,
                      bf_macro_writer_.get_block_write_ctx().macro_block_list_.at(0),
                      merge_context_->get_file_id(),

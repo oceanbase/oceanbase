@@ -37,7 +37,7 @@ class ObTransService;
 class ObDupTableMsgHeader {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDupTableMsgHeader()
   {
     reset();
@@ -60,7 +60,7 @@ class ObDupTableMsgHeader {
   }
   TO_STRING_KV(K_(src), K_(dst), K_(proxy));
 
-  protected:
+protected:
   ObAddr src_;
   ObAddr dst_;
   ObAddr proxy_;
@@ -69,7 +69,7 @@ class ObDupTableMsgHeader {
 class ObDupTableLeaseRequestMsg : public ObDupTableMsgHeader {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDupTableLeaseRequestMsg()
   {
     reset();
@@ -102,7 +102,7 @@ class ObDupTableLeaseRequestMsg : public ObDupTableMsgHeader {
   void reset();
   TO_STRING_KV(K_(request_ts), K_(partition), K_(addr), K_(last_log_id), K_(request_lease_interval_us));
 
-  private:
+private:
   // the send timestamp of a copy replica applying for lease
   int64_t request_ts_;
   common::ObPartitionKey partition_;
@@ -115,7 +115,7 @@ class ObDupTableLeaseRequestMsg : public ObDupTableMsgHeader {
 class ObDupTableLeaseResponseMsg : public ObDupTableMsgHeader {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDupTableLeaseResponseMsg()
   {
     reset();
@@ -154,7 +154,7 @@ class ObDupTableLeaseResponseMsg : public ObDupTableMsgHeader {
   void reset();
   TO_STRING_KV(K_(request_ts), K_(partition), K_(cur_log_id), K_(status), K_(lease_interval_us));
 
-  private:
+private:
   // the send timestamp of a copy replica applying for lease
   int64_t request_ts_;
   common::ObPartitionKey partition_;
@@ -167,7 +167,7 @@ class ObDupTableLeaseResponseMsg : public ObDupTableMsgHeader {
 class ObRedoLogSyncRequestMsg : public ObDupTableMsgHeader {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRedoLogSyncRequestMsg()
   {
     reset();
@@ -200,7 +200,7 @@ class ObRedoLogSyncRequestMsg : public ObDupTableMsgHeader {
   void reset();
   TO_STRING_KV(K_(partition), K_(log_id), K_(log_ts), K_(trans_id), K_(log_type));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   uint64_t log_id_;
   int64_t log_ts_;
@@ -211,7 +211,7 @@ class ObRedoLogSyncRequestMsg : public ObDupTableMsgHeader {
 class ObRedoLogSyncResponseMsg : public ObDupTableMsgHeader {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRedoLogSyncResponseMsg()
   {
     reset();
@@ -250,7 +250,7 @@ class ObRedoLogSyncResponseMsg : public ObDupTableMsgHeader {
   void reset();
   TO_STRING_KV(K_(partition), K_(log_id), K_(trans_id), K_(addr), K_(status));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   uint64_t log_id_;
   ObTransID trans_id_;
@@ -262,7 +262,7 @@ class ObRedoLogSyncResponseMsg : public ObDupTableMsgHeader {
 
 namespace obrpc {
 class ObDupTableRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObDupTableRpcProxy);
 
   RPC_AP(PRZ post_dup_table_lease_request, OB_DUP_TABLE_LEASE_REQUEST, (transaction::ObDupTableLeaseRequestMsg));
@@ -272,63 +272,63 @@ class ObDupTableRpcProxy : public obrpc::ObRpcProxy {
 };
 
 class ObDupTableLeaseRequestMsgP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_DUP_TABLE_LEASE_REQUEST>> {
-  public:
+public:
   explicit ObDupTableLeaseRequestMsgP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDupTableLeaseRequestMsgP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 class ObDupTableLeaseResponseMsgP
     : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_DUP_TABLE_LEASE_RESPONSE>> {
-  public:
+public:
   explicit ObDupTableLeaseResponseMsgP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDupTableLeaseResponseMsgP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 class ObRedoLogSyncRequestP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_REDO_LOG_SYNC_REQUEST>> {
-  public:
+public:
   explicit ObRedoLogSyncRequestP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRedoLogSyncRequestP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 class ObRedoLogSyncResponseP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_REDO_LOG_SYNC_RESPONSE>> {
-  public:
+public:
   explicit ObRedoLogSyncResponseP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRedoLogSyncResponseP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
@@ -336,7 +336,7 @@ class ObRedoLogSyncResponseP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::
 
 namespace transaction {
 class ObIDupTableRpc {
-  public:
+public:
   ObIDupTableRpc()
   {}
   virtual ~ObIDupTableRpc()
@@ -346,7 +346,7 @@ class ObIDupTableRpc {
   virtual int wait() = 0;
   virtual void destroy() = 0;
 
-  public:
+public:
   virtual int post_dup_table_lease_request(
       const uint64_t tenant_id, const common::ObAddr& server, const ObDupTableLeaseRequestMsg& msg) = 0;
   virtual int post_dup_table_lease_response(
@@ -358,7 +358,7 @@ class ObIDupTableRpc {
 };
 
 class ObDupTableRpc : public ObIDupTableRpc {
-  public:
+public:
   ObDupTableRpc() : is_inited_(false), is_running_(false), trans_service_(NULL), rpc_proxy_(NULL)
   {}
   ~ObDupTableRpc()
@@ -379,7 +379,7 @@ class ObDupTableRpc : public ObIDupTableRpc {
   virtual int post_redo_log_sync_response(
       const uint64_t tenant_id, const common::ObAddr& server, const ObRedoLogSyncResponseMsg& msg);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   ObTransService* trans_service_;

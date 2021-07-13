@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogAppend : public ObLogicalOperator {
-  public:
+public:
   ObLogAppend(ObLogPlan& plan);
   virtual ~ObLogAppend()
   {}
@@ -47,7 +47,7 @@ class ObLogAppend : public ObLogicalOperator {
   }
   VIRTUAL_TO_STRING_KV(K_(sub_plan_num));
 
-  private:
+private:
   ObLogPlan* sub_plan_[OB_SQL_MAX_CHILD_OPERATOR_NUM];
   int64_t sub_plan_num_;
 };

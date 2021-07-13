@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace clog {
 class MockLogEngine : public MockObLogEngine {
-  public:
+public:
   MockLogEngine()
   {}
   virtual ~MockLogEngine()
@@ -258,7 +258,7 @@ class MockLogEngine : public MockObLogEngine {
     return 0;
   }
 
-  private:
+private:
   ObIndexInfoBlockHandler fake_handler_;
 };
 }  // namespace clog

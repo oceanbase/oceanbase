@@ -22,7 +22,7 @@ namespace sql {
 class ObIExprExtraInfo;
 
 struct ObExprExtraInfoFactory {
-  public:
+public:
   typedef int (*AllocExtraInfoFunc)(
       common::ObIAllocator& alloc, ObIExprExtraInfo*& extra_info, const ObExprOperatorType type);
   // allocate extra info
@@ -35,11 +35,11 @@ struct ObExprExtraInfoFactory {
     return type > T_INVALID && type < T_MAX_OP && NULL != ALLOC_FUNS_[type];
   }
 
-  private:
+private:
   template <typename T>
   static int alloc(common::ObIAllocator& alloc, ObIExprExtraInfo*& extra_info, const ObExprOperatorType type);
 
-  private:
+private:
   static AllocExtraInfoFunc ALLOC_FUNS_[T_MAX_OP];
 };
 

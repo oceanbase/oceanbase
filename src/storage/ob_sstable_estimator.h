@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace storage {
 
 struct ObSSTableEstimateContext {
-  public:
+public:
   ObSSTableEstimateContext();
   ~ObSSTableEstimateContext();
   void reset();
@@ -40,7 +40,7 @@ struct ObSSTableEstimateContext {
 };
 
 class ObISSTableEstimator {
-  public:
+public:
   explicit ObISSTableEstimator()
   {}
   virtual ~ObISSTableEstimator()
@@ -58,7 +58,7 @@ class ObISSTableEstimator {
   }
   virtual int estimate_row_count(ObPartitionEst& part_est) = 0;
 
-  protected:
+protected:
   void reset()
   {
     context_.reset();
@@ -74,12 +74,12 @@ class ObISSTableEstimator {
   static int get_rowkey_column_desc(
       const blocksstable::ObFullMacroBlockMeta& meta, common::ObIArray<share::schema::ObColDesc>& columns);
 
-  protected:
+protected:
   ObSSTableEstimateContext context_;
 };
 
 class ObISSTableEstimatorWrapper {
-  public:
+public:
   explicit ObISSTableEstimatorWrapper() : estimator_(NULL)
   {}
   virtual ~ObISSTableEstimatorWrapper()
@@ -121,16 +121,16 @@ class ObISSTableEstimatorWrapper {
     return ret;
   }
 
-  protected:
+protected:
   virtual int alloc_estimator(const ObSSTable& sstable) = 0;
 
-  protected:
+protected:
   common::ObArenaAllocator allocator_;
   ObISSTableEstimator* estimator_;
 };
 
 class ObStoreRowMultiGetEstimator : public ObISSTableEstimator {
-  public:
+public:
   ObStoreRowMultiGetEstimator();
   virtual ~ObStoreRowMultiGetEstimator();
   virtual int set_context(ObSSTableEstimateContext& context) override;
@@ -138,7 +138,7 @@ class ObStoreRowMultiGetEstimator : public ObISSTableEstimator {
 };
 
 class ObSSTableScanEstimator : public ObISSTableEstimatorWrapper {
-  public:
+public:
   ObSSTableScanEstimator()
   {}
   virtual ~ObSSTableScanEstimator()
@@ -147,7 +147,7 @@ class ObSSTableScanEstimator : public ObISSTableEstimatorWrapper {
 };
 
 class ObStoreRowSingleScanEstimator : public ObISSTableEstimator {
-  public:
+public:
   ObStoreRowSingleScanEstimator();
   virtual ~ObStoreRowSingleScanEstimator();
   int set_context(ObSSTableEstimateContext& context);
@@ -155,7 +155,7 @@ class ObStoreRowSingleScanEstimator : public ObISSTableEstimator {
   void reset();
   virtual int estimate_row_count(ObPartitionEst& part_est);
 
-  private:
+private:
   int estimate_macro_row_count(const blocksstable::ObMacroBlockCtx& macro_block_ctx, const bool is_start_block,
       const bool is_last_block, ObPartitionEst& part_est);
   int estimate_border_cost(const common::ObIArray<blocksstable::ObMicroBlockInfo>& micro_infos,
@@ -168,13 +168,13 @@ class ObStoreRowSingleScanEstimator : public ObISSTableEstimator {
       const common::ObStoreRowkey& key1, const common::ObStoreRowkey& key2, int64_t& length);
   static int get_common_rowkey(const common::ObStoreRange& range, common::ObStoreRowkey& rowkey);
 
-  private:
+private:
   bool is_empty_scan_;
   bool is_first_scan_;
 };
 
 class ObMultiVersionSingleScanEstimator : public ObISSTableEstimator {
-  public:
+public:
   ObMultiVersionSingleScanEstimator(common::ObArenaAllocator& allocator) : allocator_(allocator)
   {}
   virtual ~ObMultiVersionSingleScanEstimator()
@@ -184,16 +184,16 @@ class ObMultiVersionSingleScanEstimator : public ObISSTableEstimator {
   int set_context(ObSSTableEstimateContext& context) override;
   int estimate_row_count(ObPartitionEst& part_est) override;
 
-  private:
+private:
   int estimate_macro_row_count(const blocksstable::ObMacroBlockCtx& macro_block_ctx, const bool is_left_border,
       const bool is_right_border, ObPartitionEst& part_est, int64_t& gap_size, int64_t& purged_phy_row_count);
 
-  private:
+private:
   common::ObArenaAllocator& allocator_;
 };
 
 class ObStoreRowMultiScanEstimator : public ObISSTableEstimator {
-  public:
+public:
   ObStoreRowMultiScanEstimator();
   virtual ~ObStoreRowMultiScanEstimator();
   virtual int estimate_row_count(ObPartitionEst& part_est);

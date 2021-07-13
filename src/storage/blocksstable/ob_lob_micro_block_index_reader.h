@@ -34,13 +34,13 @@ struct ObLobMicroIndexItem {
 };
 
 class ObLobMicroBlockIndexReader {
-  public:
+public:
   ObLobMicroBlockIndexReader();
   virtual ~ObLobMicroBlockIndexReader() = default;
   int transform(const char* index_buf, const int32_t size_array_offset, const int64_t micro_block_cnt);
   int get_next_index_item(ObLobMicroIndexItem& next_item);
 
-  private:
+private:
   const int32_t* offset_array_;
   const ObLobMicroIndexSizeItem* size_array_;
   int64_t micro_block_cnt_;

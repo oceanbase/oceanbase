@@ -28,14 +28,14 @@ typedef common::ObFixedArray<int64_t, common::ObIAllocator> ConnectByRowDesc;
 class ObJoin : public ObDoubleChildrenPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   const static int64_t DUMMY_OUPUT;
   const static int64_t UNUSED_POS;
   class ObJoinCtx : public ObPhyOperatorCtx {
     friend class ObJoin;
     friend class ObHashJoin;
 
-    public:
+  public:
     explicit ObJoinCtx(ObExecContext& ctx);
     virtual ~ObJoinCtx()
     {}
@@ -44,18 +44,18 @@ class ObJoin : public ObDoubleChildrenPhyOperator {
       ObPhyOperatorCtx::destroy_base();
     }
 
-    protected:
+  protected:
     const common::ObNewRow* left_row_;
     const common::ObNewRow* right_row_;
     const common::ObNewRow* last_left_row_;
     const common::ObNewRow* last_right_row_;
     bool left_row_joined_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObJoinCtx);
   };
 
-  public:
+public:
   explicit ObJoin(common::ObIAllocator& alloc);
   virtual ~ObJoin();
   virtual void reset();
@@ -136,7 +136,7 @@ class ObJoin : public ObDoubleChildrenPhyOperator {
       calc_exprs_, N_JOIN_TYPE, ob_join_type_str(join_type_), N_JOIN_EQ_COND, equal_join_conds_, N_JOIN_OTHER_COND,
       other_join_conds_);
 
-  protected:
+protected:
   inline bool need_left_join() const;
   inline bool need_right_join() const;
   int join_rows(ObJoinCtx& join_ctx, const common::ObNewRow*& row) const;
@@ -163,7 +163,7 @@ class ObJoin : public ObDoubleChildrenPhyOperator {
    */
   virtual int inner_open(ObExecContext& exec_ctx) const;
 
-  protected:
+protected:
   ObJoinType join_type_;
   common::ObDList<ObSqlExpression> equal_join_conds_;
   common::ObDList<ObSqlExpression> other_join_conds_;
@@ -175,7 +175,7 @@ class ObJoin : public ObDoubleChildrenPhyOperator {
   common::ObDList<ObSqlExpression> sort_siblings_exprs_;                            // for order siblings
   common::ObDList<ObSqlExpression> connect_by_root_exprs_;                          // calc connect_by_root expr
   bool is_nocycle_;                                                                 // deal with connect loop
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObJoin);
 };
 

@@ -28,7 +28,7 @@ class ObMultiVersionSchemaService;
 
 namespace observer {
 class ObCacheSizeCalculator : public share::ObThreadPool {
-  public:
+public:
   ObCacheSizeCalculator();
   virtual ~ObCacheSizeCalculator();
   int init(storage::ObPartitionService& partition_service, share::schema::ObMultiVersionSchemaService& schema_service);
@@ -36,7 +36,7 @@ class ObCacheSizeCalculator : public share::ObThreadPool {
   int start();
   void stop();
 
-  private:
+private:
   static const int64_t RENEW_CACHE_SIZE_INTERVAL_US = 10 * 1000 * 1000;
   static const int64_t MIN_HOLD_SIZE = 10L * 1024L * 1024L;         // 10MB
   static const int64_t MAX_HOLD_SIZE = 5L * 1024L * 1024L * 1024L;  // 5GB

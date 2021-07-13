@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 class ObIBaseLogItem {
-  public:
+public:
   ObIBaseLogItem()
   {}
   virtual ~ObIBaseLogItem()
@@ -59,7 +59,7 @@ struct ObBaseLogWriterCfg {
 };
 
 class ObBaseLogWriter {
-  public:
+public:
   ObBaseLogWriter();
   virtual ~ObBaseLogWriter();
   virtual int init(const ObBaseLogWriterCfg& log_cfg);
@@ -89,16 +89,16 @@ class ObBaseLogWriter {
     return log_item_push_idx_ - log_item_pop_idx_;
   }
 
-  protected:
+protected:
   virtual void process_log_items(ObIBaseLogItem** items, const int64_t item_cnt, int64_t& finish_cnt) = 0;
 
-  private:
+private:
   static void* flush_log_thread(void* arg);
 
   void flush_log();
   bool need_flush();
 
-  private:
+private:
   static const uint64_t DEFAULT_LOG_APPEND_TIMEOUT_US = 100;
   static const uint64_t MAX_STOP_WAIT_TIME_US = 1000000;
   bool is_inited_;
@@ -106,7 +106,7 @@ class ObBaseLogWriter {
   ObBaseLogWriterCfg log_cfg_;
   pthread_t flush_tid_;
 
-  protected:
+protected:
   // async log queue
   ObIBaseLogItem** log_items_;
   ObIBaseLogItem** process_items_;

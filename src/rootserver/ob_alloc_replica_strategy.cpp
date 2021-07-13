@@ -1093,7 +1093,7 @@ int ObCreateTableReplicaByLocality::alloc_non_part_multiple_zone_paxos_replica(c
         int64_t tmp = 0;
         int64_t leader_id = 0;
         const int64_t zone_list_count = alive_zone_list.count();
-        for (tmp; tmp < alive_zone_list.count() && OB_SUCC(ret); ++tmp) {
+        for (; tmp < alive_zone_list.count() && OB_SUCC(ret); ++tmp) {
           // Find the first replica that can become the leader
           if (curr_part_task_array_.at(tmp).replica_type_ == REPLICA_TYPE_FULL &&
               curr_part_task_array_.at(tmp).memstore_percent_ != 0) {

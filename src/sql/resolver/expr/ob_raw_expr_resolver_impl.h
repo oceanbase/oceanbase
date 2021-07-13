@@ -34,7 +34,7 @@ class ObRawExprResolverImpl : public ObRawExprResolver {
     int ret_;
   };
 
-  public:
+public:
   explicit ObRawExprResolverImpl(ObExprResolveContext& ctx);
   virtual ~ObRawExprResolverImpl()
   {}
@@ -56,7 +56,7 @@ class ObRawExprResolverImpl : public ObRawExprResolver {
   static int check_sys_func(ObQualifiedName& q_name, bool& is_sys_func);
 
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprResolverImpl);
   // function members
@@ -141,7 +141,7 @@ class ObRawExprResolverImpl : public ObRawExprResolver {
   static int not_row_check(const ObRawExpr* expr);
   static int param_not_row_check(const ObRawExpr* expr);
 
-  private:
+private:
   int transform_ratio_afun_to_arg_div_sum(const ParseNode* ratio_to_report, ParseNode*& div);
   int convert_any_or_all_expr(ObRawExpr*& expr, bool& happened);
   int get_opposite_string(

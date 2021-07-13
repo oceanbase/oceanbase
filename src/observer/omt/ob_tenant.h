@@ -49,7 +49,7 @@ class ObPxPool : public share::ObThreadPool {
     return false;
   }
 
-  public:
+public:
   ObPxPool() : tenant_id_(common::OB_INVALID_ID), group_id_(0)
   {}
   int64_t get_pool_size() const
@@ -65,13 +65,13 @@ class ObPxPool : public share::ObThreadPool {
     group_id_ = group_id;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t group_id_;
 };
 
 class ObPxPools {
-  public:
+public:
   static int mtl_init(ObPxPools*& pools)
   {
     int ret = common::OB_SUCCESS;
@@ -89,7 +89,7 @@ class ObPxPools {
     pools = nullptr;
   }
 
-  public:
+public:
   ObPxPools() : tenant_id_(common::OB_INVALID_ID)
   {}
   ~ObPxPools()
@@ -99,12 +99,12 @@ class ObPxPools {
   int init(uint64_t tenant_id);
   int get_or_create(int64_t group_id, ObPxPool*& pool);
 
-  private:
+private:
   void destroy();
   int create_pool(int64_t group_id, ObPxPool*& pool);
   int delete_pool(int64_t group_id);
 
-  private:
+private:
   uint64_t tenant_id_;
   common::SpinRWLock lock_;
   common::hash::ObHashMap<int64_t, ObPxPool*> pool_map_;
@@ -136,7 +136,7 @@ typedef common::ObDLinkNode<ObThWorker*> WorkerNode;
 typedef common::ObDList<WorkerNode> WorkerList;
 
 class MultiLevelReqCnt {
-  public:
+public:
   MultiLevelReqCnt()
   {
     for (int i = 0; i < MAX_REQUEST_LEVEL; i++) {
@@ -155,7 +155,7 @@ class MultiLevelReqCnt {
     return pos;
   }
 
-  private:
+private:
   volatile uint64_t cnt_[MAX_REQUEST_LEVEL];
 };
 
@@ -165,7 +165,7 @@ class ObResourceGroup
   friend class ObTenant;
   friend class GroupMap;
 
-  public:
+public:
   using WListNode = common::ObDLinkNode<ObWorker*>;
   using WList = common::ObDList<WListNode>;
   enum { CALIBRATE_TOKEN_INTERVAL = 100 * 1000 };
@@ -286,11 +286,11 @@ class ObResourceGroup
 
   lib::ObMutex workers_lock_;
 
-  protected:
+protected:
   WList workers_;
   common::ObPriorityQueue2<0, 1> req_queue_;
 
-  private:
+private:
   bool inited_;  // Mark whether the container has threads and queues allocated
   int32_t group_id_;
 
@@ -312,7 +312,7 @@ class ObResourceGroup
 typedef common::FixedHash2<ObResourceGroup> GroupHash;
 class GroupMap : public GroupHash  // Store all group containers of the current tenant
 {
-  public:
+public:
   GroupMap(void* buf, int64_t size) : GroupHash(buf, size), inited_(false)
   {}
   ~GroupMap()
@@ -344,7 +344,7 @@ class GroupMap : public GroupHash  // Store all group containers of the current 
     return pos;
   }
 
-  private:
+private:
   bool inited_;
 };
 
@@ -361,7 +361,7 @@ class ObTenant : public share::ObTenantBase {
   enum { CALIBRATE_WORKER_INTERVAL = 30 * 1000 * 1000 };
   enum { CALIBRATE_TOKEN_INTERVAL = 100 * 1000 };
 
-  public:
+public:
   // Quick Queue Priorities
   enum { QQ_HIGH = 0, QQ_PRIOR_TO_NORMAL, QQ_NORMAL, QQ_MAX_PRIO };
   // Request queue priorities
@@ -433,7 +433,7 @@ class ObTenant : public share::ObTenantBase {
       "nesting workers", nesting_workers_.get_size(), "lq waiting workers", lq_waiting_workers_.get_size(),
       K_(req_queue), "large queued", large_req_queue_.size(), K_(multi_level_queue), K_(recv_level_rpc_cnt),
       K_(group_map))
-  public:
+public:
   static bool equal(const ObTenant* t1, const ObTenant* t2)
   {
     return (!OB_ISNULL(t1) && !OB_ISNULL(t2) && t1->id_ == t2->id_);
@@ -492,7 +492,7 @@ class ObTenant : public share::ObTenantBase {
   // calling this function.
   void periodically_check();
 
-  private:
+private:
   // alloc NUM worker
   int acquire_level_worker(int64_t num, int64_t& succ_num, int32_t level);
   int acquire_more_worker(int64_t num, int64_t& succ_num);
@@ -514,7 +514,7 @@ class ObTenant : public share::ObTenantBase {
   // The update of the resource manager is applied to the cgroup
   void check_resource_manager_plan();
 
-  protected:
+protected:
   // times of workers of cpu slice this tenant can alloc.
   const int64_t times_of_workers_;
   // max/min cpu read from unit
@@ -590,7 +590,7 @@ class ObTenant : public share::ObTenantBase {
 
   common::ObSpinLock worker_list_lock_;
 
-  public:
+public:
   common::ObLDLatch lock_;
 
   // Variables for V2

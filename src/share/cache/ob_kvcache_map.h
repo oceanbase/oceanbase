@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace common {
 class ObKVCacheIterator;
 class ObKVCacheMap {
-  public:
+public:
   ObKVCacheMap();
   virtual ~ObKVCacheMap();
   int init(const int64_t bucket_num, ObKVCacheStore* store);
@@ -39,7 +39,7 @@ class ObKVCacheMap {
       ObKVMemBlockHandle*& out_handle);
   int erase(ObKVCacheInst& inst, const ObIKVCacheKey& key);
 
-  private:
+private:
   friend class ObKVCacheIterator;
   struct Node {
     ObKVCacheInst* inst_;
@@ -59,7 +59,7 @@ class ObKVCacheMap {
     Node* nodes_[BUCKET_SIZE];
   };
 
-  private:
+private:
   int multi_get(const int64_t cache_id, const int64_t pos, common::ObList<Node, common::ObArenaAllocator>& list);
   void internal_map_erase(Node*& prev, Node*& iter, const uint64_t bucket_pos);
   void internal_map_replace(Node*& prev, Node*& iter, const uint64_t bucket_pos);
@@ -78,7 +78,7 @@ class ObKVCacheMap {
   }
   Node*& get_bucket_node(const int64_t idx);
 
-  private:
+private:
   bool is_inited_;
   ObMalloc bucket_allocator_;
   int64_t bucket_num_;

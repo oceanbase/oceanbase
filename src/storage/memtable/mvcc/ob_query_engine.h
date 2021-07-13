@@ -28,13 +28,13 @@ namespace memtable {
 class ObMvccRow;
 
 class ObIQueryEngineIterator {
-  public:
+public:
   ObIQueryEngineIterator()
   {}
   virtual ~ObIQueryEngineIterator()
   {}
 
-  public:
+public:
   virtual int next(const bool skip_purge_memtable) = 0;
   virtual int next_internal(const bool skip_purge_memtable) = 0;
   virtual const ObMemtableKey* get_key() const = 0;
@@ -46,20 +46,20 @@ class ObIQueryEngineIterator {
 };
 
 class ObQueryEngine {
-  public:
+public:
   enum { INIT_TABLE_INDEX_COUNT = (1 << 10), MAX_SAMPLE_ROW_COUNT = 500 };
   typedef keybtree::ObKeyBtree KeyBtree;
   typedef ObMtHash KeyHash;
 
   template <typename BtreeScanHandle>
   class Iterator : public ObIQueryEngineIterator {
-    public:
+  public:
     Iterator() : value_(NULL), iter_flag_(0), version_(0)
     {}
     ~Iterator()
     {}
 
-    public:
+  public:
     void set_version(int64_t version)
     {
       version_ = version;
@@ -126,7 +126,7 @@ class ObQueryEngine {
       return iter_flag_;
     }
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(Iterator);
     BtreeScanHandle btree_iter_;
     ObMemtableKey key_;
@@ -137,7 +137,7 @@ class ObQueryEngine {
 
   template <typename BtreeScanHandle>
   class IteratorAlloc {
-    public:
+  public:
     IteratorAlloc()
     {}
     ~IteratorAlloc()
@@ -151,12 +151,12 @@ class ObQueryEngine {
       op_reclaim_free(iter);
     }
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(IteratorAlloc);
   };
 
   class TableIndexNode {
-    public:
+  public:
     explicit TableIndexNode(keybtree::BtreeNodeAllocator& btree_allocator, common::ObIAllocator& memstore_allocator,
         const uint64_t table_id, int64_t obj_cnt)
         : is_inited_(false),
@@ -189,7 +189,7 @@ class ObQueryEngine {
       return obj_cnt_;
     }
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(TableIndexNode);
     bool is_inited_;
     KeyBtree keybtree_;
@@ -199,7 +199,7 @@ class ObQueryEngine {
   };
 
   class TableIndex {
-    public:
+  public:
     explicit TableIndex(keybtree::BtreeNodeAllocator& btree_allocator, common::ObIAllocator& memstore_allocator)
         : base_(nullptr),
           is_inited_(false),
@@ -248,7 +248,7 @@ class ObQueryEngine {
     int set(const uint64_t table_id, const int64_t obj_cnt, TableIndexNode*& return_ptr);
     int get_active_table_ids(common::ObIArray<uint64_t>& table_ids);
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(TableIndex);
     static TableIndexNode* const PLACE_HOLDER;
     TableIndexNode** base_;
@@ -258,7 +258,7 @@ class ObQueryEngine {
     ObIAllocator& memstore_allocator_;
   };
 
-  public:
+public:
   enum { ESTIMATE_CHILD_COUNT_THRESHOLD = 1024, MAX_RANGE_SPLIT_COUNT = 1024 };
   explicit ObQueryEngine(ObIAllocator& memstore_allocator)
       : is_inited_(false),
@@ -326,14 +326,14 @@ class ObQueryEngine {
   int expand_index(TableIndex* old_index);
   int get_active_table_ids(common::ObIArray<uint64_t>& table_ids);
 
-  private:
+private:
   int sample_rows(Iterator<keybtree::TScanRawHandle>* iter, const ObMemtableKey* start_key, const int start_exclude,
       const ObMemtableKey* end_key, const int end_exclude, int64_t& logical_row_count, int64_t& physical_row_count,
       double& ratio);
   int init_raw_iter_for_estimate(
       Iterator<keybtree::TScanRawHandle>*& iter, const ObMemtableKey* start_key, const ObMemtableKey* end_key);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryEngine);
   bool is_inited_;
   bool is_expanding_;

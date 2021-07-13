@@ -23,7 +23,7 @@ class ObPhyOpSeriCtx;
 class ObExprValuesOpInput : public ObOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObExprValuesOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObOpInput(ctx, spec), partition_id_values_(0)
   {}
   virtual ~ObExprValuesOpInput()
@@ -36,14 +36,14 @@ class ObExprValuesOpInput : public ObOpInput {
     return common::OB_SUCCESS;
   }
 
-  public:
+public:
   int64_t partition_id_values_;
 };
 
 class ObExprValuesSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObExprValuesSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type), values_(alloc), str_values_array_(alloc)
   {}
@@ -57,16 +57,16 @@ class ObExprValuesSpec : public ObOpSpec {
   virtual int64_t get_serialize_size(const ObPhyOpSeriCtx& seri_ctx) const override;
   int64_t get_serialize_size_(const ObPhyOpSeriCtx& seri_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprValuesSpec);
 
-  public:
+public:
   common::ObFixedArray<ObExpr*, common::ObIAllocator> values_;
   common::ObFixedArray<ObStrValues, common::ObIAllocator> str_values_array_;
 };
 
 class ObExprValuesOp : public ObOperator {
-  public:
+public:
   ObExprValuesOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual int inner_open() override;
   virtual int rescan() override;
@@ -82,14 +82,14 @@ class ObExprValuesOp : public ObOperator {
     ObOperator::destroy();
   }
 
-  private:
+private:
   int calc_next_row();
   int get_value_count();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprValuesOp);
 
-  private:
+private:
   int64_t node_idx_;
   int64_t vector_index_;
   ObDatumCaster datum_caster_;

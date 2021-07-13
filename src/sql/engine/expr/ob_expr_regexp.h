@@ -21,7 +21,7 @@ namespace sql {
 class ObExprRegexp : public ObFuncExprOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObExprRegexp(common::ObIAllocator& alloc);
   virtual ~ObExprRegexp();
 
@@ -64,15 +64,15 @@ class ObExprRegexp : public ObFuncExprOperator {
 
   static int eval_regexp(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   inline int need_fast_calc(common::ObExprCtx& expr_ctx, bool& result) const;
 
-  private:
+private:
   int16_t regexp_idx_;  // idx of posix_regexp_list_ in plan ctx, for regexp operator
   bool pattern_is_const_;
   bool value_is_const_;
 
-  private:
+private:
   // disallow copy
   ObExprRegexp(const ObExprRegexp& other);
   ObExprRegexp& operator=(const ObExprRegexp& ohter);

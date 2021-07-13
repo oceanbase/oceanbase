@@ -45,7 +45,7 @@ namespace dtl {
 class ObDtlRpcChannel : public ObDtlBasicChannel {
   friend class ObDtlBcastService;
   class SendMsgCB : public obrpc::ObDtlRpcProxy::AsyncCB<obrpc::OB_DTL_SEND> {
-    public:
+  public:
     explicit SendMsgCB(SendMsgResponse& response, const common::ObCurTraceId::TraceId trace_id) : response_(response)
     {
       trace_id_.set(trace_id);
@@ -59,13 +59,13 @@ class ObDtlRpcChannel : public ObDtlBasicChannel {
       UNUSED(arg);
     }
 
-    private:
+  private:
     SendMsgResponse& response_;
     common::ObCurTraceId::TraceId trace_id_;
   };
 
   class SendBCMsgCB : public obrpc::ObDtlRpcProxy::AsyncCB<obrpc::OB_DTL_BC_SEND> {
-    public:
+  public:
     explicit SendBCMsgCB(const common::ObCurTraceId::TraceId trace_id) : responses_()
     {
       trace_id_.set(trace_id);
@@ -83,12 +83,12 @@ class ObDtlRpcChannel : public ObDtlBasicChannel {
       return responses_.assign(resps);
     }
 
-    private:
+  private:
     common::ObSEArray<SendMsgResponse*, 16> responses_;
     common::ObCurTraceId::TraceId trace_id_;
   };
 
-  public:
+public:
   explicit ObDtlRpcChannel(const uint64_t tenant_id, const uint64_t id, const common::ObAddr& peer);
   virtual ~ObDtlRpcChannel();
 

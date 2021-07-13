@@ -11,7 +11,7 @@
  */
 
 class Printer {
-  public:
+public:
   enum { MAX_BUF_SIZE = 4096 };
   Printer() : limit_(MAX_BUF_SIZE), pos_(0)
   {
@@ -60,14 +60,14 @@ class Printer {
     return src;
   }
 
-  private:
+private:
   char buf_[MAX_BUF_SIZE];
   int64_t limit_;
   int64_t pos_;
 };
 
 class Tokenizer {
-  public:
+public:
   Tokenizer(char* str, const char* delim) : str_(str), delim_(delim), saveptr_(NULL)
   {}
   ~Tokenizer()
@@ -83,7 +83,7 @@ class Tokenizer {
     return ret;
   }
 
-  private:
+private:
   char* str_;
   const char* delim_;
   char* saveptr_;

@@ -24,7 +24,7 @@ class ObExecContext;
 class ObDistributedTransmitInput : public ObTransmitInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDistributedTransmitInput()
       : ObTransmitInput(), expire_time_(0), ob_task_id_(), force_save_interm_result_(false), slice_events_(NULL)
   {}
@@ -70,22 +70,22 @@ class ObDistributedTransmitInput : public ObTransmitInput {
     return expire_time_;
   }
 
-  private:
+private:
   int64_t expire_time_;
   ObTaskID ob_task_id_;
   bool force_save_interm_result_;
   common::ObIArray<ObSliceEvent>* slice_events_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistributedTransmitInput);
 };
 
 class ObDistributedTransmit : public ObTransmit {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   class ObSliceInfo {
-    public:
+  public:
     ObSliceInfo()
         : part_offset_(OB_INVALID_INDEX_INT64),
           subpart_offset_(OB_INVALID_INDEX_INT64),
@@ -102,11 +102,11 @@ class ObDistributedTransmit : public ObTransmit {
     int64_t slice_idx_;
   };
 
-  protected:
+protected:
   class ObDistributedTransmitCtx : public ObTransmitCtx {
     friend class ObDistributedTransmit;
 
-    public:
+  public:
     explicit ObDistributedTransmitCtx(ObExecContext& ctx) : ObTransmitCtx(ctx)
     {}
     virtual ~ObDistributedTransmitCtx()
@@ -116,15 +116,15 @@ class ObDistributedTransmit : public ObTransmit {
       ObTransmitCtx::destroy();
     }
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObDistributedTransmitCtx);
   };
 
-  public:
+public:
   explicit ObDistributedTransmit(common::ObIAllocator& alloc);
   virtual ~ObDistributedTransmit();
 
-  virtual int create_operator_input(ObExecContext& ctx) const;
+  virtual int create_operator_input(ObExecContext& ctx) const override;
   inline void set_shuffle_func(ObSqlExpression* shuffle_func);
   int get_part_shuffle_key(
       const share::schema::ObTableSchema* table_schema, int64_t part_idx, ObShuffleKey& part_shuffle_key) const;
@@ -133,7 +133,7 @@ class ObDistributedTransmit : public ObTransmit {
   int get_shuffle_part_key(const share::schema::ObTableSchema* table_schema, int64_t part_idx, int64_t subpart_idx,
       common::ObPartitionKey& shuffle_part_key) const;
 
-  private:
+private:
   int init_slice_infos(
       const share::schema::ObTableSchema& table_schema, common::ObIArray<ObSliceInfo>& slices_info) const;
   int get_slice_idx(ObExecContext& exec_ctx, const share::schema::ObTableSchema* table_schema,
@@ -142,20 +142,20 @@ class ObDistributedTransmit : public ObTransmit {
       const ObIArray<ObTransmitRepartColumn>& repart_sub_columns, int64_t slices_count, int64_t& slice_idx,
       bool& no_match_partiton) const;
 
-  protected:
-  virtual int inner_open(ObExecContext& exec_ctx) const;
+protected:
+  virtual int inner_open(ObExecContext& exec_ctx) const override;
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
-  virtual int init_op_ctx(ObExecContext& ctx) const;
+  virtual int init_op_ctx(ObExecContext& ctx) const override;
   bool skip_empty_slice() const;
   int prepare_interm_result(ObIntermResultManager& interm_result_mgr, ObIntermResult*& interm_result) const;
   int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const override;
-  int inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const;
+  int inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const override;
 
-  private:
+private:
   const static int64_t NO_MATCH_PARTITION = -2;
   ObSqlExpression* shuffle_func_;
 

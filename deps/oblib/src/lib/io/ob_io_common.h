@@ -91,7 +91,7 @@ struct ObDiskFd final {
 };
 
 struct ObIOConfig {
-  public:
+public:
   static const int64_t DEFAULT_SYS_IO_LOW_PERCENT = 10;
   static const int64_t DEFAULT_SYS_IO_HIGH_PERCENT = 90;
   static const int64_t DEFAULT_USER_IO_UP_PERCENT = 50;
@@ -104,7 +104,7 @@ struct ObIOConfig {
   static const int64_t DEFAULT_IO_CALLBACK_THREAD_COUNT = 8;
   static const int64_t DEFAULT_LARGE_QUERY_IO_PERCENT = 0;                 // 0 means unlimited
   static const int64_t DEFAULT_DATA_STORAGE_IO_TIMEOUT_MS = 120L * 1000L;  // 120s
-  public:
+public:
   ObIOConfig()
   {
     set_default_value();
@@ -117,7 +117,7 @@ struct ObIOConfig {
       K_(retry_error_limit), K_(disk_io_thread_count), K_(callback_thread_count), K_(large_query_io_percent),
       K_(data_storage_io_timeout_ms));
 
-  public:
+public:
   int64_t sys_io_low_percent_;
   int64_t sys_io_high_percent_;
   int64_t user_iort_up_percent_;
@@ -133,7 +133,7 @@ struct ObIOConfig {
 };
 
 struct ObIODesc {
-  public:
+public:
   ObIODesc() : category_(USER_IO), mode_(IO_MODE_READ), wait_event_no_(0), req_deadline_time_(0)
   {}
   bool is_valid() const
@@ -151,7 +151,7 @@ struct ObIODesc {
   }
   TO_STRING_KV(K_(category), K_(mode), K_(wait_event_no), K_(req_deadline_time));
 
-  public:
+public:
   ObIOCategory category_;
   ObIOMode mode_;
   int64_t wait_event_no_;
@@ -159,7 +159,7 @@ struct ObIODesc {
 };
 
 struct ObIOPoint {
-  public:
+public:
   ObIOPoint() : fd_(), size_(0), offset_(0), write_buf_(NULL)
   {}
   ~ObIOPoint()
@@ -178,7 +178,7 @@ struct ObIOPoint {
   }
   TO_STRING_KV(K_(fd), K_(offset), K_(size), KP_(write_buf));
 
-  public:
+public:
   ObDiskFd fd_;
   int32_t size_;
   int64_t offset_;
@@ -187,7 +187,7 @@ struct ObIOPoint {
 
 // pure virtual interface of io callback, any not sub class of ObIOCallback should add it to get_io_master_buf_size
 class ObIOCallback {
-  public:
+public:
   static const int64_t CALLBACK_BUF_SIZE = 1024;
   ObIOCallback() : compat_mode_(static_cast<lib::Worker::CompatMode>(lib::get_compat_mode()))
   {}
@@ -216,27 +216,27 @@ class ObIOCallback {
 };
 
 class ObIOWriteFinishCallback {
-  public:
+public:
   virtual ~ObIOWriteFinishCallback()
   {}
   virtual int notice_finish(const int64_t finish_id) = 0;
 };
 
 struct ObIORetCode {
-  public:
+public:
   ObIORetCode() : io_ret_(0), sys_errno_(0)
   {}
   virtual ~ObIORetCode()
   {}
   TO_STRING_KV(K_(io_ret), K_(sys_errno));
 
-  public:
+public:
   int io_ret_;     // ob ret code, for example: OB_SUCCESS, OB_TIME_OUT, OB_IO_ERROR
   int sys_errno_;  // system error number, get error message via strerror().
 };
 
 struct ObIOStat {
-  public:
+public:
   ObIOStat() : io_cnt_(0), io_bytes_(0), io_rt_us_(0)
   {}
   virtual ~ObIOStat()
@@ -248,14 +248,14 @@ struct ObIOStat {
   };
   TO_STRING_KV(K_(io_cnt), K_(io_bytes), K_(io_rt_us));
 
-  public:
+public:
   uint64_t io_cnt_;
   uint64_t io_bytes_;
   uint64_t io_rt_us_;
 };
 
 class ObIOStatDiff {
-  public:
+public:
   ObIOStatDiff();
   virtual ~ObIOStatDiff()
   {}
@@ -274,7 +274,7 @@ class ObIOStatDiff {
   }
   TO_STRING_KV(K_(average_size), K_(average_rt_us), K_(old_stat), K_(new_stat));
 
-  private:
+private:
   int64_t average_size_;
   double average_rt_us_;
   ObIOStat old_stat_;
@@ -283,7 +283,7 @@ class ObIOStatDiff {
 };
 
 class ObCpuStatDiff {
-  public:
+public:
   ObCpuStatDiff();
   virtual ~ObCpuStatDiff()
   {}
@@ -294,7 +294,7 @@ class ObCpuStatDiff {
   }
   TO_STRING_KV(K_(avg_usage));
 
-  private:
+private:
   struct rusage old_usage_;
   struct rusage new_usage_;
   int64_t old_time_;
@@ -303,7 +303,7 @@ class ObCpuStatDiff {
 };
 
 class ObIOQueue {
-  public:
+public:
   ObIOQueue();
   virtual ~ObIOQueue();
   int init(const int32_t queue_depth);
@@ -321,7 +321,7 @@ class ObIOQueue {
     return req_cnt_;
   }
 
-  private:
+private:
   struct ObIORequestCmp {
     bool operator()(const ObIORequest* a, const ObIORequest* b) const;
   };
@@ -334,7 +334,7 @@ class ObIOQueue {
 };
 
 class ObIOChannel {
-  public:
+public:
   ObIOChannel();
   virtual ~ObIOChannel();
   int init(const int32_t queue_depth);
@@ -351,12 +351,12 @@ class ObIOChannel {
   }
   TO_STRING_KV(K_(inited), K_(submit_cnt), K_(can_submit_request));
 
-  private:
+private:
   int inner_submit(ObIORequest& req, int& sys_ret);
   void finish_flying_req(ObIORequest& req, int io_ret, int system_errno);
   int64_t get_pop_wait_timeout(const int64_t queue_deadline);
 
-  private:
+private:
   static const int32_t MAX_AIO_EVENT_CNT = 512;
   static const int64_t DISK_WAIT_PERIOD_US = 1000;
   static const int64_t AIO_TIMEOUT_NS = 1000L * 10000L;  // 10ms
@@ -370,7 +370,7 @@ class ObIOChannel {
 };
 
 struct ObIOInfo final {
-  public:
+public:
   ObIOInfo();
   ~ObIOInfo()
   {}
@@ -383,7 +383,7 @@ struct ObIOInfo final {
       common::ObArrayWrap<ObIOPoint>(io_points_, batch_count_), K_(fail_disk_count), "fail_disk_ids",
       common::ObArrayWrap<int64_t>(fail_disk_ids_, fail_disk_count_));
 
-  public:
+public:
   int32_t size_;
   ObIODesc io_desc_;
   int32_t batch_count_;  // number of io_points_, 0 if not using batch io
@@ -398,7 +398,7 @@ struct ObIOInfo final {
 
 template <typename T>
 class ObPointerHolder {
-  public:
+public:
   explicit ObPointerHolder() : ptr_(NULL)
   {}
   explicit ObPointerHolder(T* ptr) : ptr_(NULL)
@@ -430,13 +430,13 @@ class ObPointerHolder {
   }
   TO_STRING_KV(KP_(ptr));
 
-  private:
+private:
   T* ptr_;
 };
 
 // default io callback, only used to alloc memory, process do nothing
 class ObDefaultIOCallback : public ObIOCallback {
-  public:
+public:
   ObDefaultIOCallback();
   virtual ~ObDefaultIOCallback();
   int init(common::ObIOAllocator* allocator, const int64_t offset, const int64_t buf_size);
@@ -447,7 +447,7 @@ class ObDefaultIOCallback : public ObIOCallback {
   virtual const char* get_data();
   TO_STRING_KV(KP_(data_buf));
 
-  private:
+private:
   bool is_inited_;
   common::ObIOAllocator* allocator_;
   int64_t offset_;

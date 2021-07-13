@@ -21,7 +21,7 @@ using namespace common;
 namespace share {
 
 class TestReentrantThread : public ObReentrantThread {
-  public:
+public:
   TestReentrantThread() : sleeped_cnt_(0)
   {}
 

@@ -53,7 +53,7 @@ int padding_char_for_cast(int64_t padding_cnt, const common::ObCollationType& pa
     common::ObIAllocator& alloc, common::ObString& padding_res);
 
 class ObDatumHexUtils {
-  public:
+public:
   static int hextoraw_string(const ObExpr& expr, const common::ObString& in_str, ObEvalCtx& ctx, ObDatum& res_datum);
   static int hextoraw(const ObExpr& expr, const common::ObDatum& in, const common::ObObjType& in_type,
       const common::ObCollationType& in_cs_type, ObEvalCtx& ctx, ObDatum& res);
@@ -68,7 +68,7 @@ class ObDatumHexUtils {
 };
 
 class ObDatumCast {
-  public:
+public:
   static int get_implicit_cast_function(const common::ObObjType in_type, const common::ObCollationType in_cs_type,
       const common::ObObjType out_type, const common::ObCollationType out_cs_type, const int64_t cast_mode,
       ObExpr::EvalFunc& eval_func);
@@ -109,7 +109,7 @@ class ObDatumCast {
 };
 
 class ObDatumCaster {
-  public:
+public:
   ObDatumCaster() : inited_(false), eval_ctx_(NULL), cast_expr_(NULL), extra_cast_expr_(NULL)
   {}
   ~ObDatumCaster()
@@ -131,7 +131,7 @@ class ObDatumCaster {
 
   int destroy();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDatumCaster);
 
   // setup following data member of ObExpr:

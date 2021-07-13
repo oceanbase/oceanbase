@@ -26,7 +26,7 @@ class ObStoreRowkey;
 namespace blocksstable {
 
 class ObSparseMicroBlockGetReader : public ObMicroBlockGetReader {
-  public:
+public:
   ObSparseMicroBlockGetReader();
   virtual ~ObSparseMicroBlockGetReader();
   virtual int get_row(const uint64_t tenant_id, const ObMicroBlockData& block_data, const common::ObStoreRowkey& rowkey,
@@ -43,18 +43,18 @@ class ObSparseMicroBlockGetReader : public ObMicroBlockGetReader {
       const common::ObStoreRowkey& rowkey, const ObFullMacroBlockMeta& macro_meta,
       const storage::ObSSTableRowkeyHelper* rowkey_helper, storage::ObStoreRowLockState& lock_state) override;
 
-  protected:
+protected:
   virtual int locate_row(const common::ObStoreRowkey& rowkey, const storage::ObSSTableRowkeyHelper* rowkey_helper,
       const common::ObObjMeta* cols_type, const char*& row_buf, int64_t& row_len) override;
 };
 
 class ObSparseMicroBlockReader : public ObIMicroBlockReader {
-  public:
+public:
   ObSparseMicroBlockReader();
   virtual ~ObSparseMicroBlockReader();
   virtual int init(const ObMicroBlockData& block_data, const ObColumnMap* column_map,
       const common::ObRowStoreType out_type = common::FLAT_ROW_STORE) override;
-  virtual void reset();
+  virtual void reset() override;
   virtual int get_row(const int64_t index, storage::ObStoreRow& row) override;
   virtual int get_rows(const int64_t begin_index, const int64_t end_index, const int64_t row_capacity,
       storage::ObStoreRow* rows, int64_t& row_count) override;
@@ -64,15 +64,15 @@ class ObSparseMicroBlockReader : public ObIMicroBlockReader {
       const int64_t sql_sequence_idx, storage::ObMultiVersionRowFlag& flag, transaction::ObTransID& trans_id,
       int64_t& version, int64_t& sql_sequence) override;
 
-  protected:
+protected:
   int base_init(const ObMicroBlockData& block_data);
   virtual int find_bound(const common::ObStoreRowkey& key, const bool lower_bound, const int64_t begin_idx,
-      const int64_t end_idx, int64_t& row_idx, bool& equal);
+      const int64_t end_idx, int64_t& row_idx, bool& equal) override;
 
-  private:
+private:
   int get_row_impl(const int64_t index, storage::ObStoreRow& row);
 
-  protected:
+protected:
   const ObMicroBlockHeader* header_;
   const char* data_begin_;  // start position of micro block data
   const char* data_end_;    // end position of micro block data

@@ -1073,9 +1073,12 @@ int ObLogDirectReader::read_trailer(
     ObReadRes res;
     ObReadParam trailer_param;
     trailer_param.file_id_ = param.file_id_;
-    trailer_param.offset_ = CLOG_TRAILER_OFFSET;
-    trailer_param.read_len_ = CLOG_TRAILER_SIZE;
+    trailer_param.offset_ = CLOG_TRAILER_ALIGN_WRITE_OFFSET;  // 4k aligned write, but data is in last 512bytes
+    trailer_param.read_len_ = CLOG_DIO_ALIGN_SIZE;
     trailer_param.timeout_ = param.timeout_;
+
+    const char* trailer_buf = NULL;
+    int64_t trailer_len = 0;
 
     // always read trailed from disk, handling error code  specially
     if (OB_SUCCESS != (ret = read_data_direct_impl(trailer_param, rbuf, res, cost))) {
@@ -1084,8 +1087,15 @@ int ObLogDirectReader::read_trailer(
       } else {
         CLOG_LOG(WARN, "read trailer data error", K(ret), K(trailer_param));
       }
-    } else if (OB_FAIL(trailer.deserialize(res.buf_, res.data_len_, pos))) {
-      CLOG_LOG(WARN, "trailer deserialize fail", K(ret), K(res), K(pos));
+    } else {
+      trailer_buf = res.buf_ + (CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE);
+      trailer_len = CLOG_TRAILER_SIZE;
+    }
+
+    if (OB_FAIL(ret)) {
+      CLOG_LOG(WARN, "fail to read trailer data", K(ret));
+    } else if (OB_FAIL(trailer.deserialize(trailer_buf, trailer_len, pos))) {
+      CLOG_LOG(WARN, "trailer deserialize fail", K(ret), KP(trailer_buf), K(trailer_len), K(res), K(pos));
     } else if (OB_UNLIKELY(trailer.get_file_id() != trailer_param.file_id_ + 1)) {
       ret = OB_INVALID_DATA;
       CLOG_LOG(WARN,

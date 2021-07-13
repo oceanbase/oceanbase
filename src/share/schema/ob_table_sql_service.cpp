@@ -2080,7 +2080,7 @@ int ObTableSqlService::create_table(ObTableSchema& table, ObISQLClient& sql_clie
   if (OB_SUCCESS == ret && 0 != table.get_autoinc_column_id()) {
     if (OB_FAIL(add_sequence(
             table.get_tenant_id(), table.get_table_id(), table.get_autoinc_column_id(), table.get_auto_increment()))) {
-      LOG_WARN("insert sequence record faild", K(ret), K(table));
+      LOG_WARN("insert sequence record failed", K(ret), K(table));
     }
     end_usec = ObTimeUtility::current_time();
     cost_usec = end_usec - start_usec;
@@ -2090,7 +2090,7 @@ int ObTableSqlService::create_table(ObTableSchema& table, ObISQLClient& sql_clie
   // hidden primary key start with 1; incre
   if (OB_SUCCESS == ret && NULL != table.get_column_schema(OB_HIDDEN_PK_INCREMENT_COLUMN_ID)) {
     if (OB_FAIL(add_sequence(table.get_tenant_id(), table.get_table_id(), OB_HIDDEN_PK_INCREMENT_COLUMN_ID, 1))) {
-      LOG_WARN("insert sequence record faild", K(ret), K(table));
+      LOG_WARN("insert sequence record failed", K(ret), K(table));
     }
     end_usec = ObTimeUtility::current_time();
     cost_usec = end_usec - start_usec;

@@ -26,7 +26,7 @@
 namespace oceanbase {
 namespace common {
 class ObDISessionCollect : public ObDINode<ObDISessionCollect> {
-  public:
+public:
   ObDISessionCollect();
   virtual ~ObDISessionCollect();
   void clean();
@@ -37,7 +37,7 @@ class ObDISessionCollect : public ObDINode<ObDISessionCollect> {
 };
 
 class ObDITenantCollect : public ObDINode<ObDITenantCollect> {
-  public:
+public:
   ObDITenantCollect();
   virtual ~ObDITenantCollect();
   void clean();
@@ -47,7 +47,7 @@ class ObDITenantCollect : public ObDINode<ObDITenantCollect> {
 };
 
 class ObDISessionCache {
-  public:
+public:
   static ObDISessionCache& get_instance();
   void destroy();
 
@@ -56,7 +56,7 @@ class ObDISessionCache {
   int get_the_diag_info(uint64_t session_id, ObDISessionCollect*& diag_infos);
   int get_node(uint64_t session_id, ObDISessionCollect*& session_collect);
 
-  private:
+private:
   struct ObSessionBucket {
     ObSessionBucket() : list_(), lock_()
     {}
@@ -139,7 +139,7 @@ class ObDIBaseTenantCacheIterator;
 
 template <uint64_t MAX_TENANT_NODE_NUM>
 class ObDIBaseTenantCache {
-  public:
+public:
   ObDIBaseTenantCache();
   virtual ~ObDIBaseTenantCache();
   void get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenantInfo& diag_infos);
@@ -149,7 +149,7 @@ class ObDIBaseTenantCache {
     return &collects_[0];
   }
 
-  private:
+private:
   friend class ObDIBaseTenantCacheIterator<MAX_TENANT_NODE_NUM>;
   int add_node(uint64_t tenant_id, ObDITenantCollect*& tenant_collect);
   int del_node(uint64_t tenant_id);
@@ -160,19 +160,19 @@ class ObDIBaseTenantCache {
 
 template <uint64_t MAX_TENANT_NODE_NUM>
 class ObDIBaseTenantCacheIterator {
-  public:
+public:
   ObDIBaseTenantCacheIterator(const ObDIBaseTenantCache<MAX_TENANT_NODE_NUM>& tenant_cache);
   virtual ~ObDIBaseTenantCacheIterator();
   int get_next(const ObDITenantCollect*& collect);
 
-  private:
+private:
   const ObDIBaseTenantCache<MAX_TENANT_NODE_NUM>& tenant_cache_;
   int64_t collect_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObDIBaseTenantCacheIterator);
 };
 
 class ObDIThreadTenantCache : public ObDINode<ObDIThreadTenantCache> {
-  public:
+public:
   static const int64_t DEFAULT_TENANT_NODE_NUM = 32;
 
   ObDIThreadTenantCache();
@@ -188,12 +188,12 @@ class ObDIThreadTenantCache : public ObDINode<ObDIThreadTenantCache> {
     return tenant_cache_;
   }
 
-  private:
+private:
   ObDIBaseTenantCache<DEFAULT_TENANT_NODE_NUM> tenant_cache_;
 };
 
 class ObDIGlobalTenantCache {
-  public:
+public:
   static ObDIGlobalTenantCache& get_instance();
 
   void link(ObDIThreadTenantCache* node);
@@ -203,7 +203,7 @@ class ObDIGlobalTenantCache {
   int get_all_latch_stat(ObIAllocator& allocator, ObIArray<std::pair<uint64_t, ObDiagnoseTenantInfo*> >& diag_infos);
   int get_the_diag_info(uint64_t tenant_id, ObDiagnoseTenantInfo& diag_infos);
 
-  private:
+private:
   ObDIGlobalTenantCache();
   virtual ~ObDIGlobalTenantCache();
   template <class _callback>
@@ -214,7 +214,7 @@ class ObDIGlobalTenantCache {
       CALLBACK_FUNC& callback, ObTenantBucket* di_map, const int64_t di_map_bucket_num);
   int add_tenant_stat(ObDIThreadTenantCache& node);
 
-  private:
+private:
   ObDIList<ObDIThreadTenantCache> list_;
   int64_t cnt_;
   DIRWLock lock_;

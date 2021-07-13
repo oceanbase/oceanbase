@@ -41,7 +41,7 @@ enum ObSerFuncArrayID { SER_FUNC_ARRAY_ID_ENUM };
 #define UNUSED_SER_FUNC_ARRAY_ID_ENUM OB_SFA_MIN, OB_SFA_MAX
 
 class ObFuncSerialization {
-  public:
+public:
   // called before worker threads started.
   static void init()
   {
@@ -95,7 +95,7 @@ class ObFuncSerialization {
     uint64_t bucket_size_mask_;
   };
 
-  private:
+private:
   const static int64_t ARRAY_IDX_SHIFT_BIT = 32;
 
   struct FuncArray {

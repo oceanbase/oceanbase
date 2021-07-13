@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace common {
 namespace sqlclient {
 class MySQLResultWrapper {
-  public:
+public:
   // see this for template virtual function
   // http://cxh.me/2014/07/01/nvi-usage-of-virtual-template/
   DEFINE_ALLOCATOR_WRAPPER

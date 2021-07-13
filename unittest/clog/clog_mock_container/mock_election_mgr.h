@@ -46,7 +46,7 @@ class ObIElectionCallback;
 namespace election {
 
 class MockObElectionMgr : public ObElectionMgr {
-  public:
+public:
   MockObElectionMgr()
   {}
   ~MockObElectionMgr()
@@ -93,7 +93,7 @@ class MockObElectionMgr : public ObElectionMgr {
     return OB_SUCCESS;
   }
 
-  public:
+public:
   int add_partition(
       const common::ObPartitionKey& partition_key, const int64_t replica_num, ObIElectionCallback* election_cb)
   {
@@ -119,7 +119,7 @@ class MockObElectionMgr : public ObElectionMgr {
     return OB_SUCCESS;
   }
 
-  public:
+public:
   int handle_election_msg(const ObElectionMsgBuffer& msgbuf, obrpc::ObElectionRpcResult& result)
   {
     UNUSED(msgbuf);
@@ -127,7 +127,7 @@ class MockObElectionMgr : public ObElectionMgr {
     return OB_SUCCESS;
   }
 
-  public:
+public:
   int set_candidate(const common::ObPartitionKey& partition_key, const common::ObMemberList& prev_mlist,
       const common::ObMemberList& curr_mlist)
   {
@@ -164,7 +164,7 @@ class MockObElectionMgr : public ObElectionMgr {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   ObIElection* get_election_(const common::ObPartitionKey& partition_key) const
   {
     UNUSED(partition_key);

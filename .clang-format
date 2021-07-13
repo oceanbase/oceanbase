@@ -2,7 +2,7 @@
 Language: Cpp
 # BasedOnStyle:	LLVM
 SortIncludes: false
-AccessModifierOffset: 0
+AccessModifierOffset: -2
 AlignAfterOpenBracket: DontAlign
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false

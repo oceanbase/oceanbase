@@ -29,11 +29,11 @@
 namespace oceanbase {
 namespace common {
 class IFileBuffer {
-  public:
+public:
   IFileBuffer(){};
   virtual ~IFileBuffer(){};
 
-  public:
+public:
   virtual char* get_buffer() = 0;
   virtual int64_t get_base_pos() = 0;
   virtual void set_base_pos(const int64_t pos) = 0;
@@ -42,66 +42,66 @@ class IFileBuffer {
 };
 
 class IFileAsyncCallback {
-  public:
+public:
   IFileAsyncCallback(){};
   virtual ~IFileAsyncCallback(){};
 
-  public:
+public:
   virtual void callback(const int io_ret, const int io_errno) = 0;
 };
 
 namespace FileComponent {
 class IFileReader {
-  public:
+public:
   IFileReader() : fd_(-1){};
   virtual ~IFileReader(){};
 
-  public:
+public:
   virtual int open(const ObString& fname);
   virtual void close();
   virtual bool is_opened() const;
   virtual void revise(int64_t pos);
 
-  public:
+public:
   virtual int pread(void* buf, const int64_t count, const int64_t offset, int64_t& read_size) = 0;
   virtual int pread(const int64_t count, const int64_t offset, IFileBuffer& file_buf, int64_t& read_size) = 0;
 
-  public:
+public:
   virtual int get_open_flags() const = 0;
   virtual int get_open_mode() const = 0;
 
-  public:
+public:
   virtual int pread_by_fd(const int fd, void* buf, const int64_t count, const int64_t offset, int64_t& read_size) = 0;
   virtual int pread_by_fd(
       const int fd, const int64_t count, const int64_t offset, IFileBuffer& file_buf, int64_t& read_size) = 0;
 
-  protected:
+protected:
   int fd_;
 };
 
 class IFileAppender {
-  public:
+public:
   IFileAppender() : fd_(-1){};
   virtual ~IFileAppender(){};
 
-  public:
+public:
   virtual int open(const ObString& fname, const bool is_create, const bool is_trunc);
   virtual int create(const ObString& fname);
   virtual void close();
   virtual bool is_opened() const;
   virtual int get_fd() const;
 
-  public:
+public:
   virtual int append(const void* buf, const int64_t count, const bool is_fsync) = 0;
   virtual int async_append(const void* buf, const int64_t count, IFileAsyncCallback* callback) = 0;
   virtual int fsync() = 0;
 
-  public:
+public:
   virtual int64_t get_file_pos() const = 0;
   virtual int get_open_flags() const = 0;
   virtual int get_open_mode() const = 0;
 
-  private:
+private:
   virtual int prepare_buffer_() = 0;
   virtual void set_normal_flags_() = 0;
   virtual void add_truncate_flags_() = 0;
@@ -109,7 +109,7 @@ class IFileAppender {
   virtual void add_excl_flags_() = 0;
   virtual void set_file_pos_(const int64_t file_pos) = 0;
 
-  protected:
+protected:
   int fd_;
 };
 
@@ -117,17 +117,17 @@ class BufferFileReader : public IFileReader {
   static const int OPEN_FLAGS = O_RDONLY;
   static const int OPEN_MODE = S_IRWXU;
 
-  public:
+public:
   BufferFileReader();
   ~BufferFileReader();
 
-  public:
+public:
   int pread(void* buf, const int64_t count, const int64_t offset, int64_t& read_size);
   int pread(const int64_t count, const int64_t offset, IFileBuffer& file_buf, int64_t& read_size);
   int get_open_flags() const;
   int get_open_mode() const;
 
-  public:
+public:
   int pread_by_fd(const int fd, void* buf, const int64_t count, const int64_t offset, int64_t& read_size);
   int pread_by_fd(const int fd, const int64_t count, const int64_t offset, IFileBuffer& file_buf, int64_t& read_size);
 };
@@ -136,25 +136,25 @@ class DirectFileReader : public IFileReader {
   static const int OPEN_FLAGS = O_RDWR | O_DIRECT;
   static const int OPEN_MODE = S_IRWXU;
 
-  public:
+public:
   static const int64_t DEFAULT_ALIGN_SIZE = 4L * 1024L;
   static const int64_t DEFAULT_BUFFER_SIZE = 1L * 1024L * 1024L;
 
-  public:
+public:
   DirectFileReader(const int64_t buffer_size = DEFAULT_BUFFER_SIZE, const int64_t align_size = DEFAULT_ALIGN_SIZE);
   ~DirectFileReader();
 
-  public:
+public:
   int pread(void* buf, const int64_t count, const int64_t offset, int64_t& read_size);
   int pread(const int64_t count, const int64_t offset, IFileBuffer& file_buf, int64_t& read_size);
   int get_open_flags() const;
   int get_open_mode() const;
 
-  public:
+public:
   int pread_by_fd(const int fd, void* buf, const int64_t count, const int64_t offset, int64_t& read_size);
   int pread_by_fd(const int fd, const int64_t count, const int64_t offset, IFileBuffer& file_buf, int64_t& read_size);
 
-  private:
+private:
   const int64_t align_size_;
   const int64_t buffer_size_;
   char* buffer_;
@@ -167,14 +167,14 @@ class BufferFileAppender : public IFileAppender {
   static const int EXCL_FLAGS = O_EXCL;
   static const int OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 
-  public:
+public:
   static const int64_t DEFAULT_BUFFER_SIZE = 2L * 1024L * 1024L;
 
-  public:
+public:
   explicit BufferFileAppender(const int64_t buffer_size = DEFAULT_BUFFER_SIZE);
   ~BufferFileAppender();
 
-  public:
+public:
   void close();
   int append(const void* buf, const int64_t count, const bool is_fsync);
   int async_append(const void* buf, const int64_t count, IFileAsyncCallback* callback);
@@ -186,10 +186,10 @@ class BufferFileAppender : public IFileAppender {
     return file_pos_;
   }
 
-  private:
+private:
   int buffer_sync_();
 
-  private:
+private:
   int prepare_buffer_();
   void set_normal_flags_();
   void add_truncate_flags_();
@@ -197,7 +197,7 @@ class BufferFileAppender : public IFileAppender {
   void add_excl_flags_();
   void set_file_pos_(const int64_t file_pos);
 
-  private:
+private:
   int open_flags_;
   const int64_t buffer_size_;
   int64_t buffer_pos_;
@@ -213,15 +213,15 @@ class DirectFileAppender : public IFileAppender {
   static const int EXCL_FLAGS = O_EXCL;
   static const int OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 
-  public:
+public:
   static const int64_t DEFAULT_ALIGN_SIZE = 4L * 1024L;
   static const int64_t DEFAULT_BUFFER_SIZE = 2L * 1024L * 1024L;
 
-  public:
+public:
   DirectFileAppender(const int64_t buffer_size = DEFAULT_BUFFER_SIZE, const int64_t align_size = DEFAULT_ALIGN_SIZE);
   ~DirectFileAppender();
 
-  public:
+public:
   void close();
   int append(const void* buf, const int64_t count, const bool is_fsync);
   int async_append(const void* buf, const int64_t count, IFileAsyncCallback* callback);
@@ -234,10 +234,10 @@ class DirectFileAppender : public IFileAppender {
   }
   int set_align_size(const int64_t align_size);
 
-  private:
+private:
   int buffer_sync_(bool* need_truncate = NULL);
 
-  private:
+private:
   int prepare_buffer_();
   void set_normal_flags_();
   void add_truncate_flags_();
@@ -245,7 +245,7 @@ class DirectFileAppender : public IFileAppender {
   void add_excl_flags_();
   void set_file_pos_(const int64_t file_pos);
 
-  private:
+private:
   int open_flags_;
   int64_t align_size_;
   const int64_t buffer_size_;
@@ -292,21 +292,21 @@ extern int64_t get_file_size(const char* fname);
 class ObFileBuffer : public IFileBuffer {
   static const int64_t MIN_BUFFER_SIZE = 1L * 1024L * 1024L;
 
-  public:
+public:
   ObFileBuffer();
   ~ObFileBuffer();
 
-  public:
+public:
   char* get_buffer();
   int64_t get_base_pos();
   void set_base_pos(const int64_t pos);
   int assign(const int64_t size, const int64_t align);
   int assign(const int64_t size);
 
-  public:
+public:
   void release();
 
-  protected:
+protected:
   char* buffer_;
   int64_t base_pos_;
   int64_t buffer_size_;
@@ -314,40 +314,40 @@ class ObFileBuffer : public IFileBuffer {
 
 // File reader thread is not safe and only allows one thread to call at the same time
 class ObFileReader {
-  public:
+public:
   ObFileReader();
   ~ObFileReader();
 
-  public:
+public:
   int open(const ObString& fname, const bool dio,
       const int64_t align_size = FileComponent::DirectFileReader::DEFAULT_ALIGN_SIZE);
   void close();
   bool is_opened() const;
   void revise(int64_t pos);
 
-  public:
+public:
   int pread(void* buf, const int64_t count, const int64_t offset, int64_t& read_size);
   int pread(const int64_t count, const int64_t offset, IFileBuffer& file_buf, int64_t& read_size);
 
-  public:
+public:
   static int read_record(common::IFileInfoMgr& fileinfo_mgr, const uint64_t file_id, const int64_t offset,
       const int64_t size, IFileBuffer& file_buf);
   static int read_record(
       const common::IFileInfo& file_info, const int64_t offset, const int64_t size, IFileBuffer& file_buf);
   static int read_record(const int fd, const int64_t offset, const int64_t size, IFileBuffer& file_buf);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFileReader);
 
-  private:
+private:
   FileComponent::IFileReader* file_;
 };
 
 class ObIFileAppender {
-  public:
+public:
   virtual ~ObIFileAppender(){};
 
-  public:
+public:
   virtual int open(const ObString& fname, const bool dio, const bool is_create, const bool is_trunc = false,
       const int64_t align_size = FileComponent::DirectFileAppender::DEFAULT_ALIGN_SIZE) = 0;
   virtual int create(const ObString& fname, const bool dio,
@@ -361,11 +361,11 @@ class ObIFileAppender {
 // File appender thread is not safe and only allows one thread to call at the same time
 // Turn off the implementation of ordinary io, temporarily only support dio
 class ObFileAppender : public ObIFileAppender {
-  public:
+public:
   ObFileAppender();
   ~ObFileAppender();
 
-  public:
+public:
   // Subclasses can overload open close get_file_pos
   int open(const ObString& fname, const bool dio, const bool is_create, const bool is_trunc = false,
       const int64_t align_size = FileComponent::DirectFileAppender::DEFAULT_ALIGN_SIZE);
@@ -379,26 +379,26 @@ class ObFileAppender : public ObIFileAppender {
     return file_->get_fd();
   }
 
-  public:
+public:
   int create(const ObString& fname, const bool dio,
       const int64_t align_size = FileComponent::DirectFileAppender::DEFAULT_ALIGN_SIZE);
   bool is_opened() const;
 
-  public:
+public:
   // Subclasses can overload append fsync
   // If is_fsync is not set, the internal buffer is used to cache data by default, and the disk is flushed until the
   // buffer is full.
   int append(const void* buf, const int64_t count, const bool is_fsync);
   int fsync();
 
-  public:
+public:
   // Temporarily not realized
   int async_append(const void* buf, const int64_t count, IFileAsyncCallback* callback);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFileAppender);
 
-  private:
+private:
   FileComponent::IFileAppender* file_;
   FileComponent::DirectFileAppender direct_file_;
   FileComponent::BufferFileAppender buffer_file_;
@@ -409,7 +409,7 @@ class ObFileAppender : public ObIFileAppender {
 #define __USE_AIO_FILE
 #ifdef __USE_AIO_FILE
 class ObIWaiter {
-  public:
+public:
   virtual ~ObIWaiter(){};
   virtual void wait() = 0;
 };
@@ -421,11 +421,11 @@ class ObWaitablePool {
     Node* next;
   };
 
-  public:
+public:
   ObWaitablePool();
   ~ObWaitablePool();
 
-  public:
+public:
   int alloc_obj(T*& obj, ObIWaiter& waiter);
   void free_obj(T* obj);
   int64_t used() const
@@ -433,7 +433,7 @@ class ObWaitablePool {
     return used_;
   };
 
-  private:
+private:
   Node* objs_;
   Node* list_;
   int64_t used_;
@@ -549,11 +549,11 @@ class ObFileAsyncAppender : public ObIFileAppender, ObIWaiter {
   static const int64_t AIO_WAIT_TIME_US = 1000000;
   typedef ObWaitablePool<AIOCB, AIO_MAXEVENTS> Pool;
 
-  public:
+public:
   ObFileAsyncAppender();
   ~ObFileAsyncAppender();
 
-  public:
+public:
   int open(const ObString& fname, const bool dio, const bool is_create, const bool is_trunc = false,
       const int64_t align_size = FileComponent::DirectFileAppender::DEFAULT_ALIGN_SIZE);
   int create(const ObString& fname, const bool dio,
@@ -563,14 +563,14 @@ class ObFileAsyncAppender : public ObIFileAppender, ObIWaiter {
   int append(const void* buf, const int64_t count, const bool is_fsync);
   int fsync();
 
-  public:
+public:
   void wait();
 
-  private:
+private:
   int submit_iocb_(AIOCB* iocb);
   AIOCB* get_iocb_();
 
-  private:
+private:
   Pool pool_;
   int fd_;
   int64_t file_pos_;

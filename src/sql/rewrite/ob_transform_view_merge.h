@@ -28,7 +28,7 @@ namespace sql {
 class ObDelUpdStmt;
 
 class ObTransformViewMerge : public ObTransformRule {
-  public:
+public:
   ObTransformViewMerge(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER), for_post_process_(false)
   {}
   virtual ~ObTransformViewMerge()
@@ -42,7 +42,7 @@ class ObTransformViewMerge : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   struct ViewMergeHelper {
     ViewMergeHelper()
         : parent_table(NULL),

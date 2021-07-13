@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace storage {
 class ObTableScanParam;
 class ObIndexMerge : public ObQueryRowIterator {
-  public:
+public:
   ObIndexMerge();
   virtual ~ObIndexMerge();
   virtual int init(const ObTableAccessParam& param, const ObTableAccessParam& index_param,
@@ -38,7 +38,7 @@ class ObIndexMerge : public ObQueryRowIterator {
   int set_tables(const common::ObIArray<ObITable*>& tables);
   int switch_iterator(const int64_t range_array_idx);
 
-  private:
+private:
   static const int64_t MAX_NUM_PER_BATCH = 1000;
   ObQueryRowIterator* index_iter_;
   ObQueryRowIterator* main_iter_;
@@ -51,7 +51,7 @@ class ObIndexMerge : public ObQueryRowIterator {
   ObArray<int64_t> rowkey_range_idx_;
   int64_t index_range_array_cursor_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexMerge);
 };
 

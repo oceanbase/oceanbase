@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace unittest {
 
 class TestIOPerformance : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     COMMON_LOG(INFO, "start set up");
@@ -44,7 +44,7 @@ TEST_F(TestIOPerformance, single)
 }
 
 class MPSC_ThreadPool : public lib::ThreadPool {
-  public:
+public:
   MPSC_ThreadPool() : inited_(false), is_lighty_(true)
   {}
   virtual ~MPSC_ThreadPool()
@@ -55,11 +55,11 @@ class MPSC_ThreadPool : public lib::ThreadPool {
   static const int64_t CONSUMER_COUNT = 1;
   static const int64_t PRODUCE_INTERVAL_US = 100;
 
-  private:
+private:
   int produce();
   int consume();
 
-  private:
+private:
   bool inited_;
   ObLightyQueue lighty_queue_;
   ObFixedQueue<int64_t> fixed_queue_;

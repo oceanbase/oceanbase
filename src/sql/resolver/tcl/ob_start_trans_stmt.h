@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObStartTransStmt : public ObTCLStmt {
-  public:
+public:
   ObStartTransStmt();
   virtual ~ObStartTransStmt();
   virtual void print(FILE* fp, int32_t level, int32_t index);
@@ -30,14 +30,14 @@ class ObStartTransStmt : public ObTCLStmt {
   }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(read_only), K_(with_consistent_snapshot));
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   ObStartTransStmt(const ObStartTransStmt& other);
   ObStartTransStmt& operator=(const ObStartTransStmt& other);
   // function members
-  private:
+private:
   // data members
   bool with_consistent_snapshot_;
   bool read_only_;

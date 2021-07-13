@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace transaction {
 
 class ObTransStatus {
-  public:
+public:
   ObTransStatus() : trans_id_(), status_(common::OB_TRANS_UNKNOWN)
   {}
   ObTransStatus(const ObTransID& trans_id, const int status) : trans_id_(trans_id), status_(status)
@@ -30,7 +30,7 @@ class ObTransStatus {
   ~ObTransStatus()
   {}
 
-  public:
+public:
   const ObTransID& get_trans_id() const
   {
     return trans_id_;
@@ -41,13 +41,13 @@ class ObTransStatus {
   }
   TO_STRING_KV(K_(trans_id), K_(status));
 
-  private:
+private:
   ObTransID trans_id_;
   int status_;
 };
 
 class ObTransStatusMgr {
-  public:
+public:
   ObTransStatusMgr()
   {}
   ~ObTransStatusMgr()
@@ -55,11 +55,11 @@ class ObTransStatusMgr {
   int set_status(const ObTransID& trans_id, const ObTransStatus& status);
   int get_status(const ObTransID& trans_id, ObTransStatus& status);
 
-  private:
+private:
   static const int64_t MAX_TRANS_STATUS = 1 * 1024 * 1024;
   static const int64_t MAX_LOCK = 64 * 1024;
 
-  private:
+private:
   common::ObSpinLock lock_[MAX_LOCK];
   ObTransStatus status_array_[MAX_TRANS_STATUS];
 };

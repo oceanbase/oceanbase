@@ -25,7 +25,7 @@ namespace storage {
 class ObPartitionService;
 
 class ObMsInfoTask {
-  public:
+public:
   ObMsInfoTask()
       : pkey_(),
         server_(),
@@ -112,7 +112,7 @@ class ObMsInfoTask {
       ms_log_id_, "mc_timestamp", mc_timestamp_, "replica_num", replica_num_, "prev_member_list", prev_member_list_,
       "curr_member_list", curr_member_list_, "ms_proposal_id", ms_proposal_id_);
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   common::ObAddr server_;
   int64_t cluster_id_;
@@ -126,13 +126,13 @@ class ObMsInfoTask {
 };
 
 class ObSlogWriterQueueThread : public lib::TGTaskHandler {
-  public:
+public:
   static const int64_t QUEUE_THREAD_NUM = 4;
   static const int64_t MINI_MODE_QUEUE_THREAD_NUM = 2;
   ObSlogWriterQueueThread();
   virtual ~ObSlogWriterQueueThread();
 
-  public:
+public:
   virtual int init(ObPartitionService* partition_service, int tg_id);
   virtual int push(const ObMsInfoTask* task);
   virtual void handle(void* task);
@@ -142,18 +142,18 @@ class ObSlogWriterQueueThread : public lib::TGTaskHandler {
     return tg_id_;
   }
 
-  private:
+private:
   int get_task(ObMsInfoTask*& task);
   void free_task(ObMsInfoTask* task);
 
-  private:
+private:
   bool inited_;
   ObPartitionService* partition_service_;
   common::ObFixedQueue<ObMsInfoTask> free_queue_;
   ObMsInfoTask* tasks_;
   int tg_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSlogWriterQueueThread);
 };
 

@@ -95,7 +95,7 @@ struct ObSimpleFrozenStatus {
 struct TenantIdAndSchemaVersion {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   TenantIdAndSchemaVersion() : tenant_id_(common::OB_INVALID_TENANT_ID), schema_version_(0)
   {}
   TenantIdAndSchemaVersion(const int64_t tenant_id, const int64_t schema_version)
@@ -127,20 +127,20 @@ struct TenantIdAndSchemaVersion {
 };
 
 class ObFreezeInfoProxy {
-  public:
+public:
   ObFreezeInfoProxy()
   {}
   virtual ~ObFreezeInfoProxy()
   {}
   static const char* OB_ALL_FREEZE_INFO_TNAME;
 
-  public:
+public:
   // freeze status
   static const int64_t INVALID_TIMESTAMP = storage::ObFrozenStatus::INVALID_TIMESTAMP;
   static const int64_t INVALID_FROZEN_VERSION = storage::ObFrozenStatus::INVALID_FROZEN_VERSION;
   static const int64_t INVALID_SCHEMA_VERSION = storage::ObFrozenStatus::INVALID_SCHEMA_VERSION;
 
-  public:
+public:
   // major_version = 0: Get latest freeze info
   int get_freeze_info(
       common::ObISQLClient& sql_proxy, const int64_t major_version, ObSimpleFrozenStatus& frozen_status);
@@ -204,7 +204,7 @@ class ObFreezeInfoProxy {
   int get_frozen_status_less_than(common::ObISQLClient& sql_proxy, const int64_t tenant_id,
       const int64_t schema_version, ObSimpleFrozenStatus& frozen_status);
 
-  private:
+private:
   int get_freeze_info_larger_than_inner(common::ObISQLClient& sql_proxy, const int64_t major_version,
       common::ObIArray<storage::ObFrozenStatus>& frozen_statuses);
   int get_min_major_available_and_larger_info_inner(common::ObISQLClient& sql_proxy, const int64_t major_version,
@@ -217,7 +217,7 @@ class ObFreezeInfoProxy {
   int get_max_frozen_status_with_schema_version_v2_inner(
       common::ObISQLClient& sql_proxy, common::ObSqlString& sql, ObSimpleFrozenStatus& frozen_status);
 
-  private:
+private:
   inline bool is_valid_frozen_version_(int64_t frozen_version)
   {
     return INVALID_FROZEN_VERSION != frozen_version && frozen_version > 0;
@@ -241,7 +241,7 @@ class ObFreezeInfoProxy {
     return ((cur_ts > old_ts) ? cur_ts : (old_ts + 1));
   }
 
-  private:
+private:
   // table name and column name
   static const char* FROZEN_VERSION_CNAME;
   static const char* FROZEN_TIMESTAMP_CNAME;

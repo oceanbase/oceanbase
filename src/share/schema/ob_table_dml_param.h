@@ -24,7 +24,7 @@ class ObColumnParam;
 class ObTableSchemaParam {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   typedef common::ObFixedArray<common::ObRowkeyInfo*, common::ObIAllocator> RowKeys;
   typedef common::ObFixedArray<ObColumnParam*, common::ObIAllocator> Columns;
 
@@ -116,11 +116,11 @@ class ObTableSchemaParam {
   bool is_depend_column(uint64_t column_id) const;
   DECLARE_TO_STRING;
 
-  private:
+private:
   ObTableSchemaParam();
   DISALLOW_COPY_AND_ASSIGN(ObTableSchemaParam);
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   uint64_t table_id_;
   int64_t schema_version_;
@@ -140,7 +140,7 @@ class ObTableSchemaParam {
 class ObTableDMLParam {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   typedef common::ObFixedArray<ObTableSchemaParam*, common::ObIAllocator> TableSchemas;
   typedef common::ObFixedArray<ObColDesc, common::ObIAllocator> ObColDescArray;
 
@@ -178,7 +178,7 @@ class ObTableDMLParam {
   }
   DECLARE_TO_STRING;
 
-  private:
+private:
   ObTableDMLParam();
   DISALLOW_COPY_AND_ASSIGN(ObTableDMLParam);
 
@@ -187,7 +187,7 @@ class ObTableDMLParam {
   int get_schemas_serialize_size(const TableSchemas& schemas, int64_t& size) const;
   ObTableSchemaParam* alloc_schema();
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   int64_t tenant_schema_version_;
   ObTableSchemaParam data_table_;

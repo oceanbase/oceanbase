@@ -58,7 +58,7 @@ struct ObStorageObjectVersionParam {
 };
 
 class ObStorageUtil {
-  public:
+public:
   static const int64_t OB_AGENT_MAX_RETRY_TIME = 5 * 60 * 1000 * 1000;  // 300s
   static const int64_t OB_AGENT_SINGLE_SLEEP_US = 5 * 1000 * 1000;      // 5s
   // should not use retry during physical backup
@@ -93,7 +93,7 @@ class ObStorageUtil {
   // uri is directory
   int delete_tmp_files(const common::ObString& uri, const common::ObString& storage_info);
 
-  private:
+private:
   int get_util(const common::ObString& uri, ObIStorageUtil*& util);
 
   int do_read_single_file(const common::ObString& uri, const common::ObString& storage_info, char* buf,
@@ -110,7 +110,7 @@ class ObStorageUtil {
 };
 
 class ObStorageReader {
-  public:
+public:
   ObStorageReader();
   virtual ~ObStorageReader();
   int open(const common::ObString& uri, const common::ObString& storage_info);
@@ -121,7 +121,7 @@ class ObStorageReader {
     return file_length_;
   }
 
-  private:
+private:
   int64_t file_length_;
   ObIStorageReader* reader_;
   ObStorageFileReader file_reader_;
@@ -134,14 +134,14 @@ class ObStorageReader {
 };
 
 class ObStorageWriter {
-  public:
+public:
   ObStorageWriter();
   virtual ~ObStorageWriter();
   int open(const common::ObString& uri, const common::ObString& storage_info);
   int write(const char* buf, const int64_t size);
   int close();
 
-  private:
+private:
   ObIStorageWriter* writer_;
   ObStorageFileWriter file_writer_;
 #ifdef _WITH_OSS
@@ -153,7 +153,7 @@ class ObStorageWriter {
 };
 
 class ObStorageAppender {
-  public:
+public:
   ObStorageAppender(StorageOpenMode mode);
   ObStorageAppender();
   virtual ~ObStorageAppender();
@@ -176,7 +176,7 @@ class ObStorageAppender {
   int64_t get_length();
   TO_STRING_KV(KP(appender_), K_(start_ts), K_(is_opened), K_(uri));
 
-  private:
+private:
   ObIStorageWriter* appender_;
   ObStorageFileAppender file_appender_;
 #ifdef _WITH_OSS
@@ -189,14 +189,14 @@ class ObStorageAppender {
 };
 
 class ObStorageMetaWrapper {
-  public:
+public:
   ObStorageMetaWrapper();
   virtual ~ObStorageMetaWrapper();
   int get(const common::ObString& uri, const common::ObString& storage_info, char* buf, const int64_t buf_size,
       int64_t& read_size);
   int set(const common::ObString& uri, const common::ObString& storage_info, const char* buf, const int64_t size);
 
-  private:
+private:
   int get_meta(const common::ObString& uri, ObIStorageMetaWrapper*& meta);
   ObStorageFileMetaWrapper file_meta_;
 #ifdef _WITH_OSS

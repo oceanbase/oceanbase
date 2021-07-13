@@ -22,7 +22,7 @@ namespace sqlclient {
 class ObMySQLResult;
 
 class ObMySQLReadContext : public ObISQLResultHandler {
-  public:
+public:
   ObMySQLReadContext() : result_(NULL), stmt_()
   {}
   virtual ~ObMySQLReadContext()
@@ -33,7 +33,7 @@ class ObMySQLReadContext : public ObISQLResultHandler {
     return result_;
   }
 
-  public:
+public:
   ObMySQLResult* result_;
   ObMySQLStatement stmt_;
 };

@@ -22,7 +22,7 @@ namespace sql {
 class ObTableAppendLocalSortDataInput : public ObTableAppendInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableAppendLocalSortDataInput() : ObTableAppendInput(), task_id_()
   {}
   virtual ~ObTableAppendLocalSortDataInput()
@@ -42,18 +42,18 @@ class ObTableAppendLocalSortDataInput : public ObTableAppendInput {
     return task_id_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableAppendLocalSortDataInput);
   ObTaskID task_id_;
 };
 
 class ObTableAppendLocalSortData : public ObTableAppend {
-  public:
+public:
   class ObTableAppendLocalSortDataCtx : public ObPhyOperatorCtx {
     friend class ObTableAppendLocalSortData;
 
-    public:
-    public:
+  public:
+  public:
     explicit ObTableAppendLocalSortDataCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
     {}
     virtual ~ObTableAppendLocalSortDataCtx() = default;
@@ -74,7 +74,7 @@ class ObTableAppendLocalSortData : public ObTableAppend {
     return &reclaim_macro_block;
   }
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const override;
   virtual int inner_close(ObExecContext& ctx) const override;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
@@ -82,7 +82,7 @@ class ObTableAppendLocalSortData : public ObTableAppend {
   // called when interm result freed
   static void reclaim_macro_block(const common::ObNewRow& row);
 
-  private:
+private:
   mutable common::ObNewRow row_;
   mutable bool iter_end_;
 };

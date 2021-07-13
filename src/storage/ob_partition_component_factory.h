@@ -24,7 +24,7 @@ namespace storage {
 class ObSSStore;
 
 class ObPartitionComponentFactory : public ObIPartitionComponentFactory {
-  public:
+public:
   ObPartitionComponentFactory()
   {}
   virtual ~ObPartitionComponentFactory()
@@ -126,7 +126,7 @@ class ObPartitionComponentFactory : public ObIPartitionComponentFactory {
   virtual void free(ObPGPartitionBaseDataMetaRestoreReaderV2* reader);
   virtual void free(ObIPhyRestoreMacroIndexStore* macro_index);
 
-  protected:
+protected:
   template <class IT>
   void component_free(IT* component)
   {

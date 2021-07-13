@@ -34,7 +34,7 @@ class StartArchiveHelper;
 class ObArchiveThreadPool;
 typedef common::LinkHashValue<ObPGKey> PGArchiveTaskValue;
 class ObPGArchiveTask : public PGArchiveTaskValue {
-  public:
+public:
   ObPGArchiveTask();
   ~ObPGArchiveTask();
 
@@ -42,10 +42,10 @@ class ObPGArchiveTask : public PGArchiveTaskValue {
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
 
-  public:
+public:
   int init(StartArchiveHelper& helper, ObArchiveAllocator* allocator);
 
-  public:
+public:
   ObPGKey get_pg_key()
   {
     return pg_key_;
@@ -126,12 +126,12 @@ class ObPGArchiveTask : public PGArchiveTaskValue {
       K(fetcher_max_split_log_id_), K(last_split_log_id_), K(last_split_log_submit_ts_), K(last_split_checkpoint_ts_),
       K(mandatory_), K(archive_destination_), K(pg_key_));
 
-  private:
+private:
   void destroy();
   void update_unlock_(StartArchiveHelper& helper);
   void free_task_status_();
 
-  private:
+private:
   bool pg_been_deleted_;
   bool is_first_record_finish_;
   bool has_encount_error_;
@@ -167,29 +167,29 @@ class ObPGArchiveTask : public PGArchiveTaskValue {
   ObArchiveAllocator* allocator_;
   mutable RWLock rwlock_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPGArchiveTask);
 };
 
 class ObPGArchiveTaskGuard final {
-  public:
+public:
   explicit ObPGArchiveTaskGuard(ObArchivePGMgr* pg_mgr);
   ~ObPGArchiveTaskGuard();
 
-  public:
+public:
   void set_pg_archive_task(ObPGArchiveTask* pg_archive_task);
   ObPGArchiveTask* get_pg_archive_task();
 
   TO_STRING_KV(KPC(pg_archive_task_));
 
-  private:
+private:
   void revert_pg_archive_task_();
 
-  private:
+private:
   ObPGArchiveTask* pg_archive_task_;
   ObArchivePGMgr* pg_mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPGArchiveTaskGuard);
 };
 

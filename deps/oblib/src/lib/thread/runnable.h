@@ -22,7 +22,7 @@ class CThread;
  */
 class Runnable {
 
-  public:
+public:
   /*
    * Destructor
    */

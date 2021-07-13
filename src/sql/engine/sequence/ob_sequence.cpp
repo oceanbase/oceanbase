@@ -25,7 +25,7 @@ using namespace share;
 using namespace share::schema;
 namespace sql {
 class ObSequence::ObSequenceCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObSequenceCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx), sequence_cache_(nullptr)
   {
     sequence_cache_ = &share::ObSequenceCache::get_instance();
@@ -47,7 +47,7 @@ class ObSequence::ObSequenceCtx : public ObPhyOperatorCtx {
     ObPhyOperatorCtx::destroy_base();
   }
 
-  private:
+private:
   share::ObSequenceCache* sequence_cache_;
   common::ObSEArray<ObSequenceSchema, 1> seq_schemas_;
   friend class ObSequence;

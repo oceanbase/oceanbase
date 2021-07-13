@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObGroupByChecker : public ObRawExprVisitor {
-  public:
+public:
   ObGroupByChecker(ObIArray<ObRawExpr*>* group_by_exprs, ObIArray<ObRawExpr*>* rollup_exprs = nullptr,
       ObIArray<ObGroupbyExpr>* groupby_exprs = nullptr)
       : ObRawExprVisitor(),
@@ -57,7 +57,7 @@ class ObGroupByChecker : public ObRawExprVisitor {
     return skip_expr_ == &expr;
   }
 
-  private:
+private:
   int64_t level_;
   ObIArray<ObRawExpr*>* group_by_exprs_;
   ObIArray<ObRawExpr*>* rollup_exprs_;
@@ -68,7 +68,7 @@ class ObGroupByChecker : public ObRawExprVisitor {
   ObQueryCtx* query_ctx_;
   bool has_nested_aggr_;
 
-  private:
+private:
   bool is_top_select_stmt()
   {
     return 0 == level_;
@@ -99,7 +99,7 @@ class ObGroupByChecker : public ObRawExprVisitor {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObGroupByChecker);
 
-  public:
+public:
   void set_level(int64_t level)
   {
     level_ = level;

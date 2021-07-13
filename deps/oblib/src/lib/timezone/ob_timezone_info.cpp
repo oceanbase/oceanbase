@@ -39987,6 +39987,5 @@ OB_SERIALIZE_MEMBER(ObIntervalYMValue, nmonth_);
 // Referenced by dereference pointer to avoid GCC reference packed filed error:
 //    cannot bind packed field fractional_second_ to `int32_t &`
 OB_SERIALIZE_MEMBER(ObIntervalDSValue, (*(int64_t*)&nsecond_), (*(int32_t*)&fractional_second_));
-
 }  // namespace common
 }  // namespace oceanbase

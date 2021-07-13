@@ -27,7 +27,7 @@ using namespace common;
 namespace share {
 namespace schema {
 class TestTableIterator : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown()
   {}

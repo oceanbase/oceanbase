@@ -83,7 +83,7 @@ inline int icore_id()
 }
 
 class SimpleItem {
-  public:
+public:
   SimpleItem() : value_(0)
   {}
   ~SimpleItem()

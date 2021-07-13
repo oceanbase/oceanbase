@@ -25,13 +25,13 @@ namespace oceanbase {
 using namespace common;
 namespace clog {
 class ObIlogFileBuilder::PrepareRawArrayFunctor {
-  public:
+public:
   explicit PrepareRawArrayFunctor(RawArray& raw_array) : raw_array_(raw_array), curr_idx_(0)
   {}
   ~PrepareRawArrayFunctor()
   {}
 
-  public:
+public:
   bool operator()(const ObPartitionLogInfo& partition_log_info, ObLogCursorExt& log_cursor_ext)
   {
     bool bool_ret = false;
@@ -58,22 +58,22 @@ class ObIlogFileBuilder::PrepareRawArrayFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   RawArray& raw_array_;
   int64_t curr_idx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(PrepareRawArrayFunctor);
 };
 
 class ObIlogFileBuilder::UpdateStartOffsetFunctor {
-  public:
+public:
   explicit UpdateStartOffsetFunctor(const offset_t start_offset) : start_offset_(start_offset)
   {}
   ~UpdateStartOffsetFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObPartitionKey& partition_key, IndexInfoBlockEntry& index_info_block_entry)
   {
     bool bool_ret = false;
@@ -86,21 +86,21 @@ class ObIlogFileBuilder::UpdateStartOffsetFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   offset_t start_offset_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(UpdateStartOffsetFunctor);
 };
 
 class ObIlogFileBuilder::BuildArrayMapFunctor {
-  public:
+public:
   explicit BuildArrayMapFunctor(IndexInfoBlockMap& index_info_block_map) : index_info_block_map_(index_info_block_map)
   {}
   ~BuildArrayMapFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObPartitionKey& partition_key, IndexInfoBlockEntry& index_info_block_entry)
   {
     int ret = OB_SUCCESS;
@@ -113,21 +113,21 @@ class ObIlogFileBuilder::BuildArrayMapFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   IndexInfoBlockMap& index_info_block_map_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(BuildArrayMapFunctor);
 };
 
 class ObIlogFileBuilder::BuildMemberListMapFunctor {
-  public:
+public:
   explicit BuildMemberListMapFunctor(MemberListMap& memberlist_map) : memberlist_map_(memberlist_map)
   {}
   ~BuildMemberListMapFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObPartitionKey& partition_key, MemberListInfo& memberlist_info)
   {
     int ret = OB_SUCCESS;
@@ -140,10 +140,10 @@ class ObIlogFileBuilder::BuildMemberListMapFunctor {
     return bool_ret;
   }
 
-  private:
+private:
   MemberListMap& memberlist_map_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(BuildMemberListMapFunctor);
 };
 

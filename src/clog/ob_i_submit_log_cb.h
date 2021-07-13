@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace clog {
 class ObISubmitLogCb {
-  public:
+public:
   ObISubmitLogCb() : next_(NULL), submit_timestamp_(0), need_post_cb_(false), is_high_priority_(false)
   {}
   virtual ~ObISubmitLogCb()
@@ -29,7 +29,7 @@ class ObISubmitLogCb {
     is_high_priority_ = false;
   }
 
-  public:
+public:
   // batch_committed:
   //   For distributed transactions of batch commit type, this value is used to notify the upper-layer transaction
   //   whether the commit is successful batch_committed = true
@@ -88,7 +88,7 @@ class ObISubmitLogCb {
     return is_high_priority_;
   }
 
-  public:
+public:
   ObISubmitLogCb* next_;
   int64_t submit_timestamp_;
   bool need_post_cb_;
@@ -97,13 +97,13 @@ class ObISubmitLogCb {
 };
 
 class ObSubmitLogDummyCb : public ObISubmitLogCb {
-  public:
+public:
   ObSubmitLogDummyCb()
   {}
   ~ObSubmitLogDummyCb()
   {}
 
-  public:
+public:
   int on_success(const common::ObPartitionKey& partition_key, const clog::ObLogType log_type, const uint64_t log_id,
       const int64_t version, const bool batch_committed, const bool batch_last_succeed)
   {

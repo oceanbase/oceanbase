@@ -46,13 +46,13 @@ inline int check_stack_overflow(void)
  *        The of pointer of the class is maintained on thread local.
  */
 class ObFatalErrExtraInfoGuard {
-  public:
+public:
   explicit ObFatalErrExtraInfoGuard();
   virtual ~ObFatalErrExtraInfoGuard();
   static const ObFatalErrExtraInfoGuard* get_thd_local_val_ptr();
   DEFINE_VIRTUAL_TO_STRING();
 
-  private:
+private:
   static ObFatalErrExtraInfoGuard*& get_val();
   ObFatalErrExtraInfoGuard* last_;
 };

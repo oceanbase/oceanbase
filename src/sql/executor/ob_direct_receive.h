@@ -28,25 +28,25 @@ class ObTaskInfo;
 class ObDirectReceiveInput : public ObReceiveInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDirectReceiveInput();
   virtual ~ObDirectReceiveInput();
   virtual void reset() override;
   virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
   virtual ObPhyOperatorType get_phy_op_type() const;
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObDirectReceiveInput);
 };
 
 class ObDirectReceive : public ObReceive {
-  private:
+private:
   class ObDirectReceiveCtx : public ObPhyOperatorCtx {
     friend class ObDirectReceive;
 
-    public:
+  public:
     explicit ObDirectReceiveCtx(ObExecContext& ctx);
     virtual ~ObDirectReceiveCtx();
     virtual void destroy()
@@ -61,19 +61,19 @@ class ObDirectReceive : public ObReceive {
     bool first_request_received_;
     int64_t found_rows_;
 
-    private:
+  private:
     /* functions */
     /* variables */
     DISALLOW_COPY_AND_ASSIGN(ObDirectReceiveCtx);
   };
 
-  public:
+public:
   explicit ObDirectReceive(common::ObIAllocator& alloc);
   virtual ~ObDirectReceive();
 
   virtual int rescan(ObExecContext& ctx) const;
 
-  private:
+private:
   /* functions */
   int setup_next_scanner(ObExecContext& ctx) const;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
@@ -87,7 +87,7 @@ class ObDirectReceive : public ObReceive {
    */
   virtual int init_op_ctx(ObExecContext& ctx) const;
 
-  private:
+private:
   /* macros */
   DISALLOW_COPY_AND_ASSIGN(ObDirectReceive);
 };

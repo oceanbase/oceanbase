@@ -22,15 +22,15 @@ namespace election {
 using namespace oceanbase::common;
 
 class Loss {
-  public:
+public:
   Loss(int64_t loss_rate = 0, int64_t start = 0, int64_t end = 0);
   ~Loss();
 
-  public:
+public:
   void set_loss(int64_t loss_rate, int64_t start = INT64_MIN, int64_t end = INT64_MAX);
   bool is_loss(int64_t ts);
 
-  protected:
+protected:
   int64_t loss_rate_;
   int64_t start_;
   int64_t end_;

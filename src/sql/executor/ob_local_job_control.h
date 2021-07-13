@@ -18,13 +18,13 @@
 namespace oceanbase {
 namespace sql {
 class ObLocalJobControl : public ObJobControl {
-  public:
+public:
   explicit ObLocalJobControl();
   virtual ~ObLocalJobControl();
 
   virtual int get_ready_jobs(common::ObIArray<ObJob*>& jobs, bool serial_sched = false) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLocalJobControl);
 };
 }  // namespace sql

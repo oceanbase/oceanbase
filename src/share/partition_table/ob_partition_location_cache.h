@@ -72,7 +72,7 @@ struct ObLocationCacheKey : public common::ObIKVCacheKey {
 };
 
 struct LocationInfo {
-  public:
+public:
   LocationInfo() : server_(), renew_ts_(0)
   {}
   LocationInfo(const common::ObAddr& server, const int64_t renew_ts) : server_(server), renew_ts_(renew_ts)
@@ -80,14 +80,14 @@ struct LocationInfo {
   virtual ~LocationInfo()
   {}
 
-  public:
+public:
   bool is_valid() const
   {
     return server_.is_valid() && renew_ts_ > 0;
   }
   TO_STRING_KV(K_(server), K_(renew_ts));
 
-  public:
+public:
   int assign(const LocationInfo& that)
   {
     int ret = common::OB_SUCCESS;
@@ -113,13 +113,13 @@ struct LocationInfo {
     renew_ts_ = renew_ts;
   }
 
-  public:
+public:
   common::ObAddr server_;
   int64_t renew_ts_;
 };
 
 class ObLocationLeader {
-  public:
+public:
   ObLocationLeader() : key_(), leader_info_()
   {}
   virtual ~ObLocationLeader()
@@ -143,7 +143,7 @@ class ObLocationLeader {
   }
   TO_STRING_KV(K_(key), K_(leader_info));
 
-  private:
+private:
   ObLocationCacheKey key_;
   LocationInfo leader_info_;
 };
@@ -160,7 +160,7 @@ struct ObLocationCacheValue : public common::ObIKVCacheValue {
 };
 
 struct ObTenantSqlRenewStat {
-  public:
+public:
   uint64_t tenant_id_;
   int64_t start_sql_renew_ts_;
   int64_t sql_renew_count_;
@@ -191,7 +191,7 @@ typedef common::ObArray<ObTenantSqlRenewStat> TenantSqlRenewInfoArray;
 typedef common::ObIArray<ObTenantSqlRenewStat> TenantSqlRenewInfoIArray;
 
 class ObTenantStatGuard {
-  public:
+public:
   ObTenantStatGuard() = delete;
   ObTenantStatGuard(const uint64_t tenant_id, TenantSqlRenewInfoMap& map,
       common::ObCachedAllocator<ObTenantSqlRenewStat>& object_pool, common::ObSpinLock& lock)
@@ -213,11 +213,11 @@ class ObTenantStatGuard {
   }
   TO_STRING_KV(KP_(tenant_stat), K_(tenant_id));
 
-  private:
+private:
   int set_tenant_stat(const uint64_t tenant_id, TenantSqlRenewInfoMap& map,
       common::ObCachedAllocator<ObTenantSqlRenewStat>& object_pool, common::ObSpinLock& lock);
 
-  private:
+private:
   ObTenantSqlRenewStat* tenant_stat_;
   uint64_t tenant_id_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantStatGuard);
@@ -226,7 +226,7 @@ class ObTenantStatGuard {
 class ObIPartitionLocationCache;
 // partition table update task
 class ObLocationAsyncUpdateTask : public common::ObDLinkBase<ObLocationAsyncUpdateTask> {
-  public:
+public:
   friend class ObLocationFetcher;
   static const int64_t WAIT_PROCESS_WARN_TIME = 3 * 1000 * 1000;  // 3s
   enum Type { MODE_AUTO = 0, MODE_SQL_ONLY = 1 };
@@ -274,7 +274,7 @@ class ObLocationAsyncUpdateTask : public common::ObDLinkBase<ObLocationAsyncUpda
   bool need_discard() const;
   TO_STRING_KV(KT_(table_id), K_(partition_id), K_(add_timestamp), K_(cluster_id), K_(type));
 
-  private:
+private:
   ObIPartitionLocationCache* loc_cache_;
   uint64_t table_id_;
   int64_t partition_id_;
@@ -285,7 +285,7 @@ class ObLocationAsyncUpdateTask : public common::ObDLinkBase<ObLocationAsyncUpda
 
 ///////////////////////////////////////////
 class ObIPartitionLocationCache {
-  public:
+public:
   enum PartitionLocationCacheType {
     PART_LOC_CACHE_TYPE_INVALID = 0,
     PART_LOC_CACHE_TYPE_NORMAL,
@@ -293,7 +293,7 @@ class ObIPartitionLocationCache {
     PART_LOC_CACHE_TYPE_OPTIMIZER,
   };
 
-  public:
+public:
   virtual ~ObIPartitionLocationCache()
   {}
 
@@ -420,7 +420,7 @@ class ObIPartitionLocationCache {
 };
 
 struct ObLocationRpcRenewInfo {
-  public:
+public:
   ObLocationRpcRenewInfo();
   ~ObLocationRpcRenewInfo();
   void reset();
@@ -428,14 +428,14 @@ struct ObLocationRpcRenewInfo {
   TO_STRING_KV(K_(addr), "key_cnt", OB_ISNULL(arg_) ? 0 : arg_->keys_.count(), "idx_cnt",
       OB_ISNULL(idx_array_) ? 0 : idx_array_->count());
 
-  public:
+public:
   ObAddr addr_;
   obrpc::ObLocationRpcRenewArg* arg_;
   common::ObArray<int64_t>* idx_array_;
 };
 
 struct ObReplicaRenewKey {
-  public:
+public:
   ObReplicaRenewKey();
   ObReplicaRenewKey(const uint64_t table_id, const int64_t partition_id, const ObAddr& addr);
   ~ObReplicaRenewKey();
@@ -444,14 +444,14 @@ struct ObReplicaRenewKey {
   bool operator==(const ObReplicaRenewKey& other) const;
   TO_STRING_KV(K_(table_id), K_(partition_id), K_(addr));
 
-  public:
+public:
   uint64_t table_id_;
   int64_t partition_id_;
   ObAddr addr_;
 };
 
 class ObILocationFetcher {
-  public:
+public:
   virtual ~ObILocationFetcher()
   {}
   virtual int fetch_location(
@@ -470,7 +470,7 @@ class ObILocationFetcher {
       common::ObIAllocator& allocator, common::ObIArray<ObPartitionLocation*>& new_locations) = 0;
   static uint64_t get_rpc_tenant_id(const uint64_t table_id);
 
-  protected:
+protected:
   virtual int partition_table_fetch_location(ObPartitionTableOperator* pt, const int64_t cluster_id,
       const uint64_t table_id, const int64_t partition_id, ObPartitionLocation& location);
   virtual int partition_table_batch_fetch_location(ObPartitionTableOperator* pt, const int64_t cluster_id,
@@ -481,7 +481,7 @@ class ObILocationFetcher {
 
 // used by observer
 class ObLocationFetcher : public ObILocationFetcher {
-  public:
+public:
   static const int64_t OB_FETCH_LOCATION_TIMEOUT = 1 * 1000 * 1000;           // 1s
   static const int64_t OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT = 500 * 1000;  // 500ms
   ObLocationFetcher();
@@ -491,21 +491,22 @@ class ObLocationFetcher : public ObILocationFetcher {
       obrpc::ObSrvRpcProxy& srv_rpc_proxy, ObILocalityManager* locality_manager,
       // ObIRemoteLocatonGetter *remote_location_getter,
       const int64_t cluster_id);
-  virtual int fetch_location(
-      const uint64_t table_id, const int64_t partition_id, const int64_t cluster_id, ObPartitionLocation& location);
-  virtual int fetch_vtable_location(const uint64_t table_id, common::ObSArray<ObPartitionLocation>& locations);
+  virtual int fetch_location(const uint64_t table_id, const int64_t partition_id, const int64_t cluster_id,
+      ObPartitionLocation& location) override;
+  virtual int fetch_vtable_location(const uint64_t table_id, common::ObSArray<ObPartitionLocation>& locations) override;
   virtual int renew_location_with_rpc_v2(
       common::hash::ObHashMap<ObReplicaRenewKey, const obrpc::ObMemberListAndLeaderArg*>* result_map,
-      const ObPartitionLocation& cached_location, ObPartitionLocation& new_location, bool& is_new_location_valid);
+      const ObPartitionLocation& cached_location, ObPartitionLocation& new_location,
+      bool& is_new_location_valid) override;
   virtual int batch_renew_sys_table_location_by_rpc(const ObPartitionLocation& core_table_location,
-      const common::ObIArray<ObLocationCacheKey>& keys, common::ObIArray<ObLocationLeader>& results);
+      const common::ObIArray<ObLocationCacheKey>& keys, common::ObIArray<ObLocationLeader>& results) override;
 
   virtual int batch_fetch_location(const common::ObIArray<common::ObPartitionKey>& keys, const int64_t cluster_id,
       common::ObIAllocator& allocator, common::ObIArray<ObPartitionLocation*>& new_locations) override;
   virtual int batch_renew_location_with_rpc(const common::ObIArray<const ObPartitionLocation*>& rpc_locations,
       common::ObIAllocator& allocator, common::ObIArray<ObPartitionLocation*>& new_locations) override;
 
-  private:
+private:
   static int check_member_list(const common::ObIArray<ObReplicaLocation>& cached_member_list,
       const common::ObIArray<common::ObAddr>& server_list, bool& is_same);
   int check_non_paxos_replica(const common::ObIArray<ObReplicaLocation>& cached_member_list,
@@ -524,7 +525,7 @@ class ObLocationFetcher : public ObILocationFetcher {
       common::ObArray<int>& key_results,
       common::hash::ObHashMap<ObReplicaRenewKey, const obrpc::ObMemberListAndLeaderArg*>& result_map);
 
-  private:
+private:
   bool inited_;
   common::ObServerConfig* config_;
   share::ObPartitionTableOperator* pt_;
@@ -537,7 +538,7 @@ class ObLocationFetcher : public ObILocationFetcher {
 };
 
 class ObLocationCacheQueueSet {
-  public:
+public:
   enum Type {
     LOC_QUEUE_SYS_CORE,
     LOC_QUEUE_SYS_RESTART_RELATED,
@@ -548,13 +549,13 @@ class ObLocationCacheQueueSet {
     LOC_QUEUE_MAX
   };
 
-  public:
+public:
   ObLocationCacheQueueSet();
   virtual ~ObLocationCacheQueueSet();
   int init(common::ObServerConfig& config);
   int add_task(const ObLocationUpdateTask& task);
 
-  public:
+public:
   static const int32_t ALL_ROOT_THREAD_CNT = 1;
   static const int32_t SYS_THREAD_CNT = 1;
   static const int64_t PLC_TASK_QUEUE_SIZE = 10 * 1000;
@@ -566,7 +567,7 @@ class ObLocationCacheQueueSet {
   static const char* get_str_by_queue_type(Type type);
   static ObLocationCacheQueueSet::Type get_queue_type(const uint64_t table_id, const int64_t partition_id);
 
-  private:
+private:
   bool is_inited_;
   // all core table's location don't need a queue because it fetch location through rpc
   common::ObDedupQueue all_root_update_queue_;      // __all_core_table, __all_root_table, __all_tenant_gts, __all_gts
@@ -578,9 +579,9 @@ class ObLocationCacheQueueSet {
 };
 
 class ObLocationLeaderCache {
-  public:
+public:
   class ObLocationLeaderInfo {
-    public:
+  public:
     ObLocationLeaderInfo() : lock_(), value_(NULL)
     {}
     virtual ~ObLocationLeaderInfo()
@@ -594,12 +595,12 @@ class ObLocationLeaderCache {
       return value_;
     }
 
-    private:
+  private:
     common::SpinRWLock lock_;
     ObLocationLeader* value_;
   };
 
-  public:
+public:
   ObLocationLeaderCache() : allocator_(), buffer_()
   {}
   virtual ~ObLocationLeaderCache()
@@ -607,7 +608,7 @@ class ObLocationLeaderCache {
   int get_strong_leader_info(const ObLocationCacheKey& key, LocationInfo& location_info);
   int set_strong_leader_info(const ObLocationCacheKey& key, const LocationInfo& location_info, bool force_update);
 
-  private:
+private:
   static const int64_t CACHE_NUM = 10000;
   common::ObArenaAllocator allocator_;
   ObLocationLeaderInfo buffer_[CACHE_NUM];
@@ -616,7 +617,7 @@ class ObLocationLeaderCache {
 typedef observer::ObUniqTaskQueue<ObLocationAsyncUpdateTask, ObIPartitionLocationCache> ObLocationAsyncUpdateQueue;
 
 class ObLocationAsyncUpdateQueueSet {
-  public:
+public:
   ObLocationAsyncUpdateQueueSet(ObIPartitionLocationCache* loc_cache_);
   virtual ~ObLocationAsyncUpdateQueueSet();
   int init(common::ObServerConfig& config);
@@ -624,12 +625,12 @@ class ObLocationAsyncUpdateQueueSet {
   void stop();
   void wait();
 
-  public:
+public:
   const static int64_t MINI_MODE_UPDATE_THREAD_CNT = 1;
   static const int64_t PLC_TASK_QUEUE_SIZE = 10 * 1000;
   static const int64_t USER_TASK_QUEUE_SIZE = 200 * 1000;           // 20W partitions
   static const int64_t MINI_MODE_USER_TASK_QUEUE_SIZE = 10 * 1000;  // 1W partitions
-  private:
+private:
   bool is_inited_;
   ObIPartitionLocationCache* loc_cache_;
   // all core table's location don't need a queue because it fetch location through rpc
@@ -642,18 +643,18 @@ class ObLocationAsyncUpdateQueueSet {
 };
 
 class ObPartitionLocationCache : public ObIPartitionLocationCache {
-  public:
+public:
   friend class ObLocationUpdateTask;
 
   class LocationSem {
-    public:
+  public:
     LocationSem();
     ~LocationSem();
     void set_max_count(const int64_t max_count);
     int acquire(const int64_t abs_timeout_us);
     int release();
 
-    private:
+  private:
     int64_t cur_count_;
     int64_t max_count_;
     common::ObThreadCond cond_;
@@ -661,7 +662,7 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
 
   // limit the concurrency of location cache updates
   class RenewLimiter {
-    public:
+  public:
     const static int64_t RENEW_INTERVAL = 1000000;  // 1s
     const static int64_t PARTITION_HASH_BUCKET_COUNT = 10000;
 
@@ -679,7 +680,7 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
       return last_renew_timestamps_[idx];
     }
 
-    private:
+  private:
     int64_t last_renew_timestamps_[PARTITION_HASH_BUCKET_COUNT];
   };
 
@@ -695,7 +696,7 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
 
   int reload_config();
 
-  virtual ObIPartitionLocationCache::PartitionLocationCacheType get_type() const
+  virtual ObIPartitionLocationCache::PartitionLocationCacheType get_type() const override
   {
     return ObIPartitionLocationCache::PART_LOC_CACHE_TYPE_NORMAL;
   }
@@ -760,7 +761,7 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
   virtual int nonblock_renew_with_limiter(
       const common::ObPartitionKey& partition, const int64_t expire_renew_time, bool& is_limited) override;
   // link table.
-  virtual int get_link_table_location(const uint64_t table_id, ObPartitionLocation& location);
+  virtual int get_link_table_location(const uint64_t table_id, ObPartitionLocation& location) override;
 
   /*-----batch async renew location-----*/
   virtual int batch_process_tasks(const common::ObIArray<ObLocationAsyncUpdateTask>& tasks, bool& stopped) override;
@@ -774,7 +775,7 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
       const ObPartitionLocation& location, char* buf, const int64_t buf_size, ObLocationCacheValue& cache_value);
   static const int64_t OB_MAX_LOCATION_SERIALIZATION_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE;
 
-  private:
+private:
   int remote_get(const common::ObPartitionKey& pkey, ObPartitionLocation& location);
 
   bool is_duty_time(const ObPartitionLocation& location);
@@ -787,7 +788,7 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
       common::ObIAllocator& allocator, common::ObIArray<ObPartitionLocation*>& new_locations);
   int set_batch_timeout_ctx(const int64_t task_cnt, ObLocationAsyncUpdateTask::Type type, common::ObTimeoutCtx& ctx);
   /*-----batch async renew location end -----*/
-  private:
+private:
   const static int64_t DEFAULT_FETCH_LOCATION_TIMEOUT_US =
       ObLocationFetcher::OB_FETCH_LOCATION_TIMEOUT + ObLocationFetcher::OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT;  // 4s
   static const int64_t OB_SYS_LOCATION_CACHE_BUCKET_NUM = 512;
@@ -847,7 +848,7 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
   bool use_sys_cache(const uint64_t table_id) const;
   bool use_sys_leader_cache(const uint64_t table_id, const int64_t cluster_id) const;
 
-  private:
+private:
   const int64_t FORCE_SQL_RENEW_WINDOW = 1000000;      // 1s
   const int64_t LC_VALID_THRESHOLD_TS = 10 * 1000000;  // 10s
   bool is_reliable(const int64_t renew_time)
@@ -855,7 +856,7 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
     return renew_time + LC_VALID_THRESHOLD_TS > common::ObTimeUtility::current_time();
   }
 
-  private:
+private:
   bool is_inited_;
   bool is_stopped_;
   ObILocationFetcher& location_fetcher_;
@@ -877,7 +878,7 @@ class ObPartitionLocationCache : public ObIPartitionLocationCache {
   ObLocationAsyncUpdateQueueSet local_async_queue_set_;
   ObLocationAsyncUpdateQueueSet remote_async_queue_set_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionLocationCache);
 };
 

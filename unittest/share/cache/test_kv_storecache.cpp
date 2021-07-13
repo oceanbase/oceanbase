@@ -25,19 +25,19 @@ using namespace lib;
 using namespace observer;
 namespace common {
 class TestKVCache : public ::testing::Test {
-  public:
+public:
   TestKVCache();
   virtual ~TestKVCache();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestKVCache);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
   int64_t tenant_id_;
   int64_t lower_mem_limit_;

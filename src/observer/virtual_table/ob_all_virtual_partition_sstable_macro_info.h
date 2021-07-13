@@ -25,14 +25,14 @@ class ObPGPartitionIterator;
 namespace observer {
 
 class ObAllVirtualPartitionSSTableMacroInfo : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualPartitionSSTableMacroInfo();
   virtual ~ObAllVirtualPartitionSSTableMacroInfo();
   int init(storage::ObPartitionService& partition_service);
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   int set_key_ranges(const common::ObIArray<common::ObNewRange>& key_ranges);
   int gen_row(common::ObNewRow*& row);
   int get_next_sstable();
@@ -53,7 +53,7 @@ class ObAllVirtualPartitionSSTableMacroInfo : public common::ObVirtualTableScann
   common::ObObj objs_[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualPartitionSSTableMacroInfo);
 };
 

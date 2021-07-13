@@ -26,7 +26,7 @@ namespace schema {
 
 struct ObSchemaOperation;
 class ObDDLSqlService {
-  public:
+public:
   ObDDLSqlService(ObSchemaService& schema_service) : schema_service_(schema_service)
   {}
   virtual ~ObDDLSqlService()
@@ -46,17 +46,17 @@ class ObDDLSqlService {
   int finish_schema_split_v2(
       common::ObISQLClient& sql_client, const uint64_t tenant_id, const int64_t new_schema_version);
 
-  protected:
+protected:
   virtual int log_operation(ObSchemaOperation& ddl_operation, common::ObISQLClient& sql_client,
       int64_t sql_exec_tenant_id = OB_INVALID_TENANT_ID, common::ObSqlString* public_sql_string = NULL);
 
-  private:
+private:
   uint64_t fill_schema_id(const uint64_t exec_tenant_id, const uint64_t schema_id);
 
-  protected:
+protected:
   ObSchemaService& schema_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLSqlService);
 };
 

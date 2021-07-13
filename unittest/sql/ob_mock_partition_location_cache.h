@@ -19,7 +19,7 @@ using oceanbase::share::ObPartitionLocation;
 using oceanbase::share::ObReplicaLocation;
 
 class MockPartitionLocationCache : public oceanbase::share::ObPartitionLocationCache {
-  public:
+public:
   MockPartitionLocationCache() : ObPartitionLocationCache(fetcher_)
   {}
   virtual ~MockPartitionLocationCache()
@@ -32,7 +32,7 @@ class MockPartitionLocationCache : public oceanbase::share::ObPartitionLocationC
   virtual int nonblock_get(const uint64_t table_id, const int64_t partition_id, ObPartitionLocation& location,
       const int64_t cluster_id = -1);
 
-  private:
+private:
   oceanbase::share::ObLocationFetcher fetcher_;
 };
 

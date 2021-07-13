@@ -30,7 +30,7 @@ namespace sql {
 struct ObSortColumnExtra {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const uint8_t SORT_COL_EXTRA_MASK = 0x7F;
   static const uint8_t SORT_COL_EXTRA_BIT = 0x80;
   static const uint8_t SORT_COL_ASC_MASK = 0xFE;
@@ -47,7 +47,7 @@ struct ObSortColumnExtra {
 };
 
 class ObSortColumn : public common::ObColumnInfo, public ObSortColumnExtra {
-  public:
+public:
   // +--------------------------------+----+---------+
   // |      7      | 6 | 5 | 4 | 3 | 2 | 1 |     0   |
   // +-------------------------------------+---------+
@@ -140,7 +140,7 @@ class ObSortColumn : public common::ObColumnInfo, public ObSortColumnExtra {
 };
 
 class ObSortableTrait {
-  public:
+public:
   ObSortableTrait(common::ObIAllocator& alloc) : sort_columns_(alloc)
   {}
   ~ObSortableTrait()
@@ -167,7 +167,7 @@ class ObSortableTrait {
     sort_columns_.reuse();
   }
 
-  protected:
+protected:
   common::ObFixedArray<ObSortColumn, common::ObIAllocator> sort_columns_;  // for merge sort
 };
 
@@ -176,7 +176,7 @@ class ObBaseSort : public common::ObOuterRowIterator {
   struct TypedRowComparer;
   struct TypelessRowComparer;
 
-  public:
+public:
   struct StrongTypeRow {
     common::ObObj* objs_;
     const common::ObNewRow* row_;
@@ -200,7 +200,7 @@ class ObBaseSort : public common::ObOuterRowIterator {
     TO_STRING_KV(K_(objs), K_(row));
   };
 
-  public:
+public:
   explicit ObBaseSort();
   virtual ~ObBaseSort(){};
   virtual void reset();
@@ -263,20 +263,20 @@ class ObBaseSort : public common::ObOuterRowIterator {
   static int enable_typed_sort(const common::ObIArray<ObSortColumn>& sort_columns, const int64_t prefix_pos,
       const common::ObNewRow& row, bool& is_typed_sort);
 
-  private:
+private:
   int inner_sort_rows(const bool is_typed_sort);
 
-  protected:
+protected:
   int add_typed_row(const common::ObNewRow& row, common::ObIAllocator& alloc);
 
-  protected:
+protected:
   int64_t topn_cnt_;  // for topn
-  private:
+private:
   // current allocator && next block allocator
   common::ObArenaAllocator row_alloc0_;
   common::ObArenaAllocator row_alloc1_;
 
-  protected:
+protected:
   common::ObArenaAllocator* cur_alloc_;         // deep copy current block row
   common::ObArenaAllocator* next_block_alloc_;  // deep copy next block row
   common::ObArray<const StrongTypeRow*> sort_array_;
@@ -284,7 +284,7 @@ class ObBaseSort : public common::ObOuterRowIterator {
   // put all nulls in one buffer, and put non-nulls in another buffer
   common::ObArray<const StrongTypeRow*> null_array_;
 
-  private:
+private:
   int64_t row_count_;
   int64_t prefix_keys_pos_;           // prefix columns keys pos
   int64_t row_array_pos_;             // for get next row, cur array pos

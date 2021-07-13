@@ -57,7 +57,7 @@ struct ObCLogWriterCfg {
 };
 
 class ObCLogWriter : public common::ObBaseLogWriter {
-  public:
+public:
   ObCLogWriter();
   virtual ~ObCLogWriter();
   int init(ObCLogWriterCfg& clog_cfg);
@@ -69,10 +69,10 @@ class ObCLogWriter : public common::ObBaseLogWriter {
   int set_is_disk_error();
   int reset_is_disk_error();
 
-  protected:
+protected:
   virtual void process_log_items(common::ObIBaseLogItem** items, const int64_t item_cnt, int64_t& finish_cnt);
 
-  public:
+public:
   // InfoBlock size is fixed(1.875M). It contains a group of hash table, which has the
   // maximum limitation of partition count.
   // In order to avoid serialization failure, the partition count is limited by following:
@@ -90,7 +90,7 @@ class ObCLogWriter : public common::ObBaseLogWriter {
   static const int64_t CLOG_MAX_SWITCH_FILE_LIMIT = 44000;
   static const int64_t ILOG_MAX_SWITCH_FILE_LIMIT = 17000;
 
-  private:
+private:
   static const int TASK_NUM = 1024;
   void set_clog_writer_thread_name();
   bool need_switch_file(const uint64_t write_len) const;
@@ -108,20 +108,20 @@ class ObCLogWriter : public common::ObBaseLogWriter {
 };
 
 class ObCLogDiskErrorCB : public share::IBGCallback {
-  public:
+public:
   ObCLogDiskErrorCB(ObCLogWriter* host);
   virtual ~ObCLogDiskErrorCB();
   int callback() final;
   virtual void destroy();
 
-  private:
+private:
   ObCLogWriter* host_;
 };
 
 // This class will locate the next write position of log files
 template <class Type, class Interface>
 class ObLogFileTailLocatorImpl {
-  public:
+public:
   ObLogFileTailLocatorImpl()
   {}
   ~ObLogFileTailLocatorImpl()

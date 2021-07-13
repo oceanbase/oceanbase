@@ -25,13 +25,13 @@ class ObMultiVersionSchemaService;
 }  // namespace share
 namespace common {
 class ObVirtualTableProjector : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObVirtualTableProjector()
   {}
   virtual ~ObVirtualTableProjector()
   {}
 
-  protected:
+protected:
   struct Column {
     Column() : column_id_(common::OB_INVALID_ID), column_value_()
     {}
@@ -45,7 +45,7 @@ class ObVirtualTableProjector : public common::ObVirtualTableScannerIterator {
       const common::ObIArray<Column>& columns, common::ObNewRow& row, const bool full_columns = true);
   virtual int check_column_exist(const share::schema::ObTableSchema* table, const char* column_name, bool& exist) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObVirtualTableProjector);
 };
 
@@ -109,7 +109,7 @@ class ObVirtualTableProjector : public common::ObVirtualTableScannerIterator {
   } while (false)
 
 class ObSimpleVirtualTableIterator : public ObVirtualTableProjector {
-  public:
+public:
   ObSimpleVirtualTableIterator(uint64_t tenant_id, uint64_t table_id);
   virtual ~ObSimpleVirtualTableIterator()
   {}
@@ -125,17 +125,17 @@ class ObSimpleVirtualTableIterator : public ObVirtualTableProjector {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   // types and constants
   static const int64_t MAX_COLUMN_NUM = 32;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSimpleVirtualTableIterator);
   // function members
   int get_table_schema(uint64_t tenant_id, uint64_t table_id);
 
-  private:
+private:
   // data members
   uint64_t tenant_id_;
   uint64_t table_id_;

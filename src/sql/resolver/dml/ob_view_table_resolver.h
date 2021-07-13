@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObViewTableResolver : public ObSelectResolver {
-  public:
+public:
   ObViewTableResolver(ObResolverParams& params, const ObString& view_db_name, const ObString& view_name)
       : ObSelectResolver(params),
         parent_view_resolver_(NULL),
@@ -62,7 +62,7 @@ class ObViewTableResolver : public ObSelectResolver {
     return auto_name_id_;
   }
 
-  protected:
+protected:
   virtual int do_resolve_set_query(
       const ParseNode& parse_tree, ObSelectStmt*& child_stmt, const bool is_left_child = false);
   virtual int expand_view(TableItem& view_item);
@@ -79,7 +79,7 @@ class ObViewTableResolver : public ObSelectResolver {
     return view_name_;
   }
 
-  protected:
+protected:
   // current_view_item: current namespace expanded from which user created view
   TableItem current_view_item;
   ObViewTableResolver* parent_view_resolver_;

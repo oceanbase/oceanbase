@@ -38,7 +38,7 @@ struct ObMicroBlockIndexHandle {
 };
 
 class ObMicroBlockIndexHandleMgr : public ObHandleMgr<ObMicroBlockIndexHandle, blocksstable::MacroBlockId, 64> {
-  public:
+public:
   ObMicroBlockIndexHandleMgr() = default;
   virtual ~ObMicroBlockIndexHandleMgr() = default;
   int get_block_index_handle(const uint64_t table_id, const blocksstable::ObMacroBlockCtx& block_ctx,

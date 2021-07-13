@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace unittest {
 class MockObEndTransCallback : public sql::ObExclusiveEndTransCallback {
-  public:
+public:
   virtual int wait()
   {
     int res = OB_SUCCESS;
@@ -44,10 +44,10 @@ class MockObEndTransCallback : public sql::ObExclusiveEndTransCallback {
     return sql::MOCK_CALLBACK_TYPE;
   }
 
-  private:
+private:
   static const int64_t WAIT_US = 1000 * 1000 * 1000;
 
-  private:
+private:
   transaction::ObTransCond cond_;
 };
 

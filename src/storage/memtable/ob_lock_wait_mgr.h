@@ -32,17 +32,17 @@ class ObAllVirtualLockWaitStat;
 
 namespace memtable {
 class ObLockWaitMgr : public share::ObThreadPool {
-  public:
+public:
   friend class ObDeadLockChecker;
   friend class observer::ObAllVirtualLockWaitStat;
 
-  public:
+public:
   enum { LOCK_BUCKET_COUNT = 65536 };
   typedef ObMemtableKey Key;
   typedef rpc::ObLockWaitNode Node;
   typedef FixedHash2<Node> Hash;
 
-  public:
+public:
   ObLockWaitMgr();
   ~ObLockWaitMgr();
 
@@ -85,25 +85,25 @@ class ObLockWaitMgr : public share::ObThreadPool {
   // wakeup the request waiting on the transaction
   void wakeup(const uint32_t ctx_desc);
 
-  protected:
+protected:
   // obtain the request waiting on the row or transaction
   Node* fetch_waiter(uint64_t hash);
-  // check whether there exits requests already timeoutt or need be
+  // check whether there exits requests already timeout or need be
   // retried(session is killed, deadlocked or son on), and wakeup and retry them
   ObLink* check_timeout();
-  // reclaim the chained reuqests
+  // reclaim the chained requests
   void retire_node(ObLink*& tail, Node* node);
   // wakeup the request and put into the thread worker queue
   virtual int repost(Node* node);
 
-  private:
+private:
   int64_t get_wait_lock_timeout(int64_t timeout);
   bool wait(Node* node);
   Node* next(Node*& iter, Node* target);
   Node* get(uint64_t hash);
   void wakeup(uint64_t hash);
 
-  private:
+private:
   Node*& get_thread_node()
   {
     static __thread Node* node = NULL;
@@ -148,16 +148,16 @@ class ObLockWaitMgr : public share::ObThreadPool {
     return ATOMIC_LOAD(&sequence_[(hash >> 1) % LOCK_BUCKET_COUNT]);
   }
 
-  private:
+private:
   bool is_inited_;
   Hash hash_;
   int64_t sequence_[LOCK_BUCKET_COUNT];
   char hash_buf_[sizeof(SpHashNode) * LOCK_BUCKET_COUNT];
 
-  public:
+public:
   int fullfill_row_key(uint64_t hash, char* row_key, int64_t length);
 
-  private:
+private:
   memtable::MemtableIDMap* mt_id_map_;
 };
 

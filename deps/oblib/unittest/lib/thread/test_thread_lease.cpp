@@ -15,7 +15,7 @@
 
 using namespace oceanbase::common;
 class TestObThreadLease : public ::testing::Test {
-  public:
+public:
   TestObThreadLease()
   {}
   virtual ~TestObThreadLease()
@@ -31,13 +31,13 @@ class TestObThreadLease : public ::testing::Test {
   static void TearDownTestCase()
   {}
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestObThreadLease);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
 };
 
 TEST_F(TestObThreadLease, smoke_test)

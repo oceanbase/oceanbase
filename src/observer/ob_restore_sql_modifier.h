@@ -21,7 +21,7 @@ class ObResultSet;
 
 namespace observer {
 class ObRestoreSQLModifier {
-  public:
+public:
   virtual int modify(sql::ObResultSet& rs) = 0;
 };
 }  // namespace observer

@@ -35,7 +35,7 @@ class ObReqTransport;
 namespace transaction {
 
 class ObWeakReadService : public ObIWeakReadService, public share::ObThreadPool {
-  public:
+public:
   ObWeakReadService() : inited_(false), wrs_rpc_(), server_version_epoch_tstamp_(0)
   {}
   ~ObWeakReadService()
@@ -48,10 +48,10 @@ class ObWeakReadService : public ObIWeakReadService, public share::ObThreadPool 
   void stop();
   void wait();
 
-  public:
+public:
   void run1();
 
-  public:
+public:
   /// get SERVER level weak read version
   int get_server_version(const uint64_t tenant_id, int64_t& version) const;
   /// get CLUSTER level weak read version
@@ -74,7 +74,7 @@ class ObWeakReadService : public ObIWeakReadService, public share::ObThreadPool 
     return wrs_rpc_;
   }
 
-  private:
+private:
   int update_server_version_epoch_tstamp_(const int64_t cur_time);
   int scan_all_partitions_(int64_t& valid_user_part_count, int64_t& skip_user_part_count,
       int64_t& valid_inner_part_count, int64_t& skip_inner_part_count);
@@ -82,7 +82,7 @@ class ObWeakReadService : public ObIWeakReadService, public share::ObThreadPool 
   int get_tenant_service_(const uint64_t tenant_id, ObTenantWeakReadService*& wrts);
   int handle_all_tenant_();
 
-  private:
+private:
   bool inited_;
   ObWrsRpc wrs_rpc_;
 

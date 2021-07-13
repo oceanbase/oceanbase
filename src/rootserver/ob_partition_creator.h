@@ -31,7 +31,7 @@ namespace rootserver {
 class ObServerManager;
 // async create partition
 class ObPartitionCreator {
-  public:
+public:
   typedef common::hash::ObHashMap<common::ObAddr, obrpc::ObCreatePartitionBatchArg*> DestArgMap;
   typedef common::hash::ObHashMap<common::ObAddr, obrpc::ObSetMemberListBatchArg*> DestMemberArgMap;
   typedef common::hash::ObHashMap<common::ObAddr, int64_t> DestCountMap;
@@ -83,7 +83,7 @@ class ObPartitionCreator {
       const int64_t member_cnt, common::ObReplicaType replica_type);
   int set_tenant_exist_partition_member_list(const uint64_t tenant_id, const int64_t quorum);
 
-  private:
+private:
   int update_flag_replica();
   int batch_update_flag_replica();
   int batch_update_flag_replica(const int64_t begin, const int64_t end);
@@ -135,7 +135,7 @@ class ObPartitionCreator {
   // create partition success, set member_list
   int send_set_member_list_rpc();
 
-  private:
+private:
   ObCreatePartitionProxy proxy_;
   share::ObPartitionTableOperator& pt_operator_;
   ObCreatePartitionBatchProxy proxy_batch_;

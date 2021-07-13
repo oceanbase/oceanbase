@@ -20,14 +20,14 @@ class ObRestoreTenantStmt;
 class ObPhysicalRestoreTenantStmt;
 
 class ObRestoreTenantExecutor {
-  public:
+public:
   ObRestoreTenantExecutor();
   virtual ~ObRestoreTenantExecutor();
   int execute(ObExecContext& ctx, ObRestoreTenantStmt& stmt);
 };
 
 class ObPhysicalRestoreTenantExecutor {
-  public:
+public:
   ObPhysicalRestoreTenantExecutor();
   virtual ~ObPhysicalRestoreTenantExecutor();
   int execute(ObExecContext& ctx, ObPhysicalRestoreTenantStmt& stmt);

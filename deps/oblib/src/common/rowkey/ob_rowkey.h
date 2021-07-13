@@ -30,7 +30,7 @@ class ObRowkeyInfo;
 class ObStoreRowkey;
 
 class ObRowkey {
-  public:
+public:
   ObRowkey() : obj_ptr_(NULL), obj_cnt_(0)
   {}
   ObRowkey(ObObj* ptr, const int64_t cnt) : obj_ptr_(ptr), obj_cnt_(cnt)
@@ -38,7 +38,7 @@ class ObRowkey {
   ~ObRowkey()
   {}
 
-  public:
+public:
   int to_store_rowkey(ObStoreRowkey& store_rowkey) const;
   void reset()
   {
@@ -164,7 +164,7 @@ class ObRowkey {
   }
   static int get_common_prefix_length(const ObRowkey& lhs, const ObRowkey& rhs, int64_t& prefix_len);
 
-  public:
+public:
   int equal(const ObRowkey& rhs, bool& is_equal) const;
   bool simple_equal(const ObRowkey& rhs) const;
   // FIXME temporarily, rowkey compare with column order use seperate func
@@ -189,7 +189,9 @@ class ObRowkey {
     if (obj_ptr_ == rhs.obj_ptr_) {
       cmp = static_cast<int32_t>(obj_cnt_ - rhs.obj_cnt_);
     } else {
-      cmp = compare_prefix(rhs);
+      // Ignore return code because this version of compare does not have
+      // return code. The whole function will be removed later.
+      compare_prefix(rhs, cmp);
       if (0 == cmp) {
         cmp = static_cast<int32_t>(obj_cnt_ - rhs.obj_cnt_);
       }
@@ -227,36 +229,6 @@ class ObRowkey {
     return ret;
   }
 
-  // TODO : remove this function
-  OB_INLINE int compare_prefix(const ObRowkey& rhs) const
-  {
-    int cmp = 0;
-    int lv = 0;
-    int rv = 0;
-    // TODO remove disgusting loop, useless max min judge
-    if (is_min_row()) {
-      lv = -1;
-    } else if (is_max_row()) {
-      lv = 1;
-    }
-    if (rhs.is_min_row()) {
-      rv = -1;
-    } else if (rhs.is_max_row()) {
-      rv = 1;
-    }
-    if (0 == lv && 0 == rv) {
-      int64_t i = 0;
-      int64_t cmp_cnt = std::min(obj_cnt_, rhs.obj_cnt_);
-      for (; i < cmp_cnt && 0 == cmp; ++i) {
-        // TODO remove collation free check
-        cmp = obj_ptr_[i].check_collation_free_and_compare(rhs.obj_ptr_[i]);
-      }
-    } else {
-      cmp = lv - rv;
-    }
-    return cmp;
-  }
-
   inline bool operator<(const ObRowkey& rhs) const
   {
     return compare(rhs) < 0;
@@ -286,11 +258,11 @@ class ObRowkey {
     return compare(rhs) != 0;
   }
 
-  private:
+private:
   ObObj* obj_ptr_;
   int64_t obj_cnt_;
 
-  public:
+public:
   static ObObj MIN_OBJECT;
   static ObObj MAX_OBJECT;
   static ObRowkey MIN_ROWKEY;

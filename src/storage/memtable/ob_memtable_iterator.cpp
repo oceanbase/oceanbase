@@ -1337,6 +1337,8 @@ int ObMemtableMultiVersionScanIterator::iterate_uncommitted_row_value_(ObStoreRo
         if (OB_ITER_END != ret) {
           TRANS_LOG(WARN, "failed to get next uncommitted node", K(ret), K(tnode));
         }
+      } else if (ObActionFlag::OP_DEL_ROW == row.flag_) {
+        continue;
       } else {
         const ObMvccTransNode* trans_node = reinterpret_cast<const ObMvccTransNode*>(tnode);
         if (OB_ISNULL(trans_node)) {

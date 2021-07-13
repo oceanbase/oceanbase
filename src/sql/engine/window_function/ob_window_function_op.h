@@ -30,11 +30,11 @@ namespace sql {
 struct WinFuncInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   struct ExtBound {
     OB_UNIS_VERSION_V(1);
 
-    public:
+  public:
     ExtBound()
         : is_preceding_(false),
           is_unbounded_(false),
@@ -53,7 +53,7 @@ struct WinFuncInfo {
                                   // b)
   };
 
-  public:
+public:
   WinFuncInfo() : win_type_(WINDOW_MAX), func_type_(T_MAX), is_ignore_null_(false), is_from_first_(false), expr_(NULL)
   {}
 
@@ -109,28 +109,28 @@ struct WinFuncInfo {
 typedef common::ObFixedArray<WinFuncInfo, common::ObIAllocator> WFInfoFixedArray;
 
 class ObWindowFunctionSpec : public ObOpSpec {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObWindowFunctionSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type), wf_infos_(alloc), all_expr_(alloc), is_parallel_(false)
   {}
   DECLARE_VIRTUAL_TO_STRING;
   virtual int register_to_datahub(ObExecContext& ctx) const override;
 
-  public:
+public:
   WFInfoFixedArray wf_infos_;
   ExprFixedArray all_expr_;  // child output + all sort expr
   bool is_parallel_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObWindowFunctionSpec);
 };
 
 class ObWindowFunctionOp : public ObOperator {
-  public:
+public:
   struct Frame {
     Frame(const int64_t head = -1, const int64_t tail = -1) : head_(head), tail_(tail)
     {}
@@ -145,7 +145,7 @@ class ObWindowFunctionOp : public ObOperator {
   };
 
   class RowsStore {
-    public:
+  public:
     RowsStore() : rows_buf_(NULL /*allocator*/), begin_idx_(0), row_cnt_(0)
     {}
     ~RowsStore()
@@ -210,14 +210,14 @@ class ObWindowFunctionOp : public ObOperator {
     }
     TO_STRING_KV(K_(begin_idx), K_(row_cnt), K_(rows_buf));
 
-    public:
+  public:
     ObRADatumStore rows_buf_;
     int64_t begin_idx_;
     int64_t row_cnt_;
   };
 
   class RowsReader {
-    public:
+  public:
     RowsReader(RowsStore& rows_store) : rows_store_(rows_store), reader_(rows_store.rows_buf_)
     {}
     inline int get_row(const int64_t row_idx, const ObRADatumStore::StoredRow*& sr)
@@ -235,13 +235,13 @@ class ObWindowFunctionOp : public ObOperator {
       return ret;
     }
 
-    private:
+  private:
     RowsStore& rows_store_;
     ObRADatumStore::Reader reader_;
   };
 
   class WinFuncCell : public common::ObDLinkBase<WinFuncCell> {
-    public:
+  public:
     WinFuncCell(WinFuncInfo& wf_info, ObWindowFunctionOp& op)
         : wf_info_(wf_info),
           op_(op),
@@ -262,11 +262,11 @@ class ObWindowFunctionOp : public ObOperator {
     virtual bool is_aggr() const = 0;
     VIRTUAL_TO_STRING_KV(K_(wf_idx), K_(wf_info), K_(part_first_row_idx), K_(part_rows_store), K_(last_valid_frame));
 
-    protected:
+  protected:
     virtual void reset_for_restart_self()
     {}
 
-    public:
+  public:
     WinFuncInfo& wf_info_;
     ObWindowFunctionOp& op_;
 
@@ -279,7 +279,7 @@ class ObWindowFunctionOp : public ObOperator {
   };
 
   class AggrCell : public WinFuncCell {
-    public:
+  public:
     AggrCell(WinFuncInfo& wf_info, ObWindowFunctionOp& op, ObIArray<ObAggrInfo>& aggr_infos)
         : WinFuncCell(wf_info, op),
           finish_prepared_(false),
@@ -321,7 +321,7 @@ class ObWindowFunctionOp : public ObOperator {
     }
     DECLARE_VIRTUAL_TO_STRING;
 
-    protected:
+  protected:
     virtual int trans_self(const ObRADatumStore::StoredRow& row);
     virtual int inv_trans_self(const ObRADatumStore::StoredRow& row)
     {
@@ -338,7 +338,7 @@ class ObWindowFunctionOp : public ObOperator {
       got_result_ = false;
     }
 
-    public:
+  public:
     bool finish_prepared_;
     ObAggregateProcessor aggr_processor_;
     ObDatum result_;
@@ -346,7 +346,7 @@ class ObWindowFunctionOp : public ObOperator {
   };
 
   class NonAggrCell : public WinFuncCell {
-    public:
+  public:
     NonAggrCell(WinFuncInfo& wf_info, ObWindowFunctionOp& op) : WinFuncCell(wf_info, op)
     {}
     virtual int eval(RowsReader& assist_reader, const int64_t row_idx, const ObRADatumStore::StoredRow& row,
@@ -358,7 +358,7 @@ class ObWindowFunctionOp : public ObOperator {
   };
 
   class NonAggrCellRowNumber : public NonAggrCell {
-    public:
+  public:
     NonAggrCellRowNumber(WinFuncInfo& wf_info, ObWindowFunctionOp& op) : NonAggrCell(wf_info, op)
     {}
     virtual int eval(RowsReader& assist_reader, const int64_t row_idx, const ObRADatumStore::StoredRow& row,
@@ -366,7 +366,7 @@ class ObWindowFunctionOp : public ObOperator {
   };
 
   class NonAggrCellNtile : public NonAggrCell {
-    public:
+  public:
     NonAggrCellNtile(WinFuncInfo& wf_info, ObWindowFunctionOp& op) : NonAggrCell(wf_info, op)
     {}
     virtual int eval(RowsReader& assist_reader, const int64_t row_idx, const ObRADatumStore::StoredRow& row,
@@ -374,7 +374,7 @@ class ObWindowFunctionOp : public ObOperator {
   };
 
   class NonAggrCellNthValue : public NonAggrCell {
-    public:
+  public:
     NonAggrCellNthValue(WinFuncInfo& wf_info, ObWindowFunctionOp& op) : NonAggrCell(wf_info, op)
     {}
     virtual int eval(RowsReader& assist_reader, const int64_t row_idx, const ObRADatumStore::StoredRow& row,
@@ -382,7 +382,7 @@ class ObWindowFunctionOp : public ObOperator {
   };
 
   class NonAggrCellLeadOrLag : public NonAggrCell {
-    public:
+  public:
     NonAggrCellLeadOrLag(WinFuncInfo& wf_info, ObWindowFunctionOp& op) : NonAggrCell(wf_info, op)
     {}
     virtual int eval(RowsReader& assist_reader, const int64_t row_idx, const ObRADatumStore::StoredRow& row,
@@ -390,7 +390,7 @@ class ObWindowFunctionOp : public ObOperator {
   };
 
   class NonAggrCellRankLike : public NonAggrCell {
-    public:
+  public:
     NonAggrCellRankLike(WinFuncInfo& wf_info, ObWindowFunctionOp& op) : NonAggrCell(wf_info, op), rank_of_prev_row_(0)
     {}
     virtual int eval(RowsReader& assist_reader, const int64_t row_idx, const ObRADatumStore::StoredRow& row,
@@ -405,7 +405,7 @@ class ObWindowFunctionOp : public ObOperator {
   };
 
   class NonAggrCellCumeDist : public NonAggrCell {
-    public:
+  public:
     NonAggrCellCumeDist(WinFuncInfo& wf_info, ObWindowFunctionOp& op) : NonAggrCell(wf_info, op)
     {}
     virtual int eval(RowsReader& assist_reader, const int64_t row_idx, const ObRADatumStore::StoredRow& row,
@@ -415,13 +415,13 @@ class ObWindowFunctionOp : public ObOperator {
   typedef common::ObDList<WinFuncCell> WinFuncCellList;
 
   class FuncAllocer {
-    public:
+  public:
     template <class FuncType>
     int alloc(WinFuncCell*& return_func, WinFuncInfo& wf_info, ObWindowFunctionOp& op, const int64_t tenant_id);
     common::ObIAllocator* local_allocator_;
   };
 
-  public:
+public:
   ObWindowFunctionOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input),
         local_allocator_(),
@@ -444,7 +444,7 @@ class ObWindowFunctionOp : public ObOperator {
   virtual int inner_get_next_row() override;
   virtual void destroy() override;
 
-  protected:
+protected:
   int init();
 
   inline int reset_for_scan(const int64_t tenant_id)
@@ -484,11 +484,11 @@ class ObWindowFunctionOp : public ObOperator {
   int get_whole_msg(bool is_end, ObWinbufWholeMsg& whole, const ObRADatumStore::StoredRow* row = NULL);
   int copy_datum_row(const ObRADatumStore::StoredRow& row, ObWinbufPieceMsg& piece, int64_t buf_len, char* buf);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObWindowFunctionOp);
 
-  private:
+private:
   common::ObArenaAllocator local_allocator_;
 
   RowsStore rows_store_;

@@ -79,7 +79,7 @@ TEST(TestAliveServerMap, all)
 }
 
 class ServerList {
-  public:
+public:
   int fetch_alive_server(const ObFetchAliveServerArg&, ObFetchAliveServerResult& res, const ObRpcOpts&)
   {
     return res.server_list_.assign(server_list_);

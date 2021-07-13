@@ -47,7 +47,7 @@ using namespace omt;
 namespace unittest {
 
 class TestAddTask : public ObITask {
-  public:
+public:
   TestAddTask() : ObITask(ObITaskType::TASK_TYPE_UT), counter_(NULL), adder_(), seq_(0), task_cnt_(0), sleep_us_(0)
   {}
   ~TestAddTask()
@@ -100,19 +100,19 @@ class TestAddTask : public ObITask {
   }
   VIRTUAL_TO_STRING_KV(KP_(counter), K_(seq), K_(task_cnt));
 
-  private:
+private:
   int64_t* counter_;
   int64_t adder_;
   int64_t seq_;
   int64_t task_cnt_;
   int sleep_us_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestAddTask);
 };
 
 class TestMulTask : public ObITask {
-  public:
+public:
   TestMulTask() : ObITask(ObITaskType::TASK_TYPE_UT), counter_(NULL), sleep_us_(0)
   {}
   ~TestMulTask()
@@ -133,16 +133,16 @@ class TestMulTask : public ObITask {
   }
   VIRTUAL_TO_STRING_KV(KP_(counter));
 
-  private:
+private:
   int64_t* counter_;
   int sleep_us_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestMulTask);
 };
 
 class AtomicOperator {
-  public:
+public:
   AtomicOperator() : v_(0)
   {}
   AtomicOperator(int64_t v) : v_(v)
@@ -168,7 +168,7 @@ class AtomicOperator {
     v_ = 0;
   }
 
-  private:
+private:
   lib::ObMutex lock_;
   int64_t v_;
 };
@@ -176,7 +176,7 @@ class AtomicOperator {
 static const int64_t SLEEP_SLICE = 100;
 
 class AtomicMulTask : public ObITask {
-  public:
+public:
   AtomicMulTask() : ObITask(ObITask::TASK_TYPE_UT), seq_(0), cnt_(0), error_seq_(-1), op_(NULL), sleep_us_(0)
   {}
   int init(int64_t seq, int64_t cnt, AtomicOperator& op, int sleep_us = 0, int64_t error_seq = -1)
@@ -227,7 +227,7 @@ class AtomicMulTask : public ObITask {
   }
   VIRTUAL_TO_STRING_KV("type", "AtomicMul", K(*dag_), K_(seq), K_(cnt), KP_(op), K_(error_seq), K_(sleep_us));
 
-  private:
+private:
   int64_t seq_;
   int64_t cnt_;
   int64_t error_seq_;
@@ -236,7 +236,7 @@ class AtomicMulTask : public ObITask {
 };
 
 class AtomicIncTask : public ObITask {
-  public:
+public:
   AtomicIncTask() : ObITask(ObITask::TASK_TYPE_UT), seq_(0), cnt_(0), error_seq_(-1), op_(NULL), sleep_us_(0)
   {}
   int init(int64_t seq, int64_t cnt, AtomicOperator& op, int sleep_us = 0, int64_t error_seq = -1)
@@ -287,7 +287,7 @@ class AtomicIncTask : public ObITask {
   }
   VIRTUAL_TO_STRING_KV("type", "AtomicInc", K(*dag_), K_(seq), K_(cnt), KP_(op), K_(error_seq), K_(sleep_us));
 
-  private:
+private:
   int64_t seq_;
   int64_t cnt_;
   int64_t error_seq_;
@@ -317,7 +317,7 @@ void wait_scheduler(ObDagScheduler& scheduler)
 }
 
 class TestDag : public ObIDag {
-  public:
+public:
   TestDag()
       : ObIDag(ObIDagType::DAG_TYPE_UT, ObIDag::DAG_PRIO_SSTABLE_MINOR_MERGE),
         id_(0),
@@ -400,7 +400,7 @@ class TestDag : public ObIDag {
   }
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(type), K_(id), K(task_list_.get_size()));
 
-  protected:
+protected:
   int64_t id_;
   int64_t expect_;
   int expect_ret_;
@@ -408,34 +408,34 @@ class TestDag : public ObIDag {
   bool running_;
   lib::ThreadPool* tester_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestDag);
 };
 
 class TestLPDag : public TestDag {
-  public:
+public:
   TestLPDag() : TestDag(ObIDagType::DAG_TYPE_CREATE_INDEX, ObIDag::DAG_PRIO_CREATE_INDEX)
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestLPDag);
 };
 
 class TestMPDag : public TestDag {
-  public:
+public:
   TestMPDag() : TestDag(ObIDagType::DAG_TYPE_SSTABLE_MAJOR_MERGE, ObIDag::DAG_PRIO_SSTABLE_MAJOR_MERGE)
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestMPDag);
 };
 
 class TestHPDag : public TestDag {
-  public:
+public:
   TestHPDag() : TestDag(ObIDagType::DAG_TYPE_SSTABLE_MINOR_MERGE, ObIDag::DAG_PRIO_SSTABLE_MINOR_MERGE)
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestHPDag);
 };
 
@@ -443,7 +443,7 @@ class TestPrepareTask : public ObITask {
   static const int64_t inc_task_cnt = 8;
   static const int64_t mul_task_cnt = 6;
 
-  public:
+public:
   TestPrepareTask() : ObITask(ObITask::TASK_TYPE_UT), dag_id_(0), is_error_(false), sleep_us_(0), op_(NULL)
   {}
 
@@ -512,7 +512,7 @@ class TestPrepareTask : public ObITask {
     return ret;
   }
 
-  private:
+private:
   int64_t dag_id_;
   bool is_error_;
   int sleep_us_;
@@ -520,7 +520,7 @@ class TestPrepareTask : public ObITask {
 };
 
 class TestCyclePrepare : public ObITask {
-  public:
+public:
   TestCyclePrepare() : ObITask(ObITask::TASK_TYPE_UT), op_(NULL)
   {}
   int init(AtomicOperator* op = NULL)
@@ -580,14 +580,14 @@ class TestCyclePrepare : public ObITask {
     return ret;
   }
 
-  private:
+private:
   AtomicOperator* op_;
 };
 
 class DagSchedulerStressTester : public lib::ThreadPool {
   static const int64_t STRESS_THREAD_NUM = 16;
 
-  public:
+public:
   DagSchedulerStressTester() : test_time_(0)
   {}
 
@@ -699,7 +699,7 @@ class DagSchedulerStressTester : public lib::ThreadPool {
     return ATOMIC_FAA(&counter_, 1);
   }
 
-  private:
+private:
   static int64_t counter_;
   int64_t test_time_;
 };
@@ -707,7 +707,7 @@ class DagSchedulerStressTester : public lib::ThreadPool {
 int64_t DagSchedulerStressTester::counter_ = 0;
 
 class TestDagScheduler : public ::testing::Test {
-  public:
+public:
   TestDagScheduler()
   {}
   ~TestDagScheduler()
@@ -724,7 +724,7 @@ class TestDagScheduler : public ::testing::Test {
   void TearDown()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestDagScheduler);
 };
 

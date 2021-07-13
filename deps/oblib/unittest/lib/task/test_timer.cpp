@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace common {
 
 class TestTimerTask : public ObTimerTask {
-  public:
+public:
   TestTimerTask() : running_(false), task_run_count_(0)
   {}
 

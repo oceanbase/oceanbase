@@ -43,7 +43,7 @@ class ObServerManager;
 class ObRebalanceTaskMgr;
 
 class ObRootValidateIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObRootValidateIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual int64_t get_idle_interval_us() override;
@@ -52,7 +52,7 @@ class ObRootValidateIdling : public ObThreadIdling {
 class ObRootValidate : public ObRsReentrantThread {
   friend class ObTenantValidate;
 
-  public:
+public:
   ObRootValidate();
   virtual ~ObRootValidate();
   int init(common::ObServerConfig& config, common::ObMySQLProxy& sql_proxy, ObRootBalancer& root_balancer,
@@ -74,7 +74,7 @@ class ObRootValidate : public ObRsReentrantThread {
   void update_prepare_flag(const bool is_prepare);
   bool get_prepare_flag() const;
 
-  private:
+private:
   int check_can_do_work(bool& can);
 
   int check_tenant_has_been_dropped(uint64_t tenant_id, bool& dropped);
@@ -134,7 +134,7 @@ class ObRootValidate : public ObRsReentrantThread {
   int update_validate_task(
       const share::ObBackupValidateTaskInfo& src_info, const share::ObBackupValidateTaskInfo& dst_info);
 
-  private:
+private:
   bool is_inited_;
   bool is_working_;
   bool is_prepare_flag_;
@@ -153,12 +153,12 @@ class ObRootValidate : public ObRsReentrantThread {
   share::ObIBackupLeaseService* backup_lease_service_;
   mutable ObRootValidateIdling idling_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRootValidate);
 };
 
 class ObTenantValidate {
-  public:
+public:
   ObTenantValidate();
   virtual ~ObTenantValidate();
 
@@ -167,7 +167,7 @@ class ObTenantValidate {
       ObServerManager& server_mgr, common::ObISQLClient& trans, obrpc::ObSrvRpcProxy& rpc_proxy,
       share::ObIBackupLeaseService& backup_lease_service);
 
-  public:
+public:
   int do_scheduler();
 
   int do_generate(const share::ObTenantValidateTaskInfo& task_info);
@@ -193,7 +193,7 @@ class ObTenantValidate {
       const int64_t full_backup_set_id, const int64_t inc_backup_set_id,
       const share::ObTenantValidateTaskInfo& tenant_task_info, common::ObIArray<common::ObPartitionKey>& normal_pkeys);
 
-  private:
+private:
   bool is_inited_;
   bool is_dropped_;  // this tenant has been dropped
   int64_t job_id_;
@@ -210,7 +210,7 @@ class ObTenantValidate {
   share::ObPGValidateTaskUpdater pg_task_updater_;
   share::ObIBackupLeaseService* backup_lease_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantValidate);
 };
 

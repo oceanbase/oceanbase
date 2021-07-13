@@ -54,7 +54,7 @@ class ObSimpleSynonymSchema;
 class ObUDF;
 class ObMockSchemaInfo;
 class ObSchemaGetterGuardHelper {
-  public:
+public:
   ObSchemaGetterGuardHelper(common::ObIAllocator& alloc)
       : is_inited_(false), alloc_(alloc), full_schemas_(), simple_schemas_()
   {}
@@ -71,19 +71,19 @@ class ObSchemaGetterGuardHelper {
   int get_tablegroup_schema(ObSchemaGetterGuard& guard, const ObSimpleTablegroupSchema* orig_tablegroup,
       const ObSimpleTablegroupSchema*& tablegroup_schema);
 
-  private:
+private:
   const static int64_t DEFAULT_SCHEMA_NUM = 100;
   int64_t is_inited_;
   common::ObIAllocator& alloc_;
   common::hash::ObHashMap<uint64_t, const ObSchema*, common::hash::NoPthreadDefendMode> full_schemas_;
   common::hash::ObHashMap<uint64_t, const ObSchema*, common::hash::NoPthreadDefendMode> simple_schemas_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaGetterGuardHelper);
 };
 
 class ObSchemaMgrInfo {
-  public:
+public:
   ObSchemaMgrInfo()
       : tenant_id_(common::OB_INVALID_TENANT_ID),
         snapshot_version_(common::OB_INVALID_VERSION),
@@ -127,7 +127,7 @@ class ObSchemaMgrInfo {
   void reset();
   TO_STRING_KV(K_(tenant_id), K_(snapshot_version), KP_(schema_mgr), K_(schema_status));
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t snapshot_version_;
   const ObSchemaMgr* schema_mgr_;
@@ -153,7 +153,7 @@ class ObSchemaGetterGuard : public common::ObPartMgr {
   typedef common::ObSEArray<SchemaObj, DEFAULT_RESERVE_SIZE> SchemaObjs;
   typedef common::ObSEArray<ObSchemaMgrInfo, DEFAULT_TENANT_NUM> SchemaMgrInfos;
 
-  public:
+public:
   enum CheckTableType {
     ALL_TYPES = 0,
     TEMP_TABLE_TYPE = 1,
@@ -481,7 +481,7 @@ class ObSchemaGetterGuard : public common::ObPartMgr {
   virtual int get_part(const uint64_t table_id, const share::schema::ObPartitionLevel part_level, const int64_t part_id,
       const common::ObNewRange& range, const bool reverse, common::ObIArray<int64_t>& part_ids) override;
   virtual int get_part(const uint64_t table_id, const share::schema::ObPartitionLevel part_level, const int64_t part_id,
-      const common::ObNewRow& row, common::ObIArray<int64_t>& part_ids);
+      const common::ObNewRow& row, common::ObIArray<int64_t>& part_ids) override;
   int get_schema_count(int64_t& schema_count);
   int get_schema_count(const uint64_t tenant_id, int64_t& schema_count);
   int get_schema_size(const uint64_t tenant_id, int64_t& schema_count);
@@ -534,7 +534,7 @@ class ObSchemaGetterGuard : public common::ObPartMgr {
   int get_sys_priv_with_tenant_id(const uint64_t tenant_id, common::ObIArray<const ObSysPriv*>& sys_privs);
   int get_sys_priv_with_grantee_id(const uint64_t tenant_id, const uint64_t grantee_id, ObSysPriv*& sys_priv);
 
-  public:
+public:
   // for optimize
   // ------- local cache : id2schema  ---------
   struct IdSchemaWrapper {
@@ -547,7 +547,7 @@ class ObSchemaGetterGuard : public common::ObPartMgr {
   template <typename T>
   int get_from_local_cache(const ObSchemaType schema_type, const uint64_t schema_id, const T*& schema);
 
-  private:
+private:
   int get_outline_schemas_in_tenant(const uint64_t tenant_id, common::ObIArray<const ObOutlineInfo*>& outline_schemas);
   int get_synonym_schemas_in_tenant(const uint64_t tenant_id, common::ObIArray<const ObSynonymInfo*>& synonym_schemas);
 
@@ -598,7 +598,7 @@ class ObSchemaGetterGuard : public common::ObPartMgr {
   int get_index_status_inner(const ObTableSchema& data_table_schema, const bool with_global_index,
       common::ObIArray<ObIndexTableStat>& index_status);
 
-  private:
+private:
   int add_handle(const common::ObKVCacheHandle& handle);
   int init(const bool is_standby_cluster);
   int fast_reset()
@@ -620,7 +620,7 @@ class ObSchemaGetterGuard : public common::ObPartMgr {
       const common::ObIArray<uint64_t>& role_id_array);
   int try_mock_rowid(const ObTableSchema* orig_table, const ObTableSchema*& final_table);
 
-  private:
+private:
   ObMultiVersionSchemaService* schema_service_;
   int64_t snapshot_version_;
   uint64_t session_id_;  // 0: default value (session_id_ is useless)
@@ -653,7 +653,7 @@ class ObSchemaGetterGuard : public common::ObPartMgr {
   bool is_standby_cluster_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaGetterGuard);
 };
 }  // end of namespace schema

@@ -207,6 +207,7 @@ OB_INLINE static int simple_fuse_row(
       nop_pos.reset();
       result.flag_ = former.flag_;
       result.from_base_ = former.from_base_;
+      result.dml_ = former.dml_;
       column_cnt = former.row_val_.count_;
     } else {
       column_cnt = nop_pos.count_;

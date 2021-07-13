@@ -51,7 +51,7 @@ LeaderActiveArg leader_active_arg;
 // (1) Packaage sent does not go through the network communication.
 // (2) OB_SUCCESS is returned for the function post_trans_msg.
 class MockObTransRpc : public ObITransRpc, common::ObSimpleThreadPool {
-  public:
+public:
   MockObTransRpc() : trans_service_(NULL)
   {}
   virtual ~MockObTransRpc()
@@ -182,12 +182,12 @@ class MockObTransRpc : public ObITransRpc, common::ObSimpleThreadPool {
     return ret;
   }
 
-  private:
+private:
   ObTransService* trans_service_;
 };
 
 class MockObLocationAdapter : public ObILocationAdapter {
-  public:
+public:
   MockObLocationAdapter()
   {}
   ~MockObLocationAdapter()
@@ -230,7 +230,7 @@ class MockObLocationAdapter : public ObILocationAdapter {
     self_ = self;
   }
 
-  private:
+private:
   ObAddr self_;
 };
 
@@ -244,7 +244,7 @@ struct MySubmitLogTask {
 };
 
 class MockObClogAdapter : public ObIClogAdapter, public ObSimpleThreadPool {
-  public:
+public:
   MockObClogAdapter()
   {}
   ~MockObClogAdapter()
@@ -525,7 +525,7 @@ class MockObClogAdapter : public ObIClogAdapter, public ObSimpleThreadPool {
 };
 
 class MyMockObPartitionLogService : public MockPartitionLogService {
-  public:
+public:
   int submit_log(const char* buff, const int64_t size, const storage::ObStorageLogType log_type,
       const common::ObVersion& version, ObITransSubmitLogCb* cb)
   {
@@ -545,7 +545,7 @@ class MyMockObPartitionLogService : public MockPartitionLogService {
 };
 
 class MyMockObPartitionComponentFactory : public MockObIPartitionComponentFactory {
-  public:
+public:
   virtual void free(ObIPartitionGroup* partition)
   {
     UNUSED(partition);
@@ -554,7 +554,7 @@ class MyMockObPartitionComponentFactory : public MockObIPartitionComponentFactor
 };
 
 class MyMockObPartition : public MockObIPartitionGroup {
-  public:
+public:
   MyMockObPartition() : partition_log_service_(NULL), pg_file_(NULL), pkey_(nullptr)
   {}
   virtual ~MyMockObPartition()
@@ -594,7 +594,7 @@ class MyMockObPartition : public MockObIPartitionGroup {
     return *pkey_;
   }
 
-  private:
+private:
   ObIPartitionLogService* partition_log_service_;
   blocksstable::ObStorageFile* pg_file_;
   blocksstable::ObStorageFileHandle file_handle_;
@@ -602,7 +602,7 @@ class MyMockObPartition : public MockObIPartitionGroup {
 };
 
 class MyMockObPartitionService : public MockObIPartitionService {
-  public:
+public:
   MyMockObPartitionService() : partition_(NULL)
   {
     partition_ = new MyMockObPartition();
@@ -680,7 +680,7 @@ class MyMockObPartitionService : public MockObIPartitionService {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   MyMockObPartition* partition_;
 };
 
@@ -690,7 +690,7 @@ static const int32_t PORT = 8080;
 static const ObAddr::VER IP_TYPE = ObAddr::IPV4;
 
 class TestPerformance : public ::testing::Test {
-  public:
+public:
   TestPerformance() : self_(IP_TYPE, LOCAL_IP, PORT), sp_trans_(false), access_mod_(ObTransAccessMode::UNKNOWN)
   {}
   virtual ~TestPerformance()
@@ -706,7 +706,7 @@ class TestPerformance : public ::testing::Test {
   int init();
   void destroy();
 
-  public:
+public:
   int smoke();
   int get_random_partition(ObPartitionLeaderArray& array);
   void set_sp_trans(const bool sp_trans)
@@ -718,17 +718,17 @@ class TestPerformance : public ::testing::Test {
     access_mod_ = access_mod;
   }
 
-  private:
+private:
   int do_trans();
 
-  private:
+private:
   static const uint64_t TENANT_ID = 1234;
   static const int32_t PARTITION_COUNT_PER_TABLE = 5;
   static const int32_t MAX_TABLE = 10;
   static const int32_t TABLE_NUMBER_START = 20000;
   int generate_participant_arr_guard_(const ObPartitionArray& participants, ObIPartitionArrayGuard& pkey_guard_arr);
 
-  private:
+private:
   ObAddr self_;
   MockObTransRpc rpc_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

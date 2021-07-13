@@ -276,7 +276,7 @@ static void freestate(struct nfa* nfa, struct state* s)
  - destroystate - really get rid of an already-freed state
  ^ static void destroystate(struct nfa *, struct state *);
  */
-static void destroystate(struct nfa* nfa, struct state* s)
+static void destroystate(struct nfa* nfa __attribute__((unused)), struct state* s)
 {
   struct arcbatch* ab;
   struct arcbatch* abnext;

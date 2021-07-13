@@ -19,40 +19,40 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprDayOfMonth : public ObExprTimeBase {
-  public:
+public:
   ObExprDayOfMonth();
   explicit ObExprDayOfMonth(common::ObIAllocator& alloc);
   virtual ~ObExprDayOfMonth();
   static int calc_dayofmonth(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDayOfMonth);
 };
 
 class ObExprDayOfWeek : public ObExprTimeBase {
-  public:
+public:
   ObExprDayOfWeek();
   explicit ObExprDayOfWeek(common::ObIAllocator& alloc);
   virtual ~ObExprDayOfWeek();
   static int calc_dayofweek(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDayOfWeek);
 };
 
 class ObExprDayOfYear : public ObExprTimeBase {
-  public:
+public:
   ObExprDayOfYear();
   explicit ObExprDayOfYear(common::ObIAllocator& alloc);
   virtual ~ObExprDayOfYear();
   static int calc_dayofyear(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDayOfYear);
 };
 
 class ObExprToSeconds : public ObFuncExprOperator {
-  public:
+public:
   ObExprToSeconds();
   explicit ObExprToSeconds(common::ObIAllocator& alloc);
   virtual ~ObExprToSeconds();
@@ -63,7 +63,7 @@ class ObExprToSeconds : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_toseconds(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToSeconds);
 };
 
@@ -82,7 +82,7 @@ inline int ObExprToSeconds::calc_result_type1(
 }
 
 class ObExprSecToTime : public ObFuncExprOperator {
-  public:
+public:
   ObExprSecToTime();
   explicit ObExprSecToTime(common::ObIAllocator& alloc);
   virtual ~ObExprSecToTime();
@@ -93,7 +93,7 @@ class ObExprSecToTime : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_sectotime(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSecToTime);
 };
 
@@ -109,7 +109,7 @@ inline int ObExprSecToTime::calc_result_type1(
 }
 
 class ObExprTimeToSec : public ObFuncExprOperator {
-  public:
+public:
   ObExprTimeToSec();
   explicit ObExprTimeToSec(common::ObIAllocator& alloc);
   virtual ~ObExprTimeToSec();
@@ -120,7 +120,7 @@ class ObExprTimeToSec : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_timetosec(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprTimeToSec);
 };
 
@@ -137,7 +137,7 @@ inline int ObExprTimeToSec::calc_result_type1(
 }
 
 class ObExprSubtime : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSubtime(common::ObIAllocator& alloc);
   virtual ~ObExprSubtime(){};
   virtual int calc_result_type2(ObExprResType& type, ObExprResType& date_arg, ObExprResType& time_arg,
@@ -150,7 +150,7 @@ class ObExprSubtime : public ObFuncExprOperator {
   static int subtime_datetime(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int subtime_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSubtime);
 };
 

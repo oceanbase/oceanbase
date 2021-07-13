@@ -79,7 +79,7 @@ class ExprFunction;
 class ObSQLSessionInfo;
 class ObConnectBy;
 class ObCodeGeneratorImpl {
-  public:
+public:
   explicit ObCodeGeneratorImpl(uint64_t min_cluster_version);
   virtual ~ObCodeGeneratorImpl()
   {}
@@ -89,12 +89,12 @@ class ObCodeGeneratorImpl {
   static int generate_calculable_exprs(const common::ObIArray<ObHiddenColumnItem>& calculable_exprs,
       const ObDMLStmt& stmt, ObPhysicalPlan& phy_plan, common::ObDList<ObSqlExpression>& pre_calc_exprs);
 
-  protected:
+protected:
   // types and constants
   class ColumnIndexProviderImpl;
   typedef common::ObSEArray<std::pair<ObPhyOperator*, RowDesc*>, 2> PhyOpsDesc;
 
-  protected:
+protected:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCodeGeneratorImpl);
   // function members
@@ -351,7 +351,7 @@ class ObCodeGeneratorImpl {
   int convert_multi_table_insert(ObLogInsertAll& op, const PhyOpsDesc& child_ops, PhyOpsDesc& out_ops);
   int convert_multi_insert_conditions(ObMultiTableInsert& phy_op, ObLogInsertAll& op, RowDesc* out_row_desc);
 
-  protected:
+protected:
   ObPhysicalPlan* phy_plan_;
   common::ObSEArray<ObFakeCTETable*, 10> phy_cte_tables_;
   uint64_t cur_tbl_op_id_;

@@ -83,7 +83,7 @@ enum
 **/
 
 class SpinLocker {
-  public:
+public:
   explicit SpinLocker(pthread_spinlock_t& spin) : succ_(false), spin_(NULL)
   {
     if (0 != pthread_spin_lock(&spin)) {
@@ -106,17 +106,17 @@ class SpinLocker {
     return succ_;
   }
 
-  private:
+private:
   SpinLocker()
   {}
 
-  private:
+private:
   bool succ_;
   pthread_spinlock_t* spin_;
 };
 
 class MutexLocker {
-  public:
+public:
   explicit MutexLocker(pthread_mutex_t& mutex) : succ_(false), mutex_(NULL)
   {
     if (0 != pthread_mutex_lock(&mutex)) {
@@ -139,17 +139,17 @@ class MutexLocker {
     return succ_;
   }
 
-  private:
+private:
   MutexLocker()
   {}
 
-  private:
+private:
   bool succ_;
   pthread_mutex_t* mutex_;
 };
 
 class MutexWaiter {
-  public:
+public:
   MutexWaiter()
   {}
   ~MutexWaiter()
@@ -161,7 +161,7 @@ class MutexWaiter {
 };
 
 class MutexBroadCaster {
-  public:
+public:
   MutexBroadCaster()
   {}
   ~MutexBroadCaster()
@@ -173,7 +173,7 @@ class MutexBroadCaster {
 };
 
 class ReadLocker {
-  public:
+public:
   explicit ReadLocker(pthread_rwlock_t& rwlock) : succ_(false), rwlock_(NULL)
   {
     if (0 != pthread_rwlock_rdlock(&rwlock)) {
@@ -196,17 +196,17 @@ class ReadLocker {
     return succ_;
   }
 
-  private:
+private:
   ReadLocker()
   {}
 
-  private:
+private:
   bool succ_;
   pthread_rwlock_t* rwlock_;
 };
 
 class WriteLocker {
-  public:
+public:
   explicit WriteLocker(pthread_rwlock_t& rwlock) : succ_(false), rwlock_(NULL)
   {
     if (0 != pthread_rwlock_wrlock(&rwlock)) {
@@ -229,17 +229,17 @@ class WriteLocker {
     return succ_;
   }
 
-  private:
+private:
   WriteLocker()
   {}
 
-  private:
+private:
   bool succ_;
   pthread_rwlock_t* rwlock_;
 };
 
 class RWLockIniter {
-  public:
+public:
   explicit RWLockIniter(pthread_rwlock_t& rwlock) : succ_(false)
   {
     if (0 != pthread_rwlock_init(&rwlock, NULL)) {
@@ -253,15 +253,15 @@ class RWLockIniter {
     return succ_;
   }
 
-  private:
+private:
   RWLockIniter();
 
-  private:
+private:
   bool succ_;
 };
 
 class LatchReadLocker {
-  public:
+public:
   explicit LatchReadLocker(common::ObLatch& rwlock) : succ_(false), rwlock_(NULL)
   {
     int ret = common::OB_SUCCESS;
@@ -283,17 +283,17 @@ class LatchReadLocker {
     return succ_;
   }
 
-  private:
+private:
   LatchReadLocker()
   {}
 
-  private:
+private:
   bool succ_;
   common::ObLatch* rwlock_;
 };
 
 class LatchWriteLocker {
-  public:
+public:
   explicit LatchWriteLocker(common::ObLatch& rwlock) : succ_(false), rwlock_(NULL)
   {
     int ret = common::OB_SUCCESS;
@@ -315,11 +315,11 @@ class LatchWriteLocker {
     return succ_;
   }
 
-  private:
+private:
   LatchWriteLocker()
   {}
 
-  private:
+private:
   bool succ_;
   common::ObLatch* rwlock_;
 };
@@ -327,7 +327,7 @@ class LatchWriteLocker {
 ///
 
 class SpinReadLocker {
-  public:
+public:
   explicit SpinReadLocker(SpinRWLock& rwlock) : succ_(false), rwlock_(NULL)
   {
     if (0 != rwlock.rdlock()) {
@@ -348,17 +348,17 @@ class SpinReadLocker {
     return succ_;
   }
 
-  private:
+private:
   SpinReadLocker()
   {}
 
-  private:
+private:
   bool succ_;
   SpinRWLock* rwlock_;
 };
 
 class SpinWriteLocker {
-  public:
+public:
   explicit SpinWriteLocker(SpinRWLock& rwlock) : succ_(false), rwlock_(NULL)
   {
     if (0 != rwlock.wrlock()) {
@@ -379,17 +379,17 @@ class SpinWriteLocker {
     return succ_;
   }
 
-  private:
+private:
   SpinWriteLocker()
   {}
 
-  private:
+private:
   bool succ_;
   SpinRWLock* rwlock_;
 };
 
 class SpinIniter {
-  public:
+public:
   explicit SpinIniter(pthread_spinlock_t& spin) : succ_(false)
   {
     if (0 != pthread_spin_init(&spin, PTHREAD_PROCESS_PRIVATE)) {
@@ -403,15 +403,15 @@ class SpinIniter {
     return succ_;
   }
 
-  private:
+private:
   SpinIniter();
 
-  private:
+private:
   bool succ_;
 };
 
 class MutexIniter {
-  public:
+public:
   explicit MutexIniter(pthread_mutex_t& mutex) : succ_(false)
   {
     if (0 != pthread_mutex_init(&mutex, NULL)) {
@@ -425,15 +425,15 @@ class MutexIniter {
     return succ_;
   }
 
-  private:
+private:
   MutexIniter();
 
-  private:
+private:
   bool succ_;
 };
 
 class NLock {
-  public:
+public:
   NLock()
   {}
   ~NLock()
@@ -441,7 +441,7 @@ class NLock {
 };
 
 class NCond {
-  public:
+public:
   NCond()
   {}
   ~NCond()
@@ -449,7 +449,7 @@ class NCond {
 };
 
 class NullIniter {
-  public:
+public:
   explicit NullIniter(NLock& nlock)
   {
     NLock* usr = NULL;
@@ -457,12 +457,12 @@ class NullIniter {
     UNUSED(usr);
   }
 
-  private:
+private:
   NullIniter();
 };
 
 class NullLocker {
-  public:
+public:
   explicit NullLocker(pthread_mutex_t& mutex)
   {
     pthread_mutex_t* usr = NULL;
@@ -486,14 +486,14 @@ class NullLocker {
     return true;
   }
 
-  private:
+private:
   NullLocker()
   {}
 };
 
 template <class T>
 class NWaiter {
-  public:
+public:
   NWaiter()
   {}
   ~NWaiter()
@@ -508,7 +508,7 @@ class NWaiter {
 };
 
 class NBroadCaster {
-  public:
+public:
   NBroadCaster()
   {}
   ~NBroadCaster()
@@ -803,7 +803,7 @@ struct HashMapPair {
   }
   TO_STRING_KV(K(first), K(second));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(HashMapPair);
 };
 
@@ -891,7 +891,7 @@ struct DefaultBigArrayAllocator {
 template <class T, class Allocer = DefaultBigArrayAllocator>
 class BigArrayTemp {
   class Block {
-    public:
+  public:
     Block() : array_(NULL), allocer_(NULL)
     {}
     ~Block()
@@ -899,7 +899,7 @@ class BigArrayTemp {
       destroy();
     }
 
-    public:
+  public:
     int create(const int64_t array_size, Allocer* allocer)
     {
       int ret = 0;
@@ -925,7 +925,7 @@ class BigArrayTemp {
       allocer_ = NULL;
     }
 
-    public:
+  public:
     T& operator[](const int64_t pos)
     {
       T& ret = array_[pos];
@@ -937,16 +937,16 @@ class BigArrayTemp {
       return ret;
     }
 
-    private:
+  private:
     T* array_;
     Allocer* allocer_;
   };
 
-  public:
+public:
   typedef BigArrayTag ArrayTag;
   typedef BigArrayTemp<T, Allocer> array_type;
 
-  public:
+public:
   BigArrayTemp() : blocks_(NULL), array_size_(0), blocks_num_(0)
   {}
   ~BigArrayTemp()
@@ -954,7 +954,7 @@ class BigArrayTemp {
     destroy();
   }
 
-  public:
+public:
   bool inited() const
   {
     return (NULL != blocks_);
@@ -1020,7 +1020,7 @@ class BigArrayTemp {
     return blocks_[block_pos][array_pos];
   }
 
-  public:
+public:
   static int64_t upper_align(const int64_t input, const int64_t align)
   {
     int64_t ret = input;
@@ -1036,7 +1036,7 @@ class BigArrayTemp {
     return input & (align - 1);
   }
 
-  private:
+private:
   Block* blocks_;
   Allocer allocer_;
   int64_t array_size_;
@@ -1158,7 +1158,7 @@ void do_destroy(Array& array, NormalPointerTag, BucketAllocator& alloc)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 struct DefaultSimpleAllocerAllocator {
-  public:
+public:
   explicit DefaultSimpleAllocerAllocator(
       uint64_t tenant_id = OB_SERVER_TENANT_ID, const lib::ObLabel& label = ObModIds::OB_HASH_NODE)
   {
@@ -1189,7 +1189,7 @@ struct DefaultSimpleAllocerAllocator {
     attr_.label_ = label;
   }
 
-  private:
+private:
   ObMemAttr attr_;
 };
 
@@ -1249,7 +1249,7 @@ class SimpleAllocer {
   typedef typename DefendMode::lock_type lock_type;
   typedef typename DefendMode::lock_initer lock_initer;
 
-  public:
+public:
   SimpleAllocer() : block_list_head_(NULL), free_list_head_(NULL)
   {
     lock_initer initer(lock_);
@@ -1399,7 +1399,7 @@ class SimpleAllocer {
     }
   }
 
-  private:
+private:
   Block* block_list_head_;
   Node* free_list_head_;
   lock_type lock_;

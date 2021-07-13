@@ -5024,6 +5024,7 @@ int ObPartitionLogService::restore_replayed_log(const common::ObBaseStorageInfo&
       uint64_t cur_log_id = start_id;
       bool need_replay = false;
       int64_t log_submit_timestamp = OB_INVALID_TIMESTAMP;
+      int64_t next_replay_log_ts_for_rg = OB_INVALID_TIMESTAMP;
       int64_t accum_checksum = 0;
       do {
         if (OB_EAGAIN == ret) {
@@ -5031,8 +5032,8 @@ int ObPartitionLogService::restore_replayed_log(const common::ObBaseStorageInfo&
         }
         bool is_meta_log = false;
         ObLogType log_type = OB_LOG_UNKNOWN;
-        if (OB_FAIL(sw_.check_is_meta_log(
-                partition_key_, cur_log_id, is_meta_log, log_submit_timestamp, accum_checksum, log_type))) {
+        if (OB_FAIL(sw_.get_log_meta_info(
+                cur_log_id, is_meta_log, log_submit_timestamp, next_replay_log_ts_for_rg, accum_checksum, log_type))) {
           if (OB_EAGAIN == ret) {
             if (REACH_TIME_INTERVAL(100 * 1000)) {
               CLOG_LOG(WARN, "failed to check is meta log", K(partition_key_), K(cur_log_id), K(ret));
@@ -5045,15 +5046,13 @@ int ObPartitionLogService::restore_replayed_log(const common::ObBaseStorageInfo&
         }
 
         uint64_t last_replay_log_id = OB_INVALID_ID;
-        int64_t last_replay_log_ts = OB_INVALID_TIMESTAMP;
-        (void)sw_.get_last_replay_log(last_replay_log_id, last_replay_log_ts);
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(replay_engine_->submit_replay_log_task_sequentially(partition_key_,
                        cur_log_id,
                        log_submit_timestamp,
                        need_replay,
                        log_type,
-                       last_replay_log_ts + 1))) {
+                       next_replay_log_ts_for_rg))) {
           if (OB_EAGAIN == ret) {
             if (REACH_TIME_INTERVAL(100 * 1000)) {
               CLOG_LOG(WARN, "failed to submit replay task step by step", K(ret), K_(partition_key), K(cur_log_id));

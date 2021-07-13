@@ -18,7 +18,7 @@
 using namespace oceanbase::common;
 
 class TestObj {
-  public:
+public:
   TestObj(int64_t val) : value_(val)
   {}
   TestObj() : value_(0)
@@ -44,24 +44,24 @@ class TestObj {
 };
 
 class TestArrayArray : public ::testing::Test {
-  public:
+public:
   TestArrayArray();
   virtual ~TestArrayArray();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestArrayArray);
 
-  protected:
+protected:
   // function members
   void setup(int64_t N, ObIArray<TestObj>& arr);
   void verify(int64_t N, const ObIArray<TestObj>& arr);
   void verify(const ObIArray<TestObj>& arr1, const ObIArray<TestObj>& arr2);
   void extend_to(const int64_t N, ObIArray<TestObj>& arr);
 
-  protected:
+protected:
   // data members
 };
 

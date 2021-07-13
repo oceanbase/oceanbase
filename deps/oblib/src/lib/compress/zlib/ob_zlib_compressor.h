@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace common {
 class ObZlibCompressor : public ObCompressor {
-  public:
+public:
   explicit ObZlibCompressor(int64_t compress_level = 6) : compress_level_(compress_level)
   {}
   virtual ~ObZlibCompressor()
@@ -34,7 +34,7 @@ class ObZlibCompressor : public ObCompressor {
   int fast_level0_compress(
       unsigned char* dest, unsigned long* destLen, const unsigned char* source, unsigned long sourceLen);
 
-  private:
+private:
   int64_t compress_level_;
   static const char* compressor_name;
 };

@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace share {
 namespace schema {
 class MockObSchemaFetcher : public ObSchemaFetcher {
-  public:
+public:
   MOCK_METHOD2(init, int(ObSchemaService*, common::ObISQLClient*));
   MOCK_METHOD5(fetch_schema, int(ObSchemaType, uint64_t, int64_t, common::ObIAllocator&, ObSchema*&));
   MOCK_METHOD4(fetch_tenant_schema, int(uint64_t, int64_t, common::ObIAllocator&, ObTenantSchema*&));

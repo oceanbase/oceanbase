@@ -27,7 +27,7 @@ namespace test {
 class TestTransUtils {
   static const int trans_type_[];
 
-  public:
+public:
   struct CmdLineParam {
     CmdLineParam() : use_it_(false)
     {
@@ -37,18 +37,18 @@ class TestTransUtils {
     bool use_it_;
   };
 
-  public:
+public:
   TestTransUtils();
   virtual ~TestTransUtils()
   {}
 
-  public:
+public:
   static bool parse_cmd(int argc, char* argv[], CmdLineParam& param);
 
-  private:
+private:
   static void print_help();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestTransUtils);
 };
 }  // namespace test

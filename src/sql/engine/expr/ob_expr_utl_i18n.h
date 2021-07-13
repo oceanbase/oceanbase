@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprUtlI18nStringToRaw : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprUtlI18nStringToRaw(common::ObIAllocator& alloc);
   virtual ~ObExprUtlI18nStringToRaw();
   virtual int calc_result_type2(
@@ -30,12 +30,12 @@ class ObExprUtlI18nStringToRaw : public ObStringExprOperator {
   virtual int calc_result2(
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUtlI18nStringToRaw);
 };
 
 class ObExprUtlI18nRawToChar : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprUtlI18nRawToChar(common::ObIAllocator& alloc);
   virtual ~ObExprUtlI18nRawToChar();
   virtual int calc_result_type2(
@@ -45,7 +45,7 @@ class ObExprUtlI18nRawToChar : public ObStringExprOperator {
   virtual int calc_result2(
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUtlI18nRawToChar);
 };
 

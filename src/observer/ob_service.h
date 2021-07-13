@@ -49,7 +49,7 @@ class ObServerInstance;
 class ObRemoteLocationGetter;
 
 class ObSchemaReleaseTimeTask : public common::ObTimerTask {
-  public:
+public:
   ObSchemaReleaseTimeTask();
   virtual ~ObSchemaReleaseTimeTask()
   {}
@@ -57,7 +57,7 @@ class ObSchemaReleaseTimeTask : public common::ObTimerTask {
   void destroy();
   virtual void runTimerTask() override;
 
-  private:
+private:
   const static int64_t REFRESH_INTERVAL = 30L * 60L * 1000L * 1000L;  // 30min
   ObServerSchemaUpdater* schema_updater_;
   bool is_inited_;
@@ -66,7 +66,7 @@ class ObSchemaReleaseTimeTask : public common::ObTimerTask {
 class ObService : public ObIPartitionReplicaFiller,
                   public share::ObIPartPropertyGetter,
                   public storage::ObIPartitionReport {
-  public:
+public:
   explicit ObService(const ObGlobalContext& gctx);
   virtual ~ObService();
 
@@ -291,14 +291,14 @@ class ObService : public ObIPartitionReplicaFiller,
   int renew_in_zone_hb(const share::ObInZoneHbRequest& arg, share::ObInZoneHbResponse& result);
   int pre_process_server_reply(const obrpc::ObPreProcessServerReplyArg& arg);
 
-  private:
+private:
   int register_self();
   int check_server_empty(const obrpc::ObCheckServerEmptyArg& arg, const bool wait_log_scan, bool& server_empty);
   int schedule_pt_check_task();
   int check_partition_need_update_pt_(const obrpc::ObCreatePartitionBatchArg& batch_arg,
       obrpc::ObCreatePartitionBatchRes& batch_res, bool& need_update);
 
-  private:
+private:
   bool inited_;
   bool in_register_process_;
   bool service_started_;

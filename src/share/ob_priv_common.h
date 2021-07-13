@@ -51,7 +51,7 @@ typedef ObPrivSet ObPackedObjPriv;  // used in obj priv in priv schema packed
 
 class ObPrivPacker {
 
-  public:
+public:
   static int init_packed_array(ObPackedPrivArray& array);
 
   static int raw_priv_to_packed_info(
@@ -87,7 +87,7 @@ class ObPrivPacker {
 
   static int get_total_privs(const ObPackedPrivArray& packed_array, int& n_cnt);
 
-  private:
+private:
   static int has_raw_priv(const ObRawPriv raw_priv, const ObPrivSet priv_set, bool& exists, uint64_t& option);
 
   static int push_back_raw_priv_array(ObRawPriv raw_priv, bool exists, uint64_t option, ObRawPrivArray& raw_priv_array,
@@ -95,7 +95,7 @@ class ObPrivPacker {
 };
 
 class ObOraPrivCheck {
-  public:
+public:
   /* check if rawsyspriv exists */
   static int raw_sys_priv_exists(
       const uint64_t option, const ObRawPriv priv, const ObPackedPrivArray& packed_array, bool& exists);

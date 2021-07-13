@@ -28,7 +28,7 @@ namespace oceanbase {
 using namespace oceanbase::common;
 namespace archive {
 class ObArchivePGMgr::CheckArchiveRoundStartFunctor {
-  public:
+public:
   CheckArchiveRoundStartFunctor(const int64_t archive_round, const int64_t incarnation)
       : start_flag_(true), archive_round_(archive_round), incarnation_(incarnation)
   {}
@@ -57,14 +57,14 @@ class ObArchivePGMgr::CheckArchiveRoundStartFunctor {
     return start_flag_;
   }
 
-  private:
+private:
   bool start_flag_;
   int64_t archive_round_;
   int64_t incarnation_;
 };
 
 class ObArchivePGMgr::CheckDeletePGFunctor {
-  public:
+public:
   CheckDeletePGFunctor(ObArchivePGMgr* pg_mgr) : pg_mgr_(pg_mgr)
   {}
 
@@ -102,7 +102,7 @@ class ObArchivePGMgr::CheckDeletePGFunctor {
     return true;
   }
 
-  private:
+private:
   ObArchivePGMgr* pg_mgr_;
 };
 
@@ -756,7 +756,7 @@ int64_t ObArchivePGMgr::thread_index_()
 }
 
 // 1. add pg task if needed
-// 2. handle add/delte pg task
+// 2. handle add/delete pg task
 // 3. check if archive round start
 // 4. delete pg task if needed
 void ObArchivePGMgr::do_thread_task_()

@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace common {
 class ObIAllocator;
 class ObMsQueue {
-  public:
+public:
   typedef ObLink Task;
   struct TaskHead {
     Task* head_;
@@ -55,7 +55,7 @@ class ObMsQueue {
     bool next_is_ready(const int64_t ready_seq) const;
   };
 
-  public:
+public:
   ObMsQueue();
   ~ObMsQueue();
   int init(const int64_t n_queue, const int64_t queue_len, ObIAllocator* allocator);
@@ -71,7 +71,7 @@ class ObMsQueue {
 
   TO_STRING_KV(K_(inited), K_(qlen), K_(qcount));
 
-  private:
+private:
   bool inited_;
   int64_t qlen_;
   int64_t qcount_;

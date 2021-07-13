@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObRowQueue {
-  public:
+public:
   ObRowQueue() : cell_cnt_(0), cur_pos_(0), row_type_(MAX_ROW_STORE), is_inited_(false)
   {}
   int init(const ObRowStoreType row_type, const int64_t cell_cnt);
@@ -71,10 +71,10 @@ class ObRowQueue {
   }
   TO_STRING_KV(K_(cell_cnt), K_(cur_pos), "count", rows_.count(), K_(row_type));
 
-  private:
+private:
   int alloc_row(storage::ObStoreRow*& row, common::ObIAllocator& allocator);
 
-  private:
+private:
   static const int64_t DEFAULT_MULTIVERSION_ROW_COUNT = 64;
   int64_t cell_cnt_;
   int64_t cur_pos_;

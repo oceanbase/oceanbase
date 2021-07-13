@@ -23,7 +23,7 @@ namespace sql {
  *  during output expr allocation.
  */
 class ObRawExprPullUpAggrExpr : public ObRawExprVisitor {
-  public:
+public:
   ObRawExprPullUpAggrExpr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo* session_info)
       : expr_factory_(expr_factory),
         new_expr_(NULL),
@@ -68,7 +68,7 @@ class ObRawExprPullUpAggrExpr : public ObRawExprVisitor {
     return merge_synopsis_;
   }
 
-  private:
+private:
   // ObIArray<ExprProducer> *ctx_;
   // uint64_t consumer_id_;
   // disallow copy

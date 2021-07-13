@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace share {
 class MockObRsMgr : public ObRsMgr {
-  public:
+public:
   MOCK_CONST_METHOD1(get_master_root_server, int(common::ObAddr&));
   virtual ~MockObRsMgr()
   {}

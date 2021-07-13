@@ -160,7 +160,7 @@ struct ObIntervalLimit {
 };
 
 class ObIntervalParts {
-  public:
+public:
   ObIntervalParts()
   {
     reset();
@@ -169,7 +169,7 @@ class ObIntervalParts {
   {}
   inline void reset()
   {
-    is_negtive_ = false;
+    is_negative_ = false;
     memset(parts_, 0, sizeof(parts_));
   }
   enum PartName {
@@ -185,15 +185,15 @@ class ObIntervalParts {
   };
   inline int32_t get_part_value(PartName part_name)
   {
-    return (part_name < PART_CNT && part_name > INVALID_PART) ? (parts_[part_name] * (is_negtive_ ? -1 : 1))
+    return (part_name < PART_CNT && part_name > INVALID_PART) ? (parts_[part_name] * (is_negative_ ? -1 : 1))
                                                               : INT32_MAX;
   }
-  bool is_negtive_;
+  bool is_negative_;
   int32_t parts_[PART_CNT];
 };
 
 class ObTime {
-  public:
+public:
   ObTime()
       : mode_(0),
         time_zone_id_(common::OB_INVALID_INDEX),
@@ -280,7 +280,7 @@ struct ObTimeConvertCtx {
   bool is_timestamp_;  // means mysql timestamp?
 };
 class ObTimeConverter {
-  public:
+public:
   // ZERO_DATETIME is the minimal value that satisfied: 0 == value % USECS_PER_DAY.
   static const int64_t ZERO_DATETIME = static_cast<int64_t>(-9223372022400000000);
 
@@ -295,7 +295,7 @@ class ObTimeConverter {
   static const ObString COMPAT_OLD_NLS_TIMESTAMP_FORMAT;
   static const ObString COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT;
 
-  public:
+public:
   // int / double / string -> datetime(timestamp) / interval / date / time / year.
   static int int_to_datetime(int64_t int_part, int64_t dec_part, const ObTimeConvertCtx& cvrt_ctx, int64_t& value);
   static int int_to_date(int64_t int64, int32_t& value);
@@ -391,7 +391,7 @@ class ObTimeConverter {
   static int calc_days_and_months_between_dates(
       const int64_t date_value1, const int64_t date_value2, int64_t& months_diff, int64_t& rest_utc_diff);
 
-  public:
+public:
   // int / string -> ObTime / ObInterval <- datetime(timestamp) / date / time / year.
   static int int_to_ob_time_with_date(int64_t int64, ObTime& ob_time, bool is_dayofmonth = false);
   static int int_to_ob_time_without_date(int64_t int64, ObTime& ob_time);
@@ -462,7 +462,7 @@ class ObTimeConverter {
   static int encode_interval_ds(
       char* buf, const int64_t len, int64_t& pos, const ObIntervalDSValue& value, const ObScale scale);
 
-  public:
+public:
   // other functions.
   static int set_ob_time_part_directly(
       ObTime& ob_time, int64_t& conflict_bitset, const int64_t part_offset, const int32_t part_value);
@@ -499,7 +499,7 @@ class ObTimeConverter {
   };
   enum ObHourFlag { HOUR_UNUSE, HOUR_AM, HOUR_PM };
 
-  private:
+private:
   // date add / sub / diff.
   static int merge_date_interval(
       int64_t base_value, const ObString& interval_str, ObDateUnitType unit_type, int64_t& value, bool is_add);
@@ -552,7 +552,7 @@ class ObTimeConverter {
   static int set_ob_time_year_may_conflict(
       ObTime& ob_time, int32_t& julian_year_value, int32_t check_year, int32_t set_year, bool overwrite);
 
-  private:
+private:
   ObTimeConverter();
   virtual ~ObTimeConverter();
   DISALLOW_COPY_AND_ASSIGN(ObTimeConverter);

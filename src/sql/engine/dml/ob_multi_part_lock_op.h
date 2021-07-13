@@ -18,7 +18,7 @@ namespace sql {
 class ObMultiPartLockSpec : public ObTableModifySpec, public ObMultiDMLInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMultiPartLockSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableModifySpec(alloc, type), ObMultiDMLInfo(alloc)
   {}
@@ -32,18 +32,18 @@ class ObMultiPartLockSpec : public ObTableModifySpec, public ObMultiDMLInfo {
 };
 
 class ObMultiPartLockOp : public ObTableModifyOp, public ObMultiDMLCtx {
-  public:
+public:
   static const int64_t LOCK_OP = 0;
   static const int64_t DML_OP_CNT = 1;
 
-  public:
+public:
   ObMultiPartLockOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableModifyOp(ctx, spec, input), ObMultiDMLCtx(ctx.get_allocator())
   {}
   ~ObMultiPartLockOp()
   {}
 
-  private:
+private:
   virtual int inner_open() override;
   virtual int inner_close() override;
   virtual int inner_get_next_row();
@@ -55,7 +55,7 @@ class ObMultiPartLockOp : public ObTableModifyOp, public ObMultiDMLCtx {
     ObMultiDMLCtx::destroy_ctx();
   }
 
-  private:
+private:
   bool got_row_ = false;
 };
 }  // namespace sql

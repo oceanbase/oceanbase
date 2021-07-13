@@ -25,9 +25,9 @@ class ObTableLocation;
 class ObDeterminateTaskTransmit : public ObDistributedTransmit {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   class ITaskRouting {
-    public:
+  public:
     enum Policy {
       DATA_REPLICA_PICKER,
       INDEX_REPLICA_PICKER,
@@ -46,7 +46,7 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
   struct TaskIndex {
     OB_UNIS_VERSION_V(1);
 
-    public:
+  public:
     int32_t loc_idx_;
     int32_t part_loc_idx_;
 
@@ -58,7 +58,7 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
   struct IdRange {
     OB_UNIS_VERSION_V(1);
 
-    public:
+  public:
     int32_t begin_;
     int32_t end_;
 
@@ -70,7 +70,7 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
   struct ResultRange {
     OB_UNIS_VERSION_V(1);
 
-    public:
+  public:
     IdRange task_range_;
     IdRange slice_range_;
 
@@ -80,9 +80,9 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
   // compare ObNewRange::start_ and ObNewRow
   struct RangeStartCompare;
 
-  private:
+private:
   class ObDeterminateTaskTransmitCtx : public ObDistributedTransmitCtx {
-    public:
+  public:
     explicit ObDeterminateTaskTransmitCtx(ObExecContext& ctx)
         : ObDistributedTransmitCtx(ctx), close_child_manually_(false)
     {}
@@ -94,17 +94,17 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
       ObDistributedTransmitCtx::destroy();
     }
 
-    public:
+  public:
     bool close_child_manually_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObDeterminateTaskTransmitCtx);
   };
 
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> Id2IdxMap;
   typedef common::hash::ObHashSet<ObTaskID> TaskIDSet;
 
-  public:
+public:
   explicit ObDeterminateTaskTransmit(common::ObIAllocator& alloc);
   virtual ~ObDeterminateTaskTransmit()
   {}
@@ -112,7 +112,7 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
   virtual int init_op_ctx(ObExecContext& exec_ctx) const override;
   virtual int inner_open(ObExecContext& exec_ctx) const override;
   virtual int inner_close(ObExecContext& ctx) const override;
-  virtual OperatorOpenOrder get_operator_open_order(ObExecContext& ctx) const;
+  virtual OperatorOpenOrder get_operator_open_order(ObExecContext& ctx) const override;
   typedef common::ObFixedArray<ObTaskInfo::ObRangeLocation, common::ObIAllocator> RangeLocations;
   typedef common::ObFixedArray<TaskIndex, common::ObIAllocator> Tasks;
   typedef common::ObFixedArray<common::ObFixedArray<common::ObNewRange, common::ObIAllocator>, common::ObIAllocator>
@@ -181,7 +181,7 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
     return background_;
   }
 
-  private:
+private:
   int alloc_result_array(
       ObExecContext& exec_ctx, ObIntermResultManager& mgr, const int64_t cnt, ObIntermResult**& results) const;
   int free_result_array(ObIntermResultManager& mgr, const int64_t cnt, ObIntermResult**& results) const;
@@ -190,12 +190,12 @@ class ObDeterminateTaskTransmit : public ObDistributedTransmit {
   int shuffle_row(ObExecContext& exec_ctx, ObSqlSchemaGuard& schema_guard, ObTableLocation& table_location,
       Id2IdxMap& partition_id2idx_map, const common::ObNewRow& row, int64_t& slice_idx) const;
 
-  private:
+private:
   static common::ObLatch task_set_init_lock_;
   static TaskIDSet executing_task_set_instance_;
   static TaskIDSet* executing_tasks();
 
-  private:
+private:
   bool result_reusable_;
   RangeLocations range_locations_;
   Tasks tasks_;

@@ -26,7 +26,7 @@ namespace hash {
  */
 template <class K, class V, template <class, class> class GetKey>
 class ObPointerHashArray {
-  public:
+public:
   struct Iterator {
     Iterator() : ha_(NULL), pos_(NULL), end_(NULL)
     {}
@@ -75,7 +75,7 @@ class ObPointerHashArray {
     const V* end_;
   };
 
-  public:
+public:
   explicit ObPointerHashArray(const int64_t array_mem_size, const double load_factor = 0.7)
       : capacity_((array_mem_size - sizeof(ObPointerHashArray)) / sizeof(V)),
         max_entries_((int64_t)((double)capacity_ * load_factor)),
@@ -364,7 +364,7 @@ class ObPointerHashArray {
     return *it == erased_v_;
   }
 
-  private:
+private:
   uint64_t key_to_anchor_idx(const K& key) const
   {
     uint64_t hash_val = do_hash(key);
@@ -453,10 +453,10 @@ class ObPointerHashArray {
     return ret;
   }
 
-  public:
+public:
   static const int64_t MIN_HASH_ARRAY_ITEM_COUNT = 16;
 
-  private:
+private:
   int64_t capacity_;
   int64_t max_entries_;
   int64_t anchor_mask_;
@@ -476,7 +476,7 @@ template <class K, class V, template <class, class> class GetKey, int64_t defaul
 class ObPointerHashMap {
   typedef ObPointerHashArray<K, V, GetKey> SubMap;
 
-  public:
+public:
   typedef typename SubMap::Iterator iterator;
 
   explicit ObPointerHashMap(const lib::ObLabel& label = ObModIds::OB_HASH_NODE)
@@ -800,7 +800,7 @@ class ObPointerHashMap {
     return sub_map_mem_size_;
   }
 
-  private:
+private:
   ObPointerHashMap(const ObPointerHashMap& other, const int64_t resize_to)
       : sub_map_count_(0), sub_map_mem_size_(resize_to)
   {
@@ -977,10 +977,10 @@ class ObPointerHashMap {
     }
   }
 
-  private:
+private:
   static const int64_t MAX_SUB_MAP_COUNT = 4;
 
-  private:
+private:
   SubMap* sub_maps_[MAX_SUB_MAP_COUNT];
   int64_t sub_map_count_;
   int64_t sub_map_mem_size_;

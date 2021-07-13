@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObDropFuncStmt : public ObDDLStmt {
-  public:
+public:
   ObDropFuncStmt() : ObDDLStmt(stmt::T_DROP_FUNC), drop_func_arg_()
   {}
   ~ObDropFuncStmt()
@@ -40,7 +40,7 @@ class ObDropFuncStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(drop_func_arg));
 
-  private:
+private:
   obrpc::ObDropUserDefinedFunctionArg drop_func_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObDropFuncStmt);
 };

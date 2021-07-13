@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateUserStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObCreateUserStmt(common::ObIAllocator* name_pool);
   ObCreateUserStmt();
   virtual ~ObCreateUserStmt();
@@ -76,7 +76,7 @@ class ObCreateUserStmt : public ObDDLStmt {
   }
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   // data members
   uint64_t tenant_id_;
   common::ObStrings users_;  // (user1, host1, pass1, need_enc1;
@@ -87,7 +87,7 @@ class ObCreateUserStmt : public ObDDLStmt {
   uint64_t profile_id_;  // only used in oracle mode
   obrpc::ObCreateUserArg create_user_arg_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateUserStmt);
 };
 }  // end namespace sql

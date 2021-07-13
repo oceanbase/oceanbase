@@ -23,7 +23,7 @@ using namespace storage;
 namespace unittest {
 
 class FakeTableScanParam : public ObTableScanParam {
-  public:
+public:
   FakeTableScanParam(ObOrderType order = ObOrderType::ASC)
   {
     fake_column_orders_.push_back(order);
@@ -36,7 +36,7 @@ class FakeTableScanParam : public ObTableScanParam {
     return true;
   }
 
-  private:
+private:
   common::ObArray<ObOrderType> fake_column_orders_;
 };
 

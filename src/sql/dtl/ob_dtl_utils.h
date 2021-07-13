@@ -22,7 +22,7 @@ namespace sql {
 namespace dtl {
 
 class ObPxControlChannelProc : public ObIDltChannelLoopPred {
-  public:
+public:
   ObPxControlChannelProc()
   {}
   virtual bool pred_process(int64_t idx, ObDtlChannel* chan) override
@@ -33,7 +33,7 @@ class ObPxControlChannelProc : public ObIDltChannelLoopPred {
 };
 
 class ObDtlAsynSender {
-  public:
+public:
   ObDtlAsynSender(ObIArray<ObDtlChannel*>& channels, ObDtlChTotalInfo* ch_info, bool is_transmit)
       : channels_(channels), ch_info_(ch_info), is_transmit_(is_transmit)
   {}
@@ -42,17 +42,17 @@ class ObDtlAsynSender {
   int syn_send();
   virtual int action(ObDtlChannel* ch) = 0;
 
-  private:
+private:
   int calc_batch_buffer_cnt(int64_t& max_batch_size, int64_t& max_loop_cnt);
 
-  private:
+private:
   ObIArray<ObDtlChannel*>& channels_;
   ObDtlChTotalInfo* ch_info_;
   bool is_transmit_;
 };
 
 class ObTransmitEofAsynSender : public ObDtlAsynSender {
-  public:
+public:
   ObTransmitEofAsynSender(ObIArray<ObDtlChannel*>& channels, ObDtlChTotalInfo* ch_info, bool is_transmit,
       int64_t timeout_ts, sql::ObEvalCtx* eval_ctx)
       : ObDtlAsynSender(channels, ch_info, is_transmit), timeout_ts_(timeout_ts), eval_ctx_(eval_ctx)
@@ -60,13 +60,13 @@ class ObTransmitEofAsynSender : public ObDtlAsynSender {
 
   virtual int action(ObDtlChannel* ch);
 
-  private:
+private:
   int64_t timeout_ts_;
   sql::ObEvalCtx* eval_ctx_;
 };
 
 class ObDfcDrainAsynSender : public ObDtlAsynSender {
-  public:
+public:
   ObDfcDrainAsynSender(
       ObIArray<ObDtlChannel*>& channels, ObDtlChTotalInfo* ch_info, bool is_transmit, int64_t timeout_ts)
       : ObDtlAsynSender(channels, ch_info, is_transmit), timeout_ts_(timeout_ts)
@@ -74,12 +74,12 @@ class ObDfcDrainAsynSender : public ObDtlAsynSender {
 
   virtual int action(ObDtlChannel* ch);
 
-  private:
+private:
   int64_t timeout_ts_;
 };
 
 class ObDfcUnblockAsynSender : public ObDtlAsynSender {
-  public:
+public:
   ObDfcUnblockAsynSender(ObIArray<ObDtlChannel*>& channels, ObDtlChTotalInfo* ch_info, bool is_transmit,
       int64_t timeout_ts, ObDtlFlowControl& dfc)
       : ObDtlAsynSender(channels, ch_info, is_transmit), timeout_ts_(timeout_ts), dfc_(dfc), unblock_cnt_(0)
@@ -92,7 +92,7 @@ class ObDfcUnblockAsynSender : public ObDtlAsynSender {
     return unblock_cnt_;
   }
 
-  private:
+private:
   int64_t timeout_ts_;
   ObDtlFlowControl& dfc_;
   int64_t unblock_cnt_;

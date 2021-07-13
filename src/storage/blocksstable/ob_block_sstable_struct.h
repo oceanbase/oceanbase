@@ -287,7 +287,7 @@ struct ObSuperBlockHeader {
 };
 
 struct ObSuperBlockHeaderV2 final {
-  public:
+public:
   ObSuperBlockHeaderV2();
   ~ObSuperBlockHeaderV2() = default;
   bool is_valid() const;
@@ -296,7 +296,7 @@ struct ObSuperBlockHeaderV2 final {
   NEED_SERIALIZE_AND_DESERIALIZE;
   static const int32_t HEADER_VERSION = 3;
 
-  public:
+public:
   int32_t version_;
   int32_t magic_;  // magic number
 };
@@ -515,7 +515,7 @@ struct ObLinkedMacroBlockHeader {
 };
 
 struct ObLinkedMacroBlockHeaderV2 final {
-  public:
+public:
   ObLinkedMacroBlockHeaderV2()
   {
     reset();
@@ -544,7 +544,7 @@ struct ObLinkedMacroBlockHeaderV2 final {
       K_(previous_block_first_id), K_(previous_block_second_id), K_(previous_block_third_id),
       K_(previous_block_fourth_id));
 
-  public:
+public:
   int32_t header_size_;
   int32_t version_;
   int32_t magic_;
@@ -646,7 +646,7 @@ class ObBufferReader;
 class ObBufferWriter;
 
 struct ObMacroBlockSchemaInfo final {
-  public:
+public:
   static const int64_t MACRO_BLOCK_SCHEMA_INFO_HEADER_VERSION = 1;
   ObMacroBlockSchemaInfo();
   ~ObMacroBlockSchemaInfo() = default;
@@ -709,10 +709,10 @@ struct ObMacroBlockMeta {
   // default 0
   int32_t row_count_delta_;
 
-  int32_t micro_block_mark_deletion_offset_;  // micro_block_mark_deletion_size = delte_offset -
+  int32_t micro_block_mark_deletion_offset_;  // micro_block_mark_deletion_size = delete_offset -
                                               // micro_block_mark_deletion_offset_
   bool macro_block_deletion_flag_;
-  int32_t micro_block_delta_offset_;  // delte_size = occupy_size - micro_block_delta_offset;
+  int32_t micro_block_delta_offset_;  // delta_size = occupy_size - micro_block_delta_offset;
   int64_t partition_id_;              // added since 2.0
   int16_t column_checksum_method_;    // 0 for unkown, 1 for ObObj::checksum(), 2 for ObObj::checksum_v2()
   int64_t progressive_merge_round_;
@@ -785,7 +785,7 @@ struct ObMacroBlockMeta {
     return encrypt_id_ > static_cast<int64_t>(share::ObAesOpMode::ob_invalid_mode);
   }
 
-  private:
+private:
   int64_t get_meta_content_serialize_size() const;
 };
 
@@ -1081,7 +1081,7 @@ struct ObPartitionMeta {
 };
 
 class ObRowHeader {
-  public:
+public:
   ObRowHeader()
   {
     memset(this, 0, sizeof(*this));
@@ -1171,7 +1171,7 @@ class ObRowHeader {
   TO_STRING_KV(K_(row_flag), K_(column_index_bytes), K_(row_dml), K_(version), K_(row_type_flag), K_(reserved8),
       K_(column_count));
 
-  private:
+private:
   int8_t row_flag_;
   int8_t column_index_bytes_;
   int8_t row_dml_;
@@ -1219,7 +1219,7 @@ struct ObSSTablePair {
 };
 
 struct ObLogicBlockIndex {
-  public:
+public:
   static const int64_t INVALID_LOGIC_BLOCK_INDEX = -1;
 
   ObLogicBlockIndex() : logic_block_index_(INVALID_LOGIC_BLOCK_INDEX)
@@ -1254,12 +1254,12 @@ struct ObLogicBlockIndex {
   TO_STRING_KV(K_(logic_block_index));
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int64_t logic_block_index_;
 };
 
 struct ObMacroBlockItem {
-  public:
+public:
   ObMacroBlockItem() : macro_block_id_(), logic_block_index_()
   {}
   ~ObMacroBlockItem()
@@ -1300,7 +1300,7 @@ struct ObMacroBlockItem {
     return macro_block_id_.is_valid() && logic_block_index_.is_valid();
   }
 
-  public:
+public:
   MacroBlockId macro_block_id_;
   ObLogicBlockIndex logic_block_index_;
 };
@@ -1377,7 +1377,7 @@ struct ObMacroBlockMarkerStatus {
   int64_t lob_data_block_count_;
   int64_t second_index_count_;
   int64_t lob_second_index_count_;
-  int64_t bloomfiter_count_;
+  int64_t bloomfilter_count_;
   int64_t hold_count_;
   int64_t pending_free_count_;
   int64_t free_count_;
@@ -1395,12 +1395,12 @@ struct ObMacroBlockMarkerStatus {
 
   TO_STRING_KV(K_(total_block_count), K_(reserved_block_count), K_(macro_meta_block_count),
       K_(partition_meta_block_count), K_(data_block_count), K_(lob_data_block_count), K_(second_index_count),
-      K_(lob_second_index_count), K_(bloomfiter_count), K_(hold_count), K_(pending_free_count), K_(free_count),
+      K_(lob_second_index_count), K_(bloomfilter_count), K_(hold_count), K_(pending_free_count), K_(free_count),
       K_(mark_cost_time), K_(sweep_cost_time), K_(hold_alert_time), K_(hold_info));
 };
 
 class ObMacroBlockMarkerBitMap {
-  public:
+public:
   ObMacroBlockMarkerBitMap();
   virtual ~ObMacroBlockMarkerBitMap();
   int init(const int64_t macro_block_count);
@@ -1409,7 +1409,7 @@ class ObMacroBlockMarkerBitMap {
   int set_block(const int64_t block_index);
   int test_block(const int64_t block_index, bool& bool_ret) const;
 
-  private:
+private:
   typedef uint64_t size_type;
   static const size_type BYTES_PER_BLOCK = sizeof(size_type);
   static const size_type BITS_PER_BLOCK = BYTES_PER_BLOCK * 8;
@@ -1427,7 +1427,7 @@ class ObMacroBlockMarkerBitMap {
     return (1ULL << bit_index(pos));
   }
 
-  private:
+private:
   bool is_inited_;
   char* block_bitmap_;
   int64_t byte_size_;
@@ -1435,7 +1435,7 @@ class ObMacroBlockMarkerBitMap {
 };
 
 class ObMacroBlockMarkerHelper {
-  public:
+public:
   ObMacroBlockMarkerHelper();
   virtual ~ObMacroBlockMarkerHelper();
   int init(const int64_t macro_block_count);
@@ -1451,7 +1451,7 @@ class ObMacroBlockMarkerHelper {
       const ObMacroBlockCommonHeader::MacroBlockType& type, const common::ObIArray<MacroBlockId>& block_array);
   int test_block(const int64_t block_index, bool& bool_ret) const;
 
-  private:
+private:
   bool is_inited_;
   ObMacroBlockMarkerStatus status_;
   ObMacroBlockMarkerBitMap bit_map_;
@@ -1505,7 +1505,7 @@ OB_INLINE const blocksstable::MacroBlockId& ObMacroBlockCtx::get_macro_block_id(
 enum ObRecordHeaderVersion { RECORD_HEADER_VERSION_V2 = 2, RECORD_HEADER_VERSION_V3 = 3 };
 
 struct ObRecordHeaderV3 {
-  public:
+public:
   ObRecordHeaderV3();
   ~ObRecordHeaderV3() = default;
   static int deserialize_and_check_record(
@@ -1529,12 +1529,12 @@ struct ObRecordHeaderV3 {
   }
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   int check_payload_checksum(const char* buf, const int64_t len) const;
 
-  public:
+public:
   struct ObRecordCommonHeader {
-    public:
+  public:
     ObRecordCommonHeader() = default;
     ~ObRecordCommonHeader() = default;
     inline bool is_compressed() const
@@ -1571,7 +1571,7 @@ struct ObRecordHeaderV3 {
 
 // ObStorageFile's superblock should inherit from this basic one
 class ObISuperBlock {
-  public:
+public:
   ObISuperBlock() = default;
   virtual ~ObISuperBlock() = default;
   virtual void reset() = 0;
@@ -1583,7 +1583,7 @@ class ObISuperBlock {
 };
 
 struct ObSuperBlockMetaEntry {
-  public:
+public:
   static const int64_t META_ENTRY_VERSION = 1;
   ObSuperBlockMetaEntry() : macro_block_id_(-1)
   {}
@@ -1599,7 +1599,7 @@ struct ObSuperBlockMetaEntry {
   TO_STRING_KV(K_(macro_block_id));
   OB_UNIS_VERSION(META_ENTRY_VERSION);
 
-  public:
+public:
   blocksstable::MacroBlockId macro_block_id_;  // first entry meta macro block id
 };
 
@@ -1628,7 +1628,7 @@ struct ObServerSuperBlock : public blocksstable::ObISuperBlock {
 
   ObServerSuperBlock();
 
-  virtual int64_t get_timestamp() const
+  virtual int64_t get_timestamp() const override
   {
     return content_.modify_timestamp_;
   }
@@ -1656,7 +1656,7 @@ struct ObServerSuperBlock : public blocksstable::ObISuperBlock {
 };
 
 struct ObMacroBlockMetaV2 final {
-  public:
+public:
   static const int64_t MACRO_BLOCK_META_VERSION_V1 = 1;
   static const int64_t MACRO_BLOCK_META_VERSION_V2 = 2;  // upgrade in version 3.1, new meta format
   ObMacroBlockMetaV2();
@@ -1719,10 +1719,10 @@ struct ObMacroBlockMetaV2 final {
     return encrypt_id_ > static_cast<int64_t>(share::ObAesOpMode::ob_invalid_mode);
   }
 
-  private:
+private:
   int64_t get_meta_content_serialize_size() const;
 
-  public:
+public:
   // For compatibility, the variables in this struct MUST NOT be deleted or moved.
   // You should ONLY add variables at the end.
   // Note that if you use complex structure as variables, the complex structure should also keep compatibility.
@@ -1757,10 +1757,10 @@ struct ObMacroBlockMetaV2 final {
   // default 0
   int32_t row_count_delta_;
 
-  int32_t micro_block_mark_deletion_offset_;  // micro_block_mark_deletion_size = delte_offset -
+  int32_t micro_block_mark_deletion_offset_;  // micro_block_mark_deletion_size = delete_offset -
                                               // micro_block_mark_deletion_offset_
   bool macro_block_deletion_flag_;
-  int32_t micro_block_delta_offset_;  // delte_size = occupy_size - micro_block_delta_offset;
+  int32_t micro_block_delta_offset_;  // delta_size = occupy_size - micro_block_delta_offset;
   int64_t partition_id_;              // added since 2.0
   int16_t column_checksum_method_;    // 0 for unkown, 1 for ObObj::checksum(), 2 for ObObj::checksum_v2()
   int64_t progressive_merge_round_;
@@ -1778,7 +1778,7 @@ struct ObMacroBlockMetaV2 final {
 };
 
 struct ObFullMacroBlockMeta final {
-  public:
+public:
   ObFullMacroBlockMeta();
   ObFullMacroBlockMeta(const ObMacroBlockSchemaInfo* schema, const ObMacroBlockMetaV2* meta);
   ~ObFullMacroBlockMeta() = default;
@@ -1798,7 +1798,7 @@ struct ObFullMacroBlockMeta final {
 };
 
 struct ObMacroBlockInfoPair final {
-  public:
+public:
   ObMacroBlockInfoPair() : block_id_(), meta_()
   {}
   ObMacroBlockInfoPair(const blocksstable::MacroBlockId& block_id, const ObFullMacroBlockMeta& meta)
@@ -1820,7 +1820,7 @@ struct ObMacroBlockInfoPair final {
 };
 
 struct ObFullMacroBlockMetaEntry final {
-  public:
+public:
   ObFullMacroBlockMetaEntry(ObMacroBlockMetaV2& meta_, ObMacroBlockSchemaInfo& schema);
   ~ObFullMacroBlockMetaEntry() = default;
   NEED_SERIALIZE_AND_DESERIALIZE;
@@ -1829,7 +1829,7 @@ struct ObFullMacroBlockMetaEntry final {
 };
 
 class ObIMacroIdIterator {
-  public:
+public:
   ObIMacroIdIterator()
   {}
   virtual ~ObIMacroIdIterator()

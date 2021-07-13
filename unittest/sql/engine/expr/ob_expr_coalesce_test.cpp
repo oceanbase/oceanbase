@@ -19,18 +19,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObExprCoalesceTest : public ::testing::Test {
-  public:
+public:
   ObExprCoalesceTest();
   virtual ~ObExprCoalesceTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprCoalesceTest(const ObExprCoalesceTest& other);
   ObExprCoalesceTest& operator=(const ObExprCoalesceTest& other);
 
-  private:
+private:
   // data members
 };
 ObExprCoalesceTest::ObExprCoalesceTest()

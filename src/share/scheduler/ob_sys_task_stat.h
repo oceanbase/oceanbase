@@ -59,7 +59,7 @@ struct ObSysTaskStat {
 };
 
 class ObSysTaskStatMgr {
-  public:
+public:
   ObSysTaskStatMgr();
   virtual ~ObSysTaskStatMgr();
 
@@ -73,7 +73,7 @@ class ObSysTaskStatMgr {
   int cancel_task(const ObTaskId& task_id);
   int is_task_cancel(const ObTaskId& task_id, bool& is_cancel);
 
-  private:
+private:
   common::SpinRWLock lock_;
   common::ObArray<ObSysTaskStat> task_array_;
   common::ObAddr self_addr_;

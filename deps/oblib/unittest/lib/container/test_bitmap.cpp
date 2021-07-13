@@ -21,7 +21,7 @@ using namespace common;
 
 namespace unittest {
 class TestObBitmap : public ::testing::Test {
-  public:
+public:
   static constexpr uint64_t bits_per_memblock()
   {
     return ObBitmap::BITS_PER_BLOCK * ObBitmap::BLOCKS_PER_MEM_BLOCK;
@@ -38,10 +38,10 @@ class TestObBitmap : public ::testing::Test {
   static void TearDownTestCase()
   {}
 
-  protected:
+protected:
   ModulePageAllocator allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestObBitmap);
 };
 

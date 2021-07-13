@@ -35,7 +35,7 @@ namespace snappy {
 
 // A Sink is an interface that consumes a sequence of bytes.
 class Sink {
-  public:
+public:
   Sink()
   {}
   virtual ~Sink();
@@ -60,7 +60,7 @@ class Sink {
   // The default implementation always returns the scratch buffer.
   virtual char* GetAppendBuffer(size_t length, char* scratch);
 
-  private:
+private:
   // No copying
   Sink(const Sink&);
   void operator=(const Sink&);
@@ -68,7 +68,7 @@ class Sink {
 
 // A Source is an interface that yields a sequence of bytes
 class Source {
-  public:
+public:
   Source()
   {}
   virtual ~Source();
@@ -96,7 +96,7 @@ class Source {
   // REQUIRES: Available() >= n
   virtual void Skip(size_t n) = 0;
 
-  private:
+private:
   // No copying
   Source(const Source&);
   void operator=(const Source&);
@@ -104,7 +104,7 @@ class Source {
 
 // A Source implementation that yields the contents of a flat array
 class ByteArraySource : public Source {
-  public:
+public:
   ByteArraySource(const char* p, size_t n) : ptr_(p), left_(n)
   {}
   virtual ~ByteArraySource();
@@ -112,14 +112,14 @@ class ByteArraySource : public Source {
   virtual const char* Peek(size_t* len);
   virtual void Skip(size_t n);
 
-  private:
+private:
   const char* ptr_;
   size_t left_;
 };
 
 // A Sink implementation that writes to a flat array without any bound checks.
 class UncheckedByteArraySink : public Sink {
-  public:
+public:
   explicit UncheckedByteArraySink(char* dest) : dest_(dest)
   {}
   virtual ~UncheckedByteArraySink();
@@ -134,7 +134,7 @@ class UncheckedByteArraySink : public Sink {
     return dest_;
   }
 
-  private:
+private:
   char* dest_;
 };
 

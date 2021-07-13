@@ -30,7 +30,7 @@ class ObPartitionKey;
 namespace share {
 
 class ObIMergeErrorCb {
-  public:
+public:
   virtual int submit_merge_error_task() = 0;
 };
 
@@ -39,7 +39,7 @@ class ObPartitionInfo;
 
 // Partition property getter, get partition member list
 class ObIPartPropertyGetter {
-  public:
+public:
   ObIPartPropertyGetter(){};
   virtual ~ObIPartPropertyGetter()
   {}
@@ -55,7 +55,7 @@ class ObIPartPropertyGetter {
 };
 
 class ObIPartitionTable {
-  public:
+public:
   const static int64_t ALL_CORE_TABLE_PARTITION_ID = 0;
   const static int64_t ALL_CORE_TABLE_PARTITION_NUM = 1;
   // partition table levels: __all_tenant_meta_table, __all_root_table, __all_core_table, memory table
@@ -158,7 +158,7 @@ class ObIPartitionTable {
 
   static int partition_table_id_to_name(const uint64_t pt_table_id, const char*& table_name);
 
-  protected:
+protected:
   ObIPartPropertyGetter* prop_getter_;
   ObIMergeErrorCb* merge_error_cb_;
 };

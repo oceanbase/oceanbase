@@ -35,7 +35,7 @@ class ObPGMemtableMgr;
 typedef common::LinkHashNode<common::ObPartitionKey> ObPGPartitionHashNode;
 typedef common::LinkHashValue<common::ObPartitionKey> ObPGPartitionHashValue;
 class ObPGPartition : public ObPGPartitionHashValue {
-  public:
+public:
   ObPGPartition();
   virtual ~ObPGPartition();
   void destroy();
@@ -121,14 +121,14 @@ class ObPGPartition : public ObPGPartitionHashValue {
       int64_t& schema_version, int64_t& refreshed_schema_ts, uint64_t& log_id, int64_t& log_ts);
   TO_STRING_KV(K_(pkey), KP_(cp_fty), KP_(storage));
 
-  private:
+private:
   bool is_gc_starting_() const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPGPartition);
   static const int64_t DELAY_SCHEDULE_TIME_UNIT = 1000 * 1000 * 1;       // 1s
   static const int64_t MAX_DELAY_SCHEDULE_TIME_UNIT = 1000 * 1000 * 60;  // 60s
-  private:
+private:
   bool is_inited_;
   common::ObPartitionKey pkey_;
   ObIPartitionComponentFactory* cp_fty_;
@@ -151,7 +151,7 @@ class ObPGPartition : public ObPGPartitionHashValue {
 
 // Memory Alloc
 class PGPartitionInfoAlloc {
-  public:
+public:
   static ObPGPartition* alloc_value()
   {
     return op_alloc(ObPGPartition);
@@ -182,16 +182,16 @@ typedef common::ObLinkHashMap<common::ObPartitionKey, ObPGPartition, PGPartition
 
 // thread safe
 class ObPartitionKeyList {
-  private:
+private:
   class Node : public ObDLinkBase<Node> {
-    public:
+  public:
     Node(const common::ObPartitionKey& key) : key_(key)
     {}
     const common::ObPartitionKey key_;
   };
   typedef common::ObDList<Node> List;
 
-  public:
+public:
   ObPartitionKeyList() : lock_(), list_()
   {}
 
@@ -271,13 +271,13 @@ class ObPartitionKeyList {
     }
   }
 
-  private:
+private:
   TCRWLock lock_;
   List list_;
 };
 
 class ObPGPartitionGuard {
-  public:
+public:
   ObPGPartitionGuard() : pg_partition_(NULL), map_(NULL)
   {}
   ObPGPartitionGuard(const common::ObPartitionKey& pkey, const ObPGPartitionMap& map) : pg_partition_(NULL), map_(NULL)
@@ -331,14 +331,14 @@ class ObPGPartitionGuard {
   }
   TO_STRING_KV(KP_(pg_partition), K_(pkey), KP_(map));
 
-  private:
+private:
   ObPGPartition* pg_partition_;
   common::ObPartitionKey pkey_;
   ObPGPartitionMap* map_;
 };
 
 class ObPGPartitionArrayGuard {
-  public:
+public:
   ObPGPartitionArrayGuard(ObPGPartitionMap& map) : pg_partition_map_(map)
   {}
   ~ObPGPartitionArrayGuard();
@@ -356,7 +356,7 @@ class ObPGPartitionArrayGuard {
     return pg_partition_map_;
   }
 
-  private:
+private:
   common::ObSEArray<ObPGPartition*, OB_DEFAULT_PARTITION_KEY_COUNT> partitions_;
   ObPGPartitionMap& pg_partition_map_;
 };

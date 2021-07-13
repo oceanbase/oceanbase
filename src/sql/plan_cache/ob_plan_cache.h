@@ -46,7 +46,7 @@ struct ObGetAllDeletedCacheObjIdsOp {
   {}
   int operator()(common::hash::HashMapPair<uint64_t, ObCacheObject*>& entry);
 
-  private:
+private:
   bool should_dump(ObCacheObjType obj_type) const
   {
     bool ret_bool = false;
@@ -66,7 +66,7 @@ struct ObGetAllDeletedCacheObjIdsOp {
     return ret_bool;
   }
 
-  private:
+private:
   common::ObIArray<DeletedCacheObjInfo>* key_array_;
   const bool dump_all_;
   int64_t safe_timestamp_;
@@ -76,7 +76,7 @@ struct ObGetAllDeletedCacheObjIdsOp {
 class ObPlanCache {
   friend class ObCacheObjectFactory;
 
-  public:
+public:
   static const int64_t MAX_PLAN_SIZE = 20 * 1024 * 1024;                 // 20M
   static const int64_t MAX_PLAN_CACHE_SIZE = 5 * 1024L * 1024L * 1024L;  // 5G
   static const int64_t EVICT_KEY_NUM = 8;
@@ -314,7 +314,7 @@ class ObPlanCache {
     return ref_handle_mgr_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanCache);
   int add_cache_obj(ObCacheObject* plan, ObPlanCacheCtx& pc_ctx);
   int get_cache_obj(ObPlanCacheCtx& pc_ctx, ObCacheObject*& cache_obj);
@@ -340,9 +340,9 @@ class ObPlanCache {
 
   int get_pl_cache(ObPlanCacheCtx& pc_ctx, ObCacheObject*& cache_obj);
 
-  private:
+private:
   const static int64_t SLICE_SIZE = 1024;  // 1k
-  private:
+private:
   bool inited_;
   bool valid_;
   int64_t tenant_id_;

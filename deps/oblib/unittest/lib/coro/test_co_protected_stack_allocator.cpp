@@ -45,7 +45,7 @@ struct MhuGuard {
 };
 
 class DoNothingMhu : public CPSA::IMemHoldUpdater {
-  public:
+public:
   virtual int update_hold(const uint64_t tenant_id, const ssize_t size, bool& updated)
   {
     UNUSED(tenant_id);
@@ -56,7 +56,7 @@ class DoNothingMhu : public CPSA::IMemHoldUpdater {
 };
 
 class TestHoldMhu : public CPSA::IMemHoldUpdater {
-  public:
+public:
   TestHoldMhu() : hold_(0), limit_(0)
   {}
   void reset()

@@ -30,27 +30,27 @@ class ObMySQLResult;
 namespace rootserver {
 class ObServerManager;
 class ObAllServerChecker {
-  public:
+public:
   ObAllServerChecker();
   virtual ~ObAllServerChecker();
   int init(ObServerManager& server_manager, const common::ObAddr& rs_addr);
 
   int check_all_server();
 
-  private:
+private:
   int check_status_same(const share::ObServerStatus& left, const share::ObServerStatus& right, bool& same) const;
 
-  private:
+private:
   bool inited_;
   ObServerManager* server_manager_;
   common::ObAddr rs_addr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllServerChecker);
 };
 
 class ObCheckServerTask : public common::ObAsyncTimerTask {
-  public:
+public:
   ObCheckServerTask(common::ObWorkQueue& work_queue, ObAllServerChecker& checker);
   virtual ~ObCheckServerTask()
   {}
@@ -63,7 +63,7 @@ class ObCheckServerTask : public common::ObAsyncTimerTask {
   }
   virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
 
-  private:
+private:
   ObAllServerChecker& checker_;
 };
 

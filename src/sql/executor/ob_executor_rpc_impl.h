@@ -37,7 +37,7 @@ class ObAPMiniTaskMgr;
  *  the same as ObResultSet, essentially a variable on the stack. reference:obmp_query.cpp */
 template <obrpc::ObRpcPacketCode pcode>
 class MyStreamHandle {
-  public:
+public:
   typedef typename obrpc::ObExecutorRpcProxy::SSHandle<pcode> MyHandle;
   typedef common::ObScanner MyResult;
   explicit MyStreamHandle(const char* label) : result_(label), rc_(common::OB_SUCCESS)
@@ -96,7 +96,7 @@ class MyStreamHandle {
     return task_id_;
   }
 
-  private:
+private:
   ObTaskID task_id_;
   MyHandle handle_;
   MyResult result_;
@@ -105,7 +105,7 @@ class MyStreamHandle {
 
 template <obrpc::ObRpcPacketCode pcode>
 class MySSHandle {
-  public:
+public:
   typedef typename obrpc::ObExecutorRpcProxy::SSHandle<pcode> MyHandle;
   typedef ObIntermResultItem MyResult;
   explicit MySSHandle(const char* label) : result_(label), rc_(common::OB_SUCCESS)
@@ -152,7 +152,7 @@ class MySSHandle {
     return rc_;
   }
 
-  private:
+private:
   MyHandle handle_;
   MyResult result_;
   int rc_;
@@ -164,7 +164,7 @@ typedef MyStreamHandle<obrpc::OB_TASK_FETCH_RESULT> FetchResultStreamHandle;
 typedef MySSHandle<obrpc::OB_TASK_FETCH_INTERM_RESULT> FetchIntermResultStreamHandle;
 
 class RemoteExecuteStreamHandle {
-  public:
+public:
   RemoteExecuteStreamHandle(const char* label)
       : use_remote_protocol_v2_(false), sync_stream_handle_(label), sync_stream_handle_v2_(label)
   {}
@@ -289,17 +289,17 @@ class RemoteExecuteStreamHandle {
     return sync_stream_handle_v2_;
   }
 
-  private:
+private:
   bool use_remote_protocol_v2_;
   RemoteStreamHandle sync_stream_handle_;
   RemoteStreamHandleV2 sync_stream_handle_v2_;
 };
 
 class ObExecutorRpcCtx {
-  public:
+public:
   static const uint64_t INVALID_CLUSTER_VERSION = 0;
 
-  public:
+public:
   ObExecutorRpcCtx(uint64_t rpc_tenant_id, int64_t timeout_timestamp, uint64_t min_cluster_version,
       ObQueryRetryInfo* retry_info, ObSQLSessionInfo* session, bool is_plain_select,
       ObAPMiniTaskMgr* ap_mini_task_mgr = NULL)
@@ -350,7 +350,7 @@ class ObExecutorRpcCtx {
   int check_status() const;
   TO_STRING_KV(K_(rpc_tenant_id), K_(timeout_timestamp), K_(min_cluster_version), K_(retry_info), K_(is_plain_select));
 
-  private:
+private:
   uint64_t rpc_tenant_id_;
   int64_t timeout_timestamp_;
   uint64_t min_cluster_version_;
@@ -360,13 +360,13 @@ class ObExecutorRpcCtx {
   bool is_plain_select_;  // stmt_type == T_SELECT && not select...for update
   ObAPMiniTaskMgr* ap_mini_task_mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExecutorRpcCtx);
 };
 
 class ObDistributedSchedulerManager;
 class ObExecutorPingRpcCtx {
-  public:
+public:
   ObExecutorPingRpcCtx(uint64_t rpc_tenant_id, int64_t wait_timeout, ObDistributedSchedulerManager* dist_task_mgr,
       ObAPMiniTaskMgr* mini_task_mgr)
       : rpc_tenant_id_(rpc_tenant_id),
@@ -393,13 +393,13 @@ class ObExecutorPingRpcCtx {
     return mini_task_mgr_;
   }
 
-  private:
+private:
   uint64_t rpc_tenant_id_;
   int64_t wait_timeout_;
   ObDistributedSchedulerManager* dist_task_mgr_;
   ObAPMiniTaskMgr* mini_task_mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExecutorPingRpcCtx);
 };
 
@@ -408,7 +408,7 @@ class ObExecutorPingRpcCtx {
 
 // All calls to rpc must use the to function to support concurrent calls
 class ObExecutorRpcImpl {
-  public:
+public:
   ObExecutorRpcImpl() : proxy_(NULL), batch_rpc_(nullptr)
   {}
   virtual ~ObExecutorRpcImpl()
@@ -487,11 +487,11 @@ class ObExecutorRpcImpl {
     return proxy_;
   }
 
-  private:
+private:
   void deal_with_rpc_timeout_err(ObExecutorRpcCtx& rpc_ctx, int& err, const common::ObAddr& dist_server) const;
   int get_sql_batch_req_type(int64_t execution_id) const;
 
-  private:
+private:
   /* functions */
   /* variables */
   obrpc::ObExecutorRpcProxy* proxy_;

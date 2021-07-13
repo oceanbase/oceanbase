@@ -28,9 +28,9 @@ namespace sql {
 // Random access row store, support disk store.
 // All row must have same cell count and  projector.
 class ObRADatumStore {
-  public:
+public:
   class ShrinkBuffer {
-    public:
+  public:
     ShrinkBuffer() : data_(NULL), head_(0), tail_(0), cap_(0)
     {}
 
@@ -83,7 +83,7 @@ class ObRADatumStore {
 
     TO_STRING_KV(KP_(data), K_(head), K_(tail), K_(cap));
 
-    private:
+  private:
     char* data_;
     int64_t head_;
     int64_t tail_;
@@ -285,7 +285,7 @@ class ObRADatumStore {
   class Reader {
     friend class ObRADatumStore;
 
-    public:
+  public:
     explicit Reader(ObRADatumStore& store) : store_(store), file_size_(0), idx_blk_(NULL), ib_pos_(0), blk_(NULL)
     {}
     virtual ~Reader()
@@ -303,10 +303,10 @@ class ObRADatumStore {
     void reset();
     void reuse();
 
-    private:
+  private:
     void reset_cursor(const int64_t file_size);
 
-    private:
+  private:
     ObRADatumStore& store_;
     // idx_blk_, blk_ may point to the writing block,
     // we need to invalid the pointers if file_size_ change.
@@ -321,7 +321,7 @@ class ObRADatumStore {
     DISALLOW_COPY_AND_ASSIGN(Reader);
   };
 
-  public:
+public:
   const static int64_t BLOCK_SIZE = (64L << 10) - sizeof(LinkNode);
   const static int64_t BIG_BLOCK_SIZE = (256L << 10) - sizeof(LinkNode);
   // alloc first index block after store 1MB data.
@@ -389,7 +389,7 @@ class ObRADatumStore {
   TO_STRING_KV(
       K_(tenant_id), K_(label), K_(ctx_id), K_(mem_limit), K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size));
 
-  private:
+private:
   static int get_timeout(int64_t& timeout_ms);
   void* alloc_blk_mem(const int64_t size);
   void free_blk_mem(void* mem, const int64_t size = 0);
@@ -415,7 +415,7 @@ class ObRADatumStore {
 
   bool need_dump();
 
-  private:
+private:
   bool inited_;
   uint64_t tenant_id_;
   const char* label_;

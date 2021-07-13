@@ -29,7 +29,7 @@ typedef common::ObIArray<ObRootAddr> ObIAddrList;
 
 // store and fetch root server address list interface.
 class ObRootAddrAgent {
-  public:
+public:
   ObRootAddrAgent() : inited_(false), config_(NULL)
   {}
   virtual ~ObRootAddrAgent()
@@ -45,11 +45,11 @@ class ObRootAddrAgent {
   virtual int fetch_remote_rslist(const int64_t cluster_id, ObIAddrList& addr_list, ObIAddrList& readonly_addr_list,
       common::ObClusterType& cluster_type) = 0;
 
-  protected:
+protected:
   bool inited_;
   common::ObServerConfig* config_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRootAddrAgent);
 };
 

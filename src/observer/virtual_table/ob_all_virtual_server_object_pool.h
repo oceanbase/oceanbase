@@ -21,14 +21,14 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualServerObjectPool : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualServerObjectPool();
   virtual ~ObAllVirtualServerObjectPool()
   {
     reset();
   }
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
   void set_addr(common::ObAddr& addr)
@@ -36,10 +36,10 @@ class ObAllVirtualServerObjectPool : public common::ObVirtualTableScannerIterato
     addr_ = &addr;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualServerObjectPool);
 
-  private:
+private:
   common::ObServerObjectPoolRegistry::ArenaIterator iter_;
   common::ObAddr* addr_;
 };

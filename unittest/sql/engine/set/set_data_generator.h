@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class SetDataGenerator : public ObPhyOperator {
-  public:
+public:
   const static int64_t ROW_ID_CELL = 0;
   const static int64_t IDX_CELL = 1;
   const static int64_t STR_CELL = 2;
@@ -29,7 +29,7 @@ class SetDataGenerator : public ObPhyOperator {
   const static int64_t INT_VARCHAR_BUF_SIZE = 10;
 
   class Ctx : public ObPhyOperatorCtx {
-    public:
+  public:
     Ctx(ObExecContext& c) : ObPhyOperatorCtx(c)
     {}
     virtual void destroy()
@@ -168,7 +168,7 @@ class SetDataGenerator : public ObPhyOperator {
     cells_[STR_CELL].set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_BIN);
   }
 
-  public:
+public:
   bool gen_varchar_cell_ = false;
   int64_t row_cnt_ = 1;
   bool reverse_ = false;
@@ -180,7 +180,7 @@ class SetDataGenerator : public ObPhyOperator {
   IdValFunc idx_val_ = [](const int64_t v) { return v; };
   int iter_end_ret_ = OB_ITER_END;
 
-  private:
+private:
   mutable common::ObNewRow row_;
   mutable common::ObObj cells_[CELL_CNT];
   mutable int64_t row_id_ = 0;

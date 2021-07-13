@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace common {
 // read will retry `retry_limit' times when failed
 class ObSQLClientRetry : public ObISQLClient {
-  public:
+public:
   ObSQLClientRetry(ObISQLClient* sql_client, int32_t retry_limit) : sql_client_(sql_client), retry_limit_(retry_limit)
   {}
   virtual ~ObSQLClientRetry()
@@ -45,11 +45,11 @@ class ObSQLClientRetry : public ObISQLClient {
     return NULL == sql_client_ ? false : sql_client_->is_oracle_mode();
   }
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSQLClientRetry);
 
-  private:
+private:
   ObISQLClient* sql_client_;
   int32_t retry_limit_;
 };
@@ -57,7 +57,7 @@ class ObSQLClientRetry : public ObISQLClient {
 class ObMySQLProxy;
 // use READ_CONSISTENCY(WEAK) when did_retry_weak is true
 class ObSQLClientRetryWeak : public ObISQLClient {
-  public:
+public:
   ObSQLClientRetryWeak(ObISQLClient* sql_client, bool did_use_weak = false, bool did_use_retry = false,
       int64_t snapshot_timestamp = OB_INVALID_TIMESTAMP, bool check_sys_variable = true)
       : sql_client_(sql_client),
@@ -97,14 +97,14 @@ class ObSQLClientRetryWeak : public ObISQLClient {
     return NULL == sql_client_ ? false : sql_client_->is_oracle_mode();
   }
 
-  private:
+private:
   bool is_auto_mode()
   {
     return OB_INVALID_TENANT_ID != tenant_id_ || OB_INVALID_ID != table_id_;
   }
   int update_weak_read_snapshot_timestamp(const uint64_t tenant_id);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSQLClientRetryWeak);
   // functions
@@ -115,7 +115,7 @@ class ObSQLClientRetryWeak : public ObISQLClient {
   int read_without_check_sys_variable(
       ObSingleConnectionProxy& single_conn_proxy, ReadResult& res, const uint64_t tenant_id, const char* sql);
 
-  private:
+private:
   ObISQLClient* sql_client_;
   bool did_use_weak_;
   bool did_use_retry_;

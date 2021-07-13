@@ -16,19 +16,19 @@
 
 using namespace oceanbase::common;
 class TestPerfEvent : public ::testing::Test {
-  public:
+public:
   TestPerfEvent();
   virtual ~TestPerfEvent();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestPerfEvent);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 

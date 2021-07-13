@@ -31,10 +31,10 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxFifoCoordOpInput : public ObPxReceiveOpInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxFifoCoordOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxReceiveOpInput(ctx, spec)
   {}
   virtual ~ObPxFifoCoordOpInput()
@@ -44,7 +44,7 @@ class ObPxFifoCoordOpInput : public ObPxReceiveOpInput {
 class ObPxFifoCoordSpec : public ObPxCoordSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxFifoCoordSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObPxCoordSpec(alloc, type)
   {}
   ~ObPxFifoCoordSpec()
@@ -52,21 +52,21 @@ class ObPxFifoCoordSpec : public ObPxCoordSpec {
 };
 
 class ObPxFifoCoordOp : public ObPxCoordOp {
-  public:
+public:
   ObPxFifoCoordOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObPxFifoCoordOp()
   {}
 
-  public:
+public:
   class ObPxFifoCoordOpEventListener : public ObIPxCoordEventListener {
-    public:
+  public:
     virtual int on_root_data_channel_setup()
     {
       return common::OB_SUCCESS;
     }
   };
 
-  public:
+public:
   virtual int inner_open() override;
   virtual void destroy() override
   {
@@ -85,11 +85,11 @@ class ObPxFifoCoordOp : public ObPxCoordOp {
     return listener_;
   }
 
-  private:
+private:
   int next_row(bool& wait_next_msg);
   int setup_loop_proc() override;
 
-  private:
+private:
   ObPxFifoCoordOpEventListener listener_;
   ObSerialDfoScheduler serial_scheduler_;
   ObParallelDfoScheduler parallel_scheduler_;

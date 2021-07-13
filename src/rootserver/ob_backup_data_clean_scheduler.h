@@ -24,14 +24,14 @@ namespace oceanbase {
 namespace rootserver {
 
 class ObBackupDataCleanScheduler {
-  public:
+public:
   ObBackupDataCleanScheduler();
   virtual ~ObBackupDataCleanScheduler();
   int init(const obrpc::ObBackupManageArg& arg, share::schema::ObMultiVersionSchemaService& schema_service,
       common::ObMySQLProxy& sql_proxy, ObBackupDataClean* data_clean);
   int start_schedule_backup_data_clean();
 
-  private:
+private:
   int prepare_backup_clean_infos(const common::ObIArray<uint64_t>& tenant_ids);
   int get_backup_clean_info(
       const uint64_t tenant_id, common::ObISQLClient& sql_proxy, share::ObBackupCleanInfo& clean_info);
@@ -51,7 +51,7 @@ class ObBackupDataCleanScheduler {
   // delete backup set need to know incarnation
   int get_backup_incarnation(const uint64_t tenant_id, const int64_t backup_set_id);
 
-  private:
+private:
   bool is_inited_;
   obrpc::ObBackupManageArg arg_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

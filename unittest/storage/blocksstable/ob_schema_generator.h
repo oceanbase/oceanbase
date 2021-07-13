@@ -17,11 +17,11 @@
 namespace oceanbase {
 namespace blocksstable {
 class ObSchemaGenerator {
-  public:
+public:
   static inline int generate_table(const uint64_t table_id, const int64_t column_count, const int64_t rowkey_count,
       share::schema::ObTableSchema& table_schema);
 
-  private:
+private:
   static void set_column_type(const common::ObObjType obj_type, share::schema::ObColumnSchemaV2& column);
 };
 

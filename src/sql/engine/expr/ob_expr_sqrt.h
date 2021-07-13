@@ -17,17 +17,17 @@
 namespace oceanbase {
 namespace sql {
 class ObExprSqrt : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSqrt(common::ObIAllocator& alloc);
   virtual ~ObExprSqrt();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSqrt);
 
-  private:
+private:
 };
 
 }  // namespace sql

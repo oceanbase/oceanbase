@@ -31,7 +31,7 @@ struct ObReplicaLocation;
   } while (0)
 
 struct ObFBPartitionParam {
-  public:
+public:
   int64_t schema_version_;
   ObPartitionLocation pl_;
   int64_t original_partition_id_;
@@ -59,7 +59,7 @@ struct ObFBPartitionParam {
 
 // C/S feedback protocol
 class ObFeedbackManager {
-  public:
+public:
   ObFeedbackManager() : follower_first_feedback_(NULL), pl_feedback_(NULL), arena_(common::ObModIds::SHARE_CS_FEEDBACKS)
   {}
   virtual ~ObFeedbackManager()
@@ -143,7 +143,7 @@ class ObFeedbackManager {
     return ret;
   }
 
-  private:
+private:
   ObFollowerFirstFeedback* follower_first_feedback_;
   ObFeedbackPartitionLocation* pl_feedback_;
   common::ObArenaAllocator arena_;  // use to alloc feedback element

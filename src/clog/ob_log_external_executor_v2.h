@@ -98,13 +98,13 @@ struct SearchById {
 enum SearchStatusType { SST_INVALID = -1, SST_BY_TS = 0, SST_BY_ID = 1 };
 
 struct SearchStatus {
-  public:
+public:
   SearchStatusType type_;
   SearchByTs search_by_ts_;
   SearchById search_by_id_;
   bool finished_;
 
-  public:
+public:
   SearchStatus() : type_(SST_INVALID), search_by_ts_(), search_by_id_(), finished_(false)
   {}
   int init(const SearchStatusType type)
@@ -171,14 +171,14 @@ struct SearchStatus {
     return finished_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(SearchStatus);
 };
 
 typedef common::ObLinearHashMap<common::ObPartitionKey, SearchStatus*> SearchMap;
 
 struct SearchParam {
-  public:
+public:
   SearchStatusType type_;
   common::PageArena<>* map_allocator_;
   common::PageArena<>* info_allocator_;
@@ -212,7 +212,7 @@ struct SearchParam {
   }
   TO_STRING_KV(K(type_), KP(map_allocator_), KP(info_allocator_));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(SearchParam);
 };
 
@@ -352,13 +352,13 @@ struct Progress {
   TO_STRING_KV(
       K(total_), K(finished_), K(min_file_id_), K(max_file_id_), K(cur_file_id_), K(start_file_id_), K(break_file_id_));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(Progress);
 };
 
 // Only supports positioning with breakpoints
 class ObLogExternalExecutorWithBreakpoint {
-  public:
+public:
   struct Config {
     const char* ilog_dir_;
     uint64_t read_timeout_;
@@ -375,7 +375,7 @@ class ObLogExternalExecutorWithBreakpoint {
     TO_STRING_KV(K(ilog_dir_), K(read_timeout_));
   };
 
-  public:
+public:
   ObLogExternalExecutorWithBreakpoint() : is_inited_(false), log_engine_(NULL), config_(), partition_service_(NULL)
   {}
   ~ObLogExternalExecutorWithBreakpoint()
@@ -383,13 +383,13 @@ class ObLogExternalExecutorWithBreakpoint {
   int init(const ObLogExternalExecutorWithBreakpoint::Config& config, clog::ObILogEngine* log_engine,
       storage::ObPartitionService* partition_service);
 
-  public:
+public:
   int req_start_log_id_by_ts_with_breakpoint(const obrpc::ObLogReqStartLogIdByTsRequestWithBreakpoint& req_msg,
       obrpc::ObLogReqStartLogIdByTsResponseWithBreakpoint& result);
   int req_start_pos_by_log_id_with_breakpoint(const obrpc::ObLogReqStartPosByLogIdRequestWithBreakpoint& req_msg,
       obrpc::ObLogReqStartPosByLogIdResponseWithBreakpoint& result);
 
-  private:
+private:
   inline int64_t get_rpc_deadline()
   {
     return THIS_WORKER.get_timeout_ts();
@@ -435,10 +435,10 @@ class ObLogExternalExecutorWithBreakpoint {
   int get_min_log_id_and_ts_from_index_info_block_map_(clog::IndexInfoBlockMap& index_info_block_map,
       const common::ObPartitionKey& partition_key, uint64_t& min_log_id, int64_t& min_submit_timestamp) const;
 
-  private:
+private:
   static const bool FORCE_RPINT_STATISTIC = true;
 
-  private:
+private:
   bool is_inited_;
   clog::ObILogEngine* log_engine_;
   Config config_;

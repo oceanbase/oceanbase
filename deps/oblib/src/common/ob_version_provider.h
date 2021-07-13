@@ -15,18 +15,18 @@
 namespace oceanbase {
 namespace common {
 class ObVersionProvider {
-  public:
+public:
   ObVersionProvider(){};
   virtual ~ObVersionProvider(){};
   virtual common::ObVersion get_frozen_version() const = 0;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObVersionProvider);
 
-  private:
+private:
   // data members
 };
 }  // end namespace common

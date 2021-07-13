@@ -698,7 +698,7 @@ struct ObDumpPsInfo {
 };
 
 class PsTimeCmp {
-  public:
+public:
   bool operator()(std::pair<ObPsStmtId, int64_t> left, std::pair<ObPsStmtId, int64_t> right)
   {
     return left.second < right.second;

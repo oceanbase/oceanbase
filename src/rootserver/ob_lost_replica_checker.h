@@ -30,7 +30,7 @@ namespace rootserver {
 class ObServerManager;
 
 class ObLostReplicaChecker {
-  public:
+public:
   ObLostReplicaChecker();
   virtual ~ObLostReplicaChecker();
 
@@ -38,7 +38,7 @@ class ObLostReplicaChecker {
       share::schema::ObMultiVersionSchemaService& schema_service);
   int check_lost_replicas();
 
-  private:
+private:
   int check_lost_replica_by_pt(uint64_t pt_table_id, int64_t pt_partition_id);
   // (server lost and not in member list) or (server lost and not in schema)
   int check_lost_replica(const share::ObPartitionInfo& partition_info, const share::ObPartitionReplica& replica,
@@ -47,13 +47,13 @@ class ObLostReplicaChecker {
   int check_cancel();
   int delete_pg_partition_meta_table_item_(const uint64_t tg_id, const common::ObAddr& svr_ip);
 
-  private:
+private:
   bool inited_;
   ObServerManager* server_manager_;
   share::ObPartitionTableOperator* pt_operator_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLostReplicaChecker);
 };
 }  // end namespace rootserver

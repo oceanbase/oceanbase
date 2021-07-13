@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace common {
 template <class T, int64_t N>
 class LimitArray {
-  public:
+public:
   LimitArray() : holder_index_(0), size_(0), index_(0), tail_holer_index_(0)
   {}
   bool expand(ObArrayHelper<T>& new_array)
@@ -122,7 +122,7 @@ class LimitArray {
     return index_;
   }
 
-  private:
+private:
   ObArrayHelper<T> holder[N];
   int64_t holder_index_;
   int64_t size_;

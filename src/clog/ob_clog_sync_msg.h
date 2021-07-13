@@ -22,7 +22,7 @@ static const int64_t OB_ARRAY_COUNT = 16;
 struct McCtx {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   McCtx()
   {
     reset();
@@ -48,7 +48,7 @@ namespace obrpc {
 class ObLogGetMCTsRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogGetMCTsRequest()
   {
     reset();
@@ -71,17 +71,17 @@ class ObLogGetMCTsRequest {
   }
   TO_STRING_KV(K_(partition_key));
 
-  private:
+private:
   common::ObPartitionKey partition_key_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetMCTsRequest);
 };
 
 class ObLogGetMCTsResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogGetMCTsResponse()
   {
     reset();
@@ -131,7 +131,7 @@ class ObLogGetMCTsResponse {
   }
   TO_STRING_KV(K_(partition_key), K_(membership_timestamp), K_(max_confirmed_log_id), K_(is_normal_partition));
 
-  private:
+private:
   common::ObPartitionKey partition_key_;
   int64_t membership_timestamp_;
   uint64_t max_confirmed_log_id_;
@@ -140,14 +140,14 @@ class ObLogGetMCTsResponse {
   // 2. disk space not enougn
   bool is_normal_partition_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetMCTsResponse);
 };
 
 class ObLogGetPriorityArrayRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogGetPriorityArrayRequest()
   {
     reset();
@@ -172,17 +172,17 @@ class ObLogGetPriorityArrayRequest {
   }
   TO_STRING_KV(K(partition_array_));
 
-  private:
+private:
   common::ObPartitionArray partition_array_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetPriorityArrayRequest);
 };
 
 class ObLogGetPriorityArrayResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogGetPriorityArrayResponse()
   {
     reset();
@@ -205,17 +205,17 @@ class ObLogGetPriorityArrayResponse {
   }
   TO_STRING_KV(K(priority_array_));
 
-  private:
+private:
   election::PriorityArray priority_array_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetPriorityArrayResponse);
 };
 
 class ObLogGetMcCtxArrayRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogGetMcCtxArrayRequest()
   {
     reset();
@@ -238,17 +238,17 @@ class ObLogGetMcCtxArrayRequest {
   }
   TO_STRING_KV(K(partition_array_));
 
-  private:
+private:
   common::ObPartitionArray partition_array_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetMcCtxArrayRequest);
 };
 
 class ObLogGetMcCtxArrayResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogGetMcCtxArrayResponse()
   {
     reset();
@@ -271,17 +271,17 @@ class ObLogGetMcCtxArrayResponse {
   }
   TO_STRING_KV(K(mc_ctx_array_));
 
-  private:
+private:
   clog::McCtxArray mc_ctx_array_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetMcCtxArrayResponse);
 };
 
 class ObLogGetRemoteLogRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogGetRemoteLogRequest()
   {
     reset();
@@ -310,18 +310,18 @@ class ObLogGetRemoteLogRequest {
   }
   TO_STRING_KV(K(partition_key_), K(log_id_));
 
-  private:
+private:
   common::ObPartitionKey partition_key_;
   uint64_t log_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetRemoteLogRequest);
 };
 
 class ObLogGetRemoteLogResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogGetRemoteLogResponse()
   {
     reset();
@@ -361,14 +361,14 @@ class ObLogGetRemoteLogResponse {
   }
   TO_STRING_KV(K(partition_key_), K(log_id_), K(trans_id_), K(submit_timestamp_), K(ret_value_));
 
-  private:
+private:
   common::ObPartitionKey partition_key_;
   uint64_t log_id_;
   transaction::ObTransID trans_id_;
   int64_t submit_timestamp_;
   int ret_value_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGetRemoteLogResponse);
 };
 }  // namespace obrpc

@@ -71,7 +71,7 @@ class ObRawExprPrinter {
 #define BINARY_COLLATION 63
 #define INVALID_COLLATION 0
 
-  public:
+public:
   ObRawExprPrinter();
   ObRawExprPrinter(
       char* buf, int64_t buf_len, int64_t* pos, common::ObObjPrintParams print_params = common::ObObjPrintParams());
@@ -81,7 +81,7 @@ class ObRawExprPrinter {
   void init(char* buf, int64_t buf_len, int64_t* pos, ObObjPrintParams print_params);
   int do_print(ObRawExpr* expr, ObStmtScope scope, bool only_column_namespace = false);
 
-  private:
+private:
   int print(ObRawExpr* expr);
 
   int print(ObConstRawExpr* expr);
@@ -106,7 +106,7 @@ class ObRawExprPrinter {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprPrinter);
 
-  private:
+private:
   // data members
   char* buf_;
   int64_t buf_len_;

@@ -61,7 +61,7 @@ struct ObStoredJoinRow : public sql::ObChunkRowStore::StoredRow {
 };
 
 struct ObRowStoreHeader : public common::ObDLinkBase<ObRowStoreHeader> {
-  public:
+public:
   ObRowStoreHeader() : row_store_(ObModIds::OB_ARENA_HASH_JOIN, OB_SERVER_TENANT_ID, true)
   {}
   virtual ~ObRowStoreHeader()
@@ -75,7 +75,7 @@ struct ObRowStoreHeader : public common::ObDLinkBase<ObRowStoreHeader> {
   ((ObRowStoreHeader*)((char*)row_store - (int64_t)(&(((ObRowStoreHeader*)(0))->row_store_))))
 
 class ObHJPartition {
-  public:
+public:
   ObHJPartition() : buf_mgr_(nullptr), batch_mgr_(nullptr), batch_(nullptr), part_level_(-1), part_id_(-1)
   {}
 
@@ -161,7 +161,7 @@ class ObHJPartition {
 
   int record_pre_batch_info(int64_t pre_part_count, int64_t pre_bucket_number, int64_t total_size);
 
-  private:
+private:
   ObHJBufMgr* buf_mgr_;
   ObHJBatchMgr* batch_mgr_;
   ObHJBatch* batch_;

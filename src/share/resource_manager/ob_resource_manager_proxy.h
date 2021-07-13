@@ -26,7 +26,7 @@ class ObObj;
 }  // namespace common
 namespace share {
 class ObResourceManagerProxy {
-  public:
+public:
   ObResourceManagerProxy();
   virtual ~ObResourceManagerProxy();
   int create_plan(uint64_t tenant_id, const common::ObString& plan, const common::ObObj& comment);
@@ -55,7 +55,7 @@ class ObResourceManagerProxy {
   int get_all_resource_mapping_rules_by_user(
       uint64_t tenant_id, const common::ObString& plan, common::ObIArray<ObResourceUserMappingRule>& rules);
 
-  private:
+private:
   int allocate_consumer_group_id(common::ObMySQLTransaction& trans, uint64_t tenant_id, int64_t& group_id);
   int check_if_plan_directive_exist(common::ObMySQLTransaction& trans, uint64_t tenant_id, const common::ObString& plan,
       const common::ObString& group, bool& exist);
@@ -65,19 +65,19 @@ class ObResourceManagerProxy {
       common::ObMySQLTransaction& trans, uint64_t tenant_id, const common::ObString& group, bool& exist);
   int get_percentage(const char* name, const common::ObObj& obj, int64_t& v);
 
-  public:
+public:
   class TransGuard {
-    public:
+  public:
     TransGuard(common::ObMySQLTransaction& trans, int& ret);
     ~TransGuard();
     bool ready();
 
-    private:
+  private:
     common::ObMySQLTransaction& trans_;
     int& ret_;
   };
 
-  private:
+private:
   /* functions */
   int try_init_default_consumer_groups(common::ObMySQLTransaction& trans, uint64_t tenant_id);
   /* variables */

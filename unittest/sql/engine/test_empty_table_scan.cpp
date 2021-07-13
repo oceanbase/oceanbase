@@ -21,7 +21,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
 class ObEmptyTableScanTest : public ::testing::Test {
-  public:
+public:
   const static int64_t TEST_COL_NUM = 2;
 
   const static int64_t TEST_TABLE_ID = 1;
@@ -37,12 +37,12 @@ class ObEmptyTableScanTest : public ::testing::Test {
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObEmptyTableScanTest(const ObEmptyTableScanTest& other);
   ObEmptyTableScanTest& operator=(const ObEmptyTableScanTest& other);
 
-  private:
+private:
   // data members
 };
 ObEmptyTableScanTest::ObEmptyTableScanTest()

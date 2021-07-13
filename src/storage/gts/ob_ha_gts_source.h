@@ -33,11 +33,11 @@ class ObMySQLProxy;
 }
 namespace gts {
 class ObHaGtsSource : public share::ObThreadPool {
-  public:
+public:
   ObHaGtsSource();
   ~ObHaGtsSource();
 
-  public:
+public:
   int init(obrpc::ObSrvRpcProxy* rpc_proxy, common::ObMySQLProxy* sql_proxy, const common::ObAddr& self_addr);
   void reset();
   void destroy();
@@ -45,7 +45,7 @@ class ObHaGtsSource : public share::ObThreadPool {
   void stop();
   void wait();
 
-  public:
+public:
   // if gts does not support this tenant, return OB_NOT_SUPPORTED;
   // if stc <= tenant_cache.srr_, return tenant_cache.gts_;
   // others, return OB_EAGAIN;
@@ -58,9 +58,9 @@ class ObHaGtsSource : public share::ObThreadPool {
   void runTimerTask();
   void refresh_gts(const uint64_t gts_id, const common::ObAddr& gts_server);
 
-  private:
+private:
   class ObTenantCache {
-    public:
+  public:
     ObTenantCache()
     {
       reset();
@@ -70,7 +70,7 @@ class ObHaGtsSource : public share::ObThreadPool {
       reset();
     }
 
-    public:
+  public:
     void reset()
     {
       srr_.reset();
@@ -90,7 +90,7 @@ class ObHaGtsSource : public share::ObThreadPool {
       return gts_;
     }
 
-    private:
+  private:
     transaction::MonotonicTs srr_;
     int64_t gts_;
   };
@@ -104,7 +104,7 @@ class ObHaGtsSource : public share::ObThreadPool {
   typedef common::ObSEArray<ObTenantLease, 16> ObTenantLeaseArray;
 
   class ObGtsMeta {
-    public:
+  public:
     ObGtsMeta()
     {
       reset();
@@ -114,7 +114,7 @@ class ObHaGtsSource : public share::ObThreadPool {
       destroy();
     }
 
-    public:
+  public:
     void reset()
     {
       tenant_lease_array_.reset();
@@ -150,23 +150,23 @@ class ObHaGtsSource : public share::ObThreadPool {
     }
     TO_STRING_KV(K(tenant_lease_array_), K(member_list_));
 
-    private:
+  private:
     ObTenantLeaseArray tenant_lease_array_;
     common::ObMemberList member_list_;
   };
 
   class ObHaGtsSourceTask : public common::ObTimerTask {
-    public:
+  public:
     ObHaGtsSourceTask() : gts_source_(NULL)
     {}
     ~ObHaGtsSourceTask()
     {}
 
-    public:
+  public:
     int init(ObHaGtsSource* gts_source);
     virtual void runTimerTask();
 
-    private:
+  private:
     ObHaGtsSource* gts_source_;
   };
 
@@ -184,7 +184,7 @@ class ObHaGtsSource : public share::ObThreadPool {
   const static uint64_t REFRESHING_FLAG = (1ULL << 63);
   const static int64_t RETRY_TRIGGER_INTERVAL = 10 * 1000;
 
-  private:
+private:
   void refresh_gts_();
   void load_gts_meta_map_();
   int get_gts_meta_array_(ObGtsIDArray& gts_id_array, ObGtsMetaArray& gts_meta_array);
@@ -194,7 +194,7 @@ class ObHaGtsSource : public share::ObThreadPool {
   static int64_t set_refreshing_(const int64_t refresh_ts);
   static int64_t reset_refreshing_(const int64_t refresh_ts);
 
-  private:
+private:
   bool is_inited_;
   ObGtsMetaMap gts_meta_map_;
   ObTenantCacheMap tenant_cache_map_;
@@ -206,7 +206,7 @@ class ObHaGtsSource : public share::ObThreadPool {
   int64_t latest_refresh_ts_;
   int64_t latest_trigger_ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHaGtsSource);
 };
 }  // namespace gts

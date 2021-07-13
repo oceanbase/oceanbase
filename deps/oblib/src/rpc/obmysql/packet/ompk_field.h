@@ -20,14 +20,14 @@ namespace oceanbase {
 namespace obmysql {
 
 class OMPKField : public ObMySQLPacket {
-  public:
+public:
   explicit OMPKField(ObMySQLField& field);
   virtual ~OMPKField()
   {}
 
   virtual int serialize(char* buffer, int64_t len, int64_t& pos) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(OMPKField);
 
   ObMySQLField& field_;

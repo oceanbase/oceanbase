@@ -29,7 +29,7 @@ class ObExecContext;
 class ObHashJoin : public ObJoin {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   static const int64_t RATIO_OF_BUCKETS = 2;
   // min row count for estimated row count
   static const int64_t MIN_ROW_COUNT = 10000;
@@ -96,7 +96,7 @@ class ObHashJoin : public ObJoin {
     hj_hash_fun hash_ptr_;
   };
 
-  private:
+private:
   enum ObJoinState {
     JS_JOIN_END,
     JS_READ_RIGHT,
@@ -238,12 +238,12 @@ class ObHashJoin : public ObJoin {
     common::ObObjType cmp_type_;
     common::ObCollationType ctype_;  // collation type
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(EqualConditionInfo);
   };
 
   class DefaultHashJoin {
-    public:
+  public:
     DefaultHashJoin()
     {}
     ~DefaultHashJoin()
@@ -255,7 +255,7 @@ class ObHashJoin : public ObJoin {
   };
 
   class HashInnerJoin : public DefaultHashJoin {
-    public:
+  public:
     HashInnerJoin()
     {}
     ~HashInnerJoin()
@@ -266,11 +266,11 @@ class ObHashJoin : public ObJoin {
   };
   enum HJNestLoopState { START, GOING, RECURSIVE, END };
 
-  public:
+public:
   class ObHashJoinCtx : public ObJoinCtx {
     friend class ObHashJoin;
 
-    public:
+  public:
     enum HJState { INIT, NORMAL, NEXT_BATCH };
 
     enum HJProcessor { NONE = 0, NEST_LOOP = 1, RECURSIVE = 2, IN_MEMORY = 4 };
@@ -315,7 +315,7 @@ class ObHashJoin : public ObJoin {
       ObJoinCtx::destroy();
     }
 
-    private:
+  private:
     HJState hj_state_;
     HJProcessor hj_processor_;
     join::ObHJBufMgr* buf_mgr_;
@@ -341,7 +341,7 @@ class ObHashJoin : public ObJoin {
   class ObPartHashJoinCtx : public ObHashJoinCtx {
     friend class ObHashJoin;
 
-    public:
+  public:
     explicit ObPartHashJoinCtx(ObExecContext& ctx);
     virtual ~ObPartHashJoinCtx()
     {}
@@ -454,7 +454,7 @@ class ObHashJoin : public ObJoin {
       return get_mem_used() > sql_mem_processor_.get_mem_bound();
     }
 
-    private:
+  private:
     ObJoinState state_;
     uint64_t hash_value_;     // cur right row's hash_value
     bool right_has_matched_;  // if cur right row has matched
@@ -494,7 +494,7 @@ class ObHashJoin : public ObJoin {
   typedef int (ObHashJoin::*state_operation_func_type)(ObPartHashJoinCtx& join_ctx) const;
   typedef int (ObHashJoin::*state_function_func_type)(ObPartHashJoinCtx& join_ctx, const common::ObNewRow*& row) const;
 
-  public:
+public:
   explicit ObHashJoin(common::ObIAllocator& alloc);
   virtual ~ObHashJoin();
   virtual void reset();
@@ -502,7 +502,7 @@ class ObHashJoin : public ObJoin {
   virtual int rescan(ObExecContext& exec_ctx) const;
   virtual int part_rescan(ObExecContext& exec_ctx, bool reset_all) const;
 
-  private:
+private:
   int init_join_ctx(ObExecContext& ctx) const;
   int init_join_partition(ObPartHashJoinCtx* join_ctx) const;
   // get next row
@@ -612,7 +612,7 @@ class ObHashJoin : public ObJoin {
   void set_partition_memory_limit(ObPartHashJoinCtx& join_ctx, const int64_t mem_limit) const;
   int get_max_memory_size(ObPartHashJoinCtx& join_ctx, int64_t input_size) const;
 
-  private:
+private:
   state_operation_func_type state_operation_func_[JS_STATE_COUNT];
   state_function_func_type state_function_func_[JS_STATE_COUNT][FT_TYPE_COUNT];
   int64_t mem_limit_;

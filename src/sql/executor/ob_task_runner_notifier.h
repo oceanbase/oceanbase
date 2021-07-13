@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObTaskRunnerNotifier {
-  public:
+public:
   ObTaskRunnerNotifier(ObSQLSessionInfo* session, ObSQLSessionMgr* mgr) : session_(session), mgr_(mgr)
   {}
 
@@ -37,11 +37,11 @@ class ObTaskRunnerNotifier {
     return ret;
   }
 
-  private:
+private:
   ObSQLSessionInfo* session_;
   ObSQLSessionMgr* mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTaskRunnerNotifier);
 };
 }  // namespace sql

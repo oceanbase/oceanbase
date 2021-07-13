@@ -33,7 +33,7 @@ class ObServerManager;
 
 /// Check whether have partitions on non-alive servers.
 class ObEmptyServerCheckRound {
-  public:
+public:
   const static int64_t PT_SYNC_TIMEOUT = 10L * 60 * 1000 * 1000;  // 10 minutes
   explicit ObEmptyServerCheckRound(volatile bool& stop);
   virtual ~ObEmptyServerCheckRound();
@@ -45,11 +45,11 @@ class ObEmptyServerCheckRound {
   int check(common::ObThreadCond& cond);
   int pt_sync_finish(const common::ObAddr& server, const int64_t version);
 
-  private:
+private:
   int wait_pt_sync_finish(common::ObThreadCond& cond);
   int update_with_partition_flag();
 
-  private:
+private:
   bool inited_;
   volatile bool& stop_;
   int64_t version_;
@@ -67,7 +67,7 @@ class ObEmptyServerCheckRound {
 
 /// Empty server checker thread.
 class ObEmptyServerChecker : public ObRsReentrantThread {
-  public:
+public:
   ObEmptyServerChecker();
   virtual ~ObEmptyServerChecker();
 
@@ -85,7 +85,7 @@ class ObEmptyServerChecker : public ObRsReentrantThread {
   virtual int notify_check();
   virtual int pt_sync_finish(const common::ObAddr& server, const int64_t version);
 
-  private:
+private:
   bool inited_;
   bool need_check_;
   ObEmptyServerCheckRound check_round_;

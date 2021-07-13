@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace election {
 class MockObIElectionMgr : public ObIElectionMgr {
-  public:
+public:
   MockObIElectionMgr()
   {}
   virtual ~MockObIElectionMgr()
@@ -69,7 +69,7 @@ class MockObIElectionMgr : public ObIElectionMgr {
     return common::OB_SUCCESS;
   }
 
-  public:
+public:
   virtual int add_partition(const common::ObPartitionKey& partition, const int64_t replica_num,
       ObIElectionCallback* election_cb, ObIElection*& election)
   {
@@ -114,7 +114,7 @@ class MockObIElectionMgr : public ObIElectionMgr {
     return common::OB_SUCCESS;
   }
 
-  public:
+public:
   virtual int handle_election_msg(const ObElectionMsgBuffer& msgbuf, obrpc::ObElectionRpcResult& result)
   {
     UNUSED(msgbuf);
@@ -122,7 +122,7 @@ class MockObIElectionMgr : public ObIElectionMgr {
     return common::OB_SUCCESS;
   }
 
-  public:
+public:
   virtual int set_candidate(const common::ObPartitionKey& partition, const common::ObMemberList& prev_mlist,
       const common::ObMemberList& curr_mlist)
   {

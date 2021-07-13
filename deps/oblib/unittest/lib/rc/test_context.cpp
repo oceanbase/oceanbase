@@ -34,7 +34,7 @@ void has_unfree_callback(char*)
 }
 
 class TestContext : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

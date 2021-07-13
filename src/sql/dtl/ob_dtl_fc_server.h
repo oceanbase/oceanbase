@@ -30,11 +30,11 @@ namespace sql {
 namespace dtl {
 
 class ObTenantDfc {
-  public:
+public:
   ObTenantDfc(uint64_t tenant_id);
   virtual ~ObTenantDfc();
 
-  public:
+public:
   static int mtl_init(uint64_t tenant_id, ObTenantDfc*& tenant_dfc);
   static void mtl_destroy(ObTenantDfc*& tenant_dfc);
 
@@ -54,7 +54,7 @@ class ObTenantDfc {
 
   int deregister_dfc(ObDtlFlowControl& dfc);
 
-  public:
+public:
   // for cache first msg and release first msg
   int64_t get_hash_value(int64_t chid);
   int cache_buffer(int64_t chid, ObDtlLinkedBuffer*& data_buffer, bool attach = false);
@@ -128,14 +128,14 @@ class ObTenantDfc {
     return &tenant_mem_mgr_;
   }
 
-  private:
+private:
   static int init_channel_mem_manager();
   static int init_first_buffer_manager();
 
   int clean_on_timeout();
   virtual void calc_max_buffer(int64_t max_parallel_cnt);
 
-  private:
+private:
   // global data flow control
   ObDtlFlowControl tenant_dfc_;
   uint64_t tenant_id_;
@@ -156,12 +156,12 @@ class ObTenantDfc {
   ObDtlTenantMemManager tenant_mem_mgr_;
   ObDtlLocalFirstBufferCacheManager first_buffer_mgr_;
 
-  public:
+public:
   TO_STRING_KV(K_(tenant_id), K_(blocked_dfc_cnt), K_(channel_total_cnt));
 };
 
 class ObDfcServer : public ObTimerTask {
-  public:
+public:
   ObDfcServer()
   {}
   ~ObDfcServer()
@@ -194,7 +194,7 @@ class ObDfcServer : public ObTimerTask {
 
   ObDtlTenantMemManager* get_tenant_mem_manager(int64_t tenant_id);
 
-  private:
+private:
   int get_tenant_dfc_by_id(uint64_t tenant_id, ObTenantDfc*& tenant_dfc);
   common::hash::ObHashMap<uint64_t, ObTenantDfc*, common::hash::NoPthreadDefendMode> tenant_dfc_map_;
   typedef common::hash::ObHashMap<uint64_t, ObTenantDfc*, common::hash::NoPthreadDefendMode>::iterator

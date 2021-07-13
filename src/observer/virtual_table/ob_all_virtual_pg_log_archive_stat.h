@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace observer {
 struct PGLogArchiveStat {
-  public:
+public:
   PGLogArchiveStat()
   {
     reset();
@@ -93,20 +93,20 @@ class ObAllVirtualPGLogArchiveStat : public common::ObVirtualTableIterator {
     CUR_DATA_FILE_OFFSET,
   };
 
-  public:
+public:
   ObAllVirtualPGLogArchiveStat();
   virtual ~ObAllVirtualPGLogArchiveStat();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   void reset();
   int init(storage::ObPartitionService* partition_service, common::ObAddr& addr);
 
-  private:
+private:
   int get_log_archive_stat_(PGLogArchiveStat& stat);
   int get_iter_();
 
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* ps_;
   common::ObAddr addr_;

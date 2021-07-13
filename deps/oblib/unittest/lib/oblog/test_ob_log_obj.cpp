@@ -23,7 +23,7 @@ enum ObLogTestLevel {
   third = 2,
 };
 class ObLogTest {
-  public:
+public:
   ObLogTest() : num_(10), name_("hello"), lever_(first)
   {}
   virtual ~ObLogTest(){};

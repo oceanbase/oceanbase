@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace clog {
 class ObLogCallbackHandler;
 class ObLogCallbackThreadPool : public lib::TGTaskHandler {
-  public:
+public:
   ObLogCallbackThreadPool() : is_inited_(false), handler_(NULL)
   {}
   virtual ~ObLogCallbackThreadPool()
@@ -30,23 +30,23 @@ class ObLogCallbackThreadPool : public lib::TGTaskHandler {
     destroy();
   }
 
-  public:
+public:
   int init(int tg_id, ObLogCallbackHandler* handler, const common::ObAddr& self_addr);
   void destroy();
   // virtual void *on_begin();
   virtual void handle(void* task);
 
-  private:
+private:
   // Adaptive thread pool's parameters
   const int64_t LEAST_THREAD_NUM = 8;
   const int64_t ESTIMATE_TS = 80000;
   const int64_t EXPAND_RATE = 70;
   const int64_t SHRINK_RATE = 35;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogCallbackThreadPool);
 
-  private:
+private:
   bool is_inited_;
   ObLogCallbackHandler* handler_;
   int tg_id_;

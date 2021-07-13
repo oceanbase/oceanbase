@@ -43,7 +43,7 @@ static uint64_t addrv_to_server_id(easy_addr_t addr)
 class IServerAdapter;
 class Transport;
 class DataBuffer {
-  public:
+public:
   DataBuffer(easy_buf_t* pb)
   {
     b = pb;
@@ -180,7 +180,7 @@ class DataBuffer {
     return true;
   }
 
-  private:
+private:
   easy_pool_t* pool;
   easy_list_t* l;
   easy_buf_t* b;
@@ -188,14 +188,14 @@ class DataBuffer {
 };
 
 class PacketHeader {
-  public:
+public:
   uint32_t _chid;
   int _pcode;
   int _dataLen;
 };
 
 class Packet {
-  public:
+public:
   Packet()
   {
     memset(&_packetHeader, 0, sizeof(PacketHeader));
@@ -241,13 +241,13 @@ class Packet {
   virtual bool encode(DataBuffer* output) = 0;
   virtual bool decode(DataBuffer* input, PacketHeader* header) = 0;
 
-  public:
+public:
   PacketHeader _packetHeader;
   easy_request_t* r;
 };
 
 class ControlPacket : public Packet {
-  public:
+public:
   enum { CMD_BAD_PACKET = 1, CMD_TIMEOUT_PACKET, CMD_DISCONN_PACKET };
   ControlPacket(int c) : _command(c)
   {}
@@ -268,12 +268,12 @@ class ControlPacket : public Packet {
     return false;
   }
 
-  private:
+private:
   int _command;
 };
 
 class IOComponent {
-  public:
+public:
   IOComponent()
   {}
   ~IOComponent()
@@ -283,12 +283,12 @@ class IOComponent {
     this->l = l;
   }
 
-  private:
+private:
   easy_listen_t* l;
 };
 
 class IPacketFactory {
-  public:
+public:
   IPacketFactory()
   {
     flag = 0x416e4574;
@@ -304,7 +304,7 @@ class IPacketFactory {
 
 class IPacketStreamer {
 
-  public:
+public:
   IPacketStreamer()
   {
     _factory = NULL;
@@ -410,12 +410,12 @@ class IPacketStreamer {
     return EASY_OK;
   }
 
-  protected:
+protected:
   IPacketFactory* _factory;
 };
 
 class IPacketHandler {
-  public:
+public:
   enum HPRetCode {
     KEEP_CHANNEL = 0,    // easy_ok
     CLOSE_CHANNEL = -1,  // easy_error
@@ -482,13 +482,13 @@ class IPacketHandler {
   {}
   virtual HPRetCode handlePacket(Packet* packet, void* args) = 0;
 
-  protected:
+protected:
   IPacketStreamer* client_streamer;
   easy_io_handler_pt client_handler;
 };
 
 class PacketQueue {
-  public:
+public:
   PacketQueue(easy_message_t* pm)
   {
     m = pm;
@@ -502,7 +502,7 @@ class PacketQueue {
 
 class Connection {
 
-  public:
+public:
   Connection()
   {}
   Connection(easy_connection_t* c, easy_request_t* r)
@@ -565,14 +565,14 @@ class Connection {
     return htons(((addr.addr >> 32) & 0xffff));
   }
 
-  protected:
+protected:
   easy_addr_t addr;
   easy_connection_t* c;
   easy_request_t* r;
 };
 
 class IServerAdapter {
-  public:
+public:
   IServerAdapter()
   {
     memset(&server_handler, 0, sizeof(easy_io_handler_pt));
@@ -646,14 +646,14 @@ class IServerAdapter {
     return false;
   }
 
-  protected:
+protected:
   IPacketStreamer* server_streamer;
   easy_io_handler_pt server_handler;
 };
 
 class DefaultPacketStreamer : public IPacketStreamer {
 
-  public:
+public:
   DefaultPacketStreamer()
   {}
 
@@ -673,7 +673,7 @@ class DefaultPacketStreamer : public IPacketStreamer {
 
 class Transport {
 
-  public:
+public:
   Transport()
   {
     _eio = easy_eio_create(NULL, 1);
@@ -742,19 +742,19 @@ class Transport {
     return _eio;
   }
 
-  private:
+private:
   easy_io_t* _eio;
 };
 
 class IPacketQueueHandler {
-  public:
+public:
   virtual ~IPacketQueueHandler()
   {}
   virtual bool handlePacketQueue(Packet* packet, void* args) = 0;
 };
 
 class PacketQueueThread {
-  public:
+public:
   PacketQueueThread()
   {
     _threadPool = NULL;
@@ -794,13 +794,13 @@ class PacketQueueThread {
     return easy_thread_pool_push_message(_threadPool, queue.m, (int64_t)(long)queue.m);
   }
 
-  private:
+private:
   IPacketQueueHandler* _handler;
   easy_thread_pool_t* _threadPool;
 };
 
 class ConnectionManager {
-  public:
+public:
   ConnectionManager(Transport* transport, IPacketStreamer* streamer, IPacketHandler* packetHandler)
   {
     _transport = transport;
@@ -871,7 +871,7 @@ class ConnectionManager {
     return true;
   }
 
-  private:
+private:
   Transport* _transport;
   IPacketHandler* _packetHandler;
   easy_client_t* _cl;

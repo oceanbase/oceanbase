@@ -26,7 +26,7 @@ namespace transaction {
 struct ObTrxMsgBase : public obrpc::ObIFill {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTrxMsgBase()
       : tenant_id_(common::OB_INVALID_TENANT_ID), msg_type_(OB_TRX_MSG_UNKNOWN), trans_time_(0), timestamp_(0)
   {}
@@ -48,7 +48,7 @@ struct ObTrxMsgBase : public obrpc::ObIFill {
   TO_STRING_KV(K_(tenant_id), K_(trans_id), K_(msg_type), K_(trans_time), K_(sender), K_(receiver), K_(trans_param),
       K_(sender_addr), K_(timestamp));
 
-  public:
+public:
   uint64_t tenant_id_;
   ObTransID trans_id_;
   int64_t msg_type_;
@@ -342,7 +342,7 @@ PartitionLogInfoArray partition_log_info_arr_;
 struct ObTrx2PCPrepareRequest : public ObTrxMsgBase {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTrx2PCPrepareRequest() : status_(common::OB_SUCCESS), request_id_(0), stc_(0), is_xa_prepare_(false)
   {}
   int init(const uint64_t tenant_id, const ObTransID& trans_id, const int64_t msg_type, const int64_t trans_time,
@@ -368,7 +368,7 @@ struct ObTrx2PCPrepareRequest : public ObTrxMsgBase {
   TO_STRING_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(stc),
       K_(partition_log_info_arr), K_(batch_same_leader_partitions), K_(app_trace_info), K_(xid), K_(is_xa_prepare));
 
-  public:
+public:
   common::ObAddr scheduler_;
   common::ObPartitionKey coordinator_;
   common::ObPartitionArray participants_;
@@ -386,7 +386,7 @@ struct ObTrx2PCPrepareRequest : public ObTrxMsgBase {
 struct ObTrx2PCPrepareResponse : public ObTrxMsgBase {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTrx2PCPrepareResponse()
       : prepare_log_id_(0),
         prepare_log_timestamp_(0),
@@ -423,7 +423,7 @@ struct ObTrx2PCPrepareResponse : public ObTrxMsgBase {
       K_(partition_log_info_arr), K_(trans_version), K_(prepare_log_id), K_(prepare_log_timestamp),
       K_(need_wait_interval_us), K_(app_trace_info), K_(publish_version), K_(xid), K_(is_xa_prepare));
 
-  public:
+public:
   common::ObAddr scheduler_;
   common::ObPartitionKey coordinator_;
   common::ObPartitionArray participants_;
@@ -445,7 +445,7 @@ struct ObTrx2PCPrepareResponse : public ObTrxMsgBase {
 struct ObTrx2PCCommitRequest : public ObTrxMsgBase {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTrx2PCCommitRequest() : trans_version_(0), request_id_(0), status_(common::OB_SUCCESS)
   {}
   int init(const uint64_t tenant_id, const ObTransID& trans_id, const int64_t msg_type, const int64_t trans_time,
@@ -465,7 +465,7 @@ struct ObTrx2PCCommitRequest : public ObTrxMsgBase {
   TO_STRING_KV(
       K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(batch_same_leader_partitions));
 
-  public:
+public:
   common::ObAddr scheduler_;
   common::ObPartitionKey coordinator_;
   common::ObPartitionArray participants_;
@@ -481,10 +481,10 @@ typedef ObTrx2PCPreCommitRequest ObTrx2PCPreCommitResponse;
 struct ObTrxListenerCommitRequest : public ObTrx2PCCommitRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   INHERIT_TO_STRING_KV("ObTrx2PCCommitRequest", ObTrx2PCCommitRequest, K_(split_info));
 
-  public:
+public:
   ObTransSplitInfo split_info_;
 };
 
@@ -493,7 +493,7 @@ typedef ObTrxListenerCommitRequest ObTrxListenerCommitResponse;
 struct ObTrx2PCCommitResponse : public ObTrxMsgBase {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTrx2PCCommitResponse() : trans_version_(0), request_id_(0), status_(common::OB_SUCCESS), commit_log_ts_(0)
   {}
   int init(const uint64_t tenant_id, const ObTransID& trans_id, const int64_t msg_type, const int64_t trans_time,
@@ -514,7 +514,7 @@ struct ObTrx2PCCommitResponse : public ObTrxMsgBase {
   TO_STRING_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status),
       K_(batch_same_leader_partitions), K_(commit_log_ts));
 
-  public:
+public:
   common::ObAddr scheduler_;
   common::ObPartitionKey coordinator_;
   common::ObPartitionArray participants_;
@@ -528,7 +528,7 @@ struct ObTrx2PCCommitResponse : public ObTrxMsgBase {
 struct ObTrx2PCAbortRequest : public ObTrxMsgBase {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTrx2PCAbortRequest() : request_id_(0), status_(common::OB_SUCCESS)
   {}
   int init(const uint64_t tenant_id, const ObTransID& trans_id, const int64_t msg_type, const int64_t trans_time,
@@ -548,7 +548,7 @@ struct ObTrx2PCAbortRequest : public ObTrxMsgBase {
   TO_STRING_KV(
       K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status), K_(batch_same_leader_partitions));
 
-  public:
+public:
   common::ObAddr scheduler_;
   common::ObPartitionKey coordinator_;
   common::ObPartitionArray participants_;
@@ -562,7 +562,7 @@ typedef ObTrx2PCAbortRequest ObTrx2PCAbortResponse;
 struct ObTrx2PCClearRequest : public ObTrxMsgBase {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTrx2PCClearRequest() : request_id_(0), status_(common::OB_SUCCESS), clear_log_base_ts_(0)
   {}
   int init(const uint64_t tenant_id, const ObTransID& trans_id, const int64_t msg_type, const int64_t trans_time,
@@ -582,7 +582,7 @@ struct ObTrx2PCClearRequest : public ObTrxMsgBase {
   TO_STRING_KV(K_(scheduler), K_(coordinator), K_(participants), K_(request_id), K_(status),
       K_(batch_same_leader_partitions), K_(clear_log_base_ts));
 
-  public:
+public:
   common::ObAddr scheduler_;
   common::ObPartitionKey coordinator_;
   common::ObPartitionArray participants_;
@@ -596,10 +596,10 @@ typedef ObTrx2PCClearRequest ObTrx2PCClearResponse;
 struct ObTrxListenerAbortRequest : public ObTrx2PCAbortRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   INHERIT_TO_STRING_KV("ObTrx2PCAbortRequest", ObTrx2PCAbortRequest, K_(split_info));
 
-  public:
+public:
   ObTransSplitInfo split_info_;
 };
 
@@ -677,7 +677,7 @@ union ObTransMsgUnionData {
 };
 
 class ObTransMsgUnion {
-  public:
+public:
   ObTransMsgUnion(const int64_t msg_type);
   ~ObTransMsgUnion();
   void set_receiver(const common::ObPartitionKey& receiver);

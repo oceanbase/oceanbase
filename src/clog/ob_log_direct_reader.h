@@ -33,7 +33,7 @@ namespace clog {
 class Log2File;
 // Alloc a buffer which is aligned, used to read or write file directly
 class ObAlignedBuffer {
-  public:
+public:
   ObAlignedBuffer();
   ~ObAlignedBuffer();
   // Allocate memory space according to size and align_size during initialization
@@ -54,7 +54,7 @@ class ObAlignedBuffer {
   }
   TO_STRING_KV(KP(align_buf_), K(size_), K(align_size_), K(is_inited_));
 
-  private:
+private:
   // Save the aligned starting address in the allocated space
   char* align_buf_;
   // The size of the externally visible space
@@ -63,22 +63,22 @@ class ObAlignedBuffer {
   int64_t align_size_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAlignedBuffer);
 };
 
 class ObLogDirectReader : public ObILogDirectReader {
-  public:
+public:
   ObLogDirectReader();
   virtual ~ObLogDirectReader();
 
-  public:
+public:
   int init(const char* log_dir, const char* shm_buf, const bool use_cache, ObLogCache* log_cache, ObTailCursor* tail,
       ObLogWritePoolType type);
   int get_file_id_range(uint32_t& min_file_id, uint32_t& max_file_id) const;
   void destroy();
 
-  public:
+public:
   // Interface of read
   // Read data from disk directlly
   //
@@ -114,7 +114,7 @@ class ObLogDirectReader : public ObILogDirectReader {
       const offset_t want_offset, const int64_t want_size, char* user_buf, const int64_t buf_size,
       int64_t& origin_size);
 
-  private:
+private:
   offset_t limit_by_file_size(const int64_t offset) const;
   int limit_param_by_tail(const ObReadParam& want_param, ObReadParam& real_param);
   void align_param_for_dio_without_cache(const ObReadParam& param, ObReadParam& align_param, int64_t& backoff);
@@ -148,11 +148,11 @@ class ObLogDirectReader : public ObILogDirectReader {
 
   int get_log_file_type(ObLogWritePoolType& file_type) const;
 
-  private:
+private:
   static const int64_t STAT_TIME_INTERVAL = 10 * 1000 * 1000;
   static const int64_t READ_DISK_SIZE = CLOG_CACHE_SIZE;
 
-  private:
+private:
   bool is_inited_;
   bool use_cache_;
   common::ObILogFileStore* file_store_;

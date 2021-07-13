@@ -18,13 +18,13 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualMemoryContextStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualMemoryContextStat();
   virtual ~ObAllVirtualMemoryContextStat();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   char entity_buf_[32];
   char p_entity_buf_[32];

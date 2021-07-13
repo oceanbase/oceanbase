@@ -40,7 +40,7 @@ namespace rootserver {
 enum RestoreTaskStatus { RESTORE_INIT = 0, RESTORE_DOING, RESTORE_DONE, RESTORE_STOP, RESTORE_FAIL };
 
 struct RestoreJob {
-  public:
+public:
   RestoreJob()
       : job_id_(common::OB_INVALID_ID),
         level_(0),
@@ -69,14 +69,14 @@ struct RestoreJob {
   common::ObString backup_uri_;
   common::ObString tenant_name_;
 
-  private:
+private:
   uint64_t tenant_id_;       /* valid if level_ >= 0 */
   uint64_t database_id_;     /* valid if level_ >= 1 */
   uint64_t table_id_;        /* valid if level_ >= 2 */
   uint64_t backup_table_id_; /* valid if level_ >= 2 */
   uint64_t partition_id_;    /* valid if level_ >= 3 */
 
-  public:
+public:
   bool is_valid()
   {
     return common::OB_INVALID_ID != job_id_;
@@ -111,12 +111,12 @@ struct RestoreJob {
   TO_STRING_KV(K_(job_id), K_(level), K_(status), K_(start_time), K_(backup_end_time), K_(recycle_end_time),
       K_(backup_uri), K_(tenant_name), K_(tenant_id), K_(table_id), K_(backup_table_id), K_(partition_id));
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
 };
 
 struct PartitionRestoreTask {
-  public:
+public:
   typedef common::ObSEArray<share::ObSchemaIdPair, 10> ObSchemaIdPairs;
   PartitionRestoreTask()
       : tenant_id_(common::OB_INVALID_TENANT_ID),
@@ -131,7 +131,7 @@ struct PartitionRestoreTask {
   {}
   ~PartitionRestoreTask() = default;
 
-  public:
+public:
   uint64_t tenant_id_;
   union {
     uint64_t table_id_;
@@ -155,7 +155,7 @@ struct PartitionRestoreTask {
 
 // not used
 class ObRestoreProgressTracker {
-  public:
+public:
   ObRestoreProgressTracker() : cond_(), has_task_(true), lock_(false)
   {}
   ~ObRestoreProgressTracker()
@@ -211,7 +211,7 @@ class ObRestoreProgressTracker {
     lock_ = false;
   }
 
-  private:
+private:
   common::ObThreadCond cond_;
   volatile bool has_task_;
   volatile bool lock_;
@@ -222,7 +222,7 @@ class TenantBalanceStat;
 class ObDDLService;
 class ObRootBalancer;
 class ObRestoreMgrCtx {
-  public:
+public:
   ObRestoreMgrCtx()
       : conn_env_(NULL),
         task_mgr_(NULL),

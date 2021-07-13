@@ -29,7 +29,7 @@ class ObDatabaseSchema;
 namespace observer {
 
 class ObShowDatabaseStatus : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObShowDatabaseStatus();
   virtual ~ObShowDatabaseStatus();
 
@@ -45,10 +45,10 @@ class ObShowDatabaseStatus : public common::ObVirtualTableScannerIterator {
       common::ObObj* cells, const int64_t col_count);
   int add_all_database_status();
 
-  private:
+private:
   uint64_t tenant_id_;
 
-  private:
+private:
   enum DATABASE_STATUS_COLUMN {
     DATABASE_NAME = common::OB_APP_MIN_COLUMN_ID,
     HOST,

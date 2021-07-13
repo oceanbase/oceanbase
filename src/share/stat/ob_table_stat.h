@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace common {
 
 class ObTableStat : public common::ObIKVCacheValue {
-  public:
+public:
   struct Key : public common::ObIKVCacheKey {
     ObPartitionKey pkey_;
     Key() : pkey_()
@@ -117,7 +117,7 @@ class ObTableStat : public common::ObIKVCacheValue {
     return ret;
   }
 
-  public:
+public:
   int64_t get_data_version() const
   {
     return data_version_;
@@ -181,7 +181,7 @@ class ObTableStat : public common::ObIKVCacheValue {
   TO_STRING_KV(
       K_(row_count), K_(data_size), K_(macro_blocks_num), K_(micro_blocks_num), K_(average_row_size), K_(data_version));
 
-  private:
+private:
   int64_t row_count_;
   int64_t data_size_;
   int64_t macro_blocks_num_;

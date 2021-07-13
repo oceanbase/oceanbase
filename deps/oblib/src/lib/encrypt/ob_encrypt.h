@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class DES_crypt {
-  public:
+public:
   DES_crypt();
   ~DES_crypt();
 
@@ -46,7 +46,7 @@ class DES_crypt {
       const ObString& user_name, const int64_t timestamp, const int64_t skey, char* buffer, int64_t& buffer_length);
   int des_decrypt(ObString& user_name, int64_t& timestamp, const int64_t skey, char* buffer, int64_t buffer_length);
 
-  private:
+private:
   const static int64_t OB_CRYPT_UNIT = 64;
   const static int64_t OB_BYTE_NUM = 8;
   const static int32_t OB_OP_MASK = 0x0080;
@@ -60,7 +60,7 @@ class DES_crypt {
   const static int ENCODE_FLAG = 0;
   const static int DECODE_FLAG = 1;
 
-  private:
+private:
   char keybyte_[OB_ENRYPT_KEY_BYTE];
   char txtbyte_[OB_ENCRYPT_TXT_BYTE];
   char txtptr_[OB_MAX_TOKEN_BUFFER_LENGTH];

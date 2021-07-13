@@ -21,18 +21,18 @@ namespace common {
 namespace zstd {
 
 class ObZstdStreamCtxAllocator {
-  public:
+public:
   ObZstdStreamCtxAllocator();
   virtual ~ObZstdStreamCtxAllocator();
   void* alloc(size_t size);
   void free(void* addr);
 
-  private:
+private:
   ModulePageAllocator allocator_;
 };
 
 class ObZstdStreamCompressor : public ObStreamCompressor {
-  public:
+public:
   explicit ObZstdStreamCompressor()
   {}
   virtual ~ObZstdStreamCompressor()
@@ -58,7 +58,7 @@ class ObZstdStreamCompressor : public ObStreamCompressor {
   int get_compress_bound_size(const int64_t src_size, int64_t& bound_size) const;
   int insert_uncompressed_block(void* dctx, const void* block, const int64_t block_size);
 
-  private:
+private:
   static const char* compressor_name;
 };
 }  // namespace zstd

@@ -21,7 +21,7 @@ namespace common {
 // T should be a derived class of common::DLink
 template <typename T>
 class ObTCFreeList {
-  public:
+public:
   ObTCFreeList() : magic_(0xFBEE1127), max_length_(1), low_water_(0), overlimit_times_(0), list_()
   {}
   virtual ~ObTCFreeList()
@@ -99,7 +99,7 @@ class ObTCFreeList {
     ++overlimit_times_;
   }
 
-  private:
+private:
   // data members
   int32_t magic_;
   int32_t max_length_;
@@ -107,7 +107,7 @@ class ObTCFreeList {
   int32_t overlimit_times_;
   common::ObDList<T> list_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTCFreeList);
 };
 
@@ -131,7 +131,7 @@ void ob_tc_factory_callback_on_put(T* obj, BoolType<false>)
 template <typename T, int64_t MAX_CLASS_NUM, const char* LABEL, int64_t MEM_LIMIT = 1 << 24 /*16MB*/,
     int32_t MAX_FREE_LIST_LENGTH = 1024>
 class ObTCFactory {
-  public:
+public:
   static ObTCFactory* get_instance();
 
   T* get(int32_t type_id, const uint64_t tenant_id = OB_SERVER_TENANT_ID);
@@ -143,28 +143,28 @@ class ObTCFactory {
     mem_limit_ = mem_limit;
   }
 
-  public:
+public:
   // function members
   ObTCFactory();
   virtual ~ObTCFactory()
   {}
 
-  private:
+private:
   // types and constants
   typedef ObTCFactory<T, MAX_CLASS_NUM, LABEL, MEM_LIMIT, MAX_FREE_LIST_LENGTH> self_t;
   typedef ObGlobalFactory<T, MAX_CLASS_NUM, LABEL> global_factory_t;
   typedef ObTCFreeList<T> freelist_t;
   static const int32_t MAX_OVERLIMIT_TIMES = 3;
 
-  private:
+private:
   T* get_from_global_factory(int32_t type_id, int32_t obj_size);
   void list_too_long(freelist_t& list, int32_t type_id, int32_t obj_size);
   void garbage_collect();
 
-  private:
+private:
   static volatile self_t* TC_FACTORY_LIST_HEAD;
 
-  private:
+private:
   // data members
   freelist_t freelists_[MAX_CLASS_NUM];
   int64_t mem_size_;
@@ -173,7 +173,7 @@ class ObTCFactory {
   volatile self_t* next_;
   int64_t mem_limit_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTCFactory);
 };
 

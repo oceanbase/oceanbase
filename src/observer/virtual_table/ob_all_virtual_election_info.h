@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace observer {
 class ObGVElectionInfo : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObGVElectionInfo() : ObVirtualTableScannerIterator()
   {
     reset();
@@ -37,15 +37,15 @@ class ObGVElectionInfo : public common::ObVirtualTableScannerIterator {
     destroy();
   }
 
-  public:
+public:
   int inner_get_next_row(common::ObNewRow*& row);
   void reset();
   void destroy();
 
-  private:
+private:
   int prepare_to_read_();
 
-  private:
+private:
   election::ObElectionMgr* election_mgr_;
   char ip_buffer_[common::OB_IP_STR_BUFF];
   char current_leader_ip_port_buffer_[common::OB_IP_PORT_STR_BUFF];
@@ -54,7 +54,7 @@ class ObGVElectionInfo : public common::ObVirtualTableScannerIterator {
   char member_list_buffer_[common::MAX_MEMBER_LIST_LENGTH];
   election::ObElectionInfoIterator election_info_iter_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGVElectionInfo);
 };
 

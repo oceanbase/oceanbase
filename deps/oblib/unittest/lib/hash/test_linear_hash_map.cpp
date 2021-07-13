@@ -79,7 +79,7 @@ namespace unittest {
 // Test Key type.
 // 8B Key, 8B Value.
 class UnitTestKey {
-  public:
+public:
   uint64_t key;
   uint64_t hash() const
   {
@@ -92,7 +92,7 @@ class UnitTestKey {
 };
 
 class UnitTestValue {
-  public:
+public:
   uint64_t val;
   bool operator==(const UnitTestValue& other) const
   {
@@ -577,7 +577,7 @@ TEST(ObLinearHashMap, ACCSStest5)
 // Performance tests.
 // Test Key type.
 class PerfTestKey {
-  public:
+public:
   uint64_t key;
   uint64_t data;
   uint64_t hash() const
@@ -591,7 +591,7 @@ class PerfTestKey {
 };
 
 class PerfTestValue {
-  public:
+public:
   uint64_t val;
 };
 

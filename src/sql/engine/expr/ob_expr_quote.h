@@ -17,16 +17,17 @@
 namespace oceanbase {
 namespace sql {
 class ObExprQuote : public ObStringExprOperator {
-  public:
+public:
   ObExprQuote();
   explicit ObExprQuote(common::ObIAllocator& alloc);
   virtual ~ObExprQuote();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_type1(
+      ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_quote_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   static const int16_t APPEND_LEN = 2;
   static const int16_t LEN_OF_NULL = 4;
   // quote string

@@ -30,13 +30,13 @@ void init_env()
 }
 
 class TestSegArray : public ::testing::Test {
-  public:
+public:
   TestSegArray()
   {}
   virtual ~TestSegArray()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestSegArray);
 };
 

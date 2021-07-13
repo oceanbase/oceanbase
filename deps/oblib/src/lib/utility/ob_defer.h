@@ -20,7 +20,7 @@ namespace common {
 // C++ implementation of golang defer keyword, the concept of delayed execution, often used for resource release
 template <typename FnType>
 class ScopedLambda {
-  public:
+public:
   explicit ScopedLambda(FnType fn) : fn_(std::move(fn)), active_(true)
   {}
   // Default movable.
@@ -50,7 +50,7 @@ class ScopedLambda {
     active_ = false;
   }
 
-  private:
+private:
   FnType fn_;
   bool active_ = true;
 };

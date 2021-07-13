@@ -24,7 +24,7 @@ namespace obrpc {
 class ObRpcPacket;
 class ObRpcSessionHandler;
 class ObRpcStreamCond {
-  public:
+public:
   explicit ObRpcStreamCond(ObRpcSessionHandler& handle);
   virtual ~ObRpcStreamCond();
 
@@ -39,11 +39,11 @@ class ObRpcStreamCond {
     return sessid_;
   }
 
-  private:
+private:
   int64_t sessid_;
   ObRpcSessionHandler& handler_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcStreamCond);
 };  // end of class ObRpcStreamCond
 

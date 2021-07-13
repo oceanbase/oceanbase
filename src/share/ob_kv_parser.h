@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace share {
 
 class ObKVMatchCb {
-  public:
+public:
   virtual int match(const char* key, const char* value) = 0;
   virtual bool check() const
   {
@@ -28,7 +28,7 @@ class ObKVMatchCb {
 };
 
 class ObKVParser {
-  public:
+public:
   ObKVParser()
       : SYM_KV_SEP(':'),
         SYM_PAIR_SEP(','),
@@ -61,13 +61,13 @@ class ObKVParser {
   int parse(const char* data);
   int parse(const char* data, int64_t data_length);
 
-  private:
+private:
   int match(int sym);
   int emit(int sym);
   int get_token();  // Pre-reading symbol
   int kv_pair();
 
-  private:
+private:
   static const int MAX_TOKEN_SIZE = 1024;
   // Symbol table
   static const int SYM_END = 0;

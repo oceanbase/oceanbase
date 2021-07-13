@@ -74,10 +74,10 @@ struct WorkingSetMB {
 };
 
 class ObWorkingSet : public ObDLinkBase<ObWorkingSet>, public ObIKVCacheStore<WorkingSetMB> {
-  private:
+private:
   friend class ObWorkingSetMgr;
 
-  public:
+public:
   ObWorkingSet();
   virtual ~ObWorkingSet();
 
@@ -124,7 +124,7 @@ class ObWorkingSet : public ObDLinkBase<ObWorkingSet>, public ObIKVCacheStore<Wo
   }
   TO_STRING_KV(K_(inited), K_(ws_list_key), K_(used), K_(limit));
 
-  private:
+private:
   int build_ws_mb(ObKVMemBlockHandle* mb_handle, WorkingSetMB*& ws_mb);
   int reuse_mb(ObKVCacheInst& inst, const int64_t block_size, ObKVMemBlockHandle*& mb_handle);
   bool try_reuse_mb(WorkingSetMB* ws_mb, ObKVMemBlockHandle*& mb_handle);
@@ -147,7 +147,7 @@ class ObWorkingSet : public ObDLinkBase<ObWorkingSet>, public ObIKVCacheStore<Wo
   static void retire_ws_mbs(ObFixedQueue<WorkingSetMB>& ws_mb_pool, HazardList& retire_list);
   static void reuse_ws_mbs(ObFixedQueue<WorkingSetMB>& ws_mb_pool, HazardList& reclaim_list);
 
-  private:
+private:
   bool inited_;
   WSListKey ws_list_key_;
   int64_t used_;
@@ -160,7 +160,7 @@ class ObWorkingSet : public ObDLinkBase<ObWorkingSet>, public ObIKVCacheStore<Wo
 };
 
 class ObWorkingSetMgr {
-  public:
+public:
   ObWorkingSetMgr();
   virtual ~ObWorkingSetMgr();
 
@@ -169,7 +169,7 @@ class ObWorkingSetMgr {
   int create_working_set(const WSListKey& ws_list_key, const int64_t limit, ObWorkingSet*& working_set);
   int delete_working_set(ObWorkingSet* working_set);
 
-  private:
+private:
   static const int64_t MAX_WORKING_SET_COUNT = 10000;
   static const int64_t MAX_WORKING_SET_MB_COUNT = 10 * 1024 * 512;
   struct FreeArrayMB {
@@ -215,13 +215,13 @@ class ObWorkingSetMgr {
   };
   typedef hash::ObHashMap<WSListKey, WorkingSetList*, hash::NoPthreadDefendMode> WSListMap;
 
-  private:
+private:
   int get_ws_list(const WSListKey& key, const bool create_not_exist, WorkingSetList*& list);
   int create_ws_list(const WSListKey& key, WorkingSetList*& list);
   int alloc_mb(WorkingSetList* list, ObKVMemBlockHandle*& mb_handle);
   int free_mb(WorkingSetList* list, ObKVMemBlockHandle* mb_handle);
 
-  private:
+private:
   bool inited_;
   DRWLock lock_;
   WSListMap ws_list_map_;

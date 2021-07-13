@@ -35,7 +35,7 @@ struct RpcTask {
 };
 
 class MockObTransRpc : public ObITransRpc, public ObSimpleThreadPool {
-  public:
+public:
   MockObTransRpc(STMap* st_map)
   {
     st_map_ = st_map;
@@ -116,7 +116,7 @@ class MockObTransRpc : public ObITransRpc, public ObSimpleThreadPool {
     return ret;
   }
 
-  public:
+public:
   void handle(void* task)
   {
     int tmp_ret = 0;
@@ -134,7 +134,7 @@ class MockObTransRpc : public ObITransRpc, public ObSimpleThreadPool {
     delete rpc_task;
   }
 
-  private:
+private:
   STMap* st_map_;
 };
 

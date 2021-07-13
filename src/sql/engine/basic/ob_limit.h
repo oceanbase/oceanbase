@@ -23,10 +23,10 @@ class ObSqlExpression;
 class ObLimit : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   class ObLimitCtx;
 
-  public:
+public:
   explicit ObLimit(common::ObIAllocator& alloc);
   virtual ~ObLimit();
 
@@ -56,7 +56,7 @@ class ObLimit : public ObSingleChildPhyOperator {
   }
   int convert_limit_percent(ObExecContext& ctx, ObLimitCtx* limit_ctx) const;
 
-  private:
+private:
   bool is_valid() const;
   int get_int_value(ObExecContext& ctx, const ObSqlExpression* in_val, int64_t& out_val, bool& is_null_value) const;
   int get_double_value(ObExecContext& ctx, const ObSqlExpression* double_val, double& out_val) const;
@@ -96,7 +96,7 @@ class ObLimit : public ObSingleChildPhyOperator {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLimit);
 
-  private:
+private:
   // data members
   ObSqlExpression* org_limit_;
   ObSqlExpression* org_offset_;

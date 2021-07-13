@@ -27,7 +27,7 @@ enum FdLevel { INVALID_LEVEL = -1, TABLE_LEVEL, EXPR_LEVEL };
  *      {t1}          is child tables
  */
 class ObFdItem {
-  public:
+public:
   ObFdItem(const bool is_unique = false, ObRawExprSet* parent_exprs = NULL, const int32_t stmt_level = -1)
       : parent_exprs_(parent_exprs), is_unique_(is_unique), stmt_level_(stmt_level)
   {}
@@ -81,7 +81,7 @@ class ObFdItem {
 
   VIRTUAL_TO_STRING_KV(K_(parent_exprs), K_(is_unique), K_(stmt_level));
 
-  protected:
+protected:
   ObRawExprSet* parent_exprs_;
   bool is_unique_;
   int32_t stmt_level_;
@@ -90,7 +90,7 @@ class ObFdItem {
 typedef common::ObSEArray<ObFdItem*, 8, common::ModulePageAllocator, true> ObFdItemSet;
 
 class ObTableFdItem : public ObFdItem {
-  public:
+public:
   ObTableFdItem() : ObFdItem(), child_tables_()
   {}
   ObTableFdItem(const bool is_unique, ObRawExprSet* parent_exprs, const int32_t stmt_level)
@@ -115,7 +115,7 @@ class ObTableFdItem : public ObFdItem {
 
   VIRTUAL_TO_STRING_KV(K_(parent_exprs), K_(is_unique), K_(stmt_level), K_(child_tables));
 
-  protected:
+protected:
   ObRelIds child_tables_;
 };
 inline FdLevel ObTableFdItem::get_level() const
@@ -128,7 +128,7 @@ inline bool ObTableFdItem::is_table_fd_item() const
 }
 
 class ObExprFdItem : public ObFdItem {
-  public:
+public:
   ObExprFdItem() : ObFdItem(), inner_alloc_("ExprFdItem"), child_exprs_(&inner_alloc_)
   {}
   ObExprFdItem(const bool is_unique, ObRawExprSet* parent_exprs, const int32_t stmt_level)
@@ -153,7 +153,7 @@ class ObExprFdItem : public ObFdItem {
 
   VIRTUAL_TO_STRING_KV(K_(parent_exprs), K_(is_unique), K_(stmt_level), K_(child_exprs));
 
-  protected:
+protected:
   common::ModulePageAllocator inner_alloc_;
   ObRawExprSet child_exprs_;
 };
@@ -167,7 +167,7 @@ inline bool ObExprFdItem::is_expr_fd_item() const
 }
 
 class ObFdItemFactory {
-  public:
+public:
   explicit ObFdItemFactory(common::ObIAllocator& alloc) : allocator_(alloc), item_store_(alloc), item_set_store_(alloc)
   {}
   ~ObFdItemFactory()
@@ -209,13 +209,13 @@ class ObFdItemFactory {
   }
   TO_STRING_KV("", "");
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   common::ObObjStore<ObFdItem*, common::ObIAllocator&, true> item_store_;
   common::ObObjStore<ObFdItemSet*, common::ObIAllocator&, true> item_set_store_;
   ObRawExprSets parent_sets_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFdItemFactory);
 };
 

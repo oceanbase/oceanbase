@@ -27,18 +27,18 @@
 namespace oceanbase {
 namespace common {
 class IFileInfo {
-  public:
+public:
   virtual ~IFileInfo(){};
 
-  public:
+public:
   virtual int get_fd() const = 0;
 };
 
 class IFileInfoMgr {
-  public:
+public:
   virtual ~IFileInfoMgr(){};
 
-  public:
+public:
   virtual const IFileInfo* get_fileinfo(const uint64_t key_id) = 0;
   virtual int revert_fileinfo(const IFileInfo* file_info) = 0;
   virtual int erase_fileinfo(const uint64_t key_id)

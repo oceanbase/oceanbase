@@ -23,7 +23,7 @@ class ObSQLSessionInfo;
 class TransResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   TransResult() : is_incomplete_(false), lock_(), max_sql_no_(0), trans_desc_(NULL)
   {}
 
@@ -65,7 +65,7 @@ class TransResult {
   void clear_stmt_result();
   TO_STRING_KV(K_(total_partitions), K_(part_epoch_list), K_(response_partitions), K_(max_sql_no));
 
-  private:
+private:
   // collect all partitions for foreign key.
   common::ObPartitionArray total_partitions_;
   // discard_partitions_ indicates that the transaction in the partition is enabled,
@@ -97,7 +97,7 @@ class TransResult {
 };
 
 class ObSqlTransUtil {
-  public:
+public:
   /* Determine whether a statement should start a transaction remotely */
   static bool is_remote_trans(bool ac, bool in_trans, ObPhyPlanType ptype)
   {
@@ -124,7 +124,7 @@ class ObSqlTransUtil {
     return true == in_trans;
   }
 
-  private:
+private:
   ObSqlTransUtil(){};
   ~ObSqlTransUtil(){};
   DISALLOW_COPY_AND_ASSIGN(ObSqlTransUtil);

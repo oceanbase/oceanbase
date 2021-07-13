@@ -79,7 +79,7 @@ class ObTableSchema;
  *     the normalized primary zone is "zone1;zone2;zone3;zone4"
  */
 class ObPrimaryZoneUtil {
-  public:
+public:
   // when invoked by ddl zone_region_list is a valid pointer,
   // when invoked by schema, zone_region_list is NULL
   ObPrimaryZoneUtil(const common::ObString& primary_zone,
@@ -99,7 +99,7 @@ class ObPrimaryZoneUtil {
   {}
   ~ObPrimaryZoneUtil()
   {}  // no one shall derive from this
-  public:
+public:
   // when invoked by DDL, zones in primary zone string is not confirmed to be a valid zone,
   // zone_list is an essential input argument to check if all zones in primary zone is valid;
   int init(const common::ObIArray<common::ObString>& zone_list);
@@ -108,7 +108,7 @@ class ObPrimaryZoneUtil {
   // zone_list is not an essential input argument any more.
   int init();
 
-  public:
+public:
   // check if the zone exists, if so parse it based on the priority
   int check_and_parse_primary_zone();
   // when primary zone is "zone1,   zone2; zone3", is is normalized to "zone1,zone2;zone3";
@@ -119,7 +119,7 @@ class ObPrimaryZoneUtil {
     return full_zone_array_;
   }
 
-  private:
+private:
   struct ZoneRegionScore {
     ZoneRegionScore() : zone_region_(), zone_score_(INT64_MAX), region_score_(INT64_MAX)
     {}
@@ -159,7 +159,7 @@ class ObPrimaryZoneUtil {
   };
   typedef common::ObSEArray<ZoneRegionScore, common::MAX_ZONE_NUM, common::ObNullAllocator> ZoneRegionScoreArray;
 
-  private:
+private:
   int get_next_zone_score(int64_t& cursor, const int64_t end, share::schema::ObZoneScore& zone_score);
   void jump_over_blanks(int64_t& cursor, const int64_t end);
   int check_zone_exist(const common::ObString& zone, bool& zone_exist);
@@ -179,12 +179,12 @@ class ObPrimaryZoneUtil {
   int update_region_score();
   // related to the comments 4.f and 4.g
   int construct_full_zone_array();  // construct full_zone_array_
-  private:
+private:
   static const char BLANK_TOKEN = ' ';
   static const char COMMA_TOKEN = ',';
   static const char SEMI_COLON_TOKEN = ';';
   static const int64_t ZONE_COUNT = 5;  // usually no more than five
-  private:
+private:
   const common::ObString& primary_zone_;  // this is a list indeed
   common::ObSEArray<common::ObZone, ZONE_COUNT> zone_list_;
   const common::ObIArray<schema::ObZoneRegion>* zone_region_list_;
@@ -209,7 +209,7 @@ class ObPrimaryZoneUtil {
 
   /* static method
    */
-  public:
+public:
   static bool check_primary_zone_equal(
       const share::schema::ObPrimaryZone& left, const share::schema::ObPrimaryZone& right);
   static int check_primary_zone_equal(share::schema::ObSchemaGetterGuard& schema_guard,
@@ -225,7 +225,7 @@ class ObPrimaryZoneUtil {
     return primary_zone_str == common::ObString(common::OB_RANDOM_PRIMARY_ZONE) || primary_zone_str.empty();
   }
 
-  public:
+public:
   /* this method will get primary zone based on the inheriting rule:
    * 1 based on the locality, reserve the zone with full replica
    *   for instance:if primary zone = "z1,z2"; locality="F@z1,R@z2";
@@ -240,7 +240,7 @@ class ObPrimaryZoneUtil {
   static int get_pg_integrated_primary_zone(share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObPartitionSchema& partition_schema, common::ObZone& primary_zone);
 
-  private:
+private:
   static int generate_integrated_primary_zone_str(const share::schema::ObPrimaryZone& primary_zone,
       const common::ObIArray<common::ObZone>& zone_list,
       const common::ObIArray<share::ObZoneReplicaNumSet>& zone_locality, common::ObZone& primary_zone_str);
@@ -262,7 +262,7 @@ class ObPrimaryZoneUtil {
  * shall know the implications
  */
 class ObRawPrimaryZoneUtil {
-  public:
+public:
   struct ZoneScore {
     ZoneScore() : zone_(), zone_score_(INT64_MAX)
     {
@@ -325,29 +325,29 @@ class ObRawPrimaryZoneUtil {
     int64_t region_score_;
   };
 
-  public:
+public:
   ObRawPrimaryZoneUtil(const rootserver::ObZoneManager& zone_mgr) : zone_mgr_(zone_mgr), current_score_(0)
   {}
   ~ObRawPrimaryZoneUtil()
   {}  // no one shall derive
-  public:
+public:
   int build(const common::ObZone& primary, common::ObIArray<ZoneScore>& zone_score_array,
       common::ObIArray<RegionScore>& region_score_array);
 
-  private:
+private:
   int get_next_zone_score(const char* ptr, int64_t& cursor, const int64_t end, ZoneScore& zone_score);
   void jump_over_blanks(const char* ptr, int64_t& cursor, const int64_t end);
 
-  private:
+private:
   static const char BLANK_TOKEN = ' ';
   static const char COMMA_TOKEN = ',';
   static const char SEMI_COLON_TOKEN = ';';
 
-  private:
+private:
   const rootserver::ObZoneManager& zone_mgr_;
   int64_t current_score_;
   // static member func
-  public:
+public:
   static int generate_high_priority_zone_array(
       const common::ObIArray<ZoneScore>& zone_score_array, common::ObIArray<common::ObZone>& high_priority_zone_array);
 };

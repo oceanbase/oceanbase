@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace lib {
 
 class ObLibConfig {
-  public:
+public:
   static ObLibConfig& get_instance();
   void reload_diagnose_info_config(const bool enable_diagnose_info);
   void reload_trace_log_config(const bool enable_trace_log);
@@ -32,7 +32,7 @@ class ObLibConfig {
     return enable_trace_log_;
   }
 
-  private:
+private:
   ObLibConfig();
   virtual ~ObLibConfig() = default;
   volatile bool enable_diagnose_info_;

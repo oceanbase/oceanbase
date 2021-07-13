@@ -27,7 +27,7 @@ namespace oceanbase {
 namespace common {
 
 struct ObParamedSelectItemCtx {
-  public:
+public:
   // paramed column for display
   ObString paramed_cname_;
   // Record every parameterized? Offset relative to field name
@@ -69,7 +69,7 @@ struct ObParamedSelectItemCtx {
 
 // NOTE: ~ObFileld may not called, all memory should be auto free.
 class ObField {
-  public:
+public:
   ObString dname_;       // database name for display
   ObString tname_;       // table name for display
   ObString org_tname_;   // original table name
@@ -119,7 +119,7 @@ class ObField {
   static int get_field_mb_length(
       const ObObjType type, const ObAccuracy& accuracy, const ObCollationType charsetnr, int32_t& length);
 
-  private:
+private:
   static int32_t my_decimal_precision_to_length_no_truncation(int16_t precision, int16_t scale, bool unsigned_flag)
   {
     /*

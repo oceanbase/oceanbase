@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace lib {
 
 class CoCond {
-  public:
+public:
   CoCond()
   {}
   ~CoCond()
@@ -64,11 +64,11 @@ class CoCond {
     return ret;
   }
 
-  private:
+private:
   ObMutex mutex_;
   CoFutex futex_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(CoCond);
 };
 

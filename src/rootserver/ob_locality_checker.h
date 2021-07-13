@@ -38,7 +38,7 @@ class ObReplicaTypeTransformUtility;
 class ObServerManager;
 class ObLeaderCoordinator;
 class ObLocalityChecker {
-  public:
+public:
   explicit ObLocalityChecker();
   virtual ~ObLocalityChecker();
   int init(share::schema::ObMultiVersionSchemaService& schema_service, TenantBalanceStat& tenant_stat,
@@ -53,10 +53,10 @@ class ObLocalityChecker {
   int get_filter_result(
       const balancer::HashIndexCollection& hash_index_collection, common::ObIArray<ObReplicaTask>& results);
 
-  private:
+private:
   static const int64_t MAX_BATCH_TYPE_TRANSFORM_COUNT = 128;
 
-  private:
+private:
   void reset();
 
   int check_partition_locality_for_modify_quorum(const balancer::HashIndexCollection& hash_index_collection,
@@ -111,10 +111,10 @@ class ObLocalityChecker {
       common::ObIArray<common::ObAddr>& leader_addr_array, const ObTypeTransformTaskInfo& task_info,
       const Partition* cur_partition, const Replica& cur_replica, const ObReplicaType dst_type, int64_t& task_cnt);
 
-  private:
+private:
   static const int64_t DEFAULT_ZONE_CNT = 7;
 
-  private:
+private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   TenantBalanceStat* tenant_stat_;

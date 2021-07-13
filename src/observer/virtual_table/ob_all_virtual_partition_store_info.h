@@ -25,7 +25,7 @@ class ObIPartitionGroupIterator;
 namespace observer {
 
 class ObAllPartitionStoreInfo : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllPartitionStoreInfo();
   virtual ~ObAllPartitionStoreInfo();
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
@@ -38,7 +38,7 @@ class ObAllPartitionStoreInfo : public common::ObVirtualTableScannerIterator {
   }
   virtual void reset() override;
 
-  private:
+private:
   enum TABLE_COLUMN {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,

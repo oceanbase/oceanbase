@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogMVTableScan : public ObLogTableScan {
-  public:
+public:
   ObLogMVTableScan(ObLogPlan& plan);
   virtual ~ObLogMVTableScan()
   {}
@@ -33,7 +33,7 @@ class ObLogMVTableScan : public ObLogTableScan {
     depend_table_id_ = depend_tid;
   }
 
-  private:
+private:
   ObTablePartitionInfo right_table_partition_info_;
   uint64_t depend_table_id_;
 };

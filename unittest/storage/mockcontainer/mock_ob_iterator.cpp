@@ -833,7 +833,9 @@ int ObMockIteratorBuilder::static_init()
              OB_SUCCESS != str_to_dml_.set_refactored(ObString::make_string("DELETE"), T_DML_DELETE) ||
              OB_SUCCESS != str_to_dml_.set_refactored(ObString::make_string("T_DML_DELETE"), T_DML_DELETE) ||
              OB_SUCCESS != str_to_dml_.set_refactored(ObString::make_string("REPLACE"), T_DML_REPLACE) ||
-             OB_SUCCESS != str_to_dml_.set_refactored(ObString::make_string("T_DML_REPLACE"), T_DML_REPLACE)) {
+             OB_SUCCESS != str_to_dml_.set_refactored(ObString::make_string("T_DML_REPLACE"), T_DML_REPLACE) ||
+             OB_SUCCESS != str_to_dml_.set_refactored(ObString::make_string("LOCK"), T_DML_LOCK) ||
+             OB_SUCCESS != str_to_dml_.set_refactored(ObString::make_string("T_DML_LOCK"), T_DML_LOCK)) {
     ret = OB_INIT_FAIL;
     STORAGE_LOG(WARN, "dml hashtable insert failed");
   } else {

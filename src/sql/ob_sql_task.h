@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 class ObSql;
 class ObSqlTaskHandler : public rpc::frame::ObReqProcessor {
-  public:
+public:
   ObSqlTaskHandler() : task_(NULL), sql_engine_(NULL)
   {}
   ~ObSqlTaskHandler()
@@ -28,7 +28,7 @@ class ObSqlTaskHandler : public rpc::frame::ObReqProcessor {
   int init(observer::ObSrvTask* task, ObSql* sql_engine);
   void reset();
 
-  protected:
+protected:
   int deserialize()
   {
     return common::OB_SUCCESS;
@@ -49,7 +49,7 @@ class ObSqlTaskHandler : public rpc::frame::ObReqProcessor {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlTaskHandler);
   observer::ObSrvTask* task_;
   ObSql* sql_engine_;
@@ -58,7 +58,7 @@ class ObSqlTaskHandler : public rpc::frame::ObReqProcessor {
 class ObSqlTask : public observer::ObSrvTask {
   friend class ObSqlTaskFactory;
 
-  public:
+public:
   ObSqlTask() : msg_type_(0), size_(0), is_fixed_alloc_(false), handler_()
   {}
   ~ObSqlTask()
@@ -87,10 +87,10 @@ class ObSqlTask : public observer::ObSrvTask {
   }
   TO_STRING_KV(KP(this), K_(msg_type));
 
-  public:
+public:
   static const int64_t MAX_SQL_TASK_SIZE = 16 * 1024 - 128;
 
-  private:
+private:
   void set_fixed_alloc()
   {
     is_fixed_alloc_ = true;
@@ -100,7 +100,7 @@ class ObSqlTask : public observer::ObSrvTask {
     return is_fixed_alloc_;
   }
 
-  private:
+private:
   int msg_type_;
   char buf_[MAX_SQL_TASK_SIZE];
   int64_t size_;
@@ -110,7 +110,7 @@ class ObSqlTask : public observer::ObSrvTask {
 };
 
 class ObSqlTaskFactory {
-  public:
+public:
   ObSqlTaskFactory()
   {}
   ~ObSqlTaskFactory()
@@ -120,20 +120,20 @@ class ObSqlTaskFactory {
   int init();
   void destroy();
 
-  public:
+public:
   ObSqlTask* alloc(const uint64_t tenant_id);
   void free(ObSqlTask* task);
   static ObSqlTaskFactory& get_instance();
 
-  private:
+private:
   ObSqlTask* alloc_(const uint64_t tenant_id);
   void free_(ObSqlTask* task);
 
-  private:
+private:
   static const int64_t NORMAL_FIXED_TASK_NUM = 4096;
   static const int64_t MINI_FIXED_TASK_NUM = 128;
 
-  private:
+private:
   ObFixedQueue<ObSqlTask> fixed_queue_;
 };
 

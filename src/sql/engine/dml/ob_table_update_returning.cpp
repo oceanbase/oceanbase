@@ -26,7 +26,7 @@ using namespace storage;
 using namespace share;
 namespace sql {
 class ObTableUpdateReturning::ObTableUpdateReturningCtx : public ObTableUpdateCtx {
-  public:
+public:
   explicit ObTableUpdateReturningCtx(ObExecContext& ctx) : ObTableUpdateCtx(ctx)
   {}
   ~ObTableUpdateReturningCtx()

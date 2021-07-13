@@ -20,13 +20,13 @@
 namespace oceanbase {
 namespace sql {
 class ObStartTransResolver : public ObTCLResolver {
-  public:
+public:
   explicit ObStartTransResolver(ObResolverParams& params);
   virtual ~ObStartTransResolver();
 
   virtual int resolve(const ParseNode& parse_node);
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObStartTransResolver);

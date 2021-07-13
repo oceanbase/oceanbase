@@ -22,7 +22,7 @@ const char* get_consistency_level_str(ObConsistencyLevel level);
 /// @retval -1 on error
 ObConsistencyLevel get_consistency_level_by_str(const ObString& level);
 struct ObTableScanHint {
-  public:
+public:
   int64_t max_parallel_count_;
   bool enable_parallel_;
   int64_t timeout_us_;
@@ -30,7 +30,7 @@ struct ObTableScanHint {
   ObConsistencyLevel read_consistency_;
   bool force_refresh_lc_;
 
-  public:
+public:
   ObTableScanHint()
       : max_parallel_count_(OB_DEFAULT_MAX_PARALLEL_COUNT),
         enable_parallel_(true),

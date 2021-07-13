@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObIMergeSort {
-  public:
+public:
   virtual int dump_base_run(common::ObOuterRowIterator& row_iterator, bool build_fragment = true) = 0;
   virtual int build_cur_fragment() = 0;
 };

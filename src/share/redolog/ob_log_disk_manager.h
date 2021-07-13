@@ -50,7 +50,7 @@ enum ObLogDiskState {
 };
 
 struct ObLogFdInfo {
-  public:
+public:
   int fd_;
   int64_t disk_id_;
   int64_t file_id_;
@@ -72,7 +72,7 @@ struct ObLogFdInfo {
 };
 
 class ObLogDiskInfo {
-  public:
+public:
   ObLogDiskInfo()
       : disk_id_(-1),
         state_(OB_LDS_INVALID),
@@ -149,7 +149,7 @@ class ObLogDiskInfo {
   TO_STRING_KV(K_(disk_id), K_(dir_path), K_(state), K_(state_modify_timestamp), K_(restore_start_file_id),
       K_(restore_start_offset), K_(log_dir), K_(file_pool), K_(is_inited));
 
-  private:
+private:
   OB_INLINE void set_disk_path(const char* path)
   {
     if (STRLEN(path) >= OB_MAX_FILE_NAME_LENGTH) {
@@ -160,7 +160,7 @@ class ObLogDiskInfo {
     }
   }
 
-  private:
+private:
   int64_t disk_id_;
   char dir_path_[OB_MAX_FILE_NAME_LENGTH];
   int64_t state_;
@@ -175,9 +175,9 @@ class ObLogDiskInfo {
 };
 
 class ObLogDiskManager {
-  public:
+public:
   class BaseDiskIterator {
-    public:
+  public:
     BaseDiskIterator(const ObLogDiskManager* disk_mgr, int64_t idx)
     {
       disk_mgr_ = disk_mgr;
@@ -222,24 +222,24 @@ class ObLogDiskManager {
       return (other.disk_mgr_ != disk_mgr_) || (other.cur_idx_ != cur_idx_);
     }
 
-    protected:
+  protected:
     virtual bool is_qualified_state(const ObLogDiskState state)
     {
       UNUSED(state);
       return true;
     }
 
-    private:
+  private:
     const ObLogDiskManager* disk_mgr_;
     int64_t cur_idx_;
   };
 
   class ReadWriteDiskIterator : public BaseDiskIterator {
-    public:
+  public:
     ReadWriteDiskIterator(const ObLogDiskManager* disk_mgr, int64_t idx) : BaseDiskIterator(disk_mgr, idx){};
     virtual ~ReadWriteDiskIterator(){};
 
-    protected:
+  protected:
     virtual bool is_qualified_state(const ObLogDiskState state)
     {
       return OB_LDS_GOOD == state || OB_LDS_RESTORE == state;
@@ -261,7 +261,7 @@ class ObLogDiskManager {
   // 4) Get restore start file and offset from disk info
   // 5) Catch up finish
   class LogRestoreProgress {
-    public:
+  public:
     LogRestoreProgress()
     {
       reset();
@@ -286,7 +286,7 @@ class ObLogDiskManager {
 
     static const int16_t DATA_VERSION = 1;
 
-    public:
+  public:
     OB_INLINE bool is_catchup_start() const
     {
       return catchup_file_id_ > 0 && catchup_offset_ >= 0;
@@ -309,11 +309,11 @@ class ObLogDiskManager {
     int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
     int64_t get_serialize_size(void) const;
 
-    private:
+  private:
     int check();
   };
 
-  public:
+public:
   ObLogDiskManager();
   virtual ~ObLogDiskManager();
 
@@ -360,7 +360,7 @@ class ObLogDiskManager {
   static ObLogDiskManager* get_disk_manager(const ObRedoLogType log_type);
   static const int64_t MAX_DISK_COUNT = 5;
 
-  private:
+private:
   struct DirScanResult {
     int64_t disk_id_;
     int64_t min_log_id_;
@@ -377,7 +377,7 @@ class ObLogDiskManager {
   };
 
   class MonitorTask : public common::ObTimerTask {
-    public:
+  public:
     MonitorTask() : disk_mgr_(NULL)
     {}
     virtual ~MonitorTask()
@@ -391,7 +391,7 @@ class ObLogDiskManager {
     }
     virtual void runTimerTask();
 
-    private:
+  private:
     ObLogDiskManager* disk_mgr_;
     DISALLOW_COPY_AND_ASSIGN(MonitorTask);
   };
@@ -512,7 +512,7 @@ class ObLogDiskManager {
   const char* LOG_RESTORE_FILENAME = "LOG_RESTORE";
   const char* VALID_DISK_PREFIX = "disk";
 
-  private:
+private:
   bool is_inited_;
   char log_dir_[OB_MAX_FILE_NAME_LENGTH];
   int64_t file_size_;
@@ -532,7 +532,7 @@ class ObLogDiskManager {
 };
 
 class ObSLogDiskManager : public ObLogDiskManager {
-  public:
+public:
   virtual ~ObSLogDiskManager()
   {}
 
@@ -547,13 +547,13 @@ class ObSLogDiskManager : public ObLogDiskManager {
     return ObLogDiskManager::init(log_dir, file_size, clog::ObLogWritePoolType::SLOG_WRITE_POOL);
   }
 
-  private:
+private:
   ObSLogDiskManager()
   {}
 };
 
 class ObCLogDiskManager : public ObLogDiskManager {
-  public:
+public:
   virtual ~ObCLogDiskManager()
   {}
 
@@ -568,13 +568,13 @@ class ObCLogDiskManager : public ObLogDiskManager {
     return ObLogDiskManager::init(log_dir, file_size, clog::ObLogWritePoolType::CLOG_WRITE_POOL);
   }
 
-  private:
+private:
   ObCLogDiskManager()
   {}
 };
 
 class ObILogDiskManager : public ObLogDiskManager {
-  public:
+public:
   virtual ~ObILogDiskManager()
   {}
 
@@ -589,7 +589,7 @@ class ObILogDiskManager : public ObLogDiskManager {
     return ObLogDiskManager::init(log_dir, file_size, clog::ObLogWritePoolType::ILOG_WRITE_POOL);
   }
 
-  private:
+private:
   ObILogDiskManager()
   {}
 };

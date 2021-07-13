@@ -28,7 +28,7 @@ class ObRootService;
 }
 namespace observer {
 class ObVirtualDataAccessService : public common::ObIDataAccessService {
-  public:
+public:
   ObVirtualDataAccessService(
       rootserver::ObRootService& root_service, common::ObAddr& addr, common::ObServerConfig* config)
       : vt_iter_factory_(root_service, addr, config)
@@ -51,7 +51,7 @@ class ObVirtualDataAccessService : public common::ObIDataAccessService {
     return vt_iter_factory_;
   }
 
-  private:
+private:
   ObVirtualTableIteratorFactory vt_iter_factory_;
   DISALLOW_COPY_AND_ASSIGN(ObVirtualDataAccessService);
 };

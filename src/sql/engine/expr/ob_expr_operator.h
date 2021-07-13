@@ -51,10 +51,10 @@ enum CollectionPredRes {
   COLL_PRED_BOTH_COLL_ZERO,
 };
 class ObFuncInputType {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObFuncInputType() : calc_meta_(), max_length_(0), flag_(0)
   {}
   ObFuncInputType(common::ObObjMeta calc_meta, common::ObLength max_length, uint32_t flag)
@@ -88,7 +88,7 @@ class ObFuncInputType {
 
   TO_STRING_KV(N_CALC_META, calc_meta_, N_LENGTH, max_length_, N_FLAG, flag_);
 
-  private:
+private:
   // connvert ObObj to this type
   common::ObObjMeta calc_meta_;
   // for zerofill
@@ -97,7 +97,7 @@ class ObFuncInputType {
 };
 
 class ObExprOperatorCtx {
-  public:
+public:
   ObExprOperatorCtx()
   {}
   virtual ~ObExprOperatorCtx()
@@ -113,7 +113,7 @@ class ObExprOperatorCtx {
 typedef common::ObIArray<common::ObNewRowIterator*> RowIterIArray;
 
 class ObIterExprCtx {
-  public:
+public:
   ObIterExprCtx(ObExecContext& ctx, common::ObIAllocator& allocator)
       : iter_expr_ctxs_(allocator), index_scan_iters_(NULL), ctx_(ctx), allocator_(allocator), cur_row_(NULL)
   {}
@@ -170,7 +170,7 @@ class ObIterExprCtx {
     return cur_row_;
   }
 
-  private:
+private:
   common::ObFixedArray<ObExprOperatorCtx*, common::ObIAllocator> iter_expr_ctxs_;
   RowIterIArray* index_scan_iters_;
   ObExecContext& ctx_;
@@ -179,7 +179,7 @@ class ObIterExprCtx {
 };
 
 class ObFastExprOperator {
-  public:
+public:
   ObFastExprOperator(ObExprOperatorType operator_type) : op_type_(operator_type)
   {}
   virtual ~ObFastExprOperator()
@@ -191,14 +191,14 @@ class ObFastExprOperator {
   }
   virtual int assign(const ObFastExprOperator& other) = 0;
 
-  protected:
+protected:
   ObExprOperatorType op_type_;
 };
 
 class ObIterExprOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObIterExprOperator() : expr_id_(common::OB_INVALID_ID), expr_type_(T_INVALID)
   {}
   virtual ~ObIterExprOperator()
@@ -224,7 +224,7 @@ class ObIterExprOperator {
 
   TO_STRING_KV(K_(expr_id), K_(expr_type));
 
-  protected:
+protected:
   uint64_t expr_id_;
   ObExprOperatorType expr_type_;
 };
@@ -232,7 +232,7 @@ class ObIterExprOperator {
 class ObExprOperator : public common::ObDLinkBase<ObExprOperator> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   friend class ObRawExpr;
 
   enum ObSqlParamNumFlag {
@@ -438,7 +438,7 @@ class ObExprOperator : public common::ObDLinkBase<ObExprOperator> {
     return pos;
   }
 
-  public:
+public:
   /*
     Aggregate arguments for comparison, e.g: a=b, a LIKE b, a RLIKE b
     - don't convert to @@character_set_connection if all arguments are numbers
@@ -520,10 +520,10 @@ class ObExprOperator : public common::ObDLinkBase<ObExprOperator> {
   int calc_trig_function_result_type2(
       ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
 
-  public:
+public:
   virtual common::ObCastMode get_cast_mode() const;
 
-  protected:
+protected:
   ObExpr* get_rt_expr(const ObRawExpr& raw_expr) const;
 
   inline static void calc_result_flag1(ObExprResType& type, const ObExprResType& type1);
@@ -539,7 +539,7 @@ class ObExprOperator : public common::ObDLinkBase<ObExprOperator> {
     operand_auto_cast_ = false;
   }
 
-  private:
+private:
   // computation framework internally provided a universal datatype's converting
   // method, which is able to convert param's type to input_types_. this may
   // not be a expected behavior for some expression. If you want to prohibit
@@ -557,7 +557,7 @@ class ObExprOperator : public common::ObDLinkBase<ObExprOperator> {
   static const uint32_t OB_COLL_DISALLOW_NONE = 1;
   static const uint32_t OB_COLL_ALLOW_NUMERIC_CONV = 2;
 
-  protected:
+protected:
   static int aggregate_collations(common::ObObjMeta& type, const common::ObObjMeta* types_array, int64_t param_num,
       uint32_t flag, const common::ObCollationType conn_coll_type);
 
@@ -848,7 +848,7 @@ inline void ObExprOperator::calc_result_flagN(ObExprResType& type, const ObExprR
 
 ////////////////////////////////////////////////////////////////
 class ObFuncExprOperator : public ObExprOperator {
-  public:
+public:
   ObFuncExprOperator(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
       : ObExprOperator(alloc, type, name, param_num, dimension){};
@@ -861,10 +861,10 @@ class ObFuncExprOperator : public ObExprOperator {
 // The first two are relative to the expression; the latter one is relative to the parameters of the expression.
 //
 class ObRelationalExprOperator : public ObExprOperator {
-  public:
-  virtual int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
+public:
+  virtual int deserialize(const char* buf, const int64_t data_len, int64_t& pos) override;
 
-  public:
+public:
   ObRelationalExprOperator(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num,
       int32_t dimension = NOT_ROW_DIMENSION)
       : ObExprOperator(alloc, type, name, param_num, dimension), cmp_op_func2_(NULL)
@@ -931,8 +931,9 @@ class ObRelationalExprOperator : public ObExprOperator {
       common::ObCastCtx& cast_ctx, common::ObObjType cmp_type, common::ObCollationType cmp_cs_type);
   // determine the type used for comparison of the two types
   // binary comparison
+
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
 
   // deduce binary comparison result type and parameters types
   static int deduce_cmp_type(const ObExprOperator& expr, ObExprResType& type, ObExprResType& type1,
@@ -941,7 +942,7 @@ class ObRelationalExprOperator : public ObExprOperator {
   // for between...and, not between...and etc.
   // @todo need refactor, ....yzf....Thu,  6 Aug 2015....16:00....
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
-      common::ObExprTypeCtx& type_ctx) const;
+      common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_calc_type3(ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
       common::ObExprTypeCtx& type_ctx, const common::ObObjType cmp_type) const;
   int get_cmp_result_type3(ObExprResType& type, bool& need_no_cast, const ObExprResType* types, const int64_t param_num,
@@ -949,7 +950,7 @@ class ObRelationalExprOperator : public ObExprOperator {
 
   // vector comparison, e.g. (a,b,c) > (1,2,3)
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_result2(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
       common::ObExprCtx& expr_ctx, bool is_null_safe, common::ObCmpOp cmp_op) const;
   virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
@@ -957,7 +958,7 @@ class ObRelationalExprOperator : public ObExprOperator {
 
   static int is_equivalent(
       const common::ObObjMeta& meta1, const common::ObObjMeta& meta2, const common::ObObjMeta& meta3, bool& result);
-  int assign(const ObExprOperator& other);
+  int assign(const ObExprOperator& other) override;
   int set_cmp_func(const common::ObObjType type1, const common::ObObjType type2);
   common::obj_cmp_func get_cmp_fun() const
   {
@@ -1027,7 +1028,7 @@ class ObRelationalExprOperator : public ObExprOperator {
     return need_no_cast;
   }
 
-  protected:
+protected:
   static bool is_int_cmp_const_str(const ObExprResType* type1, const ObExprResType* type2, common::ObObjType& cmp_type);
   OB_INLINE static common::ObCmpOp get_cmp_op(const ObExprOperatorType type)
   {
@@ -1118,7 +1119,7 @@ class ObRelationalExprOperator : public ObExprOperator {
   static bool can_cmp_without_cast(
       ObExprResType type1, ObExprResType type2, common::ObCmpOp cmp_op, const ObSQLSessionInfo& session);
 
-  protected:
+protected:
   // only use for comparison with 2 operands(calc_result2)
   // if cmp_op_func2_ is not NULL, that means we can compare the 2 objs directly without any casts
   // otherwise, compare_cast is necessary.
@@ -1129,7 +1130,7 @@ class ObRelationalExprOperator : public ObExprOperator {
 class ObSubQueryRelationalExpr : public ObExprOperator {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // extra info stored in ObExpr::extra_
   struct ExtraInfo : public ObExprExtraInfoAccess<ExtraInfo> {
     ObSubQueryKey subquery_key_;
@@ -1166,21 +1167,21 @@ class ObSubQueryRelationalExpr : public ObExprOperator {
   {
     right_is_iter_ = is_iter;
   }
-  virtual void reset()
+  virtual void reset() override
   {
     subquery_key_ = T_WITH_NONE;
     left_is_iter_ = false;
     right_is_iter_ = false;
   }
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  int calc_resultN(
-      common::ObObj& result, const common::ObObj* param_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
-  virtual int call(common::ObObj* stack, int64_t& stack_size, common::ObExprCtx& expr_ctx) const;
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
+  int calc_result2(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
+      common::ObExprCtx& expr_ctx) const override;
+  int calc_resultN(common::ObObj& result, const common::ObObj* param_array, int64_t param_num,
+      common::ObExprCtx& expr_ctx) const override;
+  virtual int call(common::ObObj* stack, int64_t& stack_size, common::ObExprCtx& expr_ctx) const override;
   virtual int eval(
       common::ObExprCtx& expr_ctx, common::ObObj& val, common::ObObj* params, int64_t param_num) const override;
 
@@ -1189,7 +1190,7 @@ class ObSubQueryRelationalExpr : public ObExprOperator {
   VIRTUAL_TO_STRING_KV(N_EXPR_TYPE, get_type_name(type_), N_REAL_PARAM_NUM, real_param_num_, N_RESULT_TYPE,
       result_type_, K_(subquery_key), K_(left_is_iter), K_(right_is_iter));
 
-  protected:
+protected:
   // The result of processing the subquery is a vector. In this case, the result
   // of the subquery has at most one row of data, and multiple rows of data are not allowed.
   // According to the characteristics of the vector, the result of the subquery
@@ -1235,7 +1236,7 @@ class ObSubQueryRelationalExpr : public ObExprOperator {
 
   static int check_exists(const ObExpr& expr, ObEvalCtx& ctx, bool& exists);
 
-  protected:
+protected:
   ObSubQueryKey subquery_key_;
   bool left_is_iter_;
   bool right_is_iter_;
@@ -1248,7 +1249,7 @@ typedef int (*ObArithFunc)(common::ObObj& res, const common::ObObj& left, const 
     common::ObIAllocator* allocator, common::ObScale scale);
 
 class ObArithExprOperator : public ObExprOperator {
-  public:
+public:
   ObArithExprOperator(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num,
       int32_t dimension, ObResultTypeFunc result_type_func, ObCalcTypeFunc calc_type_func,
       const ObArithFunc* arith_funcs)
@@ -1269,7 +1270,7 @@ class ObArithExprOperator : public ObExprOperator {
     return (0 != ::isinf(res));
   }
 
-  protected:
+protected:
   // temporary used, remove after all expr converted
   OB_INLINE static int get_arith_operand(const ObExpr& expr, ObEvalCtx& ctx, common::ObDatum*& left,
       common::ObDatum*& right, ObDatum& result, bool& is_finish)
@@ -1317,7 +1318,7 @@ class ObArithExprOperator : public ObExprOperator {
   ObCalcTypeFunc calc_type_func_;
   const ObArithFunc* arith_funcs_;
 
-  protected:
+protected:
   static int calc_(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
       common::ObExprCtx& expr_ctx, common::ObScale calc_scale, common::ObObjType calc_type,
       const ObArithFunc* arith_func);
@@ -1327,7 +1328,7 @@ class ObArithExprOperator : public ObExprOperator {
 };
 
 class ObVectorExprOperator : public ObExprOperator {
-  public:
+public:
   ObVectorExprOperator(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
       : ObExprOperator(alloc, type, name, param_num, dimension)
@@ -1343,13 +1344,13 @@ class ObVectorExprOperator : public ObExprOperator {
   virtual int calc_result_typeN(
       ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
 
-  private:
+private:
   int calc_result_type2_(
       ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
 };
 
 class ObLogicalExprOperator : public ObExprOperator {
-  public:
+public:
   ObLogicalExprOperator(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
       : ObExprOperator(alloc, type, name, param_num, dimension)
@@ -1365,7 +1366,7 @@ class ObLogicalExprOperator : public ObExprOperator {
   virtual int calc_result_typeN(
       ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
 
-  protected:
+protected:
   static int is_true(const common::ObObj& obj, common::ObCastMode cast_mode, bool& result);
 };
 
@@ -1378,7 +1379,7 @@ class ObLogicalExprOperator : public ObExprOperator {
 //
 template <int64_t N, typename T>
 class ObConstCArray : public common::ObIArray<T> {
-  public:
+public:
   using common::ObIArray<T>::at;
   using common::ObIArray<T>::count;
 
@@ -1435,7 +1436,7 @@ class ObConstCArray : public common::ObIArray<T> {
   virtual void extra_access_check() const override
   {}
 
-  protected:
+protected:
   T local_data_[N];
   using common::ObIArray<T>::data_;
   using common::ObIArray<T>::count_;
@@ -1449,7 +1450,7 @@ const ObConstCArray<1 + sizeof...(TS), T> make_const_carray(const T& t, const TS
 
 // functions who's result type is string
 class ObStringExprOperator : public ObExprOperator {
-  public:
+public:
   ObStringExprOperator(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num)
       : ObExprOperator(alloc, type, name, param_num, NOT_ROW_DIMENSION)
   {}
@@ -1458,23 +1459,23 @@ class ObStringExprOperator : public ObExprOperator {
   static int convert_result_collation(
       const ObExprResType& result_type, common::ObObj& result, common::ObIAllocator* allocator);
 
-  protected:
+protected:
   common::ObObjType get_result_type_mysql(int64_t char_length) const;
   static const int64_t MAX_CHAR_LENGTH_FOR_VARCAHR_RESULT = 512;
   static const int64_t MAX_CHAR_LENGTH_FOR_TEXT_RESULT = 65535;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObStringExprOperator);
   // function members
-  private:
+private:
   // data members
 };
 
 class ObBitwiseExprOperator : public ObExprOperator {
-  public:
+public:
   ObBitwiseExprOperator(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
       : ObExprOperator(alloc, type, name, param_num, dimension)
@@ -1498,7 +1499,7 @@ class ObBitwiseExprOperator : public ObExprOperator {
   static int calc_result2_oracle(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
   static int calc_result2_mysql(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  protected:
+protected:
   enum BitOperator {
     BIT_AND,
     BIT_OR,
@@ -1533,7 +1534,7 @@ class ObBitwiseExprOperator : public ObExprOperator {
 };
 
 class ObMinMaxExprOperator : public ObExprOperator {
-  public:
+public:
   // constructor and destructor
   ObMinMaxExprOperator(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
@@ -1544,19 +1545,19 @@ class ObMinMaxExprOperator : public ObExprOperator {
   {}
   virtual int assign(const ObExprOperator& other);
 
-  public:
+public:
   // serialize and deserialize
   virtual int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
   virtual int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
   virtual int64_t get_serialize_size() const;
 
-  public:
+public:
   OB_INLINE void set_need_cast(bool need_cast)
   {
     need_cast_ = need_cast;
   }
 
-  protected:
+protected:
   /*
      Aggregate  result type for comparison
      is involved by greatest, least
@@ -1570,12 +1571,12 @@ class ObMinMaxExprOperator : public ObExprOperator {
      */
   int aggregate_cmp_type_for_comparison(ObExprResType& type, const ObExprResType* types, int64_t param_num) const;
 
-  protected:
+protected:
   // calculate greatest/least's result type
   int calc_result_meta_for_comparison(ObExprResType& type, ObExprResType* types, int64_t param_num,
       const common::ObCollationType coll_type, const common::ObLengthSemantics default_length_semantics) const;
 
-  protected:
+protected:
   // least should set cmp_op to CO_LT.
   // greatest should set cmp_op to CO_GT.
   static int calc_(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
@@ -1585,7 +1586,7 @@ class ObMinMaxExprOperator : public ObExprOperator {
   OB_INLINE static int calc_with_cast(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
       const ObExprResType& result_type, common::ObExprCtx& expr_ctx, common::ObCmpOp cmp_op);
 
-  protected:
+protected:
   // if all params are of same types
   // or if all params are numeric
   // need_no_cast_ will be ture and no casts are necessary during calculation
@@ -1595,7 +1596,7 @@ class ObMinMaxExprOperator : public ObExprOperator {
 ////////////////////////////////////////////////////////////////
 // locate instr position
 class ObLocationExprOperator : public ObFuncExprOperator {
-  public:
+public:
   ObLocationExprOperator(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
       : ObFuncExprOperator(alloc, type, name, param_num, dimension){};
@@ -1614,12 +1615,12 @@ class ObLocationExprOperator : public ObFuncExprOperator {
   static int get_calc_cs_type(const ObExpr& expr, common::ObCollationType& calc_cs_type);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  private:
+private:
   OB_INLINE static int get_pos_int64(const common::ObObj& obj, common::ObExprCtx& expr_ctx, int64_t& out);
 };
 
 class ObExprTRDateFormat {
-  public:
+public:
   // http://docs.oracle.com/cd/B19306_01/server.102/b14200/functions230.htm#i1002084
   // http://www.techonthenet.com/oracle/functions/trunc_date.php
   enum FORMAT_ID {
@@ -1673,7 +1674,7 @@ class ObExprTRDateFormat {
     ob_time.parts_[DT_USEC] = 0;
   }
 
-  public:
+public:
   static const char* FORMATS_TEXT[FORMAT_MAX_TYPE];
   static uint64_t FORMATS_HASH[FORMAT_MAX_TYPE];
 };

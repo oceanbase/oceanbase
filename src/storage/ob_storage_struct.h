@@ -107,7 +107,7 @@ inline bool need_migrate_trans_table(const ObReplicaOpType replica_op)
 }
 
 struct ObMigrateStatusHelper {
-  public:
+public:
   static int trans_replica_op(const ObReplicaOpType& op_type, ObMigrateStatus& migrate_status);
   static int trans_fail_status(const ObMigrateStatus& cur_status, ObMigrateStatus& fail_status);
   static int trans_reboot_status(const ObMigrateStatus& cur_status, ObMigrateStatus& reboot_status);
@@ -200,7 +200,7 @@ struct ObPartitionStoreMeta {
       K_(split_info), K_(replica_property));
   OB_UNIS_VERSION_V(PARTITION_STORE_META_VERSION);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionStoreMeta);
 };
 
@@ -229,7 +229,7 @@ struct ObPGPartitionStoreMeta {
       K_(replica_type), K_(create_timestamp));
   OB_UNIS_VERSION(PARTITION_STORE_META_VERSION_V2);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPGPartitionStoreMeta);
 };
 
@@ -280,7 +280,7 @@ struct ObPartitionGroupMeta {
 
   OB_UNIS_VERSION_V(PARTITION_GROUP_META_VERSION);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionGroupMeta);
 };
 
@@ -371,7 +371,7 @@ struct ObPartitionReadableInfo {
 };
 
 struct ObCreatePGParam {
-  public:
+public:
   ObCreatePGParam();
   virtual ~ObCreatePGParam()
   {}
@@ -440,7 +440,7 @@ bool ObMigrateStatusHelper::check_can_migrate_out(const ObMigrateStatus& cur_sta
 
 class ObCreatePartitionMeta {
 
-  public:
+public:
   ObCreatePartitionMeta()
   {
     reset();
@@ -506,7 +506,7 @@ class ObCreatePartitionMeta {
   TO_STRING_KV(K_(is_valid), K_(table_id), K_(data_table_id), K_(progressive_merge_round), K_(is_global_index_table),
       K_(table_type), K_(table_mode), K_(index_type), K_(rowkey_column_num), K_(column_ids), KP(id_hash_array_));
 
-  private:
+private:
   //!!!! attention:only after successfully extracting from a ObTableSchema instance, can is_valid_ be true
 
   bool is_valid_;
@@ -524,7 +524,7 @@ class ObCreatePartitionMeta {
 
 class ObCreatePartitionParam {
 
-  public:
+public:
   ObCreatePartitionParam()
   {
     reset();
@@ -549,7 +549,7 @@ class ObCreatePartitionParam {
       K_(memstore_version), K_(lease_start), K_(replica_type), K_(restore), K_(frozen_timestamp), K_(pg_key),
       K_(schemas));
 
-  public:
+public:
   //!!!! attention:only after successfully extracting from a ObTableSchema instance, can is_valid_ be true
 
   bool is_valid_;
@@ -567,7 +567,7 @@ class ObCreatePartitionParam {
 };
 
 struct ObTransTableStatus {
-  public:
+public:
   ObTransTableStatus() : end_log_ts_(0), row_count_(0)
   {}
   int64_t end_log_ts_;
@@ -606,7 +606,7 @@ struct ObMigrateRemoteTableInfo {
 };
 
 class ObRecoveryPointSchemaFilter final {
-  public:
+public:
   ObRecoveryPointSchemaFilter();
   virtual ~ObRecoveryPointSchemaFilter();
   bool is_inited() const;
@@ -623,7 +623,7 @@ class ObRecoveryPointSchemaFilter final {
   TO_STRING_KV(
       K_(is_inited), K_(tenant_id), K_(tenant_recovery_point_schema_version), K_(tenant_current_schema_version));
 
-  private:
+private:
   int get_table_ids_in_pg_(const common::ObPartitionKey& pgkey, common::ObIArray<uint64_t>& table_ids,
       share::schema::ObSchemaGetterGuard& schema_guard);
   int check_partition_exist_(const common::ObPartitionKey pkey, const bool check_dropped_partition,
@@ -632,7 +632,7 @@ class ObRecoveryPointSchemaFilter final {
   int check_if_table_miss_by_schema_(const common::ObPartitionKey& pgkey,
       const common::hash::ObHashSet<uint64_t>& table_ids, share::schema::ObSchemaGetterGuard& schema_guard);
 
-  private:
+private:
   bool is_inited_;
   int64_t tenant_id_;
   int64_t tenant_recovery_point_schema_version_;
@@ -644,12 +644,12 @@ class ObRecoveryPointSchemaFilter final {
 };
 
 class ObBackupRestoreTableSchemaChecker {
-  public:
+public:
   static int check_backup_restore_need_skip_table(const share::schema::ObTableSchema* table_schema, bool& need_skip);
 };
 
 class ObRebuildListener {
-  public:
+public:
   // the upper layer need guarantee the life cycle of the
   // partition ctx mgr pointer should be safe before destruction
   ObRebuildListener(transaction::ObPartitionTransCtxMgr& mgr);
@@ -657,12 +657,12 @@ class ObRebuildListener {
   // whether the partition is in rebuild
   bool on_partition_rebuild();
 
-  private:
+private:
   transaction::ObPartitionTransCtxMgr& ob_partition_ctx_mgr_;
 };
 
 class ObRestoreFakeMemberListHelper {
-  public:
+public:
   static int fake_restore_member_list(const int64_t replica_cnt, common::ObMemberList& fake_member_list);
 };
 

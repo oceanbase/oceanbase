@@ -23,7 +23,7 @@ namespace obmysql {
 using common::ObString;
 
 class OMPKHandshakeResponse : public ObMySQLPacket {
-  public:
+public:
   OMPKHandshakeResponse()
       : capability_(),
         max_packet_size_(0),
@@ -119,10 +119,10 @@ class OMPKHandshakeResponse : public ObMySQLPacket {
   VIRTUAL_TO_STRING_KV("header", hdr_, K_(capability_.capability), K_(max_packet_size), K_(character_set), K_(username),
       K_(database), K_(auth_plugin_name), K_(connect_attrs));
 
-  private:
+private:
   uint64_t get_connect_attrs_len() const;
 
-  private:
+private:
   // capability flags of the client as defined in Protocol::CapabilityFlags.
   ObMySQLCapabilityFlags capability_;
   // max size of a command packet that the client wants to send to the server.

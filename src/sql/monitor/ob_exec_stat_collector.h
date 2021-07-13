@@ -31,7 +31,7 @@ class ObSql;
 class ObPhysicalPlan;
 class ObSQLSessionInfo;
 class ObExecStatCollector {
-  public:
+public:
   ObExecStatCollector() : length_(0)
   {}
   ~ObExecStatCollector()
@@ -43,7 +43,7 @@ class ObExecStatCollector {
   int get_extend_info(common::ObIAllocator& allocator, common::ObString& str);
   void reset();
 
-  private:
+private:
   template <class T>
   int add_stat(const T* value);
 
@@ -55,25 +55,25 @@ class ObExecStatCollector {
 };
 
 class ObExecStatDispatch {
-  public:
+public:
   ObExecStatDispatch() : stat_str_(), pos_(0){};
   ~ObExecStatDispatch(){};
   int set_extend_info(const common::ObString& str);
   int dispatch(bool need_add_monitor, ObPhyPlanMonitorInfo* monitor_info, bool need_update_plan, ObPhysicalPlan* plan);
 
-  private:
+private:
   int get_next_type(StatType& type);
   template <class T>
   int get_value(T* value);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExecStatDispatch);
   common::ObString stat_str_;
   int64_t pos_;
 };
 
 class ObExecStatUtils {
-  public:
+public:
   template <class T>
   OB_INLINE static void record_exec_timestamp(const T& process,
       bool is_first,  // fir execution, not retry
@@ -105,7 +105,7 @@ class ObExecStatUtils {
     //                K(exec_timestamp.single_process_ts_));
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExecStatUtils);
   ObExecStatUtils();
   ~ObExecStatUtils();

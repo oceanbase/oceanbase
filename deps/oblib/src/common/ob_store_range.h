@@ -27,7 +27,7 @@ namespace common {
 // because the comparison of the start_key_ and end_key_ of the range requires additional
 // (column order) information.
 class ObStoreRange {
-  public:
+public:
   ObStoreRange()
   {
     reset();
@@ -158,7 +158,7 @@ class ObStoreRange {
 
   inline int get_common_store_rowkey(ObStoreRowkey& store_rowkey) const;
 
-  private:
+private:
   uint64_t table_id_;
   ObBorderFlag border_flag_;
   ObStoreRowkey start_key_;
@@ -166,7 +166,7 @@ class ObStoreRange {
 
   // FIXME-: remove interfaces below after changing code that calls below methods
   // ObStoreRange should NOT provide compare semantics
-  public:
+public:
   inline void set_whole_range();
   inline bool is_whole_range() const
   {
@@ -343,7 +343,7 @@ inline int deep_copy_range(ObIAllocator& allocator, const ObStoreRange& src, ObS
  * for better performance.
  */
 class ObExtStoreRange {
-  public:
+public:
   ObExtStoreRange();
   explicit ObExtStoreRange(const ObStoreRange& range);
 
@@ -394,7 +394,7 @@ class ObExtStoreRange {
 
   TO_STRING_KV(K_(range), K_(ext_start_key), K_(ext_end_key));
 
-  private:
+private:
   ObStoreRange range_;
   // used for search macro block
   ObExtStoreRowkey ext_start_key_;
@@ -402,13 +402,13 @@ class ObExtStoreRange {
 };
 
 class ObVersionStoreRangeConversionHelper {
-  public:
+public:
   static int store_rowkey_to_multi_version_range(const ObExtStoreRowkey& src_rowkey,
       const ObVersionRange& version_range, ObIAllocator& allocator, ObExtStoreRange& multi_version_range);
   static int range_to_multi_version_range(const ObExtStoreRange& src_range, const ObVersionRange& version_range,
       ObIAllocator& allocator, ObExtStoreRange& multi_version_range);
 
-  private:
+private:
   static int build_multi_version_store_rowkey(const ObStoreRowkey& rowkey, const int64_t trans_version,
       ObIAllocator& allocator, ObStoreRowkey& multi_version_rowkey);
 };

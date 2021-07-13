@@ -37,7 +37,7 @@ int64_t glibc_free_count = 0;
 #define MOCK_ALLOC_ALIGN 1
 
 class MockAllocator : public ObIAllocator {
-  public:
+public:
   MockAllocator() : alloc_count_(0), free_count_(0), page_size_(page_size), last_alloc_addr_(NULL), status_(true)
   {}
 
@@ -151,7 +151,7 @@ class MockAllocator : public ObIAllocator {
 };
 
 class ObFIFOAllocatorTest : public ::testing::Test {
-  public:
+public:
   ObFIFOAllocatorTest();
   virtual ~ObFIFOAllocatorTest();
   virtual void SetUp();
@@ -237,7 +237,7 @@ TEST(ObFIFOAllocator, invalid_free)
 
 // [4] test alignment
 class ObFIFOAllocatorAlignParamTest : public ::testing::TestWithParam<AllocParam> {
-  public:
+public:
   ObFIFOAllocatorAlignParamTest()
   {
     mock_allocator_ = new MockAllocator();
@@ -251,10 +251,10 @@ class ObFIFOAllocatorAlignParamTest : public ::testing::TestWithParam<AllocParam
   }
   bool check_align(void* p, int64_t align);
 
-  public:
+public:
   ObFIFOAllocator* fa_;
 
-  private:
+private:
   MockAllocator* mock_allocator_;
 };
 
@@ -324,7 +324,7 @@ struct AllocParam ps11 = {page_size, 1024 * 8};
 struct AllocParam alloc_param_special[11] = {ps1, ps2, ps3, ps4, ps5, ps6, ps7, ps8, ps9, ps10, ps11};
 
 class ObFIFOAllocatorSpecialPageListTest {
-  public:
+public:
   ObFIFOAllocatorSpecialPageListTest()
   {
     mock_allocator_ = new MockAllocator();
@@ -337,11 +337,11 @@ class ObFIFOAllocatorSpecialPageListTest {
     delete mock_allocator_;
   }
 
-  public:
+public:
   void check_special_list();
   ObFIFOAllocator* fa_;
 
-  private:
+private:
   MockAllocator* mock_allocator_;
 };
 
@@ -415,7 +415,7 @@ TEST(ObFIFOAllocatorSpecialPageListTest, non_fifo_special_list_test)
 }
 
 class ObFIFOAllocatorNormalPageListTest {
-  public:
+public:
   ObFIFOAllocatorNormalPageListTest()
   {
     mock_allocator_ = new MockAllocator();
@@ -494,10 +494,10 @@ class ObFIFOAllocatorNormalPageListTest {
     return rand() % MAX_SIZE + 1;
   }
 
-  public:
+public:
   ObFIFOAllocator* fa_;
 
-  private:
+private:
   MockAllocator* mock_allocator_;
 };
 

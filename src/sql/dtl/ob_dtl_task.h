@@ -38,7 +38,7 @@ enum DTL_CHAN_STATE { DTL_CS_RUN, DTL_CS_DRAINED, DTL_CS_UNREGISTER };
 struct ObDtlChannelInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   uint64_t chid_;
   // Local or RPC channel is used.
   DTL_CHAN_TYPE type_;
@@ -59,9 +59,9 @@ struct ObDtlChannelInfo {
 class ObDtlChSet {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static constexpr int64_t MAX_CHANS = 65536;  // nearly unlimited
-  public:
+public:
   ObDtlChSet() : exec_addr_()
   {}
   ~ObDtlChSet() = default;
@@ -86,7 +86,7 @@ class ObDtlChSet {
   }
   TO_STRING_KV(K_(exec_addr), K_(ch_info_set));
 
-  protected:
+protected:
   common::ObAddr exec_addr_;
   common::ObSEArray<dtl::ObDtlChannelInfo, 12> ch_info_set_;
 };
@@ -94,7 +94,7 @@ class ObDtlChSet {
 class ObDtlExecServer {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDtlExecServer() : total_task_cnt_(0), exec_addrs_(), prefix_task_counts_()
   {}
 
@@ -117,7 +117,7 @@ class ObDtlExecServer {
   }
   TO_STRING_KV(K_(total_task_cnt), K_(exec_addrs), K_(prefix_task_counts));
 
-  public:
+public:
   int64_t total_task_cnt_;
   common::ObSEArray<common::ObAddr, 8> exec_addrs_;
   common::ObSEArray<int64_t, 8> prefix_task_counts_;
@@ -126,7 +126,7 @@ class ObDtlExecServer {
 class ObDtlChTotalInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDtlChTotalInfo()
       : start_channel_id_(0),
         transmit_exec_server_(),
@@ -147,7 +147,7 @@ class ObDtlChTotalInfo {
   TO_STRING_KV(
       K_(start_channel_id), K_(transmit_exec_server), K_(receive_exec_server), K_(channel_count), K_(tenant_id));
 
-  public:
+public:
   int64_t start_channel_id_;
   ObDtlExecServer transmit_exec_server_;
   ObDtlExecServer receive_exec_server_;
@@ -159,7 +159,7 @@ class ObDtlTask {
   OB_UNIS_VERSION(1);
   static constexpr int64_t MAX_CHANS = 128;
 
-  public:
+public:
   ObDtlTask();
   virtual ~ObDtlTask();
 
@@ -177,13 +177,13 @@ class ObDtlTask {
 
   TO_STRING_KV(K_(jobid));
 
-  protected:
+protected:
   // Link channels with channel ID.
   // int link_chans();
   // Unlink channels linked before.
   // void unlink_chans();
 
-  protected:
+protected:
   DISALLOW_COPY_AND_ASSIGN(ObDtlTask);
 
   uint64_t jobid_;

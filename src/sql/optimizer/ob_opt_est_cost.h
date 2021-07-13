@@ -77,7 +77,7 @@ struct ObTableMetaInfo {
   bool is_only_memtable_data_;  // whether has only memtable data
   EstimatedPartition table_est_part_;
   ObEstimateType cost_est_type_;  // cost estimation type
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableMetaInfo);
 };
 
@@ -106,7 +106,7 @@ struct ObIndexMetaInfo {
   bool is_index_back_;              // is index back
   bool is_unique_index_;            // is unique index
   bool is_global_index_;            // whether is global index
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexMetaInfo);
 };
 
@@ -208,7 +208,7 @@ struct ObCostTableScanInfo {
   common::ObSimpleBatch::ObBatchType batch_type_;
   SampleInfo sample_info_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
 };
 
@@ -241,7 +241,7 @@ struct ObCostBaseJoinInfo : public ObTwoChildrenNodeCostInfo {
   const common::ObIArray<ObRawExpr*>& other_join_condition_;
   ObEstSelInfo* est_sel_info_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCostBaseJoinInfo);
 };
 
@@ -265,7 +265,7 @@ struct ObCostNLJoinInfo : public ObCostBaseJoinInfo {
   bool with_nl_param_;
   bool need_mat_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCostNLJoinInfo);
 };
 
@@ -287,7 +287,7 @@ struct ObCostMergeJoinInfo : public ObCostBaseJoinInfo {
   const common::ObIArray<OrderItem>& left_need_ordering_;
   const common::ObIArray<OrderItem>& right_need_ordering_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCostMergeJoinInfo);
 };
 
@@ -306,7 +306,7 @@ struct ObCostHashJoinInfo : public ObCostBaseJoinInfo {
       K_(left_ids), K_(right_ids), K_(join_type), K_(equal_join_condition), K_(other_join_condition));
   virtual ~ObCostHashJoinInfo(){};
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCostHashJoinInfo);
 };
 
@@ -365,7 +365,7 @@ struct ObSortCostInfo {
 };
 
 class ObOptEstCost {
-  public:
+public:
   const static int64_t MAX_STORAGE_RANGE_ESTIMATION_NUM;
 
   struct ObCostParams {
@@ -585,7 +585,7 @@ class ObOptEstCost {
       ObIArray<ObExprSelPair>* all_predicate_sel, double& output_row_count, double& query_range_row_count,
       double& phy_query_range_row_count, double& index_back_row_count);
 
-  private:
+private:
   static int cost_prefix_sort(const ObSortCostInfo& cost_info, const ObIArray<ObRawExpr*>& order_exprs, double& cost);
   static int cost_topn_sort(const ObSortCostInfo& cost_info, const ObIArray<ObExprResType>& types, double& cost);
   static int cost_topn_sort_inner(const ObIArray<ObExprResType>& types, double rows, double n, double& cost);
@@ -640,7 +640,7 @@ class ObOptEstCost {
   const static double hash_params_[common::ObMaxTC + 1];
   const static ObCostParams cost_params_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOptEstCost);
 };
 

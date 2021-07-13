@@ -24,7 +24,7 @@ class ObStreamCompressor;
 
 namespace obrpc {
 class ObRpcCompressProtocolProcessor : public ObVirtualRpcProtocolProcessor {
-  public:
+public:
   ObRpcCompressProtocolProcessor()
   {}
   virtual ~ObRpcCompressProtocolProcessor()
@@ -33,7 +33,7 @@ class ObRpcCompressProtocolProcessor : public ObVirtualRpcProtocolProcessor {
   virtual int encode(easy_request_t* req, ObRpcPacket* pkt);
   virtual int decode(easy_message_t* ms, ObRpcPacket*& pkt);
 
-  private:
+private:
   int reset_compress_ctx_mode(easy_connection_t* conn, ObRpcCompressMode mode, ObRpcPacket*& pkt,
       ObCmdPacketInCompress::CmdType& cmd_type, bool& is_still_need_compress);
 

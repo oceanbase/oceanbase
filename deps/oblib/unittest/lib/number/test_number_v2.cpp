@@ -38,11 +38,11 @@ const char* format(const T& obj, int16_t scale)
 }
 
 class LimitedAllocator : public ObIAllocator {
-  public:
+public:
   LimitedAllocator(){};
   ~LimitedAllocator(){};
 
-  public:
+public:
   void* alloc(const int64_t size)
   {
     return alloc(size, default_memattr);
@@ -56,22 +56,22 @@ class LimitedAllocator : public ObIAllocator {
     return ret;
   };
 
-  private:
+private:
   uint32_t buffer_[number::ObNumber::MAX_STORE_LEN + 1];
 };
 
 class MockPoly : public number::ObCalcVector {
-  public:
+public:
   MockPoly() : idx_(0){};
 
-  public:
+public:
   template <typename... Args>
   MockPoly(const uint64_t base, const Args&... args)
   {
     fill(base, args...);
   };
 
-  public:
+public:
   template <typename... Args>
   void fill(const uint64_t base, const Args&... args)
   {
@@ -89,7 +89,7 @@ class MockPoly : public number::ObCalcVector {
   };
   void fill_(void){};
 
-  public:
+public:
   MockPoly ref(const int64_t start, const int64_t end) const
   {
     MockPoly ret;
@@ -110,7 +110,7 @@ class MockPoly : public number::ObCalcVector {
     return pos;
   };
 
-  public:
+public:
   int64_t idx_;
 };
 
@@ -471,11 +471,11 @@ TEST(ObNumber, poly_poly_div)
 }
 
 class ParseHelperTester : public ObNumberBuilder {
-  public:
+public:
   ParseHelperTester(){};
   ~ParseHelperTester(){};
 
-  public:
+public:
   int fill(const char* str)
   {
     return number_.from(str, allocator_);
@@ -489,7 +489,7 @@ class ParseHelperTester : public ObNumberBuilder {
     return number_.from(desc, vector, allocator_);
   };
 
-  private:
+private:
   CharArena allocator_;
 };
 

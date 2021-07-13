@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace share {
 
 class ObFakePartitionKey {
-  public:
+public:
   uint64_t table_id_;
   int64_t partition_id_;
   inline int64_t hash() const
@@ -34,7 +34,7 @@ class ObFakePartitionKey {
 };
 
 class ObFakePartitionLocationCache : public ObPartitionLocationCache {
-  public:
+public:
   ObFakePartitionLocationCache();
   virtual ~ObFakePartitionLocationCache();
 
@@ -44,7 +44,7 @@ class ObFakePartitionLocationCache : public ObPartitionLocationCache {
 
   int add_location(ObFakePartitionKey key, ObPartitionLocation location);
 
-  private:
+private:
   common::hash::ObHashMap<ObFakePartitionKey, ObPartitionLocation> partition_loc_map_;
   DISALLOW_COPY_AND_ASSIGN(ObFakePartitionLocationCache);
 };

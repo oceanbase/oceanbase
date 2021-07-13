@@ -24,8 +24,8 @@ static const uint64_t ET_MINI_TASK = 1;
 class ObExecutionID final {
   OB_UNIS_VERSION(1);
 
-  public:
-  public:
+public:
+public:
   ObExecutionID(const common::ObAddr& server, uint64_t execution_id)
       : server_(server), execution_id_(execution_id), task_type_(ET_DIST_TASK)
   {}
@@ -106,7 +106,7 @@ class ObExecutionID final {
   // fake control server address for global execution_id
   static const common::ObAddr& global_id_addr();
 
-  private:
+private:
   common::ObAddr server_;
   uint64_t execution_id_;
   union {

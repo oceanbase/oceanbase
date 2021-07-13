@@ -107,26 +107,26 @@ struct BalanceGroupBoxItem {
 };
 
 class BalanceGroupBox {
-  public:
+public:
   BalanceGroupBox()
   {}
   virtual ~BalanceGroupBox()
   {}
 
-  public:
+public:
   virtual BalanceGroupContainerType get_container_type() const = 0;
   virtual int set_item(const BalanceGroupBoxItem& item) = 0;
   virtual int64_t to_string(char* buf, const int64_t buf_len) const = 0;
 };
 
 class BalanceGroupCollection {
-  public:
+public:
   BalanceGroupCollection()
   {}
   virtual ~BalanceGroupCollection()
   {}
 
-  public:
+public:
   virtual BalanceGroupContainerType get_container_type() const = 0;
   virtual int collect_box(const BalanceGroupBox* balance_group_box) = 0;
 };
@@ -214,15 +214,15 @@ struct SquareIdMapItem {
 
 template <class T>
 class IdMapIterator {
-  public:
+public:
   typedef IdMapIterator<T> self_t;
 
-  public:
+public:
   typedef T* value_ptr_t;
   typedef T* pointer;
   typedef T& reference;
 
-  public:
+public:
   IdMapIterator() : value_ptr_(NULL)
   {}
   explicit IdMapIterator(value_ptr_t value_ptr)
@@ -266,7 +266,7 @@ class IdMapIterator {
     return (value_ptr_ != (other.value_ptr_));
   }
 
-  private:
+private:
   value_ptr_t value_ptr_;
 };
 
@@ -281,7 +281,7 @@ struct HashIndexMapItem;
 struct SquareIdMapItem;
 
 class SquareIdMap : public BalanceGroupBox {
-  public:
+public:
   friend AverageCountBalancer;
   friend PartitionLeaderCountBalancer;
   friend BalanceStat;
@@ -289,18 +289,18 @@ class SquareIdMap : public BalanceGroupBox {
   friend OverallBalanceStat;
   friend RowLeaderBalanceStat;
 
-  public:
+public:
   typedef SquareIdMapItem Item;
   typedef IdMapIterator<SquareIdMapItem> iterator;
   typedef IdMapIterator<const SquareIdMapItem> const_iterator;
 
-  public:
+public:
   SquareIdMap(share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder,
       common::ObIAllocator& allocator);
   virtual ~SquareIdMap()
   {}
 
-  public:
+public:
   int init(const int64_t row, const int64_t col);
   virtual BalanceGroupContainerType get_container_type() const override
   {
@@ -388,11 +388,11 @@ class SquareIdMap : public BalanceGroupBox {
   TO_STRING_KV(K_(map_id), K_(ignore_leader_balance), K_(primary_zone), K_(tenant_id), K_(row_size), K_(col_size),
       "type", get_map_type(), K_(is_valid));
 
-  protected:
+protected:
   int get_all_tg_idx(uint64_t tablegroup_id, uint64_t table_id, int64_t& all_tg_idx);
   SquareIdMapItem* alloc_id_map_item_array(common::ObIAllocator& allocator, int64_t size);
 
-  protected:
+protected:
   bool inited_;
   share::schema::ObSchemaGetterGuard& schema_guard_;
   ITenantStatFinder& stat_finder_;
@@ -405,7 +405,7 @@ class SquareIdMap : public BalanceGroupBox {
   bool ignore_leader_balance_;
   common::ObZone primary_zone_;
 
-  private:
+private:
   int64_t map_id_;    // debug only
   bool enable_dump_;  // debug only
 };
@@ -428,7 +428,7 @@ inline SquareIdMap::const_iterator SquareIdMap::end() const
 }
 
 class ShardGroupIdMap : public SquareIdMap {
-  public:
+public:
   ShardGroupIdMap(
       share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder, common::ObIAllocator& allocator)
       : SquareIdMap(schema_guard, stat_finder, allocator)
@@ -436,13 +436,13 @@ class ShardGroupIdMap : public SquareIdMap {
   virtual ~ShardGroupIdMap()
   {}
 
-  public:
+public:
   virtual const char* get_comment() const;
   virtual BalanceGroupType get_map_type() const;
 };
 
 class ShardPartitionIdMap : public SquareIdMap {
-  public:
+public:
   ShardPartitionIdMap(
       share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder, common::ObIAllocator& allocator)
       : SquareIdMap(schema_guard, stat_finder, allocator)
@@ -450,13 +450,13 @@ class ShardPartitionIdMap : public SquareIdMap {
   virtual ~ShardPartitionIdMap()
   {}
 
-  public:
+public:
   virtual const char* get_comment() const;
   virtual BalanceGroupType get_map_type() const;
 };
 
 class TableGroupIdMap : public SquareIdMap {
-  public:
+public:
   TableGroupIdMap(
       share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder, common::ObIAllocator& allocator)
       : SquareIdMap(schema_guard, stat_finder, allocator)
@@ -464,13 +464,13 @@ class TableGroupIdMap : public SquareIdMap {
   virtual ~TableGroupIdMap()
   {}
 
-  public:
+public:
   virtual const char* get_comment() const;
   virtual BalanceGroupType get_map_type() const;
 };
 
 class PartitionTableIdMap : public SquareIdMap {
-  public:
+public:
   PartitionTableIdMap(
       share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder, common::ObIAllocator& allocator)
       : SquareIdMap(schema_guard, stat_finder, allocator)
@@ -478,13 +478,13 @@ class PartitionTableIdMap : public SquareIdMap {
   virtual ~PartitionTableIdMap()
   {}
 
-  public:
+public:
   virtual const char* get_comment() const;
   virtual BalanceGroupType get_map_type() const;
 };
 
 class NonPartitionTableIdMap : public SquareIdMap {
-  public:
+public:
   NonPartitionTableIdMap(
       share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder, common::ObIAllocator& allocator)
       : SquareIdMap(schema_guard, stat_finder, allocator)
@@ -492,22 +492,22 @@ class NonPartitionTableIdMap : public SquareIdMap {
   virtual ~NonPartitionTableIdMap()
   {}
 
-  public:
+public:
   virtual const char* get_comment() const;
   virtual BalanceGroupType get_map_type() const;
 };
 
 class SquareIdMapCollection : public BalanceGroupCollection {
-  public:
+public:
   SquareIdMapCollection() : BalanceGroupCollection(), inited_(false), square_id_map_array_()
   {}
   virtual ~SquareIdMapCollection()
   {}
 
-  public:
+public:
   int init();
 
-  public:
+public:
   virtual BalanceGroupContainerType get_container_type() const override
   {
     return SQUARE_MAP_TYPE;
@@ -519,13 +519,13 @@ class SquareIdMapCollection : public BalanceGroupCollection {
     return square_id_map_array_;
   }
 
-  private:
+private:
   bool inited_;
   common::ObArray<SquareIdMap*> square_id_map_array_;
 };
 
 struct HashIndexMapItem {
-  public:
+public:
   HashIndexMapItem()
       : in_group_index_(-1),
         group_count_(0),
@@ -748,18 +748,18 @@ struct HashIndexMapItem {
 class HashIndexCollection;
 typedef common::hash::ObHashMap<common::ObPartitionKey, HashIndexMapItem> IndexMap;
 class HashIndexMap : public BalanceGroupBox {
-  public:
+public:
   friend HashIndexCollection;
   typedef HashIndexMapItem Item;
 
-  public:
+public:
   HashIndexMap() : BalanceGroupBox(), inited_(false), index_map_()
   {}
   virtual ~HashIndexMap()
   {}
   TO_STRING_EMPTY();
 
-  public:
+public:
   int init(const int64_t map_size);
   virtual BalanceGroupContainerType get_container_type() const override
   {
@@ -767,26 +767,26 @@ class HashIndexMap : public BalanceGroupBox {
   }
   virtual int set_item(const BalanceGroupBoxItem& item) override;
 
-  private:
+private:
   bool inited_;
   IndexMap index_map_;
 };
 
 class HashIndexCollection : public BalanceGroupCollection {
-  public:
+public:
   HashIndexCollection() : BalanceGroupCollection(), inited_(false), index_map_()
   {}
   virtual ~HashIndexCollection()
   {}
 
-  public:
+public:
   int init(const int64_t item_size);
   void reuse()
   {
     index_map_.reuse();
   }
 
-  public:
+public:
   virtual BalanceGroupContainerType get_container_type() const override
   {
     return HASH_INDEX_TYPE;
@@ -795,7 +795,7 @@ class HashIndexCollection : public BalanceGroupCollection {
   int get_partition_index(const common::ObPartitionKey& pkey, HashIndexMapItem& hash_index_item) const;
   int assign(const HashIndexCollection& that);
 
-  private:
+private:
   bool inited_;
   IndexMap index_map_;
 };

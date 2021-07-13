@@ -351,7 +351,7 @@ int ObTransCtx::alloc_audit_rec_and_trace_log_(ObTransService* trans_service, Ob
       while (retry_times--) {
         if (OB_FAIL(record_mgr->get_empty_record(tmp_rec))) {
           if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            TRANS_LOG(WARN, "get empty audit record faild", KR(ret));
+            TRANS_LOG(WARN, "get empty audit record failed", KR(ret));
           }
         } else if (OB_FAIL(tmp_rec->init(this))) {
           TRANS_LOG(WARN, "set trans ctx in audit record failed", KR(ret));

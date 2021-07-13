@@ -31,10 +31,10 @@ class ObTableSchema;
 class ObColumnSchemaV2;
 class ObServerSchemaService;
 class ObSchemaUtils {
-  public:
+public:
 #define UNDER_SYS_TENANT(id) ({ OB_SYS_TENANT_ID == extract_tenant_id(id); })
 
-  public:
+public:
   static uint64_t get_exec_tenant_id(const uint64_t tenant_id);
   static uint64_t get_extract_tenant_id(const uint64_t exec_tenant_id, const uint64_t tenant_id);
   static uint64_t get_extract_schema_id(const uint64_t exec_tenant_id, const uint64_t schema_id);
@@ -81,7 +81,7 @@ class ObSchemaUtils {
   static bool is_public_database(const common::ObString& db_name, bool is_oracle_mode);
   static bool is_public_database_case_cmp(const common::ObString& db_name, bool is_oracle_mode);
 
-  private:
+private:
   static int get_tenant_variable(schema::ObSchemaGetterGuard& schema_guard, uint64_t tenant_id,
       share::ObSysVarClassType var_id, common::ObObj& value);
   // disallow construct

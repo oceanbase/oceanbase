@@ -34,7 +34,7 @@ namespace rootserver {
 class ObServerManager;
 
 class ObAllPartitionTable : public common::ObVirtualTableProjector {
-  public:
+public:
   ObAllPartitionTable();
   virtual ~ObAllPartitionTable();
 
@@ -45,10 +45,10 @@ class ObAllPartitionTable : public common::ObVirtualTableProjector {
 
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  protected:
+protected:
   virtual int get_condition(uint64_t& specific_tenant_id, uint64_t& specific_table_id);
 
-  private:
+private:
   int get_full_row(const share::schema::ObTableSchema* table, const share::ObPartitionReplica& replica,
       common::ObIArray<Column>& columns);
   bool inited_;
@@ -64,7 +64,7 @@ class ObAllPartitionTable : public common::ObVirtualTableProjector {
   share::ObIPartitionTableIterator* pt_iter_;
   ObArenaAllocator arena_allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllPartitionTable);
 };
 

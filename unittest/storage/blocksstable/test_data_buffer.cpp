@@ -21,13 +21,13 @@ using namespace common;
 namespace blocksstable {
 
 class TestDataBuffer : public ::testing::Test {
-  public:
+public:
   TestDataBuffer();
   virtual ~TestDataBuffer();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   char* buf_;
   int64_t buf_size_;
 };

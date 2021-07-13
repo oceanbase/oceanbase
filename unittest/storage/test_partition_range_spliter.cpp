@@ -59,7 +59,7 @@ using namespace memtable;
 namespace storage {
 
 class TestRangeSpliter : public ObMultiVersionSSTableTest {
-  public:
+public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
   static const int64_t MAX_MACRO_CNT = 20;
   static const int64_t RANGE_MAX = 0;

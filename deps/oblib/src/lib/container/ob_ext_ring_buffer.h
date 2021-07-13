@@ -45,16 +45,16 @@ namespace common {
 
 template <typename T>
 class ObExtendibleRingBuffer : protected erb::ObExtendibleRingBufferBase<T*, erb::PtrSlot<T> > {
-  public:
+public:
   ObExtendibleRingBuffer();
   virtual ~ObExtendibleRingBuffer();
 
-  public:
+public:
   int init(const int64_t begin_sn);
   int destroy();
   bool is_inited() const;
 
-  public:
+public:
   // Get T* at sn.
   // sn should be in [begin_sn, end_sn)
   //
@@ -115,10 +115,10 @@ class ObExtendibleRingBuffer : protected erb::ObExtendibleRingBufferBase<T*, erb
   int64_t begin_sn() const;
   int64_t end_sn() const;
 
-  private:
+private:
   erb::RingBufferAlloc alloc_;
 
-  private:
+private:
   typedef ObExtendibleRingBuffer<T> MyType;
   typedef erb::ObExtendibleRingBufferBase<T*, erb::PtrSlot<T> > BaseType;
   DISALLOW_COPY_AND_ASSIGN(ObExtendibleRingBuffer<T>);

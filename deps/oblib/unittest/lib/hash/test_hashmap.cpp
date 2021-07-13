@@ -31,7 +31,7 @@ typedef uint64_t HashKey;
 typedef uint64_t HashValue;
 
 class CallBack {
-  public:
+public:
   void operator()(HashMapPair<HashKey, HashValue>& v)
   {
     v.second = v_;
@@ -41,7 +41,7 @@ class CallBack {
     v_ = v;
   };
 
-  private:
+private:
   HashValue v_;
 };
 

@@ -60,7 +60,7 @@ enum ObEstimateType {
 };
 
 class ObEstColumnStat {
-  public:
+public:
   int assign(const ObEstColumnStat& other);
   int init(const uint64_t column_id, const double rows, const int64_t ndv, const bool is_single_pkey);
 
@@ -93,14 +93,14 @@ class ObEstColumnStat {
 
   TO_STRING_KV(K_(column_id), K_(ndv), K_(origin_ndv));
 
-  private:
+private:
   uint64_t column_id_;
   double ndv_;
   double origin_ndv_;
 };
 
 class ObEstTableStat {
-  public:
+public:
   int assign(const ObEstTableStat& other);
 
   int init(const uint64_t table_id, const ObPartitionKey& pkey, const int32_t rel_id, const double rows,
@@ -185,7 +185,7 @@ class ObEstTableStat {
   TO_STRING_KV(
       K_(table_id), K_(ref_id), K_(rel_id), K_(rows), K_(origin_rows), K_(all_used_parts), K_(pk_ids), K_(all_cstat));
 
-  private:
+private:
   uint64_t table_id_;
   uint64_t ref_id_;
   int64_t part_id_;  // best_partition id
@@ -199,7 +199,7 @@ class ObEstTableStat {
 };
 
 class ObEstAllTableStat {
-  public:
+public:
   int assign(const ObEstAllTableStat& other);
 
   /**
@@ -247,7 +247,7 @@ class ObEstAllTableStat {
 
   TO_STRING_KV(K_(all_tstat));
 
-  private:
+private:
   common::ObSEArray<ObEstTableStat, 8, common::ModulePageAllocator, true> all_tstat_;
 };
 
@@ -279,7 +279,7 @@ struct ObEstColRangeInfo {
 };
 
 class ObEstSelInfo {
-  public:
+public:
   ObEstSelInfo(ObOptimizerContext& ctx, ObDMLStmt* stmt, const ObLogicalOperator* op = NULL)
       : opt_ctx_(ctx), stmt_(stmt), op_(op), use_origin_stat_(false)
   {}
@@ -389,7 +389,7 @@ class ObEstSelInfo {
   }
   TO_STRING_KV(K_(table_stats));
 
-  private:
+private:
   ObOptimizerContext& opt_ctx_;
   ObDMLStmt* stmt_;
   // in join order, op_ is NULL
@@ -399,7 +399,7 @@ class ObEstSelInfo {
   bool use_origin_stat_;
 };
 class ObOptEstSel {
-  public:
+public:
   static double DEFAULT_COLUMN_DISTINCT_RATIO;
 
   // calculate selectivity for predicates with conjective relationship
@@ -440,7 +440,7 @@ class ObOptEstSel {
     return num < 0 ? 0 : (num > 1 ? 1 : num);
   }
 
-  private:
+private:
   struct RangeSel {
     RangeSel() : var_(NULL), has_lt_(false), has_gt_(false), lt_sel_(0), gt_sel_(0)
     {}
@@ -479,7 +479,7 @@ class ObOptEstSel {
     double gt_sel_;
   };
 
-  private:
+private:
   // use real params to calc selectivity
   // @param in  plan the plan
   // @param in  qual the filter to calc selectivity, should be const or calculable expr
@@ -692,7 +692,7 @@ class ObOptEstSel {
     return fabs(num) < OB_DOUBLE_EPSINON;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOptEstSel);
 };
 }  // namespace sql

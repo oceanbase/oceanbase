@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObAllVirtualTenantParameterStat : public common::ObVirtualTableIterator {
-  public:
+public:
   ObAllVirtualTenantParameterStat();
   ObAllVirtualTenantParameterStat(uint64_t tenant_id);
   void set_exec_tenant(uint64_t tenant_id);
@@ -31,7 +31,7 @@ class ObAllVirtualTenantParameterStat : public common::ObVirtualTableIterator {
   virtual void reset();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int inner_sys_get_next_row(common::ObNewRow*& row);
   int inner_tenant_get_next_row(common::ObNewRow*& row);
   int update_seed();

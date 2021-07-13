@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 struct IndexDMLInfo {
-  public:
+public:
   IndexDMLInfo()
   {
     reset();
@@ -82,10 +82,10 @@ struct IndexDMLInfo {
     return seed;
   }
 
-  private:
+private:
   int init_column_convert_expr(const ObAssignments& assignments);
 
-  public:
+public:
   //
   // table_id_: the table_id_ of table TableItem.
   // loc_table_id_: the table_id_ used for table location lookup.
@@ -128,7 +128,7 @@ struct IndexDMLInfo {
  *  and for each one we need to provide a series of columns as required in the access layer
  */
 class TableColumns {
-  public:
+public:
   TableColumns() : table_name_()
   {}
   virtual ~TableColumns()
@@ -145,7 +145,7 @@ class TableColumns {
 };
 
 class ObDelUpdStmt : public ObDMLStmt {
-  public:
+public:
   explicit ObDelUpdStmt(stmt::StmtType type)
       : ObDMLStmt(type),
         all_table_columns_(),
@@ -266,7 +266,7 @@ class ObDelUpdStmt : public ObDMLStmt {
   uint64_t get_insert_base_tid(uint64_t table_offset = 0) const;
   uint64_t get_ref_table_id() const;
 
-  protected:
+protected:
   int inner_get_relation_exprs(RelExprCheckerBase& expr_checker);
   virtual int inner_get_relation_exprs_for_wrapper(RelExprChecker& expr_checker)
   {
@@ -276,7 +276,7 @@ class ObDelUpdStmt : public ObDMLStmt {
   int replace_table_assign_exprs(const common::ObIArray<ObRawExpr*>& other_exprs,
       const common::ObIArray<ObRawExpr*>& new_exprs, ObAssignments& assignments);
 
-  protected:
+protected:
   common::ObArray<TableColumns, common::ModulePageAllocator, true> all_table_columns_;
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_exprs_;
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_into_exprs_;

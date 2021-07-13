@@ -34,7 +34,7 @@ struct MVDesc {
 };
 
 class ObTransformMaterializedView : public ObTransformRule {
-  public:
+public:
   explicit ObTransformMaterializedView(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
   virtual ~ObTransformMaterializedView()
@@ -42,7 +42,7 @@ class ObTransformMaterializedView : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   uint64_t get_real_tid(uint64_t tid, ObSelectStmt& stmt);
   int is_col_in_mv(uint64_t tid, uint64_t cid, MVDesc mv_desc, bool& result);
   int is_all_column_covered(ObSelectStmt& stmt, MVDesc mv_desc, const JoinTableIdPair& idp, bool& result);
@@ -67,7 +67,7 @@ class ObTransformMaterializedView : public ObTransformRule {
   int get_join_tid_cid(
       uint64_t tid, uint64_t cid, uint64_t& out_tid, uint64_t& out_cid, const share::schema::ObTableSchema& mv_schema);
 
-  private:
+private:
 };
 
 }  // namespace sql

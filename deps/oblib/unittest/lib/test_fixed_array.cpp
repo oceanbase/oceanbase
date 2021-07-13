@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace common {
 class ObTestFiexedArray : public ::testing::Test {
-  public:
+public:
   ObTestFiexedArray()
   {}
   ~ObTestFiexedArray()
@@ -30,11 +30,11 @@ class ObTestFiexedArray : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTestFiexedArray);
 };
 class Testfun {
-  public:
+public:
   Testfun(ObIArray<int>& array)
   {
     UNUSED(array);
@@ -42,7 +42,7 @@ class Testfun {
   ~Testfun()
   {}
 
-  private:
+private:
   common::ObSEArray<int, 5> data_;
 };
 

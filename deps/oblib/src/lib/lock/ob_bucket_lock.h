@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace common {
 class ObBucketLock {
-  public:
+public:
   ObBucketLock();
   virtual ~ObBucketLock();
   int init(const uint64_t bucket_cnt, const uint32_t latch_id = ObLatchIds::DEFAULT_BUCKET_LOCK,
@@ -37,7 +37,7 @@ class ObBucketLock {
   int unlock_all();
   TO_STRING_KV(K_(bucket_cnt), K_(latch_cnt), K_(latch_id));
 
-  private:
+private:
   friend class ObMultiBucketLockGuard;
   friend class ObBucketHashRLockGuard;
   friend class ObBucketHashWLockGuard;
@@ -57,19 +57,19 @@ class ObBucketLock {
   OB_INLINE uint64_t bucket_to_latch_idx(const uint64_t bucket_idx) const;
   int try_lock_all(const bool is_write_lock);
 
-  private:
+private:
   uint64_t bucket_cnt_;
   uint64_t latch_cnt_;
   ObLatch* latches_;
   uint32_t latch_id_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBucketLock);
 };
 
 class ObBucketRLockGuard final {
-  public:
+public:
   ObBucketRLockGuard(ObBucketLock& lock, const uint64_t bucket_index)
       : lock_(lock), index_(bucket_index), ret_(OB_SUCCESS), lock_start_ts_(0)
   {
@@ -102,18 +102,18 @@ class ObBucketRLockGuard final {
     return ret_;
   }
 
-  private:
+private:
   ObBucketLock& lock_;
   const uint64_t index_;
   int ret_;
   int64_t lock_start_ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBucketRLockGuard);
 };
 
 class ObBucketWLockGuard final {
-  public:
+public:
   ObBucketWLockGuard(ObBucketLock& lock, const uint64_t bucket_index)
       : lock_(lock), index_(bucket_index), ret_(OB_SUCCESS), lock_start_ts_(0)
   {
@@ -146,18 +146,18 @@ class ObBucketWLockGuard final {
     return ret_;
   }
 
-  private:
+private:
   ObBucketLock& lock_;
   const uint64_t index_;
   int ret_;
   int64_t lock_start_ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBucketWLockGuard);
 };
 
 class ObBucketWLockAllGuard final {
-  public:
+public:
   ObBucketWLockAllGuard(ObBucketLock& lock) : lock_(lock), ret_(OB_SUCCESS), lock_start_ts_(0)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock_all()))) {
@@ -189,17 +189,17 @@ class ObBucketWLockAllGuard final {
     return ret_;
   }
 
-  private:
+private:
   ObBucketLock& lock_;
   int ret_;
   int64_t lock_start_ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBucketWLockAllGuard);
 };
 
 class ObBucketTryWLockAllGuard final {
-  public:
+public:
   ObBucketTryWLockAllGuard(ObBucketLock& lock) : lock_(lock), ret_(OB_SUCCESS), lock_start_ts_(0)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.try_wrlock_all()))) {
@@ -231,17 +231,17 @@ class ObBucketTryWLockAllGuard final {
     return ret_;
   }
 
-  private:
+private:
   ObBucketLock& lock_;
   int ret_;
   int64_t lock_start_ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBucketTryWLockAllGuard);
 };
 
 class ObBucketTryRLockAllGuard final {
-  public:
+public:
   ObBucketTryRLockAllGuard(ObBucketLock& lock) : lock_(lock), ret_(OB_SUCCESS), lock_start_ts_(0)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.try_rdlock_all()))) {
@@ -273,32 +273,32 @@ class ObBucketTryRLockAllGuard final {
     return ret_;
   }
 
-  private:
+private:
   ObBucketLock& lock_;
   int ret_;
   int64_t lock_start_ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBucketTryRLockAllGuard);
 };
 
 class ObMultiBucketLockGuard final {
-  public:
+public:
   ObMultiBucketLockGuard(ObBucketLock& lock, const bool is_write_lock);
   ~ObMultiBucketLockGuard();
   int lock_multi_buckets(ObIArray<uint64_t>& hash_array);
 
-  private:
+private:
   ObBucketLock& lock_;
   bool is_write_lock_;
   ObArray<uint64_t> latch_array_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiBucketLockGuard);
 };
 
 class ObBucketHashRLockGuard final {
-  public:
+public:
   ObBucketHashRLockGuard(ObBucketLock& lock, const uint64_t hash_value) : guard_(lock, lock.get_bucket_idx(hash_value))
   {}
   ~ObBucketHashRLockGuard()
@@ -308,13 +308,13 @@ class ObBucketHashRLockGuard final {
     return guard_.get_ret();
   }
 
-  private:
+private:
   ObBucketRLockGuard guard_;
   DISALLOW_COPY_AND_ASSIGN(ObBucketHashRLockGuard);
 };
 
 class ObBucketHashWLockGuard final {
-  public:
+public:
   ObBucketHashWLockGuard(ObBucketLock& lock, const uint64_t hash_value) : guard_(lock, lock.get_bucket_idx(hash_value))
   {}
   ~ObBucketHashWLockGuard()
@@ -324,7 +324,7 @@ class ObBucketHashWLockGuard final {
     return guard_.get_ret();
   }
 
-  private:
+private:
   ObBucketWLockGuard guard_;
   DISALLOW_COPY_AND_ASSIGN(ObBucketHashWLockGuard);
 };

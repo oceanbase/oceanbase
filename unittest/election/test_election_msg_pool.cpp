@@ -41,7 +41,7 @@ const vector<ObAddr> ADDR = {ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 34500),
 const vector<int> REPLICA_NUM = {3, 5, 7};
 
 class TestObElectionMsgPool : public ::testing::Test {
-  public:
+public:
   TestObElectionMsgPool()
   {}
   ~TestObElectionMsgPool()
@@ -62,10 +62,10 @@ class TestObElectionMsgPool : public ::testing::Test {
     msg_pool_.init(ADDR[0], &election_);
   }
 
-  private:
+private:
   int init();
 
-  public:
+public:
   ObElectionVoteMsgPool msg_pool_;
   int64_t t1_;
   int64_t send_ts_;

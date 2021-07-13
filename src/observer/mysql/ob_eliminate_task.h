@@ -21,7 +21,7 @@ namespace obmysql {
 
 class ObMySQLRequestManager;
 class ObEliminateTask : public common::ObTimerTask {
-  public:
+public:
   ObEliminateTask();
   virtual ~ObEliminateTask();
 
@@ -30,7 +30,7 @@ class ObEliminateTask : public common::ObTimerTask {
   int check_config_mem_limit(bool& is_change);
   int calc_evict_mem_level(int64_t& low, int64_t& high);
 
-  private:
+private:
   ObMySQLRequestManager* request_manager_;
   int64_t config_mem_limit_;
 };

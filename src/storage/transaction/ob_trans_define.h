@@ -70,7 +70,7 @@ class ObPartTransCtxMgr;
 class ObPartitionTransCtxMgr;
 
 class ObTransErrsim {
-  public:
+public:
   static inline bool is_memory_errsim()
   {
     bool ret = false;
@@ -115,7 +115,7 @@ struct TransModulePageAllocator : public common::ModulePageAllocator {
 class ObTransID final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTransID()
   {
     reset();
@@ -124,7 +124,7 @@ class ObTransID final {
   explicit ObTransID(const common::ObAddr& server);
   ObTransID(const common::ObAddr& server, const int64_t inc, const int64_t timestamp);
 
-  public:
+public:
   bool is_valid() const
   {
     return server_.is_valid() && 0 <= inc_ && 0 < timestamp_;
@@ -158,19 +158,19 @@ class ObTransID final {
   void reset();
   DECLARE_TO_STRING_AND_YSON;
 
-  private:
+private:
   static const int64_t SAMPLE_INTERVAL = 3 * 1000 * 1000;
 
-  private:
+private:
   uint64_t hash_() const;
 
-  private:
+private:
   // static increase number for generating trans id
   static int64_t s_inc_num;
   // last sample timestamp
   static int64_t s_last_sample_ts;
 
-  private:
+private:
   uint64_t hv_;
   common::ObAddr server_;
   int64_t inc_;
@@ -201,7 +201,7 @@ struct ObLockForReadArg {
 };
 
 class ObTransKey final {
-  public:
+public:
   ObTransKey()
   {
     reset();
@@ -218,7 +218,7 @@ class ObTransKey final {
     calc_hash_();
   }
 
-  public:
+public:
   bool is_valid() const
   {
     return pkey_.is_valid() && trans_id_.is_valid();
@@ -279,7 +279,7 @@ class ObTransKey final {
   }
   DECLARE_TO_STRING_AND_YSON;
 
-  private:
+private:
   OB_INLINE uint64_t calc_hash_()
   {
     uint64_t hash_val = 0;
@@ -290,25 +290,25 @@ class ObTransKey final {
     return hash_val_ = hash_val;
   }
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   ObTransID trans_id_;
   uint64_t hash_val_;
 };
 
 class ObTransAccessMode {
-  public:
+public:
   static const int32_t UNKNOWN = -1;
   static const int32_t READ_ONLY = 0;
   static const int32_t READ_WRITE = 1;
 
-  public:
+public:
   static bool is_valid(const int32_t mode)
   {
     return READ_ONLY == mode || READ_WRITE == mode;
   }
 
-  private:
+private:
   ObTransAccessMode()
   {}
   ~ObTransAccessMode()
@@ -316,13 +316,13 @@ class ObTransAccessMode {
 };
 
 class ObTransSnapshotGeneType {
-  public:
+public:
   static const int32_t UNKNOWN = -1;
   static const int32_t CONSULT = 0;
   static const int32_t APPOINT = 1;
   static const int32_t NOTHING = 2;
 
-  public:
+public:
   static bool is_valid(const int32_t type)
   {
     return CONSULT == type || APPOINT == type || NOTHING == type;
@@ -350,7 +350,7 @@ class ObTransSnapshotGeneType {
     return ret_str;
   }
 
-  public:
+public:
   ObTransSnapshotGeneType()
   {}
   ~ObTransSnapshotGeneType()
@@ -358,19 +358,19 @@ class ObTransSnapshotGeneType {
 };
 
 class TransType {
-  public:
+public:
   static const int32_t UNKNOWN = -1;
   static const int32_t SP_TRANS = 0;
   static const int32_t MINI_SP_TRANS = 1;
   static const int32_t DIST_TRANS = 2;
 
-  public:
+public:
   static bool is_valid(const int32_t type)
   {
     return SP_TRANS == type || MINI_SP_TRANS == type || DIST_TRANS == type;
   }
 
-  private:
+private:
   TransType()
   {}
   ~TransType()
@@ -378,20 +378,20 @@ class TransType {
 };
 
 class ObTransType {
-  public:
+public:
   static const int32_t UNKNOWN = -1;
   static const int32_t TRANS_NORMAL = 0;
   static const int32_t TRANS_MAJOR_FREEZE = 1;
   static const int32_t TRANS_SYSTEM = 2;
   static const int32_t TRANS_USER = 3;
 
-  public:
+public:
   static bool is_valid(const int32_t type)
   {
     return TRANS_NORMAL == type || TRANS_MAJOR_FREEZE == type || TRANS_SYSTEM == type || TRANS_USER == type;
   }
 
-  private:
+private:
   ObTransType()
   {}
   ~ObTransType()
@@ -416,12 +416,12 @@ class ObTransType {
  */
 
 class ObTransConsistencyType {
-  public:
+public:
   static const int32_t UNKNOWN = -1;
   static const int32_t CURRENT_READ = 0;
   static const int32_t BOUNDED_STALENESS_READ = 1;
 
-  public:
+public:
   static bool is_valid(const int64_t consistency_type)
   {
     return CURRENT_READ == consistency_type || BOUNDED_STALENESS_READ == consistency_type;
@@ -454,7 +454,7 @@ class ObTransConsistencyType {
     return str;
   }
 
-  private:
+private:
   ObTransConsistencyType()
   {}
   ~ObTransConsistencyType()
@@ -462,13 +462,13 @@ class ObTransConsistencyType {
 };
 
 class ObTransReadSnapshotType {
-  public:
+public:
   static const int32_t UNKNOWN = -1;
   static const int32_t TRANSACTION_SNAPSHOT = 0;
   static const int32_t STATEMENT_SNAPSHOT = 1;
   static const int32_t PARTICIPANT_SNAPSHOT = 2;
 
-  public:
+public:
   static bool is_valid(const int32_t type)
   {
     return TRANSACTION_SNAPSHOT == type || STATEMENT_SNAPSHOT == type || PARTICIPANT_SNAPSHOT == type;
@@ -502,7 +502,7 @@ class ObTransReadSnapshotType {
 };
 
 class ObStmtParam {
-  public:
+public:
   ObStmtParam()
   {
     reset();
@@ -511,7 +511,7 @@ class ObStmtParam {
   {}
   void reset();
 
-  public:
+public:
   int init(const uint64_t tenant_id, const int64_t stmt_expired_time, const bool is_retry_sql);
   int init(const uint64_t tenant_id, const int64_t stmt_expired_time, const bool is_retry_sql,
       const int64_t safe_weak_read_snapshot, const int64_t weak_read_snapshot_source, const bool trx_elr);
@@ -543,7 +543,7 @@ class ObStmtParam {
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t stmt_expired_time_;
   bool is_retry_sql_;
@@ -556,10 +556,10 @@ class ObStmtParam {
 class ObStartTransParam {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   const static uint64_t INVALID_CLUSTER_VERSION = 0;
 
-  public:
+public:
   ObStartTransParam()
   {
     reset();
@@ -570,7 +570,7 @@ class ObStartTransParam {
   }
   void reset();
 
-  public:
+public:
   int set_access_mode(const int32_t access_mode);
   int32_t get_access_mode() const
   {
@@ -645,7 +645,7 @@ class ObStartTransParam {
   bool is_serializable_isolation() const;
   int reset_read_snapshot_type_for_isolation();
 
-  public:
+public:
   bool is_readonly() const
   {
     return ObTransAccessMode::READ_ONLY == access_mode_;
@@ -654,11 +654,11 @@ class ObStartTransParam {
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   static const uint64_t MAGIC_NUM = 0xF0F0F0F0F0F0F0F0;
   static const uint64_t INVALID_MAGIC_NUM = 0x4348454E4D494E47;
 
-  private:
+private:
   // READONLY or READ_WRITE
   int32_t access_mode_;
   // transaction type: TRANS_NORMAL
@@ -675,7 +675,7 @@ class ObStartTransParam {
 
 // record the info from user to db
 class ObTraceInfo {
-  public:
+public:
   ObTraceInfo()
   {
     reset();
@@ -703,10 +703,10 @@ class ObTraceInfo {
   }
   TO_STRING_KV(K_(app_trace_info), K_(app_trace_id));
 
-  private:
+private:
   static const int64_t MAX_TRACE_INFO_BUFFER = 128;
 
-  private:
+private:
   char app_trace_info_buffer_[MAX_TRACE_INFO_BUFFER + 1];
   common::ObString app_trace_info_;
   char app_trace_id_buffer_[common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1];
@@ -714,18 +714,18 @@ class ObTraceInfo {
 };
 
 class ObTransConsistencyLevel {
-  public:
+public:
   static const int64_t UNKNOWN = -1;
   static const int64_t STRONG = 0;
   static const int64_t WEAK = 1;
 
-  public:
+public:
   static bool is_valid(const int64_t type)
   {
     return STRONG == type || WEAK == type;
   }
 
-  private:
+private:
   ObTransConsistencyLevel()
   {}
   ~ObTransConsistencyLevel()
@@ -735,7 +735,7 @@ class ObTransConsistencyLevel {
 struct ObStmtDesc {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStmtDesc()
   {
     reset();
@@ -744,7 +744,7 @@ struct ObStmtDesc {
   {}
   void reset();
 
-  public:
+public:
   bool is_valid() const
   {
     // no need to check execution_id and stmt_tenant_id for compatibility
@@ -770,15 +770,15 @@ struct ObStmtDesc {
     return sql_id_.ptr();
   }
 
-  public:
+public:
   ObStmtDesc& operator=(const ObStmtDesc& stmt_desc);
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  public:
+public:
   static const int64_t SQL_ID_LENGTH = 16;
   static const int64_t TRACE_ID_LENGTH = 35;
 
-  public:
+public:
   // local, remote, distributed
   sql::ObPhyPlanType phy_plan_type_;
   // INSERT, UPDATE ...
@@ -804,7 +804,7 @@ struct ObStmtDesc {
 
 // no need to serialize
 class ObPartitionSchemaInfo {
-  public:
+public:
   ObPartitionSchemaInfo()
   {
     reset();
@@ -827,7 +827,7 @@ class ObPartitionSchemaInfo {
   }
   TO_STRING_KV(K_(pkey), K_(schema_version));
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   int64_t schema_version_;
 };
@@ -835,7 +835,7 @@ class ObPartitionSchemaInfo {
 typedef common::ObSEArray<ObPartitionSchemaInfo, 10, TransModulePageAllocator> ObPartitionSchemaInfoArray;
 
 class ObTransTraceLog : public common::ObTraceEventRecorderBase<100, 2250> {
-  public:
+public:
   ObTransTraceLog()
       : common::ObTraceEventRecorderBase<100, 2250>::ObTraceEventRecorderBase(
             true, common::ObLatchIds::TRANS_TRACE_RECORDER_LOCK)
@@ -849,7 +849,7 @@ class ObTransTraceLog : public common::ObTraceEventRecorderBase<100, 2250> {
 class ObStmtInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStmtInfo()
   {
     reset();
@@ -887,7 +887,7 @@ class ObStmtInfo {
   void reset_stmt_info();
   TO_STRING_KV(K_(nested_sql), K_(start_stmt_cnt), K_(end_stmt_cnt));
 
-  private:
+private:
   bool nested_sql_;
   int64_t start_stmt_cnt_;
   int64_t end_stmt_cnt_;
@@ -896,7 +896,7 @@ class ObStmtInfo {
 class ObTaskInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTaskInfo() : sql_no_(0), active_task_cnt_(1), snapshot_version_(common::OB_INVALID_VERSION)
   {}
   ObTaskInfo(const int32_t sql_no, const int64_t snapshot_version)
@@ -908,7 +908,7 @@ class ObTaskInfo {
   }
   TO_STRING_KV(K_(sql_no), K_(active_task_cnt), K_(snapshot_version));
 
-  public:
+public:
   int32_t sql_no_;
   int32_t active_task_cnt_;
   int64_t snapshot_version_;
@@ -917,7 +917,7 @@ class ObTaskInfo {
 class ObTransTaskInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int start_stmt(const int32_t sql_no);
   int start_task(const int32_t sql_no, const int64_t snapshot_version);
   void end_task();
@@ -934,14 +934,14 @@ class ObTransTaskInfo {
   }
   TO_STRING_KV(K(tasks_));
 
-  private:
+private:
   common::ObSEArray<ObTaskInfo, 1> tasks_;
 };
 
 class ObTransStmtInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTransStmtInfo()
   {
     reset();
@@ -1010,7 +1010,7 @@ class ObTransStmtInfo {
 
   TO_STRING_KV(K_(sql_no), K_(start_task_cnt), K_(end_task_cnt), K_(need_rollback), K_(task_info));
 
-  private:
+private:
   void update_sql_no(const int64_t sql_no)
   {
     if (sql_no > sql_no_) {
@@ -1033,16 +1033,16 @@ class ObTransStmtInfo {
 };
 
 class ObTransVersion {
-  public:
+public:
   static const int64_t INVALID_TRANS_VERSION = -1;
 
-  public:
+public:
   static bool is_valid(const int64_t trans_version)
   {
     return trans_version >= 0;
   }
 
-  private:
+private:
   ObTransVersion()
   {}
   ~ObTransVersion()
@@ -1052,7 +1052,7 @@ class ObTransVersion {
 typedef struct MonotonicTs {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit MonotonicTs(int64_t mts) : mts_(mts)
   {}
   MonotonicTs()
@@ -1112,7 +1112,7 @@ typedef struct MonotonicTs {
 } MonotonicTs;
 
 class ObTransNeedWaitWrap {
-  public:
+public:
   ObTransNeedWaitWrap()
   {
     reset();
@@ -1146,7 +1146,7 @@ class ObTransNeedWaitWrap {
   }
   TO_STRING_KV(K_(receive_gts_ts), K_(need_wait_interval_us));
 
-  private:
+private:
   MonotonicTs receive_gts_ts_;
   int64_t need_wait_interval_us_;
 };
@@ -1155,7 +1155,7 @@ class ObTransNeedWaitWrap {
 typedef common::ObFixedLengthString<128> ObSavepointIdString;
 
 class ObSavepointInfo {
-  public:
+public:
   ObSavepointInfo()
   {
     reset();
@@ -1184,14 +1184,14 @@ class ObSavepointInfo {
   }
   TO_STRING_KV(K_(id), K_(id_len), K_(sql_no));
 
-  private:
+private:
   int64_t sql_no_;
   ObSavepointIdString id_;
   int64_t id_len_;
 };
 
 class ObSavepointPartitionInfo {
-  public:
+public:
   ObSavepointPartitionInfo()
   {
     reset();
@@ -1221,7 +1221,7 @@ class ObSavepointPartitionInfo {
   int update_max_sql_no(const int64_t sql_no);
   TO_STRING_KV(K_(partition), K_(max_sql_no));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   int64_t max_sql_no_;
 };
@@ -1230,7 +1230,7 @@ typedef common::ObSEArray<ObSavepointInfo, 1, TransModulePageAllocator> ObSavepo
 typedef common::ObSEArray<ObSavepointPartitionInfo, 1, TransModulePageAllocator> ObSavepointPartitionInfoArray;
 
 class ObSavepointMgr {
-  public:
+public:
   ObSavepointMgr()
   {
     reset();
@@ -1256,13 +1256,13 @@ class ObSavepointMgr {
   int get_savepoint_rollback_info(const common::ObString& id, int64_t& sql_no, common::ObPartitionArray& partition_arr);
   TO_STRING_KV(K_(savepoint_arr), K_(savepoint_partition_arr));
 
-  private:
+private:
   int64_t find_savepoint_location_(const common::ObString& id);
   int64_t find_savepoint_partition_location_(const common::ObPartitionKey& partition);
   int find_savepoint_rollback_partitions_(const int64_t sql_no, common::ObPartitionArray& partition_arr);
   int get_savepoint_rollback_partitions_(const int64_t sql_no, common::ObPartitionArray& partition_arr);
 
-  protected:
+protected:
   ObSavepointInfoArray savepoint_arr_;
   ObSavepointPartitionInfoArray savepoint_partition_arr_;
 };
@@ -1270,7 +1270,7 @@ class ObSavepointMgr {
 class ObTransSnapInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTransSnapInfo()
   {
     reset();
@@ -1324,11 +1324,11 @@ class ObTransSnapInfo {
     reset();
   }
 
-  public:
+public:
   bool is_valid() const;
   TO_STRING_KV(K_(snapshot_version), K_(read_sql_no), K_(sql_no), K_(trans_id), K_(is_cursor_or_nested));
 
-  private:
+private:
   int64_t snapshot_version_;
   int64_t read_sql_no_;
   int64_t sql_no_;  // deprecated, for compact reason only
@@ -1339,7 +1339,7 @@ class ObTransSnapInfo {
 class ObStmtPair {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStmtPair() : from_(0), to_(0)
   {}
   ObStmtPair(const int64_t from, const int64_t to) : from_(from), to_(to)
@@ -1364,7 +1364,7 @@ class ObStmtPair {
   }
   TO_STRING_KV(K_(from), K_(to));
 
-  private:
+private:
   int64_t from_;
   int64_t to_;
 };
@@ -1372,20 +1372,20 @@ class ObStmtPair {
 class ObStmtRollbackInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObStmtRollbackInfo()
   {}
   ~ObStmtRollbackInfo()
   {}
   void reset();
 
-  public:
+public:
   int push(const ObStmtPair& stmt_pair);
   int search(const int64_t sql_no, ObStmtPair& stmt_pair) const;
   int assign(const ObStmtRollbackInfo& other);
   TO_STRING_KV(K_(stmt_pair_array));
 
-  private:
+private:
   common::ObSEArray<ObStmtPair, 16> stmt_pair_array_;
 };
 
@@ -1394,7 +1394,7 @@ class ObTransDesc;
 class ObStandaloneStmtDesc {
   friend class ObTransDesc;
 
-  public:
+public:
   ObStandaloneStmtDesc()
   {
     reset();
@@ -1481,7 +1481,7 @@ class ObStandaloneStmtDesc {
       K_(read_snapshot_type), K_(snapshot_version), K_(is_local_single_partition), K_(is_standalone_stmt_end),
       K_(first_pkey));
 
-  private:
+private:
   // for standalone transaction
   uint64_t magic_;
   ObTransID trans_id_;
@@ -1510,7 +1510,7 @@ enum ObXAReqType {
 class ObXATransID {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObXATransID()
   {
     reset();
@@ -1549,12 +1549,12 @@ class ObXATransID {
   TO_STRING_KV(K_(gtrid_str), K_(bqual_str), K_(format_id), KPHEX(gtrid_str_.ptr(), gtrid_str_.length()),
       KPHEX(bqual_str_.ptr(), bqual_str_.length()));
 
-  public:
+public:
   static const int32_t MAX_GTRID_LENGTH = 64;
   static const int32_t MAX_BQUAL_LENGTH = 64;
   static const int32_t MAX_XID_LENGTH = MAX_GTRID_LENGTH + MAX_BQUAL_LENGTH;
 
-  private:
+private:
   char gtrid_buf_[MAX_GTRID_LENGTH];
   common::ObString gtrid_str_;
   char bqual_buf_[MAX_BQUAL_LENGTH];
@@ -1565,7 +1565,7 @@ class ObXATransID {
 class ObTransDesc : public ObSavepointMgr {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTransDesc();
   ~ObTransDesc()
   {
@@ -1574,7 +1574,7 @@ class ObTransDesc : public ObSavepointMgr {
   void reset();
   void destroy();
 
-  public:
+public:
   int init(sql::ObBasicSessionInfo* session);
   // for test
   int test_init();
@@ -2090,20 +2090,20 @@ class ObTransDesc : public ObSavepointMgr {
       K_(trans_need_wait_wrap), K_(is_fast_select), K_(trace_info), K_(standalone_stmt_desc),
       K_(need_check_at_end_participant), K_(is_nested_stmt), K_(stmt_min_sql_no), K_(xid), K_(gc_participants));
 
-  public:
+public:
   static const int32_t MAX_XID_LENGTH = 128;
 
-  private:
+private:
   bool contain_(const common::ObPartitionArray& participants, const common::ObPartitionKey& participant) const;
   DISALLOW_COPY_AND_ASSIGN(ObTransDesc);
 
-  public:
+public:
   bool cluster_version_before_2271() const
   {
     return cluster_version_ < CLUSTER_VERSION_2271;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   ObTransID trans_id_;
   int64_t snapshot_version_;
@@ -2146,7 +2146,7 @@ class ObTransDesc : public ObSavepointMgr {
   int64_t stmt_min_sql_no_;
   bool is_tightly_coupled_;
 
-  private:
+private:
   // no need to serialize
   ObTransCtx* part_ctx_;
   ObScheTransCtx* sche_ctx_;
@@ -2174,7 +2174,7 @@ class ObTransDesc : public ObSavepointMgr {
 };
 
 class ObTransIsolation {
-  public:
+public:
   enum {
     /*
      * after the discussion, we decide to adjust the value of
@@ -2190,7 +2190,7 @@ class ObTransIsolation {
   };
   static const common::ObString LEVEL_NAME[MAX_LEVEL];
 
-  public:
+public:
   static bool is_valid(const int32_t level)
   {
     return level == READ_COMMITED || level == REPEATABLE_READ || level == SERIALIZABLE;
@@ -2198,7 +2198,7 @@ class ObTransIsolation {
   static int32_t get_level(const common::ObString& level_name);
   static const common::ObString& get_name(int32_t level);
 
-  private:
+private:
   ObTransIsolation()
   {}
   ~ObTransIsolation()
@@ -2206,7 +2206,7 @@ class ObTransIsolation {
 };
 
 class ObPartTransAction {
-  public:
+public:
   static const int64_t UNKNOWN = -1;
   static const int64_t START_TASK = 1;
   static const int64_t END_TASK = 2;
@@ -2215,13 +2215,13 @@ class ObPartTransAction {
   static const int64_t DIED = 5;
   static const int64_t END = 6;
 
-  public:
+public:
   static bool is_valid(const int64_t state)
   {
     return state >= START_TASK && state < END;
   }
 
-  private:
+private:
   ObPartTransAction()
   {}
   ~ObPartTransAction()
@@ -2229,18 +2229,18 @@ class ObPartTransAction {
 };
 
 class ObRunningState {
-  public:
+public:
   static const int64_t UNKNOWN = -1;
   static const int64_t INIT = 0;
   static const int64_t ABORT = 200;
 
-  public:
+public:
   static bool is_valid(const int64_t state)
   {
     return INIT == state || ABORT == state;
   }
 
-  private:
+private:
   ObRunningState()
   {}
   ~ObRunningState()
@@ -2248,20 +2248,20 @@ class ObRunningState {
 };
 
 class ObSpState {
-  public:
+public:
   static const int64_t UNKNOWN = -1;
   static const int64_t INIT = 0;
   static const int64_t PREPARE = 100;
   static const int64_t COMMIT = 101;
   static const int64_t ABORT = 102;
 
-  public:
+public:
   static bool is_valid(const int64_t state)
   {
     return INIT == state || PREPARE == state || COMMIT == state || ABORT == state;
   }
 
-  private:
+private:
   ObSpState()
   {}
   ~ObSpState()
@@ -2269,7 +2269,7 @@ class ObSpState {
 };
 
 class Ob2PCState {
-  public:
+public:
   static const int64_t UNKNOWN = -1;
   static const int64_t INIT = 0;
   static const int64_t PREPARE = 1;
@@ -2279,13 +2279,13 @@ class Ob2PCState {
   static const int64_t PRE_PREPARE = 5;
   static const int64_t PRE_COMMIT = 6;
 
-  public:
+public:
   static bool is_valid(const int64_t state)
   {
     return state >= INIT && state <= PRE_COMMIT;
   }
 
-  private:
+private:
   Ob2PCState()
   {}
   ~Ob2PCState()
@@ -2293,7 +2293,7 @@ class Ob2PCState {
 };
 
 class ObXATransState {
-  public:
+public:
   static const int32_t UNKNOWN = -1;
   static const int32_t NON_EXISTING = 0;
   static const int32_t ACTIVE = 1;
@@ -2303,7 +2303,7 @@ class ObXATransState {
   static const int32_t ROLLBACKED = 5;
   static const int32_t PREPARING = 6;
 
-  public:
+public:
   static bool is_valid(const int32_t state)
   {
     return state >= NON_EXISTING && state <= PREPARING;
@@ -2343,7 +2343,7 @@ class ObXATransState {
 };
 
 class ObXAFlag {
-  public:
+public:
   enum {
     TMNOFLAGS = 0,
     // non-standard xa protocol, to denote a readonly xa trans
@@ -2359,7 +2359,7 @@ class ObXAFlag {
     TMONEPHASE = 0x40000000,
   };
 
-  public:
+public:
   static bool is_valid(const int64_t flag, const int64_t xa_req_type);
   static bool is_valid_inner_flag(const int64_t flag);
   static bool contain_tmreadonly(const int64_t flag)
@@ -2410,13 +2410,13 @@ class ObXAFlag {
 };
 
 class ObTransSubmitLogState {
-  public:
+public:
   static const int64_t INIT = 0;
   static const int64_t SUBMIT_LOG = 1;
   static const int64_t SUBMIT_LOG_PENDING = 2;
   static const int64_t SUBMIT_LOG_SUCCESS = 3;
 
-  public:
+public:
   bool is_valid(const int64_t state)
   {
     return INIT == state || SUBMIT_LOG == state || SUBMIT_LOG_PENDING == state || SUBMIT_LOG_SUCCESS == state;
@@ -2424,7 +2424,7 @@ class ObTransSubmitLogState {
 };
 
 class ObTransRetryTaskType {
-  public:
+public:
   static const int64_t UNKNOWN = -1;
   // submit log
   static const int64_t SUBMIT_LOG = 0;
@@ -2446,7 +2446,7 @@ class ObTransRetryTaskType {
   static const int64_t AGGRE_LOG_TASK = 12;
   static const int64_t MAX = 13;
 
-  public:
+public:
   static bool is_valid(const int64_t task_type)
   {
     return task_type > UNKNOWN && task_type < MAX;
@@ -2456,7 +2456,7 @@ class ObTransRetryTaskType {
 class ObPartitionLeaderInfo final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartitionLeaderInfo()
   {}
   ObPartitionLeaderInfo(const common::ObPartitionKey& partition, const common::ObAddr& addr)
@@ -2479,7 +2479,7 @@ class ObPartitionLeaderInfo final {
 
   TO_STRING_KV(K_(partition), K_(addr));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   common::ObAddr addr_;
 };
@@ -2487,7 +2487,7 @@ class ObPartitionLeaderInfo final {
 class ObPartitionLogInfo final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartitionLogInfo() : log_id_(0), log_timestamp_(0)
   {}
   ObPartitionLogInfo(const common::ObPartitionKey& partition, const int64_t log_id, const int64_t log_timestamp)
@@ -2521,7 +2521,7 @@ class ObPartitionLogInfo final {
   }
   TO_STRING_KV(K_(partition), K_(log_id), K_(log_timestamp));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   int64_t log_id_;
   int64_t log_timestamp_;
@@ -2530,7 +2530,7 @@ class ObPartitionLogInfo final {
 class ObPartitionEpochInfo final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartitionEpochInfo() : partition_(), epoch_(0)
   {}
   ObPartitionEpochInfo(const common::ObPartitionKey& partition, const int64_t epoch)
@@ -2556,20 +2556,20 @@ class ObPartitionEpochInfo final {
   }
   TO_STRING_KV(K_(partition), K_(epoch));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   int64_t epoch_;
 };
 
 class ObTransCtxType {
-  public:
+public:
   static const int64_t UNKNOWN = -1;
   static const int64_t SCHEDULER = 0;
   static const int64_t COORDINATOR = 1;
   static const int64_t PARTICIPANT = 2;
   static const int64_t SLAVE_PARTICIPANT = 3;
 
-  public:
+public:
   static bool is_valid(const int64_t type)
   {
     return SCHEDULER == type || COORDINATOR == type || PARTICIPANT == type || SLAVE_PARTICIPANT == type;
@@ -2579,7 +2579,7 @@ class ObTransCtxType {
 typedef common::ObSEArray<int64_t, 16, TransModulePageAllocator> ObLeaderEpochArray;
 
 class ObPartitionLeaderEpochInfo {
-  public:
+public:
   ObPartitionLeaderEpochInfo()
   {
     reset();
@@ -2598,14 +2598,14 @@ class ObPartitionLeaderEpochInfo {
   bool is_all_identical_epoch() const;
   TO_STRING_KV(K_(partition), K_(epoch_arr));
 
-  private:
+private:
   bool is_inited_;
   common::ObPartitionKey partition_;
   ObLeaderEpochArray epoch_arr_;
 };
 
 class ObMemtableKeyInfo {
-  public:
+public:
   ObMemtableKeyInfo()
   {
     reset();
@@ -2641,10 +2641,10 @@ class ObMemtableKeyInfo {
 
   TO_STRING_KV(K_(buf));
 
-  public:
+public:
   static const int MEMTABLE_KEY_INFO_BUF_SIZE = 512;
 
-  private:
+private:
   uint64_t table_id_;
   uint64_t hash_val_;
   void* row_lock_;
@@ -2654,7 +2654,7 @@ class ObMemtableKeyInfo {
 class ObElrTransInfo final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElrTransInfo()
   {
     reset();
@@ -2692,7 +2692,7 @@ class ObElrTransInfo final {
   }
   TO_STRING_KV(K_(trans_id), K_(commit_version), K_(result), K_(ctx_id));
 
-  private:
+private:
   ObTransID trans_id_;
   int64_t commit_version_;
   int result_;
@@ -2700,14 +2700,14 @@ class ObElrTransInfo final {
 };
 
 class ObTransResultState {
-  public:
+public:
   static const int INVALID = -1;
   static const int UNKNOWN = 0;
   static const int COMMIT = 1;
   static const int ABORT = 2;
   static const int MAX = 3;
 
-  public:
+public:
   static bool is_valid(const int state)
   {
     return state > INVALID && state < MAX;
@@ -2731,7 +2731,7 @@ class ObTransResultState {
 };
 
 class ObTransTask {
-  public:
+public:
   ObTransTask() : retry_interval_us_(0), next_handle_ts_(0), task_type_(ObTransRetryTaskType::UNKNOWN)
   {}
   ObTransTask(int64_t task_type) : retry_interval_us_(0), next_handle_ts_(0), task_type_(task_type)
@@ -2754,19 +2754,19 @@ class ObTransTask {
   bool ready_to_handle();
   TO_STRING_KV(K_(task_type), K_(retry_interval_us), K_(next_handle_ts));
 
-  public:
+public:
   static const int64_t RP_TOTAL_NUM = 512;
   static const int64_t RP_RESERVE_NUM = 64;
   static const int64_t RETRY_SLEEP_TIME_US = 100;
 
-  protected:
+protected:
   int64_t retry_interval_us_;
   int64_t next_handle_ts_;
   int64_t task_type_;
 };
 
 class ObBatchCommitState {
-  public:
+public:
   static const int INVALID = -1;
   static const int INIT = 0;
   static const int ALLOC_LOG_ID_TS = 1;
@@ -2799,7 +2799,7 @@ enum ObPartitionAuditOperator {
 };
 
 struct ObPartitionAuditInfoCache {
-  public:
+public:
   ObPartitionAuditInfoCache()
   {
     reset();
@@ -2831,7 +2831,7 @@ struct ObPartitionAuditInfoCache {
   int update_audit_info(const enum ObPartitionAuditOperator op, const int32_t count);
   int stmt_end_update_audit_info(bool commit);
 
-  public:
+public:
   int32_t insert_row_count_;
   int32_t delete_row_count_;
   int32_t update_row_count_;
@@ -2854,7 +2854,7 @@ struct ObPartitionAuditInfoCache {
 };
 
 struct ObPartitionAuditInfo {
-  public:
+public:
   ObPartitionAuditInfo() : lock_(common::ObLatchIds::PARTITION_AUDIT_SPIN_LOCK)
   {
     reset();
@@ -2895,7 +2895,7 @@ struct ObPartitionAuditInfo {
     ATOMIC_SET(&base_row_count_, count);
   }
 
-  public:
+public:
   common::ObSpinLock lock_;
   int64_t base_row_count_;
   int64_t insert_row_count_;
@@ -2919,7 +2919,7 @@ struct ObPartitionAuditInfo {
 };
 
 class ObCoreLocalPartitionAuditInfo : public common::ObCoreLocalStorage<ObPartitionAuditInfo*> {
-  public:
+public:
   ObCoreLocalPartitionAuditInfo()
   {}
   ~ObCoreLocalPartitionAuditInfo()
@@ -2950,7 +2950,7 @@ enum ELRState { ELR_INIT = 0, ELR_PREPARING = 1, ELR_PREPARED = 2 };
 enum CHANGING_LEADER_STATE { NO_CHANGING_LEADER = 0, STATEMENT_NOT_FINISH = 1, LOGGING_NOT_FINISH = 2 };
 
 class ObAddrLogId {
-  public:
+public:
   ObAddrLogId(const common::ObAddr& addr, const uint64_t log_id) : addr_(addr), log_id_(log_id)
   {}
   ObAddrLogId()
@@ -2977,7 +2977,7 @@ class ObAddrLogId {
   }
   TO_STRING_KV(K_(addr), K_(log_id));
 
-  private:
+private:
   common::ObAddr addr_;
   uint64_t log_id_;
 };
@@ -2987,7 +2987,7 @@ enum class ObTransTableStatusType : int64_t { RUNNING = 0, COMMIT, ABORT };
 class ObUndoAction {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObUndoAction()
   {
     reset();
@@ -3038,7 +3038,7 @@ class ObUndoAction {
   }
   TO_STRING_KV(K_(undo_from), K_(undo_to));
 
-  private:
+private:
   // from > to
   int64_t undo_from_;
   int64_t undo_to_;
@@ -3049,7 +3049,7 @@ typedef common::ObSEArray<ObUndoAction, 1> ObUndoActionArray;
 class ObTransUndoStatus {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTransUndoStatus() : latch_(common::ObLatchIds::UNDO_STATUS_LOCK)
   {
     reset();
@@ -3072,13 +3072,13 @@ class ObTransUndoStatus {
   int deep_copy(ObTransUndoStatus& status);
   TO_STRING_KV(K_(undo_action_arr));
 
-  protected:
+protected:
   mutable common::ObSpinLock latch_;
   ObUndoActionArray undo_action_arr_;
 };
 
 class ObTransStatusInfo {
-  public:
+public:
   ObTransStatusInfo()
       : status_(ObTransTableStatusType::RUNNING),
         trans_version_(common::OB_INVALID_VERSION),
@@ -3095,7 +3095,7 @@ class ObTransStatusInfo {
 class ObTransTableStatusInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTransTableStatusInfo()
   {
     reset();
@@ -3164,7 +3164,7 @@ class ObTransTableStatusInfo {
   }
   TO_STRING_KV(K_(status), K_(trans_version), K_(undo_status), K_(terminate_log_ts), K_(checksum), K_(checksum_log_ts));
 
-  private:
+private:
   ObTransTableStatusType status_;
   int64_t trans_version_;
   ObTransUndoStatus undo_status_;
@@ -3174,7 +3174,7 @@ class ObTransTableStatusInfo {
 };
 
 class ObSameLeaderPartitionArr {
-  public:
+public:
   ObSameLeaderPartitionArr()
   {
     reset();
@@ -3207,7 +3207,7 @@ class ObSameLeaderPartitionArr {
   }
   TO_STRING_KV(K_(leader), K_(partition_arr));
 
-  private:
+private:
   common::ObAddr leader_;
   common::ObPartitionArray partition_arr_;
 };
@@ -3215,7 +3215,7 @@ class ObSameLeaderPartitionArr {
 typedef common::ObSEArray<ObSameLeaderPartitionArr, 10> ObSameLeaderPartitionArrArray;
 
 class ObSameLeaderPartitionArrMgr {
-  public:
+public:
   ObSameLeaderPartitionArrMgr()
   {
     reset();
@@ -3248,13 +3248,13 @@ class ObSameLeaderPartitionArrMgr {
   }
   TO_STRING_KV(K_(array));
 
-  private:
+private:
   ObSameLeaderPartitionArrArray array_;
   bool is_ready_;
 };
 
 class ObPartTransSameLeaderBatchRpcItem {
-  public:
+public:
   ObPartTransSameLeaderBatchRpcItem()
   {
     reset();
@@ -3282,10 +3282,10 @@ class ObPartTransSameLeaderBatchRpcItem {
   TO_STRING_KV(K_(msg_type), K_(trans_id), K_(participants));
   static const int64_t ALLOW_PREEMPT_INTERVAL_US = 1 * 1000 * 1000;
 
-  private:
+private:
   bool allow_to_preempt_(const ObTransID& trans_id);
 
-  private:
+private:
   common::ObLatch lock_;
   int64_t msg_type_;
   ObTransID trans_id_;
@@ -3295,7 +3295,7 @@ class ObPartTransSameLeaderBatchRpcItem {
 } CACHE_ALIGNED;
 
 class ObPartTransSameLeaderBatchRpcMgr {
-  public:
+public:
   ObPartTransSameLeaderBatchRpcMgr()
   {
     reset();
@@ -3316,12 +3316,12 @@ class ObPartTransSameLeaderBatchRpcMgr {
   // 2^17
   static const int64_t SAME_LEADER_BATCH_RPC_ITEM_ARR_SIZE = 131072;
 
-  private:
+private:
   ObPartTransSameLeaderBatchRpcItem batch_rpc_item_arr_[SAME_LEADER_BATCH_RPC_ITEM_ARR_SIZE];
 };
 
 class ObTransLogBufferAggreContainer {
-  public:
+public:
   ObTransLogBufferAggreContainer()
   {
     reset();
@@ -3360,10 +3360,10 @@ class ObTransLogBufferAggreContainer {
   static const int64_t FLUSH_INTERVAL_US = 1 * 1000 * 1000;
   TO_STRING_KV(K_(offset), K_(last_flush_ts), K_(is_inited));
 
-  private:
+private:
   void flush_(bool& need_submit_log);
 
-  private:
+private:
   clog::ObAggreBuffer* aggre_buffer_;
   AggreLogTask* task_;
   int64_t offset_;
@@ -3373,7 +3373,7 @@ class ObTransLogBufferAggreContainer {
 };
 
 class ObLightTransCtxItem {
-  public:
+public:
   ObLightTransCtxItem()
   {
     reset();
@@ -3396,13 +3396,13 @@ class ObLightTransCtxItem {
     return trans_ctx_;
   }
 
-  private:
+private:
   common::ObLatch lock_;
   ObTransCtx* trans_ctx_;
 };
 
 class ObLightTransCtxMgr {
-  public:
+public:
   ObLightTransCtxMgr()
   {
     reset();
@@ -3425,10 +3425,10 @@ class ObLightTransCtxMgr {
   bool remove_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id);
   bool add_trans_ctx(ObTransCtx* ctx);
 
-  public:
+public:
   static const int64_t LIGHT_TRANS_CTX_MGR_TABLE_SIZE = 400000;
 
-  private:
+private:
   ObLightTransCtxItem item_array_[LIGHT_TRANS_CTX_MGR_TABLE_SIZE];
   ObPartTransCtxMgr* part_trans_ctx_mgr_;
 };
@@ -3440,7 +3440,7 @@ typedef common::ObSEArray<int64_t, 10, TransModulePageAllocator> ObRedoLogIdArra
 struct ObTransSSTableDurableCtxInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTransSSTableDurableCtxInfo()
   {
     reset();
@@ -3540,7 +3540,7 @@ struct CtxInfo final {
 
 typedef common::ObSEArray<CtxInfo, 9, TransModulePageAllocator> ObTransCtxArray;
 class ObTransStateTable {
-  public:
+public:
   ObTransStateTable() : partition_trans_ctx_mgr_(NULL)
   {}
   ~ObTransStateTable()
@@ -3588,12 +3588,12 @@ class ObTransStateTable {
       const ObLockForReadArg& lock_for_read_arg, bool& can_read, int64_t& trans_version, bool& is_determined_state);
   TO_STRING_KV(KP_(partition_trans_ctx_mgr));
 
-  private:
+private:
   ObPartitionTransCtxMgr* partition_trans_ctx_mgr_;
 };
 
 class ObTransStateTableGuard {
-  public:
+public:
   ObTransStateTableGuard()
   {
     reset();
@@ -3621,7 +3621,7 @@ class ObTransStateTableGuard {
   }
   TO_STRING_KV(K_(trans_state_table));
 
-  private:
+private:
   ObTransStateTable trans_state_table_;
 };
 
@@ -3631,7 +3631,7 @@ typedef common::ObSEArray<ObMemtableKeyInfo, 16, TransModulePageAllocator> ObMem
 typedef common::ObSEArray<ObAddrLogId, 10, TransModulePageAllocator> ObAddrLogIdArray;
 const int64_t OB_TRANS_REDO_LOG_RESERVE_SIZE = 128 * 1024;
 const int64_t MAX_ONE_PC_TRANS_SIZE = 1500000;
-// parmeters config transaction related
+// parameters config transaction related
 const int64_t TRANS_ACCESS_STAT_INTERVAL = 60 * 1000 * 1000;  // 60s
 const int64_t TRANS_MEM_STAT_INTERVAL = 5 * 1000 * 1000;      // 60s
 

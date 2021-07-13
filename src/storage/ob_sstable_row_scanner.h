@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObSSTableRowScanner : public ObSSTableRowIterator {
-  public:
+public:
   ObSSTableRowScanner();
   virtual ~ObSSTableRowScanner();
   virtual void reset();
@@ -34,7 +34,7 @@ class ObSSTableRowScanner : public ObSSTableRowIterator {
   int get_gap_end_impl(const ObExtStoreRange& org_range, ObStoreRowkey& gap_key, int64_t& gap_size);
   int get_row_iter_flag_impl(uint8_t& flag);
 
-  protected:
+protected:
   virtual int get_handle_cnt(const void* query_range, int64_t& read_handle_cnt, int64_t& micro_handle_cnt);
   virtual int prefetch_read_handle(ObSSTableReadHandle& read_handle);
   virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row);
@@ -45,11 +45,11 @@ class ObSSTableRowScanner : public ObSSTableRowIterator {
       ObMicroBlockIndexHandle& block_index_handle);
   virtual int get_range_count(const void* query_range, int64_t& range_count) const;
 
-  private:
+private:
   int skip_batch_rows(
       const int64_t range_idx, const ObStoreRowkey& gap_key, const bool include_gap_key, bool& need_actual_skip);
 
-  protected:
+protected:
   static const int64_t SCAN_READ_HANDLE_CNT = 4;
   static const int64_t SCAN_MICRO_HANDLE_CNT = 32;
   static const int64_t SCAN_DEFAULT_MACRO_BLOCK_CNT = 2;
@@ -57,7 +57,7 @@ class ObSSTableRowScanner : public ObSSTableRowIterator {
   int64_t prefetch_macro_idx_;
   int64_t macro_block_cnt_;
 
-  private:
+private:
   int64_t prefetch_macro_order_;
   ObExtStoreRange last_range_;
   ObExtStoreRange new_range_;

@@ -23,7 +23,7 @@ class ObColumnStat;
 class ObColumnStatValueHandle;
 
 class ObColumnStatCache : public common::ObKVCache<ObColumnStat::Key, ObColumnStat> {
-  public:
+public:
   ObColumnStatCache();
   ~ObColumnStatCache();
 
@@ -33,7 +33,7 @@ class ObColumnStatCache : public common::ObKVCache<ObColumnStat::Key, ObColumnSt
 };
 
 class ObColumnStatValueHandle {
-  public:
+public:
   friend class ObColumnStatCache;
   ObColumnStatValueHandle();
   ObColumnStatValueHandle(const ObColumnStatValueHandle& other);
@@ -46,7 +46,7 @@ class ObColumnStatValueHandle {
   const ObColumnStat* cache_value_;
   TO_STRING_KV(K(cache_value_));
 
-  private:
+private:
   ObColumnStatCache* cache_;
   ObKVCacheHandle handle_;
 };

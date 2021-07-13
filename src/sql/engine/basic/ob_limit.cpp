@@ -24,7 +24,7 @@ namespace sql {
 // REGISTER_PHY_OPERATOR(ObLimit, PHY_LIMIT);
 
 class ObLimit::ObLimitCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObLimitCtx(ObExecContext& ctx)
       : ObPhyOperatorCtx(ctx),
         limit_(-1),
@@ -40,7 +40,7 @@ class ObLimit::ObLimitCtx : public ObPhyOperatorCtx {
     ObPhyOperatorCtx::destroy_base();
   }
 
-  private:
+private:
   int64_t limit_;
   int64_t offset_;
   int64_t input_count_;

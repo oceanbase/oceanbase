@@ -25,7 +25,7 @@ namespace common {
 class ObGMemstoreAllocator;
 
 class ObMemstoreAllocatorMgr {
-  public:
+public:
   typedef ObGMemstoreAllocator TAllocator;
   typedef common::hash::ObHashMap<uint64_t, TAllocator*> TenantMemostoreAllocatorMap;
   ObMemstoreAllocatorMgr();
@@ -35,13 +35,13 @@ class ObMemstoreAllocatorMgr {
   int64_t get_all_tenants_memstore_used();
   static ObMemstoreAllocatorMgr& get_instance();
 
-  public:
+public:
   void set_malloc_allocator(lib::ObMallocAllocator* malloc_allocator)
   {
     malloc_allocator_ = malloc_allocator;
   }
 
-  private:
+private:
   static const uint64_t PRESERVED_TENANT_COUNT = 10000;
   static const uint64_t ALLOCATOR_MAP_BUCKET_NUM = 64;
   bool is_inited_;
@@ -50,7 +50,7 @@ class ObMemstoreAllocatorMgr {
   lib::ObMallocAllocator* malloc_allocator_;
   int64_t all_tenants_memstore_used_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemstoreAllocatorMgr);
 };  // end of class ObMemstoreAllocatorMgr
 

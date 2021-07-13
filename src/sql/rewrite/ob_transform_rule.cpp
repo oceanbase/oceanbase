@@ -167,7 +167,7 @@ int ObTransformRule::accept_transform(
     LOG_WARN("failed to evaluate cost for the origin stmt", K(ret));
   }
   if (OB_SUCC(ret)) {
-    if (trans_stmt_cost < stmt_cost_) {
+    if (trans_stmt_cost < stmt_cost_ * COST_BASE_TRANSFORM_THRESHOLD) {
       LOG_TRACE("accept transform because the cost is decreased", K_(stmt_cost), K(trans_stmt_cost));
       stmt = trans_stmt;
       stmt_cost_ = trans_stmt_cost;

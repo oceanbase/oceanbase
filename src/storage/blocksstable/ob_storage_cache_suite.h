@@ -28,7 +28,7 @@ namespace blocksstable {
 struct ObStorageCacheContext;
 
 class ObStorageCacheSuite {
-  public:
+public:
   static ObStorageCacheSuite& get_instance();
   int init(const int64_t index_cache_priority, const int64_t user_block_cache_priority,
       const int64_t user_row_cache_priority, const int64_t fuse_row_cache_priority, const int64_t bf_cache_priority,
@@ -63,7 +63,7 @@ class ObStorageCacheSuite {
   }
   TO_STRING_KV(K(is_inited_));
 
-  private:
+private:
   ObStorageCacheSuite();
   virtual ~ObStorageCacheSuite();
   friend class ObStorageCacheContext;
@@ -74,7 +74,7 @@ class ObStorageCacheSuite {
   ObFuseRowCache fuse_row_cache_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageCacheSuite);
 };
 

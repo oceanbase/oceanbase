@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace common {
 
 class ObIWordSegmentImpl {
-  public:
+public:
   ObIWordSegmentImpl(){};
   virtual ~ObIWordSegmentImpl()
   {}

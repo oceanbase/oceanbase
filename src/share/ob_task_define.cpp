@@ -24,7 +24,7 @@ namespace share {
 class ObLogRateLimiter : public lib::ObSimpleRateLimiter {
   friend class ObTaskController;
 
-  public:
+public:
   bool is_force_allows() const override
   {
     return OB_UNLIKELY(allows_ > 0);
@@ -36,7 +36,7 @@ class ObLogRateLimiter : public lib::ObSimpleRateLimiter {
     }
   }
 
-  private:
+private:
   static RLOCAL(int64_t, allows_);
 };
 

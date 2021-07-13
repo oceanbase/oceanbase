@@ -20,7 +20,7 @@ using namespace common;
 namespace share {
 
 class ObFakeTask : public ObAsyncTask {
-  public:
+public:
   ObFakeTask(const bool copy_success, const bool process_success)
       : copy_success_(copy_success), process_success_(process_success)
   {}
@@ -34,7 +34,7 @@ class ObFakeTask : public ObAsyncTask {
   }
   ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-  protected:
+protected:
   bool copy_success_;
   bool process_success_;
 };

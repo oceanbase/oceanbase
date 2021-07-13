@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObAlterBaselineStmt : public ObDDLStmt {
-  public:
+public:
   ObAlterBaselineStmt() : ObDDLStmt(stmt::T_ALTER_BASELINE), alter_baseline_arg_()
   {}
 
@@ -28,10 +28,10 @@ class ObAlterBaselineStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(alter_baseline_arg));
 
-  public:
+public:
   obrpc::ObAlterPlanBaselineArg alter_baseline_arg_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterBaselineStmt);
 };
 }  // namespace sql

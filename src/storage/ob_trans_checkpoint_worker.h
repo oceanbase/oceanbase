@@ -21,7 +21,7 @@ class ObPartitionService;
 class ObIPartitionGroup;
 
 class ObTransCheckpointAdapter : public share::ObThreadPool {
-  public:
+public:
   ObTransCheckpointAdapter() : inited_(false), partition_service_(nullptr)
   {}
   ~ObTransCheckpointAdapter()
@@ -35,16 +35,16 @@ class ObTransCheckpointAdapter : public share::ObThreadPool {
   void wait();
   virtual void run1() override;
 
-  private:
+private:
   int scan_all_partitions_(int64_t& valid_user_part_count, int64_t& valid_inner_part_count);
 
-  private:
+private:
   bool inited_;
   storage::ObPartitionService* partition_service_;
 };
 
 class ObTransCheckpointWorker {
-  public:
+public:
   ObTransCheckpointWorker() : inited_(false)
   {}
   ~ObTransCheckpointWorker()
@@ -57,10 +57,10 @@ class ObTransCheckpointWorker {
   void stop();
   void wait();
 
-  private:
+private:
   static const int64_t MAX_CHECKPOINT_NUM = 2;
 
-  private:
+private:
   bool inited_;
   ObTransCheckpointAdapter checkpoint_adapters_[MAX_CHECKPOINT_NUM];
 };

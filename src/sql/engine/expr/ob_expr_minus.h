@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace sql {
 class ObExprCGCtx;
 class ObExprMinus : public ObArithExprOperator {
-  public:
+public:
   ObExprMinus();
   explicit ObExprMinus(common::ObIAllocator& alloc, ObExprOperatorType type = T_OP_MINUS);
   virtual ~ObExprMinus(){};
@@ -34,7 +34,7 @@ class ObExprMinus : public ObArithExprOperator {
       common::ObIAllocator* allocator, common::ObScale scale);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   OB_INLINE static int minus_int(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
       common::ObIAllocator* allocator, common::ObScale scale);
   OB_INLINE static int minus_uint(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
@@ -54,7 +54,7 @@ class ObExprMinus : public ObArithExprOperator {
 
   DISALLOW_COPY_AND_ASSIGN(ObExprMinus);
 
-  public:
+public:
   static int minus_null(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int minus_int_int(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int minus_int_uint(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
@@ -79,7 +79,7 @@ class ObExprMinus : public ObArithExprOperator {
   static int minus_datetime_datetime_oracle(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int minus_datetime_datetime(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   OB_INLINE static bool is_int_int_out_of_range(int64_t val1, int64_t val2, int64_t res)
   {
     // top digit:
@@ -119,7 +119,7 @@ class ObExprMinus : public ObArithExprOperator {
     return val1 < val2;
   }
 
-  private:
+private:
   static ObArithFunc minus_funcs_[common::ObMaxTC];
   static ObArithFunc agg_minus_funcs_[common::ObMaxTC];
   static const int64_t SHIFT_OFFSET = 63;
@@ -128,7 +128,7 @@ class ObExprMinus : public ObArithExprOperator {
 // Minus expr for aggregation, different with ObExprMinus:
 //  No overflow check for double type.
 class ObExprAggMinus : public ObExprMinus {
-  public:
+public:
   explicit ObExprAggMinus(common::ObIAllocator& alloc) : ObExprMinus(alloc, T_OP_AGG_MINUS)
   {}
 };

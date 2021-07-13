@@ -37,7 +37,7 @@ struct SimpleObPartition : public ObIBaseStorageLogEntry {
   static void build(int64_t table_id, int64_t partition_id, int64_t macro_block_cnt, SimpleObPartition& partition);
   TO_STRING_EMPTY();
 
-  public:
+public:
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 
@@ -51,7 +51,7 @@ struct SimpleObPartitionNode {
 enum SimpleObPartitionOperation { ADD_PARTITION = 0, REMOVE_PARTITION = 1 };
 
 class SimpleObPartitionImage : public ObIRedoModule {
-  public:
+public:
   SimpleObPartitionImage();
   virtual ~SimpleObPartitionImage();
   int init(const char* data_dir, ObBaseStorageLogger* redo_log);
@@ -71,7 +71,7 @@ class SimpleObPartitionImage : public ObIRedoModule {
   bool operator==(SimpleObPartitionImage& image);
   bool operator!=(SimpleObPartitionImage& image);
 
-  public:
+public:
   static const int64_t BUCKET_NUM = 1523;
   static int64_t hash(const int64_t table_id, const int64_t partition_id);
   int do_add_partition(const SimpleObPartition& partition);

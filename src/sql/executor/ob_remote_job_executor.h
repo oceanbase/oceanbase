@@ -19,7 +19,7 @@ class ObJob;
 class ObTaskExecutor;
 class ObExecContext;
 class ObRemoteJobExecutor {
-  public:
+public:
   ObRemoteJobExecutor();
   virtual ~ObRemoteJobExecutor();
   // set job waiting for schedule
@@ -39,14 +39,14 @@ class ObRemoteJobExecutor {
     executor_ = NULL;
   }
 
-  private:
+private:
   // disallow copy
   ObRemoteJobExecutor(const ObRemoteJobExecutor& other);
   ObRemoteJobExecutor& operator=(const ObRemoteJobExecutor& ohter);
 
   int get_executable_task(ObExecContext& ctx, ObTaskInfo*& task);
 
-  private:
+private:
   ObJob* job_;
   ObTaskExecutor* executor_;
 };

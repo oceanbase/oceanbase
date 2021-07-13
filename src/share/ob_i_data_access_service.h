@@ -177,7 +177,7 @@ typedef common::ObSEArray<uint64_t, OB_PREALLOCATED_COL_ID_NUM, common::ModulePa
  *    2. virtual table
  */
 class ObVTableScanParam {
-  public:
+public:
   ObVTableScanParam()
       : index_id_(common::OB_INVALID_ID),
         timeout_(-1),
@@ -323,7 +323,7 @@ class ObVTableScanParam {
       N_LIMIT_OFFSET, limit_param_, N_FOR_UPDATE, for_update_, N_WAIT, for_update_wait_timeout_, N_FROZEN_VERSION,
       frozen_version_, K_(is_get));
 
-  private:
+private:
   // New schema, used throughout the life cycle of table_scan
   share::schema::ObSchemaGetterGuard* schema_guard_;
   char schema_guard_buf_[sizeof(share::schema::ObSchemaGetterGuard)];
@@ -332,7 +332,7 @@ class ObVTableScanParam {
 class ObNewRowIterator;
 class ObNewIterIterator;
 class ObIDataAccessService {
-  public:
+public:
   //
   // table scan
   //     scan table partition

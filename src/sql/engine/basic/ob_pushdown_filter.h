@@ -45,7 +45,7 @@ enum FilterExecutorType {
 };
 
 class ObPushdownFilterUtils {
-  public:
+public:
   static bool is_pushdown_storage(int32_t pd_storage_flag)
   {
     return pd_storage_flag & 0x01;
@@ -59,7 +59,7 @@ class ObPushdownFilterUtils {
 class ObPushdownFilterNode {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPushdownFilterNode(common::ObIAllocator& alloc)
       : alloc_(alloc), type_(PushdownFilterType::MAX_FILTER_TYPE), n_child_(0), childs_(nullptr), col_ids_(alloc)
   {}
@@ -88,7 +88,7 @@ class ObPushdownFilterNode {
   }
   TO_STRING_KV(K_(type), K_(n_child), K_(col_ids));
 
-  public:
+public:
   common::ObIAllocator& alloc_;
   PushdownFilterType type_;
   uint32_t n_child_;
@@ -99,7 +99,7 @@ class ObPushdownFilterNode {
 class ObPushdownAndFilterNode : public ObPushdownFilterNode {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPushdownAndFilterNode(common::ObIAllocator& alloc) : ObPushdownFilterNode(alloc)
   {}
 };
@@ -107,7 +107,7 @@ class ObPushdownAndFilterNode : public ObPushdownFilterNode {
 class ObPushdownOrFilterNode : public ObPushdownFilterNode {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPushdownOrFilterNode(common::ObIAllocator& alloc) : ObPushdownFilterNode(alloc)
   {}
 };
@@ -115,7 +115,7 @@ class ObPushdownOrFilterNode : public ObPushdownFilterNode {
 class ObPushdownBlackFilterNode : public ObPushdownFilterNode {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPushdownBlackFilterNode(common::ObIAllocator& alloc)
       : ObPushdownFilterNode(alloc), column_exprs_(alloc), filter_exprs_(alloc), tmp_expr_(nullptr)
   {}
@@ -126,7 +126,7 @@ class ObPushdownBlackFilterNode : public ObPushdownFilterNode {
   virtual int postprocess() override;
   OB_INLINE void clear_evaluated_datums();
 
-  public:
+public:
   ExprFixedArray column_exprs_;
   ExprFixedArray filter_exprs_;
   ObExpr* tmp_expr_;
@@ -135,7 +135,7 @@ class ObPushdownBlackFilterNode : public ObPushdownFilterNode {
 class ObPushdownWhiteFilterNode : public ObPushdownFilterNode {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPushdownWhiteFilterNode(common::ObIAllocator& alloc) : ObPushdownFilterNode(alloc)
   {}
   ~ObPushdownWhiteFilterNode()
@@ -145,14 +145,14 @@ class ObPushdownWhiteFilterNode : public ObPushdownFilterNode {
 class ObPushdownFilterExecutor;
 class ObPushdownFilterNode;
 class ObPushdownFilterFactory {
-  public:
+public:
   ObPushdownFilterFactory(common::ObIAllocator* alloc) : alloc_(alloc)
   {}
   int alloc(PushdownFilterType type, uint32_t n_child, ObPushdownFilterNode*& pd_filter);
   int alloc(FilterExecutorType type, uint32_t n_child, ObPushdownFilterNode& filter_node,
       ObPushdownFilterExecutor*& filter_executor);
 
-  private:
+private:
   // pushdown filter
   typedef int (*PDFilterAllocFunc)(common::ObIAllocator& alloc, uint32_t n_child, ObPushdownFilterNode*& filter_node);
   template <typename ClassT, PushdownFilterType type>
@@ -167,19 +167,19 @@ class ObPushdownFilterFactory {
       ObPushdownFilterExecutor*& filter_executor);
   static FilterExecutorAllocFunc FILTER_EXECUTOR_ALLOC[FilterExecutorType::MAX_EXECUTOR_TYPE];
 
-  private:
+private:
   common::ObIAllocator* alloc_;
 };
 
 class ObPushdownFilterConstructor {
-  public:
+public:
   ObPushdownFilterConstructor(common::ObIAllocator* alloc, ObStaticEngineCG& static_cg)
       : alloc_(alloc), factory_(alloc), static_cg_(static_cg)
   {}
   int apply(ObRawExpr* raw_expr, ObPushdownFilterNode*& filter_tree);
   int apply(common::ObIArray<ObRawExpr*>& exprs, ObPushdownFilterNode*& filter_tree);
 
-  private:
+private:
   int merge_filter_node(ObPushdownFilterNode* dst, ObPushdownFilterNode* other,
       common::ObIArray<ObPushdownFilterNode*>& merged_node, bool& merged);
   int deduplicate_filter_node(common::ObIArray<ObPushdownFilterNode*>& filter_nodes, uint32_t& n_node);
@@ -195,7 +195,7 @@ class ObPushdownFilterConstructor {
     return false;
   }
 
-  private:
+private:
   common::ObIAllocator* alloc_;
   ObPushdownFilterFactory factory_;
   ObStaticEngineCG& static_cg_;
@@ -205,7 +205,7 @@ class ObPushdownFilterConstructor {
 class ObPushdownFilter {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPushdownFilter(common::ObIAllocator& alloc) : alloc_(alloc), filter_tree_(nullptr)
   {}
 
@@ -227,14 +227,14 @@ class ObPushdownFilter {
       int64_t& pos, ObPushdownFilterNode*& pd_storage_filter);
   static int64_t get_serialize_pushdown_filter_size(ObPushdownFilterNode* pd_filter_node);
   // NEED_SERIALIZE_AND_DESERIALIZE;
-  private:
+private:
   common::ObIAllocator& alloc_;
   ObPushdownFilterNode* filter_tree_;
 };
 
 // executor interface
 class ObPushdownFilterExecutor {
-  public:
+public:
   ObPushdownFilterExecutor(common::ObIAllocator& alloc, ObPushdownFilterNode& filter)
       : type_(FilterExecutorType::MAX_EXECUTOR_TYPE),
         filter_(filter),
@@ -379,13 +379,13 @@ class ObPushdownFilterExecutor {
   VIRTUAL_TO_STRING_KV(K_(type), K_(n_cols), "col_offsets", common::ObArrayWrap<int32_t>(col_offsets_, n_cols_),
       K_(n_child), KP_(childs), KP_(filter_bitmap), KP_(col_params));
 
-  protected:
+protected:
   int find_evaluated_datums(
       ObExpr* expr, const common::ObIArray<ObExpr*>& calc_exprs, common::ObIArray<ObExpr*>& eval_exprs);
   int find_evaluated_datums(common::ObIArray<ObExpr*>& src_exprs, const common::ObIArray<ObExpr*>& calc_exprs,
       common::ObIArray<ObExpr*>& eval_exprs);
 
-  protected:
+protected:
   FilterExecutorType type_;
   ObPushdownFilterNode& filter_;
   int64_t n_cols_;
@@ -398,7 +398,7 @@ class ObPushdownFilterExecutor {
 };
 
 class ObBlackFilterExecutor : public ObPushdownFilterExecutor {
-  public:
+public:
   ObBlackFilterExecutor(common::ObIAllocator& alloc, ObPushdownBlackFilterNode& filter)
       : ObPushdownFilterExecutor(alloc, filter), n_eval_infos_(0), eval_infos_(nullptr), eval_ctx_(nullptr)
   {}
@@ -413,7 +413,7 @@ class ObBlackFilterExecutor : public ObPushdownFilterExecutor {
   INHERIT_TO_STRING_KV("ObPushdownBlackFilterExecutor", ObPushdownFilterExecutor, K_(filter), K_(n_eval_infos),
       K_(n_cols), "col_offsets", common::ObArrayWrap<int32_t>(col_offsets_, n_cols_), KP_(eval_infos), KP_(eval_ctx));
 
-  private:
+private:
   int32_t n_eval_infos_;
   ObEvalInfo** eval_infos_;
   ObEvalCtx* eval_ctx_;
@@ -427,7 +427,7 @@ OB_INLINE void ObBlackFilterExecutor::clear_evaluated_datums()
 }
 
 class ObWhiteFilterExecutor : public ObPushdownFilterExecutor {
-  public:
+public:
   ObWhiteFilterExecutor(common::ObIAllocator& alloc, ObPushdownWhiteFilterNode& filter)
       : ObPushdownFilterExecutor(alloc, filter)
   {}
@@ -439,11 +439,11 @@ class ObWhiteFilterExecutor : public ObPushdownFilterExecutor {
       common::ObIAllocator& alloc, const common::ObIArray<ObExpr*>& calc_exprs, ObEvalCtx* eval_ctx) override;
   INHERIT_TO_STRING_KV("ObPushdownFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 
-  private:
+private:
 };
 
 class ObAndFilterExecutor : public ObPushdownFilterExecutor {
-  public:
+public:
   ObAndFilterExecutor(common::ObIAllocator& alloc, ObPushdownAndFilterNode& filter)
       : ObPushdownFilterExecutor(alloc, filter)
   {}
@@ -452,11 +452,11 @@ class ObAndFilterExecutor : public ObPushdownFilterExecutor {
       common::ObIAllocator& alloc, const common::ObIArray<ObExpr*>& calc_exprs, ObEvalCtx* eval_ctx) override;
   INHERIT_TO_STRING_KV("ObPushdownFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 
-  private:
+private:
 };
 
 class ObOrFilterExecutor : public ObPushdownFilterExecutor {
-  public:
+public:
   ObOrFilterExecutor(common::ObIAllocator& alloc, ObPushdownOrFilterNode& filter)
       : ObPushdownFilterExecutor(alloc, filter)
   {}
@@ -466,20 +466,20 @@ class ObOrFilterExecutor : public ObPushdownFilterExecutor {
       common::ObIAllocator& alloc, const common::ObIArray<ObExpr*>& calc_exprs, ObEvalCtx* eval_ctx) override;
   INHERIT_TO_STRING_KV("ObPushdownFilterExecutor", ObPushdownFilterExecutor, K_(filter));
 
-  private:
+private:
 };
 
 class ObFilterExecutorConstructor {
-  public:
+public:
   ObFilterExecutorConstructor(common::ObIAllocator* alloc) : alloc_(alloc), factory_(alloc)
   {}
   int apply(ObPushdownFilterNode* filter_tree, ObPushdownFilterExecutor*& filter_executor);
 
-  private:
+private:
   template <typename CLASST, FilterExecutorType type>
   int create_filter_executor(ObPushdownFilterNode* filter_tree, ObPushdownFilterExecutor*& filter_executor);
 
-  private:
+private:
   common::ObIAllocator* alloc_;
   ObPushdownFilterFactory factory_;
 };

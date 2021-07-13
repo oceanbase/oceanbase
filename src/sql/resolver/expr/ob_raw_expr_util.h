@@ -36,7 +36,7 @@ class ObSelectIntoItem;
 
 template <class T>
 class UniqueSetWrapAllocer {
-  public:
+public:
   UniqueSetWrapAllocer() : allocator_(NULL)
   {}
   UniqueSetWrapAllocer(ObIAllocator& alloc) : allocator_(&alloc)
@@ -65,12 +65,12 @@ class UniqueSetWrapAllocer {
   void dec_ref()
   {}
 
-  private:
+private:
   ObIAllocator* allocator_;
 };
 
 class ObRawExprUniqueSet {
-  public:
+public:
   typedef UniqueSetWrapAllocer<typename common::hash::HashSetTypes<uint64_t>::AllocType> NodeAllocator;
   typedef common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode, common::hash::hash_func<uint64_t>,
       common::hash::equal_to<uint64_t>, NodeAllocator, common::hash::NormalPointer, common::ObWrapperAllocator,
@@ -99,10 +99,10 @@ class ObRawExprUniqueSet {
     return expr_array_;
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprUniqueSet);
 
-  private:
+private:
   NodeAllocator node_allocator_;
   common::ObWrapperAllocator bucket_allocator_;
   ExprPtrSet expr_set_;
@@ -143,7 +143,7 @@ int ObRawExprUniqueSet::append(const ObIArray<RawExprType*>& exprs)
 }
 
 class ObRawExprUtils {
-  public:
+public:
   /**
    * make expression from string
    *
@@ -425,7 +425,7 @@ class ObRawExprUtils {
   static int build_to_outfile_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo* session_info,
       const ObSelectIntoItem* into_item, const ObIArray<ObRawExpr*>& exprs, ObRawExpr*& to_outfile_expr);
 
-  private:
+private:
   static int create_real_cast_expr(ObRawExprFactory& expr_factory, ObRawExpr* src_expr, const ObExprResType& dst_type,
       ObSysFunRawExpr*& func_expr, const ObSQLSessionInfo* session_info);
   ObRawExprUtils();

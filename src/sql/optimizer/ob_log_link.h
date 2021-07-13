@@ -21,7 +21,7 @@ namespace sql {
 typedef common::ObIArray<common::ObString> ObStringIArray;
 
 class ObLogLink : public ObLogicalOperator {
-  public:
+public:
   ObLogLink(ObLogPlan& plan);
   virtual ~ObLogLink()
   {}
@@ -47,11 +47,11 @@ class ObLogLink : public ObLogicalOperator {
     return stmt_fmt_len_;
   }
 
-  private:
+private:
   int gen_link_stmt_fmt_buf();
   int gen_link_stmt_param_infos();
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   ObLinkStmt link_stmt_;
   char* stmt_fmt_buf_;

@@ -28,7 +28,7 @@ using namespace memtable;
 
 namespace obrpc {
 class TestMigrateRpc : public ::testing::Test {
-  public:
+public:
   static void SetUpTestCase();
   void SetUp()
   {}
@@ -55,13 +55,13 @@ void TestMigrateRpc::SetUpTestCase()
 }
 
 class ObMockFetchPartitionInfoP : public ObFetchPartitionInfoP {
-  public:
+public:
   ObMockFetchPartitionInfoP() : ObFetchPartitionInfoP(NULL)
   {}
   ~ObMockFetchPartitionInfoP()
   {}
 
-  protected:
+protected:
   int process()
   {
     result_.meta_.pkey_ = arg_.pkey_;
@@ -71,7 +71,7 @@ class ObMockFetchPartitionInfoP : public ObFetchPartitionInfoP {
 };
 
 class ObMockFetchLogicRowP : public ObFetchLogicRowP {
-  public:
+public:
   ObMockFetchLogicRowP() : ObFetchLogicRowP(NULL, NULL)
   {}
   ~ObMockFetchLogicRowP()
@@ -79,7 +79,7 @@ class ObMockFetchLogicRowP : public ObFetchLogicRowP {
 
   ObMockIterator iter_;
 
-  protected:
+protected:
   int process()
   {
     int ret = OB_SUCCESS;

@@ -25,7 +25,7 @@ namespace clog {
 class ObClogAggreRunnable;
 
 class ObClogAggreTask {
-  public:
+public:
   ObClogAggreTask(ObClogAggreRunnable* host, storage::ObPartitionService* ps) : host_(host), ps_(ps), run_ts_(0)
   {}
   ~ObClogAggreTask()
@@ -33,7 +33,7 @@ class ObClogAggreTask {
   int set_partition_key(const common::ObPartitionKey& pkey);
   int set_run_ts(const int64_t run_ts);
 
-  public:
+public:
   void handle();
   uint64_t hash() const
   {
@@ -41,7 +41,7 @@ class ObClogAggreTask {
   }
   TO_STRING_KV(K_(pkey));
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   ObClogAggreRunnable* host_;
   storage::ObPartitionService* ps_;
@@ -51,37 +51,37 @@ class ObClogAggreTask {
 class ObClogAggreRunnable : public lib::TGTaskHandler {
   friend class ObClogAggreTask;
 
-  public:
+public:
   ObClogAggreRunnable();
   virtual ~ObClogAggreRunnable();
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service);
   int start();
   void stop();
   void wait();
   void destroy();
 
-  public:
+public:
   void handle(void* task);
   int add_task(const common::ObPartitionKey& pkey, const int64_t delay_us);
 
-  public:
+public:
   static const int64_t THREAD_COUNT = 4;
   static const int64_t MINI_THREAD_COUNT = 1;
   static const int64_t TOTAL_TASK = 256;
 
-  private:
+private:
   int push_back(ObClogAggreTask* task);
 
-  private:
+private:
   bool is_inited_;
   ObClogAggreTask* task_array_[TOTAL_TASK];
   int64_t available_index_;
   common::ObSpinLock lock_;
   int tg_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObClogAggreRunnable);
 };
 

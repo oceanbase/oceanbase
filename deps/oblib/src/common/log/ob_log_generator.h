@@ -35,11 +35,11 @@ struct DebugLog {
   int64_t last_ctime_;
 };
 class ObLogGenerator {
-  public:
+public:
   static const int64_t LOG_FILE_ALIGN_SIZE = 1 << OB_DIRECT_IO_ALIGN_BITS;
   static const int64_t LOG_FILE_ALIGN_MASK = LOG_FILE_ALIGN_SIZE - 1;
   static const int64_t LOG_BUF_RESERVED_SIZE = 3 * LOG_FILE_ALIGN_SIZE;  // nop + switch_log + eof
-  public:
+public:
   ObLogGenerator();
   ~ObLogGenerator();
   int init(int64_t log_buf_size, int64_t log_file_max_size, const ObAddr* id = NULL);
@@ -63,12 +63,12 @@ class ObLogGenerator {
   int64_t to_string(char* buf, const int64_t len) const;
   static bool is_eof(const char* buf, int64_t len);
 
-  public:
+public:
   int get_start_cursor(ObLogCursor& log_cursor) const;
   int get_end_cursor(ObLogCursor& log_cursor) const;
   int dump_for_debug() const;
 
-  protected:
+protected:
   bool is_inited() const;
   int check_state() const;
   bool has_log() const;
@@ -78,10 +78,10 @@ class ObLogGenerator {
   int write_nop(const bool force_write = false);
   int append_eof();
 
-  public:
+public:
   static char eof_flag_buf_[LOG_FILE_ALIGN_SIZE] __attribute__((aligned(DIO_ALIGN_SIZE)));
 
-  private:
+private:
   bool is_frozen_;
   int64_t log_file_max_size_;
   ObLogCursor start_cursor_;

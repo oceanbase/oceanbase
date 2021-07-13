@@ -28,7 +28,7 @@ namespace sql {
 class ObGIOpInput : public ObOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObGIOpInput(ObExecContext& ctx, const ObOpSpec& spec);
   virtual ~ObGIOpInput()
   {}
@@ -60,10 +60,10 @@ class ObGIOpInput : public ObOpInput {
     return worker_id_;
   }
 
-  private:
+private:
   int deep_copy_range(ObIAllocator* allocator, const ObNewRange& src, ObNewRange& dst);
 
-  public:
+public:
   // the dop, the QC deside the dop before our task send to SQC server
   // but the dop may be change as the worker server don't has enough process.
   int64_t parallelism_;
@@ -76,14 +76,14 @@ class ObGIOpInput : public ObOpInput {
   common::ObSEArray<common::ObPartitionKey, 16> pkeys_;
   ObGranulePump* pump_;
 
-  private:
+private:
   common::ObIAllocator* deserialize_allocator_;
 };
 
 class ObGranuleIteratorSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObGranuleIteratorSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   ~ObGranuleIteratorSpec()
   {}
@@ -157,7 +157,7 @@ class ObGranuleIteratorSpec : public ObOpSpec {
     return partition_wise_join_ && !affinitize_;
   }
 
-  public:
+public:
   uint64_t ref_table_id_;
   int64_t tablet_size_;
   // indicate whether has binds between threads and tasks
@@ -173,7 +173,7 @@ class ObGranuleIteratorSpec : public ObOpSpec {
 };
 
 class ObGranuleIteratorOp : public ObOperator {
-  private:
+private:
   enum ObGranuleIteratorState {
     GI_UNINITIALIZED,
     GI_PREPARED,
@@ -182,7 +182,7 @@ class ObGranuleIteratorOp : public ObOperator {
     GI_END,
   };
 
-  public:
+public:
   ObGranuleIteratorOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObGranuleIteratorOp()
   {}
@@ -203,7 +203,7 @@ class ObGranuleIteratorOp : public ObOperator {
     return OPEN_SELF_FIRST;
   }
 
-  private:
+private:
   int parameters_init();
   int try_fetch_task(ObGranuleTaskInfo& info);
   int fetch_full_pw_tasks(ObIArray<ObGranuleTaskInfo>& infos, const ObIArray<int64_t>& op_ids);
@@ -218,7 +218,7 @@ class ObGranuleIteratorOp : public ObOperator {
   int get_gi_task_consumer_node(ObOperator* cur, ObOperator*& child) const;
   int try_pruning_partition(const ObGITaskSet& taskset, ObGITaskSet::Pos& pos, bool& partition_pruned);
 
-  private:
+private:
   int64_t parallelism_;
   int64_t worker_id_;
   uint64_t tsc_op_id_;

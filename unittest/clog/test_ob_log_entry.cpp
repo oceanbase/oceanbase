@@ -22,7 +22,7 @@ namespace oceanbase {
 using namespace clog;
 namespace unittest {
 class TestObLogEntry : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     ltype = OB_LOG_SUBMIT;                                         // Test log type in normal case
@@ -44,7 +44,7 @@ class TestObLogEntry : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  public:
+public:
   static const int64_t BUFSIZE = 1 << 9;  // 256B
   ObLogEntryHeader header;
   clog::ObLogEntry entry;

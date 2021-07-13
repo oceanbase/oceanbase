@@ -24,7 +24,7 @@ namespace transaction {
 class ObTsCbTask;
 
 class ObGTSTaskQueue {
-  public:
+public:
   ObGTSTaskQueue() : is_inited_(false), task_type_(INVALID_GTS_TASK_TYPE)
   {}
   ~ObGTSTaskQueue()
@@ -42,10 +42,10 @@ class ObGTSTaskQueue {
     return queue_.size();
   }
 
-  private:
+private:
   static const int64_t TOTAL_WAIT_TASK_NUM = 500 * 1000;
 
-  private:
+private:
   bool is_inited_;
   ObGTSCacheTaskType task_type_;
   common::ObLinkQueue queue_;

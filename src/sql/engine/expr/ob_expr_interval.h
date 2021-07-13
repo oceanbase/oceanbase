@@ -24,7 +24,7 @@ namespace sql {
 class ObExprInterval : public ObExprOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObExprInterval(common::ObIAllocator& alloc);
 
   virtual ~ObExprInterval()
@@ -44,7 +44,7 @@ class ObExprInterval : public ObExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_interval_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   bool use_binary_search_;  // use binary search or sequential search during calc
 };
 

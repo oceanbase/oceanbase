@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateOutlineStmt : public ObDDLStmt {
-  public:
+public:
   ObCreateOutlineStmt()
       : ObDDLStmt(stmt::T_CREATE_OUTLINE), create_outline_arg_(), max_concurrent_(-1), outline_stmt_(NULL)
   {}
@@ -106,7 +106,7 @@ class ObCreateOutlineStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(create_outline_arg), K_(outline_stmt));
 
-  private:
+private:
   obrpc::ObCreateOutlineArg create_outline_arg_;
   common::ObString sql_id_;
   common::ObString hint_;

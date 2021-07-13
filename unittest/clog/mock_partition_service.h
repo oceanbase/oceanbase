@@ -20,11 +20,11 @@ namespace oceanbase {
 using namespace clog;
 namespace storage {
 class MockObPartition : public storage::MockObIPartition {
-  public:
+public:
   MockObPartition() : valid_(false)
   {}
 
-  public:
+public:
   int init(int32_t seed)
   {
     partition_key_.init(seed, seed, 1024);
@@ -53,18 +53,18 @@ class MockObPartition : public storage::MockObIPartition {
     return 0;
   }
 
-  private:
+private:
   clog::MockPartitionLogService mock_pls_;
   common::ObPartitionKey partition_key_;
   bool valid_;
 };
 
 class MockObPartitionService : public storage::MockObIPartitionService {
-  public:
+public:
   MockObPartitionService() : list_(NULL)
   {}
 
-  public:
+public:
   struct MockPartitionNode {
     MockObPartition partition_;
     MockPartitionNode* next_;
@@ -77,7 +77,7 @@ class MockObPartitionService : public storage::MockObIPartitionService {
     }
   };
   class MockObPartitionIter : public storage::ObIPartitionIterator {
-    public:
+  public:
     MockObPartitionIter() : mgr_(NULL), curr_node_(NULL)
     {}
     MockObPartitionIter(ObPartitionService* mgr)
@@ -106,12 +106,12 @@ class MockObPartitionService : public storage::MockObIPartitionService {
       return ret;
     }
 
-    private:
+  private:
     MockObPartitionService* mgr_;
     MockPartitionNode* curr_node_;
   };
 
-  public:
+public:
   int create_partition(int32_t seed)
   // int create_partition(common::ObMemberList &list, const ObPartitionKey &key, const int64_t replica_num)
   {
@@ -174,7 +174,7 @@ class MockObPartitionService : public storage::MockObIPartitionService {
     return ret;
   }
 
-  private:
+private:
   MockPartitionNode* list_;
 
   DISALLOW_COPY_AND_ASSIGN(MockObPartitionService);

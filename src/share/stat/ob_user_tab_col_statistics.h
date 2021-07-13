@@ -25,7 +25,7 @@ struct ObPartitionKey;
 class ObServerConfig;
 
 class ObColStatService : public ObColumnStatDataService {
-  public:
+public:
   ObColStatService();
   ~ObColStatService();
 
@@ -37,27 +37,28 @@ class ObColStatService : public ObColumnStatDataService {
    * Caller should not hold ObColumnStat object for a long time that ObColumnStatCache
    * can not release it.
    */
-  int get_column_stat(const ObColumnStat::Key& key, const bool force_new, ObColumnStatValueHandle& handle);
+  int get_column_stat(const ObColumnStat::Key& key, const bool force_new, ObColumnStatValueHandle& handle) override;
 
   /**
    * same as above interface, except do not hold object in cache instead of deep copy
    * so %stat can be written in incremental calculation.
    */
-  int get_column_stat(const ObColumnStat::Key& key, const bool force_new, ObColumnStat& stat, ObIAllocator& alloc);
+  int get_column_stat(
+      const ObColumnStat::Key& key, const bool force_new, ObColumnStat& stat, ObIAllocator& alloc) override;
 
   int get_batch_stat(const uint64_t table_id, const ObIArray<uint64_t>& partition_id,
-      const ObIArray<uint64_t>& column_id, ObIArray<ObColumnStatValueHandle>& handles);
+      const ObIArray<uint64_t>& column_id, ObIArray<ObColumnStatValueHandle>& handles) override;
 
   int get_batch_stat(const share::schema::ObTableSchema& table_schema, const uint64_t partition_id,
-      ObIArray<ObColumnStat*>& stats, ObIAllocator& allocator);
+      ObIArray<ObColumnStat*>& stats, ObIAllocator& allocator) override;
   /**
    * item in stats must not NULL, or will return OB_ERR_UNEXPECTED
    */
-  int update_column_stats(const ObIArray<ObColumnStat*>& stats);
-  int update_column_stat(const ObColumnStat& stat);
+  int update_column_stats(const ObIArray<ObColumnStat*>& stats) override;
+  int update_column_stat(const ObColumnStat& stat) override;
   int erase_column_stat(const ObPartitionKey& pkey, const int64_t column_id) override;
 
-  private:
+private:
   int load_and_put_cache(const ObColumnStat::Key& key, ObColumnStatValueHandle& handle);
   int load_and_put_cache(const ObColumnStat::Key& key, ObColumnStat& new_entry, ObColumnStatValueHandle& handle);
   int batch_load_and_put_cache(const share::schema::ObTableSchema& table_schema, const uint64_t partition_id,
@@ -67,14 +68,14 @@ class ObColStatService : public ObColumnStatDataService {
   int batch_put_and_fetch_row(ObIArray<ObColumnStat*>& col_stats, ObIArray<ObColumnStatValueHandle>& handles);
   static int deep_copy(ObIAllocator& alloc, const ObColumnStat& src, ObColumnStat& dst);
 
-  private:
+private:
   ObTableColStatSqlService sql_service_;
   ObColumnStatCache column_stat_cache_;
   bool inited_;
 };  // end of class ObColStatService
 
 class ObTableStatService : public ObTableStatDataService {
-  public:
+public:
   ObTableStatService();
   ~ObTableStatService();
 
@@ -82,13 +83,13 @@ class ObTableStatService : public ObTableStatDataService {
   virtual int get_table_stat(const common::ObPartitionKey& key, ObTableStat& tstat);
   int erase_table_stat(const common::ObPartitionKey& pkey);
 
-  private:
+private:
   int load_and_put_cache(ObTableStat::Key& key, ObTableStatValueHandle& handle);
 
-  private:
+private:
   static const int64_t DEFAULT_USER_TAB_STAT_CACHE_PRIORITY = 1;
 
-  private:
+private:
   ObTableColStatSqlService sql_service_;
   ObTableStatDataService* service_cache_;
   ObTableStatCache table_stat_cache_;

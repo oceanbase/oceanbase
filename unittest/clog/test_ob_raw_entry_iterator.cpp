@@ -27,7 +27,7 @@ namespace oceanbase {
 using namespace clog;
 namespace unittest {
 class TestObRawLogIterator : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown();
   void prepare_entry();

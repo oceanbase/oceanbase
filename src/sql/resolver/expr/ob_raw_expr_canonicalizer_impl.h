@@ -16,16 +16,16 @@
 namespace oceanbase {
 namespace sql {
 class ObRawExprCanonicalizerImpl : public ObRawExprCanonicalizer {
-  public:
+public:
   explicit ObRawExprCanonicalizerImpl(ObExprResolveContext& ctx);
   virtual ~ObRawExprCanonicalizerImpl()
   {}
 
   virtual int canonicalize(ObRawExpr*& expr);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprCanonicalizerImpl);
   // function members
@@ -38,7 +38,7 @@ class ObRawExprCanonicalizerImpl : public ObRawExprCanonicalizer {
   int pull_similar_expr(ObRawExpr*& expr);
   int cluster_and_or(ObRawExpr*& expr);
 
-  private:
+private:
   struct ObOppositeOpPair {
     ObItemType original_;
     ObItemType opposite_;
@@ -46,7 +46,7 @@ class ObRawExprCanonicalizerImpl : public ObRawExprCanonicalizer {
   static ObItemType get_opposite_op(ObItemType type);
   static ObOppositeOpPair OPPOSITE_PAIRS[];
 
-  private:
+private:
   // data members
   ObExprResolveContext& ctx_;
   //  ObIAllocator &allocator_;

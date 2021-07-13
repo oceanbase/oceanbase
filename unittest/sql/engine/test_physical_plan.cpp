@@ -18,7 +18,7 @@ using namespace oceanbase::share::schema;
 namespace oceanbase {
 namespace sql {
 class TestPhysicalPlan : public ::testing::Test {
-  public:
+public:
   TestPhysicalPlan()
   {}
   virtual ~TestPhysicalPlan()

@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBAE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
-#define OCEANBAE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
+#ifndef OCEANBASE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
+#define OCEANBASE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
 
 #include "lib/objectpool/ob_pool.h"
 #include "lib/lock/ob_spin_lock.h"
@@ -21,7 +21,7 @@ namespace common {
 // @note thread-safe
 template <typename T>
 class ObCachedAllocator {
-  public:
+public:
   ObCachedAllocator();
   virtual ~ObCachedAllocator();
 
@@ -36,11 +36,11 @@ class ObCachedAllocator {
     return cached_count_;
   };
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCachedAllocator);
 
-  private:
+private:
   // data members
   ObSpinLock lock_;
   ObPool<> pool_;
@@ -111,4 +111,4 @@ void ObCachedAllocator<T>::free(T* obj)
 }  // end namespace common
 }  // end namespace oceanbase
 
-#endif  // OCEANBAE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_
+#endif  // OCEANBASE_LIB_ALLOCATER_OB_CACHED_ALLOCATOR_H_

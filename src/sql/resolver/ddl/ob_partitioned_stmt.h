@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObPartitionedStmt : public ObDDLStmt {
-  public:
+public:
   ObPartitionedStmt(common::ObIAllocator* name_pool, stmt::StmtType type) : ObDDLStmt(name_pool, type)
   {}
   explicit ObPartitionedStmt(stmt::StmtType type) : ObDDLStmt(type)
@@ -49,7 +49,7 @@ class ObPartitionedStmt : public ObDDLStmt {
   TO_STRING_KV(K_(part_fun_exprs), K_(part_values_exprs), K_(subpart_fun_exprs), K_(template_subpart_values_exprs),
       K_(individual_subpart_values_exprs));
 
-  private:
+private:
   /**
    * part_values_exprs demo:
    * range: array of single value, e.g.
@@ -66,7 +66,7 @@ class ObPartitionedStmt : public ObDDLStmt {
   array_t subpart_fun_exprs_;                      // for subpart fun expr
   array_t template_subpart_values_exprs_;          // for template subpart fun expr
   array_array_t individual_subpart_values_exprs_;  // for individual subpart values expr
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionedStmt);
 };
 

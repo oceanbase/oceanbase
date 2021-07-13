@@ -24,13 +24,13 @@ namespace obmysql {
 
 class ObDiag {
   static const int64_t EXPIRED_TIME = 10 * 1000L * 1000L;  // 10 seconds
-  public:
+public:
   ObDiag();
 
   int refresh_passwd(common::ObString& passwd);
   int check_passwd(const common::ObString& passwd, const common::ObString& scramble_str);
 
-  private:
+private:
   lib::ObMutex lock_;
   char passwd_[64];
   int64_t fresh_timestamp_;

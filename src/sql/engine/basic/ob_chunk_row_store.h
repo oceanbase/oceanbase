@@ -31,7 +31,7 @@ namespace sql {
 class ObChunkRowStore {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   enum STORE_MODE {        /* e.g. [0, 1, 2] with projector (0, 2) */
     WITHOUT_PROJECTOR = 0, /* store [0, 2]    get [0, 2] */
     FULL                   /* store [0, 1, 2] get [0, 1, 2] with(0, 2) */
@@ -146,7 +146,7 @@ class ObChunkRowStore {
   } __attribute__((packed));
 
   struct BlockList {
-    public:
+  public:
     BlockList() : head_(NULL), last_(NULL), size_(0)
     {}
     inline int64_t get_size() const
@@ -197,7 +197,7 @@ class ObChunkRowStore {
     }
     TO_STRING_KV(K_(size), K_(head), K_(last), K_(*head), K_(last));
 
-    private:
+  private:
     Block* head_;
     Block* last_;
     int64_t size_;
@@ -217,7 +217,7 @@ class ObChunkRowStore {
    * |----------------|
    * */
   class BlockBuffer {
-    public:
+  public:
     static const int64_t HEAD_SIZE = sizeof(Block); /* n_rows, check_sum */
     BlockBuffer() : data_(NULL), cur_pos_(0), cap_(0)
     {}
@@ -279,7 +279,7 @@ class ObChunkRowStore {
     friend ObChunkRowStore;
     friend Block;
 
-    private:
+  private:
     union {
       char* data_;
       Block* block;
@@ -290,7 +290,7 @@ class ObChunkRowStore {
 
   class ChunkIterator;
   class RowIterator {
-    public:
+  public:
     friend class ObChunkRowStore;
     RowIterator();
     virtual ~RowIterator()
@@ -325,7 +325,7 @@ class ObChunkRowStore {
     TO_STRING_KV(KP_(store), K_(*store), K_(cur_iter_blk), K_(cur_row_in_blk), K_(cur_pos_in_blk), K_(n_blocks),
         K_(cur_nth_block));
 
-    private:
+  private:
     explicit RowIterator(ObChunkRowStore* row_store);
     void reset_cursor()
     {
@@ -336,7 +336,7 @@ class ObChunkRowStore {
       cur_nth_block_ = 0;
     }
 
-    protected:
+  protected:
     ObChunkRowStore* store_;
     Block* cur_iter_blk_;
     common::ObNewRow row_;
@@ -347,10 +347,10 @@ class ObChunkRowStore {
   };
 
   class ChunkIterator {
-    public:
+  public:
     enum IterEndState { PROCESSING = 0x00, MEM_ITER_END = 0x01, DISK_ITER_END = 0x02 };
 
-    public:
+  public:
     friend class ObChunkRowStore;
     ChunkIterator();
     virtual ~ChunkIterator();
@@ -405,10 +405,10 @@ class ObChunkRowStore {
     TO_STRING_KV(KP_(store), KP_(cur_iter_blk), KP_(cur_iter_blk_buf), K_(cur_chunk_n_blocks), K_(cur_iter_pos),
         K_(file_size), K_(chunk_read_size), KP_(chunk_mem));
 
-    private:
+  private:
     void reset_cursor(const int64_t file_size);
 
-    protected:
+  protected:
     ObChunkRowStore* store_;
     Block* cur_iter_blk_;
     BlockBuffer* cur_iter_blk_buf_; /*for reuse of cur_iter_blk_;
@@ -432,7 +432,7 @@ class ObChunkRowStore {
   }
 
   class Iterator : public common::ObOuterRowIterator {
-    public:
+  public:
     friend class ObChunkRowStore;
     Iterator() : start_iter_(false), convert_row_with_obj_fun_(NULL), convert_row_fun_(NULL)
     {}
@@ -474,14 +474,14 @@ class ObChunkRowStore {
       return (this->*convert_row_fun_)(row_it_, row, sr);
     }
 
-    private:
+  private:
     explicit Iterator(ObChunkRowStore* row_store);
 
     CONVERT_FUN(convert_to_row, , common::ObNewRow*&)
     CONVERT_FUN(convert_to_row, _with_obj, common::ObNewRow&)
     CONVERT_FUN(convert_to_row_full, , common::ObNewRow*&)
     CONVERT_FUN(convert_to_row_full, _with_obj, common::ObNewRow&)
-    protected:
+  protected:
     bool start_iter_;
     ChunkIterator chunk_it_;
     RowIterator row_it_;
@@ -489,7 +489,7 @@ class ObChunkRowStore {
     int (Iterator::*convert_row_fun_)(RowIterator& it, ObNewRow*& row, const StoredRow* sr);
   };
 
-  public:
+public:
   const static int64_t BLOCK_SIZE = (64L << 10);  //+ BlockBuffer::HEAD_SIZE;
 
   explicit ObChunkRowStore(common::ObIAllocator* alloc = NULL);
@@ -613,7 +613,7 @@ class ObChunkRowStore {
   int alloc_dir_id();
   TO_STRING_KV(K_(tenant_id), K_(label), K_(ctx_id), K_(mem_limit), K_(row_cnt), K_(file_size));
 
-  private:
+private:
   static int get_timeout(int64_t& timeout_ms);
   void* alloc_blk_mem(const int64_t size, const bool for_iterator);
   void free_blk_mem(void* mem, const int64_t size = 0);
@@ -663,7 +663,7 @@ class ObChunkRowStore {
     }
   }
 
-  private:
+private:
   bool inited_;
   uint64_t tenant_id_;
   const char* label_;
@@ -723,7 +723,7 @@ inline int ObChunkRowStore::BlockBuffer::advance(int64_t size)
 }
 
 class ObChunkStoreUtil {
-  public:
+public:
   static int alloc_dir_id(int64_t& dir_id);
 };
 

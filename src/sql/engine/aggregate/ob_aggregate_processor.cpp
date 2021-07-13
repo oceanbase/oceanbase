@@ -947,6 +947,31 @@ int ObAggregateProcessor::init_one_group(const int64_t group_id)
                     eval_ctx_,
                     need_rewind))) {
               LOG_WARN("init GroupConcatExtraResult failed", K(ret));
+            } else if (aggr_info.separator_expr_ != NULL) {
+              ObDatum* separator_result = NULL;
+              if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
+              } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+                LOG_WARN("eval failed", K(ret));
+              } else {
+                // parse separator in prepare
+                int64_t pos = sizeof(ObDatum);
+                int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+                char* buf = (char*)aggr_alloc_.alloc(len);
+                if (OB_ISNULL(buf)) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("fall to alloc buff", K(len), K(ret));
+                } else {
+                  ObDatum** separator_datum = const_cast<ObDatum**>(&result->get_separator_datum());
+                  *separator_datum = new (buf) ObDatum;
+                  if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+                    LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+                  } else {
+                    LOG_DEBUG("succ to calc separator", K(ret), KP(*separator_datum));
+                  }
+                }
+              }
             }
           }
           break;
@@ -1299,31 +1324,6 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
             LOG_WARN("fail to add row", K(ret));
           } else if (param_exprs != NULL && OB_FAIL(extra->add_row(*param_exprs, eval_ctx_))) {
             LOG_WARN("fail to add row", K(ret));
-          } else if (aggr_info.separator_expr_ != NULL) {
-            ObDatum* separator_result = NULL;
-            if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
-            } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
-              LOG_WARN("eval failed", K(ret));
-            } else {
-              // parse separator in prepare
-              int64_t pos = sizeof(ObDatum);
-              int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
-              char* buf = (char*)aggr_alloc_.alloc(len);
-              if (OB_ISNULL(buf)) {
-                ret = OB_ALLOCATE_MEMORY_FAILED;
-                LOG_WARN("fall to alloc buff", K(len), K(ret));
-              } else {
-                ObDatum** separator_datum = const_cast<ObDatum**>(&aggr_info.separator_datum_);
-                *separator_datum = new (buf) ObDatum;
-                if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
-                  LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
-                } else {
-                  LOG_DEBUG("succ to calc separator", K(ret), KP(*separator_datum));
-                }
-              }
-            }
           } else {
             LOG_DEBUG("succ to add row", K(stored_row), KPC(extra));
           }
@@ -1699,11 +1699,11 @@ int ObAggregateProcessor::collect_aggr_result(AggrCell& aggr_cell, const ObExpr*
         LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
       } else {
         if (aggr_info.separator_expr_ != NULL) {
-          if (OB_ISNULL(aggr_info.separator_datum_)) {
+          if (OB_ISNULL(extra->get_separator_datum())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("seperator is nullptr", K(ret));
           } else {
-            sep_str = aggr_info.separator_datum_->get_string();
+            sep_str = extra->get_separator_datum()->get_string();
           }
         } else {
           if (share::is_oracle_mode()) {

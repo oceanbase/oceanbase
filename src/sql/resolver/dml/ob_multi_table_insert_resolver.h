@@ -35,7 +35,7 @@ namespace sql {
  *   subquery
  */
 class InsertValueNode {
-  public:
+public:
   InsertValueNode() : table_idx_(-1), insert_value_node_(NULL)
   {}
   ~InsertValueNode()
@@ -46,7 +46,7 @@ class InsertValueNode {
 };
 
 class InsertConditionNode {
-  public:
+public:
   InsertConditionNode() : table_cnt_(0), insert_cond_node_(NULL)
   {}
   ~InsertConditionNode()
@@ -57,16 +57,16 @@ class InsertConditionNode {
 };
 
 class ObMultiTableInsertResolver : public ObInsertResolver {
-  public:
+public:
   explicit ObMultiTableInsertResolver(ObResolverParams& params);
   virtual ~ObMultiTableInsertResolver();
   virtual int resolve(const ParseNode& parse_tree);
 
-  protected:
+protected:
   virtual int mock_values_column_ref(const ObColumnRefRawExpr* column_ref);
   virtual int find_value_desc(uint64_t column_id, ObRawExpr*& column_ref, uint64_t index = 0);
 
-  private:
+private:
   int resolve_multi_table_insert(const ParseNode& node);
   int resolve_multi_insert_subquey(const ParseNode& subquery_node);
   int resolve_multi_insert_clause(const ParseNode& insert_list_node,

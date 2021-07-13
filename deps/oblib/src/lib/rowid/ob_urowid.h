@@ -29,13 +29,13 @@ struct ObURowIDData {
   OB_UNIS_VERSION(1);
   friend class TestURowID;
 
-  private:
+private:
   typedef int (*get_pk_val_func)(const uint8_t*, const int64_t, int64_t&, ObObj&);
   typedef int (*set_pk_val_func)(const ObObj&, uint8_t*, const int64_t, int64_t&);
   static get_pk_val_func inner_get_funcs_[ObMaxType];
   static set_pk_val_func inner_set_funcs_[ObMaxType];
 
-  public:
+public:
   constexpr static int64_t INVALID_ROWID_VERSION = 0;
   constexpr static int64_t PK_ROWID_VERSION = 1;
   constexpr static int64_t NO_PK_ROWID_VERSION = 2;
@@ -151,7 +151,7 @@ struct ObURowIDData {
   static int64_t needed_content_buf_size(const common::ObIArray<ObObj>& pk_vals);
   DECLARE_TO_STRING;
 
-  private:
+private:
   static int decode_base64_str(
       const char* input, const int64_t input_len, uint8_t* output, const int64_t output_len, int64_t& pos);
 

@@ -32,7 +32,7 @@ enum ObSplitProgress {
 };
 
 struct ObSplitInfo {
-  public:
+public:
   PartitionSplitType split_type_;
   schema::ObPartitionFuncType part_type_;
   uint64_t table_id_;
@@ -59,7 +59,7 @@ struct ObSplitInfo {
 class ObSplitPartitionPair {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSplitPartitionPair() : src_pkey_(), dest_pkey_array_()
   {}
   ~ObSplitPartitionPair()
@@ -93,7 +93,7 @@ class ObSplitPartitionPair {
   int replace_tenant_id(const uint64_t new_tenant_id);
   TO_STRING_KV(K_(src_pkey), K_(dest_pkey_array));
 
-  private:
+private:
   // Split source
   common::ObPartitionKey src_pkey_;
   // Split destination
@@ -103,7 +103,7 @@ class ObSplitPartitionPair {
 class ObSplitPartition {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSplitPartition() : split_info_(), schema_version_(0)
   {}
   ~ObSplitPartition()
@@ -130,7 +130,7 @@ class ObSplitPartition {
   int replace_tenant_id(const uint64_t new_tenant_id);
   TO_STRING_KV(K_(split_info), K_(schema_version));
 
-  private:
+private:
   // All copies of information that need to be split;
   common::ObSArray<ObSplitPartitionPair> split_info_;
   // The bottom layer needs to check that the schema_version is consistent with the schema_verion of the partition;
@@ -140,7 +140,7 @@ class ObSplitPartition {
 class ObPartitionSplitProgress {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartitionSplitProgress() : pkey_(), progress_(static_cast<int>(UNKNOWN_SPLIT_PROGRESS))
   {}
   ObPartitionSplitProgress(const common::ObPartitionKey& pkey, const int progress) : pkey_(pkey), progress_(progress)
@@ -157,7 +157,7 @@ class ObPartitionSplitProgress {
   }
   TO_STRING_KV(K_(pkey), K_(progress));
 
-  private:
+private:
   common::ObPartitionKey pkey_;
   int progress_;
 };

@@ -33,7 +33,7 @@ class ObTempTableInsertOpInput : public ObOpInput {
   OB_UNIS_VERSION_V(1);
   friend class ObTempTableInsertOp;
 
-  public:
+public:
   ObTempTableInsertOpInput(ObExecContext& ctx, const ObOpSpec& spec);
   virtual ~ObTempTableInsertOpInput();
   virtual void reset() override;
@@ -42,20 +42,20 @@ class ObTempTableInsertOpInput : public ObOpInput {
   virtual int init(ObTaskInfo& task_info);
   virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
 
-  protected:
+protected:
   common::ObIAllocator* deserialize_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTempTableInsertOpInput);
 
-  public:
+public:
   uint64_t unfinished_count_ptr_;
   common::ObSEArray<uint64_t, 8> interm_result_ids_;
 };
 
 class ObTempTableInsertOpSpec : public ObOpSpec {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTempTableInsertOpSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type), temp_table_id_(0), is_distributed_(false)
   {}
@@ -80,13 +80,13 @@ class ObTempTableInsertOpSpec : public ObOpSpec {
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  public:
+public:
   uint64_t temp_table_id_;
   bool is_distributed_;
 };
 
 class ObTempTableInsertOp : public ObOperator {
-  public:
+public:
   ObTempTableInsertOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input), interm_result_id_(0)
   {}
@@ -100,7 +100,7 @@ class ObTempTableInsertOp : public ObOperator {
   virtual void destroy() override;
   int prepare_scan_param();
 
-  private:
+private:
   uint64_t interm_result_id_;
 };
 

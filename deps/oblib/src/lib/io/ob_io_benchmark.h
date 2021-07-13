@@ -64,7 +64,7 @@ struct ObIOBenchResult {
 };
 
 class ObIOBenchResultSet {
-  public:
+public:
   ObIOBenchResultSet();
   virtual ~ObIOBenchResultSet();
 
@@ -110,7 +110,7 @@ class ObIOBenchResultSet {
   }
   int64_t to_string(char* buf, const int64_t length) const;
 
-  private:
+private:
   /*
    * find index of benchmark result of given size
    */
@@ -127,14 +127,14 @@ class ObIOBenchResultSet {
 };
 
 class ObIORunner : lib::ThreadPool {
-  public:
+public:
   ObIORunner();
   virtual ~ObIORunner();
   int init(const ObDiskFd& fd, int64_t file_size, const int max_thread_cnt);
   virtual int run_test(const int thread_cnt, const ObIOWorkload& workload, ObIOBenchResult& result);
   void run1();
 
-  private:
+private:
   void destroy();
   void reuse();
   /*
@@ -144,12 +144,12 @@ class ObIORunner : lib::ThreadPool {
   void cal_result(ObIOBenchResult& result);
   DISALLOW_COPY_AND_ASSIGN(ObIORunner);
 
-  private:
+private:
   static const int64_t BENCH_TIME_US = 4 * 1000 * 1000;  // us
   static const int64_t CHUNK_ALIGN_SIZE = 2 * 1024 * 1024;
   static const int64_t WAIT_MS = 100;
 
-  private:
+private:
   bool is_inited_;
   bool start_work_;
   bool is_finish_;
@@ -167,7 +167,7 @@ class ObIORunner : lib::ThreadPool {
 };
 
 class ObDecompressTester {
-  public:
+public:
   ObDecompressTester();
   virtual ~ObDecompressTester();
 
@@ -175,7 +175,7 @@ class ObDecompressTester {
   // throughtput calculated based on compressed data size
   int get_decompress_throughtput(int64_t& throughtput);
 
-  private:
+private:
   int prepare_data(const int64_t total_size, const int64_t block_size);
   int fill_buffer(char* buf, const int64_t buf_size, int64_t& data_size);
   bool inited_;
@@ -199,7 +199,7 @@ class ObIOBenchmark {
     uint64_t aveq_;       /* Average queue length */
   };
 
-  public:
+public:
   static ObIOBenchmark& get_instance();
   /**
    * If data_dir is NULL, will only load conf from configure file.
@@ -221,7 +221,7 @@ class ObIOBenchmark {
     return disk_type_;
   }
 
-  private:
+private:
   ObIOBenchmark();
   virtual ~ObIOBenchmark();
   int benchmark(const char* data_dir, const int64_t file_size, const int32_t max_thread_cnt);
@@ -240,7 +240,7 @@ class ObIOBenchmark {
   int cal_disk_type();
   DISALLOW_COPY_AND_ASSIGN(ObIOBenchmark);
 
-  private:
+private:
   static const int64_t DEFAULT_BENCHMARK_FILE_SIZE = 1024 * 1024 * 1024;
   static const int32_t START_THREAD_CNT = 2;
   static const int32_t FILL_FILE_THREAD_CNT = 4;

@@ -201,7 +201,7 @@ struct ob_vector_traits<oceanbase::sql::FromItem> {
 
 namespace sql {
 class ObSelectStmt : public ObDMLStmt {
-  public:
+public:
   enum SetOperator {
     NONE = 0,
     UNION,
@@ -233,7 +233,7 @@ class ObSelectStmt : public ObDMLStmt {
   }
 
   class ObShowStmtCtx {
-    public:
+  public:
     ObShowStmtCtx()
         : is_from_show_stmt_(false),
           global_scope_(false),
@@ -1007,7 +1007,7 @@ class ObSelectStmt : public ObDMLStmt {
     return const_cast<ObSelectStmt*>(static_cast<const ObSelectStmt&>(*this).get_real_stmt());
   }
 
-  private:
+private:
   int replace_multi_rollup_items_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs,
       ObIArray<ObMultiRollupItem>& multi_rollup_items);
   int get_relation_exprs_from_multi_rollup_items(
@@ -1017,14 +1017,14 @@ class ObSelectStmt : public ObDMLStmt {
   int has_special_expr_in_multi_rollup_items(
       const ObIArray<ObMultiRollupItem>& multi_rollup_items, const ObExprInfoFlag flag, bool& has) const;
 
-  protected:
+protected:
   virtual int inner_get_relation_exprs(RelExprCheckerBase& expr_checker);
   virtual int inner_get_relation_exprs_for_wrapper(RelExprChecker& expr_checker)
   {
     return inner_get_relation_exprs(expr_checker);
   }
 
-  private:
+private:
   SetOperator set_op_;
   /* these var is only used for recursive union */
   bool is_recursive_cte_;

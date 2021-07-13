@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprInstr : public ObLocationExprOperator {
-  public:
+public:
   ObExprInstr();
   explicit ObExprInstr(common::ObIAllocator& alloc);
   virtual ~ObExprInstr();
@@ -25,12 +25,12 @@ class ObExprInstr : public ObLocationExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_mysql_instr_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprInstr);
 };
 
 class ObExprOracleInstr : public ObLocationExprOperator {
-  public:
+public:
   ObExprOracleInstr();
   explicit ObExprOracleInstr(common::ObIAllocator& alloc);
   virtual ~ObExprOracleInstr();
@@ -47,7 +47,7 @@ class ObExprOracleInstr : public ObLocationExprOperator {
   static int calc(common::ObObj& result, const common::ObObj& heystack, const common::ObObj& needle,
       const common::ObObj& position, const common::ObObj& occurrence, common::ObExprCtx& expr_ctx);
 
-  private:
+private:
   virtual int calc_result_type2(
       ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
   DISALLOW_COPY_AND_ASSIGN(ObExprOracleInstr);

@@ -21,7 +21,7 @@ using namespace share::schema;
 
 namespace unittest {
 class TestSSTableSingleGet : public ObSSTableTest {
-  public:
+public:
   TestSSTableSingleGet();
   virtual ~TestSSTableSingleGet();
   void test_one_rowkey(const int64_t seed);

@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace common {
 struct ObPartitionKey final {
-  public:
+public:
   ObPartitionKey() : table_id_(OB_INVALID_ID), part_id_(OB_INVALID_INDEX), assit_id_(OB_INVALID_INDEX), hash_value_(0)
   {}
 
@@ -116,7 +116,7 @@ struct ObPartitionKey final {
     uint64_t tablegroup_id_;
   };
 
-  private:
+private:
   int32_t part_id_;  // First level part_id
   union {
     int32_t subpart_id_;  // Secondary part_id
@@ -141,14 +141,14 @@ typedef ObSEArray<ObPartitionType, OB_DEFAULT_PARTITION_KEY_COUNT> ObPartitionTy
 class ObPartitionLeaderArray {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartitionLeaderArray()
   {}
   ~ObPartitionLeaderArray()
   {}
   void reset();
 
-  public:
+public:
   int push(const common::ObPartitionKey& partition, const common::ObAddr& leader,
       const common::ObPartitionType& type = ObPartitionType::NORMAL_PARTITION);
   int assign(const ObPartitionLeaderArray& pla);
@@ -175,7 +175,7 @@ class ObPartitionLeaderArray {
 
   TO_STRING_KV(K_(partitions), K_(leaders), K_(type_array));
 
-  private:
+private:
   common::ObPartitionArray partitions_;
   common::ObAddrArray leaders_;
   common::ObPartitionTypeArray type_array_;

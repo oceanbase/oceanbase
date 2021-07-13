@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace unittest {
 
 class TestUncommittedMinorMergeScan : public transaction::ObPartitionTransCtxMgr {
-  public:
+public:
   struct TestTransStatus {
     TestTransStatus() : status_(transaction::ObTransTableStatusType::RUNNING), commit_trans_version_(INT64_MAX)
     {}
@@ -37,7 +37,7 @@ class TestUncommittedMinorMergeScan : public transaction::ObPartitionTransCtxMgr
   const static int64_t ROLLBACK_SQL_SEQUENCE_2 = 48;
   const static int64_t ROLLBACK_SQL_SEQUENCE_3 = 58;
 
-  public:
+public:
   TestUncommittedMinorMergeScan() : peek_flag_(false), input_idx_(0), default_trans_id_(ObAddr(999, 999))
   {
     int ret = OB_SUCCESS;
@@ -166,7 +166,7 @@ class TestUncommittedMinorMergeScan : public transaction::ObPartitionTransCtxMgr
     peek_flag_ = false;
   }
 
-  private:
+private:
   static const int TRANS_ID_NUM = 10;
   typedef common::hash::ObHashMap<transaction::ObTransID, TestTransStatus*> TransStatusMap;
   bool peek_flag_;

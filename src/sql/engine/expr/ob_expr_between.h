@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprBetween : public ObRelationalExprOperator {
-  public:
+public:
   ObExprBetween();
   explicit ObExprBetween(common::ObIAllocator& alloc);
   virtual ~ObExprBetween()
@@ -30,13 +30,13 @@ class ObExprBetween : public ObRelationalExprOperator {
       const common::ObObj& obj3, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprBetween);
   // function members
-  private:
+private:
   // data members
 };
 

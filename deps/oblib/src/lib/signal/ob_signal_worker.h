@@ -52,7 +52,7 @@ struct ObSigRequest {
 };
 
 class ObSignalWorker : public lib::ThreadPool {
-  public:
+public:
   ObSignalWorker();
   ~ObSignalWorker();
   void run1() override;
@@ -72,12 +72,12 @@ struct MPHandlerCtx {
 };
 
 class ObMPSigHandler : public ObISigHandler {
-  public:
+public:
   ObMPSigHandler(MPHandlerCtx& ctx) : ctx_(ctx)
   {}
   void handle() override;
 
-  private:
+private:
   MPHandlerCtx& ctx_;
 };
 

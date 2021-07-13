@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprWordSegment : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprWordSegment(common::ObIAllocator& alloc);
   virtual ~ObExprWordSegment()
   {}
@@ -34,7 +34,7 @@ class ObExprWordSegment : public ObFuncExprOperator {
     tokenizer_ = tokenizer;
   }
 
-  private:
+private:
   common::ObString tokenizer_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprWordSegment);

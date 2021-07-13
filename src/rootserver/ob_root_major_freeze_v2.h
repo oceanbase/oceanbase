@@ -21,7 +21,7 @@ namespace rootserver {
 class ObFreezeInfoManager;
 class ObZoneManager;
 class ObRootMajorFreezeV2 {
-  public:
+public:
   ObRootMajorFreezeV2(ObFreezeInfoManager& freeze_info)
       : inited_(false), freeze_info_manager_(freeze_info), zone_manager_(NULL)
   {}
@@ -38,15 +38,15 @@ class ObRootMajorFreezeV2 {
 
   static const int64_t MAX_UNMERGED_VERSION_NUM = 16;
 
-  private:
+private:
   static const int64_t UNMERGED_VERSION_LIMIT = 1;
 
-  private:
+private:
   bool inited_;
   ObFreezeInfoManager& freeze_info_manager_;
   ObZoneManager* zone_manager_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRootMajorFreezeV2);
 };
 }  // namespace rootserver

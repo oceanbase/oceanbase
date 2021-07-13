@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprDateAdjust : public ObFuncExprOperator {
-  public:
+public:
   ObExprDateAdjust(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num,
       int32_t dimension = NOT_ROW_DIMENSION);
 
@@ -28,12 +28,12 @@ class ObExprDateAdjust : public ObFuncExprOperator {
       const common::ObObj& unit, common::ObExprCtx& expr_ctx, bool is_add, const ObExprResType& res_type) const;
   static int calc_date_adjust(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum, bool is_add);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDateAdjust);
 };
 
 class ObExprDateAdd : public ObExprDateAdjust {
-  public:
+public:
   explicit ObExprDateAdd(common::ObIAllocator& alloc);
   virtual ~ObExprDateAdd(){};
   virtual int calc_result3(common::ObObj& result, const common::ObObj& date, const common::ObObj& interval,
@@ -41,12 +41,12 @@ class ObExprDateAdd : public ObExprDateAdjust {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_date_add(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDateAdd);
 };
 
 class ObExprDateSub : public ObExprDateAdjust {
-  public:
+public:
   explicit ObExprDateSub(common::ObIAllocator& alloc);
   virtual ~ObExprDateSub(){};
   virtual int calc_result3(common::ObObj& result, const common::ObObj& date, const common::ObObj& interval,
@@ -54,12 +54,12 @@ class ObExprDateSub : public ObExprDateAdjust {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_date_sub(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDateSub);
 };
 
 class ObExprAddMonths : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprAddMonths(common::ObIAllocator& alloc);
   virtual ~ObExprAddMonths()
   {}
@@ -70,12 +70,12 @@ class ObExprAddMonths : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_add_months(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprAddMonths);
 };
 
 class ObExprLastDay : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprLastDay(common::ObIAllocator& alloc);
   virtual ~ObExprLastDay()
   {}
@@ -84,12 +84,12 @@ class ObExprLastDay : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_last_day(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLastDay);
 };
 
 class ObExprNextDay : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprNextDay(common::ObIAllocator& alloc);
   virtual ~ObExprNextDay()
   {}
@@ -100,7 +100,7 @@ class ObExprNextDay : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_next_day(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprNextDay);
 };
 

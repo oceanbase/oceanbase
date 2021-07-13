@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace unittest {
 
 class ObRpcLoss {
-  public:
+public:
   ObRpcLoss() : loss_cnt_(0), total_cnt_(0), loss_rate_(0), end_time_(0)
   {}
   ~ObRpcLoss()
@@ -49,7 +49,7 @@ class ObRpcLoss {
     return bool_ret;
   }
 
-  public:
+public:
   int64_t loss_cnt_;
   int64_t total_cnt_;
   int64_t loss_rate_;
@@ -57,7 +57,7 @@ class ObRpcLoss {
 };
 
 class MockElectionServer {
-  public:
+public:
   MockElectionServer() : is_inited_(false)
   {}
   virtual ~MockElectionServer()
@@ -89,7 +89,7 @@ class MockElectionServer {
   }
   uint64_t get_eg_id_hash(const ObPartitionKey& pkey);
 
-  public:
+public:
   bool is_inited_;
   common::ObAddr self_;
   ObRpcLoss rpc_loss_;

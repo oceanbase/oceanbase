@@ -57,7 +57,7 @@ ObServerConfig& config = ObServerConfig::get_instance();
 DBInitializer db_initer;
 
 class MockLocalityManager : public ObILocalityManager {
-  public:
+public:
   struct ServerInfo {
     ServerInfo() : server_(), is_local_(false)
     {}
@@ -91,7 +91,7 @@ class MockLocalityManager : public ObILocalityManager {
 };
 
 class MockPartitionTableOperator : public ObPartitionTableOperator {
-  public:
+public:
   MockPartitionTableOperator(ObIPartPropertyGetter& prop_getter) : ObPartitionTableOperator(prop_getter)
   {}
 
@@ -99,13 +99,13 @@ class MockPartitionTableOperator : public ObPartitionTableOperator {
 };
 
 class TestPartitionLocationCache : public ::testing::Test {
-  public:
+public:
   TestPartitionLocationCache();
 
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   uint64_t TT(const uint64_t tid)
   {
     return is_sys_table(tid) ? OB_SYS_TENANT_ID : 2;

@@ -29,6 +29,7 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "storage/transaction/ob_weak_read_util.h"  //ObWeakReadUtil
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -129,8 +130,18 @@ ObBasicSessionInfo::~ObBasicSessionInfo()
 
 bool ObBasicSessionInfo::is_server_status_in_transaction() const
 {
-  bool result = get_in_transaction() ||
-                (!get_local_autocommit() && trans_desc_.get_standalone_stmt_desc().is_snapshot_version_valid());
+  /*!
+   * readonly sql not in transaction, for compatible, we also need send in trans flag to proxy.
+   * for now,
+   * we use ob_proxy_readonly_transaction_routing_policy parameter decide to send in trans or not.
+   */
+  bool result = get_in_transaction();
+  if (!result
+      && !get_local_autocommit()
+      && trans_desc_.get_standalone_stmt_desc().is_snapshot_version_valid()) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(get_effective_tenant_id()));
+    result = is_isolation_serializable() || tenant_config->ob_proxy_readonly_transaction_routing_policy;
+  }
   return result;
 }
 
@@ -937,7 +948,7 @@ int ObBasicSessionInfo::update_query_sensitive_system_variable(ObSchemaGetterGua
   return ret;
 }
 
-// used for bootstarp, in which we can not get system variables from inner table.
+// used for bootstrap, in which we can not get system variables from inner table.
 int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant)
 {
   int ret = OB_SUCCESS;
@@ -2970,6 +2981,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
   int64_t unused_inner_safe_weak_read_snapshot = safe_weak_read_snapshot_;
 
   bool need_serial_exec = trans_flags_.need_serial_exec();
+  uint64_t sql_scope_flags = 0;
   LST_DO_CODE(OB_UNIS_ENCODE,
       sys_vars_cache_.inc_data_,
       trans_consistency_type_,
@@ -2996,7 +3008,9 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
       is_foreign_key_cascade_,
       sys_var_in_pc_str_,
       is_foreign_key_check_exist_,
-      need_serial_exec);
+      need_serial_exec,
+      sql_scope_flags,
+      stmt_type_);
   return ret;
 }
 
@@ -3140,6 +3154,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   int64_t unused_inner_safe_weak_read_snapshot = 0;
   bool unused_literal_query = false;
   bool need_serial_exec = false;
+  uint64_t sql_scope_flags = 0;
 
   // sys_var_in_pc_str_ may be set when deserialize system variables,
   // so reset it before deserialization of itself.
@@ -3171,7 +3186,9 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
       is_foreign_key_cascade_,
       sys_var_in_pc_str_,
       is_foreign_key_check_exist_,
-      need_serial_exec);
+      need_serial_exec,
+      sql_scope_flags,
+      stmt_type_);
   trans_flags_.set_need_serial_exec(need_serial_exec);
   is_deserialized_ = true;
   tz_info_wrap_.set_tz_info_map(tz_info_map);
@@ -3422,6 +3439,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   bool unused_literal_query = false;
   int64_t unused_inner_safe_weak_read_snapshot = safe_weak_read_snapshot_;
   bool need_serial_exec = trans_flags_.need_serial_exec();
+  uint64_t sql_scope_flags = 0;
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
       sys_vars_cache_.inc_data_,
@@ -3449,7 +3467,9 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
       is_foreign_key_cascade_,
       sys_var_in_pc_str_,
       is_foreign_key_check_exist_,
-      need_serial_exec);
+      need_serial_exec,
+      sql_scope_flags,
+      stmt_type_);
   return len;
 }
 

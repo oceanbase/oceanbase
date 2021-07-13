@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace transaction {
 class ObTransStatItem {
-  public:
+public:
   explicit ObTransStatItem(const char* const item_name) : item_name_(item_name)
   {
     reset();
@@ -35,14 +35,14 @@ class ObTransStatItem {
   void add(const int64_t value);
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransStatItem);
 
-  private:
+private:
   static const int64_t STAT_BUFFER_COUNT = 60;
   static const int64_t STAT_INTERVAL = 1 * 1000 * 1000;
 
-  private:
+private:
   const char* const item_name_;
   int64_t total_;
   int64_t save_;
@@ -53,7 +53,7 @@ class ObTransStatItem {
 };
 
 class ObTransStatistic {
-  public:
+public:
   static ObTransStatistic& get_instance()
   {
     static ObTransStatistic trans_statistic_;
@@ -202,7 +202,7 @@ class ObTransStatistic {
   // count the time spent on data relocation
   void add_relocate_total_time(const uint64_t tenant_id, const int64_t value);
 
-  private:
+private:
   ObTransStatistic()
       : sys_trans_count_stat_("trans_sys_count"),
         user_trans_count_stat_("trans_user_count"),
@@ -255,7 +255,7 @@ class ObTransStatistic {
   {}
   DISALLOW_COPY_AND_ASSIGN(ObTransStatistic);
 
-  private:
+private:
   ObTransStatItem sys_trans_count_stat_;
   ObTransStatItem user_trans_count_stat_;
   ObTransStatItem trans_commit_count_stat_;

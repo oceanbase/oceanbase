@@ -39,7 +39,7 @@ class ObTableModify;
 
 #define ENG_OP typename ObEngineOpTraits<NEW_ENG>
 class ObTaskSpliter {
-  public:
+public:
   enum TaskSplitType {
     INVALID_SPLIT = 0,
     LOCAL_IDENTITY_SPLIT = 1,   // root(local) transmit task splitter
@@ -52,7 +52,7 @@ class ObTaskSpliter {
     DETERMINATE_TASK_SPLIT = 8  // tasks are splited already
   };
 
-  public:
+public:
   ObTaskSpliter();
   virtual ~ObTaskSpliter();
   int init(ObPhysicalPlanCtx* plan_ctx, ObExecContext* exec_ctx, ObJob& job, common::ObIAllocator& allocator);
@@ -76,7 +76,7 @@ class ObTaskSpliter {
     return NULL != job_;
   }
 
-  protected:
+protected:
   int create_task_info(ObTaskInfo*& task);
 
   template <bool NEW_ENG>
@@ -89,7 +89,7 @@ class ObTaskSpliter {
   static int find_all_table_location_keys_inner(
       common::ObIArray<TableLocationKey>& table_location_keys, const ENG_OP::Root& op);
 
-  protected:
+protected:
   common::ObAddr server_;
   ObPhysicalPlanCtx* plan_ctx_;
   ObExecContext* exec_ctx_;

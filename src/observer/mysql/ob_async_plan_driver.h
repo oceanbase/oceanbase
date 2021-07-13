@@ -30,14 +30,14 @@ class ObMySQLResultSet;
 class ObQueryRetryCtrl;
 class ObSqlEndTransCb;
 class ObAsyncPlanDriver : public ObQueryDriver {
-  public:
+public:
   ObAsyncPlanDriver(const ObGlobalContext& gctx, const sql::ObSqlCtx& ctx, sql::ObSQLSessionInfo& session,
       ObQueryRetryCtrl& retry_ctrl, ObIMPPacketSender& sender);
   virtual ~ObAsyncPlanDriver();
 
   virtual int response_result(ObMySQLResultSet& result);
 
-  private:
+private:
   /* functions */
   /* variables */
   /* disallow copy & assign */

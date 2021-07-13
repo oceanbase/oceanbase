@@ -25,7 +25,7 @@ namespace common {
 class ObAddr {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static constexpr int IPV6_LEN = 16;
   enum VER { IPV4 = 4, IPV6 = 6 };
 
@@ -119,13 +119,13 @@ class ObAddr {
 
   void reset_ipv4_10(int ip = 10);
 
-  private:
+private:
   int convert_ipv4_addr(const char* ip);
   int convert_ipv6_addr(const char* ip);
   bool set_ipv4_addr(const char* ip, const int32_t port);
   bool set_ipv6_addr(const char* ip, const int32_t port);
 
-  private:
+private:
   VER version_;
   union {
     uint32_t v4_;

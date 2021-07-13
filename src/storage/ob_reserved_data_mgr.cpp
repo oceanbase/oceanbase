@@ -1144,7 +1144,7 @@ int ObRecoveryData::get_unneed_recovery_points(
         if (!need_left && curr->get_snapshot_version() <= snapshot_gc_ts) {
           if (OB_FAIL(points_data.push_back(curr))) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("faild to push back into array", K(ret));
+            LOG_ERROR("failed to push back into array", K(ret));
           } else {
             LOG_INFO("get unneeded recovery point", K(ret), KPC(curr));
           }
@@ -1887,7 +1887,7 @@ int ObRecoveryDataMgr::add_restore_point(const int64_t snapshot_version, const O
                  partition_store_metas,
                  tables_handle,
                  restore_point_data_))) {
-    LOG_WARN("faild to add restore point", K(ret), K(pg_meta));
+    LOG_WARN("failed to add restore point", K(ret), K(pg_meta));
   }
   return ret;
 }
@@ -1934,7 +1934,7 @@ int ObRecoveryDataMgr::get_all_points_info(ObIArray<ObRecoveryPointInfo>& points
         // LOG_INFO("get_all_points_info get restore point ", K(point_info));
         if (OB_FAIL(points_info.push_back(point_info))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("faild to push back into array", K(ret));
+          LOG_ERROR("failed to push back into array", K(ret));
         }
         point = point->get_next();
       }
@@ -1949,7 +1949,7 @@ int ObRecoveryDataMgr::get_all_points_info(ObIArray<ObRecoveryPointInfo>& points
         // LOG_INFO("get_all_points_info get backup point ", K(point_info));
         if (OB_FAIL(points_info.push_back(point_info))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("faild to push back into array", K(ret));
+          LOG_ERROR("failed to push back into array", K(ret));
         }
         point = point->get_next();
       }
@@ -2085,7 +2085,7 @@ int ObRecoveryDataMgr::add_backup_point(const int64_t snapshot_version, const Ob
                  partition_store_metas,
                  tables_handle,
                  backup_point_data_))) {
-    LOG_WARN("faild to add backup point", K(ret), K(pg_meta));
+    LOG_WARN("failed to add backup point", K(ret), K(pg_meta));
   }
   return ret;
 }

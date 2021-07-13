@@ -21,13 +21,13 @@ namespace oceanbase {
 using namespace common;
 namespace clog {
 class ObBatchSubmitCtxMgr::RemoveIfFunctor {
-  public:
+public:
   RemoveIfFunctor()
   {}
   ~RemoveIfFunctor()
   {}
 
-  public:
+public:
   bool operator()(const transaction::ObTransID& trans_id, ObBatchSubmitCtx* ctx)
   {
     int tmp_ret = OB_SUCCESS;

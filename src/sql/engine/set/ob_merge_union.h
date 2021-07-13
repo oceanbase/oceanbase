@@ -21,10 +21,10 @@ class ObNewRow;
 }
 namespace sql {
 class ObMergeUnion : public ObMergeSetOperator {
-  private:
+private:
   class ObMergeUnionCtx;
 
-  public:
+public:
   explicit ObMergeUnion(common::ObIAllocator& alloc);
   virtual ~ObMergeUnion();
   virtual void reset();
@@ -33,7 +33,7 @@ class ObMergeUnion : public ObMergeSetOperator {
 
   virtual void set_distinct(bool is_distinct);
 
-  private:
+private:
   int get_first_row(ObExecContext& ctx, ObMergeUnionCtx& union_ctx, const common::ObNewRow*& row) const;
   /**
    * @brief get next row expected the same row in the same group
@@ -78,7 +78,7 @@ class ObMergeUnion : public ObMergeSetOperator {
 
   typedef int (ObMergeUnion::*GetNextRowFunc)(ObExecContext& ctx, const common::ObNewRow*& row) const;
 
-  private:
+private:
   GetNextRowFunc get_next_row_func_;
   DISALLOW_COPY_AND_ASSIGN(ObMergeUnion);
 };

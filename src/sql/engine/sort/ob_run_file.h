@@ -22,7 +22,7 @@ namespace sql {
 // support multi-bucket, multi-run in one physical file
 // @note not thread-safe
 class ObRunFile {
-  public:
+public:
   ObRunFile();
   virtual ~ObRunFile();
 
@@ -39,7 +39,7 @@ class ObRunFile {
   int get_next_row(const int64_t run_idx, common::ObNewRow& row);
   int end_read_bucket();
 
-  private:
+private:
   // types and constants
   static const int64_t MAGIC_NUMBER = 0x656c69666e7572;  // "runfile"
   struct RunTrailer {
@@ -66,7 +66,7 @@ class ObRunFile {
     TO_STRING_KV(K_(run_end_offset), K_(block_offset), K_(block_data_size), K_(next_row_pos));
   };
 
-  private:
+private:
   // function members
   int find_last_run_trailer(const int64_t bucket_idx, RunTrailer*& bucket_info);
   int read_next_run_block(RunBlock& run_block);
@@ -74,7 +74,7 @@ class ObRunFile {
   // @return OB_BUF_NOT_ENOUGH or OB_SUCCESS or other errors
   int parse_row(const char* buf, const int64_t buf_len, common::ObString& compact_row, common::ObNewRow& row);
 
-  private:
+private:
   // data members
   common::ObFileAppender file_appender_;
   common::ObFileReader file_reader_;

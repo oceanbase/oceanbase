@@ -38,7 +38,7 @@ struct ObColumnIndexItem {
 };
 
 class ObColumnHashSet {
-  public:
+public:
   ObColumnHashSet()
       : allocator_(nullptr), column_ids_(nullptr), chain_(nullptr), bucket_(nullptr), capacity_(0), shift_(0)
   {}
@@ -121,7 +121,7 @@ class ObColumnHashSet {
     idx = cur_idx;
   }
 
-  private:
+private:
   static const uint16_t MAGIC = 3079;
   common::ObIAllocator* allocator_;
   uint16_t* column_ids_;
@@ -132,7 +132,7 @@ class ObColumnHashSet {
 };
 
 class ObColumnMap {
-  public:
+public:
   ObColumnMap();
   virtual ~ObColumnMap()
   {}
@@ -193,11 +193,11 @@ class ObColumnMap {
   TO_STRING_KV(K_(request_count), K_(store_count), K_(rowkey_store_count), K_(schema_version), KP_(cols_id_map),
       K_(is_inited), K_(multi_version_rowkey_cnt));
 
-  private:
+private:
   int init_column_index(const uint64_t col_id, const int64_t schema_rowkey_cnt, const int64_t store_index,
       const int64_t store_cnt, const bool is_multi_version, ObColumnIndexItem* column_index);
 
-  private:
+private:
   int64_t request_count_;
   int64_t store_count_;
   int64_t rowkey_store_count_;

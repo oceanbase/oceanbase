@@ -22,7 +22,7 @@ struct ObRunningModeConfig {
   bool mini_mode_ = false;
   static ObRunningModeConfig& instance();
 
-  private:
+private:
   ObRunningModeConfig() = default;
 };
 

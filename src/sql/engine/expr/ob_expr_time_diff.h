@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprTimeDiff : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprTimeDiff(common::ObIAllocator& alloc);
   virtual ~ObExprTimeDiff();
   virtual int calc_result_type2(
@@ -32,7 +32,7 @@ class ObExprTimeDiff : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_timediff(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   static int get_diff_value(
       const common::ObObj& obj1, const common::ObObj& obj2, const common::ObTimeZoneInfo* tz_info, int64_t& diff);
   static int get_diff_value_with_ob_time(

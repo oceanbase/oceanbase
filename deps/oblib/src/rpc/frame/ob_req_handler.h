@@ -29,7 +29,7 @@ enum {
 };
 
 class ObReqHandler : public ObIEasyPacketHandler {
-  public:
+public:
   ObReqHandler() : ez_handler_()
   {
     memset(&ez_handler_, 0, sizeof(ez_handler_));
@@ -60,12 +60,12 @@ class ObReqHandler : public ObIEasyPacketHandler {
   int on_close(easy_connection_t* c);
   int cleanup(easy_request_t* r, void* apacket);
 
-  public:
+public:
   static const uint8_t API_VERSION = 1;
   static const uint8_t MAGIC_HEADER_FLAG[4];
   static const uint8_t MAGIC_COMPRESS_HEADER_FLAG[4];
 
-  protected:
+protected:
   easy_io_handler_pt ez_handler_;
 };  // end of class ObReqHandler
 

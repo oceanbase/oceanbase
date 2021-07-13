@@ -22,13 +22,13 @@ namespace oceanbase {
 using namespace common;
 namespace gts {
 class ObGtsPingCB : public obrpc::ObSrvRpcProxy::AsyncCB<obrpc::OB_HA_GTS_PING_REQUEST> {
-  public:
+public:
   ObGtsPingCB() : gts_mgr_(NULL)
   {}
   virtual ~ObGtsPingCB()
   {}
 
-  public:
+public:
   int init(ObHaGtsManager* gts_mgr);
   void on_timeout() final;
   int process();
@@ -47,10 +47,10 @@ class ObGtsPingCB : public obrpc::ObSrvRpcProxy::AsyncCB<obrpc::OB_HA_GTS_PING_R
     return newcb;
   }
 
-  private:
+private:
   ObHaGtsManager* gts_mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGtsPingCB);
 };
 

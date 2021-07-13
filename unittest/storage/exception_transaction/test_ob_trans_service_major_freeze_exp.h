@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace unittest {
 class ObTransMajorFreezeException {
-  public:
+public:
   ObTransMajorFreezeException()
   {
     reset();
@@ -34,7 +34,7 @@ class ObTransMajorFreezeException {
   }
   TO_STRING_KV(K_(msg_type), K_(is_do_major_freeze), K_(partitions));
 
-  private:
+private:
   int64_t msg_type_;
   bool is_do_major_freeze_;
   common::ObPartitionArray partitions_;

@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace rootserver {
 class ObRootBalancer;
 class ObAllRebalanceUnitDistributionStat : public common::ObVirtualTableProjector {
-  public:
+public:
   ObAllRebalanceUnitDistributionStat(ObUnitManager& unit_mgr, ObILeaderCoordinator& leader_coordinator,
       ObServerManager& server_mgr, ObZoneManager& zone_mgr);
   virtual ~ObAllRebalanceUnitDistributionStat();
@@ -30,11 +30,11 @@ class ObAllRebalanceUnitDistributionStat : public common::ObVirtualTableProjecto
   virtual int inner_open() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   int get_full_row(const share::ObUnitInfo& unit_info, common::ObIArray<Column>& columns);
   int get_table_schema(uint64_t tid);
 
-  private:
+private:
   // data members
   ObServerBalancePlan server_balance_plan_;
   share::schema::ObSchemaGetterGuard schema_guard_;

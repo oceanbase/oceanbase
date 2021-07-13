@@ -57,7 +57,7 @@ struct ObHashTableNode {
 
 template <class _value_type, class _lock_type, class _cond_type>
 class ObHashTableBucketNodeIterator {
-  private:
+private:
   typedef ObHashTableNode<_value_type> hashnode;
   typedef ObHashTableBucketNodeIterator<_value_type, _lock_type, _cond_type> iterator;
   typedef ObHashTableBucketNodeConstIterator<_value_type, _lock_type, _cond_type> const_iterator;
@@ -65,7 +65,7 @@ class ObHashTableBucketNodeIterator {
   typedef _value_type* pointer;
   friend class ObHashTableBucketNodeConstIterator<_value_type, _lock_type, _cond_type>;
 
-  public:
+public:
   ObHashTableBucketNodeIterator() : node_(0)
   {}
 
@@ -116,13 +116,13 @@ class ObHashTableBucketNodeIterator {
     return iter;
   }
 
-  private:
+private:
   hashnode* node_;
 };
 
 template <class _value_type, class _lock_type, class _cond_type>
 class ObHashTableBucketNodeConstIterator {
-  private:
+private:
   typedef ObHashTableNode<_value_type> hashnode;
   typedef ObHashTableBucketNodeIterator<_value_type, _lock_type, _cond_type> iterator;
   typedef ObHashTableBucketNodeConstIterator<_value_type, _lock_type, _cond_type> const_iterator;
@@ -130,7 +130,7 @@ class ObHashTableBucketNodeConstIterator {
   typedef const _value_type* const_pointer;
   friend class ObHashTableBucketNodeIterator<_value_type, _lock_type, _cond_type>;
 
-  public:
+public:
   ObHashTableBucketNodeConstIterator() : node_(0)
   {}
 
@@ -184,7 +184,7 @@ class ObHashTableBucketNodeConstIterator {
     return iter;
   }
 
-  private:
+private:
   hashnode* node_;
 };
 
@@ -233,7 +233,7 @@ struct ObBucketLockCond {
     return bucket_.cond;
   }
 
-  private:
+private:
   bucket_type& bucket_;
 };
 
@@ -253,7 +253,7 @@ struct ObBucketLockCond<_value_type, NoPthreadDefendMode> {
     return cond_;
   }
 
-  private:
+private:
   NoPthreadDefendMode::lock_type lock_;
   NoPthreadDefendMode::cond_type cond_;
 };
@@ -261,7 +261,7 @@ struct ObBucketLockCond<_value_type, NoPthreadDefendMode> {
 template <class _key_type, class _value_type, class _hashfunc, class _equal, class _getkey, class _allocer,
     class _defendmode, template <class> class _bucket_array, class _bucket_allocer, int64_t EXTEND_RATIO>
 class ObHashTableBucketIterator {
-  private:
+private:
   typedef ObHashTable<_key_type, _value_type, _hashfunc, _equal, _getkey, _allocer, _defendmode, _bucket_array,
       _bucket_allocer, EXTEND_RATIO>
       hashtable;
@@ -271,7 +271,7 @@ class ObHashTableBucketIterator {
   typedef typename hashtable::hashbucket& reference;
   typedef typename hashtable::hashbucket* pointer;
 
-  public:
+public:
   ObHashTableBucketIterator() : ht_(NULL), bucket_pos_(-1), bucket_(NULL)
   {}
 
@@ -322,7 +322,7 @@ class ObHashTableBucketIterator {
     return iter;
   }
 
-  private:
+private:
   const hashtable* ht_;
   int64_t bucket_pos_;
   pointer bucket_;
@@ -331,7 +331,7 @@ class ObHashTableBucketIterator {
 template <class _key_type, class _value_type, class _hashfunc, class _equal, class _getkey, class _allocer,
     class _defendmode, template <class> class _bucket_array, class _bucket_allocer, int64_t EXTEND_RATIO>
 class ObHashTableIterator {
-  private:
+private:
   typedef ObHashTableNode<_value_type> hashnode;
   typedef ObHashTable<_key_type, _value_type, _hashfunc, _equal, _getkey, _allocer, _defendmode, _bucket_array,
       _bucket_allocer, EXTEND_RATIO>
@@ -347,7 +347,7 @@ class ObHashTableIterator {
   friend class ObHashTableConstIterator<_key_type, _value_type, _hashfunc, _equal, _getkey, _allocer, _defendmode,
       _bucket_array, _bucket_allocer, EXTEND_RATIO>;
 
-  public:
+public:
   ObHashTableIterator() : ht_(NULL), bucket_pos_(0), node_(0)
   {}
 
@@ -411,7 +411,7 @@ class ObHashTableIterator {
     return iter;
   }
 
-  private:
+private:
   const hashtable* ht_;
   int64_t bucket_pos_;
   hashnode* node_;
@@ -420,7 +420,7 @@ class ObHashTableIterator {
 template <class _key_type, class _value_type, class _hashfunc, class _equal, class _getkey, class _allocer,
     class _defendmode, template <class> class _bucket_array, class _bucket_allocer, int64_t EXTEND_RATIO>
 class ObHashTableConstIterator {
-  private:
+private:
   typedef ObHashTableNode<_value_type> hashnode;
   typedef ObHashTable<_key_type, _value_type, _hashfunc, _equal, _getkey, _allocer, _defendmode, _bucket_array,
       _bucket_allocer, EXTEND_RATIO>
@@ -436,7 +436,7 @@ class ObHashTableConstIterator {
   friend class ObHashTableIterator<_key_type, _value_type, _hashfunc, _equal, _getkey, _allocer, _defendmode,
       _bucket_array, _bucket_allocer, EXTEND_RATIO>;
 
-  public:
+public:
   ObHashTableConstIterator() : ht_(NULL), bucket_pos_(0), node_(0)
   {}
 
@@ -498,7 +498,7 @@ class ObHashTableConstIterator {
     return iter;
   }
 
-  private:
+private:
   const hashtable* ht_;
   int64_t bucket_pos_;
   hashnode* node_;
@@ -515,7 +515,7 @@ template <class _key_type, class _value_type, class _hashfunc, class _equal,
     class _defendmode,  // multi-thread protection mode
     template <class> class _bucket_array, class _bucket_allocer = oceanbase::common::ObMalloc, int64_t EXTEND_RATIO = 1>
 class ObHashTable {
-  public:
+public:
   typedef ObHashTableBucketIterator<_key_type, _value_type, _hashfunc, _equal, _getkey, _allocer, _defendmode,
       _bucket_array, _bucket_allocer, EXTEND_RATIO>
       bucket_iterator;
@@ -533,7 +533,7 @@ class ObHashTable {
   typedef typename _defendmode::readlocker readlocker;
   typedef typename _defendmode::writelocker writelocker;
 
-  private:
+private:
   // ARRAY_SIZE * hashbucket is approximately equal to 1M, must be 2 << N.
   static const int64_t ARRAY_SIZE = 1024 * 16;
 
@@ -551,10 +551,10 @@ class ObHashTable {
   friend class ObHashTableConstIterator<_key_type, _value_type, _hashfunc, _equal, _getkey, _allocer, _defendmode,
       _bucket_array, _bucket_allocer, EXTEND_RATIO>;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHashTable);
 
-  public:
+public:
   ObHashTable() : allocer_(NULL), bucket_allocer_(&default_bucket_allocer_), bucket_num_(0), size_(0)
   {
     static_assert(((EXTEND_RATIO <= 1) || (EXTEND_RATIO > 1 && std::is_same<_defendmode, NoPthreadDefendMode>::value)),
@@ -569,7 +569,7 @@ class ObHashTable {
     }
   }
 
-  public:
+public:
   inline bool created() const
   {
     return inited(buckets_);
@@ -722,7 +722,7 @@ class ObHashTable {
     return const_iterator(this, bucket_num_, NULL);
   }
 
-  private:
+private:
   inline int internal_get(const hashbucket& bucket, const _key_type& key, _value_type& value, bool& is_fake) const
   {
     int ret = OB_SUCCESS;
@@ -822,7 +822,7 @@ class ObHashTable {
     return ret;
   }
 
-  public:
+public:
   // 4 functions below are thread-safe.
   //
   // if fake node is existent, also return OB_HASH_NOT_EXIST
@@ -1076,13 +1076,13 @@ class ObHashTable {
     return ret;
   }
 
-  public:
+public:
   int64_t size() const
   {
     return size_;
   }
 
-  public:
+public:
   template <class _archive>
   int serialization(_archive& archive)
   {
@@ -1200,7 +1200,7 @@ class ObHashTable {
     return ret;
   }
 
-  private:
+private:
   _bucket_allocer default_bucket_allocer_;
   _allocer* allocer_;
   _bucket_allocer* bucket_allocer_;

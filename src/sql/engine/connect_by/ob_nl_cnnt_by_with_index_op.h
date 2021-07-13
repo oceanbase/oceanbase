@@ -25,14 +25,14 @@ namespace sql {
 class ObNLConnectByWithIndexSpec : public ObNLConnectBySpecBase {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObNLConnectByWithIndexSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObNLConnectBySpecBase(alloc, type)
   {}
 };
 
 class ObNLConnectByWithIndexOp : public ObNLConnectByOpBase {
-  public:
+public:
   ObNLConnectByWithIndexOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObNLConnectByWithIndexOp();
 
@@ -63,7 +63,7 @@ class ObNLConnectByWithIndexOp : public ObNLConnectByOpBase {
     return connect_by_pump_.set_cur_node_path(sys_connect_by_path_id_, res_path);
   }
 
-  private:
+private:
   typedef int (ObNLConnectByWithIndexOp::*state_operation_func_type)();
   typedef int (ObNLConnectByWithIndexOp::*state_function_func_type)();
 
@@ -99,10 +99,10 @@ class ObNLConnectByWithIndexOp : public ObNLConnectByOpBase {
   int init();
   int open_right_child();
 
-  public:
+public:
   ObConnectByOpBFSPump connect_by_pump_;
 
-  private:
+private:
   // state operations and transfer functions array.
   state_operation_func_type state_operation_func_[CNTB_STATE_STATE_COUNT];
   state_function_func_type state_function_func_[CNTB_STATE_STATE_COUNT][FT_TYPE_COUNT];

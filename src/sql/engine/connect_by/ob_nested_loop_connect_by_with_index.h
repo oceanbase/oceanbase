@@ -24,11 +24,11 @@ class ObExprPrior;
 class ObConnectByWithIndex : public ObConnectByBase {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   class ObConnectByWithIndexCtx : public ObConnectByBaseCtx {
     friend ObConnectByWithIndex;
 
-    public:
+  public:
     ObConnectByWithIndexCtx(ObExecContext& ctx)
         : ObConnectByBaseCtx(ctx), output_row_(NULL), connect_by_pump_(), is_match_(false), is_cycle_(false)
     {}
@@ -53,17 +53,17 @@ class ObConnectByWithIndex : public ObConnectByBase {
       return connect_by_pump_.set_cur_node_path(sys_connect_by_path_id, res_path);
     }
 
-    private:
+  private:
     int init(const ObConnectByWithIndex& connect_by, common::ObExprCtx* join_ctx);
 
-    private:
+  private:
     const ObNewRow* output_row_;
     ObConnectByPumpBFS connect_by_pump_;
     bool is_match_;  // whether there is a child, for calc connect_by_isleaf
     bool is_cycle_;  // whether part of a cycle, for calc connect_by_iscycle
   };
 
-  public:
+public:
   explicit ObConnectByWithIndex(common::ObIAllocator& alloc);
   virtual ~ObConnectByWithIndex();
   int rescan(ObExecContext& exec_ctx) const override;
@@ -72,7 +72,7 @@ class ObConnectByWithIndex : public ObConnectByBase {
     return need_sort_siblings_;
   }
 
-  private:
+private:
   int inner_open(ObExecContext& exec_ctx) const override;
   int inner_get_next_row(ObExecContext& exec_ctx, const ObNewRow*& row) const override;
   int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const override;
@@ -109,7 +109,7 @@ class ObConnectByWithIndex : public ObConnectByBase {
       ObConnectByWithIndexCtx& join_ctx, ObNewRow* output_row, ObConnectByPseudoColumn column_type) const;
   int calc_sort_siblings_expr(ObConnectByWithIndexCtx& join_ctx, ObNewRow* output_row) const;
 
-  private:
+private:
   // state operations and transfer functions array.
   state_operation_func_type state_operation_func_[JS_STATE_COUNT];
   state_function_func_type state_function_func_[JS_STATE_COUNT][FT_TYPE_COUNT];

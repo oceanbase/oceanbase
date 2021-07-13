@@ -49,7 +49,7 @@ class ObZoneManager;
 struct ObReplicaStat;
 
 class ObDataSourceCandidateChecker {
-  public:
+public:
   ObDataSourceCandidateChecker(common::ObReplicaType type) : this_type_(type)
   {}
   inline bool is_candidate(common::ObReplicaType other_type) const
@@ -58,12 +58,12 @@ class ObDataSourceCandidateChecker {
     return common::ObReplicaTypeCheck::can_as_data_source(this_type_, other_type);
   }
 
-  private:
+private:
   common::ObReplicaType this_type_;
 };
 
 class ObStatisticsCalculator {
-  public:
+public:
   ObStatisticsCalculator();
 
   void reset();
@@ -76,7 +76,7 @@ class ObStatisticsCalculator {
     return values_.count();
   }
 
-  private:
+private:
   common::ObSEArray<double, 8> values_;
   double sum_;
 };
@@ -136,7 +136,7 @@ struct ObResourceWeight {
 const static int64_t MIN_REBALANCABLE_REPLICA_NUM = 3;
 // @see ObReplicaStat and ObReplicaResourceUsage
 struct LoadFactor {
-  public:
+public:
   LoadFactor()
   {
     reset();
@@ -203,7 +203,7 @@ struct LoadFactor {
       K_(cpu_utime_rate), K_(cpu_stime_rate), K_(net_in_rate), K_(net_in_bytes_rate), K_(net_out_rate),
       K_(net_out_bytes_rate));
 
-  private:
+private:
   // DISK capacity
   int64_t disk_used_;
   // DISK IO
@@ -327,7 +327,7 @@ struct ServerStat {
   bool stopped_;
   int64_t in_member_replica_cnt_;
   share::ObServerResourceInfo resource_info_;  // cpu,disk,mem
-  public:
+public:
   ServerStat()
       : server_(),
         online_(false),
@@ -387,7 +387,7 @@ struct UnitStat {
   // After deducting the load of gts, the service capacity coefficient that the unit can provide
   double capacity_ratio_;
 
-  public:
+public:
   UnitStat()
       : server_(NULL),
         in_pool_(false),
@@ -529,10 +529,10 @@ struct Replica {
   int64_t failmsg_start_pos_;
   int64_t failmsg_count_;
 
-  private:
+private:
   bool in_member_list_;  // in leader member list
   // Do not use this domain directly, please use is_in_service();
-  public:
+public:
   Replica()
       : unit_(NULL),
         server_(NULL),
@@ -650,7 +650,7 @@ struct ObReplicaTask {
   ObRebalanceTaskType cmd_type_;
   const char* comment_;
 
-  public:
+public:
   ObReplicaTask();
   ~ObReplicaTask(){};
   void reset();
@@ -680,13 +680,13 @@ struct Partition {
   int64_t all_pg_idx_;  // Used for inverted index all_pg
   bool has_flag_replica_;
 
-  private:
+private:
   int64_t quorum_;            // Paxos member quorum value recorded in clog
   bool has_leader_;           // at least one of the replicas role is LEADER
   bool can_balance_;          // Replicas that are split and not fully merged cannot be load balanced
   bool can_rereplicate_;      // Able to copy
   bool in_physical_restore_;  // all replica in physical restore status
-  public:
+public:
   Partition()
       : table_id_(common::OB_INVALID_ID),
         tablegroup_id_(common::OB_INVALID_ID),
@@ -769,7 +769,7 @@ struct PartitionGroup {
   int64_t end_;    // partition position end. (%sorted_partition_ array index)
   int64_t all_tg_idx_;
   // Used for inverted index all_tg_, Used for scenarios where table_id is known and its tablegroup is found
-  public:
+public:
   PartitionGroup()
       : table_id_(common::OB_INVALID_ID),
         tablegroup_id_(common::OB_INVALID_ID),
@@ -788,7 +788,7 @@ struct TableGroup {
   uint64_t tablegroup_id_;
   int64_t begin_;  // partition group position begin. ($all_pg_ array index)
   int64_t end_;    // partition group position end. ($all_pg_ array index)
-  public:
+public:
   TableGroup() : tablegroup_id_(common::OB_INVALID_ID), begin_(0), end_(0)
   {}
   TO_STRING_KV(KT_(tablegroup_id), K_(begin), K_(end));
@@ -827,9 +827,9 @@ struct ZoneUnit {
   // statistics for one tablegroup
   UnitStatArray all_unit_;
 
-  private:
+private:
   int64_t tg_pg_cnt_;  // Count the number of pg on the zone
-  public:
+public:
   ZoneUnit()
       : zone_(),
         active_unit_cnt_(0),
@@ -861,12 +861,12 @@ struct ZoneUnit {
   TO_STRING_KV(K_(zone), K_(active_unit_cnt), K_(load_avg), K_(load_imbalance), K_(tg_pg_cnt), K_(resource_weight),
       K_(ru_total), K_(ru_capacity), K_(all_unit));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ZoneUnit);
 };
 
 class ServerReplicaCountMgr {
-  public:
+public:
   ServerReplicaCountMgr() : inited_(false), server_replica_counts_()
   {}
   virtual ~ServerReplicaCountMgr()
@@ -879,7 +879,7 @@ class ServerReplicaCountMgr {
     return server_replica_counts_.count();
   }
 
-  private:
+private:
   struct ServerReplicaCount {
     common::ObAddr server_;
     int64_t replica_count_;
@@ -915,7 +915,7 @@ struct ObSimpleSequenceGenerator {
     return seq_++;
   }
 
-  private:
+private:
   int64_t seq_;
 };
 
@@ -924,14 +924,14 @@ struct ObPartitionGroupOrder {
   {}
   bool operator()(const Partition* left, const Partition* right);
 
-  private:
+private:
   template <typename T>
   int compare(const T& left, const T& right)
   {
     return left < right ? -1 : (left == right ? 0 : 1);
   }
 
-  private:
+private:
   int& ret_;
 };
 
@@ -988,7 +988,7 @@ struct TenantBalanceStat : public balancer::ITenantStatFinder {
   // relying on tenants and tables are consistent features on paxos
   int64_t min_source_replica_version_;
   // The starting version number of the copy of the standby database, and the copy less than this version is not allowed
-  public:
+public:
   friend class ObRootBalancer;
   const static int64_t MAX_SERVER_CNT = 5000;
   const static int64_t MAX_UNIT_CNT = MAX_SERVER_CNT * 100;
@@ -1173,13 +1173,13 @@ struct TenantBalanceStat : public balancer::ITenantStatFinder {
   int check_table_schema_changed(
       share::schema::ObSchemaGetterGuard& guard, const uint64_t table_id, bool& schema_changed) const;
 
-  private:
+private:
   int set_unit_capacity_ratio(UnitStat& unit_stat, Partition& gts_service_partition);
   int sort_unit_pg_by_load(ZoneUnit& zu, UnitStat& u);
   int fill_tables(const common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& tables,
       const common::ObIArray<const share::schema::ObTablegroupSchema*>& tablegroups);
 
-  private:
+private:
   int try_assign_unit_on_random_server(
       const common::ObArray<Partition*>::iterator& partition, common::hash::ObHashSet<int64_t>& units_assigned);
   int try_assign_unit_by_ppr(const common::ObArray<Partition*>::iterator& partition, Partition*& primary_partition,
@@ -1188,7 +1188,7 @@ struct TenantBalanceStat : public balancer::ITenantStatFinder {
       const common::ObArray<Partition*>::iterator& partition, common::hash::ObHashSet<int64_t>& units_assigned);
   int calc_unit_load(UnitStat*& us);
   void update_last_run_timestamp();  // save current time for thread checker.
-  private:
+private:
   bool inited_;
   bool valid_;
   ObUnitManager* unit_mgr_;
@@ -1296,7 +1296,7 @@ int TenantBalanceStat::build_readonly_at_all_info(const uint64_t schema_id, cons
 }
 
 class ObCanMigratePartitionChecker {
-  public:
+public:
   static int can_migrate_out(ObZoneManager& zone_mgr, UnitStat& src_unit, bool& need_balance);
 };
 

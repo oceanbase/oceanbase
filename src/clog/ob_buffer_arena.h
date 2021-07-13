@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace clog {
 // It is responsible for buffer alloc, which reserves header and aligns memory.
 class ObIBufferArena {
-  public:
+public:
   ObIBufferArena()
   {}
   virtual ~ObIBufferArena()
@@ -30,7 +30,7 @@ class ObIBufferArena {
 };
 
 class ObBufferArena : public ObIBufferArena {
-  public:
+public:
   ObBufferArena();
   virtual ~ObBufferArena();
   int init(const char* label, int64_t align_size, int64_t header_size, int64_t trailer_size, int64_t buffer_size,
@@ -45,7 +45,7 @@ class ObBufferArena : public ObIBufferArena {
   }
   char* alloc();
 
-  private:
+private:
   bool is_inited_;
   int64_t align_size_;
   int64_t header_size_;

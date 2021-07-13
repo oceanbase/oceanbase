@@ -20,7 +20,7 @@ using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
 class TestQueue : public ThreadPool {
-  public:
+public:
   enum { BATCH = 64 };
   struct QData : public ObLink {
     QData() : val_(0)
@@ -101,7 +101,7 @@ class TestQueue : public ThreadPool {
     }
   }
 
-  private:
+private:
   int64_t seq_ CACHE_ALIGNED;
   int64_t limit_;
   Queue queue_;

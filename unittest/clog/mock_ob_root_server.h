@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace clog {
 class MockObRootServer : public ObIMembershipCallback {
-  public:
+public:
   struct MockRootTableNode {
     int64_t mc_timestamp_;
     common::ObMemberList pre_member_list_;
@@ -61,7 +61,7 @@ class MockObRootServer : public ObIMembershipCallback {
     }
   };
 
-  public:
+public:
   MockObRootServer();
   ~MockObRootServer();
   int init();
@@ -73,7 +73,7 @@ class MockObRootServer : public ObIMembershipCallback {
   int on_member_change_success(const common::ObPartitionKey& partition_key, const int64_t mc_timestamp,
       const common::ObMemberList& prev_member_list, const common::ObMemberList& curr_member_list);
 
-  private:
+private:
   static const int64_t BUCKET_NUM = 1000;
   static const int32_t MOD_ID = 789789;
 

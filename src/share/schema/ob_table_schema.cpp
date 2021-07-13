@@ -1927,7 +1927,7 @@ bool ObTableSchema::is_valid() const
     if (is_virtual_table(table_id_) && 0 > rowkey_column_num_) {
       valid_ret = false;
       LOG_WARN("invalid rowkey_column_num:", K_(table_name), K_(rowkey_column_num));
-      // TODO:() confirm to delte it
+      // TODO:() confirm to delete it
     } else if (!is_virtual_table(table_id_) && 1 > rowkey_column_num_ && OB_INVALID_ID == dblink_id_) {
       valid_ret = false;
       LOG_WARN("no primary key specified:", K_(table_name));

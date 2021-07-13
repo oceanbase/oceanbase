@@ -23,13 +23,13 @@ using namespace common;
 namespace unittest {
 
 class TestAllMicroBlockRangeIterator : public ObSSTableTest {
-  public:
+public:
   TestAllMicroBlockRangeIterator();
   virtual ~TestAllMicroBlockRangeIterator();
   void SetUp();
   void TearDown();
 
-  protected:
+protected:
   static const int64_t ROW_CNT = 10000;
   ObPartitionComponentFactory cp_fty_;
 };

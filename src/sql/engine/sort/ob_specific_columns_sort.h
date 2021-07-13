@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace sql {
 class ObSpecificColumnsSort : public ObBaseSort {
-  public:
+public:
   explicit ObSpecificColumnsSort();
   ObSpecificColumnsSort(const char* label, uint64_t malloc_block_size, uint64_t tenant_id,
       oceanbase::common::ObCtxIds::ObCtxIdEnum ctx_id);
@@ -65,13 +65,13 @@ class ObSpecificColumnsSort : public ObBaseSort {
   int deep_copy_new_row(const common::ObNewRow& row, common::ObNewRow*& new_row, common::ObArenaAllocator& alloc);
   TO_STRING_KV(K_(row_count), K_(prefix_keys_pos), K_(row_array_pos));
   // private funs
-  private:
+private:
   int init_specific_columns();
   static int specific_columns_cmp(const void* p1, const void* p2);
 
-  protected:
+protected:
   common::ObArenaAllocator row_alloc_;  // deep copy row
-  private:
+private:
   int64_t row_count_;
   int64_t prefix_keys_pos_;           // prefix columns keys pos
   int64_t row_array_pos_;             // for get next row, cur array pos

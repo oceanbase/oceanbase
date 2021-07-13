@@ -22,18 +22,18 @@ using namespace oceanbase::sql;
 using namespace oceanbase::blocksstable;
 
 class TestScalarAggregateTest : public TestDataFilePrepare {
-  public:
+public:
   TestScalarAggregateTest();
   virtual ~TestScalarAggregateTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   TestScalarAggregateTest(const TestScalarAggregateTest& other);
   TestScalarAggregateTest& operator=(const TestScalarAggregateTest& other);
 
-  private:
+private:
   // data members
 };
 TestScalarAggregateTest::TestScalarAggregateTest() : TestDataFilePrepare("TestDisk_scalar_groupby", 2 << 20, 5000)
@@ -56,7 +56,7 @@ void TestScalarAggregateTest::TearDown()
 }
 
 class TestScalarAggregate : public ObScalarAggregate {
-  public:
+public:
   TestScalarAggregate() : ObScalarAggregate(alloc_)
   {}
   ~TestScalarAggregate()

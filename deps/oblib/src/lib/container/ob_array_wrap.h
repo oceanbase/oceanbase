@@ -25,7 +25,7 @@ int databuff_print_obj_array(
 /// Utility tempalte class to adapt C array to an object, which can be used with databuff_print_obj
 template <typename T>
 class ObIArrayWrap {
-  public:
+public:
   ObIArrayWrap() : data_(NULL), count_(0)
   {}
   ObIArrayWrap(T* data, const int64_t count) : data_(data), count_(count)
@@ -66,7 +66,7 @@ class ObIArrayWrap {
     return data_;
   }
 
-  protected:
+protected:
   // Expose %data_ and %count_ here to make at(), count() be inlined,
   // derived class should set then appropriatly
   T* data_;
@@ -76,7 +76,7 @@ class ObIArrayWrap {
 
 template <typename T>
 class ObArrayWrap final : public ObIArrayWrap<T> {
-  public:
+public:
   using ObIArrayWrap<T>::count;
   using ObIArrayWrap<T>::at;
 
@@ -150,7 +150,7 @@ class ObArrayWrap final : public ObIArrayWrap<T> {
     return ret;
   }
 
-  protected:
+protected:
   using ObIArrayWrap<T>::data_;
   using ObIArrayWrap<T>::count_;
 };

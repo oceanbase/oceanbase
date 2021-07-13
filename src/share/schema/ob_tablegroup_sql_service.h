@@ -22,7 +22,7 @@ namespace schema {
 class ObTablegroupSchema;
 
 class ObTablegroupSqlService : public ObDDLSqlService {
-  public:
+public:
   ObTablegroupSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObTablegroupSqlService()
@@ -55,7 +55,7 @@ class ObTablegroupSqlService : public ObDDLSqlService {
       common::ObISQLClient& client, const ObSchemaOperationType op_type, const ObTablegroupSchema& tablegroup_schema);
   int check_tablegroup_options(const share::schema::ObTablegroupSchema& tablegroup);
 
-  private:
+private:
   int add_tablegroup(
       common::ObISQLClient& sql_client, const share::schema::ObTablegroupSchema& tablegroup, const bool only_history);
 

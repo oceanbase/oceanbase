@@ -2813,7 +2813,7 @@ int ObOptimizerUtil::classify_get_scan_ranges(const common::ObIArray<ObNewRange>
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("table_schema is NULL", K(ret));
       } else if (OB_FAIL(deep_copy_range(allocator, input_ranges.at(i), tmp_range))) {
-        LOG_WARN("failde to deep copy range", K(ret));
+        LOG_WARN("failed to deep copy range", K(ret));
       } else if (OB_FAIL(table_schema->get_rowkey_column_ids(rowkey_descs))) {
         LOG_WARN("get rowkey column desc failed", K(ret));
       } else if (OB_FAIL(ObTableScan::transform_rowid_range(allocator, rowkey_descs, tmp_range))) {
@@ -2822,7 +2822,7 @@ int ObOptimizerUtil::classify_get_scan_ranges(const common::ObIArray<ObNewRange>
         LOG_WARN("failed to push back range", K(ret));
       }
     } else if (OB_FAIL(used_input_ranges.push_back(input_ranges.at(i)))) {
-      LOG_WARN("failde to push back range", K(ret));
+      LOG_WARN("failed to push back range", K(ret));
     }
     if (OB_SUCC(ret)) {
       LOG_TRACE("used input range", K(used_input_ranges.at(used_input_ranges.count() - 1)));

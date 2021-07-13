@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObSystemConfigValue {
-  public:
+public:
   ObSystemConfigValue();
   virtual ~ObSystemConfigValue()
   {}
@@ -60,7 +60,7 @@ class ObSystemConfigValue {
     return edit_level_;
   }
 
-  private:
+private:
   char value_[OB_MAX_CONFIG_VALUE_LEN];
   char info_[OB_MAX_CONFIG_INFO_LEN];
   char section_[OB_MAX_CONFIG_SECTION_LEN];

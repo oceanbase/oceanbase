@@ -35,7 +35,7 @@ class ObTableStmt;
 class ObTablegroupStmt;
 
 class ObPartitionExecutorUtils {
-  public:
+public:
   const static int OB_DEFAULT_ARRAY_SIZE = 16;
   static int calc_values_exprs(ObExecContext& ctx, ObCreateTableStmt& stmt);
   static int calc_values_exprs(ObExecContext& ctx, ObCreateIndexStmt& stmt);
@@ -101,7 +101,7 @@ class ObPartitionExecutorUtils {
 
   static int row_expr_to_array(ObRawExpr* row_expr, ObIArray<ObRawExpr*>& list_values_expr_array);
 
-  private:
+private:
   static int calc_values_exprs(ObExecContext& ctx, const stmt::StmtType stmt_type,
       share::schema::ObTableSchema& table_schema, ObPartitionedStmt& stmt, bool is_subpart);
 

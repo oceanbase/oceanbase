@@ -29,7 +29,7 @@ static constexpr auto TIMES_OF_WORKERS = 10;
 
 // Fake ObTenant class
 class MockTenant : public ObTenant {
-  public:
+public:
   MockTenant(const int64_t id, ObWorkerPool& worker_pool) : ObTenant(id, TIMES_OF_WORKERS, worker_pool, ctrl_)
   {
     stopped_ = false;
@@ -40,7 +40,7 @@ class MockTenant : public ObTenant {
 
   MOCK_CONST_METHOD0(waiting_count, int64_t());
 
-  private:
+private:
   ObCgroupCtrl ctrl_;
 };
 
@@ -49,7 +49,7 @@ class MockTenant : public ObTenant {
 //   get_tenant_list()
 //   add_tenant()
 class MockOMT : public ObMultiTenant {
-  public:
+public:
   MockOMT() : ObMultiTenant(procor_)
   {}
 
@@ -66,12 +66,12 @@ class MockOMT : public ObMultiTenant {
     tenants_.reset();
   }
 
-  private:
+private:
   ObFakeWorkerProcessor procor_;
 };
 
 class TestTokenCalcer : public ::testing::Test {
-  public:
+public:
   TestTokenCalcer() : otc_(omt_)
   {
     all_mock_init();
@@ -98,7 +98,7 @@ class TestTokenCalcer : public ::testing::Test {
     omt_.clear();
   }
 
-  protected:
+protected:
   ObTenant* t1_;
   ObTenant* t2_;
   ObTenant* t3_;

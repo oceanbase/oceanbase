@@ -25,7 +25,7 @@ namespace sql {
 class ObDMLTableDesc {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDMLTableDesc() : index_tid_(common::OB_INVALID_ID), partition_cnt_(-1)
   {}
   ~ObDMLTableDesc() = default;
@@ -35,7 +35,7 @@ class ObDMLTableDesc {
   }
   TO_STRING_KV(K_(index_tid), K_(partition_cnt));
 
-  public:
+public:
   // index table's physical table_id
   uint64_t index_tid_;
   // partition counts recorded in schema
@@ -45,7 +45,7 @@ class ObDMLTableDesc {
 class ObDMLRowDesc {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDMLRowDesc() : part_id_index_(common::OB_INVALID_INDEX_INT64)
   {}
   ~ObDMLRowDesc() = default;
@@ -65,14 +65,14 @@ class ObDMLRowDesc {
 
   TO_STRING_KV(K_(part_id_index));
 
-  private:
+private:
   int64_t part_id_index_;
 };
 
 class ObPxModifyInput : public ObIPhyOperatorInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxModifyInput() : task_id_(common::OB_INVALID_ID), sqc_id_(common::OB_INVALID_ID), dfo_id_(common::OB_INVALID_ID)
   {}
   virtual ~ObPxModifyInput() = default;
@@ -105,7 +105,7 @@ class ObPxModifyInput : public ObIPhyOperatorInput {
     return dfo_id_;
   }
 
-  protected:
+protected:
   int64_t task_id_;
   int64_t sqc_id_;
   int64_t dfo_id_;

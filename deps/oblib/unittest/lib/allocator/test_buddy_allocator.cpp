@@ -23,7 +23,7 @@
 using namespace oceanbase::common;
 
 class BuddyAllocatorTest : public ::testing::Test {
-  public:
+public:
   BuddyAllocatorTest();
   virtual ~BuddyAllocatorTest();
   virtual void SetUp();
@@ -32,12 +32,12 @@ class BuddyAllocatorTest : public ::testing::Test {
   void assign_ptr(char* ptr, int64_t ptr_len, int64_t seed);
   bool is_valid_ptr(const char* ptr, int64_t ptr_len, int64_t seed);
 
-  private:
+private:
   // disallow copy
   BuddyAllocatorTest(const BuddyAllocatorTest& other);
   BuddyAllocatorTest& operator=(const BuddyAllocatorTest& other);
 
-  private:
+private:
   // data members
 };
 BuddyAllocatorTest::BuddyAllocatorTest()
@@ -179,7 +179,7 @@ TEST_F(BuddyAllocatorTest, basic_test)
 }
 
 class ObPtrStore {
-  public:
+public:
   int64_t seed_;
   int64_t ptr_len_;
   char* ptr_;

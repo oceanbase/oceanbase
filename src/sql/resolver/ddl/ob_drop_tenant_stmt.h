@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObDropTenantStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObDropTenantStmt(common::ObIAllocator* name_pool);
   ObDropTenantStmt();
   virtual ~ObDropTenantStmt();
@@ -48,7 +48,7 @@ class ObDropTenantStmt : public ObDDLStmt {
     return drop_tenant_arg_;
   }
 
-  private:
+private:
   obrpc::ObDropTenantArg drop_tenant_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObDropTenantStmt);
 };

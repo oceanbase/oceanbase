@@ -35,7 +35,7 @@ class ObExprOperator;
 
 template <typename T>
 class ObSqlFixedArray {
-  public:
+public:
   ObSqlFixedArray() : data_(NULL), cap_(0), count_(0)
   {}
   int init(int64_t cap, common::ObIAllocator& allocator)
@@ -165,14 +165,14 @@ class ObSqlFixedArray {
     return data_;
   }
 
-  private:
+private:
   T* data_;
   int32_t cap_;
   int32_t count_;
 };
 
 class ObPostExprItem {
-  public:
+public:
   ObPostExprItem() : v2_(), accuracy_(), item_type_(::T_INVALID)
   {}
   // setters
@@ -243,7 +243,7 @@ class ObPostExprItem {
     return 0;
   }
 
-  protected:
+protected:
   // members in a union can only be simple data types, so an obj can only be
   // constructed through a buffer in union.
   union {
@@ -255,7 +255,7 @@ class ObPostExprItem {
   common::ObAccuracy accuracy_;  // for const, column, questionmark
   ObItemType item_type_;
 
-  private:
+private:
   // we need push ObPostExprItem object into ObIArray, so must allow copy and assign.
   // DISALLOW_COPY_AND_ASSIGN(ObPostExprItem);
 };
@@ -346,7 +346,7 @@ struct ObPostfixExpressionCalcStack {
 };
 
 class ObPostfixExpression {
-  public:
+public:
   ObPostfixExpression(common::ObIAllocator& alloc, int64_t item_count);
   ~ObPostfixExpression();
   int assign(const ObPostfixExpression& other);
@@ -400,22 +400,22 @@ class ObPostfixExpression {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   // check if the expr is const or column index.
   int check_expr_type(const int64_t type_val, bool& is_type, const int64_t stack_len) const;
 
-  private:
+private:
   static const int64_t DEF_STRING_BUF_SIZE = 64 * 1024L;
   static const int64_t BASIC_SYMBOL_COUNT = 64;
   typedef ObSqlFixedArray<ObPostExprItem> PostfixExprArray;
   void data_clear();
 
-  private:
+private:
   PostfixExprArray post_exprs_;
   common::ObIAllocator& str_buf_;
   int64_t output_column_count_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPostfixExpression);
 };  // class ObPostfixExpression
 

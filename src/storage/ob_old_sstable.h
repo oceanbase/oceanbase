@@ -60,7 +60,7 @@ class ObSSTableScanEstimator;
 class ObSSTableSplitCtx;
 
 class ObOldSSTable : public ObITable {
-  public:
+public:
   static const int64_t DEFAULT_MACRO_BLOCK_NUM = 4;
   static const int64_t DEFAULT_ALLOCATOR_BLOCK_SIZE = 1024;
   static const int64_t RESERVE_META_SIZE = 4 * 1024;
@@ -71,9 +71,9 @@ class ObOldSSTable : public ObITable {
   typedef common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_NUM> MacroBlockArray;
   typedef common::hash::ObCuckooHashMap<common::ObLogicMacroBlockId, blocksstable::MacroBlockId> LobBlockIdMap;
 
-  public:
+public:
   class ObSSTableGroupMacroBlocks {
-    public:
+  public:
     ObSSTableGroupMacroBlocks(const MacroBlockArray& data_macro_blocks, const MacroBlockArray& lob_macro_blocks);
     ~ObSSTableGroupMacroBlocks();
     OB_INLINE int64_t data_macro_block_count() const
@@ -92,16 +92,16 @@ class ObOldSSTable : public ObITable {
     int at(const int64_t idx, blocksstable::MacroBlockId& block_id) const;
     virtual int64_t to_string(char* buf, int64_t buf_len) const;
 
-    private:
+  private:
     ObSSTableGroupMacroBlocks();
     DISALLOW_COPY_AND_ASSIGN(ObSSTableGroupMacroBlocks);
 
-    private:
+  private:
     const MacroBlockArray& data_macro_blocks_;
     const MacroBlockArray& lob_macro_blocks_;
   };
 
-  public:
+public:
   ObOldSSTable();
   virtual ~ObOldSSTable();
 
@@ -319,7 +319,7 @@ class ObOldSSTable : public ObITable {
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K(status_), K(meta_));
 
-  private:
+private:
   int sort_ranges(
       const common::ObIArray<common::ObStoreRange>& ranges, common::ObIArray<common::ObStoreRange>& ordered_ranges);
   int remove_duplicate_ordered_block_id(const common::ObIArray<blocksstable::ObMacroBlockCtx>& origin_blocks,
@@ -344,7 +344,7 @@ class ObOldSSTable : public ObITable {
       const ObExtStoreRowkey& ext_rowkey, ObStoreRowIterator*& iter);
   int build_multi_exist_iterator(ObRowsInfo& rows_info, ObStoreRowIterator*& iter);
 
-  private:
+private:
   void set_multi_version_rowkey_type(const ObMultiVersionRowkeyHelpper::MultiVersionRowkeyType rowkey_type)
   {
     if (is_multi_version_table()) {
@@ -354,7 +354,7 @@ class ObOldSSTable : public ObITable {
     }
   }
 
-  private:
+private:
   friend class ObMacroBlockIterator;
   typedef common::ObFixedArray<blocksstable::ObMacroBlockMetaHandle*, common::ObIAllocator> MacroMetaArray;
   common::ObArenaAllocator allocator_;

@@ -23,7 +23,7 @@ namespace sql {
 class ObDirectTransmitInput : public ObTransmitInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDirectTransmitInput();
   virtual ~ObDirectTransmitInput();
   virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
@@ -32,16 +32,16 @@ class ObDirectTransmitInput : public ObTransmitInput {
     return PHY_DIRECT_TRANSMIT;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDirectTransmitInput);
 };
 
 class ObDirectTransmit : public ObTransmit {
-  private:
+private:
   class ObDirectTransmitCtx : public ObTransmitCtx {
     friend class ObDirectTransmit;
 
-    public:
+  public:
     explicit ObDirectTransmitCtx(ObExecContext& ctx) : ObTransmitCtx(ctx)
     {}
     virtual ~ObDirectTransmitCtx()
@@ -51,20 +51,20 @@ class ObDirectTransmit : public ObTransmit {
       ObTransmitCtx::destroy();
     }
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObDirectTransmitCtx);
   };
 
-  public:
+public:
   explicit ObDirectTransmit(common::ObIAllocator& alloc);
   virtual ~ObDirectTransmit();
 
   virtual int create_operator_input(ObExecContext& ctx) const;
 
-  protected:
+protected:
   int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const override;
 
-  private:
+private:
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
@@ -73,7 +73,7 @@ class ObDirectTransmit : public ObTransmit {
    */
   virtual int init_op_ctx(ObExecContext& ctx) const;
 
-  private:
+private:
   // disallow copy assign
   DISALLOW_COPY_AND_ASSIGN(ObDirectTransmit);
 };

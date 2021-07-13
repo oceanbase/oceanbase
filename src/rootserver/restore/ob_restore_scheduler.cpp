@@ -2347,6 +2347,8 @@ int ObRestoreScheduler::restore_fail(const ObPhysicalRestoreJob& job_info)
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("restore scheduler stopped", K(ret));
+  } else if (OB_FAIL(drop_tenant_force_if_necessary(job_info))) {
+    LOG_WARN("failed to drop_tenant_force_if_necessary", K(ret), K(job_info));
   } else if (OB_FAIL(restore_op.init(sql_proxy_))) {
     LOG_WARN("fail init", K(ret));
   } else if (OB_FAIL(restore_op.recycle_job(job_info.job_id_, PHYSICAL_RESTORE_FAIL))) {
@@ -2753,6 +2755,39 @@ int ObRestoreScheduler::do_upgrade_post(const ObPhysicalRestoreJob& job_info)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::drop_tenant_force_if_necessary(const ObPhysicalRestoreJob& job_info)
+{
+  int ret = OB_SUCCESS;
+  const bool need_force_drop = GCONF._auto_drop_tenant_if_restore_failed;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else if (need_force_drop) {
+    obrpc::ObDropTenantArg arg;
+    arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+    arg.tenant_name_ = job_info.tenant_name_;
+    arg.if_exist_ = true;
+    arg.delay_to_drop_ = false;
+    ObSqlString sql;
+    const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default 2s
+    const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
+    int64_t rpc_timeout = max(TIMEOUT_PER_RPC, DEFAULT_TIMEOUT);
+    if (OB_FAIL(sql.append_fmt("DROP TENANT IF EXISTS %s FORCE", arg.tenant_name_.ptr()))) {
+      LOG_WARN("fail to generate sql", K(ret), K(arg));
+    } else if (FALSE_IT(arg.ddl_stmt_str_ = sql.string())) {
+    } else if (OB_FAIL(rpc_proxy_->timeout(rpc_timeout).drop_tenant(arg))) {
+      LOG_WARN("fail to drop tenant", K(ret), K(arg));
+    } else {
+      LOG_INFO("drop_tenant_force after restore fail", K(job_info));
+    }
+  } else {
+    LOG_INFO("no need to drop tenant after restore fail", K(job_info));
   }
   return ret;
 }

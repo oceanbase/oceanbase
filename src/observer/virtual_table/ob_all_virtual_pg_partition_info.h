@@ -22,11 +22,11 @@
 namespace oceanbase {
 namespace observer {
 class ObPGPartitionInfo : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObPGPartitionInfo();
   virtual ~ObPGPartitionInfo();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
   inline void set_partition_service(storage::ObPartitionService* partition_service)
@@ -38,17 +38,17 @@ class ObPGPartitionInfo : public common::ObVirtualTableScannerIterator {
     addr_ = addr;
   }
 
-  private:
+private:
   int partition_state_to_string_(int64_t partition_state, char* buf, int16_t buf_len);
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   common::ObAddr addr_;
   storage::ObPGPartitionIterator* ptt_iter_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   char partition_state_buf_[common::TABLE_MAX_VALUE_LENGTH];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPGPartitionInfo);
 };
 

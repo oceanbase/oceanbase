@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace observer {
 class ObAllServerEventHistoryTableOperator : public share::ObEventHistoryTableOperator {
-  public:
+public:
   virtual ~ObAllServerEventHistoryTableOperator()
   {}
 
@@ -27,7 +27,7 @@ class ObAllServerEventHistoryTableOperator : public share::ObEventHistoryTableOp
 
   static ObAllServerEventHistoryTableOperator& get_instance();
 
-  private:
+private:
   ObAllServerEventHistoryTableOperator()
   {}
   DISALLOW_COPY_AND_ASSIGN(ObAllServerEventHistoryTableOperator);

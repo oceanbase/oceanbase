@@ -21,7 +21,7 @@ class ObServerConfig;
 class ObString;
 
 class ObClusterVersion {
-  public:
+public:
   ObClusterVersion();
   ~ObClusterVersion()
   {
@@ -36,7 +36,7 @@ class ObClusterVersion {
   uint64_t get_cluster_version();
   void update_cluster_version(const uint64_t cluster_version);
 
-  public:
+public:
   static ObClusterVersion& get_instance();
   static int is_valid(const char* verstr);
   static int get_version(const char* verstr, uint64_t& version);
@@ -45,7 +45,7 @@ class ObClusterVersion {
   static int64_t print_version_str(char* buf, const int64_t buf_len, uint64_t version);
   static const int64_t MAX_VERSION_ITEM = 16;
 
-  private:
+private:
   bool is_inited_;
   const common::ObServerConfig* config_;
   uint64_t cluster_version_;

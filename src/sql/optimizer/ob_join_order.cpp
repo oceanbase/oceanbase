@@ -3515,12 +3515,10 @@ int JoinPath::re_est_cost(sql::Path* path, double need_row_count, double& cost)
   if (OB_ISNULL(path)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null path", K(ret));
-  } else if (ACCESS == path->path_type_ &&
-             OB_FAIL(re_est_access_cost(static_cast<AccessPath*>(path), need_row_count, cost))) {
-    LOG_WARN("failed to est access cost", K(ret));
-  } else if (SUBQUERY == path->path_type_ &&
-             OB_FAIL(re_est_subquery_cost(static_cast<SubQueryPath*>(path), need_row_count, cost))) {
-    LOG_WARN("failed to est subquery cost", K(ret));
+  } else if (ACCESS == path->path_type_) {
+    ret = re_est_access_cost(static_cast<AccessPath*>(path), need_row_count, cost);
+  } else if (SUBQUERY == path->path_type_) {
+    ret = re_est_subquery_cost(static_cast<SubQueryPath*>(path), need_row_count, cost);
   } else {
     cost = path->cost_;
   }
@@ -3570,11 +3568,6 @@ int JoinPath::re_est_access_cost(AccessPath* path, double need_row_count, double
                      cost,
                      index_back_cost))) {
         LOG_WARN("failed to estimate cost", K(ret));
-      } else {
-        path->cost_ = cost;
-        path->op_cost_ = cost;
-        path->inner_row_count_ = need_row_count;
-        path->output_row_count_ = need_row_count;
       }
     } else {
       cost = path->cost_;

@@ -27,7 +27,7 @@ namespace transaction {
 class ObGtsRequest {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGtsRequest() : tenant_id_(0), srr_(0), range_size_(0), gts_pkey_(), sender_()
   {}
   ~ObGtsRequest()
@@ -36,7 +36,7 @@ class ObGtsRequest {
       const common::ObPartitionKey& gts_pkey, const common::ObAddr& sender);
   bool is_valid() const;
 
-  public:
+public:
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -55,7 +55,7 @@ class ObGtsRequest {
   }
   TO_STRING_KV(K_(tenant_id), K_(srr), K_(range_size), K_(gts_pkey), K_(sender));
 
-  private:
+private:
   uint64_t tenant_id_;
   MonotonicTs srr_;
   int64_t range_size_;
@@ -66,7 +66,7 @@ class ObGtsRequest {
 class ObGtsErrResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGtsErrResponse() : tenant_id_(0), srr_(0), status_(0), leader_(), sender_()
   {}
   ~ObGtsErrResponse()
@@ -75,7 +75,7 @@ class ObGtsErrResponse {
       const common::ObAddr& sender);
   bool is_valid() const;
 
-  public:
+public:
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -98,7 +98,7 @@ class ObGtsErrResponse {
   }
   TO_STRING_KV(K_(tenant_id), K_(srr), K_(status), K_(leader), K_(sender));
 
-  private:
+private:
   uint64_t tenant_id_;
   MonotonicTs srr_;
   int status_;

@@ -53,7 +53,7 @@ struct ObLogFileIOInfo final {
 };
 
 class ObLogFileDescriptor final {
-  public:
+public:
   friend class ObLogFileStore;
   friend class ObLogFileReader;
 
@@ -77,7 +77,7 @@ class ObLogFileDescriptor final {
   static const int8_t WRITE_FLAG = 2;
   static const int8_t TEMP_FLAG = 4;
 
-  private:
+private:
   int get_log_fd(const int64_t disk_id);
   OB_INLINE bool is_tmp() const
   {
@@ -94,7 +94,7 @@ class ObLogFileDescriptor final {
   bool is_valid_state(const ObLogDiskState state);
   static const int8_t FLAG_MASK = 0x0F;
 
-  private:
+private:
   int8_t flag_;
 
   // local fd
@@ -108,7 +108,7 @@ class ObLogFileDescriptor final {
 };
 
 class ObLogFileReader final {
-  public:
+public:
   static int get_fd(
       const char* log_dir, const int64_t file_id, const ObRedoLogType log_type, ObLogFileDescriptor& log_fd);
   static int64_t pread(ObLogFileDescriptor& log_fd, void* buf, const int64_t count, const int64_t offset);
@@ -119,7 +119,7 @@ class ObLogFileReader final {
 // It exposes file_id to caller but hide the underlying multiple disks detail.
 // Caller read or write log file by file_id.
 class ObILogFileStore {
-  public:
+public:
   ObILogFileStore() : log_type_(OB_REDO_TYPE_INVALID)
   {}
   virtual ~ObILogFileStore()
@@ -169,14 +169,14 @@ class ObILogFileStore {
   static int format_file_path(
       char* buf, const int64_t size, const char* log_dir, const int64_t file_id, const bool is_tmp);
 
-  public:
+public:
   static const int OPEN_FLAG_READ = O_RDONLY | O_DIRECT;
   static const int OPEN_FLAG_WRITE = O_WRONLY | O_DIRECT | O_SYNC | O_CREAT | O_APPEND;
   static const int OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
   static const int64_t DEFAULT_DISK_USE_PERCENT = 80;  // default value for clog
   static const int64_t SLOG_DISK_USE_PERCENT = 80;
 
-  protected:
+protected:
   static const int MAX_IO_COUNT = 1024;
   static const int64_t AIO_TIMEOUT_SECOND = 30;
   static const int64_t CLOG_AIO_TIMEOUT_SECOND = 300;
@@ -188,7 +188,7 @@ class ObILogFileStore {
 };
 
 class ObLogFileStore : public ObILogFileStore {
-  public:
+public:
   ObLogFileStore();
   virtual ~ObLogFileStore();
 
@@ -259,7 +259,7 @@ class ObLogFileStore : public ObILogFileStore {
     return disk_mgr_->free_quota_warn();
   }
 
-  private:
+private:
   int inner_open(const int64_t file_id, const int8_t flag, ObLogFileDescriptor& log_fd);
   int inner_close(ObLogFileDescriptor& log_fd);
   int rename(const int64_t file_id);
@@ -271,7 +271,7 @@ class ObLogFileStore : public ObILogFileStore {
   int process_failed_write();
   int fstat(const int64_t file_id, struct stat* file_stat) const;
 
-  private:
+private:
   bool is_inited_;
   ObLogDiskManager* disk_mgr_;
 

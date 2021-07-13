@@ -28,7 +28,7 @@ class ObExecContext;
 class ObDMLTableDesc;
 
 class ObPDMLDataDriver {
-  public:
+public:
   ObPDMLDataDriver(ObMonitorNode& op_monitor_info)
       : op_monitor_info_(op_monitor_info),
         returning_ctx_(),
@@ -55,7 +55,7 @@ class ObPDMLDataDriver {
   int destroy();
   int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row);
 
-  private:
+private:
   int fill_cache_unitl_cache_full_or_child_iter_end(ObExecContext& ctx);
   inline int try_write_last_pending_row();
   int switch_to_returning_state(ObExecContext& ctx);
@@ -64,7 +64,7 @@ class ObPDMLDataDriver {
   int next_row_from_cache(const common::ObNewRow*& row);
   int write_partitions(ObExecContext& ctx);
 
-  private:
+private:
   struct ReturningCtx {
     ReturningCtx() : next_idx_(0), row_iter_(nullptr)
     {}
@@ -106,7 +106,7 @@ class ObPDMLDataDriver {
    */
   enum DriverState { FILL_CACHE, ROW_RETURNING };
 
-  private:
+private:
   ObMonitorNode& op_monitor_info_;
   ReturningCtx returning_ctx_;
   ObBatchRowCache cache_;

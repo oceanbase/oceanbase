@@ -17,13 +17,13 @@
 namespace oceanbase {
 namespace sql {
 class ObSetTransactionResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObSetTransactionResolver(ObResolverParams& params);
   virtual ~ObSetTransactionResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int build_isolation_expr(ObRawExpr*& expr, int32_t level);
   int build_access_expr(ObRawExpr*& expr, const bool is_read_only);
   int scope_resolve(const ParseNode& parse_tree, share::ObSetVar::SetScopeType& scope);

@@ -20,12 +20,12 @@ class ObDropDbLinkResolver : public ObDDLResolver {
   static const int64_t DBLINK_NAME = 0;
   static const int64_t DBLINK_NODE_COUNT = 1;
 
-  public:
+public:
   explicit ObDropDbLinkResolver(ObResolverParams& params);
   virtual ~ObDropDbLinkResolver();
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObDropDbLinkResolver);
 };

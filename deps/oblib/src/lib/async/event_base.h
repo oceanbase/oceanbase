@@ -20,18 +20,18 @@ namespace oceanbase {
 namespace lib {
 
 class EventBase {
-  public:
+public:
   EventBase();
   virtual ~EventBase();
 
   int init();
   void destroy();
 
-  protected:
+protected:
   void signal();
   void wait4event(int64_t maxwait = 0);
 
-  private:
+private:
   std::thread th_;
   struct ev_loop* loop_;
   ev_async sched_watcher_;

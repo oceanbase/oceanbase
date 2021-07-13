@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 }
 
 class TestObjectMgr : public ::testing::Test {
-  public:
+public:
   void* Malloc(uint64_t size)
   {
     // void *p = NULL;

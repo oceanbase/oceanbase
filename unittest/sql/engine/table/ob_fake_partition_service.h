@@ -21,7 +21,7 @@ namespace oceanbase {
 
 namespace sql {
 class ObFakeTableScanIterator : public common::ObNewRowIterator {
-  public:
+public:
   ObFakeTableScanIterator()
   {}
   virtual ~ObFakeTableScanIterator()
@@ -40,18 +40,18 @@ class ObFakeTableScanIterator : public common::ObNewRowIterator {
     col_num_ = col_num;
   }
 
-  private:
+private:
   common::ObRowStore::Iterator row_store_it_;
   int64_t col_num_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFakeTableScanIterator);
 };
 }  // namespace sql
 
 namespace storage {
 class ObFakePartitionService : public ObPartitionService {
-  public:
+public:
   ObFakePartitionService();
   virtual ~ObFakePartitionService();
 
@@ -182,11 +182,11 @@ class ObFakePartitionService : public ObPartitionService {
     return OB_ERROR;
   }
 
-  private:
+private:
   common::ObScanner scanner_;
   int64_t col_num_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFakePartitionService);
 };
 

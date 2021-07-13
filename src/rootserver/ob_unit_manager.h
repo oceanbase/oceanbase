@@ -45,7 +45,7 @@ class UnitStat;
 class ObFetchPrimaryDDLOperator;
 class ObRootBalancer;
 class ObUnitManager {
-  public:
+public:
   friend class ServerBalancer;
   friend class ObServerBalancer;
   friend class ObRsGtsUnitDistributor;
@@ -68,11 +68,11 @@ class ObUnitManager {
 
     TO_STRING_KV(K_(zone), K_(unit_infos));
 
-    public:
+  public:
     common::ObZone zone_;
     common::ObArray<share::ObUnitInfo> unit_infos_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ZoneUnit);
   };
 
@@ -94,7 +94,7 @@ class ObUnitManager {
     }
     TO_STRING_KV(KP_(unit), KP_(unit_config), KP_(pool));
 
-    public:
+  public:
     share::ObUnit* unit_;
     share::ObUnitConfig* unit_config_;
     share::ObResourcePool* pool_;
@@ -147,7 +147,7 @@ class ObUnitManager {
     common::ObArray<int64_t> mark_delete_indexes_;
     bool all_normal_unit_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObServerLoad);
   };
 
@@ -173,7 +173,7 @@ class ObUnitManager {
   typedef common::hash::ObHashMap<uint64_t, share::ObResourcePool*> IdPoolMap;
   typedef common::hash::ObHashMap<uint64_t, common::ObArray<share::ObResourcePool*>*> TenantPoolsMap;
 
-  public:
+public:
   ObUnitManager(ObServerManager& server_mgr, ObZoneManager& zone_mgr);
   virtual ~ObUnitManager();
 
@@ -320,7 +320,7 @@ class ObUnitManager {
   int distrubte_for_unit_intersect(const uint64_t tenant_id, const common::ObIArray<share::ObResourcePoolName>& pools);
 
   ////////////////////////////////////////////////////////////////
-  private:
+private:
   static const int64_t UNIT_MAP_BUCKET_NUM = 1024 * 64;
   static const int64_t CONFIG_MAP_BUCKET_NUM = 1024;
   static const int64_t CONFIG_REF_COUNT_MAP_BUCKET_NUM = 1024;
@@ -351,16 +351,16 @@ class ObUnitManager {
 
     TO_STRING_KV(K_(zone), K_(unit_ptrs));
 
-    public:
+  public:
     common::ObZone zone_;
     common::ObSEArray<share::ObUnit*, 16> unit_ptrs_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ZoneUnitPtr);
   };
 
   class UnitGroupIdCmp {
-    public:
+  public:
     UnitGroupIdCmp() : ret_(common::OB_SUCCESS)
     {}
     ~UnitGroupIdCmp()
@@ -383,7 +383,7 @@ class ObUnitManager {
       return ret_;
     }
 
-    private:
+  private:
     int ret_;
   };
 
@@ -396,7 +396,7 @@ class ObUnitManager {
   };
   enum AlterResourceErr { MIN_CPU = 0, MAX_CPU, MIN_MEM, MAX_MEM, ALT_ERR };
 
-  protected:
+protected:
   static const int64_t NOTIFY_RESOURCE_RPC_TIMEOUT = 9 * 1000000;  // 9 second
   // for ObServerBalancer
   IdPoolMap& get_id_pool_map()
@@ -737,7 +737,7 @@ class ObUnitManager {
   int sum_servers_resources(
       ObUnitPlacementStrategy::ObServerResource& server_resource, const share::ObUnitConfig& unit_config);
 
-  protected:
+protected:
   int inner_try_notify_tenant_server_unit_resource(const uint64_t tenant_id,
       const bool is_delete, /*Expansion of semantics, possibly deleting resources*/
       ObNotifyTenantServerResourceProxy& notify_proxy, const share::ObResourcePool& new_pool,
@@ -804,7 +804,7 @@ class ObUnitManager {
       const bool grant, const ObIArray<share::ObResourcePoolName>& pool_names, const uint64_t tenant_id);
   int inner_try_delete_migrate_unit_resource(const uint64_t unit_id, const common::ObAddr& migrate_from_server);
 
-  private:
+private:
   bool inited_;
   bool loaded_;
   common::ObMySQLProxy* proxy_;

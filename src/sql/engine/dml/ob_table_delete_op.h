@@ -21,16 +21,16 @@ namespace sql {
 class ObTableDeleteSpec : public ObTableModifySpec {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTableDeleteSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObTableModifySpec(alloc, type)
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDeleteSpec);
 };
 
 class ObTableDeleteOp : public ObTableModifyOp {
-  public:
+public:
   ObTableDeleteOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableModifyOp(exec_ctx, spec, input), part_row_cnt_(0)
   {}
@@ -44,7 +44,7 @@ class ObTableDeleteOp : public ObTableModifyOp {
     ObTableModifyOp::destroy();
   }
 
-  protected:
+protected:
   virtual int inner_open() override;
   virtual int inner_get_next_row() override;
   virtual int prepare_next_storage_row(const ObExprPtrIArray*& output) override;
@@ -53,7 +53,7 @@ class ObTableDeleteOp : public ObTableModifyOp {
   int do_table_delete();
   int delete_rows(int64_t& affected_rows);
 
-  protected:
+protected:
   common::ObSEArray<DMLPartInfo, 1> part_infos_;
   storage::ObDMLBaseParam dml_param_;
   int64_t part_row_cnt_;
@@ -63,7 +63,7 @@ class ObTableDeleteOp : public ObTableModifyOp {
 class ObTableDeleteOpInput : public ObTableModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableDeleteOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableModifyOpInput(ctx, spec)
   {}
   int init(ObTaskInfo& task_info) override
@@ -71,7 +71,7 @@ class ObTableDeleteOpInput : public ObTableModifyOpInput {
     return ObTableModifyOpInput::init(task_info);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDeleteOpInput);
 };
 

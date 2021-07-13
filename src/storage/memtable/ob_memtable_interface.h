@@ -43,13 +43,13 @@ namespace memtable {
 
 class ObIMemtable;
 class ObIMemtableCtx : public ObIMvccCtx {
-  public:
+public:
   ObIMemtableCtx() : ObIMvccCtx(), is_standalone_(false)
   {}
   virtual ~ObIMemtableCtx()
   {}
 
-  public:
+public:
   virtual void set_read_only() = 0;
   virtual void inc_ref() = 0;
   virtual void dec_ref() = 0;
@@ -91,7 +91,7 @@ class ObIMemtableCtx : public ObIMvccCtx {
   virtual transaction::ObTransStateTableGuard* get_trans_table_guard() = 0;
   VIRTUAL_TO_STRING_KV("", "");
 
-  public:
+public:
   // return OB_AGAIN/OB_SUCCESS
   virtual int fill_redo_log(char* buf, const int64_t buf_len, int64_t& buf_pos) = 0;
   virtual int undo_fill_redo_log() = 0;
@@ -149,7 +149,7 @@ struct ObMergePriorityInfo {
 };
 
 class ObIMemtable : public storage::ObITable {
-  public:
+public:
   ObIMemtable()
   {}
   virtual ~ObIMemtable()
@@ -249,19 +249,19 @@ class ObIMemtable : public storage::ObITable {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class ObIMemtableCtxFactory {
-  public:
+public:
   ObIMemtableCtxFactory()
   {}
   virtual ~ObIMemtableCtxFactory()
   {}
 
-  public:
+public:
   virtual ObIMemtableCtx* alloc(const uint64_t tenant_id = OB_SERVER_TENANT_ID) = 0;
   virtual void free(ObIMemtableCtx* ctx) = 0;
 };
 
 class ObMemtableCtxFactory : public ObIMemtableCtxFactory {
-  public:
+public:
   enum {
     CTX_ALLOC_FIX = 1,
     CTX_ALLOC_VAR = 2,
@@ -275,11 +275,11 @@ class ObMemtableCtxFactory : public ObIMemtableCtxFactory {
   static const int64_t MAX_CTX_HOLD_COUNT = 10000;
   static const int64_t MAX_CTX_COUNT = 3000000;
 
-  public:
+public:
   ObMemtableCtxFactory();
   ~ObMemtableCtxFactory();
 
-  public:
+public:
   ObIMemtableCtx* alloc(const uint64_t tenant_id = OB_SERVER_TENANT_ID);
   void free(ObIMemtableCtx* ctx);
   IDMap& get_id_map()
@@ -295,10 +295,10 @@ class ObMemtableCtxFactory : public ObIMemtableCtxFactory {
     return malloc_allocator_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableCtxFactory);
 
-  private:
+private:
   bool is_inited_;
   common::ModulePageAllocator mod_;
   common::ModuleArena ctx_obj_allocator_;
@@ -311,18 +311,18 @@ class ObMemtableCtxFactory : public ObIMemtableCtxFactory {
 };
 
 class ObMemtableFactory {
-  public:
+public:
   ObMemtableFactory();
   ~ObMemtableFactory();
 
-  public:
+public:
   static ObMemtable* alloc(const uint64_t tenant_id);
   static void free(ObMemtable* mt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableFactory);
 
-  private:
+private:
   static int64_t alloc_count_;
   static int64_t free_count_;
 };

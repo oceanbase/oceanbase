@@ -24,7 +24,7 @@ namespace lib {
 
 // Thread unsafe, three level BitSet
 class ABitSet {
-  public:
+public:
   ABitSet(int nbits, char* buf)
       : nbits_(nbits),
         use_zero_level_(nbits_ >= (1 << 6 << 6)),
@@ -115,13 +115,13 @@ class ABitSet {
     return ret;
   }
 
-  private:
+private:
   int myffsl(uint64_t v, int pos) const
   {
     return ffsl(v & ~((1UL << pos) - 1));
   }
 
-  private:
+private:
   const int nbits_;
   const bool use_zero_level_;
   uint64_t zero_level_;

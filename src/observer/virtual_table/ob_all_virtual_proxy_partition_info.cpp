@@ -337,12 +337,14 @@ int ObAllVirtualProxyPartitionInfo::fill_cells(const ObTableSchema& table_schema
         break;
       case SPARE2: {
         int64_t idx = -1;
-        const ObRowkeyInfo& info = table_schema.get_rowkey_info();
+        const ObRowkeyInfo &info = table_schema.get_rowkey_info();
         if (OB_FAIL(info.get_index(column_id, idx))) {
-          // The generated column of the primary key table can also be used as the partition key,
-          // not necessarily in the rowkey info
-          if (OB_LIKELY(OB_ENTRY_NOT_EXIST == ret && !table_schema.is_no_pk_table() &&
-                        column_schema->is_generated_column())) {
+          // In the following scenarios, the partition key does not need to be included in the primary key
+          // 1、The generated column of the primary key table can also be used as the partition key
+          // 2、virtual table
+          if (OB_LIKELY(OB_ENTRY_NOT_EXIST == ret && 
+              ((!table_schema.is_no_pk_table() && column_schema->is_generated_column()) 
+              || table_schema.is_vir_table()))) {
             idx = info.get_size() + next_part_key_idx_;
             ret = OB_SUCCESS;
           } else {

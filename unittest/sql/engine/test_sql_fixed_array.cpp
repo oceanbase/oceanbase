@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace sql {
 class ObTestSqlFixedArray : public ::testing::Test {
-  public:
+public:
   ObTestSqlFixedArray()
   {}
   ~ObTestSqlFixedArray()
@@ -32,7 +32,7 @@ class ObTestSqlFixedArray : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTestSqlFixedArray);
 };
 

@@ -24,7 +24,7 @@ using namespace ::testing;
 
 namespace unittest {
 class ObMultipleMergeTest : public ::testing::Test {
-  public:
+public:
   ObMultipleMergeTest() = default;
   virtual ~ObMultipleMergeTest() = default;
   bool check_table_continues(const common::ObIArray<ObITable*>& tables);

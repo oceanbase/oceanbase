@@ -19,13 +19,13 @@
 namespace oceanbase {
 namespace rootserver {
 class ObRestoreMgr {
-  public:
+public:
   ObRestoreMgr(const volatile bool& is_stop);
   ~ObRestoreMgr();
   int init(ObRestoreMgrCtx* restore_ctx);
   int restore();
 
-  private:
+private:
   /* functions */
   int check_stop()
   {

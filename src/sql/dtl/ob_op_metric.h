@@ -25,7 +25,7 @@ namespace sql {
 class ObOpMetric {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObOpMetric()
       : enable_audit_(false),
         id_(-1),
@@ -148,7 +148,7 @@ class ObOpMetric {
   TO_STRING_KV(
       K_(id), K_(type), K_(first_in_ts), K_(first_out_ts), K_(last_in_ts), K_(last_out_ts), K_(counter), K_(exec_time));
 
-  private:
+private:
   static const int64_t FIRST_IN = 0x01;
   static const int64_t FIRST_OUT = 0x02;
   static const int64_t LAST_IN = 0x4;

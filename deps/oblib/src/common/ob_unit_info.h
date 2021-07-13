@@ -24,17 +24,17 @@ namespace share {
 struct ObUnit {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum Status {
     UNIT_STATUS_ACTIVE = 0,
     UNIT_STATUS_DELETING,
     UNIT_STATUS_MAX,
   };
 
-  public:
+public:
   static const char* const unit_status_strings[UNIT_STATUS_MAX];
 
-  public:
+public:
   ObUnit();
   ~ObUnit()
   {}
@@ -73,7 +73,7 @@ typedef common::ObFixedLengthString<common::MAX_UNIT_CONFIG_LENGTH> ObUnitConfig
 struct ObUnitConfig {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static constexpr double CPU_EPSILON = 0.00001;
   ObUnitConfig();
   ~ObUnitConfig()
@@ -105,7 +105,7 @@ typedef common::ObFixedLengthString<common::MAX_RESOURCE_POOL_LENGTH> ObResource
 struct ObResourcePool {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t DEFAULT_ZONE_COUNT = 5;
 
   ObResourcePool();
@@ -124,7 +124,7 @@ struct ObResourcePool {
   uint64_t tenant_id_;
   common::ObReplicaType replica_type_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObResourcePool);
 };
 
@@ -151,7 +151,7 @@ struct ObUnitInfo {
   ObUnitConfig config_;
   ObResourcePool pool_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUnitInfo);
 };
 

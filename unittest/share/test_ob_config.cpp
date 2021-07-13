@@ -20,7 +20,7 @@ using namespace oceanbase;
 /* using namespace oceanbase::common::hash; */
 
 class TestServerConfig : public ::testing::Test, public ObInitConfigContainer {
-  public:
+public:
   bool check() const
   {
     bool ret = true;

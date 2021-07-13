@@ -37,7 +37,7 @@ class ObZoneManager;
 class ObRsGtsTaskMgr;
 
 class ObGtsTaskManagerIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObGtsTaskManagerIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   static const int64_t INTERVAL_US = 1000000;
@@ -48,13 +48,13 @@ class ObGtsTaskManagerIdling : public ObThreadIdling {
 };
 
 class UnitInfoStruct : public share::ObUnitInfo {
-  public:
+public:
   UnitInfoStruct() : ObUnitInfo(), outside_replica_cnt_(0)
   {}
   virtual ~UnitInfoStruct()
   {}
 
-  public:
+public:
   int assign(const ObUnitInfo& that)
   {
     int ret = common::OB_SUCCESS;
@@ -82,12 +82,12 @@ class UnitInfoStruct : public share::ObUnitInfo {
     ++outside_replica_cnt_;
   }
 
-  private:
+private:
   int64_t outside_replica_cnt_;
 };
 
 class ObRsGtsInfoCollector {
-  public:
+public:
   ObRsGtsInfoCollector(rootserver::ObUnitManager& unit_mgr)
       : inited_(false),
         sql_proxy_(nullptr),
@@ -100,7 +100,7 @@ class ObRsGtsInfoCollector {
   virtual ~ObRsGtsInfoCollector()
   {}
 
-  public:
+public:
   int init(common::ObMySQLProxy* sql_proxy);
   void reuse();
   int gather_stat();
@@ -114,13 +114,13 @@ class ObRsGtsInfoCollector {
     return unit_info_array_;
   }
 
-  private:
+private:
   typedef common::hash::ObHashMap<common::ObAddr, UnitInfoStruct*, common::hash::NoPthreadDefendMode> UnitInfoMap;
   static const int64_t UNIT_MAP_BUCKET_CNT = 50000;
   static int append_unit_info_array(
       common::ObIArray<UnitInfoStruct>& dst_array, const common::ObIArray<share::ObUnitInfo>& src_array);
 
-  private:
+private:
   bool inited_;
   common::ObMySQLProxy* sql_proxy_;
   share::ObGtsTableOperator gts_table_operator_;
@@ -154,7 +154,7 @@ class ObRsGtsInfoCollector {
  *         processing according the above principles.
  */
 class ObRsGtsUnitDistributor {
-  public:
+public:
   ObRsGtsUnitDistributor(rootserver::ObUnitManager& unit_mgr, rootserver::ObServerManager& server_mgr,
       rootserver::ObZoneManager& zone_mgr, volatile bool& stop)
       : inited_(false),
@@ -168,18 +168,18 @@ class ObRsGtsUnitDistributor {
   virtual ~ObRsGtsUnitDistributor()
   {}
 
-  public:
+public:
   int init(common::ObMySQLProxy* sql_proxy);
   int distribute_unit_for_server_status_change();
   int unit_migrate_finish();
   int check_shrink_resource_pool();
 
-  private:
+private:
   int check_stop() const;
   int check_single_pool_shrinking_finished(const uint64_t tenant_id, const uint64_t pool_id, bool& is_finished);
   int commit_shrink_resource_pool(const uint64_t pool_id);
 
-  private:
+private:
   bool inited_;
   common::ObMySQLProxy* sql_proxy_;
   rootserver::ObUnitManager& unit_mgr_;
@@ -197,13 +197,13 @@ enum class GtsReplicaTaskType : int64_t {
 };
 
 class ObGtsReplicaTaskKey {
-  public:
+public:
   ObGtsReplicaTaskKey() : gts_id_(common::OB_INVALID_ID), hash_value_(0)
   {}
   virtual ~ObGtsReplicaTaskKey()
   {}
 
-  public:
+public:
   bool is_valid() const;
   bool operator==(const ObGtsReplicaTaskKey& that) const;
   ObGtsReplicaTaskKey& operator=(const ObGtsReplicaTaskKey& that);
@@ -212,22 +212,22 @@ class ObGtsReplicaTaskKey {
   int init(const ObGtsReplicaTaskKey& that);
   TO_STRING_KV(K_(gts_id));
 
-  private:
+private:
   uint64_t inner_hash() const;
 
-  private:
+private:
   uint64_t gts_id_;
   uint64_t hash_value_;
 };
 
 class ObGtsReplicaTask : public common::ObDLinkBase<ObGtsReplicaTask> {
-  public:
+public:
   ObGtsReplicaTask()
   {}
   virtual ~ObGtsReplicaTask()
   {}
 
-  public:
+public:
   virtual int64_t get_deep_copy_size() const = 0;
   virtual int clone_new(void* ptr, ObGtsReplicaTask*& output_ptr) const = 0;
   virtual int execute(rootserver::ObServerManager& server_mgr, share::ObGtsTableOperator& gts_table_operator,
@@ -236,7 +236,7 @@ class ObGtsReplicaTask : public common::ObDLinkBase<ObGtsReplicaTask> {
       share::ObGtsTableOperator& gts_table_operator, bool& can_execute) = 0;
   virtual GtsReplicaTaskType get_task_type() = 0;
 
-  public:
+public:
   int assign(const ObGtsReplicaTask& that)
   {
     task_key_ = that.task_key_;
@@ -248,12 +248,12 @@ class ObGtsReplicaTask : public common::ObDLinkBase<ObGtsReplicaTask> {
   }
   TO_STRING_KV(K(task_key_));
 
-  protected:
+protected:
   ObGtsReplicaTaskKey task_key_;
 };
 
 class GtsMigrateReplicaTask : public ObGtsReplicaTask {
-  public:
+public:
   enum class MigrateType : int64_t {
     MT_INVALID = 0,
     MT_MIGRATE_REPLICA,
@@ -262,13 +262,13 @@ class GtsMigrateReplicaTask : public ObGtsReplicaTask {
     MT_MAX
   };
 
-  public:
+public:
   GtsMigrateReplicaTask() : gts_info_(), src_(), dst_(), migrate_type_(MigrateType::MT_INVALID)
   {}
   virtual ~GtsMigrateReplicaTask()
   {}
 
-  public:
+public:
   virtual int64_t get_deep_copy_size() const override
   {
     return sizeof(GtsMigrateReplicaTask);
@@ -283,15 +283,15 @@ class GtsMigrateReplicaTask : public ObGtsReplicaTask {
     return GtsReplicaTaskType::GTS_RTY_MIGRATE;
   }
 
-  public:
+public:
   int init(const common::ObGtsInfo& gts_info, const common::ObAddr& src, const common::ObAddr& dst,
       const MigrateType migrate_type);
   int assign(const GtsMigrateReplicaTask& that);
 
-  private:
+private:
   int try_remove_migrate_src(rootserver::ObServerManager& server_mgr, obrpc::ObSrvRpcProxy& rpc_proxy);
 
-  private:
+private:
   common::ObGtsInfo gts_info_;
   common::ObAddr src_;
   common::ObAddr dst_;
@@ -299,13 +299,13 @@ class GtsMigrateReplicaTask : public ObGtsReplicaTask {
 };
 
 class GtsAllocStandbyTask : public ObGtsReplicaTask {
-  public:
+public:
   GtsAllocStandbyTask() : gts_info_(), new_standby_()
   {}
   virtual ~GtsAllocStandbyTask()
   {}
 
-  public:
+public:
   virtual int64_t get_deep_copy_size() const override
   {
     return sizeof(GtsAllocStandbyTask);
@@ -320,17 +320,17 @@ class GtsAllocStandbyTask : public ObGtsReplicaTask {
     return GtsReplicaTaskType::GTS_RTY_ALLOC_STANDBY;
   }
 
-  public:
+public:
   int init(const common::ObGtsInfo& gts_info, const common::ObAddr& new_standby);
   int assign(const GtsAllocStandbyTask& that);
 
-  private:
+private:
   common::ObGtsInfo gts_info_;
   common::ObAddr new_standby_;
 };
 
 class ObRsGtsReplicaTaskGenerator {
-  public:
+public:
   ObRsGtsReplicaTaskGenerator(rootserver::ObUnitManager& unit_mgr, rootserver::ObServerManager& server_mgr,
       rootserver::ObZoneManager& zone_mgr, volatile bool& stop)
       : inited_(false),
@@ -346,12 +346,12 @@ class ObRsGtsReplicaTaskGenerator {
   virtual ~ObRsGtsReplicaTaskGenerator()
   {}
 
-  public:
+public:
   int init(common::ObMySQLProxy* sql_proxy);
   int output_gts_replica_task_array(common::ObIArray<const ObGtsReplicaTask*>& output_task_array);
   void reuse();
 
-  private:
+private:
   struct ZoneReplicaCnt {
     ZoneReplicaCnt() : zone_(), cnt_(0)
     {}
@@ -374,7 +374,7 @@ class ObRsGtsReplicaTaskGenerator {
     common::ObZone zone_;
   };
 
-  private:
+private:
   int check_stop();
   int check_can_migrate(const common::ObAddr& myself, const common::ObGtsInfo& gts_info, bool& can_migrate);
   int try_generate_gts_replica_task(const common::ObGtsInfo& gts_info, ObGtsReplicaTask*& gts_replica_task);
@@ -397,10 +397,10 @@ class ObRsGtsReplicaTaskGenerator {
       const common::ObGtsInfo& gts_info, const bool count_standby, common::ObIArray<ZoneReplicaCnt>& zone_replica_cnts);
   int try_generate_server_or_zone_stopped_task(const common::ObGtsInfo& gts_info, ObGtsReplicaTask*& gts_replica_task);
 
-  public:
+public:
   static const int64_t GTS_QUORUM = 3;
 
-  private:
+private:
   bool inited_;
   common::ObMySQLProxy* sql_proxy_;
   common::ObArenaAllocator allocator_;                    // output task allocator
@@ -413,13 +413,13 @@ class ObRsGtsReplicaTaskGenerator {
 };
 
 class ObRsGtsMonitor : public ObRsReentrantThread {
-  public:
+public:
   ObRsGtsMonitor(rootserver::ObUnitManager& unit_mgr, rootserver::ObServerManager& server_mgr,
       rootserver::ObZoneManager& zone_mgr, rootserver::ObRsGtsTaskMgr& gts_task_mgr);
   virtual ~ObRsGtsMonitor()
   {}
 
-  public:
+public:
   int init(common::ObMySQLProxy* sql_proxy);
   virtual void run3() override;
   void wakeup();
@@ -432,10 +432,10 @@ class ObRsGtsMonitor : public ObRsReentrantThread {
       const common::ObIArray<common::ObAddr>& servers_need_stopped, bool& can_stop);
   int check_gts_replica_enough_when_stop_zone(const common::ObZone& zone_need_stopped, bool& can_stop);
 
-  public:
+public:
   static const int64_t GTS_QUORUM = 3;
 
-  private:
+private:
   bool inited_;
   mutable ObGtsTaskManagerIdling idling_;
   ObRsGtsUnitDistributor gts_unit_distributor_;

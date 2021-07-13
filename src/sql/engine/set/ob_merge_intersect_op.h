@@ -21,12 +21,12 @@ namespace sql {
 class ObMergeIntersectSpec : public ObMergeSetSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMergeIntersectSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 };
 
 class ObMergeIntersectOp : public ObMergeSetOp {
-  public:
+public:
   ObMergeIntersectOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;
@@ -35,7 +35,7 @@ class ObMergeIntersectOp : public ObMergeSetOp {
   virtual void destroy() override;
   virtual int inner_get_next_row() override;
 
-  private:
+private:
   bool right_iter_end_;
   bool first_got_right_row_;
 };

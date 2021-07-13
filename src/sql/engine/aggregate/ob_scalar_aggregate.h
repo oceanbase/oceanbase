@@ -23,10 +23,10 @@ class ObNewRow;
 
 namespace sql {
 class ObScalarAggregate : public ObGroupBy {
-  protected:
+protected:
   class ObScalarAggregateCtx;
 
-  public:
+public:
   explicit ObScalarAggregate(common::ObIAllocator& alloc);
   virtual ~ObScalarAggregate();
   virtual void reset();
@@ -34,7 +34,7 @@ class ObScalarAggregate : public ObGroupBy {
   virtual int rescan(ObExecContext& ctx) const;
   virtual int switch_iterator(ObExecContext& ctx) const override;
 
-  protected:
+protected:
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   /**
    * @brief open operator, not including children operators.
@@ -64,7 +64,7 @@ class ObScalarAggregate : public ObGroupBy {
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
   virtual int add_group_column_idx(int64_t column_idx, common::ObCollationType cs_type);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObScalarAggregate);
 };

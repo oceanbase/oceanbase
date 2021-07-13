@@ -23,14 +23,14 @@ class ObExecContext;
 class ObExecuteStmt;
 
 class ObExecuteExecutor {
-  public:
+public:
   ObExecuteExecutor()
   {}
   virtual ~ObExecuteExecutor()
   {}
   int execute(ObExecContext& ctx, ObExecuteStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExecuteExecutor);
 };
 

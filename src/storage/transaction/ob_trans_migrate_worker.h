@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace transaction {
 
 class ObTransMigrateWorker : public lib::TGTaskHandler {
-  public:
+public:
   ObTransMigrateWorker() : is_inited_(false), is_running_(false)
   {}
   ~ObTransMigrateWorker()
@@ -34,10 +34,10 @@ class ObTransMigrateWorker : public lib::TGTaskHandler {
   void destroy();
   int push(void* task);
 
-  public:
+public:
   void handle(void* task);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
 };

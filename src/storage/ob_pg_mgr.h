@@ -28,7 +28,7 @@ class ObPGPartition;
 class ObPGPartitionGuard;
 class ObIPartitionGroupGuard;
 class ObPGMgr {
-  public:
+public:
   friend class ObPartitionGroupIterator;
   friend class ObPGPartitionIterator;
   ObPGMgr()
@@ -79,13 +79,13 @@ class ObPGMgr {
   }
   int remove_duplicate_pgs();
 
-  private:
+private:
   OB_INLINE void free_pg(ObIPartitionGroup* pg) const;
   void del_pg_impl(ObIPartitionGroup* pg);
   int choose_preserve_pg(ObIPartitionGroup* left_pg, ObIPartitionGroup* right_pg, ObIPartitionGroup*& result_pg);
   int remove_duplicate_pg_in_linklist(ObIPartitionGroup*& head);
 
-  private:
+private:
   static const bool ENABLE_RECOVER_ALL_ZONE = false;
   bool is_inited_;
   // total pg + total standalone partition
@@ -102,7 +102,7 @@ class ObPGMgr {
 
 // iterate all pgs and all standalone partitions
 class ObIPartitionGroupIterator {
-  public:
+public:
   ObIPartitionGroupIterator()
   {}
   virtual ~ObIPartitionGroupIterator()
@@ -111,7 +111,7 @@ class ObIPartitionGroupIterator {
 };
 
 class ObPartitionGroupIterator : public ObIPartitionGroupIterator {
-  public:
+public:
   ObPartitionGroupIterator();
   virtual ~ObPartitionGroupIterator();
   virtual int get_next(ObIPartitionGroup*& partition);
@@ -121,7 +121,7 @@ class ObPartitionGroupIterator : public ObIPartitionGroupIterator {
     pg_mgr_ = &pg_mgr;
   }
 
-  private:
+private:
   common::ObArray<ObIPartitionGroup*> partitions_;
   int64_t bucket_pos_;
   int64_t array_idx_;
@@ -132,7 +132,7 @@ typedef common::ObSEArray<ObPGPartitionGuard*, 16> ObPGPartitionGuardArray;
 
 // iterate all pg partition in current server
 class ObIPGPartitionIterator {
-  public:
+public:
   ObIPGPartitionIterator() : need_trans_table_(false)
   {}
   virtual ~ObIPGPartitionIterator()
@@ -140,12 +140,12 @@ class ObIPGPartitionIterator {
   virtual int get_next(ObPGPartition*& pg_partition) = 0;
   int get_pg_partition_guard_array(ObIPartitionGroup* partition, ObPGPartitionGuardArray& pg_partition_guard_arr);
 
-  protected:
+protected:
   bool need_trans_table_;
 };
 
 class ObSinglePGPartitionIterator : public ObIPGPartitionIterator {
-  public:
+public:
   ObSinglePGPartitionIterator();
   virtual ~ObSinglePGPartitionIterator();
   int init(ObIPartitionGroup* pg, const bool need_trans_table = false);
@@ -156,14 +156,14 @@ class ObSinglePGPartitionIterator : public ObIPGPartitionIterator {
     return pg_partition_guard_arr_;
   }
 
-  private:
+private:
   ObPGPartitionGuardArray pg_partition_guard_arr_;
   int64_t array_idx_;
   bool is_inited_;
 };
 
 class ObPGPartitionIterator : public ObIPGPartitionIterator {
-  public:
+public:
   ObPGPartitionIterator();
   virtual ~ObPGPartitionIterator();
   virtual int get_next(ObPGPartition*& pg_partition);
@@ -173,10 +173,10 @@ class ObPGPartitionIterator : public ObIPGPartitionIterator {
     pg_mgr_ = &pg_mgr;
   }
 
-  private:
+private:
   int next_pg_();
 
-  private:
+private:
   int64_t bucket_pos_;
   ObPGPartitionGuardArray pg_partition_guard_arr_;
   int64_t array_idx_;
@@ -184,7 +184,7 @@ class ObPGPartitionIterator : public ObIPGPartitionIterator {
 };
 
 class ObIPartitionGroupGuard {
-  public:
+public:
   ObIPartitionGroupGuard() : pg_mgr_(nullptr), pg_(nullptr)
   {}
   virtual ~ObIPartitionGroupGuard()
@@ -211,7 +211,7 @@ class ObIPartitionGroupGuard {
     return pg_;
   }
 
-  private:
+private:
   const ObPGMgr* pg_mgr_;
   ObIPartitionGroup* pg_;
   DISALLOW_COPY_AND_ASSIGN(ObIPartitionGroupGuard);

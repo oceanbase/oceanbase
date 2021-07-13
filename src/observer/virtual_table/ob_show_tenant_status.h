@@ -29,7 +29,7 @@ class ObTenantSchema;
 namespace observer {
 
 class ObShowTenantStatus : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObShowTenantStatus();
   virtual ~ObShowTenantStatus();
 
@@ -45,10 +45,10 @@ class ObShowTenantStatus : public common::ObVirtualTableScannerIterator {
       const share::schema::ObSysVariableSchema& sys_variable_schema, common::ObObj* cells, const int64_t col_count);
   int add_all_tenant_status();
 
-  private:
+private:
   uint64_t tenant_id_;
 
-  private:
+private:
   enum TENANT_STATUS_COLUMN {
     TENANT_NAME = common::OB_APP_MIN_COLUMN_ID,
     HOST,

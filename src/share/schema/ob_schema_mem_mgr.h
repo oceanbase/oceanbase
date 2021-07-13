@@ -24,7 +24,7 @@ namespace share {
 namespace schema {
 
 class ObSchemaMemMgr {
-  public:
+public:
   ObSchemaMemMgr();
   virtual ~ObSchemaMemMgr();
   // TODO: Subsequent need to do 500 tenant memory split, schema_mgr memory usage needs to be split to tenants
@@ -47,14 +47,14 @@ class ObSchemaMemMgr {
   int try_reset_another_allocator();
   int get_another_ptrs(common::ObArray<void*>& ptrs);
 
-  private:
+private:
   bool check_inner_stat() const;
   int find_ptr(const void* ptr, const int ptrs_pos, int& idx);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaMemMgr);
 
-  private:
+private:
   common::ObArenaAllocator allocator_[2];
   common::ObArray<void*> all_ptrs_[2];
   common::ObArray<void*> ptrs_[2];

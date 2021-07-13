@@ -55,7 +55,7 @@ class TenantSchemaGetter;
 
 // To create replicas when creating tables
 class ObReplicaCreator {
-  public:
+public:
   ObReplicaCreator();
   virtual ~ObReplicaCreator()
   {}
@@ -86,14 +86,14 @@ class ObReplicaCreator {
       const common::ObIArray<ObPartitionKey>& keys, obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr,
       share::schema::ObSchemaGetterGuard& guard);
 
-  public:
+public:
   // types and constants
   typedef common::ObArray<share::ObUnitInfo> UnitArray;
   typedef common::ObSEArray<UnitArray, common::MAX_ZONE_NUM> ZoneUnitArray;
   typedef common::ObArray<share::ObUnitInfo*> UnitPtrArray;
   typedef common::ObSEArray<UnitPtrArray, common::MAX_ZONE_NUM> ZoneUnitPtrArray;
 
-  private:
+private:
   struct CmpZoneScore {
     bool operator()(share::ObRawPrimaryZoneUtil::ZoneScore& left, share::ObRawPrimaryZoneUtil::ZoneScore& right)
     {
@@ -202,7 +202,7 @@ class ObReplicaCreator {
       const common::ObIArray<share::ObUnitInfo>& logonly_units, ObPartitionAddr& paddr,
       const obrpc::ObCreateTableMode create_mode);
 
-  private:
+private:
   // data members
   bool inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
@@ -212,7 +212,7 @@ class ObReplicaCreator {
   share::ObPartitionTableOperator* pt_operator_;
   share::ObCheckStopProvider* check_stop_provider_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObReplicaCreator);
 };
@@ -237,6 +237,7 @@ int ObReplicaCreator::alloc_partitions_for_add(const SCHEMA& table, const SCHEMA
     RS_LOG(WARN, "invalid table", K(ret), K(table));
   } else if (OB_FAIL(schema_for_add.assign(table))) {
     RS_LOG(WARN, "fail to assign table", K(ret));
+  } else if (FALSE_IT(schema_for_add.reset_dropped_partition())) {
   } else if (OB_FAIL(schema_for_add.try_assign_part_array(inc_table))) {
     RS_LOG(WARN, "fail to try assign part array", K(ret));
   } else if (OB_FAIL(schema_for_add.try_assign_def_subpart_array(table))) {

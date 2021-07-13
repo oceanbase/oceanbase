@@ -57,7 +57,7 @@
 namespace oceanbase {
 namespace clog {
 class ObLogBlockMetaV2 {
-  public:
+public:
   ObLogBlockMetaV2();
   ~ObLogBlockMetaV2();
 
@@ -137,13 +137,13 @@ class ObLogBlockMetaV2 {
   NEED_SERIALIZE_AND_DESERIALIZE;
   static const int16_t META_MAGIC = 0x4C42;  // BL means block
 
-  private:
+private:
   int generate_block(const char* buf, const int64_t data_len, const ObBlockType type);
   int64_t calc_data_checksum_(const char* buf, const int64_t data_len) const;
   int64_t calc_meta_checksum_() const;
   bool check_data_checksum_(const char* buf, const int64_t data_len) const;
 
-  private:
+private:
   static const int16_t BLOCK_VERSION = 1;
 
   int16_t magic_;

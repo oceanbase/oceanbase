@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace common {
 class ObOptStatService {
-  public:
+public:
   ObOptStatService() : inited_(false)
   {}
   virtual int init(common::ObMySQLProxy* proxy, ObServerConfig* config);
@@ -30,12 +30,12 @@ class ObOptStatService {
   virtual int load_column_stat_and_put_cache(const ObOptColumnStat::Key& key, ObOptColumnStatHandle& handle);
   virtual int load_table_stat_and_put_cache(const ObOptTableStat::Key& key, ObOptTableStatHandle& handle);
 
-  private:
+private:
   int update_column_stat(const ObOptColumnStat& stat);
   int load_column_stat_and_put_cache(
       const ObOptColumnStat::Key& key, ObOptColumnStat& new_entry, ObOptColumnStatHandle& handle);
 
-  protected:
+protected:
   bool inited_;
   static const int64_t DEFAULT_TAB_STAT_CACHE_PRIORITY = 1;
   static const int64_t DEFAULT_COL_STAT_CACHE_PRIORITY = 1;

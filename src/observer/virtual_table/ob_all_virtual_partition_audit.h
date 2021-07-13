@@ -23,14 +23,14 @@ class ObIPartitionGroupIterator;
 namespace observer {
 
 class ObAllVirtualPartitionAudit : public ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualPartitionAudit();
   virtual ~ObAllVirtualPartitionAudit();
   int init();
   virtual void reset() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   enum COLUMNS {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,

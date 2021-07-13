@@ -21,7 +21,7 @@ using namespace share::schema;
 
 namespace unittest {
 class TestSSTableSingleScanner : public ObSSTableTest {
-  public:
+public:
   TestSSTableSingleScanner();
   void test_border(const bool is_reverse_scan, const int64_t limit);
   void test_normal(const bool is_reverse_scan, const int64_t limit);
@@ -33,7 +33,7 @@ class TestSSTableSingleScanner : public ObSSTableTest {
   void test_skip_range(const bool is_reverse_scan, const common::ObIArray<SkipInfo>& skip_infos);
   virtual ~TestSSTableSingleScanner();
 
-  private:
+private:
   ObStoreRow start_row_;
   ObStoreRow end_row_;
   ObObj start_cells_[TEST_COLUMN_CNT];

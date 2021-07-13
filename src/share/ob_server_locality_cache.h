@@ -26,7 +26,7 @@
 namespace oceanbase {
 namespace share {
 class ObServerLocality {
-  public:
+public:
   ObServerLocality();
   virtual ~ObServerLocality();
   void reset();
@@ -89,7 +89,7 @@ class ObServerLocality {
   TO_STRING_KV(K_(inited), K_(addr), K_(zone), K_(zone_type), K_(idc), K_(region), K_(is_idle), K_(is_active),
       K_(start_service_time), K_(server_stop_time), K_(server_status));
 
-  private:
+private:
   bool inited_;
   bool is_idle_;
   bool is_active_;
@@ -102,12 +102,12 @@ class ObServerLocality {
   int64_t server_stop_time_;
   ObServerStatus::DisplayStatus server_status_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObServerLocality);
 };
 
 class ObServerLocalityCache {
-  public:
+public:
   ObServerLocalityCache();
   virtual ~ObServerLocalityCache();
   int init();
@@ -127,11 +127,11 @@ class ObServerLocalityCache {
   int record_server_idc(const common::ObAddr& server, const common::ObIDC& idc);
   TO_STRING_KV(K_(server_locality_array), K_(has_readonly_zone));
 
-  private:
+private:
   int get_server_region_from_map_(const common::ObAddr& server, common::ObRegion& region) const;
   int get_server_idc_from_map_(const common::ObAddr& server, common::ObIDC& idc) const;
 
-  private:
+private:
   mutable common::SpinRWLock rwlock_;
   common::ObSEArray<ObServerLocality, 32> server_locality_array_;
   common::ObLinearHashMap<common::ObAddr, int64_t> server_cid_map_;  // store <server, cluster_id>
@@ -140,7 +140,7 @@ class ObServerLocalityCache {
   bool has_readonly_zone_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObServerLocalityCache);
 };
 }  // namespace share

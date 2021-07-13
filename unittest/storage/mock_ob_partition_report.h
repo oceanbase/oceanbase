@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace storage {
 
 class MockObIPartitionReport : public ObIPartitionReport {
-  public:
+public:
   MockObIPartitionReport()
   {}
   virtual ~MockObIPartitionReport()

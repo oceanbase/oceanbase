@@ -20,10 +20,10 @@ class ObSqlExpression;
 class ObSequence : public ObMultiChildrenPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   class ObSequenceCtx;
 
-  public:
+public:
   explicit ObSequence(common::ObIAllocator& alloc);
   virtual ~ObSequence();
 
@@ -31,7 +31,7 @@ class ObSequence : public ObMultiChildrenPhyOperator {
   virtual void reuse();
   int add_uniq_nextval_sequence_id(uint64_t seq_id);
 
-  private:
+private:
   bool is_valid() const;
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
@@ -68,7 +68,7 @@ class ObSequence : public ObMultiChildrenPhyOperator {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSequence);
 
-  private:
+private:
   common::ObSEArray<uint64_t, 4> nextval_seq_ids_;
 };
 }  // end namespace sql

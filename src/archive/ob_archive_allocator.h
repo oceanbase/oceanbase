@@ -23,12 +23,12 @@ class ObArchiveSendTask;
 class ObArchiveSendTaskStatus;
 class ObArchiveCLogTaskStatus;
 class ObArchiveAllocator {
-  public:
+public:
   ObArchiveAllocator();
   ~ObArchiveAllocator();
   int init();
 
-  public:
+public:
   ObPGArchiveCLogTask* alloc_clog_split_task();
   void free_clog_split_task(ObPGArchiveCLogTask* task);
 
@@ -44,7 +44,7 @@ class ObArchiveAllocator {
 
   int set_archive_batch_buffer_limit();
 
-  private:
+private:
   bool inited_;
   common::ObSmallAllocator clog_task_allocator_;
   common::ObConcurrentFIFOAllocator send_task_allocator_;

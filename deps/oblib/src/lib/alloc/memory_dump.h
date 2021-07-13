@@ -36,7 +36,7 @@ namespace common {
 enum DumpType { DUMP_CONTEXT, DUMP_CHUNK, STAT_LABEL };
 
 class ObMemoryDumpTask {
-  public:
+public:
   TO_STRING_KV(K(type_), K(dump_all_), KP(p_context_), K(slot_idx_), K(dump_tenant_ctx_), K(tenant_id_), K(ctx_id_),
       KP(p_chunk_));
   DumpType type_;
@@ -79,7 +79,7 @@ struct LabelItem {
 };
 
 class LabelMap : public common::hash::ObHashMap<ObString, LabelItem*> {
-  public:
+public:
   common::ObLocalModSet* mod_set_ = nullptr;
 };
 
@@ -87,10 +87,10 @@ using lib::ABlock;
 using lib::AChunk;
 using lib::AObject;
 class ObMemoryDump : public lib::TGRunnable {
-  public:
+public:
   static constexpr const char* LOG_FILE = "log/memory_meta";
 
-  private:
+private:
   friend class observer::ObAllVirtualMemoryInfo;
   friend class lib::ObTenantCtxAllocator;
 
@@ -130,7 +130,7 @@ class ObMemoryDump : public lib::TGRunnable {
     char log_buf_[LOG_BUF_LEN];
   };
 
-  public:
+public:
   ObMemoryDump();
   ~ObMemoryDump();
   static ObMemoryDump& get_instance();
@@ -162,14 +162,14 @@ class ObMemoryDump : public lib::TGRunnable {
     avaliable_task_set_ |= (1 << pos);
   }
 
-  private:
+private:
   void run1() override;
   void handle(void* task);
 
-  private:
+private:
   AChunk* find_chunk(void* ptr);
 
-  private:
+private:
   ObLightyQueue queue_;
   lib::ObMutex task_mutex_;
   ObMemoryDumpTask tasks_[TASK_NUM];

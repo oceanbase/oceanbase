@@ -29,7 +29,7 @@ class ObString;
 namespace rootserver {
 
 class ObDDLSqlGenerator {
-  public:
+public:
   ObDDLSqlGenerator()
   {}
 
@@ -59,7 +59,7 @@ class ObDDLSqlGenerator {
       const share::schema::ObTablePrivSortKey& table_priv_key, const bool revoke_all_flag,
       const share::ObRawObjPrivArray& obj_priv_array, const bool is_grant, common::ObSqlString& sql_string);
 
-  private:
+private:
   static int get_priv_name(const int64_t priv, const char*& name);
   static int priv_to_name(const ObPrivSet priv, common::ObSqlString& priv_str);
   static char* adjust_ddl_format_str(char* ori_format_str);

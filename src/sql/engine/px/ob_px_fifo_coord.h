@@ -33,10 +33,10 @@ class ObPxFifoCoord;
 class ObPxMergeSortCoord;
 
 class ObPxFifoCoordInput : public ObPxReceiveInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxFifoCoordInput() : ObPxReceiveInput()
   {}
   virtual ~ObPxFifoCoordInput()
@@ -48,19 +48,19 @@ class ObPxFifoCoordInput : public ObPxReceiveInput {
 };
 
 class ObPxFifoCoord : public ObPxCoord {
-  public:
+public:
   class ObPxFifoCoordCtx;
 
-  public:
+public:
   class ObPxFifoCoordEventListener : public ObIPxCoordEventListener {
-    public:
+  public:
     virtual int on_root_data_channel_setup()
     {
       return common::OB_SUCCESS;
     }
   };
   class ObPxFifoCoordCtx : public ObPxCoordCtx {
-    public:
+  public:
     explicit ObPxFifoCoordCtx(ObExecContext& ctx)
         : ObPxCoordCtx(ctx),
           serial_scheduler_(coord_info_, *this, listener_),
@@ -102,7 +102,7 @@ class ObPxFifoCoord : public ObPxCoord {
       return msg_proc_;
     }
 
-    protected:
+  protected:
     ObPxFifoCoordEventListener listener_;
     ObSerialDfoScheduler serial_scheduler_;
     ObPxMsgProc msg_proc_;  // dtl message callback for msg_loop
@@ -115,13 +115,13 @@ class ObPxFifoCoord : public ObPxCoord {
     friend class ObPxFifoCoord;
   };
 
-  public:
+public:
   explicit ObPxFifoCoord(common::ObIAllocator& alloc);
   virtual ~ObPxFifoCoord();
   // int open();
   // for debug purpose, should remove later
   // inline void set_dfo_tree(ObDfo &root) { root_ = &root;}
-  private:
+private:
   /**
    * @brief called by get_next_row(), get a row from the child operator or row_store
    * @param ctx[in], execute context

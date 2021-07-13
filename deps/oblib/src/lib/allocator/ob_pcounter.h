@@ -60,7 +60,7 @@ inline int64_t get_cpu_num()
 }
 
 class PthreadSpinLock {
-  public:
+public:
   PthreadSpinLock()
   {
     IGNORE_RETURN pthread_spin_init(&lock_, false);
@@ -82,7 +82,7 @@ class PthreadSpinLock {
     IGNORE_RETURN pthread_spin_unlock(&lock_);
   }
 
-  private:
+private:
   pthread_spinlock_t lock_;
 };
 
@@ -101,7 +101,7 @@ inline const PCounterDesc* get_pcounter_desc(int mod)
 }
 
 class PCounterSet {
-  public:
+public:
   PCounterSet()
   {
     memset(counters_, 0, sizeof(counters_));
@@ -109,7 +109,7 @@ class PCounterSet {
   ~PCounterSet()
   {}
 
-  public:
+public:
   void set(int mod, int64_t val)
   {
     counters_[mod].set(val);
@@ -123,12 +123,12 @@ class PCounterSet {
     return counters_[mod].value();
   }
 
-  private:
+private:
   ::oceanbase::common::ObPCCounter counters_[PCOUNTER_COUNT];
 };
 
 class Printer {
-  public:
+public:
   enum { MAX_BUF_SIZE = 4096 };
   Printer() : limit_(MAX_BUF_SIZE), pos_(0)
   {
@@ -177,14 +177,14 @@ class Printer {
     return src;
   }
 
-  private:
+private:
   char buf_[MAX_BUF_SIZE];
   int64_t limit_;
   int64_t pos_;
 };
 
 class PCounterMonitor {
-  public:
+public:
   typedef PthreadSpinLock Lock;
   PCounterMonitor(PCounterSet& set, int64_t interval)
       : pcounter_set_(set), report_interval_(interval), last_report_time_(0), report_seq_(1)
@@ -194,7 +194,7 @@ class PCounterMonitor {
   ~PCounterMonitor()
   {}
 
-  public:
+public:
   void report()
   {
     int64_t cur_time = get_us();
@@ -226,7 +226,7 @@ class PCounterMonitor {
     }
   }
 
-  private:
+private:
   PCounterSet& pcounter_set_;
   Lock lock_;
   int64_t report_interval_;

@@ -35,7 +35,7 @@ class TestItem;
 class TestItemCompare;
 
 class TestItem {
-  public:
+public:
   TestItem();
   virtual ~TestItem();
   void set(const int64_t key, const char* buf, const int32_t length);
@@ -61,13 +61,13 @@ class TestItem {
   TO_STRING_KV(K(key_), K(value_));
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   int64_t key_;
   ObString value_;
 };
 
 class TestItemCompare {
-  public:
+public:
   TestItemCompare(int& sort_ret) : result_code_(sort_ret)
   {}
   bool operator()(const TestItem* left, const TestItem* right)
@@ -151,7 +151,7 @@ DEFINE_GET_SERIALIZE_SIZE(TestItem)
 }
 
 class TestParallelExternalSort : public blocksstable::TestDataFilePrepare {
-  public:
+public:
   TestParallelExternalSort();
   virtual ~TestParallelExternalSort()
   {}
@@ -175,11 +175,11 @@ class TestParallelExternalSort : public blocksstable::TestDataFilePrepare {
   virtual void SetUp();
   virtual void TearDown();
 
-  public:
+public:
   static const int64_t MACRO_BLOCK_SIZE = 2 * 1024 * 1024;
   static const int64_t MACRO_BLOCK_COUNT = 15 * 1024;
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
 };
 

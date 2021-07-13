@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprEmptyClob : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprEmptyClob(common::ObIAllocator& alloc);
   virtual ~ObExprEmptyClob();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -27,13 +27,13 @@ class ObExprEmptyClob : public ObFuncExprOperator {
   static int eval_empty_clob(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprEmptyClob);
 };
 
 class ObExprEmptyBlob : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprEmptyBlob(common::ObIAllocator& alloc);
   virtual ~ObExprEmptyBlob();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -41,7 +41,7 @@ class ObExprEmptyBlob : public ObFuncExprOperator {
   static int eval_empty_blob(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprEmptyBlob);
 };

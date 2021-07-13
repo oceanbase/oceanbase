@@ -41,7 +41,7 @@ enum class DupReplicaType {
 };
 
 class ObDupReplicaChecker {
-  public:
+public:
   ObDupReplicaChecker() : is_inited_(false), schema_service_(nullptr), locality_manager_(nullptr)
   {}
   virtual ~ObDupReplicaChecker()
@@ -57,13 +57,13 @@ class ObDupReplicaChecker {
       const common::ObPartitionKey& pkey, const common::ObAddr& server, DupReplicaType& dup_replica_type);
   int get_dup_replica_type(const uint64_t table_id, const common::ObAddr& server, DupReplicaType& dup_replica_type);
 
-  private:
+private:
   int get_table_high_primary_zone_array(share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObTableSchema& table_schema, common::ObIArray<common::ObZone>& primary_zone_array);
   int get_table_high_primary_region_array(share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObTableSchema& table_schema, common::ObIArray<common::ObRegion>& primary_region_array);
 
-  private:
+private:
   bool is_inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   storage::ObLocalityManager* locality_manager_;

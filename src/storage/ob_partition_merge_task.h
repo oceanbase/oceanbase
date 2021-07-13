@@ -34,17 +34,17 @@ namespace storage {
 class ObSSTableMergeDag;
 
 class ObMacroBlockMergeTask : public share::ObITask {
-  public:
+public:
   ObMacroBlockMergeTask();
   virtual ~ObMacroBlockMergeTask();
   int init(const int64_t idx, storage::ObSSTableMergeCtx& ctx);
   virtual int process();
   int generate_next_task(ObITask*& next_task);
 
-  private:
+private:
   int process_iter_to_complement(transaction::ObTransService* txs);
 
-  private:
+private:
   int64_t idx_;
   storage::ObSSTableMergeCtx* ctx_;
   compaction::ObMacroBlockBuilder builder_;
@@ -52,13 +52,13 @@ class ObMacroBlockMergeTask : public share::ObITask {
   compaction::ObIStoreRowProcessor* processor_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlockMergeTask);
 };
 
 // used for record output macro blocks
 class ObSSTableMergeContext {
-  public:
+public:
   ObSSTableMergeContext();
   virtual ~ObSSTableMergeContext();
 
@@ -88,7 +88,7 @@ class ObSSTableMergeContext {
   int get_data_macro_block_count(int64_t& macro_block_count);
   TO_STRING_KV(K_(is_inited), K_(concurrent_cnt), K_(finish_count), K_(sstable_merge_info));
 
-  private:
+private:
   int add_lob_macro_blocks(const int64_t idx, blocksstable::ObMacroBlocksWriteCtx* blocks_ctx);
   int new_block_write_ctx(blocksstable::ObMacroBlocksWriteCtx*& ctx);
   OB_INLINE bool need_lob_macro_blocks()
@@ -96,7 +96,7 @@ class ObSSTableMergeContext {
     return !lob_block_ctxs_.empty();
   }
 
-  private:
+private:
   bool is_inited_;
   common::ObSpinLock lock_;
   ObArray<blocksstable::ObMacroBlocksWriteCtx*> block_ctxs_;
@@ -262,7 +262,7 @@ struct ObSSTableMergeCtx {
       K_(logical_data_version), K_(log_ts_range), K_(merge_log_ts), K_(trans_table_end_log_ts),
       K_(trans_table_timestamp), K_(read_base_version));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMergeCtx);
 };
 
@@ -303,56 +303,56 @@ struct ObMergeParameter {
       KP_(mv_dep_table_schema), K_(version_range), KP_(checksum_calculator), KP_(tables_handle),
       K_(is_iter_complement));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeParameter);
 };
 
 class ObSSTableMergePrepareTask : public share::ObITask {
-  public:
+public:
   ObSSTableMergePrepareTask();
   virtual ~ObSSTableMergePrepareTask();
   int init();
   virtual int process() override;
 
-  private:
+private:
   int generate_merge_sstable_task();
   int init_estimate(storage::ObSSTableMergeCtx& ctx);
   int create_sstable_for_large_snapshot(storage::ObSSTableMergeCtx& ctx);
 
-  private:
+private:
   bool is_inited_;
   ObSSTableMergeDag* merge_dag_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMergePrepareTask);
 };
 
 class ObSSTableMergeFinishTask : public share::ObITask {
-  public:
+public:
   ObSSTableMergeFinishTask();
   virtual ~ObSSTableMergeFinishTask();
   int init();
   virtual int process() override;
 
-  private:
+private:
   int get_merged_sstable_(const ObITable::TableType& type, const uint64_t table_id,
       storage::ObSSTableMergeContext& merge_context, storage::ObTableHandle& table_handle, ObSSTable*& sstable);
   int check_data_checksum();
   int check_empty_merge_valid(storage::ObSSTableMergeCtx& ctx);
   int check_macro_cnt_of_merge_table(const ObITable::TableType& type, storage::ObSSTableMergeContext& merge_context);
 
-  private:
+private:
   bool is_inited_;
   ObSSTableMergeDag* merge_dag_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMergeFinishTask);
 };
 
 class ObWriteCheckpointTask : public share::ObITask {
-  public:
+public:
   ObWriteCheckpointTask();
   virtual ~ObWriteCheckpointTask();
   int init(int64_t frozen_version);
   virtual int process() override;
 
-  private:
+private:
   static const int64_t FAIL_WRITE_CHECKPOINT_ALERT_INTERVAL = 1000L * 1000L * 3600LL;  // 6h
   static const int64_t RETRY_WRITE_CHECKPOINT_MIN_INTERVAL = 1000L * 1000L * 300L;     // 5 minutes
   // Average replay time of 1 slog is 100us. Total replay time should less than 1 minute.
@@ -365,7 +365,7 @@ class ObWriteCheckpointTask : public share::ObITask {
 };
 
 class ObWriteCheckpointDag : public share::ObIDag {
-  public:
+public:
   ObWriteCheckpointDag();
   virtual ~ObWriteCheckpointDag();
   virtual bool operator==(const ObIDag& other) const override;
@@ -378,14 +378,14 @@ class ObWriteCheckpointDag : public share::ObIDag {
     return static_cast<int64_t>(share::ObWorker::CompatMode::MYSQL);
   }
 
-  protected:
+protected:
   bool is_inited_;
   int64_t frozen_version_;
   DISALLOW_COPY_AND_ASSIGN(ObWriteCheckpointDag);
 };
 
 class ObSSTableMergeDag : public share::ObIDag {
-  public:
+public:
   ObSSTableMergeDag(const ObIDagType type, const ObIDagPriority priority);
   virtual ~ObSSTableMergeDag();
   storage::ObSSTableMergeCtx& get_ctx()
@@ -412,7 +412,7 @@ class ObSSTableMergeDag : public share::ObIDag {
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, "param", ctx_.param_, "sstable_version_range", ctx_.sstable_version_range_,
       "log_ts_range", ctx_.log_ts_range_);
 
-  protected:
+protected:
   int inner_init(const ObSSTableScheduleMergeParam& param, ObIPartitionReport* report);
 
   bool is_inited_;
@@ -426,37 +426,37 @@ class ObSSTableMergeDag : public share::ObIDag {
 };
 
 class ObSSTableMajorMergeDag : public ObSSTableMergeDag {
-  public:
+public:
   ObSSTableMajorMergeDag();
   virtual ~ObSSTableMajorMergeDag();
   int init(const ObSSTableScheduleMergeParam& param, ObIPartitionReport* report) override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMajorMergeDag);
 };
 
 class ObSSTableMiniMergeDag : public ObSSTableMergeDag {
-  public:
+public:
   ObSSTableMiniMergeDag();
   virtual ~ObSSTableMiniMergeDag();
   int init(const ObSSTableScheduleMergeParam& param, ObIPartitionReport* report) override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMiniMergeDag);
 };
 
 class ObSSTableMinorMergeDag : public ObSSTableMergeDag {
-  public:
+public:
   ObSSTableMinorMergeDag();
   virtual ~ObSSTableMinorMergeDag();
   int init(const ObSSTableScheduleMergeParam& param, ObIPartitionReport* report) override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMinorMergeDag);
 };
 
 class ObTransTableMergeDag : public share::ObIDag {
-  public:
+public:
   ObTransTableMergeDag() : ObIDag(ObIDagType::DAG_TYPE_TRANS_TABLE_MERGE, ObIDagPriority::DAG_PRIO_TRANS_TABLE_MERGE){};
   ~ObTransTableMergeDag(){};
   int init(const ObPartitionKey& pg_key)
@@ -491,16 +491,16 @@ class ObTransTableMergeDag : public share::ObIDag {
   }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, "pg_key", pg_key_);
 
-  private:
+private:
   ObPartitionKey pg_key_;
   DISALLOW_COPY_AND_ASSIGN(ObTransTableMergeDag);
 };
 
 class ObTransTableMergeTask : public share::ObITask {
-  private:
+private:
   enum class SOURCE { NONE = 0, FROM_LOCAL, FROM_REMOTE, FROM_BOTH };
 
-  public:
+public:
   ObTransTableMergeTask();
   ~ObTransTableMergeTask(){};
   int init(const ObPartitionKey& pg_key, const int64_t end_log_ts, const int64_t trans_table_seq);
@@ -510,14 +510,14 @@ class ObTransTableMergeTask : public share::ObITask {
   int merge_trans_table(blocksstable::ObMacroBlockWriter& writer);
   int get_merged_trans_sstable(ObTableHandle& table_handle, blocksstable::ObMacroBlockWriter& writer);
 
-  private:
+private:
   const int64_t SCHEMA_VERSION = 1;
 
-  private:
+private:
   int update_partition_store(ObTableHandle& table_handle);
   int merge_remote_with_local(blocksstable::ObMacroBlockWriter& writer);
 
-  private:
+private:
   ObPartitionKey pg_key_;
   common::ObArenaAllocator allocator_;
   ObPartitionKey trans_table_pkey_;

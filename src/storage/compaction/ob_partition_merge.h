@@ -30,7 +30,7 @@ namespace compaction {
 class ObMacroRowIterator;
 
 class ObIPartitionMergeFuser {
-  public:
+public:
   static const int64_t DEFAULT_ITER_COUNT = 16;
   typedef common::ObRawSEArray<ObMacroRowIterator*, DEFAULT_ITER_COUNT> MERGE_ITER_ARRAY;
   ObIPartitionMergeFuser()
@@ -81,7 +81,7 @@ class ObIPartitionMergeFuser {
   VIRTUAL_TO_STRING_KV(K_(schema_rowkey_column_cnt), K_(column_cnt), K_(checksum_method), K_(has_lob_column),
       KP_(result_row), K_(compact_type), K_(schema_column_ids), K_(is_inited));
 
-  protected:
+protected:
   int check_merge_param(const storage::ObMergeParameter& merge_param);
   int base_init(const storage::ObMergeParameter& merge_param);
   virtual int inner_check_merge_param(const storage::ObMergeParameter& merge_param) = 0;
@@ -95,8 +95,8 @@ class ObIPartitionMergeFuser {
       ObMacroRowIterator* row_iter, storage::ObStoreRow* row, const int64_t rowkey_column_cnt) = 0;
   virtual int malloc_row(int64_t column_count, storage::ObStoreRow*& row) = 0;
 
-  private:
-  protected:
+private:
+protected:
   int64_t schema_rowkey_column_cnt_;
   int64_t column_cnt_;
   int64_t checksum_method_;
@@ -111,7 +111,7 @@ class ObIPartitionMergeFuser {
 };
 
 class ObMajorPartitionMergeFuser : public ObIPartitionMergeFuser {
-  public:
+public:
   ObMajorPartitionMergeFuser()
       : ObIPartitionMergeFuser(),
         default_row_(NULL),
@@ -135,7 +135,7 @@ class ObMajorPartitionMergeFuser : public ObIPartitionMergeFuser {
   INHERIT_TO_STRING_KV("ObIPartitionMergeFuser", ObIPartitionMergeFuser, KP_(default_row), KP_(column_changed),
       KP_(table_schema), K_(need_fuse_generate));
 
-  protected:
+protected:
   virtual int inner_check_merge_param(const storage::ObMergeParameter& merge_param);
   virtual int inner_init(const storage::ObMergeParameter& merge_param) override;
   virtual int fuse_generate_exprs();
@@ -145,7 +145,7 @@ class ObMajorPartitionMergeFuser : public ObIPartitionMergeFuser {
       ObMacroRowIterator* row_iter, storage::ObStoreRow* row, const int64_t rowkey_column_cnt) override;
   virtual int malloc_row(int64_t column_count, storage::ObStoreRow*& row) override;
 
-  protected:
+protected:
   storage::ObStoreRow* default_row_;
   bool* column_changed_;  // only used in incre major fuser
   const share::schema::ObTableSchema* table_schema_;
@@ -155,12 +155,12 @@ class ObMajorPartitionMergeFuser : public ObIPartitionMergeFuser {
   bool need_fuse_generate_;
   bool is_full_merge_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMajorPartitionMergeFuser);
 };
 
 class ObIncrementMajorPartitionMergeFuser : public ObMajorPartitionMergeFuser {
-  public:
+public:
   ObIncrementMajorPartitionMergeFuser()
       : ObMajorPartitionMergeFuser(), row_changed_(false), old_row_(NULL), checksum_calculator_(NULL)
   {}
@@ -176,22 +176,22 @@ class ObIncrementMajorPartitionMergeFuser : public ObMajorPartitionMergeFuser {
   INHERIT_TO_STRING_KV(
       "ObMajorPartitionMergeFuser", ObMajorPartitionMergeFuser, K_(row_changed), KP_(old_row), K_(checksum_method));
 
-  protected:
+protected:
   virtual int inner_check_merge_param(const storage::ObMergeParameter& merge_param) override;
   virtual int inner_init(const storage::ObMergeParameter& merge_param) override;
   virtual int prepare_old_row(const MERGE_ITER_ARRAY& macro_row_iters);
 
-  protected:
+protected:
   bool row_changed_;
   storage::ObStoreRow* old_row_;
   ObColumnChecksumCalculator* checksum_calculator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIncrementMajorPartitionMergeFuser);
 };
 
 class ObMinorPartitionMergeFuser : public ObIPartitionMergeFuser {
-  public:
+public:
   ObMinorPartitionMergeFuser()
       : ObIPartitionMergeFuser(),
         col_id_set_(),
@@ -222,7 +222,7 @@ class ObMinorPartitionMergeFuser : public ObIPartitionMergeFuser {
   INHERIT_TO_STRING_KV("ObIPartitionMergeFuser", ObIPartitionMergeFuser, KP_(out_cols_project),
       KP_(multi_version_row_info), K_(column_ids));
 
-  protected:
+protected:
   virtual int inner_check_merge_param(const storage::ObMergeParameter& merge_param) override;
   virtual int inner_init(const storage::ObMergeParameter& merge_param) override;
   virtual int compare_row_iters(ObMacroRowIterator* base_iter, ObMacroRowIterator* macro_row_iter, int64_t& cmp_ret,
@@ -234,7 +234,7 @@ class ObMinorPartitionMergeFuser : public ObIPartitionMergeFuser {
   virtual int malloc_row(int64_t column_count, storage::ObStoreRow*& row) = 0;
   bool is_committed_row_(const storage::ObStoreRow& row) const;
 
-  protected:
+protected:
   common::ObBitSet<> col_id_set_;
   const common::ObIArray<int32_t>* out_cols_project_;
   storage::ObMultiVersionColDescGenerate multi_version_col_desc_gen_;
@@ -246,7 +246,7 @@ class ObMinorPartitionMergeFuser : public ObIPartitionMergeFuser {
 };
 
 class ObFlatMinorPartitionMergeFuser : public ObMinorPartitionMergeFuser {
-  public:
+public:
   ObFlatMinorPartitionMergeFuser()
   {}
   virtual ~ObFlatMinorPartitionMergeFuser()
@@ -264,7 +264,7 @@ class ObFlatMinorPartitionMergeFuser : public ObMinorPartitionMergeFuser {
 };
 
 class ObSparseMinorPartitionMergeFuser : public ObMinorPartitionMergeFuser {
-  public:
+public:
   ObSparseMinorPartitionMergeFuser()
   {}
   virtual ~ObSparseMinorPartitionMergeFuser()

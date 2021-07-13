@@ -29,29 +29,29 @@ class ObSQLSessionMgr;
 class ObKillSessionArg;
 
 class ObKillSession {
-  public:
+public:
   ObKillSession()
   {}
   virtual ~ObKillSession()
   {}
 
-  protected:
+protected:
   int kill_session(const ObKillSessionArg& arg, ObSQLSessionMgr& sess_mgr);
 
-  private:
+private:
   int get_session(ObSQLSessionMgr& ses_mgr, uint32_t sessid, ObSQLSessionInfo*& sess_info);
   DISALLOW_COPY_AND_ASSIGN(ObKillSession);
 };
 
 class ObKillExecutor : public ObKillSession {
-  public:
+public:
   ObKillExecutor()
   {}
   virtual ~ObKillExecutor()
   {}
   int execute(ObExecContext& ctx, ObKillStmt& stmt);
 
-  private:
+private:
   int get_remote_session_location(const ObKillSessionArg& arg, ObExecContext& ctx, common::ObAddr& addr);
   int generate_read_sql(uint32_t sess_id, common::ObSqlString& sql);
   int kill_remote_session(ObExecContext& ctx, const common::ObAddr& addr, const ObKillSessionArg& arg);
@@ -61,16 +61,16 @@ class ObKillExecutor : public ObKillSession {
 
 class ObRpcKillSessionP : public obrpc::ObRpcProcessor<obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_KILL_SESSION> >,
                           public ObKillSession {
-  public:
+public:
   explicit ObRpcKillSessionP(const observer::ObGlobalContext& gctx) : gctx_(gctx)
   {}
   ~ObRpcKillSessionP()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
 };
 }  // namespace sql

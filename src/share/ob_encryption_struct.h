@@ -26,7 +26,7 @@ namespace share {
 
 template <int64_t BUFSIZE>
 class ObEncryptKey {
-  public:
+public:
   ObEncryptKey() : str_(BUFSIZE, 0, buf_)
   {}
   ~ObEncryptKey()
@@ -63,7 +63,7 @@ class ObEncryptKey {
   TO_STRING_KV(K_(str));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   char buf_[BUFSIZE];
   ObString str_;
 };
@@ -166,7 +166,7 @@ enum CLogEncryptStatBitIndex {
 
 // Use scenarios to ensure no concurrency issues
 struct ObCLogEncryptStatMap {
-  public:
+public:
   ObCLogEncryptStatMap() : val_(0)
   {}
   ~ObCLogEncryptStatMap()
@@ -177,7 +177,7 @@ struct ObCLogEncryptStatMap {
   void set_map(const int64_t idx);
   bool test_map(const int64_t idx) const;
 
-  public:
+public:
   uint16_t val_;
 };
 

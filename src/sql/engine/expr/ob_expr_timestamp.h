@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 // note: this is oracle only function
 class ObExprSysTimestamp : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSysTimestamp(common::ObIAllocator& alloc);
   virtual ~ObExprSysTimestamp();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -28,13 +28,13 @@ class ObExprSysTimestamp : public ObFuncExprOperator {
   static int eval_systimestamp(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSysTimestamp);
 };
 
 // note: this is oracle only function
 class ObExprLocalTimestamp : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprLocalTimestamp(common::ObIAllocator& alloc);
   virtual ~ObExprLocalTimestamp();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -42,13 +42,13 @@ class ObExprLocalTimestamp : public ObFuncExprOperator {
   static int eval_localtimestamp(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLocalTimestamp);
 };
 
 // note: this is oracle only function
 class ObExprToTimestamp : public ObExprToTemporalBase {
-  public:
+public:
   explicit ObExprToTimestamp(common::ObIAllocator& alloc)
       : ObExprToTemporalBase(alloc, T_FUN_SYS_TO_TIMESTAMP, N_TO_TIMESTAMP)
   {}
@@ -61,13 +61,13 @@ class ObExprToTimestamp : public ObExprToTemporalBase {
     return common::ObTimestampNanoType;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToTimestamp);
 };
 
 // note: this is oracle only function
 class ObExprToTimestampTZ : public ObExprToTemporalBase {
-  public:
+public:
   explicit ObExprToTimestampTZ(common::ObIAllocator& alloc)
       : ObExprToTemporalBase(alloc, T_FUN_SYS_TO_TIMESTAMP_TZ, N_TO_TIMESTAMP_TZ)
   {}
@@ -80,7 +80,7 @@ class ObExprToTimestampTZ : public ObExprToTemporalBase {
     return common::ObTimestampTZType;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToTimestampTZ);
 };
 

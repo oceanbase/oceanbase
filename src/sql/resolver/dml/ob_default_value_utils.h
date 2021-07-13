@@ -28,7 +28,7 @@ enum ObDMLDefaultOp {
 };
 class ObDMLResolver;
 class ObDefaultValueUtils {
-  public:
+public:
   ObDefaultValueUtils(ObDMLStmt* stmt, ObResolverParams* params, ObDMLResolver* resolver)
       : stmt_(stmt), params_(params), resolver_(resolver)
   {}
@@ -44,7 +44,7 @@ class ObDefaultValueUtils {
   int build_expr_default_expr(const ColumnItem* column, ObRawExpr*& input_expr, ObRawExpr*& const_expr);
   int resolve_column_ref_in_insert(const ColumnItem* column, ObRawExpr*& expr);
 
-  private:
+private:
   int get_default_type_for_insert(const ColumnItem* column, ObDMLDefaultOp& op);
 
   int get_default_type_for_default_function(const ColumnItem* column, ObDMLDefaultOp& op, ObStmtScope scope);
@@ -62,7 +62,7 @@ class ObDefaultValueUtils {
   int build_nullable_expr(const ColumnItem* column, ObRawExpr*& expr);
   int build_default_expr_for_generated_column(const ColumnItem& column, ObRawExpr*& expr);
 
-  private:
+private:
   ObDMLStmt* stmt_;
   ObResolverParams* params_;
   ObDMLResolver* resolver_;

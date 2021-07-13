@@ -47,7 +47,7 @@ class ObPartDataFragMgr;
 
 namespace obrpc {
 class ObLoadDataRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObLoadDataRpcProxy);
   RPC_AP(@PR5 ap_load_data_execute, obrpc::OB_LOAD_DATA_EXECUTE, (sql::ObLoadbuffer), sql::ObLoadResult);
   RPC_AP(@PR5 ap_load_data_shuffle, obrpc::OB_LOAD_DATA_SHUFFLE, (sql::ObShuffleTask), sql::ObShuffleResult);
@@ -88,7 +88,7 @@ enum class ObTaskResFlag {
 typedef ObBitSet<32> ErrRowBitset;
 
 class ObParallelTaskController {
-  public:
+public:
   ObParallelTaskController() : max_parallelism_(0), task_cnt_(0), processing_cnt_(0)
   {}
   ~ObParallelTaskController()
@@ -114,7 +114,7 @@ class ObParallelTaskController {
     return max_parallelism_;
   }
 
-  private:
+private:
   static const int64_t MAX_TIME_WAIT_MS = 2 * RPC_BATCH_INSERT_TIMEOUT_US / 1000;
   int64_t max_parallelism_;
   int64_t task_cnt_;
@@ -210,7 +210,7 @@ struct ObInsertTask {
 
 template <class T>
 class ObRpcPointerArg {
-  public:
+public:
   ObRpcPointerArg() : ptr_value_(0)
   {}
   int set_arg(T* ptr)
@@ -232,7 +232,7 @@ class ObRpcPointerArg {
     return ret;
   }
 
-  private:
+private:
   union {
     uint64_t ptr_value_;
     T* ptr_;
@@ -273,7 +273,7 @@ struct ObShuffleResult {
 
 template <typename T>
 class ObConcurrentFixedCircularArray {
-  public:
+public:
   ObConcurrentFixedCircularArray() : array_size_(0), data_(NULL), head_pos_(0), tail_pos_(0)
   {}
   ~ObConcurrentFixedCircularArray()
@@ -325,7 +325,7 @@ class ObConcurrentFixedCircularArray {
     return ATOMIC_LOAD(&head_pos_) - ATOMIC_LOAD(&tail_pos_);
   }
 
-  private:
+private:
   // data members
   int64_t array_size_;
   T* volatile data_;
@@ -337,7 +337,7 @@ typedef ObConcurrentFixedCircularArray<ObLoadbuffer*> CompleteTaskArray;
 
 // load data task buffer
 class ObLoadbuffer {
-  public:
+public:
   const static int64_t LOAD_BUFFER_MAX_ROW_COUNT = DEFAULT_BUFFERRED_ROW_COUNT;
   ObLoadbuffer()
       : tenant_id_(common::OB_INVALID_ID),
@@ -504,7 +504,7 @@ class ObLoadbuffer {
       K_(part_id), K_(task_status), K_(insert_mode), K_(returned_timestamp));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   // send params
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -534,7 +534,7 @@ class ObLoadbuffer {
 
 // load data task result
 class ObLoadResult {
-  public:
+public:
   ObLoadResult()
       : task_id_(-1), part_id_(common::OB_INVALID_PARTITION_ID), affected_rows_(0), failed_rows_(0), task_flags_(false)
   {}
@@ -551,23 +551,23 @@ class ObLoadResult {
 
 class ObRpcLoadDataTaskExecuteP
     : public oceanbase::obrpc::ObRpcProcessor<obrpc::ObLoadDataRpcProxy::ObRpc<obrpc::OB_LOAD_DATA_EXECUTE> > {
-  public:
+public:
   explicit ObRpcLoadDataTaskExecuteP(const observer::ObGlobalContext& gctx) : gctx_(gctx), escape_data_buffer_()
   {}
   virtual ~ObRpcLoadDataTaskExecuteP()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
   common::ObDataBuffer escape_data_buffer_;
   char str_buf_[common::OB_MAX_DEFAULT_VALUE_LENGTH];  // TODO: change this
 };
 
 class ObRpcLoadDataTaskCallBack : public obrpc::ObLoadDataRpcProxy::AsyncCB<obrpc::OB_LOAD_DATA_EXECUTE> {
-  public:
+public:
   ObRpcLoadDataTaskCallBack(
       ObParallelTaskController& task_controller, CompleteTaskArray& complete_task_list, Request* request)
       : task_controller_(task_controller), complete_task_list_(complete_task_list), request_buffer_ptr_(request)
@@ -585,7 +585,7 @@ class ObRpcLoadDataTaskCallBack : public obrpc::ObLoadDataRpcProxy::AsyncCB<obrp
   }
   int process();
 
-  private:
+private:
   ObParallelTaskController& task_controller_;
   CompleteTaskArray& complete_task_list_;
   Request* request_buffer_ptr_;
@@ -595,21 +595,21 @@ class ObRpcLoadDataTaskCallBack : public obrpc::ObLoadDataRpcProxy::AsyncCB<obrp
 
 class ObRpcLoadDataShuffleTaskExecuteP
     : public oceanbase::obrpc::ObRpcProcessor<obrpc::ObLoadDataRpcProxy::ObRpc<obrpc::OB_LOAD_DATA_SHUFFLE> > {
-  public:
+public:
   explicit ObRpcLoadDataShuffleTaskExecuteP(const observer::ObGlobalContext& gctx) : gctx_(gctx)
   {}
   virtual ~ObRpcLoadDataShuffleTaskExecuteP()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
 };
 
 class ObRpcLoadDataShuffleTaskCallBack : public obrpc::ObLoadDataRpcProxy::AsyncCB<obrpc::OB_LOAD_DATA_SHUFFLE> {
-  public:
+public:
   ObRpcLoadDataShuffleTaskCallBack(ObParallelTaskController& task_controller,
       ObConcurrentFixedCircularArray<ObShuffleTaskHandle*>& complete_task_list, ObShuffleTaskHandle* handle)
       : task_controller_(task_controller), complete_task_list_(complete_task_list), handle_(handle)
@@ -628,7 +628,7 @@ class ObRpcLoadDataShuffleTaskCallBack : public obrpc::ObLoadDataRpcProxy::Async
   int process();
   int release_resouce();
 
-  private:
+private:
   ObParallelTaskController& task_controller_;
   ObConcurrentFixedCircularArray<ObShuffleTaskHandle*>& complete_task_list_;
   ObShuffleTaskHandle* handle_;
@@ -636,21 +636,21 @@ class ObRpcLoadDataShuffleTaskCallBack : public obrpc::ObLoadDataRpcProxy::Async
 
 class ObRpcLoadDataInsertTaskExecuteP
     : public oceanbase::obrpc::ObRpcProcessor<obrpc::ObLoadDataRpcProxy::ObRpc<obrpc::OB_LOAD_DATA_INSERT> > {
-  public:
+public:
   explicit ObRpcLoadDataInsertTaskExecuteP(const observer::ObGlobalContext& gctx) : gctx_(gctx)
   {}
   virtual ~ObRpcLoadDataInsertTaskExecuteP()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
 };
 
 class ObRpcLoadDataInsertTaskCallBack : public obrpc::ObLoadDataRpcProxy::AsyncCB<obrpc::OB_LOAD_DATA_INSERT> {
-  public:
+public:
   ObRpcLoadDataInsertTaskCallBack(ObParallelTaskController& task_controller,
       ObConcurrentFixedCircularArray<ObInsertTask*>& complete_task_list, ObInsertTask* insert_task)
       : task_controller_(task_controller), complete_task_list_(complete_task_list), insert_task_(insert_task)
@@ -669,7 +669,7 @@ class ObRpcLoadDataInsertTaskCallBack : public obrpc::ObLoadDataRpcProxy::AsyncC
   int process();
   int release_resouce();
 
-  private:
+private:
   ObParallelTaskController& task_controller_;
   ObConcurrentFixedCircularArray<ObInsertTask*>& complete_task_list_;
   ObInsertTask* insert_task_;

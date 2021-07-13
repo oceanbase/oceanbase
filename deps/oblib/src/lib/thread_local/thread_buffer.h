@@ -25,11 +25,11 @@ namespace common {
  * and free when thread exit.
  */
 class ThreadSpecificBuffer {
-  public:
+public:
   explicit ThreadSpecificBuffer(const int32_t size = MAX_THREAD_BUFFER_SIZE);
   ~ThreadSpecificBuffer();
   class Buffer {
-    public:
+  public:
     Buffer(char* start, const int32_t size) : end_of_storage_(start + size), end_(start)
     {}
     char* ptr();
@@ -53,23 +53,23 @@ class ThreadSpecificBuffer {
       return end_;
     }
 
-    private:
+  private:
     char* end_of_storage_;
     char* end_;
     char start_[0];
   };
   Buffer* get_buffer() const;
 
-  private:
+private:
   int create_thread_key();
   int delete_thread_key();
   static void destroy_thread_key(void* ptr);
   DISALLOW_COPY_AND_ASSIGN(ThreadSpecificBuffer);
 
-  private:
+private:
   static const int32_t MAX_THREAD_BUFFER_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
 
-  private:
+private:
   pthread_key_t key_;
   int32_t size_;
 };

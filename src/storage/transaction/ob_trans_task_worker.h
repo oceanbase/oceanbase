@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace transaction {
 
 class BigTransCallbackTask : public ObTransTask {
-  public:
+public:
   BigTransCallbackTask()
   {
     reset();
@@ -60,7 +60,7 @@ class BigTransCallbackTask : public ObTransTask {
   bool is_valid() const;
   TO_STRING_KV(KP(this), K_(partition), K_(log_type), K_(log_id), K_(log_timestamp));
 
-  private:
+private:
   common::ObPartitionKey partition_;
   int64_t log_type_;
   int64_t log_id_;
@@ -69,7 +69,7 @@ class BigTransCallbackTask : public ObTransTask {
 };
 
 class ObTransTaskWorker : public lib::TGTaskHandler {
-  public:
+public:
   ObTransTaskWorker() : is_inited_(false), is_running_(false)
   {}
   ~ObTransTaskWorker()
@@ -82,12 +82,12 @@ class ObTransTaskWorker : public lib::TGTaskHandler {
   void wait();
   void destroy();
 
-  public:
+public:
   void handle(void* task);
   int submit_big_trans_callback_task(const common::ObPartitionKey& partition, const int64_t log_type,
       const uint64_t log_id, const int64_t submit_timestamp, ObTransCtx* ctx);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   DISALLOW_COPY_AND_ASSIGN(ObTransTaskWorker);

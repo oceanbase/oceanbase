@@ -31,7 +31,7 @@ enum ObTokenizer {
 };
 
 class ObWordSegment {
-  public:
+public:
   ObWordSegment() : inner_allocator_(), segmenter_(NULL){};
   virtual ~ObWordSegment()
   {
@@ -44,16 +44,16 @@ class ObWordSegment {
   int reset();
   int destory();
 
-  private:
+private:
   bool is_inited()
   {
     return NULL != segmenter_;
   }
 
-  private:
+private:
   static const char* TokenizerName[WS_MAX + 1];
 
-  private:
+private:
   common::ObArenaAllocator inner_allocator_;
   ObIWordSegmentImpl* segmenter_;
 };

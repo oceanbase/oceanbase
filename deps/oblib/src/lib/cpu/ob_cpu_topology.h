@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace common {
 class ObCpuTopology {
-  public:
+public:
   static const int64_t MAX_CORE_NUMBER_PER_NODE = 1024;
   static const int64_t MAX_NODE_NUMBER = 64;
   static const int64_t MAX_CORE_NUMBER = MAX_CORE_NUMBER_PER_NODE * MAX_NODE_NUMBER;
@@ -29,10 +29,10 @@ class ObCpuTopology {
     int64_t cores_[MAX_CORE_NUMBER_PER_NODE];
   };
 
-  public:
+public:
   ObCpuTopology();
 
-  public:
+public:
   int init();
   int64_t get_core_num();
   int64_t get_node_num();
@@ -41,7 +41,7 @@ class ObCpuTopology {
   int64_t get_thread_core_id();
   void bind_cpu(uint64_t core_id);
 
-  private:
+private:
   struct ThreadLocalInfo {
     int64_t core_id_;
     int64_t node_id_;
@@ -50,7 +50,7 @@ class ObCpuTopology {
   ThreadLocalInfo& get_tl_info();
   DISALLOW_COPY_AND_ASSIGN(ObCpuTopology);
 
-  private:
+private:
   typedef CoreInfo NodeArray[MAX_NODE_NUMBER];
   typedef int64_t CoreNodeMapArray[MAX_CORE_NUMBER];
 

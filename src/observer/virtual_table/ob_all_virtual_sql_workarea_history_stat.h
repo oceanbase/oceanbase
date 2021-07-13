@@ -22,23 +22,23 @@ namespace oceanbase {
 namespace observer {
 
 class ObSqlWorkareaHistoryStatIterator {
-  public:
+public:
   ObSqlWorkareaHistoryStatIterator();
   ~ObSqlWorkareaHistoryStatIterator()
   {
     destroy();
   }
 
-  public:
+public:
   void destroy();
   void reset();
   int init();
   int get_next_wa_stat(sql::ObSqlWorkAreaStat*& wa_stat, uint64_t& tenant_id);
 
-  private:
+private:
   int get_next_batch_wa_stats();
 
-  private:
+private:
   common::ObSEArray<sql::ObSqlWorkAreaStat, 32> wa_stats_;
   common::ObSEArray<uint64_t, 16> tenant_ids_;
   int64_t cur_nth_wa_;
@@ -46,19 +46,19 @@ class ObSqlWorkareaHistoryStatIterator {
 };
 
 class ObSqlWorkareaHistoryStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObSqlWorkareaHistoryStat();
   virtual ~ObSqlWorkareaHistoryStat()
   {
     destroy();
   }
 
-  public:
+public:
   void destroy();
   void reset();
   int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   enum STORAGE_COLUMN {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -84,7 +84,7 @@ class ObSqlWorkareaHistoryStat : public common::ObVirtualTableScannerIterator {
   int fill_row(uint64_t tenant_id, sql::ObSqlWorkAreaStat& wa_stat, common::ObNewRow*& row);
   int get_server_ip_and_port();
 
-  private:
+private:
   common::ObString ipstr_;
   int32_t port_;
   ObSqlWorkareaHistoryStatIterator iter_;

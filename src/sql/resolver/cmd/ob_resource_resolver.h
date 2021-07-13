@@ -26,17 +26,17 @@ namespace sql {
 
 template <class T>
 class ObResourcePoolOptionResolver {
-  public:
+public:
   ObResourcePoolOptionResolver(){};
   ~ObResourcePoolOptionResolver(){};
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObResourcePoolOptionResolver);
 
-  public:
+public:
   int resolve_options(T* stmt, ParseNode* node) const;
 
-  private:
+private:
   int resolve_option(T* stmt, ParseNode* node) const;
   int resolve_zone_list(T* stmt, ParseNode* node) const;
   int resolve_unit_num_option(T* stmt, ParseNode* node) const;
@@ -208,17 +208,17 @@ int ObResourcePoolOptionResolver<T>::resolve_zone_list(T* stmt, ParseNode* node)
 // use template to reuse for alter unit.
 template <class T>
 class ObResourceUnitOptionResolver {
-  public:
+public:
   ObResourceUnitOptionResolver(){};
   ~ObResourceUnitOptionResolver(){};
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObResourceUnitOptionResolver);
 
-  public:
+public:
   int resolve_options(T* stmt, ParseNode* node) const;
 
-  private:
+private:
   int resolve_option(T* stmt, ParseNode* node) const;
 };
 
@@ -371,96 +371,96 @@ int ObResourceUnitOptionResolver<T>::resolve_option(T* stmt, ParseNode* option_n
  *            Resource Pool Resolver
  **************************************************/
 class ObCreateResourcePoolResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObCreateResourcePoolResolver(ObResolverParams& params);
   virtual ~ObCreateResourcePoolResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateResourcePoolResolver);
   // function members
 
-  private:
+private:
   // data members
 };
 
 class ObSplitResourcePoolResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObSplitResourcePoolResolver(ObResolverParams& params);
   virtual ~ObSplitResourcePoolResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int resolve_split_pool_list(ObSplitResourcePoolStmt* stmt, const ParseNode& parse_node);
   int resolve_corresponding_zone_list(ObSplitResourcePoolStmt* stmt, const ParseNode& parse_node);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSplitResourcePoolResolver);
   // function members
 
-  private:
+private:
   // data members
 };
 
 class ObMergeResourcePoolResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObMergeResourcePoolResolver(ObResolverParams& params);
   virtual ~ObMergeResourcePoolResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   int resolve_old_merge_pool_list(ObMergeResourcePoolStmt* stmt, const ParseNode& parse_node);
   int resolve_new_merge_pool_list(ObMergeResourcePoolStmt* stmt, const ParseNode& parse_node);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMergeResourcePoolResolver);
   // function members
 
-  private:
+private:
   // data members
 };
 
 class ObAlterResourcePoolResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObAlterResourcePoolResolver(ObResolverParams& params);
   virtual ~ObAlterResourcePoolResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObAlterResourcePoolResolver);
   // function members
 
-  private:
+private:
   // data members
 };
 
 class ObDropResourcePoolResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObDropResourcePoolResolver(ObResolverParams& params);
   virtual ~ObDropResourcePoolResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObDropResourcePoolResolver);
   // function members
 
-  private:
+private:
   // data members
 };
 
@@ -468,53 +468,53 @@ class ObDropResourcePoolResolver : public ObCMDResolver {
  *            Resource Unit Resolver
  **************************************************/
 class ObCreateResourceUnitResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObCreateResourceUnitResolver(ObResolverParams& params);
   virtual ~ObCreateResourceUnitResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateResourceUnitResolver);
   // function members
 
-  private:
+private:
   // data members
 };
 
 class ObAlterResourceUnitResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObAlterResourceUnitResolver(ObResolverParams& params);
   virtual ~ObAlterResourceUnitResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObAlterResourceUnitResolver);
   // function members
 };
 
 class ObDropResourceUnitResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObDropResourceUnitResolver(ObResolverParams& params);
   virtual ~ObDropResourceUnitResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObDropResourceUnitResolver);
   // function members
 
-  private:
+private:
   // data members
 };
 

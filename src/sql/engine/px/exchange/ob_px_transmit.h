@@ -40,10 +40,10 @@ class ObTableSchema;
 namespace sql {
 class ObSliceIdxCalc;
 class ObPxTransmitInput : public ObPxExchangeInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxTransmitInput() : ObPxExchangeInput(), ch_provider_ptr_(0)
   {}
   virtual ~ObPxTransmitInput()
@@ -68,18 +68,18 @@ class ObPxTransmitInput : public ObPxExchangeInput {
     return ch_provider_ptr_;
   }
 
-  protected:
+protected:
   uint64_t ch_provider_ptr_;
 };
 
 // ObPxTransmit is pure base class, no get_type() info provided
 class ObPxTransmit : public ObTransmit {
-  public:
+public:
   class ObPxTransmitCtx : public ObTransmitCtx {
-    public:
+  public:
     friend class ObPxTransmit;
 
-    public:
+  public:
     explicit ObPxTransmitCtx(ObExecContext& ctx);
     virtual ~ObPxTransmitCtx();
     virtual void destroy();
@@ -95,7 +95,7 @@ class ObPxTransmit : public ObTransmit {
       return task_channels_;
     }
 
-    public:
+  public:
     common::ObArray<dtl::ObDtlChannel*> task_channels_;
     common::ObArenaAllocator px_row_allocator_;
     ObPxTaskChSet task_ch_set_;
@@ -113,7 +113,7 @@ class ObPxTransmit : public ObTransmit {
     ObPxPartChInfo part_ch_info_;
   };
 
-  public:
+public:
   explicit ObPxTransmit(common::ObIAllocator& alloc);
   virtual ~ObPxTransmit();
   // This interface only used to calculate the pseudo column of the part_id to which the current row belongs
@@ -122,7 +122,7 @@ class ObPxTransmit : public ObTransmit {
     partition_id_idx_ = idx;
   }
 
-  protected:
+protected:
   OB_INLINE bool has_partition_id_column_idx() const
   {
     return partition_id_idx_ != OB_INVALID_INDEX;
@@ -141,7 +141,7 @@ class ObPxTransmit : public ObTransmit {
   int send_rows(ObExecContext& exec_ctx, ObPxTransmitCtx& transmit_ctx, ObSliceIdxCalc& slice_calc) const;
   int broadcast_rows(ObExecContext& exec_ctx, ObPxTransmitCtx& transmit_ctx, ObSliceIdxCalc& slice_calc) const;
 
-  private:
+private:
   int update_row(common::ObNewRow& row, int partition_id_column_idx, common::ObObj& partition_id) const;
   int send_row(ObExecContext& ctx, ObPxTransmitCtx& transmit_ctx, int64_t slice_idx, common::ObObj& partition_id,
       const common::ObNewRow& row, int64_t& time_recorder) const;
@@ -149,7 +149,7 @@ class ObPxTransmit : public ObTransmit {
   int broadcast_eof_row(ObPxTransmitCtx& transmit_ctx) const;
   int next_row(ObExecContext& ctx, const common::ObNewRow*& row, ObPxTransmitCtx& transmit_ctx) const;
 
-  private:
+private:
 };
 
 }  // namespace sql

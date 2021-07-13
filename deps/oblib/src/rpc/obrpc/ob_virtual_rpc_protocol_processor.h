@@ -27,7 +27,7 @@ class ObTimeGuard;
 namespace obrpc {
 
 class ObVirtualRpcProtocolProcessor {
-  public:
+public:
   ObVirtualRpcProtocolProcessor()
   {}
   virtual ~ObVirtualRpcProtocolProcessor()
@@ -36,7 +36,7 @@ class ObVirtualRpcProtocolProcessor {
   virtual int encode(easy_request_t* req, ObRpcPacket* pkt) = 0;
   virtual int decode(easy_message_t* m, ObRpcPacket*& pkt) = 0;
 
-  protected:
+protected:
   /*
    *@param [in] timeguard:
    *@param [in] req:
@@ -98,7 +98,7 @@ class ObVirtualRpcProtocolProcessor {
       bool is_data_compressed, int16_t compressed_size, int16_t original_size, int64_t& pos,
       int64_t& net_packet_buf_pos);
 
-  protected:
+protected:
   // const int16_t COMPRESS_BLOCK_SIZE = 1024;
   const int64_t MAX_COMPRESS_DATA_SIZE = (1UL << 32) - 1024;  // 4G - 1K
   const int16_t COMPRESS_BLOCK_SIZE = (1 << 15) - 1024;       // 31K

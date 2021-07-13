@@ -18,7 +18,7 @@ namespace sql {
 class ObBasicNestedLoopJoinSpec : public ObJoinSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObBasicNestedLoopJoinSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObJoinSpec(alloc, type),
         rescan_params_(alloc),
@@ -34,19 +34,19 @@ class ObBasicNestedLoopJoinSpec : public ObJoinSpec {
 
   int add_nlj_param(int64_t param_idx, ObExpr* org_expr, ObExpr* param_expr);
 
-  public:
+public:
   common::ObFixedArray<ObDynamicParamSetter, common::ObIAllocator> rescan_params_;
   // Indicates the location of the partition id column in the output row,
   // read out partition id through expr for pruning on the right
   ObExpr* gi_partition_id_expr_;
   bool enable_gi_partition_pruning_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBasicNestedLoopJoinSpec);
 };
 
 class ObBasicNestedLoopJoinOp : public ObJoinOp {
-  public:
+public:
   static const int64_t DEFAULT_MEM_LIMIT = 10 * 1024 * 1024;
   static const int64_t DEFAULT_CACHE_LIMIT = 1000;
   ObBasicNestedLoopJoinOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
@@ -78,10 +78,10 @@ class ObBasicNestedLoopJoinOp : public ObJoinOp {
   int save_left_row();
   int recover_left_row();
 
-  protected:
+protected:
   bool open_right_child_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBasicNestedLoopJoinOp);
 };
 

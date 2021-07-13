@@ -30,12 +30,12 @@ class ObRecursiveInnerDataOp {
   friend class ObRecursiveUnionAllOp;
   friend class ObRecursiveUnionAllSpec;
 
-  public:
+public:
   struct RowComparer;
   enum RecursiveUnionState { R_UNION_BEGIN, R_UNION_READ_LEFT, R_UNION_READ_RIGHT, R_UNION_END, R_UNION_STATE_COUNT };
   enum SearchStrategyType { DEPTH_FRIST, BREADTH_FRIST };
 
-  public:
+public:
   explicit ObRecursiveInnerDataOp(ObEvalCtx& eval_ctx, ObExecContext& exec_ctx, const ExprFixedArray& left_output,
       const common::ObIArray<ObSortFieldCollation>& sort_collations,
       const common::ObIArray<uint64_t>& cycle_by_col_lists, const common::ObIArray<ObExpr*>& output_union_exprs)
@@ -89,7 +89,7 @@ class ObRecursiveInnerDataOp {
     cte_columns_ = exprs;
   }
 
-  private:
+private:
   void destroy();
   int add_pseudo_column(bool cycle = false);
   int try_get_left_rows();
@@ -115,7 +115,7 @@ class ObRecursiveInnerDataOp {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRecursiveInnerDataOp);
 
-  private:
+private:
   RecursiveUnionState state_;
   common::ObArenaAllocator stored_row_buf_;
   ObFakeCTETableOp* pump_operator_;

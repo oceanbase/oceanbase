@@ -29,19 +29,21 @@
 
 namespace oceanbase {
 namespace clog {
+#define CLOG_DIO_ALIGN_SIZE 4096
+#define TMP_SUFFIX ".tmp"
+
 typedef uint32_t file_id_t;
 typedef int32_t offset_t;
 
 const int64_t CLOG_RPC_TIMEOUT = 3000 * 1000 - 100 * 1000;
 const int64_t CLOG_TRAILER_SIZE = 512;
-const int64_t CLOG_TRAILER_OFFSET = CLOG_FILE_SIZE - CLOG_TRAILER_SIZE;  // 512B for the trailer block
+const int64_t CLOG_TRAILER_OFFSET = CLOG_FILE_SIZE - CLOG_TRAILER_SIZE;                // 512B for the trailer block
+const int64_t CLOG_TRAILER_ALIGN_WRITE_OFFSET = CLOG_FILE_SIZE - CLOG_DIO_ALIGN_SIZE;  // 4k aligned write
 const int64_t CLOG_MAX_DATA_OFFSET = CLOG_TRAILER_OFFSET - common::OB_MAX_LOG_BUFFER_SIZE;
 const int64_t CLOG_CACHE_SIZE = 64 * 1024;
 const int64_t CLOG_REPLAY_CHECKSUM_WINDOW_SIZE = 1 << 9;
 const int64_t CLOG_INFO_BLOCK_SIZE_LIMIT = 1 << 22;
 const offset_t OB_INVALID_OFFSET = -1;
-#define CLOG_DIO_ALIGN_SIZE 4096
-#define TMP_SUFFIX ".tmp"
 
 inline bool is_valid_log_id(const uint64_t log_id)
 {
@@ -233,7 +235,7 @@ inline int cursor_cmp(const file_id_t f1, const offset_t o1, const file_id_t f2,
 }
 
 class ObTailCursor {
-  public:
+public:
   ObTailCursor() : file_id_(common::OB_INVALID_FILE_ID), offset_(OB_INVALID_OFFSET)
   {}
   ~ObTailCursor()
@@ -281,7 +283,7 @@ class ObTailCursor {
   }
   TO_STRING_KV(K_(file_id), K_(offset));
 
-  public:
+public:
   file_id_t file_id_;
   offset_t offset_;
 } __attribute__((aligned(8)));
@@ -314,14 +316,14 @@ struct ObLogCursor {
   }
   TO_STRING_KV(K_(file_id), K_(offset), K_(size));
 
-  private:
+private:
   // Intentionally copyable and assigned
 };
 
 // ObLogCursor extended structure
 // add acc_cksm and timestamp member
 class ObLogCursorExt {
-  public:
+public:
   ObLogCursorExt()
   {
     reset();
@@ -387,7 +389,7 @@ class ObLogCursorExt {
       is_batch_committed(), K_(acc_cksm));
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   static const uint64_t MASK = 1ull << 63;
   file_id_t file_id_;
   offset_t offset_;
@@ -474,14 +476,14 @@ struct ObLogFlushCbArg {
   TO_STRING_KV(K_(log_type), K_(log_id), K_(proposal_id), K_(leader), K_(cluster_id), K_(log_cursor),
       K_(after_consume_timestamp));
 
-  private:
+private:
   // Intentionally copyable and assigned
 };
 
 struct ObPGLogArchiveStatus {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPGLogArchiveStatus()
   {
     reset();
@@ -507,7 +509,7 @@ struct ObPGLogArchiveStatus {
       K_(round_accum_checksum), K_(archive_incarnation), K_(log_archive_round), K_(last_archived_log_id),
       K_(last_archived_checkpoint_ts), K_(last_archived_log_submit_ts), K_(clog_epoch_id), K_(accum_checksum));
 
-  public:
+public:
   share::ObLogArchiveStatus::STATUS status_;
 
   int64_t round_start_ts_;

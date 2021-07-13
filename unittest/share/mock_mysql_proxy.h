@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 
 class MockMySQLProxy : public ObMySQLProxy {
-  public:
+public:
   MOCK_METHOD2(read, int(ObMySQLProxy::ReadResult&, const char*));
   MOCK_METHOD3(read, int(ObMySQLProxy::ReadResult&, const uint64_t, const char*));
 

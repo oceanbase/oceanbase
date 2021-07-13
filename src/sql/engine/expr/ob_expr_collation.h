@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace sql {
 /// Returns the character set of the string argument.
 class ObExprCharset : public ObStringExprOperator {
-  public:
+public:
   // ObExprCharset();
   explicit ObExprCharset(common::ObIAllocator& alloc);
   virtual ~ObExprCharset();
@@ -27,19 +27,19 @@ class ObExprCharset : public ObStringExprOperator {
   virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCharset);
   // function members
-  private:
+private:
   // data members
 };
 
 /// Returns the collation of the string argument.
 class ObExprCollation : public ObStringExprOperator {
-  public:
+public:
   // ObExprCollation();
   explicit ObExprCollation(common::ObIAllocator& alloc);
   virtual ~ObExprCollation();
@@ -48,20 +48,20 @@ class ObExprCollation : public ObStringExprOperator {
   virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCollation);
   // function members
-  private:
+private:
   // data members
 };
 
 /// Returns the collation coercibility value of the string argument.
 /// @see ObCollationLevel
 class ObExprCoercibility : public ObExprOperator {
-  public:
+public:
   // ObExprCoercibility();
   explicit ObExprCoercibility(common::ObIAllocator& alloc);
   virtual ~ObExprCoercibility();
@@ -70,13 +70,13 @@ class ObExprCoercibility : public ObExprOperator {
   virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCoercibility);
   // function members
-  private:
+private:
   // data members
 };
 
@@ -84,7 +84,7 @@ class ObExprCoercibility : public ObExprOperator {
 /// used to implement COLLATE clause, e.g. C1 collate utf8_general_ci, 'abc' collate utf8_bin
 /// format: SET_COLLATION(expr, utf8_general_ci)
 class ObExprSetCollation : public ObExprOperator {
-  public:
+public:
   // ObExprSetCollation();
   explicit ObExprSetCollation(common::ObIAllocator& alloc);
   virtual ~ObExprSetCollation();
@@ -95,20 +95,20 @@ class ObExprSetCollation : public ObExprOperator {
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprSetCollation);
   // function members
-  private:
+private:
   // data members
 };
 
 /// Returns the meta used for comparison
 /// @note for debug purpose
 class ObExprCmpMeta : public ObStringExprOperator {
-  public:
+public:
   // ObExprCmpMeta();
   explicit ObExprCmpMeta(common::ObIAllocator& alloc);
   virtual ~ObExprCmpMeta();
@@ -117,13 +117,13 @@ class ObExprCmpMeta : public ObStringExprOperator {
   virtual int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCmpMeta);
   // function members
-  private:
+private:
   // data members
 };
 

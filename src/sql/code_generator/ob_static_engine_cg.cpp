@@ -628,6 +628,8 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct& op, ObMergeDistinctSpec& spec
     LOG_WARN("merge distinct has no block mode", K(op.get_algo()), K(op.get_block_mode()), K(ret));
   } else if (OB_FAIL(spec.cmp_funcs_.init(op.get_distinct_exprs().count()))) {
     LOG_WARN("failed to init sort functions", K(ret));
+  } else if (OB_FAIL(spec.distinct_exprs_.init(op.get_distinct_exprs().count()))) {
+    LOG_WARN("failed to init distinct exprs", K(ret));
   } else {
     ObExpr* expr = nullptr;
     ARRAY_FOREACH(op.get_distinct_exprs(), i)
@@ -665,6 +667,8 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct& op, ObHashDistinctSpec& spec,
     LOG_WARN("failed to init sort functions", K(ret));
   } else if (OB_FAIL(spec.sort_collations_.init(op.get_distinct_exprs().count()))) {
     LOG_WARN("failed to init sort functions", K(ret));
+  } else if (OB_FAIL(spec.distinct_exprs_.init(op.get_distinct_exprs().count()))) {
+    LOG_WARN("failed to init distinct exprs", K(ret));
   } else {
     ObExpr* expr = nullptr;
     int64_t dist_cnt = 0;

@@ -29,7 +29,7 @@ class ObServerConfig;
 
 namespace share {
 class ObUnitInfoGetter {
-  public:
+public:
   enum ObUnitStatus {
     UNIT_NORMAL = 0,
     UNIT_MIGRATE_IN,
@@ -40,7 +40,7 @@ class ObUnitInfoGetter {
   struct ObTenantConfig {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     ObTenantConfig()
         : tenant_id_(common::OB_INVALID_ID),
           unit_stat_(UNIT_ERROR_STAT),
@@ -110,7 +110,7 @@ class ObUnitInfoGetter {
   virtual int check_tenant_small(const uint64_t tenant_id, bool& small_tenant);
   int get_pools_of_tenant(const uint64_t tenant_id, common::ObIArray<ObResourcePool>& pools);
 
-  private:
+private:
   int get_units_of_server(const common::ObAddr& server, common::ObIArray<ObUnit>& units);
   int get_pools_of_units(const common::ObIArray<ObUnit>& units, common::ObIArray<ObResourcePool>& pools);
   int get_configs_of_pools(const common::ObIArray<ObResourcePool>& pools, common::ObIArray<ObUnitConfig>& configs);
@@ -130,18 +130,18 @@ class ObUnitInfoGetter {
 
   int get_compat_mode(const int64_t tenant_id, ObWorker::CompatMode& compat_mode) const;
 
-  private:
+private:
   bool inited_;
   ObUnitTableOperator ut_operator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUnitInfoGetter);
 };
 
 typedef common::ObSEArray<ObUnitInfoGetter::ObTenantConfig, 16> TenantUnits;
 
 class ObUnitStatGetter {
-  public:
+public:
   ObUnitStatGetter();
   virtual ~ObUnitStatGetter();
   int init(share::ObPartitionTableOperator& pt_operator, share::schema::ObMultiVersionSchemaService& schema_service,
@@ -149,11 +149,11 @@ class ObUnitStatGetter {
   virtual int get_unit_stat(uint64_t tenant_id, uint64_t unit_id, ObUnitStat& unit_stat) const;
   virtual int get_unit_stat(uint64_t tenant_id, share::ObUnitStatMap& unit_stat_map) const;
 
-  private:
+private:
   bool inited_;
   ObUnitStatTableOperator ut_stat_operator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUnitStatGetter);
 };
 

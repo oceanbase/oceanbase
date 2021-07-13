@@ -37,14 +37,14 @@ using namespace std;
 #define MAX_NUM 1000
 
 class TestProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(TestProxy);
 
   RPC_SS(@PR5 test, OB_TEST_PCODE, (int64_t), int64_t);
 };
 
 class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
-  protected:
+protected:
   int process()
   {
     int ret = OB_SUCCESS;
@@ -66,7 +66,7 @@ class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
 };
 
 class QHandler : public ObiReqQHandler {
-  public:
+public:
   QHandler()
   {
     mp_.init();
@@ -97,14 +97,14 @@ class QHandler : public ObiReqQHandler {
     return true;
   }
 
-  private:
+private:
   MyProcessor mp_;
   ObRpcSessionHandler shandler_;
   ObRpcReqContext ctx_;
 };
 
 class ObTestDeliver : public rpc::frame::ObReqDeliver {
-  public:
+public:
   int init()
   {
     queue_.set_qhandler(&handler_);
@@ -125,13 +125,13 @@ class ObTestDeliver : public rpc::frame::ObReqDeliver {
     queue_.get_thread().wait();
   }
 
-  protected:
+protected:
   ObReqQueueThread queue_;
   QHandler handler_;
 };
 
 class TestRpcServer : public ::testing::Test {
-  public:
+public:
   TestRpcServer() : port_(3100), handler_(server_), transport_(NULL)
   {}
 
@@ -167,7 +167,7 @@ class TestRpcServer : public ::testing::Test {
     return transport_->send(req, res);
   }
 
-  protected:
+protected:
   int port_;
   rpc::frame::ObNetEasy net_;
   obrpc::ObRpcHandler handler_;
@@ -177,7 +177,7 @@ class TestRpcServer : public ::testing::Test {
 };
 
 class MySSHandle : public TestProxy::SSHandle<OB_TEST_PCODE> {
-  public:
+public:
   void inc_sessid()
   {
     sessid_++;

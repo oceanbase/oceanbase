@@ -23,7 +23,7 @@ class ObAggFunRawExpr;
 class ObSelectResolver;
 class ObSelectStmt;
 class ObAggrExprPushUpAnalyzer {
-  public:
+public:
   ObAggrExprPushUpAnalyzer(ObSelectResolver& cur_resolver)
       : aggr_columns_checker_(aggr_columns_), level_exprs_checker_(level_exprs_), cur_resolver_(cur_resolver)
   {}
@@ -32,7 +32,7 @@ class ObAggrExprPushUpAnalyzer {
 
   int analyze_and_push_up_aggr_expr(ObAggFunRawExpr* aggr_expr, ObAggFunRawExpr*& final_aggr);
 
-  private:
+private:
   int analyze_aggr_param_exprs(common::ObIArray<ObRawExpr*>& param_exprs, ObExprLevels& aggr_expr_levels);
   int analyze_aggr_param_expr(ObRawExpr*& param_expr, ObExprLevels& aggr_expr_levels);
   int analyze_child_stmt(ObSelectStmt* child_stmt, ObExprLevels& aggr_expr_levels);
@@ -43,10 +43,10 @@ class ObAggrExprPushUpAnalyzer {
   int adjust_query_level(int32_t final_aggr_level);
   int push_up_subquery_in_aggr(ObSelectResolver& final_resolver);
 
-  private:
+private:
   static const int64_t AGGR_HASH_BUCKET_SIZE = 64;
 
-  private:
+private:
   // table column or alias column in aggregate function
   common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> aggr_columns_;
   RelExprChecker aggr_columns_checker_;

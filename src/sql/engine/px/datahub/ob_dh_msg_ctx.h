@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObPieceMsgCtx {
-  public:
+public:
   ObPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts)
       : op_id_(op_id), task_cnt_(task_cnt), timeout_ts_(timeout_ts)
   {}
@@ -30,7 +30,7 @@ class ObPieceMsgCtx {
 };
 
 class ObPieceMsgCtxMgr {
-  public:
+public:
   ObPieceMsgCtxMgr() = default;
   ~ObPieceMsgCtxMgr() = default;
   void reset()
@@ -55,7 +55,7 @@ class ObPieceMsgCtxMgr {
     return ctxs_.push_back(ctx);
   }
 
-  private:
+private:
   common::ObSEArray<ObPieceMsgCtx*, 2> ctxs_;
 };
 

@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObCreateTableResolver : public ObDDLResolver {
-  public:
+public:
   // store generated column and its' dependent expr.
   struct GenColExpr {
     GenColExpr(uint64_t col_id, ObRawExpr* gen_col_expr) : col_id_(col_id), gen_col_expr_(gen_col_expr)
@@ -43,10 +43,10 @@ class ObCreateTableResolver : public ObDDLResolver {
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   enum ResolveRule { RESOLVE_ALL = 0, RESOLVE_COL_ONLY, RESOLVE_NON_COL };
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateTableResolver);
   // function members
@@ -106,7 +106,7 @@ class ObCreateTableResolver : public ObDDLResolver {
   bool is_uk_uk_duplicate(const ObIArray<int64_t>& uk_idx, const ObIArray<obrpc::ObCreateIndexArg>& index_arg_list);
   int resolve_auto_partition(const ParseNode* partition_node);
 
-  private:
+private:
   // data members
   uint64_t cur_column_id_;
   common::ObSEArray<uint64_t, 16> primary_keys_;

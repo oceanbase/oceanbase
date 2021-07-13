@@ -18,7 +18,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
 class TestTimerTask : public ObTimerTask {
-  public:
+public:
   TestTimerTask() : running_(false), task_run_count_(0)
   {}
 
@@ -64,7 +64,7 @@ TEST(TG, timer)
 }
 
 class Handler : public TGTaskHandler {
-  public:
+public:
   void handle(void* task) override
   {
     UNUSED(task);
@@ -103,7 +103,7 @@ TEST(TG, queue_thread)
 }
 
 class MyDTask : public common::IObDedupTask {
-  public:
+public:
   MyDTask() : common::IObDedupTask(common::T_BLOOMFILTER)
   {}
   virtual int64_t hash() const
@@ -163,7 +163,7 @@ TEST(TG, dedup_queue)
 }
 
 class MyRunnable : public TGRunnable {
-  public:
+public:
   void run1() override
   {
     run_count_++;
@@ -200,7 +200,7 @@ TEST(TG, thread_pool)
 }
 
 class MyTask : public share::ObAsyncTask {
-  public:
+public:
   virtual int process() override
   {
     handle_count_++;

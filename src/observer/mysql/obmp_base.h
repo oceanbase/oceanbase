@@ -73,7 +73,7 @@ struct ObOKPParam {
 };
 
 class ObIMPPacketSender {
-  public:
+public:
   virtual ~ObIMPPacketSender()
   {}
   virtual void disconnect() = 0;
@@ -88,7 +88,7 @@ class ObIMPPacketSender {
 };
 
 class ObMPPacketSender : public ObIMPPacketSender {
-  public:
+public:
   ObMPPacketSender();
   virtual ~ObMPPacketSender();
 
@@ -112,7 +112,7 @@ class ObMPPacketSender : public ObIMPPacketSender {
   int init(rpc::ObRequest* req, sql::ObSQLSessionInfo* sess_info, uint8_t packet_seq, bool conn_status,
       bool req_has_wokenup, int64_t query_receive_ts, bool io_thread_mark);
 
-  private:
+private:
   static const int64_t MAX_TRY_STEPS = 5;
   static int64_t TRY_EZ_BUF_SIZES[MAX_TRY_STEPS];
 
@@ -126,7 +126,7 @@ class ObMPPacketSender : public ObIMPPacketSender {
   int get_session(sql::ObSQLSessionInfo*& sess_info);
   int revert_session(sql::ObSQLSessionInfo* sess_info);
 
-  protected:
+protected:
   rpc::ObRequest* req_;
   sql::ObSQLSessionInfo* sess_info_;
   uint8_t seq_;
@@ -139,12 +139,12 @@ class ObMPPacketSender : public ObIMPPacketSender {
   int64_t query_receive_ts_;
   bool io_thread_mark_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPPacketSender);
 };
 
 class ObMPBase : public rpc::frame::ObReqProcessor {
-  public:
+public:
   explicit ObMPBase(const ObGlobalContext& gctx);
   virtual ~ObMPBase();
 
@@ -153,7 +153,7 @@ class ObMPBase : public rpc::frame::ObReqProcessor {
     return process_timestamp_;
   };
 
-  protected:
+protected:
   virtual int serialize();
   virtual int before_process();
   virtual int before_response();
@@ -210,7 +210,7 @@ class ObMPBase : public rpc::frame::ObReqProcessor {
   // If not set, the default cgroup id is 0
   int setup_user_resource_group(ObSMConnection& conn, const uint64_t tenant_id, const uint64_t user_id);
 
-  protected:
+protected:
   static const int64_t MAX_TRY_STEPS = 5;
   static int64_t TRY_EZ_BUF_SIZES[MAX_TRY_STEPS];
 
@@ -222,7 +222,7 @@ class ObMPBase : public rpc::frame::ObReqProcessor {
   // easy buffer used to cache mysql response packets to client
   easy_buf_t* ez_buf_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPBase);
   int64_t process_timestamp_;
 };  // end of class ObMPBase

@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateRestorePointStmt : public ObSystemCmdStmt {
-  public:
+public:
   explicit ObCreateRestorePointStmt(common::ObIAllocator* name_pool)
       : ObSystemCmdStmt(name_pool, stmt::T_CREATE_RESTORE_POINT), create_restore_point_arg_(), restore_point_name_()
   {}
@@ -49,7 +49,7 @@ class ObCreateRestorePointStmt : public ObSystemCmdStmt {
     return restore_point_name_;
   }
 
-  private:
+private:
   obrpc::ObCreateRestorePointArg create_restore_point_arg_;
   ObString restore_point_name_;
   DISALLOW_COPY_AND_ASSIGN(ObCreateRestorePointStmt);

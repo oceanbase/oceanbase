@@ -28,15 +28,15 @@ namespace sql {
 class ObHashDistinct : public ObDistinct {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   class ObHashDistinctCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     static const int64_t MIN_PART_COUNT = 8;
     static const int64_t MAX_PART_COUNT = 256;
     enum HDState { SCAN_CHILD = 1, OUTPUT_HA = 2, PROCESS_IN_MEM = 3, GET_PARTITION = 4, SCAN_PARTITION = 5 };
     friend class ObHashDistinct;
     class PartitionLinkNode : public common::ObDLinkBase<PartitionLinkNode> {
-      public:
+    public:
       PartitionLinkNode(ObHashDistinctCtx* data, ObHashDistinctCtx* parent)
           : ObDLinkBase<PartitionLinkNode>(), data_(data), parent_(parent)
       {}
@@ -150,7 +150,7 @@ class ObHashDistinct : public ObDistinct {
     int assign_sub_ctx(ObHashDistinctCtx* parent, ObChunkRowStore* parent_row_stores, ObHashDistinctCtx* top_ctx);
     DISALLOW_COPY_AND_ASSIGN(ObHashDistinctCtx);
 
-    private:
+  private:
     int64_t mem_limit_;
     // n_bucket must be pow2, so the last N bits of hash_value can used as bucket_idx directly
     // N = bucket_bits_ = log2(n_buckets_)
@@ -198,7 +198,7 @@ class ObHashDistinct : public ObDistinct {
     friend class ObHashDistinct;
   };
 
-  public:
+public:
   static const int64_t MIN_BUCKET_COUNT = 1L << 14;  // 16384;
   static const int64_t MAX_BUCKET_COUNT = 1L << 19;  // 524288;
   static const int64_t HASH_DISTINCT_BUCKET_RATIO = 2;
@@ -213,7 +213,7 @@ class ObHashDistinct : public ObDistinct {
   virtual void reuse();
   virtual int rescan(ObExecContext& ctx) const;
 
-  private:
+private:
   int estimate_memory_usage(
       ObHashDistinctCtx* hash_ctx, int64_t memory_limit, int64_t& ha_mem, int64_t& mem_need) const;
   int get_hash_value(const common::ObNewRow* row, uint64_t& hash_value) const;

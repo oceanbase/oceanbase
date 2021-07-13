@@ -42,7 +42,7 @@ OB_INLINE bool ob_is_invalid_cmp_op_bool(ObCmpOp cmp_op)
 }
 
 class ObCompareCtx final {
-  public:
+public:
   // member functions
   ObCompareCtx(const ObObjType cmp_type, const ObCollationType cmp_cs_type, const bool is_null_safe,
       const int64_t tz_off, const ObCmpNullPos null_pos)
@@ -61,7 +61,7 @@ class ObCompareCtx final {
   {}
   TO_STRING_KV(K_(cmp_type), K_(cmp_cs_type), K_(is_null_safe), K_(tz_off));
 
-  public:
+public:
   // data members
   ObObjType cmp_type_;  // used by upper functions, not in these compare functions.
   ObCollationType cmp_cs_type_;
@@ -84,7 +84,7 @@ typedef int (*obj_cmp_func_nullsafe)(
  * so actually we can do any compare operations which NEED NOT cast.
  */
 class ObObjCmpFuncs {
-  public:
+public:
   static inline bool is_datetime_timestamp_cmp(ObObjType type1, ObObjType type2)
   {
     return (ObTimestampType == type1 && ObDateTimeType == type2) ||
@@ -217,13 +217,13 @@ class ObObjCmpFuncs {
   template <ObObjTypeClass tc1, ObObjTypeClass tc2>
   static int cmp_func(const ObObj& Obj1, const ObObj& obj2, const ObCompareCtx& cmp_ctx);
 
-  private:
+private:
   OB_INLINE static int INT_TO_CR(int val)
   {
     return val < 0 ? CR_LT : val > 0 ? CR_GT : CR_EQ;
   }
 
-  private:
+private:
   static const obj_cmp_func cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX];
   static const obj_cmp_func_nullsafe cmp_funcs_nullsafe[ObMaxTC][ObMaxTC];
   static const ObObj cmp_res_objs_bool[CR_BOOL_CNT];

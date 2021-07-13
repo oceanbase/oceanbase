@@ -36,11 +36,11 @@ struct ObArchiveReadParam;
 
 // used for ob_admin
 class ObIArchiveLogFileStore {
-  public:
+public:
   ObIArchiveLogFileStore(){};
   virtual ~ObIArchiveLogFileStore(){};
 
-  public:
+public:
   virtual int read_data_direct(const ObArchiveReadParam& param, clog::ObReadBuf& rbuf, clog::ObReadRes& res) = 0;
 };
 
@@ -48,16 +48,16 @@ class ObArchiveLogFileStore : public ObIArchiveLogFileStore {
   static const int64_t MAX_STORAGE_INFO_LENGTH = OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH;
   static const int64_t MAX_PATH_LENGTH = OB_MAX_ARCHIVE_PATH_LENGTH;
 
-  public:
+public:
   ObArchiveLogFileStore();
   ~ObArchiveLogFileStore();
 
-  public:
+public:
   virtual int init_by_restore_info(const share::ObPhysicalRestoreInfo& restore_info);
   virtual int init(const char* root_path, const char* storage_info, const char* cluster_name, const int64_t cluster_id,
       const uint64_t tenant_id, const int64_t incarnation, const int64_t archive_round);
 
-  public:
+public:
   // locate archive data file id by log id
   virtual int locate_file_by_log_id(const common::ObPGKey& pg_key, const uint64_t log_id, uint64_t& file_id);
 
@@ -75,7 +75,7 @@ class ObArchiveLogFileStore : public ObIArchiveLogFileStore {
 
   TO_STRING_KV(K(inited_), K(storage_info_), K(restore_info_));
 
-  private:
+private:
   int get_file_id_range_(
       const common::ObPGKey& pg_key, const LogArchiveFileType file_type, uint64_t& min_file_id, uint64_t& max_file_id);
 
@@ -112,7 +112,7 @@ class ObArchiveLogFileStore : public ObIArchiveLogFileStore {
   int iterate_max_archived_info_(
       const common::ObPGKey& pg_key, const uint64_t file_id, uint64_t& max_log_id, int64_t& max_checkpoint_ts);
 
-  private:
+private:
   bool inited_;
   char storage_info_[MAX_STORAGE_INFO_LENGTH];
   char base_path_[MAX_PATH_LENGTH];

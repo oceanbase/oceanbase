@@ -29,7 +29,7 @@ namespace common {
 //
 class ObSqlString {
 
-  public:
+public:
   explicit ObSqlString(const lib::ObLabel& label = ObModIds::OB_SQL_STRING);
   virtual ~ObSqlString();
 
@@ -90,10 +90,10 @@ class ObSqlString {
 
   int extend(const int64_t size);
 
-  private:
+private:
   int vappend(const char* fmt, va_list ap);
 
-  private:
+private:
   static const int64_t MAX_SQL_STRING_LEN = 512;
   char* data_;
   int64_t data_size_;

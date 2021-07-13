@@ -34,7 +34,7 @@ static const int16_t INDEX_LOG_INFO_BLOCK_VERSION = 1;
 class ObIPartitionLogService;
 
 class NeedFreezePartition {
-  public:
+public:
   NeedFreezePartition()
   {
     reset();
@@ -42,7 +42,7 @@ class NeedFreezePartition {
   ~NeedFreezePartition()
   {}
 
-  public:
+public:
   void reset()
   {
     partition_key_.reset();
@@ -70,7 +70,7 @@ class NeedFreezePartition {
   }
   TO_STRING_KV(K(partition_key_), K(max_log_id_));
 
-  private:
+private:
   common::ObPartitionKey partition_key_;
   uint64_t max_log_id_;
 };
@@ -78,15 +78,15 @@ class NeedFreezePartition {
 typedef common::ObSEArray<NeedFreezePartition, 16> NeedFreezePartitionArray;
 
 class ObIInfoBlockHandler {
-  public:
+public:
   ObIInfoBlockHandler();
   virtual ~ObIInfoBlockHandler()
   {}
 
-  public:
+public:
   static int get_min_submit_timestamp(storage::ObPartitionService* partition_service, int64_t& min_submit_timestamp);
 
-  public:
+public:
   virtual int build_info_block(char* buf, const int64_t buf_len, int64_t& pos) = 0;
   virtual int resolve_info_block(const char* buf, const int64_t buf_len, int64_t& pos) = 0;
   virtual int update_info(const int64_t max_submit_timestamp) = 0;
@@ -103,11 +103,11 @@ class ObIInfoBlockHandler {
 
   int get_max_submit_timestamp(int64_t& max_submit_timestamp) const;
 
-  public:
+public:
   // echo info_block_handler_max_submit_timestamp|sha1sum
   static const int64_t MAGIC_NUMBER_FOR_MAX_SUBMIT_TIMESTAMP = 0xfa06d5f2b8a1cce1ull;
 
-  protected:
+protected:
   struct InfoEntryV2 {
     uint64_t max_log_id_;
     void reset()
@@ -118,11 +118,11 @@ class ObIInfoBlockHandler {
   };
   typedef common::ObArrayHashMap<common::ObPartitionKey, InfoEntryV2> InfoHashV2;
   class InfoEntrySerializeFunctorV2 {
-    public:
+  public:
     InfoEntrySerializeFunctorV2(char* buf, const int64_t buf_len, int64_t& pos);
     bool operator()(const common::ObPartitionKey& partition_key, const InfoEntryV2& info_entry_v2);
 
-    private:
+  private:
     char* buf_;
     int64_t buf_len_;
     int64_t& pos_;
@@ -141,18 +141,18 @@ class ObIInfoBlockHandler {
   int update_info_hash_v2_(const common::ObPartitionKey& partition_key, const uint64_t log_id);
   int resolve_info_hash_v2_(const char* buf, const int64_t buf_len, int64_t& pos, const int64_t expected_magic_number);
 
-  private:
+private:
   static int record_need_freeze_partition(
       NeedFreezePartitionArray& partition_array, const common::ObPartitionKey& partition_key, const uint64_t log_id);
 
-  private:
+private:
   // adapt hashmap forech, used to traverse infoblock.
   // 1. during the restart phase, log_scan_runnable will compare max_log_id which
   // is record in infoblock with last_replay_log_id which is record in base_storage_info,
   // if last_replay_log_id is greator than max_log_id, means that the file needn't
   // to read.
   class CheckFileCanBeSkippedFunctor {
-    public:
+  public:
     CheckFileCanBeSkippedFunctor(storage::ObPartitionService* partition_service);
     bool operator()(const common::ObPartitionKey& pkey, const InfoEntryV2& entry);
     bool can_skip() const
@@ -164,7 +164,7 @@ class ObIInfoBlockHandler {
       return ret_code_;
     }
 
-    private:
+  private:
     storage::ObPartitionService* partition_service_;
     int64_t check_partition_not_exist_time_;
     bool can_skip_;
@@ -174,7 +174,7 @@ class ObIInfoBlockHandler {
   // adapt hashmap forech, used to traverse infoblock.
   // 1. record partition which need to be minor freeze.
   class CheckPartitionNeedFreezeFunctor {
-    public:
+  public:
     CheckPartitionNeedFreezeFunctor(storage::ObPartitionService* partition_service,
         NeedFreezePartitionArray& partition_array, const bool need_record, const bool is_strict_recycle_mode);
     bool operator()(const common::ObPartitionKey& partition_key, const InfoEntryV2& entry_v2);
@@ -187,7 +187,7 @@ class ObIInfoBlockHandler {
       return ret_code_;
     }
 
-    private:
+  private:
     // check partition whether need to do minor freeze.
     // last_replay_log_id means that the max_log_id has beed replayed.
     // max_log_id means that the max_log_id in this file.
@@ -199,7 +199,7 @@ class ObIInfoBlockHandler {
     int do_check_log_only_partition_need_freeze_(ObIPartitionLogService* pls,
         const common::ObPartitionKey& partition_key, const int64_t last_replay_log_id, const int64_t max_log_id);
 
-    private:
+  private:
     storage::ObPartitionService* partition_service_;
     NeedFreezePartitionArray& partition_array_;
     int64_t check_partition_not_exist_time_;
@@ -214,14 +214,14 @@ class ObIInfoBlockHandler {
 // the following two classes called by LogWriter, don't need to protect
 // by lock.
 class ObCommitInfoBlockHandler : public ObIInfoBlockHandler {
-  public:
+public:
   ObCommitInfoBlockHandler();
   virtual ~ObCommitInfoBlockHandler()
   {
     destroy();
   }
 
-  public:
+public:
   int init();
   void destroy();
   virtual int build_info_block(char* buf, const int64_t buf_len, int64_t& pos);
@@ -235,12 +235,12 @@ class ObCommitInfoBlockHandler : public ObIInfoBlockHandler {
   int update_info(const common::ObPartitionKey& partition_key, const uint64_t log_id, const int64_t submit_timestamp);
   int reset();
 
-  public:
+public:
   // echo commit_info_block_handler|sha1sum
   // the first 16 bits is valid
   static const int64_t MAGIC_NUMBER = 0x13bd710f4b907562ull;
 
-  private:
+private:
   bool is_inited_;
 
   DISALLOW_COPY_AND_ASSIGN(ObCommitInfoBlockHandler);
@@ -281,14 +281,14 @@ struct IndexInfoBlockEntry {
 typedef common::ObArrayHashMap<common::ObPartitionKey, IndexInfoBlockEntry> IndexInfoBlockMap;
 
 class ObIndexInfoBlockHandler : public ObIInfoBlockHandler {
-  public:
+public:
   ObIndexInfoBlockHandler();
   virtual ~ObIndexInfoBlockHandler()
   {
     destroy();
   }
 
-  private:
+private:
   struct InfoEntry {
     uint64_t min_log_id_;
     int64_t min_log_timestamp_;
@@ -309,11 +309,11 @@ class ObIndexInfoBlockHandler : public ObIInfoBlockHandler {
   typedef common::ObSEArray<int64_t, 128> TstampArray;
 
   class InfoEntrySerializeFunctor {
-    public:
+  public:
     InfoEntrySerializeFunctor(char* buf, const int64_t buf_len, int64_t& pos, TstampArray& max_log_tstamp_array);
     bool operator()(const common::ObPartitionKey& partition_key, const InfoEntry& info_entry);
 
-    private:
+  private:
     char* buf_;
     int64_t buf_len_;
     int64_t& pos_;
@@ -329,12 +329,12 @@ class ObIndexInfoBlockHandler : public ObIInfoBlockHandler {
   //
   // used to load each entry into map
   class InfoEntryLoader {
-    public:
+  public:
     InfoEntryLoader(IndexInfoBlockMap& map) : map_(map)
     {}
     bool operator()(const common::ObPartitionKey& partition_key, const InfoEntry& info_entry);
 
-    private:
+  private:
     IndexInfoBlockMap& map_;
   };
 
@@ -342,27 +342,27 @@ class ObIndexInfoBlockHandler : public ObIInfoBlockHandler {
   //
   // used to update entry in map
   class InfoEntryV2Loader {
-    public:
+  public:
     InfoEntryV2Loader(IndexInfoBlockMap& map) : map_(map)
     {}
     bool operator()(const common::ObPartitionKey& partition_key, const InfoEntryV2& info_entry);
 
-    private:
+  private:
     IndexInfoBlockMap& map_;
   };
 
-  public:
+public:
   typedef common::ObArrayHashMap<common::ObPartitionKey, uint64_t> MinLogIdInfo;
   class AppendMinLogIdInfoFunctor {
-    public:
+  public:
     AppendMinLogIdInfoFunctor(MinLogIdInfo& min_log_id_info);
     bool operator()(const common::ObPartitionKey& partition_key, const InfoEntry& info_entry);
 
-    private:
+  private:
     MinLogIdInfo& min_log_id_info_;
   };
 
-  public:
+public:
   int init(void);
   void destroy();
   virtual int build_info_block(char* buf, const int64_t buf_len, int64_t& pos);
@@ -383,11 +383,11 @@ class ObIndexInfoBlockHandler : public ObIInfoBlockHandler {
 
   int reset();
 
-  private:
+private:
   int resolve_max_log_timestamp_(const char* buf, const int64_t buf_len, int64_t& pos,
       const common::ObPartitionKey* part_array, const int64_t part_number);
 
-  private:
+private:
   // echo index_info_block_handler|sha1sum
   // the first 16 bits is valid
   static const int64_t MAGIC_NUMBER = 0x20a10b0830216399ull;

@@ -23,7 +23,7 @@ class ObIntermResultItem;
 class ObDiskIntermResultItem;
 
 class ObIntermResultItemPool {
-  public:
+public:
   static const int64_t MAX_INTERM_RESULT_ITEM_POOL_CAPACITY = ObIntermResultPool::INTERM_RESULT_CAPACITY;
   ObIntermResultItemPool();
   virtual ~ObIntermResultItemPool();
@@ -44,14 +44,14 @@ class ObIntermResultItemPool {
     return MAX_INTERM_RESULT_ITEM_POOL_CAPACITY;
   }
 
-  private:
+private:
   int init();
   inline common::ObSmallAllocator& get_allocator(const bool is_memory_item)
   {
     return is_memory_item ? mem_item_allocator_ : disk_item_allocator_;
   }
 
-  private:
+private:
   static ObIntermResultItemPool* instance_;
 
   bool inited_;
@@ -59,7 +59,7 @@ class ObIntermResultItemPool {
   common::ObSmallAllocator mem_item_allocator_;
   common::ObSmallAllocator disk_item_allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIntermResultItemPool);
 };
 }  // namespace sql

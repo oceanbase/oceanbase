@@ -22,7 +22,7 @@ class AutoincParam;
 namespace sql {
 class ObPhysicalPlanCtx;
 class ObExprAutoincNextval : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprAutoincNextval(common::ObIAllocator& alloc);
   virtual ~ObExprAutoincNextval();
 
@@ -35,7 +35,7 @@ class ObExprAutoincNextval : public ObFuncExprOperator {
 
   static int get_uint_value(const ObExpr& input_expr, ObDatum* input_value, bool& is_zero, uint64_t& casted_value);
 
-  private:
+private:
   // check to generate auto-inc value or not and cast.
   static int check_and_cast(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
       common::ObExprCtx& expr_ctx, share::AutoincParam* autoinc_param, bool& is_to_generate, uint64_t& casted_value);

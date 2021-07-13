@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace common {
 namespace sqlclient {
 class ObMySQLServerProvider {
-  public:
+public:
   ObMySQLServerProvider(){};
   virtual ~ObMySQLServerProvider(){};
   virtual int get_cluster_list(common::ObIArray<int64_t>& cluster_list) = 0;
@@ -34,7 +34,7 @@ class ObMySQLServerProvider {
     return true;
   }
 
-  private:
+private:
   ObMySQLServerProvider(const ObMySQLServerProvider&);
   ObMySQLServerProvider& operator=(const ObMySQLServerProvider&);
 };

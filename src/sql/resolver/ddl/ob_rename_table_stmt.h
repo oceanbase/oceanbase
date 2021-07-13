@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObRenameTableStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObRenameTableStmt(common::ObIAllocator* name_pool);
   ObRenameTableStmt();
   virtual ~ObRenameTableStmt();
@@ -45,7 +45,7 @@ class ObRenameTableStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(rename_table_arg));
 
-  private:
+private:
   obrpc::ObRenameTableArg rename_table_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObRenameTableStmt);
 };

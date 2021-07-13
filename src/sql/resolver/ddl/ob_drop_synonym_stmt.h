@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDropSynonymStmt : public ObDDLStmt {
-  public:
+public:
   ObDropSynonymStmt() : ObDDLStmt(stmt::T_DROP_SYNONYM), drop_synonym_arg_()
   {}
   ~ObDropSynonymStmt()
@@ -53,7 +53,7 @@ class ObDropSynonymStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(drop_synonym_arg));
 
-  private:
+private:
   obrpc::ObDropSynonymArg drop_synonym_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObDropSynonymStmt);
 };

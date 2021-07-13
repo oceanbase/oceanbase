@@ -32,7 +32,7 @@ class ObPGPartition;
 namespace observer {
 
 class ObInfoSchemaStorageStatTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObInfoSchemaStorageStatTable();
   virtual ~ObInfoSchemaStorageStatTable();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -43,7 +43,7 @@ class ObInfoSchemaStorageStatTable : public common::ObVirtualTableScannerIterato
   }
   virtual int set_ip(common::ObAddr* addr);
 
-  private:
+private:
   enum STORAGE_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,

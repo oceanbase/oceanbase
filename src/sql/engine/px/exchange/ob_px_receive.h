@@ -28,10 +28,10 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxReceiveInput : public ObPxExchangeInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxReceiveInput() : child_dfo_id_(common::OB_INVALID_ID), ch_provider_ptr_(0)
   {}
   virtual ~ObPxReceiveInput()
@@ -61,18 +61,18 @@ class ObPxReceiveInput : public ObPxExchangeInput {
     return ch_provider_ptr_;
   }
 
-  protected:
+protected:
   int64_t child_dfo_id_;
   uint64_t ch_provider_ptr_;
 };
 
 // ObPxReceive is pure base class, no get_type() info provided
 class ObPxReceive : public ObReceive {
-  public:
+public:
   class ObPxReceiveCtx : public ObReceiveCtx {
     friend class ObPxReceive;
 
-    public:
+  public:
     explicit ObPxReceiveCtx(ObExecContext& ctx)
         : ObReceiveCtx(ctx),
           task_ch_set_(),
@@ -150,7 +150,7 @@ class ObPxReceive : public ObReceive {
       return task_channels_;
     }
 
-    protected:
+  protected:
     ObPxTaskChSet task_ch_set_;
     bool iter_end_;
     bool channel_linked_;
@@ -166,7 +166,7 @@ class ObPxReceive : public ObReceive {
     dtl::ObDtlLocalFirstBufferCache* proxy_first_buffer_cache_;
   };
 
-  public:
+public:
   explicit ObPxReceive(common::ObIAllocator& alloc);
   virtual ~ObPxReceive();
   virtual int rescan(ObExecContext& ctx) const override;
@@ -174,23 +174,23 @@ class ObPxReceive : public ObReceive {
   virtual int try_link_channel(ObExecContext& ctx) const = 0;
   virtual int active_all_receive_channel(ObPxReceiveCtx& recv_ctx, ObExecContext& ctx) const;
 
-  protected:
+protected:
   // helper func
   static int link_ch_sets(
       ObPxTaskChSet& ch_set, common::ObIArray<dtl::ObDtlChannel*>& channels, dtl::ObDtlFlowControl* dfc = nullptr);
   int get_sqc_id(ObExecContext& ctx, int64_t& sqc_id) const;
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObPxReceive);
 };
 
 class ObPxFifoReceiveInput : public ObPxReceiveInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxFifoReceiveInput() : ObPxReceiveInput()
   {}
   virtual ~ObPxFifoReceiveInput()
@@ -202,12 +202,12 @@ class ObPxFifoReceiveInput : public ObPxReceiveInput {
 };
 
 class ObPxFifoReceive : public ObPxReceive {
-  public:
+public:
   class ObPxFifoReceiveCtx : public ObPxReceiveCtx {
-    public:
+  public:
     friend class ObPxFifoReceive;
 
-    public:
+  public:
     explicit ObPxFifoReceiveCtx(ObExecContext& ctx);
     virtual ~ObPxFifoReceiveCtx();
     virtual void destroy()
@@ -216,15 +216,15 @@ class ObPxFifoReceive : public ObPxReceive {
       // no need to reset interrupt_proc_
     }
 
-    private:
+  private:
     ObPxInterruptP interrupt_proc_;
   };
 
-  public:
+public:
   explicit ObPxFifoReceive(common::ObIAllocator& alloc);
   virtual ~ObPxFifoReceive();
 
-  protected:
+protected:
   virtual int create_operator_input(ObExecContext& ctx) const;
   virtual int init_op_ctx(ObExecContext& ctx) const;
   virtual int inner_open(ObExecContext& ctx) const;
@@ -232,7 +232,7 @@ class ObPxFifoReceive : public ObPxReceive {
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   virtual int try_link_channel(ObExecContext& ctx) const override;
 
-  private:
+private:
   int get_one_row_from_channels(ObPxFifoReceiveCtx& recv_ctx, dtl::ObDtlChannelLoop& loop, int64_t timeout_us,
       const common::ObNewRow*& row) const;
 };

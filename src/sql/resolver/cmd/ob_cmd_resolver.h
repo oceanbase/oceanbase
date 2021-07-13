@@ -19,13 +19,13 @@
 namespace oceanbase {
 namespace sql {
 class ObCMDResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObCMDResolver(ObResolverParams& params) : ObStmtResolver(params)
   {}
   virtual ~ObCMDResolver()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCMDResolver);
 };
 }  // namespace sql

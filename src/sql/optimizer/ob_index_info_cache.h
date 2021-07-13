@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class QueryRangeInfo {
-  public:
+public:
   QueryRangeInfo()
       : is_valid_(false),
         contain_always_false_(false),
@@ -125,7 +125,7 @@ class QueryRangeInfo {
   TO_STRING_KV(K_(is_valid), K_(contain_always_false), K_(range_columns), K_(equal_prefix_count),
       K_(equal_prefix_null_count), K_(range_prefix_count), K_(index_column_count));
 
-  private:
+private:
   bool is_valid_;
   bool contain_always_false_;
   ObQueryRange* query_range_;
@@ -139,7 +139,7 @@ class QueryRangeInfo {
 };
 
 class OrderingInfo {
-  public:
+public:
   OrderingInfo() : scan_direction_(default_asc_direction()), index_keys_(), ordering_()
   {}
   ObOrderDirection get_scan_direction() const
@@ -169,7 +169,7 @@ class OrderingInfo {
   }
   TO_STRING_KV(K_(scan_direction), K_(index_keys));
 
-  private:
+private:
   ObOrderDirection scan_direction_;
   common::ObArray<ObRawExpr*> index_keys_;
   common::ObArray<ObRawExpr*> ordering_;
@@ -177,7 +177,7 @@ class OrderingInfo {
 };
 
 class IndexInfoEntry {
-  public:
+public:
   IndexInfoEntry()
       : index_id_(common::OB_INVALID_ID),
         is_unique_index_(false),
@@ -263,7 +263,7 @@ class IndexInfoEntry {
   TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global), K_(range_info),
       K_(ordering_info), K_(interesting_order_info), K_(interesting_order_prefix_count));
 
-  private:
+private:
   uint64_t index_id_;
   bool is_unique_index_;
   bool is_index_back_;
@@ -276,7 +276,7 @@ class IndexInfoEntry {
 };
 
 class ObIndexInfoCache {
-  public:
+public:
   ObIndexInfoCache() : table_id_(common::OB_INVALID_ID), base_table_id_(common::OB_INVALID_ID), entry_count_(0)
   {
     MEMSET(index_entrys_, 0, sizeof(index_entrys_));
@@ -301,7 +301,7 @@ class ObIndexInfoCache {
   int add_index_info_entry(IndexInfoEntry*);
   TO_STRING_KV(K_(table_id), K_(base_table_id), K_(entry_count));
 
-  private:
+private:
   uint64_t table_id_;
   uint64_t base_table_id_;
   int64_t entry_count_;

@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace clog {
 struct ObLogReqContext;
 class ObIPartitionLogPacketHandler {
-  public:
+public:
   ObIPartitionLogPacketHandler()
   {}
   virtual ~ObIPartitionLogPacketHandler()

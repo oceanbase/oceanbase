@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDistributedJobControl : public ObJobControl {
-  public:
+public:
   ObDistributedJobControl();
   virtual ~ObDistributedJobControl();
 
@@ -27,7 +27,7 @@ class ObDistributedJobControl : public ObJobControl {
   virtual int init_job_finish_queue(ObExecContext& ctx) override;
   int get_root_job(ObJob*& root_job) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistributedJobControl);
 };
 }  // namespace sql

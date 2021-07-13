@@ -37,12 +37,12 @@ enum ObBcastOptimization {
 
 // monitor various events, such as root dfo scheduling events, etc
 class ObIPxCoordEventListener {
-  public:
+public:
   virtual int on_root_data_channel_setup() = 0;
 };
 
 class ObPxSqcUtil {
-  public:
+public:
   static double get_sqc_partition_ratio(ObExecContext* exec_ctx);
   static double get_sqc_est_worker_ratio(ObExecContext* exec_ctx);
 
@@ -63,13 +63,13 @@ class ObPxSqcUtil {
 
 // consider compatibility, currently set as not mutually exclusive
 class ObPxEstimateSizeUtil {
-  public:
+public:
   static int get_px_size(
       ObExecContext* exec_ctx, const PxOpSizeFactor factor, const int64_t total_size, int64_t& ret_size);
 };
 
 class ObSlaveMapItem {
-  public:
+public:
   ObSlaveMapItem()
       : group_id_(0),
         l_worker_count_(0),
@@ -98,7 +98,7 @@ class ObSlaveMapItem {
 
 class ObPXServerAddrUtil {
   class ObPxSqcTaskCountMeta {
-    public:
+  public:
     ObPxSqcTaskCountMeta() : partition_count_(0), thread_count_(0), time_(0), idx_(0), finish_(false)
     {}
     ~ObPxSqcTaskCountMeta() = default;
@@ -110,7 +110,7 @@ class ObPXServerAddrUtil {
     TO_STRING_KV(K_(partition_count), K_(thread_count), K_(time), K_(idx), K_(finish));
   };
 
-  public:
+public:
   ObPXServerAddrUtil() = default;
   ~ObPXServerAddrUtil() = default;
   static int alloc_by_data_distribution(ObExecContext& ctx, ObDfo& dfo);
@@ -125,7 +125,7 @@ class ObPXServerAddrUtil {
   static int split_parallel_into_task(const int64_t parallelism, const common::ObIArray<int64_t>& sqc_partition_count,
       common::ObIArray<int64_t>& results);
 
-  private:
+private:
   static int find_dml_ops(common::ObIArray<const ObTableModify*>& insert_ops, const ObPhyOperator& op);
 
   static int find_dml_ops(common::ObIArray<const ObTableModifySpec*>& insert_ops, const ObOpSpec& op);
@@ -187,7 +187,7 @@ class ObPXServerAddrUtil {
 };
 
 class ObPxPartitionLocationUtil {
-  public:
+public:
   /**
    * get all tables' partition info, and store them to sqc_ctx's partition_array_.
    * we need these infos to start trans.
@@ -200,22 +200,22 @@ class ObPxPartitionLocationUtil {
 };
 
 class ObPxOperatorVisitor {
-  public:
+public:
   class ApplyFunc {
-    public:
+  public:
     virtual int apply(ObExecContext& ctx, ObPhyOperator& input) = 0;
     virtual int reset(ObPhyOperator& input) = 0;
     virtual int apply(ObExecContext& ctx, ObOpSpec& input) = 0;
     virtual int reset(ObOpSpec& input) = 0;
   };
 
-  public:
+public:
   static int visit(ObExecContext& ctx, ObPhyOperator& root, ApplyFunc& func);
   static int visit(ObExecContext& ctx, ObOpSpec& root, ApplyFunc& func);
 };
 
 class ObPxTreeSerializer {
-  public:
+public:
   static int serialize_tree(
       char* buf, int64_t buf_len, int64_t& pos, ObPhyOperator& root, bool is_fulltree, ObPhyOpSeriCtx* seri_ctx = NULL);
   static int deserialize_tree(const char* buf, int64_t data_len, int64_t& pos, ObPhysicalPlan& phy_plan,
@@ -273,7 +273,7 @@ class ObPxTreeSerializer {
 };
 
 class ObPxChannelUtil {
-  public:
+public:
   static int unlink_ch_set(ObPxTaskChSet& ch_set, sql::dtl::ObDtlFlowControl* dfc);
   static int flush_rows(common::ObIArray<dtl::ObDtlChannel*>& channels);
 
@@ -286,7 +286,7 @@ class ObPxChannelUtil {
 };
 
 class ObPxAffinityByRandom {
-  public:
+public:
   struct PartitionHashValue {
     int64_t partition_id_;
     int64_t partition_idx_;
@@ -296,7 +296,7 @@ class ObPxAffinityByRandom {
     TO_STRING_KV(K_(partition_id), K_(partition_idx), K_(hash_value), K_(worker_id), K_(partition_info));
   };
 
-  public:
+public:
   ObPxAffinityByRandom() : worker_cnt_(0), partition_hash_values_()
   {}
   virtual ~ObPxAffinityByRandom() = default;
@@ -310,19 +310,19 @@ class ObPxAffinityByRandom {
   static int get_partition_info(
       int64_t partition_id, ObIArray<ObPxPartitionInfo>& partitions_info, ObPxPartitionInfo& partition_info);
 
-  private:
+private:
   int64_t worker_cnt_;
   ObSEArray<PartitionHashValue, 8> partition_hash_values_;
 };
 
 class ObPxAdmissionUtil {
-  public:
+public:
   static int check_parallel_max_servers_value(
       const common::ObIArray<share::ObUnitInfo>& units, const int64_t user_max_servers, int64_t& max_servers);
 };
 
 class ObSlaveMapUtil {
-  public:
+public:
   ObSlaveMapUtil() = default;
   ~ObSlaveMapUtil() = default;
   static int build_mn_ch_map(ObExecContext& ctx, ObDfo& child, ObDfo& parent, uint64_t tenant_id);
@@ -331,7 +331,7 @@ class ObSlaveMapUtil {
   static int build_bf_mn_channel(
       dtl::ObDtlChTotalInfo& transmit_ch_info, ObDfo& child, ObDfo& parent, const uint64_t tenant_id);
 
-  private:
+private:
   // new channel map generate
   static int build_ppwj_ch_mn_map(ObExecContext& ctx, ObDfo& parent, ObDfo& child, uint64_t tenant_id);
   static int build_pkey_random_ch_mn_map(ObDfo& parent, ObDfo& child, uint64_t tenant_id);
@@ -349,7 +349,7 @@ class ObSlaveMapUtil {
 };
 
 class ObDtlChannelUtil {
-  public:
+public:
   static int link_ch_set(
       dtl::ObDtlChSet& ch_set, common::ObIArray<dtl::ObDtlChannel*>& channels, dtl::ObDtlFlowControl* dfc = nullptr);
   static int get_receive_dtl_channel_set(

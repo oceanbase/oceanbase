@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprDiv : public ObArithExprOperator {
-  public:
+public:
   ObExprDiv();
   explicit ObExprDiv(common::ObIAllocator& alloc, ObExprOperatorType type = T_OP_DIV);
   virtual ~ObExprDiv()
@@ -58,7 +58,7 @@ class ObExprDiv : public ObArithExprOperator {
       ObEvalCtx& ctx, const ObExpr& expr);
   DISALLOW_COPY_AND_ASSIGN(ObExprDiv);
 
-  private:
+private:
   static ObArithFunc div_funcs_[common::ObMaxTC];
   static ObArithFunc avg_div_funcs_[common::ObMaxTC];
   static const common::ObScale DIV_CALC_SCALE;
@@ -68,7 +68,7 @@ class ObExprDiv : public ObArithExprOperator {
 // Div expr for aggregation, different with ObExprDiv:
 //  No overflow check for double type.
 class ObExprAggDiv : public ObExprDiv {
-  public:
+public:
   explicit ObExprAggDiv(common::ObIAllocator& alloc) : ObExprDiv(alloc, T_OP_AGG_DIV)
   {}
 };

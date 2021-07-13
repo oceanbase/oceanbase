@@ -26,7 +26,7 @@ namespace oceanbase {
 namespace common {
 template <class T>
 class ObCoreLocalStorage {
-  public:
+public:
   ObCoreLocalStorage();
   ~ObCoreLocalStorage();
   inline int init(int64_t array_len = INT64_MAX);
@@ -37,12 +37,12 @@ class ObCoreLocalStorage {
   inline int set_value(int64_t index, const T& val);
   inline int64_t get_array_idx() const;
 
-  protected:
+protected:
   inline int check_inited() const;
 
   DISALLOW_COPY_AND_ASSIGN(ObCoreLocalStorage);
 
-  protected:
+protected:
   static const int64_t ITEM_SIZE = sizeof(T) > CACHE_ALIGN_SIZE ? sizeof(T) : CACHE_ALIGN_SIZE;
   static const int64_t STORAGE_SIZE_TIMES = 2;
   void* val_array_;
@@ -52,7 +52,7 @@ class ObCoreLocalStorage {
 } CACHE_ALIGNED;
 
 class ObCoreLocalPtr : public ObCoreLocalStorage<void*> {
-  public:
+public:
   inline int cas_value(void*& old_val, void*& new_val);
 } CACHE_ALIGNED;
 

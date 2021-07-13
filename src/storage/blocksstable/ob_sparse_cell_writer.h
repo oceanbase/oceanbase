@@ -24,7 +24,7 @@ class ObCellWriter;
 namespace blocksstable {
 
 class ObSparseCellWriter {
-  public:
+public:
   ObSparseCellWriter();
   virtual ~ObSparseCellWriter()
   {}
@@ -36,7 +36,7 @@ class ObSparseCellWriter {
     return pos_;
   }
 
-  private:
+private:
   template <class T>
   int append(const T& value);
   inline int write_int(const enum common::ObObjType meta_type, const int64_t value);
@@ -50,7 +50,7 @@ class ObSparseCellWriter {
   inline int get_int_byte(int64_t int_value);
   int write_text_store(const common::ObObj& obj);
 
-  private:
+private:
   char* buf_;
   int64_t buf_size_;
   int64_t pos_;

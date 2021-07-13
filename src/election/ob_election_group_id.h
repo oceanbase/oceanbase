@@ -28,7 +28,7 @@ typedef std::pair<int64_t, int64_t> lease_t;
 class ObElectionGroupId {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObElectionGroupId() : server_(), create_time_(common::OB_INVALID_TIMESTAMP), hash_val_(0)
   {}
   ~ObElectionGroupId()
@@ -62,10 +62,10 @@ class ObElectionGroupId {
 
   TO_STRING_AND_YSON(OB_ID(eg_id_hash), hash_val_, Y_(server), Y_(create_time));
 
-  private:
+private:
   uint64_t cal_hash_() const;
 
-  private:
+private:
   common::ObAddr server_;
   int64_t create_time_;
   uint64_t hash_val_;

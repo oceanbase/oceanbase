@@ -27,11 +27,11 @@ class ObString;
 namespace share {
 
 class ObResourceMappingRuleManager {
-  public:
+public:
   typedef common::ObArray<ObResourceMappingRule> ObResourceMappingRuleSet;
   typedef common::ObArray<ObResourceUserMappingRule> ObResourceUserMappingRuleSet;
 
-  public:
+public:
   ObResourceMappingRuleManager() = default;
   virtual ~ObResourceMappingRuleManager() = default;
   int init();
@@ -58,7 +58,7 @@ class ObResourceMappingRuleManager {
     return ret;
   }
 
-  private:
+private:
   common::hash::ObHashMap<uint64_t, uint64_t> rule_map_;
   common::hash::ObHashMap<uint64_t, ObGroupName> group_map_;
   DISALLOW_COPY_AND_ASSIGN(ObResourceMappingRuleManager);

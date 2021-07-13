@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace lib {
 
 class CoTimerQueue {
-  public:
+public:
   struct Node {
     Node(int64_t expires);
     int compare(const Node* node) const
@@ -36,7 +36,7 @@ class CoTimerQueue {
     int64_t expires_;
   };
 
-  public:
+public:
   CoTimerQueue();
 
   bool add(Node* node);
@@ -44,7 +44,7 @@ class CoTimerQueue {
 
   Node* get_next();
 
-  private:
+private:
   container::ObRbTree<Node, container::ObDummyCompHelper<Node>> rb_tree_;
   Node* next_;
 };

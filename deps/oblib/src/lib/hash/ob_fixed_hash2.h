@@ -38,7 +38,7 @@ struct SpHashNode : public ObLink {
 
 template <typename Node>
 class FixedHash2 {
-  public:
+public:
   typedef SpHashNode BaseNode;
   FixedHash2(void* buf, int64_t size)
       : nodes_((Node*)buf), limit_(last2n(size / sizeof(BaseNode))), shift_(__builtin_clzll(limit_) + 1)
@@ -98,7 +98,7 @@ class FixedHash2 {
     return node;
   }
 
-  private:
+private:
   Node* quick_next_node(Node* node)
   {
     Node* next = NULL;
@@ -136,7 +136,7 @@ class FixedHash2 {
     }
   }
 
-  private:
+private:
   BaseNode* nodes_;
   int64_t limit_;
   int64_t shift_;

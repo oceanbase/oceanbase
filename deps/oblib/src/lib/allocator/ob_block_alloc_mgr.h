@@ -21,7 +21,7 @@ class ObBlockAllocMgr;
 extern ObBlockAllocMgr default_blk_alloc;
 
 class ObBlockAllocMgr {
-  public:
+public:
   ObBlockAllocMgr(int64_t limit = INT64_MAX) : limit_(limit), hold_(0)
   {}
   ~ObBlockAllocMgr()
@@ -66,7 +66,7 @@ class ObBlockAllocMgr {
     return ((limit_ - hold_) > size);
   }
 
-  private:
+private:
   int64_t limit_;
   int64_t hold_;
 };

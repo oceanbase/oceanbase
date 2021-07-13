@@ -27,7 +27,7 @@ using common::ObArenaAllocator;
 using common::ObSQLArenaAllocator;
 
 class Worker {
-  public:
+public:
   enum class CompatMode { INVALID = -1, MYSQL, ORACLE };
 
   Worker();
@@ -90,20 +90,20 @@ class Worker {
     return group_id_;
   }
 
-  public:
+public:
   // static variables
   static Worker& self();
 
-  protected:
+protected:
   static RLOCAL(Worker*, self_);
 
-  protected:
+protected:
   // Thread runtime-memory is allocated from this allocator
   // Initial tenant_id=500, when request is processed, it is updated to tenant id of request
   // Ctx_id can be specified separately, this ctx_id remains unchanged
   ObIAllocator* allocator_;
 
-  private:
+private:
   bool req_flag_;
 
   int32_t worker_level_;
@@ -154,7 +154,7 @@ inline Worker& this_worker()
 class ObRuntimeContext : public lib::RuntimeContext {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRuntimeContext() : compat_mode_(Worker::CompatMode::MYSQL)
   {}
   Worker::CompatMode compat_mode_;

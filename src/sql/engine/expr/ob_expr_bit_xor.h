@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 // bitwise xor
 class ObExprBitXor : public ObBitwiseExprOperator {
-  public:
+public:
   explicit ObExprBitXor(common::ObIAllocator& alloc);
   virtual ~ObExprBitXor(){};
 
@@ -28,7 +28,7 @@ class ObExprBitXor : public ObBitwiseExprOperator {
 
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBitXor);
 };
 }  // namespace sql

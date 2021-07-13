@@ -40,7 +40,7 @@ static constexpr int64_t cluster_id = 1000;
 static bool change_src_cluster_id = false;
 
 class TestProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(TestProxy);
 
   RPC_S(@PR5 test, OB_TEST_PCODE);
@@ -50,7 +50,7 @@ class TestProxy : public ObRpcProxy {
 };
 
 class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
-  protected:
+protected:
   int process()
   {
     static int64_t rpc_count_ = 0;
@@ -73,7 +73,7 @@ class MyProcessor : public TestProxy::Processor<OB_TEST_PCODE> {
 };
 
 class MyProcessor2 : public TestProxy::Processor<OB_TEST2_PCODE> {
-  protected:
+protected:
   int process()
   {
     const ObRpcPacket& pkt = dynamic_cast<const ObRpcPacket&>(req_->get_packet());
@@ -83,7 +83,7 @@ class MyProcessor2 : public TestProxy::Processor<OB_TEST2_PCODE> {
 };
 
 class MyProcessor3 : public TestProxy::Processor<OB_TEST3_PCODE> {
-  protected:
+protected:
   int process()
   {
     const ObRpcPacket& pkt = dynamic_cast<const ObRpcPacket&>(req_->get_packet());
@@ -99,7 +99,7 @@ class MyProcessor3 : public TestProxy::Processor<OB_TEST3_PCODE> {
 };
 
 class ObTestDeliver : public rpc::frame::ObReqDeliver {
-  public:
+public:
   int init()
   {
     return 0;
@@ -163,7 +163,7 @@ class ObTestDeliver : public rpc::frame::ObReqDeliver {
 };
 
 class TestRpcServer : public ::testing::Test {
-  public:
+public:
   TestRpcServer() : handler_(server_), transport_(NULL)
   {}
 
@@ -185,7 +185,7 @@ class TestRpcServer : public ::testing::Test {
     net_.stop();
   }
 
-  protected:
+protected:
   rpc::frame::ObNetEasy net_;
   obrpc::ObRpcHandler handler_;
   ObTestDeliver server_;

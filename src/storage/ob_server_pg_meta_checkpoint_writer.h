@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace storage {
 
 struct ObPGTenantFileComparator final {
-  public:
+public:
   ObPGTenantFileComparator(int& ret) : ret_(ret)
   {}
   ~ObPGTenantFileComparator() = default;
@@ -30,7 +30,7 @@ struct ObPGTenantFileComparator final {
 };
 
 class ObServerPGMetaCheckpointWriter final {
-  public:
+public:
   ObServerPGMetaCheckpointWriter();
   ~ObServerPGMetaCheckpointWriter() = default;
   int init(ObPartitionMetaRedoModule& partition_meta_service, ObBaseFileMgr& server_file_mgr,
@@ -42,10 +42,10 @@ class ObServerPGMetaCheckpointWriter final {
     return file_checkpoint_map_;
   }
 
-  private:
+private:
   int write_tenant_file_checkpoint(const ObTenantFileKey& file_key, common::ObIArray<ObIPartitionGroup*>& pg_array);
 
-  private:
+private:
   static const int64_t MAX_FILE_CNT_PER_SERVER = 10000L;
   ObPartitionMetaRedoModule* partition_meta_mgr_;
   ObBaseFileMgr* server_file_mgr_;

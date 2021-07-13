@@ -911,7 +911,7 @@ int ObRecoveryPointSchemaFilter::init(const int64_t tenant_id, const int64_t ten
     if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
             tenant_id, schema_service, tenant_recovery_point_schema_version, recovery_point_schema_guard_))) {
       STORAGE_LOG(WARN,
-          "failed to get tenant backup schema gaurd",
+          "failed to get tenant backup schema guard",
           K(ret),
           K(tenant_id),
           K(tenant_recovery_point_schema_version));

@@ -29,7 +29,7 @@ enum CallbackTaskType {
 };
 
 class ObLogCallbackTask {
-  public:
+public:
   ObLogCallbackTask()
   {
     reset();
@@ -37,7 +37,7 @@ class ObLogCallbackTask {
   ~ObLogCallbackTask()
   {}
 
-  public:
+public:
   int init(const CallbackTaskType& task_type, const common::ObPartitionKey& partition_key);
   void reset();
   CallbackTaskType get_cb_task_type() const
@@ -50,16 +50,16 @@ class ObLogCallbackTask {
   }
   TO_STRING_KV(K_(task_type), K_(partition_key));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogCallbackTask);
 
-  private:
+private:
   CallbackTaskType task_type_;
   common::ObPartitionKey partition_key_;
 };
 
 class ObGeneralCallbackTask : public ObLogCallbackTask {
-  public:
+public:
   ObGeneralCallbackTask()
   {
     reset();
@@ -70,17 +70,17 @@ class ObGeneralCallbackTask : public ObLogCallbackTask {
   void reset();
   int handle_callback();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGeneralCallbackTask);
 
-  public:
+public:
   common::ObICallback* callback_;
   int64_t before_push_cb_ts_;
 };
 typedef ObGeneralCallbackTask ObBatchCallbackTask;
 
 class ObMemberChangeCallbackTask : public ObLogCallbackTask {
-  public:
+public:
   ObMemberChangeCallbackTask()
   {
     reset();
@@ -88,7 +88,7 @@ class ObMemberChangeCallbackTask : public ObLogCallbackTask {
   ~ObMemberChangeCallbackTask()
   {}
 
-  public:
+public:
   int init(const CallbackTaskType& task_type, const common::ObPartitionKey& partition_key,
       const clog::ObLogType log_type, const uint64_t ms_log_id, const int64_t mc_timestamp, const int64_t replica_num,
       const common::ObMemberList& prev_member_list, const common::ObMemberList& curr_member_list,
@@ -123,10 +123,10 @@ class ObMemberChangeCallbackTask : public ObLogCallbackTask {
     return ms_proposal_id_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemberChangeCallbackTask);
 
-  private:
+private:
   ObLogType log_type_;
   uint64_t ms_log_id_;
   int64_t mc_timestamp_;

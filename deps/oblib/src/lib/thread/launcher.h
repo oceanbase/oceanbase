@@ -76,7 +76,7 @@ namespace lib {
 // 6. All self-contained thread classes should inherit and follow this set of rules.
 //
 class ILauncher {
-  public:
+public:
   virtual ~ILauncher()
   {}
 

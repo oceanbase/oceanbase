@@ -33,7 +33,7 @@ static const int64_t MAX_SERVER_NUM = 7;
 static const int64_t REPLICA_NUM = 3;
 
 class MockElectionCluster {
-  public:
+public:
   MockElectionCluster() : is_inited_(false), svr_cnt_(0)
   {}
   virtual ~MockElectionCluster()
@@ -61,14 +61,14 @@ class MockElectionCluster {
   int start_partition(
       const ObPartitionKey& pkey, const ObAddr& leader, const int64_t lease_start, int64_t& leader_epoch);
 
-  private:
+private:
   int init_server_(const char* ip, const int32_t rpc_port);
   int start_server_(const char* ip, const int32_t rpc_port);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(MockElectionCluster);
 
-  public:
+public:
   bool is_inited_;
   int64_t svr_cnt_;
   obrpc::ObBatchRpc batch_rpc_;

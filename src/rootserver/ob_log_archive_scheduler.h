@@ -41,20 +41,20 @@ class ObServerManager;
 class ObLeaderCoordinator;
 
 class ObLogArchiveThreadIdling final : public ObThreadIdling {
-  public:
+public:
   explicit ObLogArchiveThreadIdling(volatile bool& stop);
   const int64_t DEFAULT_IDLE_INTERVAL_US = 10 * 1000 * 1000;  // 10s
   const int64_t MAX_IDLE_INTERVAL_US = 10 * 1000 * 1000;      // 60s
   virtual int64_t get_idle_interval_us();
   void set_log_archive_checkpoint_interval(const int64_t interval_us);
 
-  private:
+private:
   int64_t idle_time_us_;
   DISALLOW_COPY_AND_ASSIGN(ObLogArchiveThreadIdling);
 };
 
 class ObLogArchiveScheduler final : public ObRsReentrantThread, public ObIBackupScheduler {
-  public:
+public:
   const int64_t OB_START_LOG_ARCHIVE_ROUND = 0;
 
   ObLogArchiveScheduler();
@@ -64,7 +64,7 @@ class ObLogArchiveScheduler final : public ObRsReentrantThread, public ObIBackup
       obrpc::ObSrvRpcProxy& rpc_proxy, common::ObMySQLProxy& sql_proxy,
       share::ObIBackupLeaseService& backup_lease_info);
   void set_active();
-  void stop();
+  void stop() override;
   void wakeup();
 
   int handle_enable_log_archive(const bool is_enable);
@@ -73,13 +73,13 @@ class ObLogArchiveScheduler final : public ObRsReentrantThread, public ObIBackup
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  int start();
-  virtual bool is_working() const
+  int start() override;
+  virtual bool is_working() const override
   {
     return is_working_;
   }
 
-  private:
+private:
   void cleanup_();
   int handle_stop_log_archive_();
   int handle_start_log_archive_();
@@ -121,7 +121,7 @@ class ObLogArchiveScheduler final : public ObRsReentrantThread, public ObIBackup
   int check_can_do_work_();
   int check_mount_file_(share::ObLogArchiveBackupInfo& sys_info);
 
-  private:
+private:
   bool is_inited_;
   mutable ObLogArchiveThreadIdling idling_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

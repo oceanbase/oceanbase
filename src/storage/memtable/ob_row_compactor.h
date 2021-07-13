@@ -32,7 +32,7 @@ class ObMvccRow;
 class ObMvccTransNode;
 
 class ICompactMap {
-  public:
+public:
   ICompactMap()
   {}
   virtual ~ICompactMap()
@@ -45,7 +45,7 @@ class ICompactMap {
 
 // Map with thread local array, which runs faster.
 class CompactMapImproved : public ICompactMap {
-  private:
+private:
   struct Node {
     uint32_t ver_;
     uint32_t col_id_;
@@ -53,26 +53,26 @@ class CompactMapImproved : public ICompactMap {
     Node* next_;
   };
 
-  private:
+private:
   static const int64_t BKT_N_BIT_SHIFT = 9;           // 2^9=512. Perf opt.
   static const int64_t BKT_N = 1 << BKT_N_BIT_SHIFT;  // 512
   static const int64_t BKT_N_MOD_MASK = BKT_N - 1;
   static const uint32_t INVALID_COL_ID = UINT16_MAX;
   static const uint32_t MAX_VER = UINT32_MAX;
 
-  private:
+private:
   class StaticMemoryHelper {
-    public:
+  public:
     StaticMemoryHelper();
     ~StaticMemoryHelper();
 
-    public:
+  public:
     Node* get_tl_arr();
     uint32_t& get_tl_arr_ver();
     Node* get_node();
     void revert_node(Node* n);
 
-    private:
+  private:
     static RLOCAL(Node*, bkts_);    // Thread local array.
     static RLOCAL(uint32_t, ver_);  // Thread local array version.
     common::PageArena<> arr_arena_;
@@ -80,7 +80,7 @@ class CompactMapImproved : public ICompactMap {
     common::ObSmallAllocator node_alloc_;
   };
 
-  public:
+public:
   CompactMapImproved() : bkts_(NULL), ver_(0), scan_cur_bkt_(NULL), scan_cur_node_(NULL)
   {}
   virtual ~CompactMapImproved()
@@ -90,10 +90,10 @@ class CompactMapImproved : public ICompactMap {
   int set(const uint64_t col_id, const common::ObObj& cell);
   int get_next(uint64_t& col_id, common::ObObj& cell);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(CompactMapImproved);
 
-  private:
+private:
   Node* bkts_;
   uint32_t ver_;
   Node* scan_cur_bkt_;
@@ -103,26 +103,26 @@ class CompactMapImproved : public ICompactMap {
 
 // Memtable Row Compactor.
 class ObMemtableRowCompactor {
-  public:
+public:
   ObMemtableRowCompactor();
   virtual ~ObMemtableRowCompactor();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableRowCompactor);
 
-  public:
+public:
   int init(ObMvccRow* row, common::ObIAllocator* node_alloc);
   // compact and refresh the update counter by snapshot version
   int compact(const int64_t snapshot_version);
 
-  private:
+private:
   void find_start_pos_(
       const int64_t snapshot_version, ObMvccTransNode**& start, ObMvccTransNode*& save, ObMvccTransNode*& next_node);
   ObMvccTransNode* construct_compact_node_(const int64_t snapshot_version, ObMvccTransNode* save);
   int insert_compact_node_(
       ObMvccTransNode* trans_node, ObMvccTransNode** start, ObMvccTransNode* save, ObMvccTransNode* next_node);
 
-  private:
+private:
   bool is_inited_;
   ObMvccRow* row_;
   common::ObIAllocator* node_alloc_;

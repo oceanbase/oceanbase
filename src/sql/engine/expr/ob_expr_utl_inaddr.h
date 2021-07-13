@@ -19,24 +19,24 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprUtlInaddrGetHostAddr : public ObExprOperator {
-  public:
+public:
   explicit ObExprUtlInaddrGetHostAddr(common::ObIAllocator& alloc);
   virtual ~ObExprUtlInaddrGetHostAddr();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result1(common::ObObj& result, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUtlInaddrGetHostAddr);
 };
 
 class ObExprUtlInaddrGetHostName : public ObExprOperator {
-  public:
+public:
   explicit ObExprUtlInaddrGetHostName(common::ObIAllocator& alloc);
   virtual ~ObExprUtlInaddrGetHostName();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result1(common::ObObj& result, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUtlInaddrGetHostName);
 };
 

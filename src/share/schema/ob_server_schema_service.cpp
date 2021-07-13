@@ -43,7 +43,7 @@ using namespace oceanbase::common::sqlclient;
 
 template <typename T>
 class TenantIdTrait {
-  public:
+public:
   explicit TenantIdTrait(const T& value) : value_(value)
   {}
   uint64_t get_tenant_id() const
@@ -51,12 +51,12 @@ class TenantIdTrait {
     return value_.tenant_id_;
   }
 
-  private:
+private:
   const T& value_;
 };
 template <>
 class TenantIdTrait<uint64_t> {
-  public:
+public:
   explicit TenantIdTrait(const uint64_t value) : value_(value)
   {}
   uint64_t get_tenant_id() const
@@ -64,7 +64,7 @@ class TenantIdTrait<uint64_t> {
     return common::extract_tenant_id(value_);
   }
 
-  private:
+private:
   uint64_t value_;
 };
 

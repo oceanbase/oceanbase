@@ -39,7 +39,7 @@ class ObRowCacheValue;
 class ObIRowReader;
 
 struct ObRowIndexIterator {
-  public:
+public:
   typedef ObRowIndexIterator self_t;
   typedef std::random_access_iterator_tag iterator_category;
   typedef int64_t value_type;
@@ -133,7 +133,7 @@ struct ObRowIndexIterator {
 };
 
 struct ObMicroBlockData {
-  public:
+public:
   ObMicroBlockData() : buf_(NULL), size_(0), extra_buf_(0), extra_size_(0)
   {}
   ObMicroBlockData(const char* buf, const int64_t size, const char* extra_buf = NULL, const int64_t extra_size = 0)
@@ -196,7 +196,7 @@ struct ObMicroBlockData {
 };
 
 class ObIMicroBlockGetReader {
-  public:
+public:
   ObIMicroBlockGetReader(){};
   virtual ~ObIMicroBlockGetReader(){};
   virtual int get_row(const uint64_t tenant_id, const ObMicroBlockData& block_data, const common::ObStoreRowkey& rowkey,
@@ -227,7 +227,7 @@ class ObIMicroBlockGetReader {
 };
 
 class ObIMicroBlockReader {
-  public:
+public:
   typedef const common::ObIArray<int32_t> Projector;
   static const int64_t OB_MAX_BATCH_ROW_COUNT = 64;
   static const int64_t INVALID_ROW_INDEX = -1;
@@ -271,11 +271,11 @@ class ObIMicroBlockReader {
     return end_;
   }
 
-  protected:
+protected:
   virtual int find_bound(const common::ObStoreRowkey& key, const bool lower_bound, const int64_t begin_idx,
       const int64_t end_idx, int64_t& row_idx, bool& equal) = 0;
 
-  protected:
+protected:
   bool is_inited_;
   int64_t begin_;  // begin of row index, inclusive
   int64_t end_;    // end of row index, not inclusive
@@ -285,7 +285,7 @@ class ObIMicroBlockReader {
 };
 
 class ObMicroBlock {
-  public:
+public:
   ObMicroBlock()
       : range_(),
         data_(),

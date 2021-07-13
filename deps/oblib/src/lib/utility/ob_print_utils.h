@@ -85,7 +85,7 @@ struct ObHexStringWrap {
   {}
   int64_t to_string(char* buf, const int64_t len) const;
 
-  private:
+private:
   const common::ObString& str_;
 };
 
@@ -115,7 +115,7 @@ template <>
 int64_t to_string<double>(const double& obj, char* buffer, const int64_t buffer_size);
 
 class ToStringAdaptor {
-  public:
+public:
   virtual ~ToStringAdaptor()
   {}
   virtual int64_t to_string(char* buffer, const int64_t length) const = 0;

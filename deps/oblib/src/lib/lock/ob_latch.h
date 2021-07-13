@@ -84,7 +84,7 @@ struct ObLatchWaitMode {
 };
 
 class ObLatchMutex {
-  public:
+public:
   ObLatchMutex();
   ~ObLatchMutex();
   int lock(const uint32_t latch_id, const int64_t abs_timeout_us = INT64_MAX);
@@ -95,10 +95,10 @@ class ObLatchMutex {
   inline uint32_t get_wid();
   int64_t to_string(char* buf, const int64_t buf_len);
 
-  private:
+private:
   OB_INLINE uint64_t low_try_lock(const int64_t max_spin_cnt, const uint32_t lock_value);
 
-  private:
+private:
   static const int64_t MAX_SPIN_CNT_AFTER_WAIT = 1;
   static const uint32_t WRITE_MASK = 1 << 30;
   static const uint32_t WAIT_MASK = 1 << 31;
@@ -126,19 +126,19 @@ struct ObWaitProc : public ObDLinkBase<ObWaitProc> {
   int32_t mode_;
   volatile int32_t wait_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObWaitProc);
 };
 
 class ObLatchWaitQueue {
-  public:
+public:
   static ObLatchWaitQueue& get_instance();
   template <typename LowTryLock>
   int wait(ObWaitProc& proc, const uint32_t latch_id, const uint32_t uid, LowTryLock& lock_func,
       LowTryLock& lock_func_ignore, const int64_t abs_timeout_us);
   int wake_up(ObLatch& latch, const bool only_rd_wait = false);
 
-  private:
+private:
   struct ObLatchBucket {
     ObDList<ObWaitProc> wait_list_;
     ObLatchMutex lock_;
@@ -163,16 +163,16 @@ class ObLatchWaitQueue {
   int try_lock(
       ObLatchBucket& bucket, ObWaitProc& proc, const uint32_t latch_id, const uint32_t uid, LowTryLock& lock_func);
 
-  private:
+private:
   static const uint64_t LATCH_MAP_BUCKET_CNT = 3079;
   ObLatchBucket wait_map_[LATCH_MAP_BUCKET_CNT];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLatchWaitQueue);
 };
 
 class ObLatch {
-  public:
+public:
   ObLatch();
   ~ObLatch();
   int try_rdlock(const uint32_t latch_id);
@@ -188,7 +188,7 @@ class ObLatch {
   inline uint32_t get_wid() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   template <typename LowTryLock>
   OB_INLINE int low_lock(const uint32_t latch_id, const int64_t abs_timeout_us, const uint32_t uid,
       const uint32_t wait_mode, LowTryLock& lock_func, LowTryLock& lock_func_ignore);
@@ -198,7 +198,7 @@ class ObLatch {
     {}
     inline int operator()(volatile uint32_t* latch, const uint32_t lock, const uint32_t uid, bool& conflict);
 
-    private:
+  private:
     const bool ignore_;
   };
 
@@ -207,7 +207,7 @@ class ObLatch {
     {}
     inline int operator()(volatile uint32_t* latch, const uint32_t lock, const uint32_t uid, bool& conflict);
 
-    private:
+  private:
     const bool ignore_;
   };
 
@@ -224,7 +224,7 @@ struct ObLDLockType {
 
 #ifndef ENABLE_LATCH_DIAGNOSE
 class ObLDHandle {
-  public:
+public:
   ObLDHandle()
   {}
   ~ObLDHandle()
@@ -234,13 +234,13 @@ class ObLDHandle {
     return 0;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLDHandle);
 };
 #else
 class ObLDHandleNode;
 class ObLDSlot {
-  public:
+public:
   void add(ObLDHandleNode* node);
   void remove(ObLDHandleNode* node);
   std::mutex mutex_;
@@ -248,19 +248,19 @@ class ObLDSlot {
 };
 
 class ObLDHandleNode : public common::ObDLinkBase<ObLDHandleNode> {
-  public:
+public:
   ObLDHandleNode();
   ObLDSlot* slot_;
   int tid_;
   ObLDLockType::Type type_;
   char lbt_[512];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLDHandleNode);
 };
 
 class ObLDHandle {
-  public:
+public:
   ObLDHandle() : node_(nullptr)
   {}
   void reset();
@@ -270,14 +270,14 @@ class ObLDHandle {
   }
   ObLDHandleNode* node_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLDHandle);
 };
 #endif
 
 #ifndef ENABLE_LATCH_DIAGNOSE
 class ObLockDiagnose {
-  public:
+public:
   void lock(const ObLDLockType::Type, ObLDHandle&)
   {}
   void print()
@@ -285,7 +285,7 @@ class ObLockDiagnose {
 };
 #else
 class ObLockDiagnose {
-  public:
+public:
   ~ObLockDiagnose();
   void lock(const ObLDLockType::Type type, ObLDHandle& handle);
   void print();
@@ -294,7 +294,7 @@ class ObLockDiagnose {
 #endif
 
 class ObLDLatch : public ObLatch {
-  public:
+public:
   ObLDLatch();
   void set_diagnose(bool diagnose)
   {
@@ -309,12 +309,12 @@ class ObLDLatch : public ObLatch {
   bool diagnose_;
   ObLockDiagnose ld_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLDLatch);
 };
 
 class ObLatchMutexGuard {
-  public:
+public:
   ObLatchMutexGuard(ObLatchMutex& lock, const uint32_t latch_id) : lock_(lock), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.lock(latch_id)))) {
@@ -334,14 +334,14 @@ class ObLatchMutexGuard {
     return ret_;
   }
 
-  private:
+private:
   ObLatchMutex& lock_;
   int ret_;
   DISALLOW_COPY_AND_ASSIGN(ObLatchMutexGuard);
 };
 
 class ObLatchRGuard {
-  public:
+public:
   ObLatchRGuard(ObLatch& lock, const uint32_t latch_id) : lock_(lock), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock(latch_id)))) {
@@ -361,16 +361,16 @@ class ObLatchRGuard {
     return ret_;
   }
 
-  private:
+private:
   ObLatch& lock_;
   int ret_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLatchRGuard);
 };
 
 class ObLatchWGuard {
-  public:
+public:
   ObLatchWGuard(ObLatch& lock, const uint32_t latch_id) : lock_(lock), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock(latch_id)))) {
@@ -390,11 +390,11 @@ class ObLatchWGuard {
     return ret_;
   }
 
-  private:
+private:
   ObLatch& lock_;
   int ret_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLatchWGuard);
 };
 

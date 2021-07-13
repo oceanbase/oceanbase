@@ -30,7 +30,7 @@ namespace rootserver {
 class ObSchemaReviseExecutor;
 class ObDDLService;
 class ObSchemaReviseTask : public share::ObAsyncTask {
-  public:
+public:
   explicit ObSchemaReviseTask(ObSchemaReviseExecutor& executor) : executor_(&executor)
   {}
   virtual ~ObSchemaReviseTask() = default;
@@ -38,12 +38,12 @@ class ObSchemaReviseTask : public share::ObAsyncTask {
   share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
   virtual int process() override;
 
-  private:
+private:
   ObSchemaReviseExecutor* executor_;
 };
 
 class ObSchemaReviseExecutor {
-  public:
+public:
   ObSchemaReviseExecutor();
   ~ObSchemaReviseExecutor() = default;
   int init(share::schema::ObMultiVersionSchemaService& schema_service, ObDDLService& ddl_service,
@@ -53,7 +53,7 @@ class ObSchemaReviseExecutor {
   void start();
   int stop();
 
-  private:
+private:
   int set_execute_mark();
   int check_stop();
   int check_schema_sync();
@@ -70,7 +70,7 @@ class ObSchemaReviseExecutor {
       const uint64_t tenant_id, ObIAllocator& allocator, share::schema::ObSchemaGetterGuard& schema_guard);
   int flush_schema_kv_cache();
 
-  private:
+private:
   bool is_inited_;
   bool is_stopped_;
   bool execute_;

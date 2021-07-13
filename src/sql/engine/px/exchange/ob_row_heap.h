@@ -27,7 +27,7 @@ class ObNewRow;
 namespace sql {
 
 class ObRowComparer {
-  public:
+public:
   ObRowComparer() : columns_(NULL), rows_(NULL), ret_(common::OB_SUCCESS)
   {}
   ~ObRowComparer() = default;
@@ -38,14 +38,14 @@ class ObRowComparer {
     return ret_;
   }
 
-  protected:
+protected:
   const common::ObIArray<ObSortColumn>* columns_;
   const common::ObIArray<const common::ObNewRow*>* rows_;
   int ret_;
 };
 
 class ObDatumRowCompare {
-  public:
+public:
   ObDatumRowCompare();
   int init(const ObIArray<ObSortFieldCollation>* sort_collations, const ObIArray<ObSortCmpFunc>* sort_cmp_funs,
       const common::ObIArray<const ObChunkDatumStore::StoredRow*>& rows);
@@ -73,7 +73,7 @@ class ObDatumRowCompare {
     return ret_;
   }
 
-  public:
+public:
   int ret_;
   const ObIArray<ObSortFieldCollation>* sort_collations_;
   const ObIArray<ObSortCmpFunc>* sort_cmp_funs_;
@@ -81,7 +81,7 @@ class ObDatumRowCompare {
 };
 
 class ObMaxDatumRowCompare {
-  public:
+public:
   ObMaxDatumRowCompare();
   int init(const ObIArray<ObSortFieldCollation>* sort_collations, const ObIArray<ObSortCmpFunc>* sort_cmp_funs,
       const common::ObIArray<const ObChunkDatumStore::LastStoredRow<>*>& rows);
@@ -109,7 +109,7 @@ class ObMaxDatumRowCompare {
     return ret_;
   }
 
-  public:
+public:
   int ret_;
   const ObIArray<ObSortFieldCollation>* sort_collations_;
   const ObIArray<ObSortCmpFunc>* sort_cmp_funs_;
@@ -121,7 +121,7 @@ class ObMaxDatumRowCompare {
  */
 template <class COMPARE = ObRowComparer, class ROW = common::ObNewRow>
 class ObRowHeap {
-  public:
+public:
   ObRowHeap<COMPARE, ROW>();
   ~ObRowHeap<COMPARE, ROW>();
 
@@ -165,7 +165,7 @@ class ObRowHeap {
 
   TO_STRING_KV(K_(writable_ch_idx), K_(capacity), "count", count());
 
-  private:
+private:
   /* functions */
   /* variables */
   bool inited_;

@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace memtable {
 
 class ObMemtableRowReader {
-  public:
+public:
   ObMemtableRowReader();
   ~ObMemtableRowReader()
   {}
@@ -35,7 +35,7 @@ class ObMemtableRowReader {
       ObFixedBitSet<OB_ALL_MAX_COLUMN_ID>& bit_set, storage::ObStoreRow& row, bool& loop_flag);
   TO_STRING_KV(K_(buf), K_(pos));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableRowReader);
   int parse_no_meta(storage::ObStoreRow& row, bool& has_null, bool& row_empty, int64_t& filled_column_count);
   int parse_with_meta(storage::ObStoreRow& row, bool& row_empty, bool& loop_flag);
@@ -48,7 +48,7 @@ class ObMemtableRowReader {
   template <class T>
   const T* read();
 
-  private:
+private:
   const char* buf_;
   int64_t buf_size_;
   int64_t pos_;
@@ -57,7 +57,7 @@ class ObMemtableRowReader {
 };
 
 class ObMemtableIterRowReader {
-  public:
+public:
   ObMemtableIterRowReader();
   ~ObMemtableIterRowReader();
   int init(common::ObArenaAllocator* allocator, const share::schema::ColumnMap* cols_map, ObNopBitMap* bitmap,
@@ -69,7 +69,7 @@ class ObMemtableIterRowReader {
   bool is_iter_end();
   int set_nop_pos(storage::ObStoreRow& row);
 
-  private:
+private:
   bool is_inited_;
   bool loop_flag_;
   bool row_empty_;

@@ -20,7 +20,7 @@ namespace sql {
 
 class ObSavePointStmt;
 class ObSavePointResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObSavePointResolver(ObResolverParams& params) : ObStmtResolver(params)
   {}
   virtual ~ObSavePointResolver()
@@ -28,7 +28,7 @@ class ObSavePointResolver : public ObStmtResolver {
   virtual int resolve(const ParseNode& parse_tree);
   int create_savepoint_stmt(ObItemType stmt_type, ObSavePointStmt*& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSavePointResolver);
 };
 

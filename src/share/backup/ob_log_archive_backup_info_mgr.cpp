@@ -1091,7 +1091,7 @@ int ObLogArchiveBackupInfoMgr::delete_marked_extern_log_archive_backup_info(
 
   if (!cluster_backup_dest.is_valid() || OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("delte marked extern log archive backup info get invalid argument",
+    LOG_WARN("delete marked extern log archive backup info get invalid argument",
         K(ret),
         K(cluster_backup_dest),
         K(tenant_id));

@@ -28,7 +28,7 @@ class ObMySQLResult;
 }  // namespace common
 namespace share {
 class ObPhysicalRestoreTableOperator {
-  public:
+public:
   ObPhysicalRestoreTableOperator();
   virtual ~ObPhysicalRestoreTableOperator() = default;
   int init(common::ObISQLClient* sql_client);
@@ -56,12 +56,12 @@ class ObPhysicalRestoreTableOperator {
   int get_restore_progress_statistic(
       const share::ObPhysicalRestoreJob& job_info, share::ObRestoreProgressInfo& statistic);
 
-  public:
+public:
   static const char* get_physical_restore_mod_str(PhysicalRestoreMod mod);
   static const char* get_restore_status_str(PhysicalRestoreStatus status);
   static PhysicalRestoreStatus get_restore_status(const common::ObString& status_str);
 
-  private:
+private:
   int fill_dml_splicer(share::ObDMLSqlSplicer& dml, const ObPhysicalRestoreJob& job_info);
   static int retrieve_restore_option(common::sqlclient::ObMySQLResult& result, ObPhysicalRestoreJob& job);
   static int retrieve_int_value(common::sqlclient::ObMySQLResult& result, int64_t& value);
@@ -71,7 +71,7 @@ class ObPhysicalRestoreTableOperator {
   int remove_job(int64_t job_id);
   int record_job_in_history(int64_t job_id);
 
-  private:
+private:
   bool inited_;
   common::ObISQLClient* sql_client_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalRestoreTableOperator);

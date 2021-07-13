@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace omt {
 
 class ObMultiLevelQueue {
-  public:
+public:
   int init(const int64_t limit);
   int push(rpc::ObRequest& req, const int32_t level, const int32_t prio);
   int pop(common::ObLink*& task, const int32_t level, const int64_t timeout_us);
@@ -39,7 +39,7 @@ class ObMultiLevelQueue {
     return pos;
   }
 
-  private:
+private:
   common::ObPriorityQueue<1> queue_[MULTI_LEVEL_QUEUE_SIZE];
 };
 

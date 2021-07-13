@@ -30,7 +30,7 @@ class ObPartitionInfo;
 class ObPartitionTableOperator;
 
 class ObIPartitionTableIterator {
-  public:
+public:
   ObIPartitionTableIterator() : need_fetch_faillist_(false)
   {}
   virtual ~ObIPartitionTableIterator()
@@ -43,7 +43,7 @@ class ObIPartitionTableIterator {
   }
   virtual ObReplicaFilterHolder& get_filters() = 0;
 
-  protected:
+protected:
   bool need_fetch_faillist_;
 };
 
@@ -56,13 +56,13 @@ enum CheckType { INVALID_REPLICA = 0, LEGAL_REPLICA, REDUNDANT_REPLICA, LOST_REP
  * or a binding tablegroup, this need to be guaranteed by the upper level
  */
 class ObPartIdAscIterator {
-  public:
+public:
   ObPartIdAscIterator() : sorted_part_id_array_(), part_level_(share::schema::PARTITION_LEVEL_MAX), cur_idx_(0)
   {}
   virtual ~ObPartIdAscIterator()
   {}
 
-  public:
+public:
   void reset();
   int build(const uint64_t partition_entity_id, const share::schema::ObPartitionSchema& partition_schema,
       const bool filter_dropped_schema);
@@ -71,7 +71,7 @@ class ObPartIdAscIterator {
   void inc_iter();
   int check_out_of_part_id_range(const int64_t partition_id, bool& out_of_range) const;
 
-  private:
+private:
   common::ObArray<int64_t> sorted_part_id_array_;
   share::schema::ObPartitionLevel part_level_;
   int64_t cur_idx_;
@@ -79,12 +79,12 @@ class ObPartIdAscIterator {
 
 // iterator partition for one standlone table or binding tablegroup
 class ObTablePartitionIterator : public ObIPartitionTableIterator {
-  public:
+public:
   class ObPrefetchInfo {
-    public:
+  public:
     friend class ObTablePartitionIterator;
 
-    public:
+  public:
     ObPrefetchInfo()
         : prefetch_idx_(0),
           table_id_(0),
@@ -119,7 +119,7 @@ class ObTablePartitionIterator : public ObIPartitionTableIterator {
       need_fetch_faillist_ = need_fetch_faillist;
     }
 
-    private:
+  private:
     int64_t prefetch_idx_;
     uint64_t table_id_;
     ObPartitionTableOperator* pt_operator_;
@@ -148,12 +148,12 @@ class ObTablePartitionIterator : public ObIPartitionTableIterator {
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   int mock_next_partition(ObPartitionInfo& info);
   // check if the partition_id is in a rational range
   int check_replica(ObPartitionInfo& info, CheckType& check_type);
 
-  private:
+private:
   bool inited_;
   uint64_t table_id_;  // may be a binding tablegroup id
   schema::ObPartitionLevel part_level_;
@@ -163,14 +163,14 @@ class ObTablePartitionIterator : public ObIPartitionTableIterator {
   ObPrefetchInfo prefetch_info_;
   ObReplicaFilterHolder filters_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTablePartitionIterator);
 };
 
 // iterator partition for one tenant,
 // include standlone partition and binding tablegroup
 class ObTenantPartitionIterator : public ObIPartitionTableIterator {
-  public:
+public:
   ObTenantPartitionIterator();
   virtual ~ObTenantPartitionIterator();
 
@@ -194,13 +194,13 @@ class ObTenantPartitionIterator : public ObIPartitionTableIterator {
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   int next_partition_entity();
   int inner_next(ObPartitionInfo& partition);
   int prefetch();
   int prefetch(const uint64_t last_table_id, const int64_t last_partition_id);
 
-  private:
+private:
   bool inited_;
   ObPartitionTableOperator* pt_operator_;
   schema::ObMultiVersionSchemaService* schema_service_;
@@ -221,14 +221,14 @@ class ObTenantPartitionIterator : public ObIPartitionTableIterator {
   ObPartitionEntityFilterHolder partition_entity_filters_;
   bool filter_dropped_schema_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantPartitionIterator);
 };
 
 /* iterate all partition infos of all tenants
  */
 class ObPartitionTableIterator : public ObIPartitionTableIterator {
-  public:
+public:
   ObPartitionTableIterator();
   virtual ~ObPartitionTableIterator();
 
@@ -251,10 +251,10 @@ class ObPartitionTableIterator : public ObIPartitionTableIterator {
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   int next_tenant();
 
-  private:
+private:
   bool inited_;
   ObPartitionTableOperator* pt_operator_;
   schema::ObMultiVersionSchemaService* schema_service_;
@@ -270,7 +270,7 @@ class ObPartitionTableIterator : public ObIPartitionTableIterator {
  * for the specific partitions
  */
 class ObPTPartPartitionIterator : public ObIPartitionTableIterator {
-  public:
+public:
   ObPTPartPartitionIterator();
   virtual ~ObPTPartPartitionIterator();
 
@@ -295,10 +295,10 @@ class ObPTPartPartitionIterator : public ObIPartitionTableIterator {
 
   TO_STRING_KV(K_(inited), K_(pt_table_id), K_(pt_partition_id), K_(prefetch_partitions), K_(prefetch_idx));
 
-  private:
+private:
   int prefetch();
 
-  private:
+private:
   bool inited_;
   ObPartitionTableOperator* pt_operator_;
   uint64_t pt_table_id_;
@@ -319,7 +319,7 @@ class ObPTPartPartitionIterator : public ObIPartitionTableIterator {
  *                                      __all_tenant_meta_table of all tenants
  */
 class ObPartitionTableIdIterator {
-  public:
+public:
   ObPartitionTableIdIterator();
   virtual ~ObPartitionTableIdIterator();
 
@@ -327,11 +327,11 @@ class ObPartitionTableIdIterator {
   virtual int get_next_partition(uint64_t& pt_table_id, int64_t& pt_partition_id);
   TO_STRING_KV(K_(inited), K_(tenant_iter), K_(pt_tables), K_(pt_table_id), K_(pt_partition_id));
 
-  private:
+private:
   int get_part_num(const uint64_t table_id, int64_t& part_num);
   static const int PT_TYPE_NUM = 4;
 
-  private:
+private:
   bool inited_;
   schema::ObMultiVersionSchemaService* schema_service_;
   schema::ObTenantIterator tenant_iter_;
@@ -344,7 +344,7 @@ class ObPartitionTableIdIterator {
 /* iterate all partitions of all partition tables
  */
 class ObFullPartitionTableIterator : public ObIPartitionTableIterator {
-  public:
+public:
   ObFullPartitionTableIterator();
   virtual ~ObFullPartitionTableIterator();
 
@@ -358,10 +358,10 @@ class ObFullPartitionTableIterator : public ObIPartitionTableIterator {
 
   TO_STRING_KV(K_(inited), K_(part_iter), K_(pt_part_iter));
 
-  private:
+private:
   int next_partition();
 
-  private:
+private:
   bool inited_;
   ObPartitionTableOperator* pt_operator_;
   ObPTPartPartitionIterator part_iter_;
@@ -371,7 +371,7 @@ class ObFullPartitionTableIterator : public ObIPartitionTableIterator {
 
 // iterate __all_tenant_meta_table only
 class ObFullMetaTableIterator : public ObIPartitionTableIterator {
-  public:
+public:
   ObFullMetaTableIterator();
   virtual ~ObFullMetaTableIterator();
 
@@ -385,11 +385,11 @@ class ObFullMetaTableIterator : public ObIPartitionTableIterator {
 
   TO_STRING_KV(K_(inited), K_(part_iter), K_(tenant_iter), K_(pt_table));
 
-  private:
+private:
   int next_partition();
   int get_part_num(const uint64_t table_id, int64_t& part_num);
 
-  private:
+private:
   bool inited_;
   ObPartitionTableOperator* pt_operator_;
   schema::ObMultiVersionSchemaService* schema_service_;

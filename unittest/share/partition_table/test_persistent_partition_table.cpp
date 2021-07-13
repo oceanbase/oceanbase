@@ -49,7 +49,7 @@ const static int64_t PID = FakePartPropertyGetter::PID();
   })
 
 class FakePartitionService : public ObPartitionService {
-  public:
+public:
   FakePartitionService()
   {}
   virtual ~FakePartitionService()
@@ -63,7 +63,7 @@ class FakePartitionService : public ObPartitionService {
 };
 
 class TestPersistentPartitionTable : public ::testing::Test {
-  public:
+public:
   TestPersistentPartitionTable() : pt_(prop_getter_)
   {}
 
@@ -75,7 +75,7 @@ class TestPersistentPartitionTable : public ::testing::Test {
   void update_leader_test(uint64_t table_id);
   void to_leader_time_test(uint64_t table_id);
 
-  protected:
+protected:
   DBInitializer db_initer_;
   FakePartPropertyGetter prop_getter_;
   ObPersistentPartitionTable pt_;

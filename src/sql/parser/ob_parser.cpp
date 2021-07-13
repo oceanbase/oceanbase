@@ -54,8 +54,8 @@ bool ObParser::is_single_stmt(const ObString& stmt)
 
 // In multi-stmt mode(delimiter #) eg: create t1; create t2; create t3
 // in the case of is_ret_first_stmt(false), queries will return the following stmts:
-//      queries[0]: create t1; create t2; create t3;
-//      queries[1]: create t2; create t3;
+//      queries[0]: create t1;
+//      queries[1]: create t2;
 //      queries[2]: create t3;
 // in the case of is_ret_first_stmt(true) and it will return one element
 //      queries[0]: create t1;
@@ -92,39 +92,45 @@ int ObParser::split_multiple_stmt(
     }
 
     int tmp_ret = OB_SUCCESS;
-    while (remain > 0 && OB_SUCC(ret) && !parse_stat.parse_fail_) {
+    bool need_continue = true;
+    while (remain > 0 && OB_SUCC(ret) && !parse_stat.parse_fail_ && need_continue) {
       ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
       allocator.set_label("SplitMultiStmt");
       ObIAllocator* bak_allocator = allocator_;
       allocator_ = &allocator;
-      ObString part(remain, stmt.ptr() + offset);
-      if (OB_SUCC(tmp_ret = parse(part, parse_result, parse_mode))) {
-        // length: length of the remainer statements
-        // size: length of the single statement
+      int64_t str_len = 0;
+      //for save memory allocate in parser, we need try find the single stmt length in advance
+      while (stmt[str_len + offset] != ';' && str_len < remain) {
+        ++ str_len;
+      }
+      str_len = str_len == remain ? str_len : str_len + 1;
+      ObString part(str_len, stmt.ptr() + offset);
+      ObString remain_part(remain, stmt.ptr() + offset);
+      //first try parse part str, because it's have less length and need less memory
+      if (OB_FAIL(tmp_ret = parse(part, parse_result, parse_mode))) {
+        //if parser part str failed, then try parse all remain part, avoid parse many times:
+        //bug: https://work.aone.alibaba-inc.com/issue/34642901
+        tmp_ret = OB_SUCCESS;
+        tmp_ret = parse(remain_part, parse_result, parse_mode);
+      }
+      if (OB_SUCC(tmp_ret)) {
         int32_t single_stmt_length = parse_result.end_col_;
-        if ((!is_ret_first_stmt) && (';' == *(stmt.ptr() + offset + parse_result.end_col_ - 1))) {
-          --single_stmt_length;
-        }
-
         if (is_ret_first_stmt) {
           ObString first_query(single_stmt_length, stmt.ptr());
           ret = queries.push_back(first_query);
-          break;  // only return the first stmt, so ignore the remaining stmts
+          need_continue = false; // only return the first stmt, so ignore the remaining stmts
         } else {
-          ObString query(single_stmt_length, static_cast<int32_t>(remain), stmt.ptr() + offset);
+          ObString query(single_stmt_length,stmt.ptr() + offset);
           ret = queries.push_back(query);
         }
         remain -= parse_result.end_col_;
         offset += parse_result.end_col_;
         if (remain < 0 || offset > stmt.length()) {
-          LOG_ERROR("split_multiple_stmt data error", K(remain), K(offset), K(stmt.length()), K(ret));
+          LOG_ERROR("split_multiple_stmt data error",
+                    K(remain), K(offset), K(stmt.length()), K(ret));
         }
       } else {
-        int32_t single_stmt_length = parse_result.end_col_;
-        if (';' == *(stmt.ptr() + offset + parse_result.end_col_ - 1)) {
-          --single_stmt_length;
-        }
-        ObString query(single_stmt_length, static_cast<int32_t>(remain), stmt.ptr() + offset);
+        ObString query(static_cast<int32_t>(remain), stmt.ptr() + offset);
         ret = queries.push_back(query);
         if (OB_SUCCESS == ret) {
           parse_stat.parse_fail_ = true;

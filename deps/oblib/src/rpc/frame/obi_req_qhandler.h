@@ -23,7 +23,7 @@ namespace frame {
 
 class ObPacketQueueSessionHandler;
 class ObiReqQHandler {
-  public:
+public:
   virtual ~ObiReqQHandler()
   {}
 

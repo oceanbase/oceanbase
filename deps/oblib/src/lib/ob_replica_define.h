@@ -24,7 +24,7 @@ namespace common {
 class ObReplicaProperty {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObReplicaProperty() : memstore_percent_(100), reserved_(0)
   {}
 
@@ -59,7 +59,7 @@ class ObReplicaProperty {
 
   TO_STRING_KV(K(memstore_percent_));
 
-  private:
+private:
   union {
     struct {
       uint64_t memstore_percent_ : 7;  // 0-100

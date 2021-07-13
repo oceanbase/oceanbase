@@ -19,7 +19,7 @@ namespace sql {
 class ObMultiPartInsertSpec : public ObTableInsertSpec, public ObMultiDMLInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMultiPartInsertSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableInsertSpec(alloc, type), ObMultiDMLInfo(alloc)
   {}
@@ -37,11 +37,11 @@ class ObMultiPartInsertSpec : public ObTableInsertSpec, public ObMultiDMLInfo {
 };
 
 class ObMultiPartInsertOp : public ObTableInsertOp, public ObMultiDMLCtx {
-  public:
+public:
   static const int64_t INSERT_OP = 0;
   static const int64_t DML_OP_CNT = 1;
 
-  public:
+public:
   ObMultiPartInsertOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableInsertOp(ctx, spec, input), ObMultiDMLCtx(ctx.get_allocator())
   {}

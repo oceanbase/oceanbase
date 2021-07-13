@@ -43,7 +43,7 @@ struct ObIndexTransStatus {
 };
 
 class ObIndexTransStatusReporter {
-  public:
+public:
   enum ServerType {
     INVALID_SERVER_TYPE = 0,
     OB_SERVER = 1,

@@ -17,11 +17,11 @@
 namespace oceanbase {
 namespace common {
 class ObConcurrentFIFOAllocator : public common::ObIAllocator {
-  public:
+public:
   ObConcurrentFIFOAllocator();
   virtual ~ObConcurrentFIFOAllocator();
 
-  public:
+public:
   int init(const int64_t total_limit, const int64_t hold_limit, const int64_t page_size);
 
   int init(const int64_t total_limit, const int64_t hold_limit, const int64_t tenant_id, const lib::ObLabel& label,
@@ -30,7 +30,7 @@ class ObConcurrentFIFOAllocator : public common::ObIAllocator {
   int init(const int64_t page_size, const lib::ObLabel& label, const uint64_t tenant_id, const int64_t total_limit);
   void destroy();
 
-  public:
+public:
   void set_label(const lib::ObLabel& label);
   void* alloc(const int64_t size);
   void* alloc(const int64_t size, const ObMemAttr& attr);
@@ -43,13 +43,13 @@ class ObConcurrentFIFOAllocator : public common::ObIAllocator {
   int set_hold_limit(int64_t hold_limit);
   void set_total_limit(int64_t total_limit);
 
-  private:
+private:
   static const int64_t STORAGE_SIZE_TIMES = 2;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObConcurrentFIFOAllocator);
 
-  private:
+private:
   ObLfFIFOAllocator inner_allocator_;
 };
 }  // namespace common

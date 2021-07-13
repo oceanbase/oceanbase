@@ -27,7 +27,7 @@ namespace json {
 //     {"name1":123, "name2":"string1", "name3":[]}
 //
 class ObStdJsonConvertor {
-  public:
+public:
   ObStdJsonConvertor() : backslash_escape_(true), json_(NULL), buf_(NULL), buf_size_(0), pos_(0)
   {}
   virtual ~ObStdJsonConvertor()
@@ -46,13 +46,13 @@ class ObStdJsonConvertor {
 
   int convert(int64_t& out_len);
 
-  private:
+private:
   // output [begin, p]
   int output(const char* p, const char*& begin, int64_t& out_len);
   int quoted_output(const char* p, const char*& begin, int64_t& out_len);
   int add_quote_mark(int64_t& out_len);
 
-  private:
+private:
   bool backslash_escape_;
   const char* json_;
   char* buf_;
@@ -118,7 +118,7 @@ struct ObFormatedJsonPrinter {
     return common::to_cstring(*this);
   }
 
-  private:
+private:
   const T* obj_;
 };
 

@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace common {
 
 class ObLZ4StreamCompressor : public ObStreamCompressor {
-  public:
+public:
   //-----start of stream compress ralated interfaces//
   int create_compress_ctx(void*& ctx);
   int free_compress_ctx(void* ctx);
@@ -38,13 +38,13 @@ class ObLZ4StreamCompressor : public ObStreamCompressor {
 
   const char* get_compressor_name() const;
 
-  private:
+private:
   bool is_valid_original_data_length(int64_t origin_data_len) const;
   static const char* compressor_name;
 };
 
 class ObLZ4StreamCompressor191 : public ObStreamCompressor {
-  public:
+public:
   //-----start of stream compress ralated interfaces//
   int create_compress_ctx(void*& ctx);
   int free_compress_ctx(void* ctx);
@@ -63,7 +63,7 @@ class ObLZ4StreamCompressor191 : public ObStreamCompressor {
 
   const char* get_compressor_name() const;
 
-  private:
+private:
   bool is_valid_original_data_length(int64_t origin_data_len) const;
   static const char* compressor_name;
 };

@@ -24,7 +24,7 @@ class ObMySQLResultImpl : public ObMySQLResult {
   friend class ObMySQLResultWriter;
   friend class ObMySQLResultHeader;
 
-  public:
+public:
   explicit ObMySQLResultImpl(ObMySQLStatement& stmt);
   ~ObMySQLResultImpl();
   int init();
@@ -111,7 +111,7 @@ class ObMySQLResultImpl : public ObMySQLResult {
   int print_info() const;
   int64_t get_column_count() const;
 
-  private:
+private:
   int get_column_index(const char* col_name, int64_t& index) const;
   int get_special_value(const common::ObString& varchar_val) const;
   int inner_get_number(const int64_t col_idx, common::number::ObNumber& nmb_val, IAllocator& allocator) const;
@@ -125,7 +125,7 @@ class ObMySQLResultImpl : public ObMySQLResult {
   int inner_get_lob_locator(
       const char* col_name, common::ObLobLocator*& lob_locator, common::ObIAllocator& allocator) const;
 
-  private:
+private:
   ObMySQLStatement& stmt_;
   MYSQL_RES* result_;
   MYSQL_ROW cur_row_;

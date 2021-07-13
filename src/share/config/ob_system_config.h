@@ -24,11 +24,11 @@ namespace common {
 class ObConfigItem;
 
 class ObSystemConfig {
-  public:
+public:
   static const int64_t INIT_VERSION = 2;
   typedef hash::ObHashMap<ObSystemConfigKey, ObSystemConfigValue> hashmap;
 
-  public:
+public:
   ObSystemConfig() : map_(), version_(0){};
   virtual ~ObSystemConfig(){};
 
@@ -55,7 +55,7 @@ class ObSystemConfig {
     return version_;
   }
 
-  private:
+private:
   static const int64_t MAP_SIZE = 512;
   int find_all_matched(const ObSystemConfigKey& key, ObArray<hashmap::const_iterator>& all_config) const;
   hashmap map_;

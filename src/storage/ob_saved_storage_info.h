@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace storage {
 class ObSavedStorageInfo : public common::ObBaseStorageInfo {
-  public:
+public:
   ObSavedStorageInfo()
       : common::ObBaseStorageInfo(),
         memstore_version_(0),
@@ -32,7 +32,7 @@ class ObSavedStorageInfo : public common::ObBaseStorageInfo {
   virtual ~ObSavedStorageInfo()
   {}
 
-  public:
+public:
   void set_memstore_version(const common::ObVersion& version);
   const common::ObVersion& get_memstore_version() const;
   void set_publish_version(const int64_t publish_version);
@@ -55,14 +55,14 @@ class ObSavedStorageInfo : public common::ObBaseStorageInfo {
       "frozen_timestamp", frozen_timestamp_);
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   common::ObVersion memstore_version_;
   int64_t publish_version_;
   int64_t schema_version_;
   common::ObVersion frozen_version_;
   int64_t frozen_timestamp_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSavedStorageInfo);
 };
 

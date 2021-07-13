@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace transaction {
 class ObTransPartitionStat {
-  public:
+public:
   ObTransPartitionStat()
   {
     reset();
@@ -104,7 +104,7 @@ class ObTransPartitionStat {
       K_(with_dependency_trx_count), K_(without_dependency_trx_count), K_(end_trans_by_prev_count),
       K_(end_trans_by_checkpoint_count), K_(end_trans_by_self_count));
 
-  private:
+private:
   common::ObAddr addr_;
   common::ObPartitionKey partition_;
   int64_t ctx_type_;

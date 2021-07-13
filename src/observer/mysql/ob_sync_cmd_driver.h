@@ -29,7 +29,7 @@ class ObGlobalContext;
 class ObMySQLResultSet;
 class ObQueryRetryCtrl;
 class ObSyncCmdDriver : public ObQueryDriver {
-  public:
+public:
   ObSyncCmdDriver(const ObGlobalContext& gctx, const sql::ObSqlCtx& ctx, sql::ObSQLSessionInfo& session,
       ObQueryRetryCtrl& retry_ctrl, ObIMPPacketSender& sender);
   virtual ~ObSyncCmdDriver();
@@ -37,7 +37,7 @@ class ObSyncCmdDriver : public ObQueryDriver {
   void send_eof_packet();
   virtual int response_result(ObMySQLResultSet& result);
 
-  private:
+private:
   /* functions */
   int process_schema_version_changes(const ObMySQLResultSet& result);
   int check_and_refresh_schema(uint64_t tenant_id);

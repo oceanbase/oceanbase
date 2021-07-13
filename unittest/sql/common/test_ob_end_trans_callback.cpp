@@ -24,7 +24,7 @@ using namespace oceanbase::transaction;
 
 namespace test {
 class ObEndTransCallbacksTest : public ::testing::Test {
-  public:
+public:
   ObEndTransCallbacksTest()
   {}
   virtual ~ObEndTransCallbacksTest()
@@ -34,12 +34,12 @@ class ObEndTransCallbacksTest : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   // disallow copy
   ObEndTransCallbacksTest(const ObEndTransCallbacksTest& other);
   ObEndTransCallbacksTest& operator=(const ObEndTransCallbacksTest& other);
 
-  private:
+private:
   // data members
 };
 TEST_F(ObEndTransCallbacksTest, signal_wait)

@@ -23,7 +23,7 @@ namespace expr {
 
 // OceanBase constant expression.
 class ObVarExpr : virtual public ObExpr {
-  public:
+public:
   ObVarExpr()
   {
     set_expr_class(EXPR_VAR);

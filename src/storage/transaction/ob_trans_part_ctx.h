@@ -60,7 +60,7 @@ enum {
 
 namespace transaction {
 class TransResultInfo {
-  public:
+public:
   TransResultInfo() : result_info_(NULL), registered_(false)
   {}
   ~TransResultInfo()
@@ -82,7 +82,7 @@ class TransResultInfo {
     registered_ = registered;
   }
 
-  private:
+private:
   ObTransResultInfo* result_info_;
   bool registered_;
 };
@@ -91,7 +91,7 @@ class TransResultInfo {
 class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   friend class IterateTransStatFunctor;
 
-  public:
+public:
   ObPartTransCtx()
       : ObDistTransCtx("participant", ObTransCtxType::PARTICIPANT),
         ObTsCbTask(),
@@ -116,7 +116,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   void reset();
   int construct_context(const ObTransMsg& msg);
 
-  public:
+public:
   int start_trans();
   int start_task(const ObTransDesc& trans_desc, const int64_t snapshot_version, const bool need_update_gts,
       storage::ObIPartitionGroup* ob_partition);
@@ -201,7 +201,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
     return mutator_log_no_;
   }
 
-  public:
+public:
   int replay_sp_redo_log(
       const ObSpTransRedoLog& log, const int64_t timestamp, const uint64_t log_id, int64_t& log_table_version);
   int replay_sp_commit_log(const ObSpTransCommitLog& log, const int64_t timestamp, const uint64_t log_id);
@@ -382,7 +382,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   virtual int64_t get_part_trans_action() const override;
   int rollback_stmt(const int64_t from_sql_no, const int64_t to_sql_no);
 
-  public:
+public:
   INHERIT_TO_STRING_KV("ObDistTransCtx", ObDistTransCtx, K_(snapshot_version), K_(local_trans_version),
       K_(submit_log_pending_count), K_(submit_log_count), K_(stmt_info), K_(global_trans_version), K_(redo_log_no),
       K_(mutator_log_no), K_(session_id), K_(is_gts_waiting), K_(part_trans_action), K_(timeout_task),
@@ -394,10 +394,10 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
       K_(same_leader_batch_partitions_count), K_(is_hazardous_ctx), K(mt_ctx_.get_callback_count()),
       K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id));
 
-  public:
+public:
   static const int64_t OP_LOCAL_NUM = 16;
 
-  private:
+private:
   int init_memtable_ctx_(ObTransService* txs, const uint64_t tenant_id);
   bool is_in_2pc_() const;
   bool is_logging_() const;
@@ -438,7 +438,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   }
   int submit_log_sync_(const int64_t log_type, bool& has_redo_log);
 
-  private:
+private:
   int handle_start_stmt_request_(const ObTransMsg& msg);
   int handle_stmt_rollback_request_(const ObTransMsg& msg);
   int handle_2pc_prepare_request_(const ObTransMsg& msg);
@@ -457,7 +457,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int handle_2pc_prepare_request_raw_(int status);
   int handle_2pc_prepare_redo_request_raw_(int status);
 
-  private:
+private:
   int drive_();
   void check_prev_trans_state_();
   int start_trans_();
@@ -599,10 +599,10 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int fake_kill_(const int64_t terminate_log_ts);
   int kill_v2_(const int64_t terminate_log_ts);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartTransCtx);
 
-  private:
+private:
   // 0x0078746374726170 means reset partctx
   static const int64_t PART_CTX_MAGIC_NUM = 0x0078746374726170;
   static const int64_t REPLAY_PRINT_TRACE_THRESHOLD = 10 * 1000;      // 10 ms
@@ -610,7 +610,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   static const int64_t END_STMT_SLEEP_US = 10 * 1000;                 // 10ms
   static const int64_t MAX_END_STMT_RETRY_TIMES = 100;
 
-  private:
+private:
   bool is_inited_;
   ObIClogAdapter* clog_adapter_;
   ObTransSubmitLogCb submit_log_cb_;
@@ -705,7 +705,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   bool is_redo_prepared_;
   bool has_gen_last_redo_log_;
   // this let clear_log's timestamp always
-  // greate than commit timestamp of all participants
+  // greater than commit timestamp of all participants
   int64_t clear_log_base_ts_;
   TransResultInfo result_info_;
   int64_t end_log_ts_for_batch_commit_;

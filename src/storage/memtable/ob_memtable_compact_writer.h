@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace memtable {
 class ObMemtableCompactWriter : public common::ObCellWriter {
-  public:
+public:
   static const int64_t RP_LOCAL_NUM = 0;
   static const int64_t RP_TOTAL_NUM = 128;
   static const int64_t SMALL_BUFFER_SIZE =
@@ -28,11 +28,11 @@ class ObMemtableCompactWriter : public common::ObCellWriter {
   static const int64_t NORMAL_BUFFER_SIZE = common::OB_MAX_LOG_BUFFER_SIZE;
   static const int64_t BIG_ROW_BUFFER_SIZE = common::OB_MAX_ROW_LENGTH_IN_MEMTABLE;
 
-  public:
+public:
   ObMemtableCompactWriter();
   ~ObMemtableCompactWriter();
 
-  public:
+public:
   int init();
   void reset();
   void set_dense()
@@ -50,10 +50,10 @@ class ObMemtableCompactWriter : public common::ObCellWriter {
     return false;
   }
 
-  private:
+private:
   int extend_buf();
 
-  private:
+private:
   char buf_[SMALL_BUFFER_SIZE];
   char* buffer_;
   int64_t buf_size_;

@@ -32,7 +32,7 @@ class PGKeyHashSet;
 // used for unit test mock
 #define VIRTUAL_FOR_UNITTEST virtual
 class ObPartitionMetaRedoModule : public blocksstable::ObIRedoModule {
-  public:
+public:
   ObPartitionMetaRedoModule();
   virtual ~ObPartitionMetaRedoModule();
 
@@ -40,7 +40,7 @@ class ObPartitionMetaRedoModule : public blocksstable::ObIRedoModule {
       ObBaseFileMgr* file_mgr);
   virtual int destroy();
 
-  public:
+public:
   // replay
   virtual int replay(const blocksstable::ObRedoModuleReplayParam& param) override;
   virtual int parse(const int64_t subcmd, const char* buf, const int64_t len, FILE* stream) override;
@@ -74,7 +74,7 @@ class ObPartitionMetaRedoModule : public blocksstable::ObIRedoModule {
     return partition_map_;
   }
 
-  protected:
+protected:
   virtual int inner_add_partition(
       ObIPartitionGroup& partition, const bool need_check_tenant, const bool is_replay, const bool allow_multi_value);
   virtual int inner_del_partition_for_replay(const common::ObPartitionKey& pkey, const int64_t file_id);
@@ -106,7 +106,7 @@ class ObPartitionMetaRedoModule : public blocksstable::ObIRedoModule {
   int replay_add_recovery_point_data(const blocksstable::ObRedoModuleReplayParam& param);
   int replay_remove_recovery_point_data(const blocksstable::ObRedoModuleReplayParam& param);
 
-  private:
+private:
   int get_create_pg_param(const ObCreatePartitionGroupLogEntry& log_entry, const bool write_pg_slog,
       blocksstable::ObStorageFileHandle* file_handle, ObBaseFileMgr* file_mgr, ObCreatePGParam& param);
   int get_partition(const common::ObPartitionKey& pkey, const int64_t* file_id, ObIPartitionGroupGuard& guard) const;
@@ -115,7 +115,7 @@ class ObPartitionMetaRedoModule : public blocksstable::ObIRedoModule {
   int handle_pg_conflict(const char* buf, const int64_t buf_len, int64_t& pos,
       blocksstable::ObStorageFileHandle& file_handle, ObIPartitionGroup*& ptt);
 
-  protected:
+protected:
   ObIPartitionComponentFactory* cp_fty_;
   transaction::ObTransService* txs_;
   replayengine::ObILogReplayEngine* rp_eg_;
@@ -130,12 +130,12 @@ class ObPartitionMetaRedoModule : public blocksstable::ObIRedoModule {
   bool is_replay_old_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionMetaRedoModule);
 };
 
 class ObIPartitionArrayGuard {
-  public:
+public:
   ObIPartitionArrayGuard() : pg_mgr_(nullptr), partitions_()
   {}
   virtual ~ObIPartitionArrayGuard()
@@ -182,7 +182,7 @@ class ObIPartitionArrayGuard {
     return ret;
   }
 
-  private:
+private:
   const ObPGMgr* pg_mgr_;
   common::ObSEArray<ObIPartitionGroup*, OB_DEFAULT_PARTITION_KEY_COUNT> partitions_;
   DISALLOW_COPY_AND_ASSIGN(ObIPartitionArrayGuard);

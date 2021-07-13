@@ -19,15 +19,15 @@ namespace oceanbase {
 namespace storage {
 class ObPartitionService;
 class ObPartitionMetaBlockReader : public blocksstable::ObMetaBlockReader {
-  public:
+public:
   ObPartitionMetaBlockReader(ObPartitionService& partition_service);
   virtual ~ObPartitionMetaBlockReader();
 
-  protected:
+protected:
   virtual int parse(const blocksstable::ObMacroBlockCommonHeader& common_header,
       const blocksstable::ObLinkedMacroBlockHeader& linked_header, const char* buf, const int64_t buf_len);
 
-  private:
+private:
   ObPartitionService& partition_service_;
   common::ObArenaAllocator allocator_;
   char* read_buf_;

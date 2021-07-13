@@ -21,7 +21,7 @@ class ObDMLStmt;
 class ObRawExprFactory;
 class ObSQLSessionInfo;
 class ObRawExprPrecalcAnalyzer {
-  public:
+public:
   ObRawExprPrecalcAnalyzer(ObRawExprFactory& expr_factory, ObSQLSessionInfo* my_session)
       : expr_factory_(expr_factory), my_session_(my_session)
   {}
@@ -29,7 +29,7 @@ class ObRawExprPrecalcAnalyzer {
   int analyze_all_expr(ObDMLStmt& stmt);
   int analyze_expr_tree(ObRawExpr* expr, ObDMLStmt& stmt, const bool filter_expr = false);
 
-  private:
+private:
   int pre_cast_const_expr(ObRawExpr* expr);
   int pre_cast_recursively(ObRawExpr* expr);
   int extract_calculable_expr(ObRawExpr*& expr, ObDMLStmt& stmt, const bool filter_expr = false);
@@ -38,7 +38,7 @@ class ObRawExprPrecalcAnalyzer {
   bool calculation_need_cast(common::ObObjType param_type, common::ObObjType calc_type) const;
   bool is_filtered(ObRawExpr& expr);
 
-  private:
+private:
   const static ObItemType EXPR_FILTER_LIST[];
   ObRawExprFactory& expr_factory_;
   ObSQLSessionInfo* my_session_;

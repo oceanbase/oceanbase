@@ -21,7 +21,7 @@ namespace tbutil {
  */
 template <typename T>
 class LockT {
-  public:
+public:
   explicit LockT(const T& mutex) : _mutex(mutex)
   {
     _mutex.lock();
@@ -79,13 +79,13 @@ class LockT {
     return _acquired;
   }
 
-  protected:
+protected:
   LockT(const T& mutex, bool) : _mutex(mutex)
   {
     _acquired = _mutex.tryLock();
   }
 
-  private:
+private:
   LockT(const LockT&);
   LockT& operator=(const LockT&);
 
@@ -102,7 +102,7 @@ class LockT {
  */
 template <typename T>
 class TryLockT : public LockT<T> {
-  public:
+public:
   TryLockT(const T& mutex) : LockT<T>(mutex, true)
   {}
 };

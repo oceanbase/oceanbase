@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprDateFormat : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprDateFormat(common::ObIAllocator& alloc);
   virtual ~ObExprDateFormat();
   virtual int calc_result_type2(
@@ -31,7 +31,7 @@ class ObExprDateFormat : public ObStringExprOperator {
   static int calc_date_format(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int calc_date_format_invalid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDateFormat);
 

@@ -16,7 +16,7 @@
 using namespace oceanbase::common;
 
 class TestStoreRange : public ::testing::Test {
-  public:
+public:
   TestStoreRange()
   {}
   ~TestStoreRange()
@@ -24,12 +24,12 @@ class TestStoreRange : public ::testing::Test {
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   TestStoreRange(const TestStoreRange& other);
   TestStoreRange& operator=(const TestStoreRange& other);
 
-  protected:
+protected:
   ObObj start_cells_[2];
   ObObj end_cells_[2];
   const char* start_var_ = "key1";

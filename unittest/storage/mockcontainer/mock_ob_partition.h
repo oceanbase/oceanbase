@@ -27,7 +27,7 @@
 namespace oceanbase {
 namespace storage {
 class MockObIPartitionGroup : public ObIPartitionGroup {
-  public:
+public:
   MOCK_METHOD8(init, int(const common::ObPartitionKey& key, ObIPartitionComponentFactory* cp_fty,
                          share::schema::ObMultiVersionSchemaService* schema_service, transaction::ObTransService* txs,
                          replayengine::ObILogReplayEngine* rp_eg, ObPartitionService* ps,

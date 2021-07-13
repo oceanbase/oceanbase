@@ -22,23 +22,23 @@ class ObPartitionService;
 }
 namespace clog {
 class ObLogReplayDriverRunnable : public share::ObThreadPool {
-  public:
+public:
   ObLogReplayDriverRunnable();
   virtual ~ObLogReplayDriverRunnable();
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service);
   void destroy();
   void run1();
 
-  private:
+private:
   void try_replay_loop();
 
   storage::ObPartitionService* partition_service_;
   bool can_start_service_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogReplayDriverRunnable);
 };
 

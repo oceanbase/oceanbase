@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace rootserver {
 
 class FakeZoneManager : public ObZoneManager {
-  public:
+public:
   FakeZoneManager() : config_version_(1)
   {}
   ~FakeZoneManager()

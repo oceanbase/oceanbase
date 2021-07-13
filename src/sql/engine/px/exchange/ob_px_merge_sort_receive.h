@@ -30,10 +30,10 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxMergeSortReceiveInput : public ObPxReceiveInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMergeSortReceiveInput() : ObPxReceiveInput()
   {}
   virtual ~ObPxMergeSortReceiveInput()
@@ -45,13 +45,13 @@ class ObPxMergeSortReceiveInput : public ObPxReceiveInput {
 };
 
 class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   class ObPxMergeSortReceiveCtx;
   class MergeSortInput {
-    public:
+  public:
     explicit MergeSortInput(
         ObRARowStore* get_row_store, ObRARowStore* add_row_ptr, int64_t pos, bool finish, bool can_free)
         : get_row_store_(get_row_store), add_row_store_(add_row_ptr), pos_(pos), finish_(finish), can_free_(can_free)
@@ -76,7 +76,7 @@ class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
 
     TO_STRING_KV(K_(pos));
 
-    public:
+  public:
     ObRARowStore* get_row_store_;
     ObRARowStore* add_row_store_;
 
@@ -86,7 +86,7 @@ class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
   };
 
   class GlobalOrderInput : public MergeSortInput {
-    public:
+  public:
     explicit GlobalOrderInput(uint64_t tenant_id) : MergeSortInput(nullptr, nullptr, 0, false, true)
     {
       tenant_id_ = tenant_id;
@@ -105,13 +105,13 @@ class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
     virtual void clean_row_store(ObPxMergeSortReceiveCtx& recv_ctx);
     virtual bool is_empty();
 
-    private:
+  private:
     virtual int reset_add_row_store(bool& reset);
     virtual int switch_get_row_store();
     int get_one_row_from_channels(
         ObPxMergeSortReceiveCtx& recv_ctx, ObPhysicalPlanCtx* phy_plan_ctx, int64_t channel_idx) const;
 
-    private:
+  private:
     static const int64_t MAX_ROWS_PER_STORE = 50L;
     uint64_t tenant_id_;
     int64_t add_saved_pos_;
@@ -119,7 +119,7 @@ class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
   };
 
   class LocalOrderInput : public MergeSortInput {
-    public:
+  public:
     explicit LocalOrderInput(ObRARowStore* get_row_store, int64_t pos, int64_t end_count)
         : MergeSortInput(get_row_store, get_row_store, pos, false, 0 == pos),
           org_start_pos_(pos),
@@ -138,17 +138,17 @@ class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
     virtual void destroy();
     virtual void clean_row_store(ObPxMergeSortReceiveCtx& recv_ctx);
 
-    private:
+  private:
     int64_t org_start_pos_;  // save origin start position, it can't be changed
     int64_t end_count_;
     ObRARowStore::Reader reader_;
   };
 
   class ObPxMergeSortReceiveCtx : public ObPxReceiveCtx {
-    public:
+  public:
     friend class ObPxMergeSortReceive;
 
-    public:
+  public:
     explicit ObPxMergeSortReceiveCtx(ObExecContext& ctx)
         : ObPxReceive::ObPxReceiveCtx(ctx),
           ptr_px_row_(&px_row_),
@@ -180,7 +180,7 @@ class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
       return task_channels_.count();
     }
 
-    private:
+  private:
     ObPxNewRow* ptr_px_row_;
     dtl::ObDtlChannelLoop* ptr_row_msg_loop_;
     ObPxInterruptP interrupt_proc_;
@@ -194,7 +194,7 @@ class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
     bool finish_;
   };
 
-  public:
+public:
   explicit ObPxMergeSortReceive(common::ObIAllocator& alloc, bool local_order = false)
       : ObPxReceive(alloc), ObSortableTrait(alloc), local_order_(local_order)
   {}
@@ -204,7 +204,7 @@ class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
     local_order_ = local_order;
   }
 
-  protected:
+protected:
   virtual int create_operator_input(ObExecContext& ctx) const;
   virtual int init_op_ctx(ObExecContext& ctx) const;
   virtual int inner_open(ObExecContext& ctx) const;
@@ -213,14 +213,14 @@ class ObPxMergeSortReceive : public ObPxReceive, public ObSortableTrait {
   virtual int init_merge_sort_input(ObExecContext& ctx, ObPxMergeSortReceiveCtx* recv_ctx, int64_t n_channel) const;
   virtual int release_merge_inputs(ObExecContext& ctx, ObPxMergeSortReceiveCtx* recv_ctx) const;
 
-  private:
+private:
   int get_one_row_from_channels(ObPxMergeSortReceiveCtx* recv_ctx, ObPhysicalPlanCtx* phy_plan_ctx,
       int64_t channel_idx,  // row heap require data from the channel_idx channel
       const common::ObNewRow*& in_row) const;
   int get_all_rows_from_channels(ObPxMergeSortReceiveCtx& recv_ctx, ObPhysicalPlanCtx* phy_plan_ctx) const;
   int try_link_channel(ObExecContext& ctx) const override;
 
-  private:
+private:
   static const int64_t MAX_INPUT_NUMBER = 10000L;
   bool local_order_;
 };

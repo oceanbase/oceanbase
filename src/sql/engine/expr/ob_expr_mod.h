@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprMod : public ObArithExprOperator {
-  public:
+public:
   ObExprMod();
   explicit ObExprMod(common::ObIAllocator& alloc);
   virtual ~ObExprMod(){};
@@ -39,7 +39,7 @@ class ObExprMod : public ObArithExprOperator {
   // temporary used, remove after all expr converted
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   OB_INLINE static int mod_int(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
       common::ObIAllocator* allocator, common::ObScale scale);
   OB_INLINE static int mod_uint(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
@@ -52,7 +52,7 @@ class ObExprMod : public ObArithExprOperator {
       common::ObIAllocator* allocator, common::ObScale scale);
   DISALLOW_COPY_AND_ASSIGN(ObExprMod);
 
-  private:
+private:
   static ObArithFunc mod_funcs_[common::ObMaxTC];
 };
 }  // namespace sql

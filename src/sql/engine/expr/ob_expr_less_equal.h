@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprLessEqual : public ObRelationalExprOperator {
-  public:
+public:
   ObExprLessEqual();
   explicit ObExprLessEqual(common::ObIAllocator& alloc);
   virtual ~ObExprLessEqual(){};
@@ -36,7 +36,7 @@ class ObExprLessEqual : public ObRelationalExprOperator {
     return ObRelationalExprOperator::cg_expr(expr_cg_ctx, raw_expr, rt_expr);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLessEqual);
 };
 

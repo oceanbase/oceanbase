@@ -113,6 +113,29 @@ int ObLogEntry::deep_copy_to(ObLogEntry& entry) const
   return deep_copy_to_(entry);
 }
 
+int ObLogEntry::get_next_replay_ts_for_rg(int64_t& next_replay_ts) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_LOG_AGGRE == header_.get_log_type()) {
+    int64_t pos = 0;
+    int32_t next_log_offset = 0;
+    const char* log_buf = get_buf();
+    const int64_t log_buf_len = header_.get_data_len();
+    if (OB_FAIL(serialization::decode_i32(log_buf, log_buf_len, pos, &next_log_offset))) {
+      REPLAY_LOG(
+          ERROR, "serialization decode_i32 failed", KR(ret), K(log_buf_len), K(pos), K(header_), K(next_log_offset));
+    } else if (OB_FAIL(serialization::decode_i64(log_buf, log_buf_len, pos, &next_replay_ts))) {
+      REPLAY_LOG(
+          ERROR, "serialization decode_i64 failed", KR(ret), K(log_buf_len), K(pos), K(header_), K(next_log_offset));
+    } else { /*do nothing*/
+    }
+  } else {
+    // for non_aggregate_log, just assign next_replay_ts with submit_timestamp_
+    next_replay_ts = header_.get_submit_timestamp();
+  }
+  return ret;
+}
+
 DEFINE_SERIALIZE(ObLogEntry)
 {
   int ret = OB_SUCCESS;

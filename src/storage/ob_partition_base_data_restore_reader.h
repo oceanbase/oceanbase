@@ -39,7 +39,7 @@ class ObRestoreMacroDagWrapper;
 /* }; */
 
 class ObPartitionBaseDataMetaRestoreReader {
-  public:
+public:
   ObPartitionBaseDataMetaRestoreReader();
   virtual ~ObPartitionBaseDataMetaRestoreReader();
   int init(common::ObInOutBandwidthThrottle& bandwidth_throttle, const common::ObPartitionKey& pkey,
@@ -56,12 +56,12 @@ class ObPartitionBaseDataMetaRestoreReader {
   TO_STRING_KV(K_(pkey), K_(restore_info), K_(last_read_size), K_(partition_store_meta), K_(snapshot_version),
       K_(schema_version), K_(data_version));
 
-  private:
+private:
   int prepare(const common::ObPartitionKey& pkey, const ObDataStorageInfo& data_info);
   int get_smallest_base_version(ObPartitionStore* partition_store, int64_t& base_version);
   int get_freeze_info(const int64_t snapshot_version, const ObPartitionKey& pkey, const ObDataStorageInfo& data_info);
 
-  private:
+private:
   bool is_inited_;
   common::ObPartitionKey pkey_;
   ObRestoreInfo* restore_info_;
@@ -78,7 +78,7 @@ class ObPartitionBaseDataMetaRestoreReader {
 
 class ObPartitionGroupMetaRestoreReader;
 class ObPhysicalBaseMetaRestoreReader : public ObIPhysicalBaseMetaReader {
-  public:
+public:
   ObPhysicalBaseMetaRestoreReader()
       : is_inited_(false),
         restore_info_(NULL),
@@ -99,7 +99,7 @@ class ObPhysicalBaseMetaRestoreReader : public ObIPhysicalBaseMetaReader {
     return BASE_DATA_META_RESTORE_READER;
   }
 
-  private:
+private:
   bool is_inited_;
   ObRestoreInfo* restore_info_;
   ObPartitionGroupMetaRestoreReader* reader_;
@@ -110,7 +110,7 @@ class ObPhysicalBaseMetaRestoreReader : public ObIPhysicalBaseMetaReader {
 };
 
 class ObPartitionMacroBlockRestoreReader : public ObIPartitionMacroBlockReader {
-  public:
+public:
   ObPartitionMacroBlockRestoreReader();
   virtual ~ObPartitionMacroBlockRestoreReader();
   int init(common::ObInOutBandwidthThrottle& bandwidth_throttle, common::ObIArray<ObMigrateArgMacroBlockInfo>& list,
@@ -132,13 +132,13 @@ class ObPartitionMacroBlockRestoreReader : public ObIPartitionMacroBlockReader {
     return read_size_;
   }
 
-  private:
+private:
   int schedule_macro_block_task(common::ObInOutBandwidthThrottle& bandwidth_throttle, const ObRestoreInfo& restore_info,
       const obrpc::ObFetchMacroBlockArg& arg, const ObPartitionKey& pkey, const uint64_t table_id,
       ObMacroBlockStorageReader& reader);
   int trans_macro_block(const blocksstable::ObMacroBlockMeta& meta, blocksstable::ObBufferReader& backup_data);
 
-  private:
+private:
   bool is_inited_;
   common::ObArray<obrpc::ObFetchMacroBlockArg> macro_list_;
   int64_t macro_idx_;
@@ -150,7 +150,7 @@ class ObPartitionMacroBlockRestoreReader : public ObIPartitionMacroBlockReader {
 };
 
 class ObPartitionGroupMetaRestoreReader : public ObIPartitionGroupMetaRestoreReader {
-  public:
+public:
   typedef hash::ObHashMap<ObPartitionKey, ObPartitionBaseDataMetaRestoreReader*> MetaReaderMap;
   ObPartitionGroupMetaRestoreReader();
   virtual ~ObPartitionGroupMetaRestoreReader();
@@ -171,11 +171,11 @@ class ObPartitionGroupMetaRestoreReader : public ObIPartitionGroupMetaRestoreRea
     return PG_META_RESTORE_READER;
   }
 
-  private:
+private:
   int prepare(
       const common::ObPGKey& pg_key, common::ObInOutBandwidthThrottle& bandwidth_throttle, ObRestoreInfo& restore_info);
 
-  private:
+private:
   bool is_inited_;
   common::ObPGKey pg_key_;
   ObRestoreInfo* restore_info_;
@@ -189,7 +189,7 @@ class ObPartitionGroupMetaRestoreReader : public ObIPartitionGroupMetaRestoreRea
 };
 
 class ObPGPartitionBaseDataMetaRestorReader : public ObIPGPartitionBaseDataMetaObReader {
-  public:
+public:
   ObPGPartitionBaseDataMetaRestorReader();
   virtual ~ObPGPartitionBaseDataMetaRestorReader();
 
@@ -200,7 +200,7 @@ class ObPGPartitionBaseDataMetaRestorReader : public ObIPGPartitionBaseDataMetaO
     return BASE_DATA_META_OB_RESTORE_READER;
   }
 
-  private:
+private:
   bool is_inited_;
   int64_t reader_index_;
   common::ObArray<ObPartitionBaseDataMetaRestoreReader*> partition_reader_array_;
@@ -208,7 +208,7 @@ class ObPGPartitionBaseDataMetaRestorReader : public ObIPGPartitionBaseDataMetaO
 };
 
 class ObPartitionKeyChangeUtil {
-  public:
+public:
   static int change_dst_pkey_to_src_pkey(
       const ObPartitionKey& dst_pkey, const ObRestoreInfo& restore_info, ObPartitionKey& src_pkey);
 };

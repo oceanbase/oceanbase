@@ -24,7 +24,7 @@ using namespace common;
 using namespace storage;
 namespace unittest {
 class TestPartitionMigrateTableKeyMgr : public ::testing::Test {
-  public:
+public:
   TestPartitionMigrateTableKeyMgr()
   {}
   ~TestPartitionMigrateTableKeyMgr()

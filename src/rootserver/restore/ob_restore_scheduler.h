@@ -30,7 +30,7 @@
 namespace oceanbase {
 namespace rootserver {
 class ObRestoreIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObRestoreIdling(volatile bool& stop) : ObThreadIdling(stop)
   {
     reset();
@@ -39,18 +39,18 @@ class ObRestoreIdling : public ObThreadIdling {
   void set_idle_interval_us(int64_t idle_us);
   void reset();
 
-  private:
+private:
   int64_t idle_us_;
 };
 
 // Schedule daily merge (merge dynamic data to base line data).
 // Running in a single thread.
 class ObRestoreScheduler : public ObRsReentrantThread, public share::ObCheckStopProvider {
-  public:
+public:
   static const int64_t MAX_RESTORE_TASK_CNT = 10000;
   enum SetMemberListAction { BALANCE, SET_MEMBER_LIST, DONE };
 
-  public:
+public:
   ObRestoreScheduler();
   virtual ~ObRestoreScheduler();
 
@@ -67,11 +67,11 @@ class ObRestoreScheduler : public ObRsReentrantThread, public share::ObCheckStop
     BLOCKING_RUN_IMPLEMENT();
   }
 
-  public:
+public:
   int mark_job_failed(const int64_t job_id, int return_ret, share::PhysicalRestoreMod mod,
       const common::ObCurTraceId::TraceId& trace_id, const common::ObAddr& addr);
 
-  private:
+private:
   int idle();
   int check_stop() const;
 
@@ -165,7 +165,10 @@ class ObRestoreScheduler : public ObRsReentrantThread, public share::ObCheckStop
   void record_rs_event(const share::ObPhysicalRestoreJob& job, const share::PhysicalRestoreStatus next_status);
   share::PhysicalRestoreStatus get_next_status(int return_ret, share::PhysicalRestoreStatus current_status);
 
-  private:
+private:
+  int drop_tenant_force_if_necessary(const share::ObPhysicalRestoreJob& job_info);
+
+private:
   bool inited_;
   mutable ObRestoreIdling idling_;
   share::schema::ObMultiVersionSchemaService* schema_service_;

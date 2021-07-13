@@ -27,7 +27,7 @@ class ObIArchiveLogFileStore;
 class ObArchiveFileUtils {
   static const int64_t MAX_PATH_LENGTH = OB_MAX_ARCHIVE_PATH_LENGTH;
 
-  public:
+public:
   // parameter below:
   // uri: pg archive absolute path
   // storage_info: authentication info
@@ -86,7 +86,7 @@ class ObArchiveFileUtils {
   int get_max_safe_data_file_id(const ObString& uri, const ObString& storage_info, const uint64_t log_id,
       const int64_t log_ts, const bool by_log_id, uint64_t& data_file_id);
 
-  private:
+private:
   int extract_file_id_(const ObString& file_name, uint64_t& file_id, bool& match);
 
   int locate_log_in_single_index_file_(const uint64_t log_id, char* data, const int64_t data_len, uint64_t& file_id,

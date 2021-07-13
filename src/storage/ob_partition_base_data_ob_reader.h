@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace storage {
 template <obrpc::ObRpcPacketCode RPC_CODE>
 class ObStreamRpcReader {
-  public:
+public:
   ObStreamRpcReader();
   virtual ~ObStreamRpcReader()
   {}
@@ -57,7 +57,7 @@ class ObStreamRpcReader {
     rpc_buffer_parse_pos_ = 0;
   }
 
-  private:
+private:
   bool is_inited_;
   obrpc::ObPartitionServiceRpcProxy::SSHandle<RPC_CODE> handle_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
@@ -70,7 +70,7 @@ class ObStreamRpcReader {
 
 template <obrpc::ObRpcPacketCode RPC_CODE>
 class ObLogicStreamRpcReader {
-  public:
+public:
   ObLogicStreamRpcReader();
   virtual ~ObLogicStreamRpcReader()
   {}
@@ -104,7 +104,7 @@ class ObLogicStreamRpcReader {
   }
   int decode_rpc_header();
 
-  private:
+private:
   bool is_inited_;
   obrpc::ObPartitionServiceRpcProxy::SSHandle<RPC_CODE> handle_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
@@ -132,7 +132,7 @@ class ObLogicStreamRpcReader {
 //  sstbale_meta_N
 //  ObSSTablePair list of sstable_N
 class ObPartitionBaseDataMetaObReader : public ObIPhysicalBaseMetaReader {
-  public:
+public:
   ObPartitionBaseDataMetaObReader();
   virtual ~ObPartitionBaseDataMetaObReader();
 
@@ -154,10 +154,10 @@ class ObPartitionBaseDataMetaObReader : public ObIPhysicalBaseMetaReader {
     return data_size_;
   }
 
-  private:
+private:
   int fetch_next_buffer_if_need();
 
-  private:
+private:
   bool is_inited_;
   storage::ObSavedStorageInfo saved_storage_info_;
   obrpc::ObPartitionServiceRpcProxy::SSHandle<obrpc::OB_FETCH_BASE_DATA_META> handle_;
@@ -188,7 +188,7 @@ class ObPartitionBaseDataMetaObReader : public ObIPhysicalBaseMetaReader {
 //    macro_block_data_N
 
 class ObPartitionMacroBlockObReader : public ObIPartitionMacroBlockReader {
-  public:
+public:
   ObPartitionMacroBlockObReader();
   virtual ~ObPartitionMacroBlockObReader();
   int init(obrpc::ObPartitionServiceRpcProxy& srv_rpc_proxy, common::ObInOutBandwidthThrottle& bandwidth_throttle,
@@ -209,14 +209,14 @@ class ObPartitionMacroBlockObReader : public ObIPartitionMacroBlockReader {
     return data_size_;
   }
 
-  private:
+private:
   int alloc_buffers();
   int fetch_next_buffer_if_need();
   int fetch_next_buffer();
   int fetch_next_buffer_with_old_rpc();
   int alloc_from_memctx_first(char*& buf);
 
-  private:
+private:
   bool is_inited_;
   obrpc::ObPartitionServiceRpcProxy::SSHandle<obrpc::OB_FETCH_MACRO_BLOCK> handle_;
   obrpc::ObPartitionServiceRpcProxy::SSHandle<obrpc::OB_FETCH_MACRO_BLOCK_OLD> old_handle_;
@@ -237,19 +237,19 @@ class ObPartitionMacroBlockObReader : public ObIPartitionMacroBlockReader {
 // possible. The logic of filling the package is completed in ObFetchMacroBlockP::process. Try to fill a package as much
 // as possible, and the meta is guaranteed to be in the same package (OB_MALLOC_BIG_BLOCK_SIZE).
 class ObPartitionMacroBlockObProducer {
-  public:
+public:
   ObPartitionMacroBlockObProducer();
   virtual ~ObPartitionMacroBlockObProducer();
 
   int init(const ObITable::TableKey& table_key, const common::ObIArray<obrpc::ObFetchMacroBlockArg>& arg_list);
   int get_next_macro_block(blocksstable::ObFullMacroBlockMeta& meta, blocksstable::ObBufferReader& data);
 
-  private:
+private:
   int prefetch();
   int get_macro_read_info(const obrpc::ObFetchMacroBlockArg& arg, blocksstable::ObMacroBlockCtx& macro_block_ctx,
       blocksstable::ObMacroBlockReadInfo& read_info);
 
-  private:
+private:
   static const int64_t MAX_PREFETCH_MACRO_BLOCK_NUM = 2;
   static const int64_t MACRO_META_RESERVE_TIME = 60 * 1000 * 1000LL;  // 1minutes
 
@@ -271,9 +271,9 @@ class ObPartitionMacroBlockObProducer {
 // end_key(1)
 // end_key(2)
 // ...
-// end_key(n) shoule be MAX
+// end_key(n) should be MAX
 class ObLogicBaseMetaProducer {
-  public:
+public:
   ObLogicBaseMetaProducer() : is_inited_(false), partition_service_(NULL), arg_(NULL)
   {}
   ~ObLogicBaseMetaProducer()
@@ -282,14 +282,14 @@ class ObLogicBaseMetaProducer {
   int init(storage::ObPartitionService* partition_service, obrpc::ObFetchLogicBaseMetaArg* arg);
   int get_logic_endkey_list(common::ObIArray<common::ObStoreRowkey>& end_key_list);
 
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* partition_service_;
   obrpc::ObFetchLogicBaseMetaArg* arg_;
 };
 
 class ObLogicBaseMetaReader : ObILogicBaseMetaReader {
-  public:
+public:
   ObLogicBaseMetaReader() : is_inited_(false), rpc_reader_(), allocator_(common::ObNewModIds::OB_PARTITION_MIGRATE)
   {}
   virtual ~ObLogicBaseMetaReader()
@@ -300,14 +300,14 @@ class ObLogicBaseMetaReader : ObILogicBaseMetaReader {
 
   virtual int fetch_end_key_list(common::ObIArray<common::ObStoreRowkey>& end_key_list);
 
-  private:
+private:
   bool is_inited_;
   ObStreamRpcReader<obrpc::OB_FETCH_LOGIC_BASE_META> rpc_reader_;
   common::ObArenaAllocator allocator_;
 };
 
 class ObLogicDataChecksumCalculate {
-  public:
+public:
   ObLogicDataChecksumCalculate();
   virtual ~ObLogicDataChecksumCalculate()
   {}
@@ -326,11 +326,11 @@ class ObLogicDataChecksumCalculate {
     return last_rowkey_;
   }
 
-  private:
+private:
   int inner_append_row(const ObStoreRow& store_row);
   void calc_data_checksum();
 
-  private:
+private:
   bool is_inited_;
   blocksstable::ObSelfBufferWriter data_buffer_;
   blocksstable::ObRowWriter row_writer_;
@@ -342,7 +342,7 @@ class ObLogicDataChecksumCalculate {
 };
 
 class ObLogicRowProducer {
-  public:
+public:
   ObLogicRowProducer();
   virtual ~ObLogicRowProducer()
   {}
@@ -359,7 +359,7 @@ class ObLogicRowProducer {
   }
   int get_schema_rowkey_count(int64_t& schema_rowkey_count);
 
-  private:
+private:
   int init_logical_row_iter(const ObVersionRange& version_range, ObExtStoreRange& key_range);
   bool can_reset_logical_row_iter();
   int inner_get_next_row(const ObStoreRow*& store_row);
@@ -368,7 +368,7 @@ class ObLogicRowProducer {
   int set_new_key_range(common::ObStoreRange& new_key_range);
   int check_split_source_table(const ObTablesHandle& tables_handle_, bool& is_exist);
 
-  private:
+private:
   bool is_inited_;
   ObLogicDataChecksumCalculate data_checksum_calc_;
   storage::ObTablesHandle tables_handle_;
@@ -392,7 +392,7 @@ class ObLogicRowProducer {
 };
 
 class ObPhysicalBaseMetaProducer {
-  public:
+public:
   ObPhysicalBaseMetaProducer() : is_inited_(false), partition_service_(NULL), arg_(NULL)
   {}
   ~ObPhysicalBaseMetaProducer()
@@ -401,14 +401,14 @@ class ObPhysicalBaseMetaProducer {
   int get_sstable_meta(
       blocksstable::ObSSTableBaseMeta& sstable_meta, common::ObIArray<blocksstable::ObSSTablePair>& pair_list);
 
-  private:
+private:
   bool is_inited_;
   storage::ObPartitionService* partition_service_;
   obrpc::ObFetchPhysicalBaseMetaArg* arg_;
 };
 
 class ObPhysicalBaseMetaReader : public ObIPhysicalBaseMetaReader {
-  public:
+public:
   ObPhysicalBaseMetaReader() : is_inited_(false), rpc_reader_(), allocator_(common::ObNewModIds::OB_PARTITION_MIGRATE)
   {}
   virtual ~ObPhysicalBaseMetaReader()
@@ -424,7 +424,7 @@ class ObPhysicalBaseMetaReader : public ObIPhysicalBaseMetaReader {
     return BASE_DATA_META_OB_READER;
   }
 
-  private:
+private:
   bool is_inited_;
   ObStreamRpcReader<obrpc::OB_FETCH_PHYSICAL_BASE_META> rpc_reader_;
   common::ObArenaAllocator allocator_;
@@ -432,7 +432,7 @@ class ObPhysicalBaseMetaReader : public ObIPhysicalBaseMetaReader {
 };
 
 class ObLogicRowReader : public ObIStoreRowIterator {
-  public:
+public:
   ObLogicRowReader() : is_inited_(false), rpc_reader_(), arg_(NULL), store_row_()
   {}
   virtual ~ObLogicRowReader()
@@ -444,7 +444,7 @@ class ObLogicRowReader : public ObIStoreRowIterator {
   // the store row is valid before the next call of get_next_row
   virtual int get_next_row(const ObStoreRow*& row) override;
 
-  private:
+private:
   bool is_inited_;
   ObStreamRpcReader<obrpc::OB_FETCH_LOGIC_ROW> rpc_reader_;
   const obrpc::ObFetchLogicRowArg* arg_;
@@ -454,7 +454,7 @@ class ObLogicRowReader : public ObIStoreRowIterator {
 };
 
 class ObLogicRowSliceReader : public ObIStoreRowIterator {
-  public:
+public:
   ObLogicRowSliceReader();
   virtual ~ObLogicRowSliceReader()
   {}
@@ -465,13 +465,13 @@ class ObLogicRowSliceReader : public ObIStoreRowIterator {
   // the store row is valid before the next call of get_next_row
   virtual int get_next_row(const ObStoreRow*& row) override;
 
-  private:
+private:
   int rescan(const ObStoreRow*& row);
   int copy_rowkey();
   int inner_get_next_row(const ObStoreRow*& row);
   int fetch_logic_row(const obrpc::ObFetchLogicRowArg& rpc_arg);
 
-  private:
+private:
   bool is_inited_;
   obrpc::ObPartitionServiceRpcProxy* srv_rpc_proxy_;
   ObAddr src_server_;
@@ -488,7 +488,7 @@ class ObLogicRowSliceReader : public ObIStoreRowIterator {
 };
 
 class ObILogicRowIterator {
-  public:
+public:
   ObILogicRowIterator()
   {}
   virtual ~ObILogicRowIterator()
@@ -498,7 +498,7 @@ class ObILogicRowIterator {
 };
 
 class ObLogicRowFetcher : public ObILogicRowIterator {
-  public:
+public:
   ObLogicRowFetcher();
   virtual ~ObLogicRowFetcher()
   {}
@@ -510,7 +510,7 @@ class ObLogicRowFetcher : public ObILogicRowIterator {
     return arg_;
   }
 
-  private:
+private:
   bool is_inited_;
   ObLogicRowReader logic_row_reader_;
   ObLogicRowSliceReader slice_row_reader_;
@@ -519,7 +519,7 @@ class ObLogicRowFetcher : public ObILogicRowIterator {
 };
 
 class ObTailoredRowIterator : public ObILogicRowIterator {
-  public:
+public:
   ObTailoredRowIterator();
   virtual ~ObTailoredRowIterator()
   {}
@@ -531,7 +531,7 @@ class ObTailoredRowIterator : public ObILogicRowIterator {
     return &arg_;
   }
 
-  private:
+private:
   bool is_inited_;
   ObMSRowIterator row_iter_;
   ObArenaAllocator allocator_;
@@ -542,7 +542,7 @@ class ObTailoredRowIterator : public ObILogicRowIterator {
 };
 
 class ObLogicDataChecksumReader {
-  public:
+public:
   ObLogicDataChecksumReader();
   virtual ~ObLogicDataChecksumReader()
   {}
@@ -551,7 +551,7 @@ class ObLogicDataChecksumReader {
       const common::ObAddr& src_server, const int64_t cluster_id, const obrpc::ObFetchLogicRowArg& arg);
   int get_data_checksum(int64_t& data_checksum);
 
-  private:
+private:
   int get_data_checksum_with_slice(int64_t& data_checksum);
   int get_data_checksum_without_slice(int64_t& data_checksum);
   int fetch_logic_data_checksum(const obrpc::ObFetchLogicRowArg& arg,
@@ -560,7 +560,7 @@ class ObLogicDataChecksumReader {
       int64_t& data_checksum, ObLogicStreamRpcReader<obrpc::OB_FETCH_LOGIC_DATA_CHECKSUM_SLICE>& rpc_reader);
   int rescan(int64_t& data_cheksum, ObLogicStreamRpcReader<obrpc::OB_FETCH_LOGIC_DATA_CHECKSUM_SLICE>& rpc_reader);
 
-  private:
+private:
   static const int64_t TIMEOUT = 30 * 1000 * 1000;  // 30s
   bool is_inited_;
   common::ObMemBuf last_key_buf_;
@@ -576,14 +576,14 @@ class ObLogicDataChecksumReader {
 // as possible. The logic of filling the package is completed in ObFetchBaseDataMetaP::process. partition_group meta,
 // all partition_meta, all_table_ids must ensure in one package(OB_MALLOC_BIG_BLOCK_SIZE)
 class ObPGPartitionBaseDataMetaObProducer {
-  public:
+public:
   ObPGPartitionBaseDataMetaObProducer();
   virtual ~ObPGPartitionBaseDataMetaObProducer();
   int init(const ObPGKey& pg_key, const int64_t snapshot_version, const bool is_only_major_sstable,
       const int64_t log_ts, storage::ObPartitionService* partition_serivce);
   int get_next_partition_meta_info(const obrpc::ObPGPartitionMetaInfo*& pg_partition_meta_info);
 
-  private:
+private:
   int set_all_partition_meta_info(
       const int64_t snapshot_version, const bool is_only_major_sstable, const int64_t log_ts, ObPGStorage* pg_storage);
   int set_partition_meta_info(const ObPartitionKey& pkey, const int64_t snapshot_version,
@@ -593,7 +593,7 @@ class ObPGPartitionBaseDataMetaObProducer {
       const bool is_only_major_sstable, const int64_t log_ts, ObPGStorage* pg_storage,
       obrpc::ObFetchTableInfoResult& table_info);
 
-  private:
+private:
   bool is_inited_;
   common::ObArray<obrpc::ObPGPartitionMetaInfo> pg_partition_meta_info_array_;
   int64_t meta_info_idx_;
@@ -601,7 +601,7 @@ class ObPGPartitionBaseDataMetaObProducer {
 };
 
 class ObPGPartitionBaseDataMetaObReader : public ObIPGPartitionBaseDataMetaObReader {
-  public:
+public:
   ObPGPartitionBaseDataMetaObReader();
   virtual ~ObPGPartitionBaseDataMetaObReader();
 
@@ -613,7 +613,7 @@ class ObPGPartitionBaseDataMetaObReader : public ObIPGPartitionBaseDataMetaObRea
     return BASE_DATA_META_OB_READER;
   }
 
-  private:
+private:
   static const int64_t FETCH_BASE_META_TIMEOUT = 60 * 1000 * 1000;  // 60s
   bool is_inited_;
   ObStreamRpcReader<obrpc::OB_FETCH_PG_PARTITION_INFO> rpc_reader_;

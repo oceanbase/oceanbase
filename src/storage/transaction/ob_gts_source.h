@@ -37,7 +37,7 @@ namespace transaction {
 class ObGtsStatistics {
   static const int64_t STAT_INTERVAL = 5 * 1000 * 1000;
 
-  public:
+public:
   ObGtsStatistics()
   {
     reset();
@@ -76,7 +76,7 @@ class ObGtsStatistics {
   }
   void statistics();
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t last_stat_ts_;
   int64_t gts_rpc_cnt_;
@@ -91,7 +91,7 @@ class ObGtsStatistics {
 };
 
 class ObGtsSource : public ObITsSource {
-  public:
+public:
   ObGtsSource() : log_interval_(3 * 1000 * 1000)
   {
     reset();
@@ -116,7 +116,7 @@ class ObGtsSource : public ObITsSource {
   int get_latest_srr(MonotonicTs& latest_srr);
   int64_t get_task_count() const;
 
-  public:
+public:
   int update_gts(const int64_t gts, bool& update);
   int get_gts(const MonotonicTs stc, ObTsCbTask* task, int64_t& gts, MonotonicTs& receive_gts_ts);
   int get_gts(ObTsCbTask* task, int64_t& gts);
@@ -140,7 +140,7 @@ class ObGtsSource : public ObITsSource {
   }
   TO_STRING_KV(K_(tenant_id), K_(gts_pkey), K_(gts_local_cache), K_(server));
 
-  private:
+private:
   int generate_gts_pkey_();
   int get_gts_leader_(common::ObAddr& leader);
   int refresh_gts_location_();
@@ -151,13 +151,13 @@ class ObGtsSource : public ObITsSource {
   int get_gts_from_local_timestamp_service_(common::ObAddr& leader, int64_t& gts);
   int verify_publish_version_(const int64_t publish_version);
 
-  public:
+public:
   static const int64_t GET_GTS_QUEUE_COUNT = 1;
   static const int64_t WAIT_GTS_QUEUE_COUNT = 1;
   static const int64_t WAIT_GTS_QUEUE_START_INDEX = GET_GTS_QUEUE_COUNT;
   static const int64_t TOTAL_GTS_QUEUE_COUNT = GET_GTS_QUEUE_COUNT + WAIT_GTS_QUEUE_COUNT;
 
-  private:
+private:
   bool is_inited_;
   int64_t tenant_id_;
   common::ObPartitionKey gts_pkey_;

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateDbLinkStmt : public ObDDLStmt {
-  public:
+public:
   ObCreateDbLinkStmt();
   explicit ObCreateDbLinkStmt(common::ObIAllocator* name_pool);
   virtual ~ObCreateDbLinkStmt();
@@ -72,7 +72,7 @@ class ObCreateDbLinkStmt : public ObDDLStmt {
 
   TO_STRING_KV(K_(create_dblink_arg));
 
-  private:
+private:
   obrpc::ObCreateDbLinkArg create_dblink_arg_;
 };
 }  // namespace sql

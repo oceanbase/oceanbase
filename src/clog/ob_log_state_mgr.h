@@ -59,13 +59,13 @@ enum ObCreatePlsType {
 };
 
 class ObILogStateMgrForService {
-  public:
+public:
   ObILogStateMgrForService()
   {}
   virtual ~ObILogStateMgrForService()
   {}
 
-  public:
+public:
   virtual bool can_submit_log() const = 0;
   virtual bool can_submit_start_working_log() const = 0;
   virtual bool can_append_disk_log() const = 0;
@@ -126,13 +126,13 @@ class ObILogStateMgrForService {
 };
 
 class ObILogStateMgrForSW {
-  public:
+public:
   ObILogStateMgrForSW()
   {}
   virtual ~ObILogStateMgrForSW()
   {}
 
-  public:
+public:
   virtual int16_t get_state() const = 0;
   virtual common::ObRole get_role() const = 0;
   virtual common::ObAddr get_leader() const = 0;
@@ -170,13 +170,13 @@ class ObILogStateMgrForSW {
 };
 
 class ObILogStateMgrForCasMgr {
-  public:
+public:
   ObILogStateMgrForCasMgr()
   {}
   virtual ~ObILogStateMgrForCasMgr()
   {}
 
-  public:
+public:
   virtual common::ObAddr get_leader() const = 0;
   virtual int get_cascad_leader(share::ObCascadMember& cascad_leader_member) const = 0;
   virtual share::ObCascadMember get_leader_member() const = 0;
@@ -202,13 +202,13 @@ class ObILogStateMgrForCasMgr {
 };
 
 class ObILogStateMgrForMS {
-  public:
+public:
   ObILogStateMgrForMS()
   {}
   virtual ~ObILogStateMgrForMS()
   {}
 
-  public:
+public:
   virtual bool can_submit_log() const = 0;
   virtual bool can_submit_with_assigned_id() const = 0;
   virtual common::ObAddr get_leader() const = 0;
@@ -239,13 +239,13 @@ class ObILogStateMgrForMS {
 };
 
 class ObILogStateMgrForReconfirm {
-  public:
+public:
   ObILogStateMgrForReconfirm()
   {}
   virtual ~ObILogStateMgrForReconfirm()
   {}
 
-  public:
+public:
   virtual common::ObAddr get_leader() const = 0;
   virtual common::ObAddr get_previous_leader() const = 0;
   virtual common::ObProposalID get_proposal_id() const = 0;
@@ -270,103 +270,105 @@ class ObLogStateMgr : public ObILogStateMgrForService,
                       public ObILogStateMgrForReconfirm {
   friend class unittest::ObLogStateMgrTest;
 
-  public:
+public:
   ObLogStateMgr();
   virtual ~ObLogStateMgr()
   {
     destroy();
   }
 
-  public:
+public:
   int init(ObILogSWForStateMgr* sw, ObILogReconfirm* reconfirm, ObILogEngine* log_engine, ObILogMembershipMgr* mm,
       ObLogCascadingMgr* cascading_mgr, ObLogRestoreMgr* restore_mgr, election::ObIElection* election,
       ObLogReplayEngineWrapper* replay_engine, storage::ObPartitionService* partition_service,
       common::ObILogAllocator* alloc_mgr, const common::ObAddr& self, const common::ObProposalID& proposal_id,
       const common::ObVersion& freeze_version, const common::ObPartitionKey& partition_key,
       const ObCreatePlsType& create_pls_type);
-  virtual bool can_submit_log() const
+  virtual bool can_submit_log() const override
   {
     bool bool_ret = (is_leader_active_() && !is_offline() &&
                      share::ObMultiClusterUtil::is_cluster_allow_submit_log(partition_key_.get_table_id()));
     return bool_ret;
   }
-  virtual bool can_submit_with_assigned_id() const
+  virtual bool can_submit_with_assigned_id() const override
   {
     bool bool_ret = (is_leader_active_() || is_standby_leader_active_()) && !is_offline();
     return bool_ret;
   }
-  virtual bool can_submit_start_working_log() const;
-  virtual bool is_cluster_allow_handle_prepare() const;
+  virtual bool can_submit_start_working_log() const override;
+  virtual bool is_cluster_allow_handle_prepare() const override;
   virtual bool is_switching_cluster_replica(const uint64_t table_id) const
   {
     return (GCTX.is_in_standby_switching_state() && !share::ObMultiClusterUtil::is_cluster_private_table(table_id));
   }
-  virtual bool can_append_disk_log() const;
-  virtual bool can_receive_recovery_log() const;
-  virtual bool can_majority_cb(const common::ObProposalID& proposal_id) const;
-  virtual bool can_standby_majority_cb(const common::ObProposalID& proposal_id) const;
+  virtual bool can_append_disk_log() const override;
+  virtual bool can_receive_recovery_log() const override;
+  virtual bool can_majority_cb(const common::ObProposalID& proposal_id) const override;
+  virtual bool can_standby_majority_cb(const common::ObProposalID& proposal_id) const override;
   virtual bool can_majority_cb_for_renew_ms_log(const common::ObProposalID& ms_proposal_id) const override;
-  virtual bool can_receive_log_ack(const common::ObProposalID& proposal_id) const;
-  virtual bool can_send_log_ack(const common::ObProposalID& proposal_id) const;
-  virtual bool can_send_standby_log_ack(const common::ObProposalID& proposal_id) const;
-  virtual bool can_receive_max_log_id(const common::ObProposalID& proposal_id) const;
+  virtual bool can_receive_log_ack(const common::ObProposalID& proposal_id) const override;
+  virtual bool can_send_log_ack(const common::ObProposalID& proposal_id) const override;
+  virtual bool can_send_standby_log_ack(const common::ObProposalID& proposal_id) const override;
+  virtual bool can_receive_max_log_id(const common::ObProposalID& proposal_id) const override;
   virtual bool can_receive_renew_ms_log_ack(const common::ObProposalID& ms_proposal_id) const override;
   virtual bool can_send_renew_ms_log_ack(const common::ObProposalID& proposal_id) const override;
-  virtual bool can_handle_standby_prepare_resp(const common::ObProposalID& proposal_id) const;
+  virtual bool can_handle_standby_prepare_resp(const common::ObProposalID& proposal_id) const override;
   bool is_diff_cluster_req_in_disabled_state(const int64_t cluster_id) const;
-  virtual bool can_get_log(const int64_t cluster_id) const;
-  virtual bool can_get_log_for_reconfirm(const common::ObProposalID& proposal_id) const;
+  virtual bool can_get_log(const int64_t cluster_id) const override;
+  virtual bool can_get_log_for_reconfirm(const common::ObProposalID& proposal_id) const override;
   virtual bool can_receive_log(const common::ObProposalID& proposal_id, const common::ObProposalID& proposal_id_in_log,
-      const int64_t cluster_id) const;
+      const int64_t cluster_id) const override;
   virtual bool can_receive_renew_ms_log(const common::ObProposalID& proposal_id_in_req,
-      const common::ObProposalID& proposal_id_in_log, const int64_t cluster_id) const;
-  virtual bool can_change_member() const;
-  virtual bool can_change_leader() const;
-  virtual bool can_get_leader_curr_member_list() const;
-  virtual bool can_handle_prepare_rqst(const common::ObProposalID& proposal_id, const int64_t cluster_id) const;
-  virtual bool can_handle_standby_prepare_rqst(const common::ObProposalID& proposal_id, const int64_t cluster_id) const;
-  virtual bool can_slide_sw() const;
-  virtual bool is_standby_leader_can_receive_log_id(const uint32_t log_id) const;
-  virtual bool can_receive_confirmed_info(const int64_t src_cluster_id) const;
-  virtual bool can_receive_renew_ms_log_confirmed_info() const;
+      const common::ObProposalID& proposal_id_in_log, const int64_t cluster_id) const override;
+  virtual bool can_change_member() const override;
+  virtual bool can_change_leader() const override;
+  virtual bool can_get_leader_curr_member_list() const override;
+  virtual bool can_handle_prepare_rqst(
+      const common::ObProposalID& proposal_id, const int64_t cluster_id) const override;
+  virtual bool can_handle_standby_prepare_rqst(
+      const common::ObProposalID& proposal_id, const int64_t cluster_id) const override;
+  virtual bool can_slide_sw() const override;
+  virtual bool is_standby_leader_can_receive_log_id(const uint32_t log_id) const override;
+  virtual bool can_receive_confirmed_info(const int64_t src_cluster_id) const override;
+  virtual bool can_receive_renew_ms_log_confirmed_info() const override;
   virtual bool can_set_offline() const;
   virtual bool can_set_replica_type() const;
   bool can_backfill_log(const bool is_leader, const common::ObProposalID& proposal_id) const;
   bool can_backfill_confirmed(const common::ObProposalID& proposal_id) const;
 
-  virtual common::ObProposalID get_proposal_id() const
+  virtual common::ObProposalID get_proposal_id() const override
   {
     return curr_proposal_id_;
   }
-  virtual int switch_state(bool& need_retry);
-  virtual bool check_sliding_window_state();
-  virtual bool is_state_changed(bool& need_retry);
-  virtual int set_scan_disk_log_finished();
+  virtual int switch_state(bool& need_retry) override;
+  virtual bool check_sliding_window_state() override;
+  virtual bool is_state_changed(bool& need_retry) override;
+  virtual int set_scan_disk_log_finished() override;
   virtual bool is_scan_disk_log_finished() const
   {
     return scan_disk_log_finished_;
   }
-  virtual int16_t get_state() const
+  virtual int16_t get_state() const override
   {
     return state_;
   }
-  virtual common::ObRole get_role() const
+  virtual common::ObRole get_role() const override
   {
     return role_;
   }
-  virtual common::ObAddr get_leader() const
+  virtual common::ObAddr get_leader() const override
   {
     return leader_.get_server();
   }
-  virtual share::ObCascadMember get_leader_member() const
+  virtual share::ObCascadMember get_leader_member() const override
   {
     return leader_;
   }
-  virtual common::ObAddr get_primary_leader_addr() const
+  virtual common::ObAddr get_primary_leader_addr() const override
   {
     return primary_leader_.get_server();
   }
-  virtual share::ObCascadMember get_primary_leader() const
+  virtual share::ObCascadMember get_primary_leader() const override
   {
     return primary_leader_;
   }
@@ -374,47 +376,47 @@ class ObLogStateMgr : public ObILogStateMgrForService,
   {
     return prepared_primary_leader_;
   }
-  virtual int get_cascad_leader(share::ObCascadMember& cascad_leader_member) const;
-  virtual common::ObAddr get_previous_leader() const
+  virtual int get_cascad_leader(share::ObCascadMember& cascad_leader_member) const override;
+  virtual common::ObAddr get_previous_leader() const override
   {
     return previous_leader_;
   }
-  virtual const common::ObRegion& get_region() const;
-  virtual const common::ObIDC& get_idc() const;
-  virtual int set_region(const common::ObRegion& region, bool& is_changed);
-  virtual int set_idc(const common::ObIDC& idc, bool& is_changed);
+  virtual const common::ObRegion& get_region() const override;
+  virtual const common::ObIDC& get_idc() const override;
+  virtual int set_region(const common::ObRegion& region, bool& is_changed) override;
+  virtual int set_idc(const common::ObIDC& idc, bool& is_changed) override;
   virtual int64_t get_leader_epoch() const
   {
     return leader_epoch_;
   }
-  virtual common::ObVersion get_freeze_version() const;
-  virtual int64_t get_last_leader_active_time() const
+  virtual common::ObVersion get_freeze_version() const override;
+  virtual int64_t get_last_leader_active_time() const override
   {
     return last_leader_active_time_;
   }
   virtual int update_freeze_version(const common::ObVersion& freeze_version);
   virtual int handle_prepare_rqst(
-      const common::ObProposalID& proposal_id, const common::ObAddr& new_leader, const int64_t cluster_id);
+      const common::ObProposalID& proposal_id, const common::ObAddr& new_leader, const int64_t cluster_id) override;
   virtual int handle_standby_prepare_rqst(
-      const common::ObProposalID& proposal_id, const common::ObAddr& new_leader, const int64_t cluster_id);
-  virtual int update_proposal_id(const common::ObProposalID& proposal_id);
-  virtual int start_election();
-  virtual int stop_election();
-  virtual int set_election_leader(const common::ObAddr& leader, const int64_t lease_start);
+      const common::ObProposalID& proposal_id, const common::ObAddr& new_leader, const int64_t cluster_id) override;
+  virtual int update_proposal_id(const common::ObProposalID& proposal_id) override;
+  virtual int start_election() override;
+  virtual int stop_election() override;
+  virtual int set_election_leader(const common::ObAddr& leader, const int64_t lease_start) override;
   virtual void set_offline();
   virtual void set_online();
-  virtual bool is_offline() const
+  virtual bool is_offline() const override
   {
     return true == ATOMIC_LOAD(&is_offline_);
   }
   virtual bool is_changing_leader() const;
   virtual int change_leader_async(const common::ObPartitionKey& partition_key, const common::ObAddr& leader,
       common::ObTsWindows& changing_leader_windows);
-  virtual bool is_leader_active() const
+  virtual bool is_leader_active() const override
   {
     return is_leader_active_();
   }
-  virtual bool is_standby_leader_active() const
+  virtual bool is_standby_leader_active() const override
   {
     return is_standby_leader_active_();
   }
@@ -422,11 +424,11 @@ class ObLogStateMgr : public ObILogStateMgrForService,
   {
     return is_leader_taking_over_();
   }
-  virtual bool is_leader_reconfirm() const
+  virtual bool is_leader_reconfirm() const override
   {
     return is_leader_reconfirm_();
   }
-  virtual bool is_follower_active() const
+  virtual bool is_follower_active() const override
   {
     return is_follower_active_();
   }
@@ -471,22 +473,22 @@ class ObLogStateMgr : public ObILogStateMgrForService,
   {
     return ATOMIC_STORE(&is_write_disabled_, false);
   }
-  bool is_archive_restoring() const;
-  bool is_archive_restore_leader() const;
-  bool is_archive_restoring_log() const;
+  bool is_archive_restoring() const override;
+  bool is_archive_restore_leader() const override;
+  bool is_archive_restoring_log() const override;
   int check_role_leader_and_state() const;
   int check_role_elect_leader_and_state() const;
-  int try_update_leader_from_loc_cache();
+  int try_update_leader_from_loc_cache() override;
   virtual int async_get_dst_cluster_leader_from_loc_cache(
       const bool is_need_renew, const int64_t cluster_id, ObAddr& leader) override;
-  int64_t get_self_cluster_id() const;
-  int64_t get_leader_cluster_id() const;
-  virtual int64_t get_reconfirm_start_time() const
+  int64_t get_self_cluster_id() const override;
+  int64_t get_leader_cluster_id() const override;
+  virtual int64_t get_reconfirm_start_time() const override
   {
     return reconfirm_start_time_;
   }
   void destroy();
-  virtual bool is_new_created_leader() const
+  virtual bool is_new_created_leader() const override
   {
     return is_new_created_leader_;
   }
@@ -494,39 +496,40 @@ class ObLogStateMgr : public ObILogStateMgrForService,
   {
     ATOMIC_STORE(&need_rebuild_, true);
   }
-  void reset_need_rebuild()
+  void reset_need_rebuild() override
   {
     ATOMIC_STORE(&need_rebuild_, false);
   }
-  bool is_need_rebuild() const
+  bool is_need_rebuild() const override
   {
     return ATOMIC_LOAD(&need_rebuild_);
   }
   bool is_replaying() const;
   int enable_replay();
   int disable_replay();
-  bool is_replay_enabled() const;
+  bool is_replay_enabled() const override;
   int set_election_candidates(
-      const int64_t replica_num, const ObMemberList& member_list, const int64_t membership_timestamp);
-  int set_election_replica_num(const int64_t replica_num);
-  int inc_election_replica_num();
-  int dec_election_replica_num();
-  int get_election_valid_candidates(ObMemberList& valid_candidate_list) const;
-  int get_election_leader(ObAddr& leader, int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const;
-  int get_election_leader(ObAddr& leader, int64_t& leader_epoch) const;
+      const int64_t replica_num, const ObMemberList& member_list, const int64_t membership_timestamp) override;
+  int set_election_replica_num(const int64_t replica_num) override;
+  int inc_election_replica_num() override;
+  int dec_election_replica_num() override;
+  int get_election_valid_candidates(ObMemberList& valid_candidate_list) const override;
+  int get_election_leader(
+      ObAddr& leader, int64_t& leader_epoch, common::ObTsWindows& changing_leader_windows) const override;
+  int get_election_leader(ObAddr& leader, int64_t& leader_epoch) const override;
   bool is_leader_revoke_recently() const;
-  void report_start_id_trace(const uint64_t start_id);
+  void report_start_id_trace(const uint64_t start_id) override;
   int standby_set_election_leader(const common::ObAddr& leader, const int64_t lease_start);
-  bool is_cluster_allow_vote() const;
-  bool is_can_elect_standby_leader() const;
-  bool has_valid_member_list() const;
-  virtual int try_renew_sync_standby_location();
+  bool is_cluster_allow_vote() const override;
+  bool is_can_elect_standby_leader() const override;
+  bool has_valid_member_list() const override;
+  virtual int try_renew_sync_standby_location() override;
   int standby_update_protection_level();
   int standby_leader_check_protection_level();
   int handle_sync_start_id_resp(
       const ObAddr& server, const int64_t cluster_id, const int64_t original_send_ts, const uint64_t sync_start_id);
   int get_standby_protection_level(uint32_t& protection_level) const;
-  virtual int get_pls_epoch(int64_t& pls_epoch) const;
+  virtual int get_pls_epoch(int64_t& pls_epoch) const override;
   int primary_process_protect_mode_switch();
 
   // The following two functions cooperate to achieve congestion control of clog
@@ -542,7 +545,7 @@ class ObLogStateMgr : public ObILogStateMgrForService,
   int64_t get_fetch_log_interval() const override final;
   uint64_t get_fetch_window_size() const override final;
 
-  private:
+private:
   int on_leader_takeover_();
   int on_leader_active_();
   int on_leader_revoke_();
@@ -609,7 +612,7 @@ class ObLogStateMgr : public ObILogStateMgrForService,
   bool need_fetch_log_() const;
   void reset_fetch_state_();
 
-  private:
+private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;

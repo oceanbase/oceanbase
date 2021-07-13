@@ -56,7 +56,7 @@ const char* strarray(const common::ObIArray<T>& array)
 }
 
 class ObFakeStoreRowKey {
-  public:
+public:
   ObFakeStoreRowKey(const char* str, const int64_t size)
   {
     for (int64_t i = 0; i < OBJ_CNT; i++) {
@@ -71,10 +71,10 @@ class ObFakeStoreRowKey {
     return rowkey_;
   }
 
-  private:
+private:
   static const int64_t OBJ_CNT = 1;
 
-  private:
+private:
   common::ObStoreRowkey rowkey_;
   ObObj obj_array_[OBJ_CNT];
 };

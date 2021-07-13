@@ -30,7 +30,7 @@ namespace lib {
 using common::ObDedupQueue;
 
 class ThreadCountPair {
-  public:
+public:
   ThreadCountPair(int64_t cnt, int64_t mini_mode_cnt) : cnt_(cnt), mini_mode_cnt_(mini_mode_cnt)
   {}
   int64_t get_thread_cnt() const
@@ -38,7 +38,7 @@ class ThreadCountPair {
     return !is_mini_mode() ? cnt_ : mini_mode_cnt_;
   }
 
-  private:
+private:
   int64_t cnt_;
   int64_t mini_mode_cnt_;
 };
@@ -72,7 +72,7 @@ enum class TGType {
 };
 
 class TGCommonAttr {
-  public:
+public:
   const char* name_;
   const char* desc_;
   enum TGScope scope_;
@@ -88,7 +88,7 @@ extern void lib_init_create_func();
 extern bool create_func_inited_;
 
 class ITG {
-  public:
+public:
   virtual ~ITG()
   {}
   virtual int64_t thread_cnt() = 0;
@@ -162,7 +162,7 @@ template <enum TGType type>
 class TG;
 
 class MyThreadPool : public lib::ThreadPool {
-  public:
+public:
   void run1() override
   {
     runnable_->set_thread_idx(get_thread_idx());
@@ -173,7 +173,7 @@ class MyThreadPool : public lib::ThreadPool {
 
 template <>
 class TG<TGType::THREAD_POOL> : public ITG {
-  public:
+public:
   TG(ThreadCountPair pair) : thread_cnt_(pair.get_thread_cnt())
   {}
   ~TG()
@@ -232,14 +232,14 @@ class TG<TGType::THREAD_POOL> : public ITG {
     }
   }
 
-  private:
+private:
   char buf_[sizeof(MyThreadPool)];
   MyThreadPool* th_ = nullptr;
   int thread_cnt_;
 };
 
 class MySimpleThreadPool : public common::ObSimpleThreadPool {
-  public:
+public:
   void run1() override
   {
     handler_->set_thread_cnt(get_thread_count());
@@ -255,7 +255,7 @@ class MySimpleThreadPool : public common::ObSimpleThreadPool {
 
 template <>
 class TG<TGType::QUEUE_THREAD> : public ITG {
-  public:
+public:
   TG(ThreadCountPair pair, const int64_t task_num_limit)
       : thread_num_(pair.get_thread_cnt()), task_num_limit_(task_num_limit)
   {}
@@ -334,7 +334,7 @@ class TG<TGType::QUEUE_THREAD> : public ITG {
     }
   }
 
-  private:
+private:
   char buf_[sizeof(MySimpleThreadPool)];
   MySimpleThreadPool* qth_ = nullptr;
   int64_t thread_num_;
@@ -343,7 +343,7 @@ class TG<TGType::QUEUE_THREAD> : public ITG {
 
 template <>
 class TG<TGType::DEDUP_QUEUE> : public ITG {
-  public:
+public:
   TG(ThreadCountPair pair, const int64_t queue_size = ObDedupQueue::TASK_QUEUE_SIZE,
       const int64_t task_map_size = ObDedupQueue::TASK_MAP_SIZE,
       const int64_t total_mem_limit = ObDedupQueue::TOTAL_LIMIT,
@@ -420,7 +420,7 @@ class TG<TGType::DEDUP_QUEUE> : public ITG {
     }
   }
 
-  private:
+private:
   char buf_[sizeof(common::ObDedupQueue)];
   common::ObDedupQueue* qth_ = nullptr;
   int32_t thread_num_;
@@ -434,7 +434,7 @@ class TG<TGType::DEDUP_QUEUE> : public ITG {
 
 template <>
 class TG<TGType::TIMER> : public ITG {
-  public:
+public:
   ~TG()
   {
     destroy();
@@ -518,14 +518,14 @@ class TG<TGType::TIMER> : public ITG {
     }
   }
 
-  private:
+private:
   char buf_[sizeof(common::ObTimer)];
   common::ObTimer* timer_ = nullptr;
 };
 
 template <>
 class TG<TGType::ASYNC_TASK_QUEUE> : public ITG {
-  public:
+public:
   TG(lib::ThreadCountPair pair, const int64_t queue_size) : thread_cnt_(pair.get_thread_cnt()), queue_size_(queue_size)
   {}
   ~TG()
@@ -582,7 +582,7 @@ class TG<TGType::ASYNC_TASK_QUEUE> : public ITG {
     }
   }
 
-  private:
+private:
   char buf_[sizeof(share::ObAsyncTaskQueue)];
   share::ObAsyncTaskQueue* qth_ = nullptr;
   int thread_cnt_;
@@ -594,7 +594,7 @@ class TG<TGType::TIMER_GROUP> : public ITG {
   static constexpr int MAX_CNT = 32;
   using TimerType = TG<TGType::TIMER>;
 
-  public:
+public:
   TG(ThreadCountPair pair) : cnt_(pair.get_thread_cnt())
   {}
   ~TG()
@@ -674,7 +674,7 @@ class TG<TGType::TIMER_GROUP> : public ITG {
     }
   }
 
-  private:
+private:
   char buf_[sizeof(TimerType) * MAX_CNT];
   TimerType* timers_[MAX_CNT] = {nullptr};
   const int cnt_ = 0;
@@ -687,7 +687,7 @@ class TGCLSMap;
   namespace lib {               \
   template <>                   \
   class TGCLSMap<type> {        \
-    public:                     \
+  public:                       \
     using CLS = CLS_;           \
   };                            \
   }
@@ -703,11 +703,11 @@ BIND_TG_CLS(TGType::ASYNC_TASK_QUEUE, TG<TGType::ASYNC_TASK_QUEUE>);
 namespace lib {
 
 class TGMgr {
-  private:
+private:
   TGMgr();
   ~TGMgr();
 
-  public:
+public:
   static TGMgr& instance()
   {
     static TGMgr mgr;
@@ -740,20 +740,20 @@ class TGMgr {
   }
   void destroy_tg(int tg_id);
 
-  private:
+private:
   static constexpr int MAX_ID = 1024;
   common::ObLatchMutex lock_;
   ABitSet bs_;
   char bs_buf_[ABitSet::buf_len(MAX_ID)];
 
-  public:
+public:
   ITG* tgs_[MAX_ID] = {nullptr};
   int default_tg_id_map_[TGDefIDs::END] = {-1};
 };
 
 template <typename Func, bool return_void = false>
 class FWrap {
-  public:
+public:
   int operator()(Func func)
   {
     return func();
@@ -762,7 +762,7 @@ class FWrap {
 
 template <typename Func>
 class FWrap<Func, true> {
-  public:
+public:
   int operator()(Func func)
   {
     func();

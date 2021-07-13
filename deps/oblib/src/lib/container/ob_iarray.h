@@ -22,7 +22,7 @@ namespace common {
 // this interface has three derived classes: ObArray, ObSEArray and Ob2DArray.
 template <typename T>
 class ObIArray : public ObIArrayWrap<T> {
-  public:
+public:
   using ObIArrayWrap<T>::at;
   using ObIArrayWrap<T>::count;
   ObIArray() : ObIArrayWrap<T>()
@@ -68,7 +68,7 @@ class ObIArray : public ObIArrayWrap<T> {
     return pos;
   }
 
-  protected:
+protected:
   using ObIArrayWrap<T>::data_;
   using ObIArrayWrap<T>::count_;
   DISALLOW_COPY_AND_ASSIGN(ObIArray);

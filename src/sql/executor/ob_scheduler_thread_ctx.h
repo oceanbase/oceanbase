@@ -20,7 +20,7 @@ namespace sql {
 class ObDistributedExecContext;
 
 class ObSchedulerThreadCtx {
-  public:
+public:
   explicit ObSchedulerThreadCtx(ObIAllocator& allocator)
       : scheduler_retry_info_(),
         dis_exec_ctx_(NULL),
@@ -91,7 +91,7 @@ class ObSchedulerThreadCtx {
     return is_build_index_plan_;
   }
 
-  private:
+private:
   ObQueryRetryInfo scheduler_retry_info_;
   ObDistributedExecContext* dis_exec_ctx_;
   bool is_plain_select_stmt_;
@@ -101,7 +101,7 @@ class ObSchedulerThreadCtx {
   common::ObFixedArray<ObTaskInfo::ObRangeLocation*, common::ObIAllocator> last_failed_partitions_;
   TransResult trans_result_;
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObSchedulerThreadCtx);

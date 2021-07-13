@@ -21,7 +21,7 @@
 #include "share/schema/ob_column_schema.h"
 namespace test {
 class MockTableStatService : public oceanbase::common::ObTableStatDataService {
-  public:
+public:
   static const int64_t DEFAULT_ROW_COUNT = 100;
   static const int64_t DEFAULT_ROW_SIZE = 100;
   static const int64_t DEFAULT_DATA_SIZE = DEFAULT_ROW_COUNT * DEFAULT_ROW_SIZE;
@@ -60,12 +60,12 @@ class MockTableStatService : public oceanbase::common::ObTableStatDataService {
     table_stat_.set_row_count(row_count);
   }
 
-  private:
+private:
   ObTableStat table_stat_;
 };
 
 class MockColumnStatService : public oceanbase::common::ObColumnStatDataService {
-  public:
+public:
   MockColumnStatService()
   {}
   virtual ~MockColumnStatService()
@@ -133,7 +133,7 @@ class MockStatManager : public oceanbase::common::ObStatManager {
   static const int64_t DATE_MAX_VALUE = 2932896;
   static const int64_t DATE_MIN_VALUE = -354258;
 
-  public:
+public:
   struct ColumnStatInfo {
     ObObj min_;
     ObObj max_;
@@ -327,7 +327,7 @@ class MockStatManager : public oceanbase::common::ObStatManager {
     table2_row_count_ = table2_row_count;
   }
 
-  private:
+private:
   oceanbase::sql::ObSchemaChecker* schema_checker_;
   ObArenaAllocator allocator_;
   ObSEArray<ObColumnStat*, 8> column_stats_;

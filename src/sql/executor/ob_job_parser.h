@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace sql {
 class ObJobParser {
-  public:
+public:
   ObJobParser();
   virtual ~ObJobParser();
 
@@ -31,7 +31,7 @@ class ObJobParser {
   int parse_job(ObExecContext& ctx, ObPhysicalPlan* plan, const ObExecutionID& ob_execution_id,
       ObTaskSpliterFactory& spliter_factory, ObJobControl& jc) const;
 
-  private:
+private:
   int split_jobs(ObExecContext& ctx, ObPhysicalPlan* phy_plan, ObPhyOperator* op, const ObExecutionID& ob_execution_id,
       ObJobControl& jc, ObTaskSpliterFactory& spliter_factory, ObJob& cur_job) const;
 
@@ -40,7 +40,7 @@ class ObJobParser {
 
   bool is_outer_join_child(const ObPhyOperator& phy_op) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObJobParser);
 };
 }  // namespace sql

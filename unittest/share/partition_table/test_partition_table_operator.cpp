@@ -40,7 +40,7 @@ static int64_t& PID = FakePartPropertyGetter::PID();
 
 ObServerConfig& config = ObServerConfig::get_instance();
 class TestPartitionTableOperator : public ::testing::Test {
-  public:
+public:
   TestPartitionTableOperator() : operator_(prop_getter_)
   {}
 
@@ -48,7 +48,7 @@ class TestPartitionTableOperator : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   DBInitializer db_initer_;
   FakePartPropertyGetter prop_getter_;
   MockObCommonRpcProxy rpc_proxy_;

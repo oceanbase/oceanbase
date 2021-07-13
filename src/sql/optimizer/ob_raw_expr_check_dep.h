@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObRawExpr;
 class ObRawExprCheckDep {
-  public:
+public:
   ObRawExprCheckDep(
       common::ObIArray<ObRawExpr*>& dep_exprs, common::ObBitSet<common::OB_MAX_BITSET_SIZE>& deps, bool is_access)
       : dep_exprs_(dep_exprs), dep_indices_(&deps), is_access_(is_access)
@@ -37,10 +37,10 @@ class ObRawExprCheckDep {
     return dep_indices_;
   }
 
-  private:
+private:
   int check_expr(const ObRawExpr& expr, bool& found);
 
-  private:
+private:
   common::ObIArray<ObRawExpr*>& dep_exprs_;
   common::ObBitSet<common::OB_MAX_BITSET_SIZE>* dep_indices_;
   bool is_access_;  // mark whether we are do project pruning for access exprs

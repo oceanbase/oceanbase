@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExecuteResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObExecuteResolver(ObResolverParams& params) : ObStmtResolver(params)
   {}
   virtual ~ObExecuteResolver()
@@ -31,7 +31,7 @@ class ObExecuteResolver : public ObStmtResolver {
     return static_cast<ObExecuteStmt*>(stmt_);
   }
 
-  private:
+private:
 };
 
 }  // namespace sql

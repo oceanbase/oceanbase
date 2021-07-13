@@ -35,7 +35,7 @@ const char* const duplicate_scope_strings[] = {"none",
     "cluster"};
 
 class ObDuplicateScopeChecker {
-  public:
+public:
   static bool is_valid_replicate_scope(ObDuplicateScope duplicate_scope)
   {
     return duplicate_scope < ObDuplicateScope::DUPLICATE_SCOPE_MAX &&

@@ -22,7 +22,7 @@ namespace sql {
 class ObPxMultiPartUpdateOpInput : public ObPxMultiPartModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMultiPartUpdateOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxMultiPartModifyOpInput(ctx, spec)
   {}
   int init(ObTaskInfo& task_info) override
@@ -30,14 +30,14 @@ class ObPxMultiPartUpdateOpInput : public ObPxMultiPartModifyOpInput {
     return ObPxMultiPartModifyOpInput::init(task_info);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartUpdateOpInput);
 };
 
 class ObPxMultiPartUpdateSpec : public ObTableModifySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMultiPartUpdateSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableModifySpec(alloc, type),
         row_desc_(),
@@ -63,7 +63,7 @@ class ObPxMultiPartUpdateSpec : public ObTableModifySpec {
     return true;
   }
 
-  public:
+public:
   ObDMLOpRowDesc row_desc_;
   ObDMLOpTableDesc table_desc_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> updated_column_ids_;
@@ -76,10 +76,10 @@ class ObPxMultiPartUpdateSpec : public ObTableModifySpec {
 class ObPxMultiPartUpdateOp : public ObDMLOpDataReader, public ObDMLOpDataWriter, public ObTableModifyOp {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   /**ObPDMLOpRowIteratorWrapper**/
   class ObPDMLOpRowIteratorWrapper : public common::ObNewRowIterator {
-    public:
+  public:
     ObPDMLOpRowIteratorWrapper(common::ObPartitionKey& pkey, storage::ObDMLBaseParam& dml_param,
         ObPDMLOpRowIterator& iter, ObPxMultiPartUpdateOp& op)
         : pkey_(pkey), dml_param_(dml_param), iter_(iter), op_(op)
@@ -90,14 +90,14 @@ class ObPxMultiPartUpdateOp : public ObDMLOpDataReader, public ObDMLOpDataWriter
     {}
     int get_next_row(common::ObNewRow*& row) override;
 
-    private:
+  private:
     common::ObPartitionKey& pkey_;
     storage::ObDMLBaseParam& dml_param_;
     ObPDMLOpRowIterator& iter_;
     ObPxMultiPartUpdateOp& op_;
   };
 
-  public:
+public:
   ObPxMultiPartUpdateOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableModifyOp(exec_ctx, spec, input),
         data_driver_(exec_ctx.get_eval_ctx(), exec_ctx.get_allocator(), op_monitor_info_),
@@ -110,7 +110,7 @@ class ObPxMultiPartUpdateOp : public ObDMLOpDataReader, public ObDMLOpDataWriter
   {}
   virtual ~ObPxMultiPartUpdateOp() = default;
 
-  public:
+public:
   virtual bool has_foreign_key() const
   {
     return false;
@@ -145,12 +145,12 @@ class ObPxMultiPartUpdateOp : public ObDMLOpDataReader, public ObDMLOpDataWriter
     return found_rows_;
   }
 
-  private:
+private:
   int fill_dml_base_param(uint64_t index_tid, ObSQLSessionInfo& my_session, const ObPhysicalPlan& my_phy_plan,
       const ObPhysicalPlanCtx& my_plan_ctx, storage::ObDMLBaseParam& dml_param) const;
   int process_row();
 
-  private:
+private:
   ObPDMLOpDataDriver data_driver_;
   bool has_got_old_row_;
   int64_t found_rows_;

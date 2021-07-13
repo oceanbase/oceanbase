@@ -54,9 +54,9 @@ typedef common::ObFastArray<uint64_t, OB_DEFAULT_SE_ARRAY_COUNT> UIntFastArray;
 typedef common::ObFastArray<ObRawExpr*, OB_DEFAULT_SE_ARRAY_COUNT> RawExprFastArray;
 // query result set
 class ObResultSet {
-  public:
+public:
   class ExternalRetrieveInfo {
-    public:
+  public:
     ExternalRetrieveInfo(common::ObIAllocator& allocator)
         : allocator_(allocator),
           external_params_(allocator),
@@ -95,7 +95,7 @@ class ObResultSet {
 
   typedef common::ObFastArray<ObPhysicalPlan*, 8> CandidatePlanArray;
 
-  public:
+public:
   explicit ObResultSet(ObSQLSessionInfo& session);
   explicit ObResultSet(ObSQLSessionInfo& session, common::ObIAllocator& allocator);
   virtual ~ObResultSet();
@@ -418,11 +418,11 @@ class ObResultSet {
   }
   static void replace_lob_type(const ObSQLSessionInfo& session, const ObField& field, obmysql::ObMySQLField& mfield);
 
-  private:
+private:
   // types and constants
   static const int64_t TRANSACTION_SET_VIOLATION_MAX_RETRY = 3;
 
-  private:
+private:
   // disallow copy
   ObResultSet(const ObResultSet& other);
   ObResultSet& operator=(const ObResultSet& other);
@@ -450,10 +450,10 @@ class ObResultSet {
   // delete useless spaces
   static int64_t remove_extra_space(char* buff, int64_t len);
 
-  protected:
+protected:
   bool is_user_sql_;
 
-  private:
+private:
   // data members
   common::ObArenaAllocator inner_mem_pool_;
   common::ObIAllocator& mem_pool_;

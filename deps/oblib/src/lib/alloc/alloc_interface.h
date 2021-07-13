@@ -24,21 +24,21 @@ namespace oceanbase {
 namespace lib {
 class ObTenantCtxAllocator;
 class IBlockMgr {
-  public:
+public:
   virtual ABlock* alloc_block(uint64_t size, const ObMemAttr& attr) = 0;
   virtual void free_block(ABlock* block) = 0;
   virtual ObTenantCtxAllocator& get_tenant_ctx_allocator() = 0;
 };  // end of class IBlockMgr
 
 class ISetLocker {
-  public:
+public:
   virtual void lock() = 0;
   virtual void unlock() = 0;
   virtual bool trylock() = 0;
 };
 
 class SetDoNothingLocker : public ISetLocker {
-  public:
+public:
   void lock() override
   {}
   void unlock() override
@@ -50,7 +50,7 @@ class SetDoNothingLocker : public ISetLocker {
 };
 
 class SetLocker : public ISetLocker {
-  public:
+public:
   SetLocker(lib::ObMutex& mutex) : mutex_(mutex)
   {}
   void lock() override
@@ -66,12 +66,12 @@ class SetLocker : public ISetLocker {
     return 0 == mutex_.trylock();
   }
 
-  private:
+private:
   lib::ObMutex& mutex_;
 };
 
 class SetLockerForLogger : public ISetLocker {
-  public:
+public:
   SetLockerForLogger(lib::ObMutex& mutex) : mutex_(mutex), is_disable_(false)
   {}
   void lock() override
@@ -95,7 +95,7 @@ class SetLockerForLogger : public ISetLocker {
     return succ;
   }
 
-  private:
+private:
   lib::ObMutex& mutex_;
   bool is_disable_;
 };

@@ -27,7 +27,7 @@ class ObLogTableScan : public ObLogicalOperator {
   // ObLogTableLookup has a log tsc to read remote data table.
   friend class ObLogTableLookup;
 
-  public:
+public:
   ObLogTableScan(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         table_id_(common::OB_INVALID_ID),
@@ -692,7 +692,7 @@ class ObLogTableScan : public ObLogicalOperator {
 
   int add_mapping_column_for_vt(ObColumnRefRawExpr* col_expr);
 
-  private:  // member functions
+private:  // member functions
   // called when index_back_ set
   int pick_out_query_range_exprs();
   int pick_out_startup_filters();
@@ -724,7 +724,7 @@ class ObLogTableScan : public ObLogicalOperator {
   virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
   int try_add_extra_access_exprs_for_lob_col();
 
-  protected:  // memeber variables
+protected:  // memeber variables
   // basic info
   uint64_t table_id_;      // table id or alias table id
   uint64_t ref_table_id_;  // base table id

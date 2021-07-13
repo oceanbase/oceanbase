@@ -25,13 +25,13 @@ namespace sql {
 class ObSortSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObSortSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(topn_expr), K_(topk_limit_expr), K_(topk_offset_expr), K_(prefix_pos),
       K_(minimum_row_count), K_(topk_precision), K_(prefix_pos), K_(is_local_merge_sort));
 
-  public:
+public:
   ObExpr* topn_expr_;
   ObExpr* topk_limit_expr_;
   ObExpr* topk_offset_expr_;
@@ -54,7 +54,7 @@ class ObSortSpec : public ObOpSpec {
 };
 
 class ObSortOp : public ObOperator {
-  public:
+public:
   ObSortOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;
@@ -68,7 +68,7 @@ class ObSortOp : public ObOperator {
     return sort_row_count_;
   }
 
-  private:
+private:
   void reset();
   int topn_sort_next();
   template <typename T>
@@ -90,7 +90,7 @@ class ObSortOp : public ObOperator {
   int get_topn_count(int64_t& topn_cnt);
   int process_sort();
 
-  private:
+private:
   ObSortOpImpl sort_impl_;
   ObPrefixSortImpl prefix_sort_impl_;
   ObInMemoryTopnSortImpl topn_sort_;

@@ -21,7 +21,7 @@ namespace sql {
 class ObTableScanWithChecksumInput : public ObTableScanInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableScanWithChecksumInput();
   virtual ~ObTableScanWithChecksumInput();
   virtual void reset() override;
@@ -35,24 +35,24 @@ class ObTableScanWithChecksumInput : public ObTableScanInput {
     return PHY_TABLE_SCAN_WITH_CHECKSUM;
   }
 
-  private:
+private:
   ObTaskID task_id_;
 };
 
 // when builds index, this operator is used to calculate checksum of data table
 class ObTableScanWithChecksum : public ObTableScan {
-  public:
+public:
   explicit ObTableScanWithChecksum(common::ObIAllocator& allocator);
   virtual ~ObTableScanWithChecksum();
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const override;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
   virtual int init_op_ctx(ObExecContext& ctx) const override;
 
-  protected:
+protected:
   class ObTableScanWithChecksumCtx : public ObTableScan::ObTableScanCtx {
-    public:
+  public:
     explicit ObTableScanWithChecksumCtx(ObExecContext& ctx);
     virtual ~ObTableScanWithChecksumCtx();
     virtual void destroy();
@@ -61,7 +61,7 @@ class ObTableScanWithChecksum : public ObTableScan {
     int add_row_checksum(const common::ObNewRow* row);
     int report_checksum(const int64_t execution_id);
 
-    public:
+  public:
     int64_t* checksum_;
     ObArray<int32_t> col_ids_;
     uint64_t task_id_;

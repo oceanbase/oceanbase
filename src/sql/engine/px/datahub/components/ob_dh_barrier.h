@@ -34,18 +34,18 @@ class ObBarrierPieceMsg : public ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_BARRIER
 {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   using PieceMsgListener = ObBarrierPieceMsgListener;
   using PieceMsgCtx = ObBarrierPieceMsgCtx;
 
-  public:
+public:
   ObBarrierPieceMsg() = default;
   ~ObBarrierPieceMsg() = default;
   void reset()
   {}
   INHERIT_TO_STRING_KV("meta", ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_BARRIER_PIECE_MSG>, K_(op_id));
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObBarrierPieceMsg);
@@ -54,10 +54,10 @@ class ObBarrierPieceMsg : public ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_BARRIER
 class ObBarrierWholeMsg : public ObDatahubWholeMsg<dtl::ObDtlMsgType::DH_BARRIER_WHOLE_MSG> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   using WholeMsgProvider = ObWholeMsgProvider<ObBarrierWholeMsg>;
 
-  public:
+public:
   ObBarrierWholeMsg() : ready_state_(0)
   {}
   ~ObBarrierWholeMsg() = default;
@@ -75,7 +75,7 @@ class ObBarrierWholeMsg : public ObDatahubWholeMsg<dtl::ObDtlMsgType::DH_BARRIER
 };
 
 class ObBarrierPieceMsgCtx : public ObPieceMsgCtx {
-  public:
+public:
   ObBarrierPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts)
       : ObPieceMsgCtx(op_id, task_cnt, timeout_ts), received_(0)
   {}
@@ -84,17 +84,17 @@ class ObBarrierPieceMsgCtx : public ObPieceMsgCtx {
       const ObBarrierPieceMsg& pkt, ObExecContext& ctx, int64_t task_cnt, ObPieceMsgCtx*& msg_ctx);
   INHERIT_TO_STRING_KV("meta", ObPieceMsgCtx, K_(received));
   int received_;  // Quantity of piece received
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBarrierPieceMsgCtx);
 };
 
 class ObBarrierPieceMsgListener {
-  public:
+public:
   ObBarrierPieceMsgListener() = default;
   ~ObBarrierPieceMsgListener() = default;
   static int on_message(ObBarrierPieceMsgCtx& ctx, common::ObIArray<ObPxSqcMeta*>& sqcs, const ObBarrierPieceMsg& pkt);
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObBarrierPieceMsgListener);

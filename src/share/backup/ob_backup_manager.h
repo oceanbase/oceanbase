@@ -26,7 +26,7 @@ class ObBackupItemTransUpdater;
 class ObIBackupLeaseService;
 
 struct ObBackupInfoItem : public common::ObDLinkBase<ObBackupInfoItem> {
-  public:
+public:
   typedef common::ObFixedLengthString<common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH> Value;
   typedef common::ObDList<ObBackupInfoItem> ItemList;
 
@@ -55,7 +55,7 @@ struct ObBackupInfoItem : public common::ObDLinkBase<ObBackupInfoItem> {
   // insert
   int insert(common::ObISQLClient& sql_client, const uint64_t tenant_id);
 
-  public:
+public:
   const char* name_;
   Value value_;
 };
@@ -63,7 +63,7 @@ struct ObBackupInfoItem : public common::ObDLinkBase<ObBackupInfoItem> {
 // Update item in transaction, if transaction rollback or commit failed the item value
 // value will be rollback too.
 class ObBackupItemTransUpdater {
-  public:
+public:
   ObBackupItemTransUpdater();
   ~ObBackupItemTransUpdater();
 
@@ -76,7 +76,7 @@ class ObBackupItemTransUpdater {
     return trans_;
   }
 
-  private:
+private:
   const static int64_t PTR_OFFSET = sizeof(void*);
 
   bool started_;
@@ -85,7 +85,7 @@ class ObBackupItemTransUpdater {
 };
 
 struct ObBaseBackupInfo {
-  public:
+public:
   ObBaseBackupInfo();
   ObBaseBackupInfo(const ObBaseBackupInfo& other);
   ObBaseBackupInfo& operator=(const ObBaseBackupInfo& other);
@@ -100,7 +100,7 @@ struct ObBaseBackupInfo {
   }
   int get_backup_info_status();
 
-  public:
+public:
   uint64_t tenant_id_;
   ObBackupInfoItem::ItemList list_;
   // base data backup info
@@ -120,7 +120,7 @@ struct ObBaseBackupInfo {
 };
 
 class ObBackupInfoManager {
-  public:
+public:
   // friend class FakeZoneMgr;
   ObBackupInfoManager();
   virtual ~ObBackupInfoManager();
@@ -164,7 +164,7 @@ class ObBackupInfoManager {
   int update_last_delete_expired_data_snapshot(
       const uint64_t tenant_id, const int64_t last_delete_expired_data_snapshot, common::ObISQLClient& trans);
 
-  private:
+private:
   int convert_info_to_struct(const ObBaseBackupInfo& info, ObBaseBackupInfoStruct& info_struct);
   int convert_struct_to_info(const ObBaseBackupInfoStruct& info_struct, ObBaseBackupInfo& info);
   int find_tenant_id(const uint64_t tenant_id);
@@ -173,12 +173,12 @@ class ObBackupInfoManager {
   int check_can_update_(
       const ObBackupInfoStatus::BackupStatus& src_status, const ObBackupInfoStatus::BackupStatus& dest_status);
 
-  private:
+private:
   bool inited_;
   common::ObArray<uint64_t> tenant_ids_;
   common::ObMySQLProxy* proxy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupInfoManager);
 };
 
@@ -191,7 +191,7 @@ struct ObBackupInfoSimpleItem {
 };
 
 class ObBackupInfoChecker final {
-  public:
+public:
   ObBackupInfoChecker();
   ~ObBackupInfoChecker();
 
@@ -199,7 +199,7 @@ class ObBackupInfoChecker final {
   int check(const common::ObIArray<uint64_t>& tenant_ids, share::ObIBackupLeaseService& backup_lease_service);
   int check(const uint64_t tenant_id);
 
-  private:
+private:
   int get_item_count_(const uint64_t tenant_id, int64_t& item_count);
   int get_status_line_count_(const uint64_t tenant_id, int64_t& status_count);
   int get_new_items_(common::ObISQLClient& trans, const uint64_t tenant_id, const bool for_update,
@@ -209,7 +209,7 @@ class ObBackupInfoChecker final {
   int insert_new_item_(common::ObMySQLTransaction& trans, const uint64_t tenant_id, ObBackupInfoSimpleItem& item);
   int insert_log_archive_status_(common::ObMySQLTransaction& trans, const uint64_t tenant_id);
 
-  private:
+private:
   bool is_inited_;
   common::ObMySQLProxy* sql_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupInfoChecker);

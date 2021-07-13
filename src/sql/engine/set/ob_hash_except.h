@@ -18,15 +18,15 @@
 namespace oceanbase {
 namespace sql {
 class ObHashExcept : public ObHashSetOperator {
-  private:
+private:
   class ObHashExceptCtx;
 
-  public:
+public:
   explicit ObHashExcept(common::ObIAllocator& alloc);
 
   virtual ~ObHashExcept();
 
-  private:
+private:
   int build_hash_table_by_part(ObExecContext& ctx, ObHashExceptCtx* except_ctx) const;
   virtual int inner_create_operator_ctx(ObExecContext& ctx, ObPhyOperatorCtx*& op_ctx) const;
 

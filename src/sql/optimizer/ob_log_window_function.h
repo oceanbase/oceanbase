@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogWindowFunction : public ObLogicalOperator {
-  public:
+public:
   ObLogWindowFunction(ObLogPlan& plan) : ObLogicalOperator(plan), is_parallel_(false)
   {}
   virtual ~ObLogWindowFunction()
@@ -52,7 +52,7 @@ class ObLogWindowFunction : public ObLogicalOperator {
   }
   int match_parallel_condition(bool& can_parallel);
 
-  private:
+private:
   ObSEArray<ObWinFunRawExpr*, 4> win_exprs_;
   bool is_parallel_;
 };

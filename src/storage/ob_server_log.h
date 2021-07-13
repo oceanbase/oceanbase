@@ -27,7 +27,7 @@ enum ObServerRedoLogSubcmd {
 };
 
 struct ObUpdateTenantFileSuperBlockLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t UPDATE_TENANT_FILE_SUPER_BLOCK_VERSION = 1;
   ObUpdateTenantFileSuperBlockLogEntry();
   virtual ~ObUpdateTenantFileSuperBlockLogEntry() = default;
@@ -42,7 +42,7 @@ struct ObUpdateTenantFileSuperBlockLogEntry : public blocksstable::ObIBaseStorag
 };
 
 struct ObRemoveTenantFileSuperBlockLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t REMOVE_TENANT_FILE_SUPER_BLOCK_VERSION = 1;
   ObRemoveTenantFileSuperBlockLogEntry() : key_(), delete_file_(false)
   {}
@@ -61,7 +61,7 @@ struct ObRemoveTenantFileSuperBlockLogEntry : public blocksstable::ObIBaseStorag
 };
 
 struct ObAddPGToTenantFileLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t ADD_PG_TO_TENANT_FILE_VERSION = 1;
   ObAddPGToTenantFileLogEntry() : file_key_(), pg_key_()
   {}
@@ -80,7 +80,7 @@ struct ObAddPGToTenantFileLogEntry : public blocksstable::ObIBaseStorageLogEntry
 };
 
 struct ObRemovePGFromTenantFileLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t REMOVE_PG_FROM_TENANT_FILE_VERSION = 1;
   ObRemovePGFromTenantFileLogEntry() : file_key_(), pg_key_()
   {}
@@ -99,7 +99,7 @@ struct ObRemovePGFromTenantFileLogEntry : public blocksstable::ObIBaseStorageLog
 };
 
 struct ObUpdateTenantFileInfoLogEntry : public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   static const int64_t UPDATE_TENANT_FILE_INFO_VERSION = 1;
   ObUpdateTenantFileInfoLogEntry() : file_info_()
   {}

@@ -55,7 +55,7 @@ int ObStorageLogReader::init(const char* log_dir, const uint64_t log_file_id_sta
     if (NULL == log_buffer_.get_data()) {
       ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_LOG_READER);
       char* buf =
-          static_cast<char*>(ob_malloc_align(OB_DIRECT_IO_ALIGN, ObStorageLogWriter::LOG_ITEM_MAX_LENGTH, attr));
+          static_cast<char*>(ob_malloc_align(DIO_READ_ALIGN_SIZE, ObStorageLogWriter::LOG_ITEM_MAX_LENGTH, attr));
       if (OB_ISNULL(buf)) {
         ret = OB_ERROR;
         STORAGE_REDO_LOG(WARN, "ob_malloc for log_buffer_ failed", K(ret));
@@ -391,10 +391,17 @@ int ObStorageLogReader::get_next_cursor(common::ObLogCursor& cursor) const
 int ObStorageLogReader::load_buf()
 {
   int ret = OB_SUCCESS;
-  if ((0 != log_buffer_.get_capacity() % DIO_ALIGN_SIZE) || (0 != pread_pos_ % DIO_ALIGN_SIZE) ||
-      (log_buffer_.get_remain_data_len() < 0) || (log_buffer_.get_remain_data_len() > pread_pos_)) {  // Defense code
+  if ((0 != log_buffer_.get_capacity() % DIO_READ_ALIGN_SIZE) || (log_buffer_.get_remain_data_len() < 0) ||
+      (log_buffer_.get_remain_data_len() > pread_pos_)) {  // Defense code
     ret = OB_LOG_NOT_ALIGN;
     STORAGE_REDO_LOG(WARN, "buf or read pos are not aligned", K(ret), K_(log_buffer), K_(pread_pos));
+  } else if (0 != pread_pos_ % DIO_READ_ALIGN_SIZE) {
+    // pread_pos_ should be 4k aligned because file handler returned read size is always 4k aligned,
+    // if pread_pos_ is not aligned, it means file reaches end and file size is not 4k aligned,
+    // then we have no need to load buf again
+    ret = OB_READ_NOTHING;
+    STORAGE_REDO_LOG(
+        INFO, "pread_pos_ reaches the end of file, and file size is not 4k aligned", K(ret), K_(pread_pos));
   } else if (log_buffer_.get_remain_data_len() == log_buffer_.get_capacity()) {
     // do nothing if buf hasn't been consumed
     STORAGE_REDO_LOG(WARN, "buf remains same", K(ret), K_(log_buffer), K_(pread_pos));
@@ -404,9 +411,9 @@ int ObStorageLogReader::load_buf()
 
     // Move the next log entry to the beginning of the buffer so that need to adjust pread_pos_
     // back to align the DIO read.
-    pread_pos_ = lower_align(pread_pos_ - remain_size, OB_DIRECT_IO_ALIGN);
+    pread_pos_ = lower_align(pread_pos_ - remain_size, DIO_READ_ALIGN_SIZE);
     log_buffer_.get_limit() = 0;
-    log_buffer_.get_position() = (0 == remain_size) ? 0 : upper_align(remain_size, OB_DIRECT_IO_ALIGN) - remain_size;
+    log_buffer_.get_position() = (0 == remain_size) ? 0 : upper_align(remain_size, DIO_READ_ALIGN_SIZE) - remain_size;
 
     if (OB_FAIL(file_store_->read(log_buffer_.get_data(), log_buffer_.get_capacity(), pread_pos_, read_size))) {
       STORAGE_REDO_LOG(ERROR,

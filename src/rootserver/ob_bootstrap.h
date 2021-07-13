@@ -48,7 +48,7 @@ class ObSysStat;
 class ObPartitionCreator;
 
 class ObBaseBootstrap {
-  public:
+public:
   explicit ObBaseBootstrap(
       obrpc::ObSrvRpcProxy& rpc_proxy, const obrpc::ObServerInfoList& rs_list, common::ObServerConfig& config);
   virtual ~ObBaseBootstrap()
@@ -61,7 +61,7 @@ class ObBaseBootstrap {
     return rpc_proxy_;
   }
 
-  protected:
+protected:
   virtual int check_inner_stat() const;
   virtual int check_bootstrap_rs_list(const obrpc::ObServerInfoList& rs_list);
   virtual int check_multiple_zone_deployment_rslist(const obrpc::ObServerInfoList& rs_list);
@@ -78,20 +78,20 @@ class ObBaseBootstrap {
   virtual int check_bootstrap_sys_tenant_primary_zone();
   virtual int fill_sys_unit_config(const share::ObUnitConfig& sample_config, share::ObUnitConfig& target_config);
 
-  public:
+public:
   int64_t step_id_;
 
-  protected:
+protected:
   obrpc::ObSrvRpcProxy& rpc_proxy_;
   obrpc::ObServerInfoList rs_list_;
   common::ObServerConfig& config_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBaseBootstrap);
 };
 
 class ObPreBootstrap : public ObBaseBootstrap {
-  public:
+public:
   explicit ObPreBootstrap(obrpc::ObSrvRpcProxy& rpc_proxy, const obrpc::ObServerInfoList& rs_list,
       share::ObPartitionTableOperator& pt_operator, common::ObServerConfig& config, const obrpc::ObBootstrapArg& arg,
       obrpc::ObCommonRpcProxy& rs_rpc_proxy);
@@ -101,7 +101,7 @@ class ObPreBootstrap : public ObBaseBootstrap {
       int64_t& initial_schema_version, ObIArray<storage::ObFrozenStatus>& frozen_status,
       ObIArray<share::TenantIdAndSchemaVersion>& freeze_schema);
 
-  private:
+private:
   // wait leader elect time + root service start time
   static const int64_t WAIT_ELECT_SYS_LEADER_TIMEOUT_US = 30 * 1000 * 1000;
   static const int64_t NOTIFY_RESOURCE_RPC_TIMEOUT = 9 * 1000 * 1000;  // 9 second
@@ -112,7 +112,7 @@ class ObPreBootstrap : public ObBaseBootstrap {
   virtual int notify_sys_tenant_server_unit_resource();
   virtual int create_partition(const int64_t initial_frozen_version, const int64_t initial_frozen_ts);
 
-  private:
+private:
   volatile bool stop_;
   share::ObLeaderElectionWaiter leader_waiter_;
   int64_t begin_ts_;
@@ -122,9 +122,9 @@ class ObPreBootstrap : public ObBaseBootstrap {
 };
 
 class ObBootstrap : public ObBaseBootstrap {
-  public:
+public:
   class TableIdCompare {
-    public:
+  public:
     TableIdCompare() : ret_(common::OB_SUCCESS)
     {}
     ~TableIdCompare()
@@ -135,7 +135,7 @@ class ObBootstrap : public ObBaseBootstrap {
       return ret_;
     }
 
-    private:
+  private:
     int ret_;
   };
   explicit ObBootstrap(obrpc::ObSrvRpcProxy& rpc_proxy, ObDDLService& ddl_service, ObUnitManager& unit_mgr,
@@ -153,7 +153,7 @@ class ObBootstrap : public ObBaseBootstrap {
   int check_schema_version(share::schema::ObSchemaGetterGuard& schema_guard,
       const common::ObIArray<share::schema::ObTableSchema>& table_schemas, const bool need_update);
 
-  private:
+private:
   static const int64_t HEAT_BEAT_INTERVAL_US = 2 * 1000 * 1000;           // 2s
   static const int64_t WAIT_RS_IN_SERVICE_TIMEOUT_US = 40 * 1000 * 1000;  // 40s
   static const int64_t BATCH_INSERT_SCHEMA_CNT = 32;
@@ -206,7 +206,7 @@ virtual int set_table_locality(
   // end create gts service private method
   int set_in_bootstrap();
 
-  private:
+private:
   ObDDLService& ddl_service_;
   ObUnitManager& unit_mgr_;
   ObILeaderCoordinator& leader_coordinator_;
@@ -215,7 +215,7 @@ virtual int set_table_locality(
   obrpc::ObCommonRpcProxy& common_proxy_;
   int64_t begin_ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBootstrap);
 };
 

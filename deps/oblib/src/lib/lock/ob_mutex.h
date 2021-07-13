@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace lib {
 class ObMutex {
-  public:
+public:
   explicit ObMutex(uint32_t latch_id = common::ObLatchIds::DEFAULT_MUTEX) : latch_(), latch_id_(latch_id)
   {}
   ~ObMutex()
@@ -39,11 +39,11 @@ class ObMutex {
     return latch_.unlock();
   }
 
-  private:
+private:
   common::ObLatchMutex latch_;
   uint32_t latch_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMutex);
 };
 

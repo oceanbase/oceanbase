@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprLastInsertID : public ObFuncExprOperator {
-  public:
+public:
   ObExprLastInsertID();
   explicit ObExprLastInsertID(common::ObIAllocator& alloc);
   virtual ~ObExprLastInsertID();
@@ -31,7 +31,7 @@ class ObExprLastInsertID : public ObFuncExprOperator {
 
   static int eval_last_insert_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLastInsertID);
 };
 }  // namespace sql

@@ -16,15 +16,15 @@
 namespace oceanbase {
 namespace sql {
 class ObShowResolver : public ObSelectResolver {
-  public:
+public:
   class ObShowResolverContext;
   class ShowColumnInfo;
   explicit ObShowResolver(ObResolverParams& params);
   virtual ~ObShowResolver();
   virtual int resolve(const ParseNode& parse_tree);
 
-  protected:
-  private:
+protected:
+private:
   class ObSqlStrGenerator;
   struct ObShowSqlSet;
   int get_database_info(const ParseNode* databse_node, const common::ObString& database_name, uint64_t real_tenant_id,
@@ -42,7 +42,7 @@ class ObShowResolver : public ObSelectResolver {
   int process_select_type(ObSelectStmt* select_stmt, stmt::StmtType stmt_type, const ParseNode& parse_tree);
   virtual int resolve_column_ref_expr(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObShowResolver);
 };  // ObShowresolver
 
@@ -107,7 +107,7 @@ struct ObShowResolver::ObShowSqlSet {
 };  // ObShowSqlSet
 
 class ObShowResolver::ObSqlStrGenerator {
-  public:
+public:
   ObSqlStrGenerator() : sql_buf_(NULL), sql_buf_pos_(0)
   {}
   virtual ~ObSqlStrGenerator()
@@ -118,14 +118,14 @@ class ObShowResolver::ObSqlStrGenerator {
   virtual int gen_limit_str(int64_t offset, int64_t row_cnt);
   void assign_sql_str(common::ObString& sql_str);
 
-  private:
+private:
   char* sql_buf_;
   int64_t sql_buf_pos_;
   DISALLOW_COPY_AND_ASSIGN(ObSqlStrGenerator);
 };  // ObSqlstrgenerator
 
 class ObShowResolver::ObShowResolverContext {
-  public:
+public:
   ObShowResolverContext()
       : cur_tenant_id_(common::OB_INVALID_ID),
         actual_tenant_id_(common::OB_INVALID_ID),
@@ -168,12 +168,12 @@ class ObShowResolver::ObShowResolverContext {
       K_(show_database_id), K_(show_table_id), K_(stmt_type), K_(global_scope), K_(like_pattern), K_(like_escape),
       K_(column_name));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObShowResolverContext);
 };  // ObShowResolvercontext
 
 class ObShowResolver::ShowColumnInfo {
-  public:
+public:
   ShowColumnInfo() : display_name_(), qualified_name_()
   {}
   ~ShowColumnInfo()
@@ -182,7 +182,7 @@ class ObShowResolver::ShowColumnInfo {
   ObQualifiedName qualified_name_;
   TO_STRING_KV(K_(display_name), K_(qualified_name));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ShowColumnInfo);
 };  // ShowColumninfo
 

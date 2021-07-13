@@ -57,7 +57,7 @@ int ObSchemaMapSerializer::serialize(
 }
 
 class SchemaMapParserCb : public ObKVMatchCb {
-  public:
+public:
   SchemaMapParserCb(ObIArray<ObSchemaIdPair>& id_pair) : id_pair_(id_pair)
   {}
   virtual ~SchemaMapParserCb()
@@ -80,7 +80,7 @@ class SchemaMapParserCb : public ObKVMatchCb {
     return ret;
   }
 
-  private:
+private:
   int get_int_val(const char* nptr, int64_t& int_val)
   {
     int ret = OB_SUCCESS;
@@ -98,7 +98,7 @@ class SchemaMapParserCb : public ObKVMatchCb {
     return ret;
   }
 
-  private:
+private:
   ObIArray<ObSchemaIdPair>& id_pair_;
 };
 

@@ -57,14 +57,14 @@ struct SequenceCacheNode {
     return end_.val();
   }
 
-  private:
+private:
   ObSequenceValue start_;
   ObSequenceValue end_;
 };
 
 // a wrapper class, adaptor for ObLinkHashMap
 struct CacheItemKey {
-  public:
+public:
   CacheItemKey() : key_(0)
   {}
   CacheItemKey(const uint64_t key) : key_(key)
@@ -91,7 +91,7 @@ struct CacheItemKey {
 };
 
 struct ObSequenceCacheItem : public common::LinkHashValue<CacheItemKey> {
-  public:
+public:
   ObSequenceCacheItem()
       : prefetching_(false),
         with_prefetch_node_(false),
@@ -126,7 +126,7 @@ struct ObSequenceCacheItem : public common::LinkHashValue<CacheItemKey> {
     return last_number_.val();
   }
 
-  public:
+public:
   SequenceCacheNode curr_node_;
   SequenceCacheNode prefetch_node_;
   // avoid concurrent prefetch
@@ -137,20 +137,20 @@ struct ObSequenceCacheItem : public common::LinkHashValue<CacheItemKey> {
   int64_t last_refresh_ts_;
   lib::ObMutex alloc_mutex_;
 
-  private:
+private:
   ObSequenceValue last_number_;
 
-  public:
+public:
   TO_STRING_KV(K_(curr_node), K_(prefetch_node), K_(prefetching), K_(with_prefetch_node), K_(last_refresh_ts),
       K_(last_number), K_(base_on_last_number));
 };
 
 class ObSequenceCache {
-  public:
+public:
   // map sequence_id => sequence cache
   typedef common::ObLinkHashMap<CacheItemKey, ObSequenceCacheItem> NodeMap;
 
-  public:
+public:
   ObSequenceCache();
   virtual ~ObSequenceCache() = default;
   static ObSequenceCache& get_instance();
@@ -159,7 +159,7 @@ class ObSequenceCache {
   int nextval(const share::schema::ObSequenceSchema& schema, common::ObIAllocator& allocator, ObSequenceValue& nextval);
   int remove(uint64_t sequence_id);
 
-  private:
+private:
   /* functions */
   int get_item(CacheItemKey& key, ObSequenceCacheItem*& item);
 

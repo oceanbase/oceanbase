@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprRepeat : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprRepeat(common::ObIAllocator& alloc);
   virtual ~ObExprRepeat();
   virtual int calc_result_type2(
@@ -44,7 +44,7 @@ class ObExprRepeat : public ObStringExprOperator {
   static int repeat(common::ObString& output, bool& is_null, const common::ObString& input, const int64_t count,
       common::ObIAllocator& alloc, const int64_t max_result_size);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprRepeat);
 };

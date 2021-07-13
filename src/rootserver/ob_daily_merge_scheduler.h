@@ -41,7 +41,7 @@ class ObDDLService;
 class ObFreezeInfoManager;
 
 class ObIZoneOp {
-  public:
+public:
   enum Type {
     SetZoneMergingType = 1,
     SetFinishZoneMergeType = 2,
@@ -58,7 +58,7 @@ class ObIZoneOp {
 };
 
 class ObSetZoneMergingOp : public ObIZoneOp {
-  public:
+public:
   ObSetZoneMergingOp(ObZoneManager& zone_mgr, const common::ObZone& zone);
   virtual ~ObSetZoneMergingOp()
   {}
@@ -78,7 +78,7 @@ class ObSetZoneMergingOp : public ObIZoneOp {
 
   VIRTUAL_TO_STRING_KV("OpType", "ObSetZoneMergingOp", K_(zone), K_(is_done));
 
-  private:
+private:
   ObZoneManager& zone_mgr_;
   common::ObZone zone_;
   bool is_done_;
@@ -86,7 +86,7 @@ class ObSetZoneMergingOp : public ObIZoneOp {
 };
 
 class ObSetFinishZoneMergeOp : public ObIZoneOp {
-  public:
+public:
   ObSetFinishZoneMergeOp(ObZoneManager& zone_mgr, const common::ObZone& zone, const int64_t last_merged_version,
       const int64_t all_merged_version);
 
@@ -108,7 +108,7 @@ class ObSetFinishZoneMergeOp : public ObIZoneOp {
 
   VIRTUAL_TO_STRING_KV("OpType", "ObSetFinishZoneMergeOp", K_(zone), K_(is_done));
 
-  private:
+private:
   ObZoneManager& zone_mgr_;
   common::ObZone zone_;
   int64_t last_merged_version_;
@@ -118,7 +118,7 @@ class ObSetFinishZoneMergeOp : public ObIZoneOp {
 };
 
 class ObSetZoneMergeTimeOutOp : public ObIZoneOp {
-  public:
+public:
   ObSetZoneMergeTimeOutOp(ObZoneManager& zone_mgr, const common::ObZone& zone, const int64_t version);
   virtual ~ObSetZoneMergeTimeOutOp()
   {}
@@ -138,7 +138,7 @@ class ObSetZoneMergeTimeOutOp : public ObIZoneOp {
 
   VIRTUAL_TO_STRING_KV("OpType", "ObSetZoneMergeTimeOutOp", K_(zone), K_(is_done));
 
-  private:
+private:
   ObZoneManager& zone_mgr_;
   common::ObZone zone_;
   bool is_done_;
@@ -147,7 +147,7 @@ class ObSetZoneMergeTimeOutOp : public ObIZoneOp {
 };
 
 class ObSwitchLeaderMgr {
-  public:
+public:
   ObSwitchLeaderMgr();
   virtual ~ObSwitchLeaderMgr();
 
@@ -175,14 +175,14 @@ class ObSwitchLeaderMgr {
   void set_merger_warm_up_duration_time(const int64_t merger_warm_up_duration_time);
   void set_merge_status(bool is_in_merging);
 
-  private:
+private:
   int can_add_new_op(const common::ObZone& zone, bool& can);
   int check_doing_warm_up(bool& is_doing);
   bool need_warm_up();
   bool need_smooth_coordinate(const ObIZoneOp& zone_op);
   int start_warm_up(const ObPartitionTableUtil::ObLeaderInfoArray& leader_info_array, const common::ObZone& zone);
 
-  private:
+private:
   bool is_inited_;
   ObILeaderCoordinator* leader_coordinator_;
   ObZoneManager* zone_mgr_;
@@ -194,14 +194,14 @@ class ObSwitchLeaderMgr {
 };
 
 class ObDailyMergeIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObDailyMergeIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual int64_t get_idle_interval_us();
 };
 
 class ObPartitionChecksumChecker {
-  public:
+public:
   friend class TestChecksumChecker_test_checksum_error_Test;
   ObPartitionChecksumChecker()
       : sql_proxy_(NULL),
@@ -224,11 +224,11 @@ class ObPartitionChecksumChecker {
 
   static const int64_t MIN_CHECK_INTERVAL = 10 * 1000 * 1000LL;
 
-  private:
+private:
   void check_partition_checksum();
   int check_global_index_column_checksum();
 
-  private:
+private:
   share::ObSSTableDataChecksumIterator local_data_checksum_iter_;
   share::ObSSTableDataChecksumIterator remote_data_checksum_iter_;
   common::ObMySQLProxy* sql_proxy_;
@@ -243,7 +243,7 @@ class ObPartitionChecksumChecker {
 // Schedule daily merge (merge dynamic data to base line data).
 // Running in a single thread.
 class ObDailyMergeScheduler : public ObRsReentrantThread {
-  public:
+public:
   friend class TestDailyMergerScheduler_double_check_Test;
   const static int64_t DEFAULT_ZONE_COUNT = 5;
   const static int64_t DEFAULT_IDLE_DURATION = 10 * 1000L * 1000L;
@@ -276,7 +276,7 @@ class ObDailyMergeScheduler : public ObRsReentrantThread {
 
   int64_t get_schedule_interval() const;
 
-  private:
+private:
   // return OB_CANCELED if stopped.
   int idle();
 
@@ -323,7 +323,7 @@ class ObDailyMergeScheduler : public ObRsReentrantThread {
   int try_start_smooth_coordinate();
   const int64_t SWITCH_LEADER_CHECK_INTERVAL = 2 * 60 * 1000 * 1000;
 
-  private:
+private:
   bool inited_;
   ObZoneManager* zone_mgr_;
   common::ObServerConfig* config_;

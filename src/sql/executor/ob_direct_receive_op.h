@@ -22,7 +22,7 @@ class ObExecContext;
 class ObDirectReceiveSpec : public ObReceiveSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDirectReceiveSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObReceiveSpec(alloc, type)
   {}
 
@@ -30,7 +30,7 @@ class ObDirectReceiveSpec : public ObReceiveSpec {
 };
 
 class ObDirectReceiveOp : public ObReceiveOp {
-  public:
+public:
   ObDirectReceiveOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual ~ObDirectReceiveOp()
@@ -45,12 +45,12 @@ class ObDirectReceiveOp : public ObReceiveOp {
     ObReceiveOp::destroy();
   }
 
-  private:
+private:
   int setup_next_scanner();
   int get_next_row_from_cur_scanner();
   int update_user_var();
 
-  private:
+private:
   common::ObScanner* scanner_;
   ObChunkDatumStore::Iterator scanner_iter_;
   bool all_data_empty_;
@@ -58,7 +58,7 @@ class ObDirectReceiveOp : public ObReceiveOp {
   bool first_request_received_;
   int64_t found_rows_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDirectReceiveOp);
 };
 

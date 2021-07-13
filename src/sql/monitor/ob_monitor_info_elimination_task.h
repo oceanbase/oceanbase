@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace sql {
 class ObMonitorInfoManager;
 class ObMonitorInfoEliminationTask : public common::ObTimerTask {
-  public:
+public:
   ObMonitorInfoEliminationTask() : monitor_info_(NULL)
   {}
   ~ObMonitorInfoEliminationTask()
@@ -25,10 +25,10 @@ class ObMonitorInfoEliminationTask : public common::ObTimerTask {
   int init(ObMonitorInfoManager* monitor_info);
   virtual void runTimerTask();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMonitorInfoEliminationTask);
 
-  private:
+private:
   ObMonitorInfoManager* monitor_info_;
 };
 

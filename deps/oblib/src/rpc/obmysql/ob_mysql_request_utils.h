@@ -37,7 +37,7 @@ static const int64_t OB_MAX_COMPRESSED_PACKET_LENGTH = (1L << 20);              
 static const int64_t MAX_COMPRESSED_BUF_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE;  // 2M-1k
 
 class ObMysqlPktContext {
-  public:
+public:
   enum ObMysqlPktReadStep { READ_HEADER = 0, READ_BODY, READ_COMPLETE };
   ObMysqlPktContext() : arena_(common::ObModIds::LIB_MULTI_PACKETS)
   {
@@ -83,7 +83,7 @@ class ObMysqlPktContext {
       get_read_step_str(next_read_step_), K_(raw_pkt), "used", arena_.used(), "total", arena_.total(),
       K_(is_multi_pkt));
 
-  public:
+public:
   char header_buf_[common::OB_MYSQL_HEADER_LENGTH];
   int64_t header_buffered_len_;
   char* payload_buf_;
@@ -98,12 +98,12 @@ class ObMysqlPktContext {
   bool is_multi_pkt_;
   common::ObArenaAllocator arena_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMysqlPktContext);
 };
 
 class ObCompressedPktContext {
-  public:
+public:
   ObCompressedPktContext()
   {
     reset();
@@ -118,16 +118,16 @@ class ObCompressedPktContext {
 
   TO_STRING_KV(K_(last_pkt_seq), K_(is_multi_pkt));
 
-  public:
+public:
   uint8_t last_pkt_seq_;
   bool is_multi_pkt_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCompressedPktContext);
 };
 
 class ObProto20PktContext {
-  public:
+public:
   ObProto20PktContext()
   {
     reset();
@@ -144,18 +144,18 @@ class ObProto20PktContext {
 
   TO_STRING_KV(K_(comp_last_pkt_seq), K_(is_multi_pkt), K_(proto20_last_request_id), K_(proto20_last_pkt_seq));
 
-  public:
+public:
   uint8_t comp_last_pkt_seq_;
   bool is_multi_pkt_;
   uint32_t proto20_last_request_id_;
   uint8_t proto20_last_pkt_seq_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObProto20PktContext);
 };
 
 class ObEasyBuffer {
-  public:
+public:
   explicit ObEasyBuffer(easy_buf_t& ezbuf) : buf_(ezbuf), read_pos_(ezbuf.pos)
   {}
   ~ObEasyBuffer()
@@ -239,11 +239,11 @@ class ObEasyBuffer {
   TO_STRING_KV(KP_(read_pos), KP(buf_.pos), KP(buf_.last), KP(buf_.end), "orig_buf_size", orig_buf_size(),
       "orig_data_size", orig_data_size(), "read_avail_size", read_avail_size(), "write_avail_size", write_avail_size());
 
-  public:
+public:
   easy_buf_t& buf_;
   char* read_pos_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObEasyBuffer);
 };
 
@@ -257,7 +257,7 @@ enum ObCompressType {
 };
 
 class ObCompressionContext {
-  public:
+public:
   ObCompressionContext()
   {
     reset();
@@ -335,7 +335,7 @@ class ObCompressionContext {
     return pos;
   }
 
-  public:
+public:
   ObCompressType type_;
   bool is_checksum_off_;
   uint8_t seq_;  // compressed pkt seq
@@ -343,12 +343,12 @@ class ObCompressionContext {
   char* last_pkt_pos_;  // proxy last pkt(error+ok, eof+ok, ok)'s pos in orig_ezbuf, default is null
   uint32_t sessid_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCompressionContext);
 };
 
 class ObFlushBufferParam {
-  public:
+public:
   ObFlushBufferParam(easy_buf_t& ez_buf, easy_request_t& ez_req, ObCompressionContext& context, bool& conn_valid,
       bool& req_has_wokenup, const bool io_thread_mark, const bool pkt_has_completed)
       : orig_send_buf_(ez_buf),
@@ -360,7 +360,7 @@ class ObFlushBufferParam {
         pkt_has_completed_(pkt_has_completed)
   {}
 
-  public:
+public:
   ObEasyBuffer orig_send_buf_;
   easy_request_t& ez_req_;
   ObCompressionContext& comp_context_;
@@ -369,12 +369,12 @@ class ObFlushBufferParam {
   const bool io_thread_mark_;
   const bool pkt_has_completed_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFlushBufferParam);
 };
 
 class ObMySQLRequestUtils {
-  public:
+public:
   ObMySQLRequestUtils();
   virtual ~ObMySQLRequestUtils();
   static int encode_packet(easy_buf_t* ez_buf, ObMySQLPacket& pkt, const uint8_t packet_seq);
@@ -387,7 +387,7 @@ class ObMySQLRequestUtils {
   static void wakeup_easy_request(easy_request_t& ez_req, bool& req_has_wokenup, const bool io_thread_mark = false);
   static void disconnect(easy_request_t& ez_req);
 
-  private:
+private:
   static int check_flush_param(ObFlushBufferParam& param);
   static int build_compressed_packet(
       ObEasyBuffer& src_buf, const int64_t next_compress_size, ObCompressionContext& context);
@@ -414,7 +414,7 @@ class ObMySQLRequestUtils {
     return ret_size;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLRequestUtils);
 };
 

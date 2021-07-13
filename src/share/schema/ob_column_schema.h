@@ -43,7 +43,7 @@ class ObTableSchema;
 class ObColumnSchemaV2 : public ObSchema {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   static const char* convert_column_type_to_str(common::ColumnType type);
   static common::ColumnType convert_str_to_column_type(const char* str);
   // constructor and destructor
@@ -539,10 +539,10 @@ class ObColumnSchemaV2 : public ObSchema {
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   int alloc_column_ref_set();
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t table_id_;
   uint64_t column_id_;

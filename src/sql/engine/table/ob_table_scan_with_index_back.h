@@ -17,26 +17,26 @@ namespace oceanbase {
 namespace sql {
 class ObDomainIndex;
 class ObTableScanWithIndexBack : public ObTableScan {
-  private:
+private:
   enum READ_ACTION { INVALID_ACTION, READ_ITERATOR, READ_TABLE_PARTITION, READ_ITER_END };
 
-  public:
+public:
   class ObTableScanWithIndexBackCtx : public ObTableScanCtx {
     friend class ObDomainIndex;
     friend class ObTableScanWithIndexBack;
 
-    public:
+  public:
     explicit ObTableScanWithIndexBackCtx(ObExecContext& ctx)
         : ObTableScanCtx(ctx), is_index_end_(false), use_table_allocator_(false), read_action_(INVALID_ACTION)
     {}
 
-    private:
+  private:
     bool is_index_end_;
     bool use_table_allocator_;
     READ_ACTION read_action_;
   };
 
-  public:
+public:
   explicit ObTableScanWithIndexBack(common::ObIAllocator& allocator);
   virtual ~ObTableScanWithIndexBack();
   inline void set_index_scan_tree(ObPhyOperator* index_scan_tree)
@@ -49,7 +49,7 @@ class ObTableScanWithIndexBack : public ObTableScan {
   }
   int rescan(ObExecContext& ctx) const;
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const;
   virtual int inner_close(ObExecContext& ctx) const;
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
@@ -64,7 +64,7 @@ class ObTableScanWithIndexBack : public ObTableScan {
   int do_table_rescan_with_index(ObExecContext& ctx) const;
   int open_index_scan(ObExecContext& ctx) const;
 
-  private:
+private:
   ObPhyOperator* index_scan_tree_;
 };
 }  // namespace sql

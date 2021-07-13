@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace sql {
 class ObExecContext;
 class ObSetNamesExecutor {
-  public:
+public:
   ObSetNamesExecutor()
   {}
   virtual ~ObSetNamesExecutor()
@@ -25,14 +25,14 @@ class ObSetNamesExecutor {
 
   int execute(ObExecContext& ctx, ObSetNamesStmt& stmt);
 
-  private:
+private:
   int get_global_sys_var_character_set_client(ObExecContext& ctx, common::ObString& character_set_client) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSetNamesExecutor);
   // function members
-  private:
+private:
   // data members
 };
 

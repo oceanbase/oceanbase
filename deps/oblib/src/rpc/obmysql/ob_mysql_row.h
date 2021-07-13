@@ -19,10 +19,10 @@ namespace oceanbase {
 namespace obmysql {
 
 class ObMySQLRow {
-  public:
+public:
   explicit ObMySQLRow(MYSQL_PROTOCOL_TYPE type);
 
-  public:
+public:
   /**
    * Serialize the row of data into a format recognized by MySQL,
    * output position: buf + pos, after execution,
@@ -30,11 +30,11 @@ class ObMySQLRow {
    */
   int serialize(char* buf, const int64_t len, int64_t& pos) const;
 
-  protected:
+protected:
   virtual int64_t get_cells_cnt() const = 0;
   virtual int encode_cell(int64_t idx, char* buf, int64_t len, int64_t& pos, char* bitmap) const = 0;
 
-  protected:
+protected:
   const MYSQL_PROTOCOL_TYPE type_;
 };  // end class ObMySQLRow
 

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprConcat : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprConcat(common::ObIAllocator& alloc);
   virtual ~ObExprConcat();
 
@@ -42,7 +42,7 @@ class ObExprConcat : public ObStringExprOperator {
 
   static int eval_concat(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprConcat);
 };

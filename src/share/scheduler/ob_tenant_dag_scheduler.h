@@ -40,7 +40,7 @@ class GetScheduleInfo;  // for test
 #endif
 
 class ObDagSchedulerNew : public lib::ThreadPool {
-  public:
+public:
   static ObDagSchedulerNew& get_instance();
   int init(const int64_t schedule_period = SCHEDULER_PERIOD, const int64_t total_mem_limit = TOTAL_LIMIT,
       const int64_t hold_mem_limit = HOLD_LIMIT, const int64_t page_size = PAGE_SIZE);
@@ -63,7 +63,7 @@ class ObDagSchedulerNew : public lib::ThreadPool {
   void set_sche_info(int64_t tenant_id, GetScheduleInfo* info);  // for test
 #endif
 
-  private:
+private:
   friend class ObTenantThreadPool;
   typedef common::hash::ObHashMap<int64_t, ObTenantThreadPool*> TenantThreadPoolMap;
   typedef common::hash::ObHashMap<int64_t, ObTenantThreadPool*>::iterator TenantThreadPoolIterator;
@@ -73,7 +73,7 @@ class ObDagSchedulerNew : public lib::ThreadPool {
   static const int64_t SCHEDULER_PERIOD = 1000;  // 1 ms
   static const int64_t DEFAULT_BUCKET_NUM;
 
-  private:
+private:
   ObDagSchedulerNew();
   virtual ~ObDagSchedulerNew();
   int schedule_();
@@ -81,7 +81,7 @@ class ObDagSchedulerNew : public lib::ThreadPool {
   int add_types_(ObTenantThreadPool* thread_pool);
   int get_tenant_thread_pool_by_id_(int64_t tenant_id, ObTenantThreadPool*& tenant_thread_pool);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   int64_t schedule_period_;
@@ -118,11 +118,11 @@ void ObDagSchedulerNew::free_dag(int64_t tenant_id, T*& dag)
 
 #ifndef NDEBUG
 class GetScheduleInfo {
-  public:
+public:
   common::ObVector<int64_t> choose_type_id_list_;
   common::ObVector<int64_t> running_tasks_cnt_;
 
-  public:
+public:
   GetScheduleInfo();
   ~GetScheduleInfo();
   void destroy();

@@ -30,7 +30,7 @@ class ObServerManager;
 class ObZoneManager;
 
 class ObAllServerStat : public common::ObVirtualTableProjector {
-  public:
+public:
   ObAllServerStat();
   virtual ~ObAllServerStat();
 
@@ -38,7 +38,7 @@ class ObAllServerStat : public common::ObVirtualTableProjector {
       ObServerManager& server_mgr, ObILeaderCoordinator& leader_coordinator);
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   static constexpr double EPSLISON = 0.000000001;
   static const int64_t INVALID_TOTAL_RESOURCE = 0;
   static const int64_t INVALID_ASSIGNED_PERCENT = -1;
@@ -146,7 +146,7 @@ class ObAllServerStat : public common::ObVirtualTableProjector {
     TO_STRING_KV(K_(server_load), K_(cpu_assigned_percent), K_(disk_assigned_percent), K_(unit_num),
         K_(migrating_unit_num), K_(merged_version), K_(leader_count));
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ServerStat);
   };
 
@@ -158,7 +158,7 @@ class ObAllServerStat : public common::ObVirtualTableProjector {
   int get_full_row(
       const share::schema::ObTableSchema* table, ServerStat& server_stat, common::ObIArray<Column>& columns);
 
-  private:
+private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   ObUnitManager* unit_mgr_;

@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObPGMetaBlockReader final {
-  public:
+public:
   ObPGMetaBlockReader();
   ~ObPGMetaBlockReader() = default;
   int init(const blocksstable::MacroBlockId& entry_block, blocksstable::ObStorageFileHandle& file_handle);
@@ -29,13 +29,13 @@ class ObPGMetaBlockReader final {
   void reset();
   ObIArray<blocksstable::MacroBlockId>& get_meta_block_list();
 
-  private:
+private:
   int get_meta_blocks(const blocksstable::MacroBlockId& entry_block);
   int prefetch_block();
   int check_data_checksum(const char* buf, const int64_t buf_len);
   int get_previous_block_id(const char* buf, const int64_t buf_len, blocksstable::MacroBlockId& previous_block_id);
 
-  private:
+private:
   static const int64_t HANDLE_CNT = 2;
   bool is_inited_;
   common::ObIODesc io_desc_;
@@ -48,7 +48,7 @@ class ObPGMetaBlockReader final {
 };
 
 struct ObPGMetaItemBuffer final {
-  public:
+public:
   ObPGMetaItemBuffer() : buf_(nullptr), buf_len_(0), item_type_(0)
   {}
   ~ObPGMetaItemBuffer() = default;
@@ -60,14 +60,14 @@ struct ObPGMetaItemBuffer final {
     item_type_ = 0;
   }
 
-  public:
+public:
   const char* buf_;
   int64_t buf_len_;
   int16_t item_type_;
 };
 
 class ObPGMetaItemReader final {
-  public:
+public:
   ObPGMetaItemReader();
   ~ObPGMetaItemReader() = default;
   int init(const blocksstable::MacroBlockId& entry_block, blocksstable::ObStorageFileHandle& file_handle);
@@ -75,11 +75,11 @@ class ObPGMetaItemReader final {
   void reset();
   common::ObIArray<blocksstable::MacroBlockId>& get_meta_block_list();
 
-  private:
+private:
   int read_item_block();
   int parse_item(ObPGMetaItemBuffer& item);
 
-  private:
+private:
   static const int64_t HANDLE_CNT = 2;
   bool is_inited_;
   const blocksstable::ObMacroBlockCommonHeader* common_header_;

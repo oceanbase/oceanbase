@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace observer {
 class ObRebuildFlagReporter : public common::ObDLinkBase<ObRebuildFlagReporter> {
-  public:
+public:
   ObRebuildFlagReporter();
   virtual ~ObRebuildFlagReporter();
 
@@ -62,10 +62,10 @@ class ObRebuildFlagReporter : public common::ObDLinkBase<ObRebuildFlagReporter> 
 
   TO_STRING_KV(K_(part_key), K_(server), K_(rebuild_flag));
 
-  private:
+private:
   int do_process();
 
-  private:
+private:
   bool inited_;
   common::ObPartitionKey part_key_;
   common::ObAddr server_;
@@ -73,7 +73,7 @@ class ObRebuildFlagReporter : public common::ObDLinkBase<ObRebuildFlagReporter> 
 };
 
 class ObRebuildFlagUpdater {
-  public:
+public:
   ObRebuildFlagUpdater()
   {}
   ~ObRebuildFlagUpdater()

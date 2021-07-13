@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualServerBlacklist : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualServerBlacklist();
   virtual ~ObAllVirtualServerBlacklist();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -29,10 +29,10 @@ class ObAllVirtualServerBlacklist : public common::ObVirtualTableScannerIterator
     self_addr_ = addr;
   }
 
-  private:
+private:
   int prepare_to_read_();
 
-  private:
+private:
   enum TBL_COLUMN {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -42,7 +42,7 @@ class ObAllVirtualServerBlacklist : public common::ObVirtualTableScannerIterator
     IS_CLOCKDIFF_ERROR
   };
 
-  private:
+private:
   bool ready_to_read_;
   common::ObAddr self_addr_;
   char self_ip_buf_[common::OB_IP_STR_BUFF];

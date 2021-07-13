@@ -21,7 +21,7 @@ namespace sql {
 class ObMultiTableMergeInput : public ObTableModifyInput {
   friend class ObMultiTableMerge;
 
-  public:
+public:
   ObMultiTableMergeInput() : ObTableModifyInput()
   {}
   virtual ~ObMultiTableMergeInput()
@@ -31,19 +31,19 @@ class ObMultiTableMergeInput : public ObTableModifyInput {
     return PHY_MULTI_TABLE_MERGE;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiTableMergeInput);
 };
 
 class ObMultiTableMerge : public ObTableMerge, public ObMultiDMLInfo {
   class ObMultiTableMergeCtx;
 
-  public:
+public:
   static const int64_t DELETE_OP = 0;
   static const int64_t INSERT_OP = 1;
   static const int64_t DML_OP_CNT = 2;
 
-  public:
+public:
   explicit ObMultiTableMerge(common::ObIAllocator& alloc);
   virtual ~ObMultiTableMerge();
   virtual bool is_multi_dml() const
@@ -51,7 +51,7 @@ class ObMultiTableMerge : public ObTableMerge, public ObMultiDMLInfo {
     return true;
   }
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const;
   virtual int inner_close(ObExecContext& ctx) const;
 

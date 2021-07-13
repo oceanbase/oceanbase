@@ -15,7 +15,7 @@
 namespace oceanbase {
 namespace share {
 class ObCheckStopProvider {
-  public:
+public:
   virtual ~ObCheckStopProvider()
   {}
   // return OB_CANCELED if stop, else return OB_SUCCESS

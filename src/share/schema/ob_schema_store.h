@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace share {
 namespace schema {
 class ObSchemaStore {
-  public:
+public:
   static const int64_t MAX_VERSION_COUNT = 64;
   static const int64_t MAX_VERSION_COUNT_FOR_LIBOBLOG = 6;
   ObSchemaStore() : tenant_id_(0), refreshed_version_(0), received_version_(0), checked_sys_version_(0)
@@ -53,7 +53,7 @@ class ObSchemaStore {
 };
 
 class ObSchemaStoreMap {
-  public:
+public:
   const static int TENANT_MAP_BUCKET_NUM = 1024;
   ObSchemaStoreMap()
   {}
@@ -67,7 +67,7 @@ class ObSchemaStoreMap {
   const ObSchemaStore* get(uint64_t tenant_id) const;
   ObSchemaStore* get(uint64_t tenant_id);
 
-  private:
+private:
   common::ObLinkArray map_;
 };
 

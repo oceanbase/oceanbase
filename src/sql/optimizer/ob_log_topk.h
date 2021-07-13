@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogTopk : public ObLogicalOperator {
-  public:
+public:
   ObLogTopk(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         minimum_row_count_(0),
@@ -55,7 +55,7 @@ class ObLogTopk : public ObLogicalOperator {
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
 
-  private:
+private:
   int64_t minimum_row_count_;
   int64_t topk_precision_;
   ObRawExpr* topk_limit_count_;

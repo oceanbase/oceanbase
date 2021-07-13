@@ -27,7 +27,7 @@ namespace sql {
 OB_SERIALIZE_MEMBER(ObExprValuesInput, partition_id_values_);
 
 class ObExprValues::ObExprValuesCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObExprValuesCtx(ObExecContext& ctx)
       : ObPhyOperatorCtx(ctx),
         node_idx_(0),
@@ -44,7 +44,7 @@ class ObExprValues::ObExprValuesCtx : public ObPhyOperatorCtx {
     ObPhyOperatorCtx::destroy_base();
   }
 
-  private:
+private:
   int64_t node_idx_;
   ObIterExprCtx iter_expr_ctx_;
   int64_t value_count_;
@@ -223,7 +223,7 @@ int ObExprValues::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) c
     plan_ctx->set_autoinc_id_tmp(0);
     if (get_rows() > 10) {
       if (OB_FAIL(THIS_WORKER.check_status())) {
-        LOG_WARN("check physical plan status faild", K(ret));
+        LOG_WARN("check physical plan status failed", K(ret));
       }
     }
   }

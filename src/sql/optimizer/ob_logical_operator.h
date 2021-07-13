@@ -279,7 +279,7 @@ struct FilterCompare {
 };
 
 class AdjustSortContext {
-  public:
+public:
   bool has_exchange_;
   // count the exchange, in-out will be add 2
   int64_t exchange_cnt_;
@@ -289,7 +289,7 @@ class AdjustSortContext {
 };
 
 class AllocGIContext {
-  public:
+public:
   enum GIState {
     GIS_NORMAL = 0,
     GIS_IN_PARTITION_WISE,
@@ -297,7 +297,7 @@ class AllocGIContext {
     GIS_PARTITION,
   };
 
-  public:
+public:
   explicit AllocGIContext(int64_t parallel)
       : alloc_gi_(false),
         tablet_size_(common::OB_DEFAULT_TABLET_SIZE),
@@ -394,7 +394,7 @@ class AllocGIContext {
 };
 
 class ObAllocGIInfo {
-  public:
+public:
   ObAllocGIInfo()
       : state_(AllocGIContext::GIS_NORMAL),
         pw_op_ptr_(nullptr),
@@ -424,14 +424,14 @@ class ObAllocGIInfo {
 };
 
 class AllocMDContext {
-  public:
+public:
   AllocMDContext() : org_op_id_(0){};
   ~AllocMDContext() = default;
   int64_t org_op_id_;
 };
 
 class AllocExchContext {
-  public:
+public:
   enum DistrStat {
     UNINITIALIZED = 0,
     LOCAL,
@@ -591,7 +591,7 @@ struct ObExchangeInfo {
       K_(hash_dist_exprs), "dist_method", ObPQDistributeMethod::get_type_string(dist_method_), K_(px_dop),
       K_(px_single), K_(repartition_func_exprs), K_(keep_ordering), K_(pdml_pkey), K_(slave_mapping_type));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
 };
 
@@ -599,7 +599,7 @@ struct ObExchangeInfo {
  *  Expr and its producer operator
  */
 class ExprProducer {
-  public:
+public:
   ExprProducer()
       : expr_(NULL),
         producer_branch_(common::OB_INVALID_ID),
@@ -678,7 +678,7 @@ struct ObAllocExprContext {
 struct ObPxPipeBlockingCtx {
   // Look through the pipe (may be blocked by block operator), ended with a exchange operator or not.
   class PipeEnd {
-    public:
+  public:
     PipeEnd() : exch_(false)
     {}
     explicit PipeEnd(const bool is_exch) : exch_(is_exch)
@@ -693,7 +693,7 @@ struct ObPxPipeBlockingCtx {
     }
     TO_STRING_KV(K_(exch));
 
-    private:
+  private:
     bool exch_;
   };
 
@@ -730,7 +730,7 @@ struct ObPxPipeBlockingCtx {
   OpCtx* alloc();
   TO_STRING_KV(K(op_ctxs_));
 
-  private:
+private:
   common::ObIAllocator& alloc_;
   common::ObArray<OpCtx*> op_ctxs_;
 };
@@ -745,7 +745,7 @@ typedef common::ObArray<ObRawExpr*> ObRawExprArray;
 
 class GenLinkStmtContext;
 class ObLinkStmt {
-  public:
+public:
   explicit ObLinkStmt(common::ObIAllocator& alloc, const ObRawExprIArray& output_exprs)
       : link_ctx_(NULL),
         alloc_(alloc),
@@ -810,7 +810,7 @@ class ObLinkStmt {
   int fill_orderby_strs(const ObOrderItemIArray& order_items, const ObRawExprIArray& output_exprs);
   int32_t get_total_size() const;
 
-  private:
+private:
   int fill_exprs(
       const ObRawExprIArray& exprs, const common::ObString& sep, ObStringList& strs, bool skip_nl_param = false);
   int fill_exprs(const ObRawExprIArray& exprs, const common::ObString& sep, ObStringList& strs, ObStringListIter& iter,
@@ -833,7 +833,7 @@ class ObLinkStmt {
   int do_expr_in_nl_param(ObRawExpr* expr, bool& in_nl_param);
   int get_nl_param_columns(ObRawExpr* param_expr, ObRawExprIArray& access_exprs, ObRawExprIArray& param_columns);
 
-  public:
+public:
   GenLinkStmtContext* link_ctx_;
   common::ObIAllocator& alloc_;
   const ObRawExprIArray& root_output_exprs_;
@@ -855,7 +855,7 @@ class ObLinkStmt {
   bool is_inited_;
   bool is_distinct_;
 
-  public:
+public:
   static const common::ObString TABLE_BLANK_;
   static const common::ObString JOIN_ON_;
   static const common::ObString LEFT_BRACKET_;
@@ -882,7 +882,7 @@ class ObLinkStmt {
 };
 
 class GenLinkStmtContext {
-  public:
+public:
   GenLinkStmtContext() : dblink_id_(OB_INVALID_ID), link_stmt_(NULL), nl_param_idxs_()
   {}
   uint64_t dblink_id_;
@@ -894,7 +894,7 @@ class GenLinkStmtContext {
 class Path;
 class ObLogPlan;
 class ObLogicalOperator {
-  public:
+public:
   friend class ObLogExprValues;
   friend class ObLogFunctionTable;
   typedef common::ObBitSet<common::OB_MAX_BITSET_SIZE> PPDeps;
@@ -1982,12 +1982,12 @@ class ObLogicalOperator {
 
   int check_fulfill_cut_ratio_condition(int64_t dop, double ndv, bool& is_fulfill);
 
-  public:
+public:
   /* child operators */
   ObSEArray<ObLogicalOperator*, 16, common::ModulePageAllocator, true> child_;
   // ObLogicalOperator *child_[max_num_of_child];
 
-  protected:
+protected:
   enum TraverseType { JOIN_METHOD, MATERIAL_NL, LEADING, PQ_DIST, PQ_MAP };
   enum JoinTreeType { INVALID_TYPE, LEFT_DEEP, RIGHT_DEEP, BUSHY };
 
@@ -2106,7 +2106,7 @@ class ObLogicalOperator {
 
   int check_need_sort_for_local_order(const int64_t index, const common::ObIArray<OrderItem>* order_items, bool& need);
 
-  protected:
+protected:
   int alloc_partition_id_expr(uint64_t table_id, ObAllocExprContext& ctx, ObPseudoColumnRawExpr*& partition_id_expr);
 
   void add_join_dist_flag(uint64_t& flags, JoinDistAlgo method) const
@@ -2129,7 +2129,7 @@ class ObLogicalOperator {
     flags = 0;
   }
 
-  protected:
+protected:
   log_op_def::ObLogOpType type_;
   ObLogPlan* my_plan_;                                                                // the entry point of the plan
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> output_exprs_;  // expressions produced
@@ -2149,7 +2149,7 @@ class ObLogicalOperator {
   uint64_t branch_id_;
   uint64_t op_id_;
 
-  private:
+private:
   /**
    *  Numbering the operator
    */
@@ -2199,11 +2199,11 @@ class ObLogicalOperator {
   // get the table dop for this dfo
   int calc_current_dfo_table_dop(ObLogicalOperator* root, int64_t& table_dop, bool& found_base_table);
 
-  private:
+private:
   int64_t child_id_;           // parent child
   ObLogicalOperator* parent_;  // parent operator
   bool is_plan_root_;          // plan root operator
-  protected:
+protected:
   double cost_;     // cost up to this point
   double op_cost_;  // cost for this operator
   double card_;     // cardinality
@@ -2224,7 +2224,7 @@ class ObLogicalOperator {
   uint64_t dblink_id_;
   int64_t plan_depth_;
 
-  private:
+private:
   // unify to use get, set and reset function instead of using op_ordering_
   bool is_at_most_one_row_;
   common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> op_ordering_;

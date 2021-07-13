@@ -47,7 +47,7 @@ namespace obrpc {
 class ObGtsRpcResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObGtsRpcResult()
   {
     reset();
@@ -80,10 +80,10 @@ class ObGtsRpcResult {
   bool is_valid() const;
   TO_STRING_KV(K_(tenant_id), K_(status), K_(srr), K_(gts_start), K_(gts_end));
 
-  public:
+public:
   static const int64_t OB_GTS_RPC_TIMEOUT = 1 * 1000 * 1000;
 
-  private:
+private:
   uint64_t tenant_id_;
   int status_;
   transaction::MonotonicTs srr_;
@@ -92,7 +92,7 @@ class ObGtsRpcResult {
 };
 
 class ObGtsRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObGtsRpcProxy);
 
   RPC_AP(PR1 post, OB_GET_GTS_REQUEST, (transaction::ObGtsRequest), ObGtsRpcResult);
@@ -100,38 +100,38 @@ class ObGtsRpcProxy : public obrpc::ObRpcProxy {
 };
 
 class ObGtsP : public ObRpcProcessor<obrpc::ObGtsRpcProxy::ObRpc<OB_GET_GTS_REQUEST> > {
-  public:
+public:
   explicit ObGtsP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGtsP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 class ObGtsErrRespP : public ObRpcProcessor<obrpc::ObGtsRpcProxy::ObRpc<OB_GET_GTS_ERR_RESPONSE> > {
-  public:
+public:
   explicit ObGtsErrRespP(const observer::ObGlobalContext& global_ctx) : global_ctx_(global_ctx)
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGtsErrRespP);
 
-  private:
+private:
   const observer::ObGlobalContext& global_ctx_;
 };
 
 template <ObRpcPacketCode PC>
 class ObGtsRPCCB : public ObGtsRpcProxy::AsyncCB<PC> {
-  public:
+public:
   ObGtsRPCCB() : is_inited_(false), tenant_id_(0), ts_mgr_(NULL), gts_worker_(NULL)
   {}
   ~ObGtsRPCCB()
@@ -169,7 +169,7 @@ class ObGtsRPCCB : public ObGtsRpcProxy::AsyncCB<PC> {
     return newcb;
   }
 
-  public:
+public:
   int process()
   {
     const ObGtsRpcResult& result = ObGtsRpcProxy::AsyncCB<PC>::result_;
@@ -207,7 +207,7 @@ class ObGtsRPCCB : public ObGtsRpcProxy::AsyncCB<PC> {
     }
   }
 
-  private:
+private:
   int process_(const obrpc::ObGtsRpcResult& result, const common::ObAddr& dst, obrpc::ObRpcResultCode& rcode)
   {
     int ret = OB_SUCCESS;
@@ -291,7 +291,7 @@ class ObGtsRPCCB : public ObGtsRpcProxy::AsyncCB<PC> {
 namespace transaction {
 
 class ObIGtsRequestRpc {
-  public:
+public:
   ObIGtsRequestRpc()
   {}
   virtual ~ObIGtsRequestRpc()
@@ -301,12 +301,12 @@ class ObIGtsRequestRpc {
   virtual int wait() = 0;
   virtual void destroy() = 0;
 
-  public:
+public:
   virtual int post(const uint64_t tenant_id, const common::ObAddr& server, const ObGtsRequest& msg) = 0;
 };
 
 class ObGtsRequestRpc : public ObIGtsRequestRpc {
-  public:
+public:
   ObGtsRequestRpc()
       : is_inited_(false), is_running_(false), rpc_proxy_(NULL), global_timestamp_service_(NULL), ts_mgr_(NULL)
   {}
@@ -321,10 +321,10 @@ class ObGtsRequestRpc : public ObIGtsRequestRpc {
   int wait();
   void destroy();
 
-  public:
+public:
   int post(const uint64_t tenant_id, const common::ObAddr& server, const ObGtsRequest& msg);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   obrpc::ObGtsRpcProxy* rpc_proxy_;
@@ -335,18 +335,18 @@ class ObGtsRequestRpc : public ObIGtsRequestRpc {
 };
 
 class ObIGtsResponseRpc {
-  public:
+public:
   ObIGtsResponseRpc()
   {}
   virtual ~ObIGtsResponseRpc()
   {}
 
-  public:
+public:
   virtual int post(const uint64_t tenant_id, const common::ObAddr& server, const ObGtsErrResponse& msg) = 0;
 };
 
 class ObGtsResponseRpc : public ObIGtsResponseRpc {
-  public:
+public:
   ObGtsResponseRpc() : is_inited_(false), is_running_(false)
   {}
   ~ObGtsResponseRpc()
@@ -359,10 +359,10 @@ class ObGtsResponseRpc : public ObIGtsResponseRpc {
   int wait();
   void destroy();
 
-  public:
+public:
   int post(const uint64_t tenant_id, const common::ObAddr& server, const ObGtsErrResponse& msg);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   obrpc::ObGtsRpcProxy rpc_proxy_;

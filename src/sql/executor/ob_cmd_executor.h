@@ -20,10 +20,10 @@ namespace sql {
 class ObICmd;
 class ObExecContext;
 class ObCmdExecutor {
-  public:
+public:
   static int execute(ObExecContext& ctx, ObICmd& cmd);
 
-  private:
+private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObCmdExecutor);

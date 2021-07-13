@@ -21,7 +21,7 @@ namespace rootserver {
 class ObRsReentrantThread;
 
 class ObBackupLeaseService : public share::ObIBackupLeaseService, public lib::ThreadPool {
-  public:
+public:
   ObBackupLeaseService();
   virtual ~ObBackupLeaseService();
 
@@ -41,7 +41,7 @@ class ObBackupLeaseService : public share::ObIBackupLeaseService, public lib::Th
   virtual int get_lease_status(bool& is_lease_valid) override;
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(can_be_leader_ts), K_(expect_round), K_(lease_info));
 
-  private:
+private:
   int start_backup_scheduler_();
   void stop_backup_scheduler_();
   void wait_backup_scheduler_stop_();
@@ -57,7 +57,7 @@ class ObBackupLeaseService : public share::ObIBackupLeaseService, public lib::Th
   int check_sys_backup_info_();
 
   class ObBackupLeaseIdle : public rootserver::ObThreadIdling {
-    public:
+  public:
     static const int64_t DEFAULT_IDLE_US = 60 * 1000 * 1000;  // 60s
     static const int64_t FAST_IDLE_US = 1 * 1000 * 1000;      // 1s
     explicit ObBackupLeaseIdle(volatile bool& stop) : ObThreadIdling(stop)
@@ -67,7 +67,7 @@ class ObBackupLeaseService : public share::ObIBackupLeaseService, public lib::Th
     virtual int64_t get_idle_interval_us() override;
   };
 
-  private:
+private:
   bool is_inited_;
   int64_t can_be_leader_ts_;  // > 0 means can do backup scheduler
   int64_t expect_round_;      // usually, start/stop makes round+1. Or if rs epoch is changed, round will inc 1 also.

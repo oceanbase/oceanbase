@@ -26,7 +26,7 @@
 namespace oceanbase {
 namespace share {
 struct ObLocalityZone {
-  public:
+public:
   ObLocalityZone()
   {
     reset();
@@ -38,7 +38,7 @@ struct ObLocalityZone {
   ObLocalityZone& operator=(const ObLocalityZone& item);
   TO_STRING_KV(K_(tenant_id), K_(region_priority));
 
-  public:
+public:
   uint64_t get_tenant_id()
   {
     return tenant_id_;
@@ -48,13 +48,13 @@ struct ObLocalityZone {
     return region_priority_;
   }
 
-  public:
+public:
   uint64_t tenant_id_;
   uint64_t region_priority_;
 };
 
 struct ObLocalityRegion {
-  public:
+public:
   ObLocalityRegion()
   {
     reset();
@@ -63,19 +63,19 @@ struct ObLocalityRegion {
   {}
   void reset();
 
-  public:
+public:
   typedef common::ObFixedLengthString<common::MAX_ZONE_LENGTH> Zone;
   typedef common::ObSEArray<Zone, 5> OneZoneArray;
   TO_STRING_KV(K_(region), K_(region_priority), K_(zone_array));
 
-  public:
+public:
   common::ObRegion region_;
   uint64_t region_priority_;
   OneZoneArray zone_array_;
 };
 
 struct ObLocalityInfo {
-  public:
+public:
   ObLocalityInfo()
   {
     reset();
@@ -102,12 +102,12 @@ struct ObLocalityInfo {
       K_(local_merge_status), K_(local_zone_status), K_(locality_region_array), K_(locality_zone_array));
   bool is_valid();
 
-  public:
+public:
   typedef common::ObFixedLengthString<common::MAX_ZONE_LENGTH> Zone;
   typedef common::ObSEArray<ObLocalityZone, 32> ObLocalityZoneArray;
   typedef common::ObSEArray<ObLocalityRegion, 5> ObLocalityRegionArray;
 
-  public:
+public:
   int64_t version_;
   common::ObRegion local_region_;                // local region
   Zone local_zone_;                              // local zone

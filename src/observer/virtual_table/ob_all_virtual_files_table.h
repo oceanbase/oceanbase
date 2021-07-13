@@ -18,12 +18,12 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualFilesTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualFilesTable();
   virtual ~ObAllVirtualFilesTable();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualFilesTable);
 };
 }  // namespace observer

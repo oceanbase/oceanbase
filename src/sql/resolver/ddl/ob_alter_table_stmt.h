@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObAlterTableStmt : public ObTableStmt {
-  public:
+public:
   explicit ObAlterTableStmt(common::ObIAllocator* name_pool);
   ObAlterTableStmt();
   virtual ~ObAlterTableStmt();
@@ -129,7 +129,7 @@ class ObAlterTableStmt : public ObTableStmt {
   }
   INHERIT_TO_STRING_KV("ObTableStmt", ObTableStmt, K_(stmt_type), K_(alter_table_arg), K_(index_arg_list));
 
-  private:
+private:
   obrpc::ObAlterTableArg alter_table_arg_;
   bool is_comment_table_;
   bool is_alter_system_;

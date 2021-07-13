@@ -21,12 +21,12 @@ namespace sql {
 class ObHashIntersectSpec : public ObHashSetSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObHashIntersectSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 };
 
 class ObHashIntersectOp : public ObHashSetOp {
-  public:
+public:
   ObHashIntersectOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObHashIntersectOp()
   {}
@@ -37,7 +37,7 @@ class ObHashIntersectOp : public ObHashSetOp {
   virtual int rescan() override;
   virtual void destroy() override;
 
-  private:
+private:
   int build_hash_table_by_part();
 };
 

@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTransformProjectPruning : public ObTransformRule {
-  public:
+public:
   explicit ObTransformProjectPruning(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::PRE_ORDER)
   {}
   virtual ~ObTransformProjectPruning()
@@ -28,7 +28,7 @@ class ObTransformProjectPruning : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   int project_pruning(const uint64_t table_id, ObSelectStmt& child_stmt, ObDMLStmt& upper_stmt, bool& trans_happened);
 
   int is_const_expr(ObRawExpr* expr, bool& is_const);
@@ -36,7 +36,7 @@ class ObTransformProjectPruning : public ObTransformRule {
   int check_transform_validity(const ObSelectStmt& stmt, bool& is_valid);
   int check_need_remove(ObSelectStmt* stmt, const int64_t idx, bool& need_remove);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformProjectPruning);
 };
 

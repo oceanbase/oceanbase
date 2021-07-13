@@ -24,7 +24,7 @@ namespace share {
 namespace schema {
 
 class MockMultiVersionSchemaServiceForFallback : public ObMultiVersionSchemaService {
-  public:
+public:
   MockMultiVersionSchemaServiceForFallback()
   {
     baseline_schema_version_ = 0;

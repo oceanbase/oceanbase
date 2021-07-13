@@ -18,7 +18,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::unittest;
 
 class TestObStorage : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

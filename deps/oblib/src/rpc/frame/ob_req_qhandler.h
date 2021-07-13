@@ -22,7 +22,7 @@ namespace frame {
 
 class ObReqTranslator;
 class ObReqQHandler : public ObiReqQHandler {
-  public:
+public:
   explicit ObReqQHandler(ObReqTranslator& translator_);
   virtual ~ObReqQHandler();
 
@@ -34,7 +34,7 @@ class ObReqQHandler : public ObiReqQHandler {
 
   bool handlePacketQueue(ObRequest* req, void* args);
 
-  private:
+private:
   ObReqTranslator& translator_;
 };  // end of class ObReqQHandler
 

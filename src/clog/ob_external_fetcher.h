@@ -59,7 +59,7 @@ namespace logservice {
 ////////////////////////// ObExtLogFetcher ///////////////////////////
 struct FetchRunTime;
 class ObExtLogFetcher : public ObLogFetcherImpl {
-  public:
+public:
   static const int64_t SYNC_TIMEOUT = 5 * 1000 * 1000;  // 5 second
   // When fetch log finds that the remaining time is less than RPC_QIT_RESERVED_TIME,
   // exit immediately to avoid timeout
@@ -76,7 +76,7 @@ class ObExtLogFetcher : public ObLogFetcherImpl {
   // get_cursor_batch internally retries 10 times, guarantee to return in a short time
   static const int64_t GET_CURSOR_RETRY_LIMIT = 10;
 
-  public:
+public:
   ObExtLogFetcher()
       : cur_ts_(0),
         self_(),
@@ -115,10 +115,10 @@ class ObExtLogFetcher : public ObLogFetcherImpl {
   int wash();
   void print_all_stream();
 
-  public:
+public:
   // pick out expired streams
   class ExpiredStreamPicker {
-    public:
+  public:
     ExpiredStreamPicker() : retired_arr_()
     {}
     bool operator()(const obrpc::ObStreamSeq& steam_seq, ObStream* stream);
@@ -127,7 +127,7 @@ class ObExtLogFetcher : public ObLogFetcherImpl {
       return retired_arr_;
     }
 
-    private:
+  private:
     RetiredStreamArray retired_arr_;
   };
 
@@ -136,7 +136,7 @@ class ObExtLogFetcher : public ObLogFetcherImpl {
     bool operator()(const obrpc::ObStreamSeq& steam_seq, ObStream* stream);
   };
 
-  private:
+private:
   inline static clog::ObReadParam cursor2param(const clog::ObLogCursorExt& cursor_ext)
   {
     const int64_t DEFAULT_READ_TIMEOUT = 10 * 1000;  // 10 ms
@@ -148,13 +148,13 @@ class ObExtLogFetcher : public ObLogFetcherImpl {
     return param;
   }
 
-  private:
+private:
   inline static bool is_invalid_submit_timestamp(const int64_t timestamp)
   {
     return 0 == timestamp || common::OB_INVALID_TIMESTAMP == timestamp;
   }
 
-  private:
+private:
   int generate_stream_seq(obrpc::ObStreamSeq& stream_seq);
   int alloc_stream_mem(const obrpc::ObStreamSeq& seq, const obrpc::ObLogOpenStreamReq& req, char*& ret_buf);
   void free_stream_mem(ObStream* stream);
@@ -219,18 +219,18 @@ class ObExtLogFetcher : public ObLogFetcherImpl {
     return ret;
   }
 
-  private:
+private:
   class DebugPrinter {
-    public:
+  public:
     DebugPrinter() : count_(0)
     {}
     bool operator()(const obrpc::ObStreamSeq& seq, ObStream* stream);
 
-    private:
+  private:
     int64_t count_;
   };
   class DestroyFunctor {
-    public:
+  public:
     explicit DestroyFunctor(common::ObFIFOAllocator& fifo_allocator) : fifo_allocator_(fifo_allocator)
     {}
     bool operator()(const obrpc::ObStreamSeq& seq, ObStream* stream)
@@ -243,11 +243,11 @@ class ObExtLogFetcher : public ObLogFetcherImpl {
       return true;
     }
 
-    private:
+  private:
     common::ObFIFOAllocator& fifo_allocator_;
   };
 
-  private:
+private:
   int64_t cur_ts_;
   common::ObAddr self_;
   storage::ObPartitionService* partition_service_;
@@ -284,7 +284,7 @@ struct FetchRunTime {
   clog::ObIlogStorageQueryCost csr_cost_ CACHE_ALIGNED;
   obrpc::ObFetchStatus fetch_status_ CACHE_ALIGNED;
 
-  public:
+public:
   FetchRunTime();
   ~FetchRunTime();
   int init(const ObLogRpcIDType rpc_id, const int64_t cur_tstamp, const obrpc::ObLogStreamFetchLogReq& req);

@@ -24,10 +24,10 @@ namespace sql {
 class ObSelectInto : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   class ObSelectIntoCtx;
 
-  public:
+public:
   explicit ObSelectInto(common::ObIAllocator& alloc);
   virtual ~ObSelectInto();
   virtual void reset();
@@ -56,7 +56,7 @@ class ObSelectInto : public ObSingleChildPhyOperator {
     closed_cht_ = closed_cht;
   }
 
-  private:
+private:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -91,7 +91,7 @@ class ObSelectInto : public ObSingleChildPhyOperator {
       ObSelectIntoCtx& into_ctx) const;
   DISALLOW_COPY_AND_ASSIGN(ObSelectInto);
 
-  private:
+private:
   ObItemType into_type_;
   common::ObSEArray<common::ObString, 16> user_vars_;
   common::ObObj outfile_name_;

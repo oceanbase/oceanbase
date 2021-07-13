@@ -41,7 +41,7 @@ inline uint64_t& get_unis_compat_version()
 }
 
 class UnisCompatVersionGuard {
-  public:
+public:
   UnisCompatVersionGuard(uint64_t version) : version_(get_unis_compat_version())
   {
     get_unis_compat_version() = version;
@@ -51,7 +51,7 @@ class UnisCompatVersionGuard {
     get_unis_compat_version() = version_;
   }
 
-  private:
+private:
   uint64_t version_;
 };
 }  // namespace lib
@@ -345,24 +345,24 @@ class UnisCompatVersionGuard {
 // public entries, define interfaces of manual serialization
 //-----------------------------------------------------------------------
 #define OB_UNIS_VERSION(VER) \
-  public:                    \
+public:                      \
   OB_DECLARE_UNIS(, );       \
                              \
-  private:                   \
+private:                     \
   const static int64_t UNIS_VERSION = VER
 
 #define OB_UNIS_VERSION_V(VER) \
-  public:                      \
+public:                        \
   OB_DECLARE_UNIS(virtual, );  \
                                \
-  private:                     \
+private:                       \
   const static int64_t UNIS_VERSION = VER
 
 #define OB_UNIS_VERSION_PV()     \
-  public:                        \
+public:                          \
   OB_DECLARE_UNIS(virtual, = 0); \
                                  \
-  private:
+private:
 
 #define OB_DEF_SERIALIZE(CLS, TEMP...) \
   TEMP OB_UNIS_SERIALIZE(CLS);         \
@@ -524,7 +524,7 @@ class UnisCompatVersionGuard {
 
 #define UNIS_VER(major, minor, patch) (((uint64_t)major << 32L) + ((uint64_t)minor << 16L) + (uint64_t)patch)
 #define OB_UNIS_COMPAT(V)                       \
-  private:                                      \
+private:                                        \
   const static uint64_t compat_ver_ = UNIS_##V; \
   OB_DECLARE_UNIS_COMPAT()
 

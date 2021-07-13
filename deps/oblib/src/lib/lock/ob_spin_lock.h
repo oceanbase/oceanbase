@@ -27,7 +27,7 @@ namespace common {
  *
  */
 class ObSpinLock {
-  public:
+public:
   explicit ObSpinLock(uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_LOCK);
   ~ObSpinLock();
   int lock();
@@ -35,12 +35,12 @@ class ObSpinLock {
   int trylock();
   int unlock();
 
-  private:
+private:
   // data members
   ObLatchMutex latch_;
   uint32_t latch_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSpinLock);
 };
 
@@ -73,7 +73,7 @@ inline int ObSpinLock::unlock()
 ////////////////////////////////////////////////////////////////
 // A lock class that do nothing, used as template argument
 class ObNullLock {
-  public:
+public:
   ObNullLock(){};
   ~ObNullLock(){};
   int lock()
@@ -85,7 +85,7 @@ class ObNullLock {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNullLock);
 };
 

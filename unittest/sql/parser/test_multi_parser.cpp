@@ -26,17 +26,17 @@ using namespace oceanbase::sql;
 namespace test {
 
 class TestMultiParser : public TestSqlUtils, public ::testing::Test {
-  public:
+public:
   TestMultiParser();
   virtual ~TestMultiParser();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestMultiParser);
 
-  protected:
+protected:
   // data members
   ObArenaAllocator allocator_;
 };

@@ -30,7 +30,7 @@ typedef common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE_FOR_BASE_COLUMN> ObExprV
 
 /* A state machine to handle backslash from a char stream */
 class ObLoadEscapeSM {
-  public:
+public:
   static const int64_t ESCAPE_CHAR_MYSQL = static_cast<int64_t>('\\');
   static const int64_t ESCAPE_CHAR_ORACLE = static_cast<int64_t>('\'');
   ObLoadEscapeSM() : is_escaped_flag_(false), escape_char_(INT64_MAX), escaped_char_count(0)
@@ -72,14 +72,14 @@ class ObLoadEscapeSM {
     return escaped_char_count;
   }
 
-  private:
+private:
   bool is_escaped_flag_;
   int64_t escape_char_;
   int64_t escaped_char_count;
 };
 
 class ObLoadDataUtils {
-  public:
+public:
   static const char* NULL_STRING;
   static const char NULL_VALUE_FLAG;
 
@@ -177,7 +177,7 @@ class ObLoadDataUtils {
 };
 
 class ObLoadTaskStatus {
-  public:
+public:
   ObLoadTaskStatus() : task_status_(0)
   {}
   enum class ResFlag {
@@ -202,12 +202,12 @@ class ObLoadTaskStatus {
   TO_STRING_KV(K_(task_status));
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   int64_t task_status_;
 };
 
 class ObLoadDataTimer {
-  public:
+public:
   ObLoadDataTimer() : total_time_us_(0), temp_start_time_us_(-1)
   {}
   OB_INLINE void start_stat()
@@ -231,7 +231,7 @@ class ObLoadDataTimer {
   }
   TO_STRING_KV("secs", get_wait_secs());
 
-  private:
+private:
   int64_t total_time_us_;
   int64_t temp_start_time_us_;
 };
@@ -242,7 +242,7 @@ class ObLoadDataTimer {
  * to detect a given str from a char stream
  */
 class ObKMPStateMachine {
-  public:
+public:
   ObKMPStateMachine() : is_inited_(false), str_(NULL), str_len_(0), matched_pos_(0), next_(NULL)
   {}
   int init(common::ObIAllocator& allocator, const common::ObString& str);
@@ -279,7 +279,7 @@ class ObKMPStateMachine {
     matched_pos_ = 0;
   }
 
-  private:
+private:
   static const int KEY_WORD_MAX_LENGTH = 2 * 1024;
   bool is_inited_;
   char* str_;  // string pattern for matching
@@ -337,7 +337,7 @@ struct ObLoadDataStat {
 };
 
 class ObGlobalLoadDataStatMap {
-  public:
+public:
   static ObGlobalLoadDataStatMap* getInstance();
   ObGlobalLoadDataStatMap() : is_inited_(false)
   {}
@@ -346,7 +346,7 @@ class ObGlobalLoadDataStatMap {
   int unregister_job(const ObLoadDataGID& id, ObLoadDataStat*& job_status);
   int get_job_status(const ObLoadDataGID& id, ObLoadDataStat*& job_status);
 
-  private:
+private:
   typedef common::hash::ObHashMap<ObLoadDataGID, ObLoadDataStat*, common::hash::SpinReadWriteDefendMode> HASH_MAP;
   static const int64_t bucket_num = 1000;
   static ObGlobalLoadDataStatMap* instance_;

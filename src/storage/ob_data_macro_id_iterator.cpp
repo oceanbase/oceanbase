@@ -60,7 +60,7 @@ int ObDataMacroIdIterator::init(ObPartitionService& partition_service, ObIPartit
       if (OB_ISNULL(single_pg_iter = partition_service.alloc_single_pg_partition_iter())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to alloc single partition iterator", K(ret));
-      } else if (OB_FAIL(single_pg_iter->init(pg))) {
+      } else if (OB_FAIL(single_pg_iter->init(pg, true/*need_trans_table*/))) {
         STORAGE_LOG(WARN, "fail to init single pg iterator", K(ret));
       } else {
         partition_iter_ = single_pg_iter;

@@ -17,13 +17,13 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObIdManagerAllocatorTest : public ::testing::Test {
-  public:
+public:
   ObIdManagerAllocatorTest();
   virtual ~ObIdManagerAllocatorTest();
   void SetUp();
   void TearDown();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIdManagerAllocatorTest);
 };
 

@@ -425,14 +425,14 @@ int get_merge_stmt_ora_need_privs(uint64_t user_id, const ObSqlCtx& ctx, const O
   OX(source_table = merge_stmt->get_table_item_by_id(merge_stmt->get_source_table_id()));
   CK(target_table != NULL && source_table != NULL);
   /* first add target table */
-  if (TableItem::BASE_TABLE == target_table->type_ || TableItem::ALIAS_TABLE == target_table->type_ ||
-      target_table->is_view_table_) {
+  if (OB_SUCC(ret) && (TableItem::BASE_TABLE == target_table->type_ || TableItem::ALIAS_TABLE == target_table->type_ ||
+      target_table->is_view_table_)) {
     OZ(set_privs_by_table_item_recursively(user_id, ctx, target_table, packed_privs, need_privs, check_flag));
   }
   /* then add source table */
   OZ(ObPrivPacker::pack_raw_obj_priv(NO_OPTION, OBJ_PRIV_ID_SELECT, packed_privs));
-  if (TableItem::BASE_TABLE == source_table->type_ || TableItem::ALIAS_TABLE == source_table->type_ ||
-      source_table->is_view_table_) {
+  if (OB_SUCC(ret) && (TableItem::BASE_TABLE == source_table->type_ || TableItem::ALIAS_TABLE == source_table->type_ ||
+      source_table->is_view_table_)) {
     OZ(set_privs_by_table_item_recursively(user_id, ctx, source_table, packed_privs, need_privs, check_flag));
   }
   return ret;

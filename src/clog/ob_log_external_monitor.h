@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace clog {
 // statistic for external rpc request
 class ObExtReqStatistic {
-  public:
+public:
   static void reset_all()
   {
     ts.reset();
@@ -133,7 +133,7 @@ class ObExtReqStatistic {
     }
   }
 
-  private:
+private:
   struct ReqByTsStatistic {
     int64_t req_count_;
     int64_t pkey_count_;
@@ -211,7 +211,7 @@ class ObExtReqStatistic {
     TO_STRING_KV(K(req_count_), K(pkey_count_), K(err_count_), K(disk_pkey_count_), K(disk_count_));
   };
 
-  private:
+private:
   static ReqByTsStatistic ts;
   static ReqByIdStatistic id;
   static ReqFetchStatistic fetch;

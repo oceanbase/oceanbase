@@ -21,22 +21,22 @@ namespace memtable {
 class ObMemtableMultiVersionScanIterator;
 
 class ObMemtableMultiVersionScanSparseIterator : public ObMemtableMultiVersionScanIterator {
-  public:
+public:
   ObMemtableMultiVersionScanSparseIterator();
   virtual ~ObMemtableMultiVersionScanSparseIterator();
 
-  protected:
+protected:
   virtual void row_reset() override;
   virtual int init_next_value_iter() override;
   virtual int init_row_cells(ObIAllocator* allocator) override;
 
-  protected:
+protected:
   // iterate row
   virtual int iterate_compacted_row(const common::ObStoreRowkey& key, storage::ObStoreRow& row) override;
   virtual int iterate_uncommitted_row(const ObStoreRowkey& key, storage::ObStoreRow& row) override;
   virtual int iterate_multi_version_row(const ObStoreRowkey& rowkey, storage::ObStoreRow& row) override;
 
-  private:
+private:
   // means SCANITER
   static const uint64_t VALID_MAGIC_NUM = 0x524554494e414353;
   DISALLOW_COPY_AND_ASSIGN(ObMemtableMultiVersionScanSparseIterator);
@@ -44,7 +44,7 @@ class ObMemtableMultiVersionScanSparseIterator : public ObMemtableMultiVersionSc
 
 class ObReadSparseRow {
   DEFINE_ALLOCATOR_WRAPPER
-  public:
+public:
   static int iterate_sparse_row_key(const common::ObIArray<share::schema::ObColDesc>& columns,
       const common::ObStoreRowkey& rowkey, storage::ObStoreRow& row);
   static int prepare_sparse_rowkey_position(const int64_t rowkey_length, storage::ObStoreRow& row);

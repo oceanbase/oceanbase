@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 // LOG([base,] expression), when base is not specified, it is same as LN.
 class ObExprLog : public ObExprOperator {
-  public:
+public:
   explicit ObExprLog(common::ObIAllocator& alloc);
   virtual ~ObExprLog(){};
 
@@ -29,7 +29,7 @@ class ObExprLog : public ObExprOperator {
       common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLog) const;
 };
 }  // namespace sql

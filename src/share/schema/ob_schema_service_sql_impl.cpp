@@ -2493,7 +2493,7 @@ int ObSchemaServiceSQLImpl::fetch_new_tenant_id(uint64_t& new_tenant_id)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(fetch_new_schema_id(OB_SYS_TENANT_ID, OB_MAX_USED_TENANT_ID_TYPE, new_tenant_id))) {
-    LOG_WARN("fetch_new_tenant_id faild", K(ret));
+    LOG_WARN("fetch_new_tenant_id failed", K(ret));
   } else {
     new_tenant_id = extract_pure_id(new_tenant_id);
   }

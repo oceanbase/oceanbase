@@ -35,7 +35,7 @@ class ObWorkerPool {
   static const int64_t MAX_WORKER_CNT = 10240;
   typedef common::ObFixedQueue<ObThWorker> WorkerArray;
 
-  public:
+public:
   explicit ObWorkerPool(ObIWorkerProcessor& procor);
   virtual ~ObWorkerPool();
 
@@ -47,11 +47,11 @@ class ObWorkerPool {
 
   void set_max(int64_t v);
 
-  private:
+private:
   int create_worker(ObThWorker*& worker);
   void destroy_worker(ObThWorker* worker);
 
-  private:
+private:
   bool is_inited_;
   int64_t init_cnt_;
   int64_t idle_cnt_;

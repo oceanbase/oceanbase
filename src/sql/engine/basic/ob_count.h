@@ -21,11 +21,11 @@ class ObSqlExpression;
 class ObCount : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   class ObCountCtx : ObPhyOperatorCtx {
     friend class ObCount;
 
-    public:
+  public:
     explicit ObCountCtx(ObExecContext& ctx)
         : ObPhyOperatorCtx(ctx), cur_rownum_(1), has_rownum_limit_(false), rownum_limit_value_(-1)
     {}
@@ -34,13 +34,13 @@ class ObCount : public ObSingleChildPhyOperator {
       ObPhyOperatorCtx::destroy_base();
     }
 
-    public:
+  public:
     int64_t cur_rownum_;
     bool has_rownum_limit_;
     int64_t rownum_limit_value_;
   };
 
-  public:
+public:
   explicit ObCount(common::ObIAllocator& alloc);
   virtual ~ObCount();
   virtual int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
@@ -54,7 +54,7 @@ class ObCount : public ObSingleChildPhyOperator {
   int add_anti_monotone_filter_exprs(ObSqlExpression* expr);
   virtual int switch_iterator(ObExecContext& ctx) const;
 
-  private:
+private:
   bool is_valid() const;
   int get_rownum_limit_value(ObExecContext& ctx, int64_t& rownum_limit_value) const;
   int get_int_value(ObExecContext& ctx, const ObSqlExpression* in_val, int64_t& out_val) const;
@@ -89,7 +89,7 @@ class ObCount : public ObSingleChildPhyOperator {
    */
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   ObSqlExpression* rownum_limit_expr_;
   common::ObDList<ObSqlExpression> anti_monotone_filter_exprs_;
 };

@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateTenantStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObCreateTenantStmt(common::ObIAllocator* name_pool);
   ObCreateTenantStmt();
   virtual ~ObCreateTenantStmt();
@@ -74,7 +74,7 @@ class ObCreateTenantStmt : public ObDDLStmt {
     return create_tenant_arg_;
   }
 
-  private:
+private:
   obrpc::ObCreateTenantArg create_tenant_arg_;
   common::ObArray<ObVariableSetStmt::VariableSetNode, common::ModulePageAllocator, true> sys_var_nodes_;
   DISALLOW_COPY_AND_ASSIGN(ObCreateTenantStmt);

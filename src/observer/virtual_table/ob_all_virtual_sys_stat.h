@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObAllVirtualSysStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualSysStat();
   virtual ~ObAllVirtualSysStat();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -35,15 +35,15 @@ class ObAllVirtualSysStat : public common::ObVirtualTableScannerIterator {
   }
   virtual int set_ip(common::ObAddr* addr);
 
-  protected:
+protected:
   virtual int get_all_diag_info();
   common::ObSEArray<std::pair<uint64_t, common::ObDiagnoseTenantInfo*>, common::OB_MAX_SERVER_TENANT_CNT> tenant_dis_;
 
-  private:
+private:
   int64_t get_tenant_memory_usage(int64_t tenant_id) const;
   int get_cache_size(ObStatEventSetStatArray& stat_events);
 
-  private:
+private:
   enum SYS_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
@@ -65,7 +65,7 @@ class ObAllVirtualSysStat : public common::ObVirtualTableScannerIterator {
 };
 
 class ObAllVirtualSysStatI1 : public ObAllVirtualSysStat, public ObAllVirtualDiagIndexScan {
-  public:
+public:
   ObAllVirtualSysStatI1()
   {}
   virtual ~ObAllVirtualSysStatI1()
@@ -75,10 +75,10 @@ class ObAllVirtualSysStatI1 : public ObAllVirtualSysStat, public ObAllVirtualDia
     return set_index_ids(key_ranges_);
   }
 
-  protected:
+protected:
   virtual int get_all_diag_info();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSysStatI1);
 };
 

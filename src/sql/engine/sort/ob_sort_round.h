@@ -20,7 +20,7 @@ namespace sql {
 class ObSortRun {
   friend class ObMergeSort;
 
-  public:
+public:
   typedef storage::ObFragmentWriterV2<common::ObNewRow> FragmentWriter;
   typedef storage::ObFragmentReaderV2<common::ObNewRow> FragmentReader;
   typedef common::ObArray<FragmentReader*> FragmentIteratorList;
@@ -39,11 +39,11 @@ class ObSortRun {
     return is_inited_;
   }
 
-  protected:
+protected:
   FragmentWriter writer_;
   FragmentIteratorList iters_;
 
-  private:
+private:
   bool is_inited_;
   int64_t buf_size_;
   int64_t expire_timestamp_;

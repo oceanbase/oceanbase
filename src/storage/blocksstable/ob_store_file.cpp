@@ -833,7 +833,7 @@ int ObStoreFile::get_store_status(ObMacroBlockMarkerStatus& status)
     status.second_index_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::MacroBlockSecondIndex];
     status.lob_data_block_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::LobData];
     status.lob_second_index_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::LobIndex];
-    status.bloomfiter_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::BloomFilterData];
+    status.bloomfilter_count_ = used_macro_cnt_[ObMacroBlockCommonHeader::BloomFilterData];
     status.hold_count_ = hold_macro_cnt_;
     status.pending_free_count_ = 0;
     status.free_count_ = free_block_cnt_;
@@ -1262,65 +1262,67 @@ void ObStoreFile::set_mark_sweep_done()
 int ObStoreFile::resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage)
 {
   int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(block_lock_);
   disable_mark_sweep();
   if (OB_ISNULL(store_file_system_)) {
     // do nothing
   } else if (OB_FAIL(wait_mark_sweep_finish())) {
     LOG_WARN("fail to wait mark and sweep finish", K(ret));
-  } else if (OB_FAIL(store_file_system_->resize_file(new_data_file_size, new_data_file_disk_percentage))) {
-    LOG_WARN("fail to resize file", K(ret));
   } else {
-    const int64_t new_total_file_size =
-        lower_align(store_file_system_->get_total_data_size(), store_file_system_->get_macro_block_size());
-    const int64_t new_macro_block_cnt = new_total_file_size / store_file_system_->get_macro_block_size();
-    const int64_t origin_macro_block_cnt = store_file_system_->get_total_macro_block_count();
-    if (new_macro_block_cnt > origin_macro_block_cnt) {
-      uint32_t* new_free_block_array = nullptr;
-      uint64_t* new_macro_block_bitmap = nullptr;
-      ObServerSuperBlock super_block = store_file_system_->get_server_super_block();
-      super_block.content_.total_file_size_ = new_total_file_size;
-      super_block.content_.total_macro_block_count_ = new_macro_block_cnt;
-      super_block.content_.modify_timestamp_ = ObTimeUtility::current_time();
-      ObStorageFile* file = OB_FILE_SYSTEM.get_server_root_handle().get_storage_file();
-      if (OB_ISNULL(file)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, file must not be null", K(ret));
-      } else if (OB_FAIL(alloc_memory(
-                     new_macro_block_cnt, new_free_block_array, new_macro_block_bitmap, macro_block_info_))) {
-        LOG_WARN("fail to alloc memory", K(ret), K(new_macro_block_cnt));
-      } else if (OB_FAIL(file->write_super_block(super_block))) {
-        LOG_WARN("fail to write super block", K(ret));
-      } else {
-        // copy free block info to new_free_block_array
-        if (free_block_pop_pos_ > free_block_push_pos_) {
-          MEMCPY(new_free_block_array,
-              free_block_array_ + free_block_pop_pos_,
-              (origin_macro_block_cnt - free_block_pop_pos_) * sizeof(uint32_t));
-          MEMCPY(new_free_block_array + origin_macro_block_cnt - free_block_pop_pos_,
-              free_block_array_,
-              free_block_push_pos_ * sizeof(uint32_t));
-        } else if (free_block_pop_pos_ < free_block_push_pos_) {
-          MEMCPY(new_free_block_array,
-              free_block_array_ + free_block_pop_pos_,
-              (free_block_push_pos_ - free_block_pop_pos_) * sizeof(uint32_t));
+    lib::ObMutexGuard guard(block_lock_);
+    if (OB_FAIL(store_file_system_->resize_file(new_data_file_size, new_data_file_disk_percentage))) {
+      LOG_WARN("fail to resize file", K(ret));
+    } else {
+      const int64_t new_total_file_size =
+          lower_align(store_file_system_->get_total_data_size(), store_file_system_->get_macro_block_size());
+      const int64_t new_macro_block_cnt = new_total_file_size / store_file_system_->get_macro_block_size();
+      const int64_t origin_macro_block_cnt = store_file_system_->get_total_macro_block_count();
+      if (new_macro_block_cnt > origin_macro_block_cnt) {
+        uint32_t* new_free_block_array = nullptr;
+        uint64_t* new_macro_block_bitmap = nullptr;
+        ObServerSuperBlock super_block = store_file_system_->get_server_super_block();
+        super_block.content_.total_file_size_ = new_total_file_size;
+        super_block.content_.total_macro_block_count_ = new_macro_block_cnt;
+        super_block.content_.modify_timestamp_ = ObTimeUtility::current_time();
+        ObStorageFile* file = OB_FILE_SYSTEM.get_server_root_handle().get_storage_file();
+        if (OB_ISNULL(file)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, file must not be null", K(ret));
+        } else if (OB_FAIL(alloc_memory(
+                       new_macro_block_cnt, new_free_block_array, new_macro_block_bitmap, macro_block_info_))) {
+          LOG_WARN("fail to alloc memory", K(ret), K(new_macro_block_cnt));
+        } else if (OB_FAIL(file->write_super_block(super_block))) {
+          LOG_WARN("fail to write super block", K(ret));
         } else {
-          MEMCPY(new_free_block_array, free_block_array_, free_block_cnt_ * sizeof(uint32_t));
+          // copy free block info to new_free_block_array
+          if (free_block_pop_pos_ > free_block_push_pos_) {
+            MEMCPY(new_free_block_array,
+                free_block_array_ + free_block_pop_pos_,
+                (origin_macro_block_cnt - free_block_pop_pos_) * sizeof(uint32_t));
+            MEMCPY(new_free_block_array + origin_macro_block_cnt - free_block_pop_pos_,
+                free_block_array_,
+                free_block_push_pos_ * sizeof(uint32_t));
+          } else if (free_block_pop_pos_ < free_block_push_pos_) {
+            MEMCPY(new_free_block_array,
+                free_block_array_ + free_block_pop_pos_,
+                (free_block_push_pos_ - free_block_pop_pos_) * sizeof(uint32_t));
+          } else {
+            MEMCPY(new_free_block_array, free_block_array_, free_block_cnt_ * sizeof(uint32_t));
+          }
+          free_block_pop_pos_ = 0;
+          free_block_push_pos_ = free_block_cnt_;
+          MEMCPY(new_macro_block_bitmap,
+              macro_block_bitmap_,
+              get_macro_bitmap_array_cnt(origin_macro_block_cnt) * sizeof(uint64_t));
+          allocator_.free(free_block_array_);
+          allocator_.free(macro_block_bitmap_);
+          free_block_array_ = new_free_block_array;
+          macro_block_bitmap_ = new_macro_block_bitmap;
+          LOG_INFO("succeed to resize file", K(new_data_file_size));
         }
-        free_block_pop_pos_ = 0;
-        free_block_push_pos_ = free_block_cnt_;
-        MEMCPY(new_macro_block_bitmap,
-            macro_block_bitmap_,
-            get_macro_bitmap_array_cnt(origin_macro_block_cnt) * sizeof(uint64_t));
-        allocator_.free(free_block_array_);
-        allocator_.free(macro_block_bitmap_);
-        free_block_array_ = new_free_block_array;
-        macro_block_bitmap_ = new_macro_block_bitmap;
-        LOG_INFO("succeed to resize file", K(new_data_file_size));
-      }
-      if (OB_FAIL(ret)) {
-        allocator_.free(new_free_block_array);
-        allocator_.free(new_macro_block_bitmap);
+        if (OB_FAIL(ret)) {
+          allocator_.free(new_free_block_array);
+          allocator_.free(new_macro_block_bitmap);
+        }
       }
     }
   }

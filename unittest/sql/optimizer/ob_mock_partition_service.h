@@ -26,7 +26,7 @@
 using namespace oceanbase;
 namespace test {
 class MockPartitionService : public oceanbase::storage::ObPartitionService {
-  public:
+public:
   MockPartitionService()
   {}
   virtual ~MockPartitionService()

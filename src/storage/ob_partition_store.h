@@ -65,7 +65,7 @@ class ObPartitionStore {
   friend class ObPGStorage;
   friend class ObPartitionStorage;
 
-  public:
+public:
   typedef common::hash::ObCuckooHashMap<uint64_t, ObMultiVersionTableStore*> TableStoreMap;
   typedef TableStoreMap* TableStoreMapPtr;
   static const int64_t TABLE_STORE_BUCKET_NUM = 2;
@@ -179,7 +179,7 @@ class ObPartitionStore {
 
   TO_STRING_KV(K_(is_inited), K_(log_seq_num), "meta", *meta_);
 
-  private:
+private:
   int create_partition_store(const ObPGPartitionStoreMeta& meta, const bool write_slog, ObIPartitionGroup* pg,
       ObFreezeInfoSnapshotMgr& freeze_info_mgr, ObPGMemtableMgr* pg_memtable_mgr);
   int init(const ObPGPartitionStoreMeta& meta, ObIPartitionGroup* pg, ObFreezeInfoSnapshotMgr& freeze_info_mgr);
@@ -300,7 +300,7 @@ class ObPartitionStore {
   int get_restore_point_normal_tables_(const int64_t snapshot_version, const int64_t publish_version,
       ObRecoveryPointSchemaFilter& schema_filter, ObTablesHandle& handle, bool& is_ready);
 
-  private:
+private:
   bool is_inited_;
   bool is_removed_;
   ObPGPartitionStoreMeta meta_buf_[2];

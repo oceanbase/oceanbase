@@ -21,7 +21,7 @@ using obsys::CThread;
 using oceanbase::lib::ThreadPool;
 
 class TestRingBuffer : public ::testing::Test, public ThreadPool {
-  public:
+public:
   struct RBData {
     RBData() : valid_(0), val_(0)
     {}
@@ -117,7 +117,7 @@ class TestRingBuffer : public ::testing::Test, public ThreadPool {
     mix();
   }
 
-  private:
+private:
   int64_t seq_ CACHE_ALIGNED;
   int64_t limit_;
   RingArray rbuffer_;

@@ -24,7 +24,7 @@ class ObExprCtx;
 
 namespace sql {
 class ObTransformSetOp : public ObTransformRule {
-  public:
+public:
   explicit ObTransformSetOp(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::PRE_ORDER)
   {}
   virtual ~ObTransformSetOp()
@@ -32,7 +32,7 @@ class ObTransformSetOp : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   int add_limit_order_distinct_for_union(
       const common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened);
   int remove_order_by_for_set(ObDMLStmt*& stmt, bool& trans_happened);
@@ -49,7 +49,7 @@ class ObTransformSetOp : public ObTransformRule {
   int add_limit_order_for_union(const common::ObIArray<ObParentDMLStmt>& parent_stmts, ObSelectStmt*& stmt);
   int check_can_pre_push(ObSelectStmt* stmt, ObSelectStmt* upper_stmt, bool& can_push);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformSetOp);
 };
 

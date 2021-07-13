@@ -308,7 +308,7 @@ char const* get_info_func_name(const ObInformationFunctions func);
 
 template <class K, class V>
 class ObCommonKV {
-  public:
+public:
   ObCommonKV() : key_(), value_()
   {}
   void reset()
@@ -326,7 +326,7 @@ typedef ObCommonKV<common::ObString, common::ObString> ObStringKV;
 static const int64_t MAX_STORE_LENGTH = 9;
 
 class ObMySQLPacketHeader {
-  public:
+public:
   ObMySQLPacketHeader() : len_(0), seq_(0)
   {}
 
@@ -338,7 +338,7 @@ class ObMySQLPacketHeader {
 
   TO_STRING_KV("length", len_, "sequence", seq_);
 
-  public:
+public:
   uint32_t len_;  // MySQL packet length not include packet header
   uint8_t seq_;   // MySQL packet sequence
 };
@@ -351,21 +351,21 @@ class ObMySQLPacketHeader {
  * http://imysql.com/mysql-internal-manual/compressed-packet-header.html
  */
 class ObMySQLCompressedPacketHeader {
-  public:
+public:
   ObMySQLCompressedPacketHeader() : comp_len_(0), comp_seq_(0), uncomp_len(0)
   {}
 
   TO_STRING_KV(
       "compressed_length", comp_len_, "compressed_sequence", comp_seq_, "length_before_compression", uncomp_len);
 
-  public:
+public:
   uint32_t comp_len_;   // length of compressed payload, not include packet header
   uint8_t comp_seq_;    // compressed sequence id
   uint32_t uncomp_len;  // length of payload before compressio
 };
 
 class ObMySQLPacket : public rpc::ObPacket {
-  public:
+public:
   ObMySQLPacket() : hdr_(), cdata_(NULL)
   {}
   virtual ~ObMySQLPacket()
@@ -402,13 +402,13 @@ class ObMySQLPacket : public rpc::ObPacket {
 
   VIRTUAL_TO_STRING_KV("header", hdr_);
 
-  protected:
+protected:
   virtual int serialize(char*, const int64_t, int64_t&) const
   {
     return common::OB_NOT_SUPPORTED;
   }
 
-  public:
+public:
   static const int64_t HANDSHAKE_RESPONSE_RESERVED_SIZE = 23;
   // 4: capability flags
   // 4: max-packet size
@@ -419,13 +419,13 @@ class ObMySQLPacket : public rpc::ObPacket {
   // 2: capability flags
   static const int64_t MIN_CAPABILITY_SIZE = 2;
 
-  protected:
+protected:
   ObMySQLPacketHeader hdr_;
   const char* cdata_;
 };
 
 class ObMySQLRawPacket : public ObMySQLPacket {
-  public:
+public:
   ObMySQLRawPacket()
       : ObMySQLPacket(), cmd_(OB_MYSQL_COM_MAX_NUM), can_reroute_pkt_(false), exist_trace_info_(false), trace_info_()
   {}
@@ -485,13 +485,13 @@ class ObMySQLRawPacket : public ObMySQLPacket {
 
   TO_STRING_KV("header", hdr_, "can_reroute", can_reroute_pkt_);
 
-  protected:
+protected:
   virtual int serialize(char*, const int64_t, int64_t&) const;
 
-  private:
+private:
   void set_len(uint32_t len);
 
-  private:
+private:
   ObMySQLCmd cmd_;
   bool can_reroute_pkt_;
   bool exist_trace_info_;
@@ -499,7 +499,7 @@ class ObMySQLRawPacket : public ObMySQLPacket {
 };
 
 class ObMySQLCompressedPacket : public rpc::ObPacket {
-  public:
+public:
   ObMySQLCompressedPacket() : hdr_(), cdata_(NULL)
   {}
   virtual ~ObMySQLCompressedPacket()
@@ -532,7 +532,7 @@ class ObMySQLCompressedPacket : public rpc::ObPacket {
 
   VIRTUAL_TO_STRING_KV("header", hdr_);
 
-  protected:
+protected:
   ObMySQLCompressedPacketHeader hdr_;
   const char* cdata_;
 };

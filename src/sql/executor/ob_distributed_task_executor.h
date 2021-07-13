@@ -24,7 +24,7 @@ class ObExecutorRpcImpl;
 class ObExecutorRpcCtx;
 class ObTransResultCollector;
 class ObDistributedTaskExecutor : public ObTaskExecutor {
-  public:
+public:
   explicit ObDistributedTaskExecutor(const uint64_t scheduler_id);
   virtual ~ObDistributedTaskExecutor();
 
@@ -40,13 +40,13 @@ class ObDistributedTaskExecutor : public ObTaskExecutor {
     trans_result_ = trans_result;
   }
 
-  private:
+private:
   int send_close_result_rpc(ObExecContext& ctx, const ObTaskInfo* task_info);
   int build_task(ObExecContext& query_ctx, ObJob& job, ObTaskInfo& task_info, ObTask& task);
   int task_dispatch(
       ObExecContext& exec_ctx, ObExecutorRpcImpl& rpc, ObExecutorRpcCtx& rpc_ctx, ObTask& task, ObTaskInfo& task_info);
 
-  private:
+private:
   uint64_t scheduler_id_;
   ObTransResultCollector* trans_result_;
   DISALLOW_COPY_AND_ASSIGN(ObDistributedTaskExecutor);

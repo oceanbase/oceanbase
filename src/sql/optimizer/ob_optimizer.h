@@ -121,7 +121,7 @@ struct NumberingCtx {
 };
 
 struct NumberingExchangeCtx {
-  private:
+private:
   struct IdStruct {
     IdStruct() : current_px_id_(common::OB_INVALID_ID), next_dfo_id_(common::OB_INVALID_ID)
     {}
@@ -132,7 +132,7 @@ struct NumberingExchangeCtx {
     TO_STRING_KV(K_(current_px_id), K_(next_dfo_id));
   };
 
-  public:
+public:
   NumberingExchangeCtx() : next_px_id_(common::OB_INVALID_ID), ids_()
   {}
   int64_t next_px()
@@ -163,7 +163,7 @@ struct NumberingExchangeCtx {
     return ids_.pop_back(dummy);
   }
 
-  private:
+private:
   int64_t next_px_id_;
   common::ObSEArray<IdStruct, 4> ids_;
 };
@@ -189,7 +189,7 @@ struct ObExprSelPair {
 };
 
 class ObOptimizer {
-  public:
+public:
   ObOptimizer(ObOptimizerContext& ctx) : ctx_(ctx)
   {}
   virtual ~ObOptimizer()
@@ -197,7 +197,7 @@ class ObOptimizer {
   virtual int optimize(ObDMLStmt& stmt, ObLogPlan*& plan);
   virtual int get_optimization_cost(ObDMLStmt& stmt, double& cost);
 
-  private:
+private:
   int generate_plan_for_temp_table(ObDMLStmt& stmt);
   int init_env_info(ObDMLStmt& stmt);
   int get_stmt_max_table_dop(ObDMLStmt& stmt, int64_t& max_dop);
@@ -207,7 +207,7 @@ class ObOptimizer {
   int check_pdml_supported_feature(const ObDMLStmt& stmt, const ObSQLSessionInfo& session, bool& is_use_pdml);
   int check_unique_index(const common::ObIArray<ObColumnRefRawExpr*>& column_exprs, bool& has_unique_index) const;
 
-  private:
+private:
   ObOptimizerContext& ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObOptimizer);
 };

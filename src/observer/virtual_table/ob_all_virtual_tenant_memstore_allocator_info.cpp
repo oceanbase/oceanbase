@@ -22,7 +22,7 @@ using namespace share;
 
 namespace observer {
 class MemstoreInfoFill {
-  public:
+public:
   typedef ObMemstoreAllocatorInfo Item;
   typedef ObArray<Item> ItemArray;
   typedef ObGMemstoreAllocator::AllocHandle Handle;

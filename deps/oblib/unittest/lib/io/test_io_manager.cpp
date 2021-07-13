@@ -30,7 +30,7 @@ using namespace ::testing;
 namespace oceanbase {
 namespace common {
 class MockIOCallback : public ObIOCallback {
-  public:
+public:
   MockIOCallback()
   {}
   virtual ~MockIOCallback()
@@ -44,14 +44,14 @@ class MockIOCallback : public ObIOCallback {
 };
 
 class TestIOManager : public ::testing::Test {
-  public:
+public:
   TestIOManager();
   virtual ~TestIOManager();
   virtual void SetUp();
   virtual void TearDown();
   virtual void do_multi_disk_test(const bool remove_disk_during_io_ongoing, const bool disk_hang = false);
 
-  protected:
+protected:
   ObDiskFd fd_;
   char filename_[128];
   int64_t file_size_;
@@ -318,7 +318,7 @@ TEST(ObIOAllocator, simple)
 }
 
 class MyThreadPool : public lib::ThreadPool {
-  public:
+public:
   static MyThreadPool& get_ins()
   {
     static MyThreadPool ins;
@@ -786,7 +786,7 @@ TEST_F(TestIOManager, add_delete)
 }
 
 class TestMemLeakIOCallback : public ObIOCallback {
-  public:
+public:
   TestMemLeakIOCallback() : buf_(NULL), allocator_(nullptr), buf_size_(0)
   {}
   virtual ~TestMemLeakIOCallback()
@@ -835,7 +835,7 @@ class TestMemLeakIOCallback : public ObIOCallback {
   }
   TO_STRING_KV(KP_(buf));
 
-  public:
+public:
   char* buf_;
   ObIAllocator* allocator_;
   int64_t buf_size_;
@@ -916,7 +916,7 @@ TEST_F(TestIOManager, enqueue_failed)
 #endif
 
 class TestIOCallback : public ObIOCallback {
-  public:
+public:
   TestIOCallback() : buf_(NULL), buf_size_(OB_MALLOC_NORMAL_BLOCK_SIZE + DIO_READ_ALIGN_SIZE), allocator_(NULL)
   {}
   virtual ~TestIOCallback()
@@ -969,7 +969,7 @@ class TestIOCallback : public ObIOCallback {
   }
   TO_STRING_KV(KP_(buf));
 
-  public:
+public:
   char* buf_;
   int64_t buf_size_;
   ObArenaAllocator* allocator_;

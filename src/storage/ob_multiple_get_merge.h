@@ -29,7 +29,7 @@ enum class ObMultiGetRowState {
 };
 
 struct ObQueryRowInfo final {
-  public:
+public:
   ObQueryRowInfo()
       : row_(),
         nop_pos_(),
@@ -49,7 +49,7 @@ struct ObQueryRowInfo final {
 };
 
 class ObMultipleGetMerge : public ObMultipleMerge {
-  public:
+public:
   ObMultipleGetMerge();
   virtual ~ObMultipleGetMerge();
   int open(const common::ObIArray<common::ObExtStoreRowkey>& rowkeys);
@@ -62,7 +62,7 @@ class ObMultipleGetMerge : public ObMultipleMerge {
   virtual void reuse() override;
   virtual int is_range_valid() const override;
 
-  protected:
+protected:
   virtual int prepare() override;
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
@@ -70,7 +70,7 @@ class ObMultipleGetMerge : public ObMultipleMerge {
   virtual void collect_merge_stat(ObTableStoreStat& stat) const override;
   virtual int skip_to_range(const int64_t range_idx) override;
 
-  private:
+private:
   int construct_iters_with_fuse_row_cache();
   int construct_iters_without_fuse_row_cache();
   int inner_get_next_row_with_fuse_row_cache(ObStoreRow& row);
@@ -84,7 +84,7 @@ class ObMultipleGetMerge : public ObMultipleMerge {
   int alloc_resource();
   void reset_with_fuse_row_cache();
 
-  private:
+private:
   static const int64_t MAX_PREFETCH_CNT = 300;
   static const int64_t MAX_MULTI_GET_FUSE_ROW_CACHE_GET_COUNT = 100;
   static const int64_t MAX_MULTI_GET_FUSE_ROW_CACHE_PUT_COUNT;

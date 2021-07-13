@@ -25,7 +25,7 @@ namespace common {
 
 template <typename T>
 class ObMaskSet2 {
-  public:
+public:
   ObMaskSet2() : is_inited_(false), array_(NULL), bitset_()
   {}
   ~ObMaskSet2()
@@ -53,7 +53,7 @@ class ObMaskSet2 {
     bitset_.reuse();
   }
 
-  public:
+public:
   int mask(const T& key)
   {
     int ret = OB_SUCCESS;
@@ -143,7 +143,7 @@ class ObMaskSet2 {
     return bool_ret;
   }
 
-  private:
+private:
   bool is_inited_;
   const ObIArray<T>* array_;
   ObBitSet<> bitset_;

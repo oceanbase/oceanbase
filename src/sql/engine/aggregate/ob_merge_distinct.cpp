@@ -22,7 +22,7 @@ using namespace common;
 
 namespace sql {
 class ObMergeDistinct::ObMergeDistinctCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObMergeDistinctCtx(ObExecContext& ctx)
       : ObPhyOperatorCtx(ctx),
         got_first_row_(false),
@@ -93,10 +93,10 @@ class ObMergeDistinct::ObMergeDistinctCtx : public ObPhyOperatorCtx {
     ObPhyOperatorCtx::destroy_base();
   }
 
-  private:
+private:
   static const int64_t OB_ROW_BUF_SIZE = OB_MAX_ROW_LENGTH;
 
-  private:
+private:
   bool got_first_row_;
   ObNewRow last_row_;
   void* last_row_buf_;

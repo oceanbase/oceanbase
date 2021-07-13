@@ -21,14 +21,14 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualSysParameterStat : public common::ObVirtualTableIterator {
-  public:
+public:
   ObAllVirtualSysParameterStat();
   virtual ~ObAllVirtualSysParameterStat();
   virtual int inner_open();
   virtual void reset();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int inner_sys_get_next_row(common::ObNewRow*& row);
   int inner_tenant_get_next_row(common::ObNewRow*& row);
   enum SYS_PARAMETER_STAT_COLUMN {

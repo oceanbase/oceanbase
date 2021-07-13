@@ -25,17 +25,17 @@ using namespace oceanbase::common;
 using namespace oceanbase::election;
 
 class MockObElection : public ObElection {
-  public:
+public:
   MockObElection();
 
-  public:
+public:
   virtual int handle_packet(const int64_t packet_code, ObDataBuffer& in_buff, ObDataBuffer& out_buff);
 
   int set_outage_for(ObElectionVoteMsgType type, int64_t start_time = 0, int64_t end_time = INT64_MAX);
 
   int set_outage_all(int64_t start_time = 0, int64_t end_time = INT64_MAX);
 
-  private:
+private:
   Outage outage_map_[MAX_VOTE_MSG_TYPE];
 };
 }  // namespace election

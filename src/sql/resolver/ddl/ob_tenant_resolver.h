@@ -25,7 +25,7 @@ namespace oceanbase {
 namespace sql {
 template <class T>
 class ObTenantResolver {
-  public:
+public:
   ObTenantResolver()
       : charset_type_(common::CHARSET_INVALID),
         collation_type_(common::CS_TYPE_INVALID),
@@ -35,7 +35,7 @@ class ObTenantResolver {
   ~ObTenantResolver()
   {}
 
-  public:
+public:
   int resolve_tenant_options(T* stmt, ParseNode* node, ObSQLSessionInfo* session_info, common::ObIAllocator& allocator);
   const common::ObBitSet<>& get_alter_option_bitset() const
   {
@@ -46,12 +46,12 @@ class ObTenantResolver {
     return modify_read_only_;
   }
 
-  private:
+private:
   int resolve_tenant_option(T* stmt, ParseNode* node, ObSQLSessionInfo* session_info, common::ObIAllocator& allocator);
   int resolve_zone_list(T* stmt, ParseNode* node) const;
   int resolve_resource_pool_list(T* stmt, ParseNode* node) const;
 
-  private:
+private:
   common::ObCharsetType charset_type_;
   common::ObCollationType collation_type_;
   common::ObBitSet<> alter_option_bitset_;

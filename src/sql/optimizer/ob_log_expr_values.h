@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogExprValues : public ObLogicalOperator {
-  public:
+public:
   ObLogExprValues(ObLogPlan& plan) : ObLogicalOperator(plan), need_columnlized_(false)
   {}
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
@@ -61,10 +61,10 @@ class ObLogExprValues : public ObLogicalOperator {
   virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
 
-  private:
+private:
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
 
-  private:
+private:
   bool need_columnlized_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> value_exprs_;
   // only engine 3.0 used

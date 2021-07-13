@@ -807,15 +807,15 @@ int ObElectionGroup::process_vote_prepare_(const ObElectionMsgEGPrepare& msg, co
         ELECT_ASYNC_LOG_(WARN, "store prepare message error", K(ret), "election_group", *this, K(msg));
       } else {
         T1_timestamp_ = msg_t1;
-        if (OB_FAIL(try_centrialized_voting_(now_lease_time))) {
-          ELECT_ASYNC_LOG_(WARN, "try centrialized voting error", K(ret), "self", *this, K(msg), K(now_lease_time));
+        if (OB_FAIL(try_centralized_voting_(now_lease_time))) {
+          ELECT_ASYNC_LOG_(WARN, "try centralized voting error", K(ret), "self", *this, K(msg), K(now_lease_time));
         } else {
           if (msg_eg_version != eg_version_ && ROLE_SLAVE == role_) {
             ELECT_ASYNC_LOG_(
                 INFO, "eg_version not equal with leader when send_vote_vote", K(msg), K(msg_eg_version), "self", *this);
           }
         }
-        REC_TRACE_EXT(tlog_, try_centrialized_voting, Y(ret), Y_(vote_period), Y(lease_time));
+        REC_TRACE_EXT(tlog_, try_centralized_voting, Y(ret), Y_(vote_period), Y(lease_time));
       }
     }
   }
@@ -896,7 +896,7 @@ int ObElectionGroup::handle_vote_prepare(
   return ret;
 }
 
-int ObElectionGroup::try_centrialized_voting_(const int64_t lease_time)
+int ObElectionGroup::try_centralized_voting_(const int64_t lease_time)
 {
   int ret = OB_SUCCESS;
   ObAddr msg_cur_leader;
@@ -1162,7 +1162,7 @@ void ObElectionGroup::clear_part_stat_vote_cnt_()
 // receive new message
 // 1. check if received enough messages
 // 2. if so, send vote success message
-int ObElectionGroup::check_centrialized_majority_()
+int ObElectionGroup::check_centralized_majority_()
 {
   int ret = OB_SUCCESS;
   ObAddr cur_leader;
@@ -1184,7 +1184,7 @@ int ObElectionGroup::check_centrialized_majority_()
     if (OB_ELECTION_WARN_NOT_REACH_MAJORITY == ret || OB_ELECTION_WAIT_LEADER_MESSAGE == ret) {
       // no enough message or waiting for leader's message
     } else {
-      ELECT_ASYNC_LOG_(WARN, "check_centrialized_majority_ error", K(ret), K_(eg_id));
+      ELECT_ASYNC_LOG_(WARN, "check_centralized_majority_ error", K(ret), K_(eg_id));
     }
   } else {
     bool arg_all_part_merged_in = is_all_part_merged_in_;
@@ -1229,7 +1229,7 @@ int ObElectionGroup::check_centrialized_majority_()
       }
     } else {
       ret = OB_STATE_NOT_MATCH;
-      FORCE_ELECT_LOG(WARN, "check_centrialized_majority_ error", K(ret), K(*this), K(cur_leader));
+      FORCE_ELECT_LOG(WARN, "check_centralized_majority_ error", K(ret), K(*this), K(cur_leader));
     }
   }
   clear_part_stat_vote_cnt_();
@@ -1841,7 +1841,7 @@ void ObElectionGroup::run_gt1_task(const int64_t expect_ts)
           }
           // avoid print error log while election run at start
           if (cur_ts > start_timestamp_ + (vote_period_ + T_CYCLE_EXTEND_MORE) * T_ELECT2) {
-            // pirnt error log only if leader group's lease expired
+            // print error log only if leader group's lease expired
             if (old_leader == self_ && partition_array_.count() > 0 && !is_all_dropped) {
               ELECT_ASYNC_LOG_(ERROR, "eg leader lease is expired", K(*this), K(old_leader), K(is_all_dropped));
             } else {
@@ -1868,7 +1868,7 @@ void ObElectionGroup::run_gt1_task(const int64_t expect_ts)
               } else if (!is_candidate_(self_)) {
                 FORCE_ELECT_LOG(WARN, "self is not candidate", "self", *this);
               } else if (is_pre_destroy_state()) {
-                // must not do reappoint if group if pre-destoryed
+                // must not do reappoint if group if pre-destroyed
                 ELECT_ASYNC_LOG(INFO, "in pre_destroy_state, give up reappoint", "self", *this);
               } else if (is_empty_()) {
                 FORCE_ELECT_LOG(WARN, "self is empty, no need to reappoint", K(ret), "self", *this);
@@ -1957,10 +1957,10 @@ void ObElectionGroup::run_gt3_task(const int64_t expect_ts)
     ELECT_ASYNC_LIMIT_LOG(
         WARN, "run time out of range", K(ret), "self", *this, K(cur_ts), K(expect_ts), "delta", cur_ts - expect_ts);
   } else {
-    if (OB_FAIL(check_centrialized_majority_())) {
-      ELECT_ASYNC_LOG_(WARN, "check_centrialized_majority_ error", K(ret), "self", *this);
+    if (OB_FAIL(check_centralized_majority_())) {
+      ELECT_ASYNC_LOG_(WARN, "check_centralized_majority_ error", K(ret), "self", *this);
     }
-    REC_TRACE_EXT(tlog_, check_centrialized_majority, Y(ret));
+    REC_TRACE_EXT(tlog_, check_centralized_majority, Y(ret));
   }
   ELECT_ASYNC_LOG(DEBUG, "GT3Task", K(ret), "self", *this, K(expect_ts), K(cur_ts));
 }

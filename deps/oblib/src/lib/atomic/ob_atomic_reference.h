@@ -30,7 +30,7 @@ union AtomicInt64 {
 };
 
 class ObAtomicReference final {
-  public:
+public:
   ObAtomicReference();
   ~ObAtomicReference();
   void reset();
@@ -49,7 +49,7 @@ class ObAtomicReference final {
     return atomic_num_.ref;
   }
 
-  private:
+private:
   AtomicInt64 atomic_num_;
 };
 

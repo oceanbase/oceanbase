@@ -38,7 +38,7 @@ class ObILeaderCoordinator;
 class FakeZoneManager;
 class ObLocalityDistribution;
 class ObZoneManagerBase : public share::ObIZoneTrace {
-  public:
+public:
   friend class FakeZoneMgr;
   ObZoneManagerBase();
   virtual ~ObZoneManagerBase();
@@ -128,7 +128,7 @@ class ObZoneManagerBase : public share::ObIZoneTrace {
 
   DECLARE_TO_STRING;
 
-  private:
+private:
   int update_zone_status(const common::ObZone& zone, const share::ObZoneStatus::Status& status);
   int inner_try_update_global_last_merged_version();
 
@@ -145,13 +145,13 @@ class ObZoneManagerBase : public share::ObIZoneTrace {
   int construct_zone_region_list(common::ObIArray<share::schema::ObZoneRegion>& zone_region_list,
       const common::ObIArray<common::ObZone>& zone_list);
 
-  protected:
+protected:
   common::SpinRWLock lock_;
   // only used for copying data to/from shadow_
   static int copy_infos(ObZoneManagerBase& dest, const ObZoneManagerBase& src);
   friend class FakeZoneManager;
 
-  private:
+private:
   bool inited_;
   bool loaded_;
   share::ObZoneInfo zone_infos_[common::MAX_ZONE_NUM];
@@ -162,80 +162,80 @@ class ObZoneManagerBase : public share::ObIZoneTrace {
   common::ObMySQLProxy* proxy_;
   ObILeaderCoordinator* leader_coordinator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObZoneManagerBase);
 };
 
 class ObZoneManager : public ObZoneManagerBase {
-  public:
+public:
   ObZoneManager();
   virtual ~ObZoneManager();
 
   int init(common::ObMySQLProxy& proxy, ObILeaderCoordinator& leader_coordinator);
-  virtual int reload();
+  virtual int reload() override;
   virtual int add_zone(const common::ObZone& zone, const common::ObRegion& region, const common::ObIDC& idc,
-      const common::ObZoneType& zone_type);
-  virtual int delete_zone(const common::ObZone& zone);
-  virtual int start_zone(const common::ObZone& zone);
-  virtual int stop_zone(const common::ObZone& zone);
+      const common::ObZoneType& zone_type) override;
+  virtual int delete_zone(const common::ObZone& zone) override;
+  virtual int start_zone(const common::ObZone& zone) override;
+  virtual int stop_zone(const common::ObZone& zone) override;
   virtual int alter_zone(const obrpc::ObAdminZoneArg& arg) override;
 
-  virtual int set_merge_error(const int64_t merge_error);
-  virtual int try_update_global_last_merged_version();
-  virtual int generate_next_global_broadcast_version();
+  virtual int set_merge_error(const int64_t merge_error) override;
+  virtual int try_update_global_last_merged_version() override;
+  virtual int generate_next_global_broadcast_version() override;
 
-  virtual int set_zone_merging(const common::ObZone& zone);
-  virtual int inc_start_merge_fail_times(const common::ObZone& zone);
-  virtual int clear_zone_merging(const common::ObZone& zone);
-  virtual int start_zone_merge(const common::ObZone& zone);
+  virtual int set_zone_merging(const common::ObZone& zone) override;
+  virtual int inc_start_merge_fail_times(const common::ObZone& zone) override;
+  virtual int clear_zone_merging(const common::ObZone& zone) override;
+  virtual int start_zone_merge(const common::ObZone& zone) override;
   virtual int finish_zone_merge(
-      const common::ObZone& zone, const int64_t merged_version, const int64_t all_merged_version);
-  virtual int set_zone_merge_timeout(const common::ObZone& zone);
+      const common::ObZone& zone, const int64_t merged_version, const int64_t all_merged_version) override;
+  virtual int set_zone_merge_timeout(const common::ObZone& zone) override;
 
-  virtual int update_privilege_version(const int64_t privilege_version);
-  virtual int update_config_version(const int64_t config_version);
+  virtual int update_privilege_version(const int64_t privilege_version) override;
+  virtual int update_config_version(const int64_t config_version) override;
 
-  virtual int update_proposal_frozen_version(const int64_t proposal_frozen_version);
-  virtual int set_frozen_info(const int64_t frozen_version, const int64_t frozen_time);
+  virtual int update_proposal_frozen_version(const int64_t proposal_frozen_version) override;
+  virtual int set_frozen_info(const int64_t frozen_version, const int64_t frozen_time) override;
   virtual int set_frozen_info(
-      common::ObISQLClient& sql_client, const int64_t frozen_version, const int64_t frozen_time);
-  virtual int set_try_frozen_version(const int64_t try_frozen_version);
+      common::ObISQLClient& sql_client, const int64_t frozen_version, const int64_t frozen_time) override;
+  virtual int set_try_frozen_version(const int64_t try_frozen_version) override;
 
-  virtual int check_merge_order(const common::ObString& list_str);
-  virtual int check_merge_order(const common::ObIArray<common::ObZone>& merge_list);
+  virtual int check_merge_order(const common::ObString& list_str) override;
+  virtual int check_merge_order(const common::ObIArray<common::ObZone>& merge_list) override;
 
-  virtual int suspend_merge(const common::ObZone& zone);
-  virtual int resume_merge(const common::ObZone& zone);
+  virtual int suspend_merge(const common::ObZone& zone) override;
+  virtual int resume_merge(const common::ObZone& zone) override;
 
-  virtual int reset_global_merge_status();
-  virtual int set_warm_up_start_time(const int64_t time_ts);
+  virtual int reset_global_merge_status() override;
+  virtual int set_warm_up_start_time(const int64_t time_ts) override;
   std::default_random_engine& get_random_engine()
   {
     return random_;
   }
-  virtual int renew_snapshot_gc_ts();
+  virtual int renew_snapshot_gc_ts() override;
 
-  virtual int set_storage_format_version(const int64_t version);
+  virtual int set_storage_format_version(const int64_t version) override;
 
-  public:
+public:
   class ObZoneManagerShadowGuard {
-    public:
+  public:
     ObZoneManagerShadowGuard(
         const common::SpinRWLock& lock, ObZoneManagerBase& zone_mgr, ObZoneManagerBase& shadow, int& ret);
     ~ObZoneManagerShadowGuard();
 
-    private:
+  private:
     common::SpinRWLock& lock_;
     ObZoneManagerBase& zone_mgr_;
     ObZoneManagerBase& shadow_;
     int& ret_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObZoneManagerShadowGuard);
   };
   friend class FakeZoneManager;
 
-  private:
+private:
   common::SpinRWLock write_lock_;
   ObZoneManagerBase shadow_;
   // this proxy is not inited and

@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObSetOperator : public ObPhyOperator {
-  public:
+public:
   ObSetOperator();
   explicit ObSetOperator(common::ObIAllocator& alloc);
   ~ObSetOperator();
@@ -31,7 +31,7 @@ class ObSetOperator : public ObPhyOperator {
   bool is_distinct() const;
   int add_collation_type(common::ObCollationType cs_type);
 
-  protected:
+protected:
   int init_collation_types(int64_t count);
 
   /**
@@ -61,7 +61,7 @@ class ObSetOperator : public ObPhyOperator {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSetOperator);
 
-  protected:
+protected:
   bool distinct_;
   common::ObFixedArray<common::ObCollationType, common::ObIAllocator> cs_types_;
   int32_t child_num_;

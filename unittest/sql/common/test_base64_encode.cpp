@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace common {
 class TestBase64Encoder : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

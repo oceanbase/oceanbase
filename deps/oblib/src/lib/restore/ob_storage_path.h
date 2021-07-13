@@ -26,7 +26,7 @@ static const char* const BACKUP_BASE_DATA = "base_data";
 static const char* const BACKUP_ALL_TENANT_ID_LIST = "all_tenant_id_list";
 
 class ObStoragePath {
-  public:
+public:
   ObStoragePath();
   virtual ~ObStoragePath();
   int init(const common::ObString& uri);
@@ -67,7 +67,7 @@ class ObStoragePath {
     return cur_pos_ > 0;
   }
 
-  private:
+private:
   int trim_right_delim();
   int trim_left_delim(const common::ObString& path, int64_t& delim_pos);
   char path_[common::OB_MAX_URI_LENGTH];
@@ -75,7 +75,7 @@ class ObStoragePath {
 };
 
 class ObStoragePathUtil {
-  public:
+public:
   // example: oss://runiu1/ob1.XX/all_tenant_id_list
   static int generate_all_tenant_id_list_file_path(
       const common::ObString& header_uri, const common::ObString& cluster_name, ObStoragePath& path);

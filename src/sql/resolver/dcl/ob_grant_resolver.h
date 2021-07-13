@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObGrantResolver : public ObDCLResolver {
-  public:
+public:
   explicit ObGrantResolver(ObResolverParams& params);
   virtual ~ObGrantResolver();
 
@@ -60,7 +60,7 @@ class ObGrantResolver : public ObDCLResolver {
       ObIArray<ObString>& user_name_array, const ObGrantStmt* grant_stmt, const ObString& user_name,
       const ObString& host_name);
 
-  private:
+private:
   int build_table_priv_arary_for_all(
       ObGrantStmt* grant_stmt, share::ObRawObjPrivArray& table_priv_array, bool is_owner);
   int check_obj_priv_valid(ObGrantStmt* grant_stmt, share::ObRawObjPriv ora_obj_priv);
@@ -74,7 +74,7 @@ class ObGrantResolver : public ObDCLResolver {
   int check_duplicated_privs_with_info_ora(const ParseNode* privs_node, bool& duplicated_privs, bool& priv_has_execute);
   static int trans_ora_sys_priv_to_obj(ParseNode* priv_type_node);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObGrantResolver);
 };

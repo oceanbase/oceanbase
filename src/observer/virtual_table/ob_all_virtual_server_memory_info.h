@@ -36,11 +36,11 @@ class ObAllVirtualServerMemoryInfo : public common::ObVirtualTableScannerIterato
     MEMSTORE_LIMIT
   };
 
-  public:
+public:
   ObAllVirtualServerMemoryInfo();
   virtual ~ObAllVirtualServerMemoryInfo();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
   inline void set_tenant_mgr(common::ObTenantManager* tenant_mgr)
@@ -52,12 +52,12 @@ class ObAllVirtualServerMemoryInfo : public common::ObVirtualTableScannerIterato
     addr_ = addr;
   }
 
-  private:
+private:
   common::ObTenantManager* tenant_mgr_;
   uint64_t current_pos_;
   common::ObAddr addr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualServerMemoryInfo);
 };
 

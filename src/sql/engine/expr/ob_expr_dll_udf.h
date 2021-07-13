@@ -28,7 +28,7 @@ class ObSqlExpression;
 class ObExprDllUdf : public ObFuncExprOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObExprDllUdf(ObIAllocator& alloc);
   ObExprDllUdf(ObIAllocator& alloc, ObExprOperatorType type, const char* name);
   virtual ~ObExprDllUdf();
@@ -38,7 +38,7 @@ class ObExprDllUdf : public ObFuncExprOperator {
   virtual int calc_resultN(
       common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
 
-  public:
+public:
   int set_udf_meta(const share::schema::ObUDFMeta& udf);
   int init_udf(const common::ObIArray<ObRawExpr*>& para_exprs);
   common::ObIArray<common::ObString>& get_udf_attribute()
@@ -55,7 +55,7 @@ class ObExprDllUdf : public ObFuncExprOperator {
   };
   int add_const_expression(ObSqlExpression* sql_calc, int64_t idx_in_udf_arg);
 
-  protected:
+protected:
   common::ObIAllocator& allocator_;
   ObNormalUdfFunction udf_func_;
   ObUdfFunction::ObUdfCtx udf_ctx_;

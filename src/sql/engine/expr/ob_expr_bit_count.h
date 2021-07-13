@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprBitCount : public ObBitwiseExprOperator {
-  public:
+public:
   explicit ObExprBitCount(common::ObIAllocator& alloc);
   virtual ~ObExprBitCount();
   virtual int calc_result1(common::ObObj& result, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const;
@@ -26,7 +26,7 @@ class ObExprBitCount : public ObBitwiseExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_bitcount_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   static const uint8_t char_to_num_bits[256];
   DISALLOW_COPY_AND_ASSIGN(ObExprBitCount);
 };

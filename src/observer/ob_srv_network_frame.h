@@ -34,7 +34,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObSrvNetworkFrame {
-  public:
+public:
   enum { NET_IO_NORMAL_GID = 0, NET_IO_HP_GID = 64, NET_IO_BATCH_GID = 72 };
   explicit ObSrvNetworkFrame(ObGlobalContext& gctx);
 
@@ -63,7 +63,7 @@ class ObSrvNetworkFrame {
   rpc::frame::ObReqTransport* get_batch_rpc_req_transport();
   inline rpc::frame::ObReqTranslator& get_xlator();
 
-  private:
+private:
   ObGlobalContext& gctx_;
 
   ObSrvXlator xlator_;

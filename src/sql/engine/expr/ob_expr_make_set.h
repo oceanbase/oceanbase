@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprMakeSet : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprMakeSet(common::ObIAllocator& alloc);
   virtual ~ObExprMakeSet();
   virtual int calc_result_typeN(
@@ -29,7 +29,7 @@ class ObExprMakeSet : public ObStringExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_make_set_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMakeSet);
 };
 

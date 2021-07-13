@@ -25,7 +25,7 @@
 namespace oceanbase {
 namespace clog {
 class ObICLogItem : public common::ObIBaseLogItem {
-  public:
+public:
   ObICLogItem()
   {}
   virtual ~ObICLogItem()
@@ -41,20 +41,20 @@ class ObICLogItem : public common::ObIBaseLogItem {
 
 // The new file will write ObNewLogFileBuf in the file header to avoid reading the old block when reusing log files
 class ObNewLogFileBuf {
-  public:
+public:
   ObNewLogFileBuf()
   {}
   ~ObNewLogFileBuf()
   {}
   static char buf_[CLOG_DIO_ALIGN_SIZE] __attribute__((aligned(CLOG_DIO_ALIGN_SIZE)));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNewLogFileBuf);
 };
 
 template <typename T>
 struct TSI {
-  public:
+public:
   TSI() : create_err_(0), key_()
   {
     create_err_ = pthread_key_create(&key_, release);
@@ -85,7 +85,7 @@ struct TSI {
     return val;
   }
 
-  private:
+private:
   static void release(void* arg)
   {
     if (NULL != arg) {
@@ -106,7 +106,7 @@ inline common::ObQSync& get_log_file_qs()
 int close_fd(const int fd);
 
 class ObLogMeta {
-  public:
+public:
   ObLogMeta() : log_id_(common::OB_INVALID_ID), submit_timestamp_(common::OB_INVALID_TIMESTAMP), proposal_id_()
   {}
   ~ObLogMeta()
@@ -149,10 +149,10 @@ class ObLogMeta {
     return proposal_id_;
   }
 
-  public:
+public:
   TO_STRING_KV(K(log_id_), K(submit_timestamp_), K(proposal_id_));
 
-  private:
+private:
   uint64_t log_id_;
   int64_t submit_timestamp_;
   common::ObProposalID proposal_id_;
@@ -161,7 +161,7 @@ class ObLogMeta {
 class ObLogInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogInfo()
   {
     reset();
@@ -171,7 +171,7 @@ class ObLogInfo {
     reset();
   }
 
-  public:
+public:
   void reset()
   {
     buff_ = NULL;
@@ -240,7 +240,7 @@ class ObLogInfo {
   }
   TO_STRING_KV(K(size_), K(log_id_), K(submit_timestamp_), K(proposal_id_), K(need_flushed_));
 
-  private:
+private:
   const char* buff_;
   int64_t size_;
   uint64_t log_id_;

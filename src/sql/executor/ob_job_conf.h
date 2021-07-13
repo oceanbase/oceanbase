@@ -26,7 +26,7 @@ typedef common::ObIArray<common::ObNewRange> RangeIArray;
 typedef common::ObSEArray<common::ObNewRange, 8> RangeSEArray;
 
 class ObJobConf {
-  public:
+public:
   ObJobConf();
   virtual ~ObJobConf();
   void reset();
@@ -43,11 +43,11 @@ class ObJobConf {
     task_split_type_ = type;
   }
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObJobConf);
 
-  private:
+private:
   // Task Split Type
   int task_split_type_;
   // If a table scan Job, we need this info:

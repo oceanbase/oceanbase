@@ -32,7 +32,7 @@ using std::endl;
 namespace oceanbase {
 namespace common {
 class TestAllocator : public ObIAllocator {
-  public:
+public:
   virtual void* alloc(const int64_t size) override
   {
     return std::malloc(size);
@@ -47,7 +47,7 @@ class TestAllocator : public ObIAllocator {
   }
 };
 class TestURowID {
-  public:
+public:
   // void SetUp() override {}
   // void TearDown() override {}
 

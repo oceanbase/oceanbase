@@ -41,14 +41,14 @@ class ObSchemaGetterGuard;
 namespace rootserver {
 
 class OBackupAutoDeleteExpiredIdling : public ObThreadIdling {
-  public:
+public:
   explicit OBackupAutoDeleteExpiredIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual int64_t get_idle_interval_us();
 };
 
 class ObBackupAutoDeleteExpiredData : public ObRsReentrantThread, public ObIBackupScheduler {
-  public:
+public:
   ObBackupAutoDeleteExpiredData();
   virtual ~ObBackupAutoDeleteExpiredData();
   int init(common::ObServerConfig& cfg, ObMySQLProxy& sql_proxy,
@@ -69,13 +69,13 @@ class ObBackupAutoDeleteExpiredData : public ObRsReentrantThread, public ObIBack
   int start();
   ;
 
-  private:
+private:
   int check_can_auto_delete(
       const bool auto_delete_expired_backup, const int64_t backup_recovery_window, bool& can_delete);
   int get_last_succeed_delete_expired_snapshot(int64_t& last_succ_delete_expired_snapshot);
   int schedule_auto_delete_expired_data(const int64_t backup_recovery_window);
 
-  private:
+private:
   bool is_inited_;
   common::ObServerConfig* config_;
   common::ObMySQLProxy* sql_proxy_;
@@ -85,7 +85,7 @@ class ObBackupAutoDeleteExpiredData : public ObRsReentrantThread, public ObIBack
   bool is_working_;
   share::ObIBackupLeaseService* backup_lease_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupAutoDeleteExpiredData);
 };
 

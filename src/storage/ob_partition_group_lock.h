@@ -51,7 +51,7 @@ class ObPartitionGroupLock {
   friend ObPartitionGroupTryLockGuard;
   friend ObPGLockWithPendingReplayGuard;
 
-  public:
+public:
   typedef common::ObLatch RWLock;
 
   ObPartitionGroupLock();
@@ -60,7 +60,7 @@ class ObPartitionGroupLock {
   ObPartitionGroupLock(const ObPartitionGroupLock&) = delete;
   ObPartitionGroupLock& operator=(const ObPartitionGroupLock&) = delete;
 
-  private:
+private:
   int64_t lock(int64_t hold, int64_t change);
   int64_t try_lock(int64_t hold, int64_t change);
   void unlock(int64_t target);
@@ -69,7 +69,7 @@ class ObPartitionGroupLock {
 };
 
 class ObPartitionGroupLockGuard {
-  public:
+public:
   ObPartitionGroupLockGuard(ObPartitionGroupLock& lock, int64_t hold, int64_t change, const bool trylock = false);
   ~ObPartitionGroupLockGuard();
 
@@ -82,18 +82,18 @@ class ObPartitionGroupLockGuard {
   ObPartitionGroupLockGuard(const ObPartitionGroupLockGuard&) = delete;
   ObPartitionGroupLockGuard& operator=(const ObPartitionGroupLockGuard&) = delete;
 
-  private:
+private:
   ObPartitionGroupLock& lock_;
   int64_t mark_;
   int64_t start_ts_;
 };
 
 // ATTENTION:
-// The lock is designed to resolve the deadlock of code desgin between replay
+// The lock is designed to resolve the deadlock of code design between replay
 // engine and partition group. You need use the guard when adding replay engine
 // lock inside partition group
 class ObPGLockWithPendingReplayGuard {
-  public:
+public:
   ObPGLockWithPendingReplayGuard(ObPartitionGroupLock& lock, ObReplayStatus& replay_status, const ObPartitionKey& key,
       int64_t hold, int64_t change);
   ~ObPGLockWithPendingReplayGuard();
@@ -107,11 +107,11 @@ class ObPGLockWithPendingReplayGuard {
   ObPGLockWithPendingReplayGuard(const ObPGLockWithPendingReplayGuard&) = delete;
   ObPGLockWithPendingReplayGuard& operator=(const ObPGLockWithPendingReplayGuard&) = delete;
 
-  public:
+public:
   static const int64_t SLEEP_FOR_PENDING_REPLAY = 10L * 1000L;  // 10ms
   static const int64_t SLEEP_FOR_PENDING_REPLAY_CNT = 5000L;
   static const int64_t TIMEOUT_FOR_PENDING_REPLAY = 100L * 1000L;  // 100ms
-  private:
+private:
   ObPartitionGroupLock& lock_;
   ObReplayStatus& replay_status_;
   ObPartitionKey pkey_;
