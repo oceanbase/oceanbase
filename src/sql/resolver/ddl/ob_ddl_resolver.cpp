@@ -428,9 +428,12 @@ int ObDDLResolver::resolve_default_value(ParseNode* def_node,
             default_value.set_param_meta();
           } else if (ObFloatType == old_obj.get_type()) {
             float value = 0.0f;
-            old_obj.get_float(value);
-            default_value.set_float(-value);
-            default_value.set_param_meta();
+            if (OB_FAIL(old_obj.get_float(value))) {
+              SQL_RESV_LOG(WARN, "failed to get float value from old_obj", K(ret), K(old_obj));
+            } else {
+              default_value.set_float(-value);
+              default_value.set_param_meta();
+            }
           } else if (ObDoubleType == old_obj.get_type()) {
             double value = 0.0;
             if (OB_FAIL(old_obj.get_double(value))) {
