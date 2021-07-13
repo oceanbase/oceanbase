@@ -1085,6 +1085,7 @@ typedef enum ObItemType {
 
   T_SFU_INT,
   T_SFU_DECIMAL,
+  T_SFU_DOUBLE,
   T_FOR_UPDATE,
   T_DEFAULT_INT,
   T_DEFAULT_NULL,

@@ -46,7 +46,6 @@ public:
         sort_collations_(),
         sort_cmp_funcs_(),
         separator_expr_(NULL),
-        separator_datum_(nullptr),
         linear_inter_expr_(NULL)
   {}
   virtual ~ObAggrInfo();
@@ -98,7 +97,6 @@ public:
   ObSortCollations sort_collations_;
   ObSortFuncs sort_cmp_funcs_;
   ObExpr* separator_expr_;
-  ObDatum* separator_datum_;
 
   // used for median/percentile_cont aggr
   ObExpr* linear_inter_expr_;
@@ -160,7 +158,7 @@ public:
   class GroupConcatExtraResult : public ExtraResult {
   public:
     explicit GroupConcatExtraResult(common::ObIAllocator& alloc)
-        : ExtraResult(alloc), row_count_(0), iter_idx_(0), sort_op_(NULL)
+        : ExtraResult(alloc), row_count_(0), iter_idx_(0), sort_op_(NULL), separator_datum_(NULL)
     {}
     virtual ~GroupConcatExtraResult();
     void reuse_self();
@@ -208,6 +206,7 @@ public:
     {
       return row_count_;
     }
+    ObDatum *&get_separator_datum() { return separator_datum_; }
     DECLARE_VIRTUAL_TO_STRING;
 
   private:
@@ -218,6 +217,7 @@ public:
     ObChunkDatumStore::Iterator row_store_iter_;
 
     ObSortOpImpl* sort_op_;
+    ObDatum *separator_datum_;
   };
 
   class AggrCell {

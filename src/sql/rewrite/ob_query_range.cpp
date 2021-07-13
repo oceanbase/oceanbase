@@ -4152,6 +4152,8 @@ int ObQueryRange::get_like_range(
       }
     } else if (OB_FAIL(escape.get_string(escape_str))) {
       LOG_WARN("failed to get escape string", K(escape), K(ret));
+    } else if (escape_str.empty()) {
+      escape_str.assign_ptr("\\", 1);
     } else { /* do nothing */
     }
     if (OB_FAIL(ret)) {

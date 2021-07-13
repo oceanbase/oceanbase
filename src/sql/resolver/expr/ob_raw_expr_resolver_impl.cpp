@@ -250,6 +250,14 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
           }
           break;
         }
+        case T_SFU_DOUBLE: {
+          ParseNode *tmp_node = const_cast<ParseNode *>(node);
+          tmp_node->type_ = T_DOUBLE;
+          if (OB_FAIL(process_datatype_or_questionmark(*tmp_node, expr))) {
+            LOG_WARN("fail to process datetype or questionmark", K(ret), K(tmp_node));
+          } else {/*do nothing*/}
+          break;
+        }
         case T_CAST_ARGUMENT: {
           ObConstRawExpr* c_expr = NULL;
           if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_INT, c_expr))) {
