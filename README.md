@@ -4,20 +4,20 @@ OceanBase Database is a native distributed relational database. It is developed 
 
 OceanBase Database has these features:
 
-- High availability
+- High availability</br>
     OceanBase Database recovers from single server failure automatically. OceanBase Database supports cross-city disaster tolerance for multiple IDCs and zero data loss. OceanBase Database meets the financial industry Level 6 disaster recovery standard (RPO=0, RTO<=30 seconds).
-- Linear scalability
+- Linear scalability</br>
     OceanBase Database scales transparently to applications and balances the system load automatically. It can manage more than 1500 nodes in a cluster. The data volume can reach petabytes. The records in a single table can be more than a trillion rows.
-- High compatibility with MySQL
+- High compatibility with MySQL</br>
     OceanBase Database is compatible with MySQL protocol and syntax. You can access OceanBase Database by MySQL client.
-- High performance
+- High performance</br>
     OceanBase Database supports quasi memory level data change and exclusive encoding compression. Together with the linear scalability, OceanBase Database provides high performance.
-- Low cost
-    OceanBase Database can leverage PC servers and cheap SSDs. Its high storage compression ratio and high performance also reduce the storage and computing costs.
-- Multi-tenancy
+- Low cost</br>
+    OceanBase Database leverages PC servers and cheap SSDs. Its high storage compression ratio and high performance also reduce the storage and computing costs.
+- Multi-tenancy</br>
     OceanBase Database supports native multi-tenancy architecture. One cluster supports multiple businesses. Data is isolated among tenants. This reduces the deployment, operation, and maintenance costs.
 
-OceanBase Database is supporting the entire core business of Alipay and the core systems of hundreds of financial institutions, such as banks and insurance companies.
+OceanBase Database supports the entire core business of Alipay and the core systems of hundreds of financial institutions, such as banks and insurance companies.
 
 ## Quick start
 
