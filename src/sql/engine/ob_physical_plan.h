@@ -90,18 +90,8 @@ public:
 
   virtual void destroy();
   virtual void reset();
-  void set_is_last_open_succ(bool val)
-  {
-    stat_.is_last_open_succ_ = val;
-  }
-  bool is_last_open_succ() const
-  {
-    return stat_.is_last_open_succ_;
-  }
-  bool from_plan_baseline() const
-  {
-    return common::OB_INVALID_ID != stat_.bl_info_.plan_baseline_id_;
-  }
+  void set_is_last_exec_succ(bool val) { stat_.is_last_exec_succ_ = val; }
+  bool is_last_exec_succ() const { return stat_.is_last_exec_succ_; }
   const ObString& get_constructed_sql() const
   {
     return stat_.bl_info_.key_.constructed_sql_;

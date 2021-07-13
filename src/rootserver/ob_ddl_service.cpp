@@ -18807,13 +18807,15 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg& arg)
     uint64_t database_id = OB_INVALID_ID;
     if (OB_SUCC(ret)) {
       bool database_exist = false;
-      if (OB_FAIL(schema_service_->check_database_exist(tenant_id, database_name, database_id, database_exist))) {
-        LOG_WARN("failed to check database exist!",
-            K(tenant_id),
-            K(database_name),
-            K(database_id),
-            K(database_exist),
-            K(ret));
+      if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
+        database_id = OB_OUTLINE_DEFAULT_DATABASE_ID;
+        database_exist = true;
+      } else if (OB_FAIL(schema_service_->check_database_exist(tenant_id,
+                                                        database_name,
+                                                        database_id,
+                                                        database_exist))) {
+        LOG_WARN("failed to check database exist!", K(tenant_id), K(database_name),
+                 K(database_id), K(database_exist), K(ret));
       } else if (!database_exist) {
         ret = OB_ERR_BAD_DATABASE;
         LOG_USER_ERROR(OB_ERR_BAD_DATABASE, database_name.length(), database_name.ptr());

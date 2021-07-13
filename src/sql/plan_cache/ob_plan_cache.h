@@ -294,11 +294,11 @@ public:
   int dump_all_objs() const;
   template <DumpType dump_type>
   int dump_deleted_objs(common::ObIArray<DeletedCacheObjInfo>& deleted_objs, const int64_t safe_timestamp) const;
-  static common::ObMemAttr get_mem_attr()
+  common::ObMemAttr get_mem_attr()
   {
     common::ObMemAttr attr;
     attr.label_ = ObNewModIds::OB_SQL_PLAN_CACHE;
-    attr.tenant_id_ = OB_INVALID_ID;
+    attr.tenant_id_ = tenant_id_;
     attr.ctx_id_ = ObCtxIds::PLAN_CACHE_CTX_ID;
     return attr;
   }

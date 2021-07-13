@@ -151,10 +151,12 @@ ObPlanCacheValue::ObPlanCacheValue()
 int ObPlanCacheValue::init(ObPCVSet* pcv_set, const ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr mem_attr = ObPlanCache::get_mem_attr();
-  if (OB_ISNULL(pcv_set) || OB_ISNULL(cache_obj)) {
+  ObMemAttr mem_attr;
+  if (OB_ISNULL(pcv_set) || OB_ISNULL(cache_obj) || OB_ISNULL(pcv_set->get_plan_cache())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(pcv_set), K(cache_obj));
+  } else if (FALSE_IT(mem_attr = pcv_set->get_plan_cache()->get_mem_attr())) {
+      // do nothing
   } else if (OB_ISNULL(pc_alloc_ = pcv_set->get_pc_allocator())) {
     LOG_WARN("invalid argument", K(pcv_set->get_pc_allocator()));
   } else if (OB_FAIL(outline_params_wrapper_.set_allocator(pc_alloc_, mem_attr))) {
@@ -840,6 +842,20 @@ void ObPlanCacheValue::reset()
         not_param_info_.at(i).raw_text_.reset();
       }
     }
+
+    for (int64_t i = 0; i < not_param_var_.count(); i++) {
+      // deep-copy destory
+      // free v
+      ObObjParam param = not_param_var_.at(i).ps_param_;
+      void * ptr = param.get_deep_copy_obj_ptr();
+      if (NULL == ptr){
+        // do nothing
+      } else {
+        pc_alloc_->free(ptr);
+        not_param_var_.at(i).ps_param_.reset();
+      }
+    }
+
     if (NULL != outline_signature_.ptr()) {
       pc_alloc_->free(outline_signature_.ptr());
       outline_signature_.reset();
@@ -851,6 +867,7 @@ void ObPlanCacheValue::reset()
   }
   not_param_info_.reset();
   not_param_index_.reset();
+  not_param_var_.reset();
   neg_param_index_.reset();
   param_charset_type_.reset();
   sql_traits_.reset();

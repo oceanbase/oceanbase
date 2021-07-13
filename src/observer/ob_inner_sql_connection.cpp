@@ -473,6 +473,10 @@ int ObInnerSQLConnection::process_retry(
   if (need_retry) {
     LOG_WARN("need retry, set ret to OB_SUCCESS", K(ret), K(last_ret), K(retry_cnt));
     retry_info.set_last_query_retry_err(last_ret);
+    if (OB_ISNULL(extern_session_)) {
+    } else {
+      extern_session_->get_retry_info_for_update().set_last_query_retry_err(last_ret);
+    }
     ret = OB_SUCCESS;
   }
   return ret;

@@ -1154,13 +1154,20 @@ inline int ObSql::handle_text_query(const ObString& stmt, ObSqlCtx& context, ObR
   } else {
     context.cur_sql_ = trimed_stmt;
     pc_ctx = new (pc_ctx) ObPlanCacheCtx(trimed_stmt,
-        false, /*is_ps_mode*/
-        allocator,
-        context,
-        ectx,
-        tenant_id);
-    if (OB_FAIL(session.get_database_id(pc_ctx->bl_key_.db_id_))) {
+                                         false, /*is_ps_mode*/
+                                         allocator,
+                                         context,
+                                         ectx,
+                                         tenant_id);
+    uint64_t database_id = OB_INVALID_ID;
+
+    if (OB_FAIL(session.get_database_id(database_id))) {
       LOG_WARN("Failed to get database id", K(ret));
+    } else if (FALSE_IT(pc_ctx->bl_key_.db_id_ =
+                                  (database_id == OB_INVALID_ID) ?
+                                      OB_OUTLINE_DEFAULT_DATABASE_ID:
+                                      database_id)) {
+      // do nothing
     } else if (!use_plan_cache) {
       if (context.multi_stmt_item_.is_batched_multi_stmt()) {
         ret = OB_BATCHED_MULTI_STMT_ROLLBACK;

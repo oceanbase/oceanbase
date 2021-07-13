@@ -1195,8 +1195,9 @@ int ObSqlPlanSet::get_local_plan_direct(ObPlanCacheCtx& pc_ctx, bool& is_direct_
       plan = local_plan_;
     }
     if (OB_SUCC(ret) && plan != NULL) {
-      int last_retry_err = pc_ctx.sql_ctx_.session_info_->get_retry_info().get_last_query_retry_err();
-      if (plan->is_last_open_succ()) {
+      int last_retry_err = pc_ctx.sql_ctx_.session_info_
+                             ->get_retry_info().get_last_query_retry_err();
+      if (plan->is_last_exec_succ()) {
         is_direct_local_plan = true;
       } else if (pc_ctx.sql_ctx_.session_info_->get_is_in_retry() && is_local_plan_opt_allowed(last_retry_err)) {
         is_direct_local_plan = true;

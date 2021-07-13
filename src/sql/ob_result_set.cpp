@@ -128,12 +128,6 @@ OB_INLINE int ObResultSet::open_plan()
         }
       }
     }
-
-    if (OB_FAIL(ret)) {
-      physical_plan_->set_is_last_open_succ(false);
-    } else {
-      physical_plan_->set_is_last_open_succ(true);
-    }
   }
   return ret;
 }
@@ -143,6 +137,19 @@ int ObResultSet::sync_open()
   int ret = OB_SUCCESS;
   OZ(execute());
   OZ(open());
+
+  if (OB_NOT_NULL(cmd_)) {
+    // cmd not set
+  } else if (ret == OB_NOT_INIT) {
+    // phy plan not init, do nothing
+  } else if (OB_ISNULL(physical_plan_)) {
+    LOG_WARN("empty physical plan"); 
+  } else if (OB_FAIL(ret)) {
+    physical_plan_->set_is_last_exec_succ(false);
+  } else {
+    physical_plan_->set_is_last_exec_succ(true);
+  }
+
   return ret;
 }
 
@@ -478,12 +485,15 @@ OB_INLINE int ObResultSet::end_participant(const bool is_rollback)
 int ObResultSet::get_next_row(const common::ObNewRow*& row)
 {
   int& ret = errcode_;
-  if (OB_LIKELY(NULL != physical_plan_)) {  // take this branch more frequently
+  // last_exec_succ default values is true
+  if (OB_LIKELY(NULL != physical_plan_)) { // take this branch more frequently
     if (OB_ISNULL(exec_result_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("exec result is null", K(ret));
     } else if (OB_FAIL(exec_result_->get_next_row(get_exec_context(), row))) {
       if (OB_ITER_END != ret) {
+        // marked last execute status
+        physical_plan_->set_is_last_exec_succ(false);
         LOG_WARN("get next row from exec result failed", K(ret));
       }
     } else {

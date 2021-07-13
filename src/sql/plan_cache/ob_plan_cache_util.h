@@ -698,7 +698,7 @@ struct ObPlanStat {
   int64_t expected_worker_count_;
   int64_t outline_version_;
   int64_t outline_id_;
-  bool is_last_open_succ_;
+  bool is_last_exec_succ_;
   common::ObString sp_info_str_;
   common::ObString param_infos_;
   common::ObString sys_vars_str_;
@@ -782,7 +782,7 @@ struct ObPlanStat {
         expected_worker_count_(-1),
         outline_version_(common::OB_INVALID_VERSION),
         outline_id_(common::OB_INVALID_ID),
-        is_last_open_succ_(true),
+        is_last_exec_succ_(true),
         is_evolution_(false),
         asyn_baseline_stat_(ASYN_NOTHING),
         is_bind_sensitive_(false),
@@ -847,7 +847,7 @@ struct ObPlanStat {
         expected_worker_count_(rhs.expected_worker_count_),
         outline_version_(rhs.outline_version_),
         outline_id_(rhs.outline_id_),
-        is_last_open_succ_(rhs.is_last_open_succ_),
+        is_last_exec_succ_(rhs.is_last_exec_succ_),
         is_evolution_(rhs.is_evolution_),
         asyn_baseline_stat_(rhs.asyn_baseline_stat_),
         bl_info_(rhs.bl_info_),
@@ -996,7 +996,7 @@ struct ObPlanStat {
       K_(execute_times), K_(disk_reads), K_(direct_writes), K_(buffer_gets), K_(application_wait_time),
       K_(concurrency_wait_time), K_(user_io_wait_time), K_(rows_processed), K_(elapsed_time), K_(cpu_time),
       K_(large_querys), K_(delayed_large_querys), K_(outline_version), K_(outline_id), K_(is_evolution),
-      K_(is_last_open_succ), K_(is_bind_sensitive), K_(is_bind_aware), K_(is_last_open_succ), K_(timeout_count),
+      K_(is_last_exec_succ), K_(is_bind_sensitive), K_(is_bind_aware), K_(is_last_exec_succ), K_(timeout_count),
       K_(bl_info));
 };
 

@@ -2084,10 +2084,11 @@ public:
   //@{  deep copy
   bool need_deep_copy() const;
   OB_INLINE int64_t get_deep_copy_size() const;
-  int deep_copy(const ObObj& src, char* buf, const int64_t size, int64_t& pos);
-  void set_data_ptr(void* data_ptr);
-  const void* get_data_ptr() const;
-  // return byte length
+  int deep_copy(const ObObj &src, char *buf, const int64_t size, int64_t &pos);
+  void* get_deep_copy_obj_ptr();
+  void set_data_ptr(void *data_ptr);
+  const void *get_data_ptr() const;
+  //return byte length
   int64_t get_data_length() const;
 
   template <typename Allocator>
