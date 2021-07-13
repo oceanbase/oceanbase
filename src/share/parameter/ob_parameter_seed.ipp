@@ -1434,3 +1434,7 @@ DEF_TIME(ilog_index_expire_time, OB_CLUSTER_PARAMETER, "7d", "[0s, 60d]",
 DEF_BOOL(_auto_drop_tenant_if_restore_failed, OB_CLUSTER_PARAMETER, "True",
     "auto drop restoring tenant if physical restore fails",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(ob_proxy_readonly_transaction_routing_policy, OB_TENANT_PARAMETER, "true",
+         "Proxy route policy for readonly sql",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
