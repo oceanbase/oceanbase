@@ -88,9 +88,6 @@ private:
 
   int check_validity_for_target_table(OjLimitPushDownHelper& helper, bool& is_valid);
 
-  int prepare_view_table(ObSelectStmt* stmt, TableItem* target_table, ObIArray<ObRawExpr*>& extracted_conditions,
-      ObIArray<OrderItem>& saved_order_items, TableItem*& view_table);
-
   int pushdown_view_table(ObSelectStmt* stmt, TableItem* target_table, ObIArray<ObRawExpr*>& extracted_conditions,
       ObIArray<OrderItem>& saved_order_items, bool need_rename, bool is_limit_only);
 
