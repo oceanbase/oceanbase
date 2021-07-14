@@ -163,7 +163,7 @@ void ObReqQueue::loop()
                "wait finish, remain %ld task",
           "qsize",
           queue_.size());
-    } else if (0 == queue_.size()) {
+    } else if (0 != queue_.size()) {
       LOG_INFO("exiting queue thread and wait remain finish");
       // Process remains if we should wait until all task has been
       // processed before exiting this thread. Previous return code
