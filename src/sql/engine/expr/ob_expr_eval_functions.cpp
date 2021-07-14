@@ -49,6 +49,7 @@
 #include "ob_expr_like.h"
 #include "ob_expr_lower.h"
 #include "ob_expr_md5.h"
+#include "ob_expr_crc32.h"
 #include "ob_expr_mid.h"
 #include "ob_expr_minus.h"
 #include "ob_expr_mod.h"
@@ -638,7 +639,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprFormat::calc_format_expr,           /* 387 */
     calc_translate_using_expr,                /* 388 */
     ObExprQuarter::calc_quater,               /* 389 */
-    ObExprBitLength::calc_bit_length          /* 390 */
+    ObExprBitLength::calc_bit_length,         /* 390 */
+    ObExprCrc32::calc_crc32_expr              /* 391 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

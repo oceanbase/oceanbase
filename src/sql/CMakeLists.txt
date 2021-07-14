@@ -221,6 +221,7 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_conv.cpp
   engine/expr/ob_expr_convert.cpp
   engine/expr/ob_expr_cosh.cpp
+  engine/expr/ob_expr_crc32.cpp
   engine/expr/ob_expr_timezone.cpp
   engine/expr/ob_expr_tz_offset.cpp
   engine/expr/ob_expr_from_tz.cpp
