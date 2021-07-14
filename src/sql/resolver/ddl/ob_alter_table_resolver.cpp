@@ -3421,6 +3421,16 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode& node)
               K(ret),
               K(alter_column_schema.get_accuracy()),
               KPC(origin_col_schema));
+        } else if ((ObTimestampType == origin_col_schema->get_data_type()
+                      || ObDateTimeType == origin_col_schema->get_data_type()
+                      || ObTimeType == origin_col_schema->get_data_type())
+                  && origin_col_schema->get_data_type() == alter_column_schema.get_data_type()
+                  && origin_col_schema->get_accuracy().get_precision() >
+                    alter_column_schema.get_accuracy().get_precision()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Decrease scale of timestamp type");
+          LOG_WARN("Decrease scale of timestamp type not supported", K(ret),
+                  K(origin_col_schema->get_accuracy()), K(alter_column_schema.get_accuracy()));
         }
       }
       if (OB_SUCC(ret)) {
@@ -3531,6 +3541,17 @@ int ObAlterTableResolver::resolve_modify_column(
               K(ret),
               K(alter_column_schema.get_accuracy()),
               KPC(origin_col_schema));
+        } else if ((ObTimestampNanoType == origin_col_schema->get_data_type()
+                        || ObTimestampType == origin_col_schema->get_data_type()
+                        || ObDateTimeType == origin_col_schema->get_data_type()
+                        || ObTimeType == origin_col_schema->get_data_type())
+                    && origin_col_schema->get_data_type() == alter_column_schema.get_data_type()
+                    && origin_col_schema->get_accuracy().get_precision() >
+                      alter_column_schema.get_accuracy().get_precision()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Decrease scale of timestamp type");
+          LOG_WARN("Decrease scale of timestamp type not supported", K(ret),
+                  K(origin_col_schema->get_accuracy()), K(alter_column_schema.get_accuracy()));
         } else if (share::is_oracle_mode() &&
                    ((origin_col_schema->get_data_type() != alter_column_schema.get_data_type()) ||
                        (origin_col_schema->get_data_length() != alter_column_schema.get_data_length()))) {

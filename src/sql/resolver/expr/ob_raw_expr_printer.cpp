@@ -411,6 +411,10 @@ int ObRawExprPrinter::print(ObOpRawExpr* expr)
       case T_OP_GT:
       case T_OP_SQ_GT:
         SET_SYMBOL_IF_EMPTY(">");
+      case T_OP_BIT_LEFT_SHIFT:
+        SET_SYMBOL_IF_EMPTY("<<");
+      case T_OP_BIT_RIGHT_SHIFT:
+        SET_SYMBOL_IF_EMPTY(">>");
       case T_OP_NE:
       case T_OP_SQ_NE:
         SET_SYMBOL_IF_EMPTY("<>");

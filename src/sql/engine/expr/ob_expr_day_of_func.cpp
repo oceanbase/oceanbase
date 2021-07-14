@@ -625,8 +625,10 @@ int ObExprSubtime::subtime_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
         }
       } else {
         t_val1 = ObTimeConverter::ob_time_to_time(ot1);
+        if (IS_NEG_TIME(ot1.mode_)) {
+          t_val1 = -t_val1;
+        }
       }
-
       if (OB_SUCC(ret)) {
         int64_t int_usec = t_val1 - t_val2;
         const int64_t datetime_buf_len = DATETIME_MAX_LENGTH + 1;

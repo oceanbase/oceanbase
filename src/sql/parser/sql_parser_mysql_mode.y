@@ -12334,6 +12334,10 @@ NAME_OB
 {
   make_name_node($$, result->malloc_pool_, "database");
 }
+| SCHEMA
+{
+  make_name_node($$, result->malloc_pool_, "database");
+}
 | COALESCE
 {
   make_name_node($$, result->malloc_pool_, "coalesce");
