@@ -340,7 +340,7 @@ int ObStorageLogReader::tackle_less_header_len(const common::ObLogEntry& entry)
     STORAGE_REDO_LOG(INFO, "reach the end of log", K(ret), K(file_id_));
   } else {
     ret = OB_LAST_LOG_NOT_COMPLETE;
-    STORAGE_REDO_LOG(ERROR,
+    STORAGE_REDO_LOG(WARN,
         "last log not complete",
         K(ret),
         "remain_data_len",
@@ -355,7 +355,7 @@ int ObStorageLogReader::tackle_less_data_len(const common::ObLogEntry& entry)
 {
   int ret = OB_SUCCESS;
   ret = OB_LAST_LOG_NOT_COMPLETE;
-  STORAGE_REDO_LOG(ERROR, "last log not complete", K_(file_id), K_(log_buffer), K(entry));
+  STORAGE_REDO_LOG(WARN, "last log not complete", K_(file_id), K_(log_buffer), K(entry));
   hex_dump(log_buffer_.get_data(), static_cast<int32_t>(log_buffer_.get_limit()), true, OB_LOG_LEVEL_WARN);
   return ret;
 }
