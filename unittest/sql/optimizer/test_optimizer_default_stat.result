@@ -3546,7 +3546,7 @@ SQL: select * from t5 where c2 = 5 and c3 = 7;
 Outputs & filters: 
 -------------------------------------
   0 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil)
-  1 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil)
+  1 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil)
   2 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
       access([t5.c2], [t5.c3], [t5.c1]), partitions(p2), 
       is_index_back=false, 
@@ -3570,7 +3570,7 @@ SQL: select * from t5 where c2 = 6 and c3 = 7;
 Outputs & filters: 
 -------------------------------------
   0 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil)
-  1 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil)
+  1 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil)
   2 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
       access([t5.c2], [t5.c3], [t5.c1]), partitions(p2), 
       is_index_back=false, 
@@ -7427,7 +7427,7 @@ SQL: select * from t1 X, t1 Y where X.c1 = Y.c1 and X.c1 = 1 and Y.c1 = 1;
 Outputs & filters: 
 -------------------------------------
   0 - output([X.c1], [X.c2], [X.c1], [X.c2]), filter(nil)
-  1 - output([X.c1], [X.c2]), filter(nil)
+  1 - output([X.c1], [X.c2], [X.c1], [X.c2]), filter(nil)
   2 - output([X.c1], [X.c2]), filter(nil), 
       access([X.c1], [X.c2]), partitions(p1), 
       is_index_back=false, 
@@ -8714,7 +8714,7 @@ SQL: select * from t14 partition(p1) where (c1, c2) =(1, 2) or (c1, c2) = (2, 3)
 Outputs & filters: 
 -------------------------------------
   0 - output([t14.c1], [t14.c2], [t14.c3]), filter(nil)
-  1 - output([t14.c3], [t14.c1], [t14.c2]), filter(nil)
+  1 - output([t14.c1], [t14.c2], [t14.c3]), filter(nil)
   2 - output([t14.c3], [t14.c1], [t14.c2]), filter(nil), 
       access([t14.c3], [t14.c1], [t14.c2]), partitions(p1), 
       is_index_back=false, 
@@ -8738,7 +8738,7 @@ SQL: select/*+index(t14 primary)*/* from t14  partition(p1) where (c1, c2) =(1, 
 Outputs & filters: 
 -------------------------------------
   0 - output([t14.c1], [t14.c2], [t14.c3]), filter(nil)
-  1 - output([t14.c3], [t14.c1], [t14.c2]), filter(nil)
+  1 - output([t14.c1], [t14.c2], [t14.c3]), filter(nil)
   2 - output([t14.c3], [t14.c1], [t14.c2]), filter(nil), 
       access([t14.c3], [t14.c1], [t14.c2]), partitions(p1), 
       is_index_back=false, 

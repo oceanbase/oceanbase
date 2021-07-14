@@ -5203,26 +5203,41 @@ int ObLogicalOperator::allocate_dummy_output_access()
         } else if (type_ == log_op_def::LOG_GRANULE_ITERATOR &&
                    get_plan()->get_optimizer_context().is_batched_multi_stmt()) {
           ret = append_array_no_dup(output_exprs_, get_child(first_child)->get_output_exprs());
-        } else {
-          ObRawExpr* partition_id_expr = NULL;
-          if (log_op_def::LOG_EXCHANGE == type_) {
+        } else if (log_op_def::LOG_EXCHANGE == type_) {
+          ObRawExpr *partition_id_expr = NULL;
+          ObLogExchange *exchange_op = NULL;
+          exchange_op = static_cast<ObLogExchange*>(this);
+          if (exchange_op->get_is_remote() && exchange_op->is_producer()) {
+            // https://work.aone.alibaba-inc.com/issue/33487009
+            // 0. EXCHANGE IN REMOTE
+            // 1.  EXCHANGE OUT REMOTE
+            // 2.   TABLE SCAN / OTHERS
+            // exchange_out_remote must copy output from exchange_in_remote
+            // operators 0 and 1 must have the same output
+            if (OB_ISNULL(get_parent())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("parent is null", K(ret), K(get_plan()), K(type_), K(id_));
+            } else if (OB_FAIL(output_exprs_.assign(get_parent()->get_output_exprs()))) {
+              LOG_WARN("copy_exprs fails", K(ret));
+            }
+          } else {
             for (int64_t i = 0; i < output_exprs_.count() && OB_ISNULL(partition_id_expr); i++) {
               ObRawExpr* expr = output_exprs_.at(i);
               if (expr->get_expr_type() == T_PDML_PARTITION_ID) {
                 partition_id_expr = expr;
               }
             }
-          }
-          if (OB_FAIL(output_exprs_.assign(get_child(first_child)->get_output_exprs()))) {
-            LOG_WARN("copy_exprs fails", K(ret));
-          } else if (OB_NOT_NULL(partition_id_expr)) {
-            LOG_DEBUG("append the partition id expr to output exprs", K(*partition_id_expr));
-            if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, partition_id_expr))) {
-              LOG_WARN("failed to add partition id expr to output exprs", K(ret));
+            if (OB_FAIL(output_exprs_.assign(get_child(first_child)->get_output_exprs()))) {
+              LOG_WARN("copy_exprs fails", K(ret));
+            } else if (OB_NOT_NULL(partition_id_expr)) {
+              LOG_DEBUG("append the partition id expr to output exprs", K(*partition_id_expr));
+              if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, partition_id_expr))) {
+                LOG_WARN("failed to add partition id expr to output exprs", K(ret));
+              }
             }
-          } else {
-            LOG_DEBUG("succ to assign output_exprs_", K(output_exprs_));
           }
+        } else if (OB_FAIL(output_exprs_.assign(get_child(first_child)->get_output_exprs()))) {
+          LOG_WARN("copy_exprs fails", K(ret));
         }
       } else { /* Do nothing */
       }

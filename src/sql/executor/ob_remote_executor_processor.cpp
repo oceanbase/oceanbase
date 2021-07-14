@@ -686,7 +686,11 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask& task)
   ObPhysicalPlan* plan = nullptr;
   ObPhysicalPlanCtx* plan_ctx = nullptr;
   CacheRefHandleID cache_handle_id = MAX_HANDLE;
-  if (OB_ISNULL(session = exec_ctx_.get_my_session())) {
+  int inject_err_no = EVENT_CALL(EventTable::EN_REMOTE_EXEC_ERR);
+  if (0 != inject_err_no) {
+    ret = inject_err_no;
+    LOG_WARN("Injection OB_LOCATION_NOT_EXIST error", K(ret));
+  } else if (OB_ISNULL(session = exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("session is NULL", K(ret), K(task));
   } else if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(exec_ctx_))) {

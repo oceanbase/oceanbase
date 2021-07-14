@@ -2997,6 +2997,15 @@ int ObSql::after_get_plan(ObPlanCacheCtx& pc_ctx, ObSQLSessionInfo& session, ObP
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx* pctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
+  bool enable_send_plan_event = EVENT_CALL(EventTable::EN_DISABLE_REMOTE_EXEC_WITH_PLAN) == 0;
+  bool enable_send_plan = session.get_is_in_retry() && enable_send_plan_event;
+  int last_query_retry_err = session.get_retry_info().get_last_query_retry_err();
+  if (OB_TRANSACTION_SET_VIOLATION == last_query_retry_err
+      || OB_TRY_LOCK_ROW_CONFLICT == last_query_retry_err) {
+    enable_send_plan = false;
+  }
+  LOG_DEBUG("before after_get_plan", K(enable_send_plan), K(enable_send_plan_event),
+            "is_retry",session.get_is_in_retry());
   //  LOG_INFO("after get paln", K(pctx), K(phy_plan));
   if (NULL != pctx) {
     if (NULL != phy_plan) {
@@ -3020,7 +3029,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx& pc_ctx, ObSQLSessionInfo& session, ObP
         }  // end for
       }
       if (OB_SUCC(ret) && phy_plan->is_remote_plan() && !phy_plan->contains_temp_table() &&
-          GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2250) {
+          GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2250 &&
+          !enable_send_plan) {
         ParamStore& param_store = pctx->get_param_store_for_update();
         if (OB_NOT_NULL(ps_params)) {
           int64_t initial_param_count = ps_params->count();
