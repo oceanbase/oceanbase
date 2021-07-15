@@ -126,6 +126,7 @@ private:
   char* buf_;
   int64_t size_;  // has read or to write size.
   bool is_read_;
+  bool has_wait_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileIOHandle);
 };
 
