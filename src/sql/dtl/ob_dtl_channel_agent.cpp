@@ -350,7 +350,7 @@ int ObDtlChanAgent::switch_buffer(int64_t need_size)
   if (OB_SUCC(ret)) {
     current_buffer_->set_bcast();
     dtl_buf_encoder_.set_new_buffer(current_buffer_);
-  } else {
+  } else if (nullptr != current_buffer_) {
     dtl_buf_allocator_.free_buf(*bcast_ch, current_buffer_);
   }
 

@@ -59,7 +59,7 @@ int ObDtlFlowControl::init(uint64_t tenant_id, int64_t chan_cnt)
   } else {
     ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (tenant_config.is_valid() && true == tenant_config->_px_message_compression) {
-      compressor_type_ = ObCompressorType::STREAM_LZ4_COMPRESSOR;
+      compressor_type_ = ObCompressorType::LZ4_COMPRESSOR;
     }
     is_init_ = true;
     tenant_id_ = tenant_id;
