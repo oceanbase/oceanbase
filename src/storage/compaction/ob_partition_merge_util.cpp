@@ -1213,8 +1213,9 @@ int ObMinorMergeMacroRowIterator::next()
       // the first output row of each rowkey must be compact row
       // skip the uncommited row and magic row(last row)
       check_first_row_compacted_ = false;
-      if (curr_row_->row_type_flag_.is_compacted_multi_version_row()) {  // do nothing for compacted row
-        // do nothing
+      if (curr_row_->row_type_flag_.is_compacted_multi_version_row()
+          && 0 == curr_row_->row_val_.cells_[multi_version_row_info_->trans_version_index_ + 1].get_int()) {
+        // curr row is compact row && is not a uncommitted->committed row
       } else if (OB_FAIL(make_first_row_compacted())) {
         LOG_WARN("Fail to compact first row, ", K(ret));
       } else if (OB_FAIL(row_queue_.get_next_row(curr_row_))) {  // return first row in row_queue

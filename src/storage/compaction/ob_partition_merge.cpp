@@ -1363,7 +1363,7 @@ int ObMinorPartitionMergeFuser::set_multi_version_row_flag(
     const MERGE_ITER_ARRAY& macro_row_iters, ObStoreRow& store_row)
 {
   int ret = OB_SUCCESS;
-  store_row.row_type_flag_.set_compacted_multi_version_row(false);
+  store_row.row_type_flag_.set_compacted_multi_version_row(true);
   store_row.row_type_flag_.set_first_multi_version_row(true);
   if (need_check_curr_row_last_) {
     store_row.row_type_flag_.set_last_multi_version_row(true);
@@ -1372,9 +1372,8 @@ int ObMinorPartitionMergeFuser::set_multi_version_row_flag(
   }
 
   for (int64_t i = 0; i < macro_row_iters.count(); ++i) {
-    if (macro_row_iters.at(i)->get_curr_row()->row_type_flag_.is_compacted_multi_version_row() ||
-        !macro_row_iters.at(i)->get_table()->is_multi_version_table()) {
-      store_row.row_type_flag_.set_compacted_multi_version_row(true);
+    if (!macro_row_iters.at(i)->get_curr_row()->row_type_flag_.is_compacted_multi_version_row()) {
+      store_row.row_type_flag_.set_compacted_multi_version_row(false);
       break;
     }
   }

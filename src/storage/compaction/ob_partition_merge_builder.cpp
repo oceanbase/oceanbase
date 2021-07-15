@@ -45,7 +45,9 @@ ObMacroBlockBuilder::ObMacroBlockBuilder()
       need_build_bloom_filter_(false),
       bf_macro_writer_(),
       cols_id_map_(nullptr),
-      is_opened_(false)
+      is_opened_(false),
+      check_row_flag_status_(CHECK_FIRST_ROW),
+      last_compact_row_nop_cnt_(-1)
 {}
 
 ObMacroBlockBuilder::~ObMacroBlockBuilder()
@@ -352,6 +354,8 @@ int ObMacroBlockBuilder::process(const blocksstable::ObMacroBlockCtx& macro_bloc
   } else if (OB_FAIL(writer_->append_macro_block(macro_block_ctx))) {
     STORAGE_LOG(WARN, "macro block writer fail to close.", K(ret));
   } else {
+    check_row_flag_status_ = CHECK_FIRST_ROW;
+    last_compact_row_nop_cnt_ = -1;
     STORAGE_LOG(DEBUG, "Success to append macro block, ", K(macro_block_ctx));
   }
   return ret;
@@ -423,12 +427,18 @@ int ObMacroBlockBuilder::check_flat_row_columns(const ObStoreRow& row)
 {
   int ret = OB_SUCCESS;
   if (ObActionFlag::OP_ROW_EXIST != row.flag_) {
+    if (row.row_type_flag_.is_last_multi_version_row()) { // meet last row
+      check_row_flag_status_ = CHECK_FIRST_ROW;
+      last_compact_row_nop_cnt_ = -1;
+    }
   } else if (row.row_val_.count_ != desc_.row_column_count_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Unexpected column count of store row", K(row), K_(desc), K(ret));
   } else {
     const int64_t interval = 4;
     int64_t i = 0;
+    int64_t nop_pos_cnt = 0;
+    bool check_nop_pos_flag = desc_.is_multi_version_minor_sstable();
     for (i = 0; i + interval < row.row_val_.count_; i += interval) {
       const int tmp0 = check_row_column(row, i + 0);
       const int tmp1 = check_row_column(row, i + 1);
@@ -438,14 +448,43 @@ int ObMacroBlockBuilder::check_flat_row_columns(const ObStoreRow& row)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to check row column", K(ret), K(i), K(interval), K(row));
         break;
+      } else if (check_nop_pos_flag) {
+        nop_pos_cnt += (row.row_val_.cells_[i].is_nop_value()
+            + row.row_val_.cells_[i + 1].is_nop_value()
+            + row.row_val_.cells_[i + 2].is_nop_value()
+            + row.row_val_.cells_[i + 3].is_nop_value());
       }
     }
-
     for (; OB_SUCC(ret) && i < row.row_val_.count_; ++i) {
       if (OB_FAIL(check_row_column(row, i))) {
         LOG_WARN("failed to check row column", K(ret), K(i));
+      } else if (check_nop_pos_flag) {
+        nop_pos_cnt += row.row_val_.cells_[i].is_nop_value();
       }
     }
+
+    if (OB_SUCC(ret) && check_nop_pos_flag) {
+      if (row.row_type_flag_.is_uncommitted_row()) {
+        // do nothing
+      } else if (CHECK_FIRST_ROW == check_row_flag_status_) { // meet first committed row
+        check_row_flag_status_ = CHECK_LAST_ROW;
+      } else if (CHECK_LAST_ROW == check_row_flag_status_) {
+        if (nop_pos_cnt < last_compact_row_nop_cnt_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("nop_cnt of current row is less than last compact row", K(ret), K(nop_pos_cnt),
+              K(row), K(last_compact_row_nop_cnt_));
+        }
+      }
+      if (row.row_type_flag_.is_last_multi_version_row()) { // meet last row
+        check_row_flag_status_ = CHECK_FIRST_ROW;
+        last_compact_row_nop_cnt_ = -1;
+      } else if (row.row_type_flag_.is_compacted_multi_version_row()
+          && ObActionFlag::OP_ROW_DOES_NOT_EXIST != row.flag_
+          && ObActionFlag::OP_DEL_ROW != row.flag_) {
+        last_compact_row_nop_cnt_ = nop_pos_cnt;
+      }
+    }
+
   }
 
   return ret;
@@ -550,6 +589,7 @@ int ObMacroBlockBuilder::process(const ObStoreRow& row, const ObCompactRowType::
     STORAGE_LOG(WARN, "The row is invalid, ", K(row), K(ret));
   } else if (OB_FAIL(check_row_columns(row))) {
     STORAGE_LOG(WARN, "The row is invalid, ", K(row), K_(desc), K(ret));
+    writer_->dump_micro_block_writer_buffer();
   } else if (!is_multi_version_minor_merge(merge_type_)) {
     if ((ObActionFlag::OP_ROW_EXIST == row.flag_ || row.row_type_flag_.is_uncommitted_row()) &&
         OB_FAIL(writer_->append_row(row))) {
@@ -690,6 +730,8 @@ void ObMacroBlockBuilder::reset()
   need_build_bloom_filter_ = false;
   bf_macro_writer_.reset();
   is_opened_ = false;
+  check_row_flag_status_ = CHECK_FIRST_ROW;
+  last_compact_row_nop_cnt_ = -1;
 }
 
 void ObMacroBlockBuilder::set_purged_count(const int64_t count)

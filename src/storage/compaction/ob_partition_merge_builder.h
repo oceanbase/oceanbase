@@ -96,6 +96,11 @@ protected:
   OB_INLINE int check_sparse_row_column(const common::ObObj& obj, const int64_t idx);
   int append_bloom_filter(const storage::ObStoreRow& row);
 
+  enum CheckRowFlagStatus
+  {
+    CHECK_FIRST_ROW = 0,
+    CHECK_LAST_ROW = 1,
+  };
 private:
   storage::ObMergeType merge_type_;
   blocksstable::ObMacroBlockWriter* writer_;
@@ -109,6 +114,8 @@ private:
   blocksstable::ObBloomFilterDataWriter bf_macro_writer_;
   share::schema::ColumnMap* cols_id_map_;
   bool is_opened_;
+  CheckRowFlagStatus check_row_flag_status_;
+  int64_t last_compact_row_nop_cnt_;
 };
 
 class ObMacroBlockEstimator : public ObIStoreRowProcessor {

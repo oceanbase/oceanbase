@@ -23,12 +23,10 @@ namespace storage {
 class ObSSTableDumpErrorInfo {
 public:
   ObSSTableDumpErrorInfo()
-      : param_(),
-        context_(),
-        store_ctx_(),
-        allocator_("dump_error_info"),
-        column_ids_(COL_ARRAY_LEN, allocator_),
-        ext_rowkey_()
+      : allocator_("dump_error_info"),
+        ext_rowkey_(),
+        query_param_for_table1_(allocator_),
+        query_param_for_table2_(allocator_)
   {}
   ~ObSSTableDumpErrorInfo()
   {
@@ -44,6 +42,22 @@ public:
 private:
   static const int64_t COL_ARRAY_LEN = 128;
 
+  struct QueryParam {
+    QueryParam(ObIAllocator& allocator) : param_(), context_(), store_ctx_(), column_ids_(COL_ARRAY_LEN, allocator)
+    {}
+    void reset()
+    {
+      param_.reset();
+      context_.reset();
+      store_ctx_.reset();
+      column_ids_.reuse();
+    }
+    ObTableIterParam param_;
+    ObTableAccessContext context_;
+    ObStoreCtx store_ctx_;
+    ObArray<ObColDesc, ObIAllocator&> column_ids_;
+  };
+
 private:
   int find_extra_row(
       ObSSTable& sstable1, const ObTableSchema& schema1, ObSSTable& sstable2, const ObTableSchema& schema2);
@@ -51,20 +65,18 @@ private:
       const ObStoreRow& row, const int64_t rowkey_cnt, ObIArray<int64_t>& projector, ObStoreRowkey& rowkey);
   int get_sstable_scan_iter(ObSSTable& sstable, const ObTableSchema& schema, ObStoreRowIterator*& scanner);
   int simple_get_sstable_rowkey_get_iter(
-      ObSSTable& sstable, const common::ObStoreRowkey& rowkey, ObStoreRowIterator*& getter);
+      ObSSTable& sstable, const common::ObStoreRowkey& rowkey, QueryParam& query_param, ObStoreRowIterator*& getter);
   int generate_projecter(const ObTableSchema& schema1, const ObTableSchema& schema2, ObIArray<int64_t>& projector);
   int get_row_with_rowkey_and_check(const ObStoreRow* input_row, ObStoreRowIterator* getter,
       common::ObSEArray<int64_t, COL_ARRAY_LEN>& projector, int64_t& found_row_cnt);
-  int prepare_sstable_query_param(ObSSTable& sstable, const ObTableSchema& schema);
+  int prepare_sstable_query_param(ObSSTable& sstable, const ObTableSchema& schema, QueryParam& query_param);
 
 private:
   ObObj rowkey_obj_[OB_MAX_ROWKEY_COLUMN_NUMBER];
-  ObTableIterParam param_;
-  ObTableAccessContext context_;
-  ObStoreCtx store_ctx_;
   ObArenaAllocator allocator_;
-  ObArray<ObColDesc, ObIAllocator&> column_ids_;
   ObExtStoreRowkey ext_rowkey_;
+  QueryParam query_param_for_table1_;
+  QueryParam query_param_for_table2_;
 };
 
 }  // namespace storage
