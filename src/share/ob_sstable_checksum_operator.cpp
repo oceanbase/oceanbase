@@ -179,7 +179,7 @@ int ObSSTableDataChecksumOperator::need_verify_checksum(const ObTableSchema& tab
       } else {
         // when each partition has at lease one replica which finished compaction with version global_snapshot_version,
         // we will validate checksum
-        bool check_dropped_schema = true;
+        bool check_dropped_schema = false;
         ObTablePartitionKeyIter part_iter(table_schema, check_dropped_schema);
         const int64_t part_num = part_iter.get_partition_num();
         ObPartitionKey pkey;

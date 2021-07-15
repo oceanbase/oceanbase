@@ -139,7 +139,7 @@ int ObTenantShowTables::inner_get_next_row()
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "table schema is NULL", K(ret), K(table_schema_idx_), K(tenant_id_), K(database_id_));
           } else if (table_schema->is_dropped_schema()) {
-            // skip
+            is_allow = false;
           } else {
             uint64_t cell_idx = 0;
             for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {

@@ -482,8 +482,6 @@ protected:
 // used by observer
 class ObLocationFetcher : public ObILocationFetcher {
 public:
-  static const int64_t OB_FETCH_LOCATION_TIMEOUT = 1 * 1000 * 1000;           // 1s
-  static const int64_t OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT = 500 * 1000;  // 500ms
   ObLocationFetcher();
   virtual ~ObLocationFetcher();
   int init(common::ObServerConfig& config, share::ObPartitionTableOperator& pt,
@@ -601,7 +599,7 @@ public:
   };
 
 public:
-  ObLocationLeaderCache() : allocator_(), buffer_()
+  ObLocationLeaderCache() : local_allocator_(), allocator_(local_allocator_), buffer_()
   {}
   virtual ~ObLocationLeaderCache()
   {}
@@ -610,7 +608,8 @@ public:
 
 private:
   static const int64_t CACHE_NUM = 10000;
-  common::ObArenaAllocator allocator_;
+  common::ObArenaAllocator local_allocator_;
+  common::ObSafeArenaAllocator allocator_;
   ObLocationLeaderInfo buffer_[CACHE_NUM];
 };
 
@@ -789,8 +788,6 @@ private:
   int set_batch_timeout_ctx(const int64_t task_cnt, ObLocationAsyncUpdateTask::Type type, common::ObTimeoutCtx& ctx);
   /*-----batch async renew location end -----*/
 private:
-  const static int64_t DEFAULT_FETCH_LOCATION_TIMEOUT_US =
-      ObLocationFetcher::OB_FETCH_LOCATION_TIMEOUT + ObLocationFetcher::OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT;  // 4s
   static const int64_t OB_SYS_LOCATION_CACHE_BUCKET_NUM = 512;
   typedef common::hash::ObHashMap<ObLocationCacheKey, ObPartitionLocation> NoSwapCache;
   typedef common::hash::ObHashMap<ObLocationCacheKey, LocationInfo> NoSwapLeaderCache;

@@ -10158,7 +10158,22 @@ int ObRootService::get_tenant_schema_versions(
         ObRefreshSchemaStatus schema_status;
         schema_status.tenant_id_ = GCTX.is_schema_splited() ? tenant_id : OB_INVALID_TENANT_ID;
         int64_t version_in_inner_table = OB_INVALID_VERSION;
-        if (OB_FAIL(schema_service_->get_schema_version_in_inner_table(
+        bool is_restore = false;
+        if (OB_FAIL(schema_service_->check_tenant_is_restore(&schema_guard, tenant_id, is_restore))) {
+          LOG_WARN("fail to check tenant is restore", KR(ret), K(tenant_id));
+        } else if (is_restore) {
+          ObSchemaStatusProxy* schema_status_proxy = GCTX.schema_status_proxy_;
+          if (OB_ISNULL(schema_status_proxy)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("schema_status_proxy is null", KR(ret));
+          } else if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id, schema_status))) {
+            LOG_WARN("failed to get tenant refresh schema status", KR(ret), K(tenant_id));
+          } else if (OB_INVALID_VERSION != schema_status.readable_schema_version_) {
+            ret = OB_EAGAIN;
+            LOG_WARN("tenant's sys replicas are not restored yet, try later", KR(ret), K(tenant_id));
+          }
+        }
+        if (FAILEDx(schema_service_->get_schema_version_in_inner_table(
                 sql_proxy_, schema_status, version_in_inner_table))) {
           // failed tenant creation, inner table is empty, return OB_CORE_SCHEMA_VERSION
           if (OB_EMPTY_RESULT == ret) {

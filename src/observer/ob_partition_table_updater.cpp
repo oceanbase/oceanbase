@@ -461,23 +461,32 @@ int ObPartitionTableUpdater::process_barrier(const ObPTUpdateRoleTask& task, boo
   return OB_NOT_SUPPORTED;
 }
 
-int ObPartitionTableUpdater::do_batch_execute(
-    const common::ObIArray<ObPartitionReplica>& tasks, const common::ObRole new_role)
+int ObPartitionTableUpdater::do_batch_execute(const int64_t start_time,
+    const common::ObIArray<ObPTUpdateRoleTask>& tasks, const common::ObIArray<ObPartitionReplica>& replicas,
+    const common::ObRole new_role)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(tasks.count() <= 0)) {
+  if (OB_UNLIKELY(tasks.count() <= 0 || replicas.count() <= 0)) {
     // empty task
   } else if (OB_UNLIKELY(nullptr == GCTX.pt_operator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pt operator is null", KR(ret));
   } else {
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(GCTX.pt_operator_->batch_report_partition_role(tasks, new_role))) {
-        LOG_WARN("fail to batch report partition role", KR(ret), K(tasks));
+      if (OB_FAIL(GCTX.pt_operator_->batch_report_partition_role(replicas, new_role))) {
+        LOG_WARN("fail to batch report partition role", KR(ret), K(replicas));
       }
     }
     if (OB_FAIL(ret)) {
-      LOG_WARN("batch execute report role failed", KR(ret), "cnt", tasks.count());
+      LOG_WARN("batch execute report role failed", KR(ret), "cnt", replicas.count());
+      bool is_sys = is_sys_table(tasks.at(0).pkey_.get_table_id());
+      (void)throttle(is_sys, ret, ObTimeUtility::current_time() - start_time, stopped_);
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = reput_to_queue(tasks))) {
+        LOG_WARN("update info fail to reput to queue", KR(tmp_ret), K(tasks));
+      } else {
+        LOG_INFO("batch update partition table failed, reput to queue", K(tasks));
+      }
     } else if (tasks.count() > 0) {
       LOG_INFO("batch execute report role success", KR(ret), "cnt", tasks.count());
     }
@@ -534,7 +543,7 @@ int ObPartitionTableUpdater::batch_process_tasks(const ObIArray<ObPTUpdateRoleTa
     // try to check if tenant has been dropped before execute, ignore ret code
     (void)check_if_tenant_has_been_dropped(tenant_id, tenant_dropped);
   }
-
+  const int64_t start_time = ObTimeUtility::current_time();
   if (OB_SUCC(ret) && !tenant_dropped && tasks.count() > 0) {
     ObArray<ObPTUpdateRoleTask> leader_tasks;
     ObArray<ObPTUpdateRoleTask> standby_leader_tasks;
@@ -583,37 +592,23 @@ int ObPartitionTableUpdater::batch_process_tasks(const ObIArray<ObPTUpdateRoleTa
       }
     }
     if (OB_SUCC(ret)) {
-      int tmp_ret = do_batch_execute(leader_r_array, LEADER);
-      if (OB_SUCCESS == tmp_ret) {
-        // good
-      } else if (OB_SUCCESS != (tmp_ret = reput_to_queue(leader_tasks))) {
-        LOG_WARN("update info fail to reput to queue", KR(tmp_ret), K(leader_tasks));
-      } else {
-        LOG_INFO("batch update partition table failed, reput to queue", K(leader_tasks));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = do_batch_execute(start_time, leader_tasks, leader_r_array, LEADER))) {
+        LOG_WARN("batch report leader failed", KR(ret), K(start_time), K(leader_r_array));
       }
-    }
-    if (OB_SUCC(ret)) {
-      int tmp_ret = do_batch_execute(standby_leader_r_array, STANDBY_LEADER);
-      if (OB_SUCCESS == tmp_ret) {
-        // good
-      } else if (OB_SUCCESS != (tmp_ret = reput_to_queue(standby_leader_tasks))) {
-        LOG_WARN("update info fail to reput to queue", KR(tmp_ret), K(standby_leader_tasks));
-      } else {
-        LOG_INFO("batch update partition table failed, reput to queue", K(standby_leader_tasks));
+      if (OB_SUCCESS !=
+          (tmp_ret = do_batch_execute(start_time, standby_leader_tasks, standby_leader_r_array, STANDBY_LEADER))) {
+        LOG_WARN("batch report standby leader failed", KR(ret), K(start_time), K(standby_leader_r_array));
       }
-    }
-    if (OB_SUCC(ret)) {
-      int tmp_ret = do_batch_execute(restore_leader_r_array, RESTORE_LEADER);
-      if (OB_SUCCESS == tmp_ret) {
-        // good
-      } else if (OB_SUCCESS != (tmp_ret = reput_to_queue(restore_leader_tasks))) {
-        LOG_WARN("update info fail to reput to queue", KR(tmp_ret), K(restore_leader_tasks));
-      } else {
-        LOG_INFO("batch update partition table failed, reput to queue", K(restore_leader_tasks));
+      if (OB_SUCCESS !=
+          (tmp_ret = do_batch_execute(start_time, restore_leader_tasks, restore_leader_r_array, RESTORE_LEADER))) {
+        LOG_WARN("batch report restore leader failed", KR(ret), K(start_time), K(restore_leader_r_array));
       }
     }
     if (OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
+      const bool is_sys = tasks.count() > 0 ? is_sys_table(tasks.at(0).pkey_.get_table_id()) : false;
+      (void)throttle(is_sys, ret, ObTimeUtility::current_time() - start_time, stopped_);
       if (OB_SUCCESS != (tmp_ret = reput_to_queue(batch_tasks))) {
         LOG_WARN("update info failed to reput to queue", KR(tmp_ret), K(batch_tasks));
       } else {
@@ -637,6 +632,7 @@ int ObPartitionTableUpdater::batch_process_tasks(const ObIArray<ObPTUpdateTask>&
   DEBUG_SYNC(BEFORE_BATCH_PROCESS_TASK);
   ObSEArray<ObPTUpdateTask, UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM> tasks;
   bool skip_to_reput_tasks = false;
+  const int64_t start_time = ObTimeUtility::current_time();
   ObCurTraceId::init(GCONF.self_addr_);
   if (OB_ISNULL(GCTX.pt_operator_) || OB_ISNULL(GCTX.ob_service_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -737,12 +733,12 @@ int ObPartitionTableUpdater::batch_process_tasks(const ObIArray<ObPTUpdateTask>&
       skip_to_reput_tasks = true;
       // execute leader or removed replica report tasks
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = do_batch_execute(leader_tasks, leader_replicas, true /*with role*/))) {
+      if (OB_SUCCESS != (tmp_ret = do_batch_execute(start_time, leader_tasks, leader_replicas, true /*with role*/))) {
         LOG_WARN("batch execute leader replicas failed", K(ret), "cnt", leader_tasks.count());
       }
       // execute follower replica report tasks with role
-      if (OB_SUCCESS !=
-          (tmp_ret = do_batch_execute(with_role_report_tasks, with_role_report_replicas, true /*with role*/))) {
+      if (OB_SUCCESS != (tmp_ret = do_batch_execute(
+                             start_time, with_role_report_tasks, with_role_report_replicas, true /*with role*/))) {
         LOG_WARN("batch execute with role replicas failed",
             K(ret),
             "cnt",
@@ -751,8 +747,9 @@ int ObPartitionTableUpdater::batch_process_tasks(const ObIArray<ObPTUpdateTask>&
             true);
       }
       // execute follower replica report tasks without role
-      if (OB_SUCCESS != (tmp_ret = do_batch_execute(
-                             without_role_report_tasks, without_role_report_replicas, false /*without role*/))) {
+      if (OB_SUCCESS !=
+          (tmp_ret = do_batch_execute(
+               start_time, without_role_report_tasks, without_role_report_replicas, false /*without role*/))) {
         LOG_WARN("batch execute without role replicas failed",
             K(ret),
             "cnt",
@@ -763,6 +760,8 @@ int ObPartitionTableUpdater::batch_process_tasks(const ObIArray<ObPTUpdateTask>&
     }
   }
   if (OB_FAIL(ret) && !skip_to_reput_tasks) {
+    const bool is_sys = tasks.count() > 0 ? is_sys_table(tasks.at(0).part_key_.get_table_id()) : false;
+    (void)throttle(is_sys, ret, ObTimeUtility::current_time() - start_time, stopped_);
     int tmp_ret = reput_to_queue(batch_tasks);
     if (OB_SUCCESS != tmp_ret) {
       LOG_ERROR("update info fail to reput to queue", K(ret), K(batch_tasks.count()));
@@ -797,8 +796,8 @@ int ObPartitionTableUpdater::check_if_tenant_has_been_dropped(const uint64_t ten
   return ret;
 }
 
-int ObPartitionTableUpdater::do_batch_execute(
-    const ObIArray<ObPTUpdateTask>& tasks, const ObIArray<ObPartitionReplica>& replicas, const bool with_role)
+int ObPartitionTableUpdater::do_batch_execute(const int64_t start_time, const ObIArray<ObPTUpdateTask>& tasks,
+    const ObIArray<ObPartitionReplica>& replicas, const bool with_role)
 {
   int ret = OB_SUCCESS;
   bool skip_to_reput_tasks = false;
@@ -812,9 +811,8 @@ int ObPartitionTableUpdater::do_batch_execute(
   } else {
     DEBUG_SYNC(BEFORE_ASYNC_PT_UPDATE_TASK_EXECUTE);
     // need to push back to task queue if failed
-    const bool is_sys = is_sys_table(tasks.at(0).part_key_.get_table_id());
     const uint64_t tenant_id = tasks.at(0).part_key_.get_tenant_id();
-    const int64_t start_time = ObTimeUtility::current_time();
+    const bool is_sys = is_sys_table(tasks.at(0).part_key_.get_table_id());
     if ((replicas.at(0).is_leader_like() && (replicas.at(0).need_force_full_report() || with_role)) ||
         replicas.at(0).is_remove_) {
       ObSEArray<ObPartitionReplica, 1> tmp_replicas;
@@ -868,10 +866,7 @@ int ObPartitionTableUpdater::do_batch_execute(
           ObTimeUtility::current_time() - start_time);
       EVENT_ADD(OBSERVER_PARTITION_TABLE_UPDATER_FINISH_COUNT, replicas.count());
     }
-    int tmp_ret = throttle(is_sys, ret, ObTimeUtility::current_time() - start_time, stopped_);
-    if (OB_SUCCESS != tmp_ret) {
-      LOG_WARN("throttle failed", K(tmp_ret));
-    }
+    (void)throttle(is_sys, ret, ObTimeUtility::current_time() - start_time, stopped_);
     DEBUG_SYNC(AFTER_ASYNC_PT_UPDATE_TASK_EXECUTE);
   }
   if (OB_FAIL(ret) && !skip_to_reput_tasks) {

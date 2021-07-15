@@ -772,10 +772,10 @@ STAT_EVENT_ADD_DEF(OBSERVER_PARTITION_TABLE_UPDATER_PROCESS_TIME, "observer part
 STAT_EVENT_ADD_DEF(OBSERVER_PARTITION_TABLE_UPDATER_DROP_COUNT, "observer partition table updater drop task count",
     ObStatClassIds::OBSERVER, "observer partition table updater drop task count", 100004, false, true)
 STAT_EVENT_ADD_DEF(OBSERVER_PARTITION_TABLE_UPDATER_REPUT_COUNT,
-    "observer partition table updater repurt to queue count", ObStatClassIds::OBSERVER,
+    "observer partition table updater reput to queue count", ObStatClassIds::OBSERVER,
     "observer partition table updater reput to queue count", 100005, false, true)
 STAT_EVENT_ADD_DEF(OBSERVER_PARTITION_TABLE_UPDATER_FAIL_TIMES, "observer partition table updater execute fail times",
-    ObStatClassIds::OBSERVER, "observer partition table updater fail times", 10006, false, true)
+    ObStatClassIds::OBSERVER, "observer partition table updater fail times", 100006, false, true)
 STAT_EVENT_ADD_DEF(OBSERVER_PARTITION_TABLE_UPDATER_FINISH_COUNT,
     "observer partition table updater success execute count", ObStatClassIds::OBSERVER,
     "observer partition table updater execute success count", 100007, false, true)

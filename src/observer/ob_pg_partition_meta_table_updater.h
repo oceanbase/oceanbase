@@ -71,16 +71,13 @@ typedef ObUniqTaskQueue<ObPGPartitionMTUpdateTask, ObPGPartitionMTUpdater> Parti
 
 class ObPGPartitionMTUpdater {
 public:
-  ObPGPartitionMTUpdater()
-  {
-    reset();
-  }
+  ObPGPartitionMTUpdater() : is_inited_(false), stopped_(false), task_queue_()
+  {}
   virtual ~ObPGPartitionMTUpdater()
   {
     destroy();
   }
   int init();
-  void reset();
   void stop();
   void wait();
   void destroy();
@@ -103,7 +100,7 @@ private:
 
 private:
   bool is_inited_;
-  bool is_running_;
+  bool stopped_;
   PartitionMetaTableTaskQueue task_queue_;
 };
 

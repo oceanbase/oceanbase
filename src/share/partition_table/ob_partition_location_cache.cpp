@@ -637,7 +637,7 @@ int ObLocationFetcher::fetch_vtable_location(const uint64_t table_id, ObSArray<O
     LOG_WARN("table is not virtual table", KT(table_id), K(ret));
   } else {
     LOG_INFO("fetch virtual table location with tenant", "tenant", THIS_WORKER.get_rpc_tenant(), KT(table_id));
-    int64_t timeout_us = OB_FETCH_LOCATION_TIMEOUT;
+    int64_t timeout_us = GCONF.location_cache_refresh_sql_timeout;
     if (ObTimeoutCtx::get_ctx().is_timeout_set()) {
       timeout_us = std::min(timeout_us, ObTimeoutCtx::get_ctx().get_timeout());
     }
@@ -718,7 +718,7 @@ int ObLocationFetcher::batch_renew_sys_table_location_by_rpc(const ObPartitionLo
   } else {
     results.reset();
     obrpc::ObBatchGetRoleArg arg;
-    const int64_t timeout_ts = OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT;
+    const int64_t timeout_ts = GCONF.location_cache_refresh_rpc_timeout;
     rootserver::ObBatchGetRoleProxy proxy(*srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_get_role);
     const ObIArray<ObReplicaLocation>& location_array = core_table_location.get_replica_locations();
     /*
@@ -805,7 +805,7 @@ int ObLocationFetcher::renew_location_with_rpc_v2(
   is_new_location_valid = true;
   common::ObPartitionKey pkey;
   const uint64_t tenant_id = get_rpc_tenant_id(cached_location.get_table_id());
-  const int64_t default_timeout = OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT;
+  const int64_t default_timeout = GCONF.location_cache_refresh_rpc_timeout;
   int64_t timeout_us = default_timeout;
   const ObIArray<ObReplicaLocation>& location_array = cached_location.get_replica_locations();
   ObMemberListAndLeaderArg member_info;
@@ -1305,7 +1305,7 @@ int ObLocationFetcher::batch_renew_location_with_rpc(const common::ObIArray<cons
     rootserver::ObBatchRpcRenewLocProxy proxy_batch(
         *srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_get_member_list_and_leader);
     // gather rpc results
-    const int64_t timeout_ts = OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT;
+    const int64_t timeout_ts = GCONF.location_cache_refresh_rpc_timeout;
     for (int64_t i = 0; i < infos.count(); i++) {  // ignore failure
       ObLocationRpcRenewInfo& info = infos.at(i);
       if (!info.is_valid()) {
@@ -4137,7 +4137,8 @@ int ObPartitionLocationCache::set_timeout_ctx(common::ObTimeoutCtx& ctx)
   int64_t abs_timeout_us = ctx.get_abs_timeout();
 
   if (abs_timeout_us < 0) {
-    abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_FETCH_LOCATION_TIMEOUT_US;
+    abs_timeout_us = ObTimeUtility::current_time() + GCONF.location_cache_refresh_rpc_timeout +
+                     GCONF.location_cache_refresh_sql_timeout;
   }
   if (THIS_WORKER.get_timeout_ts() > 0 && THIS_WORKER.get_timeout_ts() < abs_timeout_us) {
     abs_timeout_us = THIS_WORKER.get_timeout_ts();
@@ -4325,7 +4326,8 @@ int ObPartitionLocationCache::batch_renew_location(const common::ObIArray<ObLoca
             ObWaitEventIds::PT_LOCATION_CACHE_LOCK_WAIT, wait_event_time_out, unused, unused, unused);
 
         // ignore acquire fail
-        abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_FETCH_LOCATION_TIMEOUT_US;
+        abs_timeout_us = ObTimeUtility::current_time() + GCONF.location_cache_refresh_rpc_timeout +
+                         GCONF.location_cache_refresh_sql_timeout;
         int tmp_ret = sem_.acquire(abs_timeout_us);
         if (OB_SUCCESS != tmp_ret) {
           LOG_WARN("acquire failed", K(tmp_ret));
@@ -4636,9 +4638,9 @@ int ObPartitionLocationCache::set_batch_timeout_ctx(
   UNUSED(task_cnt);
   if (abs_timeout_us < 0) {
     if (ObLocationAsyncUpdateTask::MODE_SQL_ONLY == type) {
-      abs_timeout_us = ObTimeUtility::current_time() + 2 * DEFAULT_FETCH_LOCATION_TIMEOUT_US;
+      abs_timeout_us = ObTimeUtility::current_time() + 2 * GCONF.location_cache_refresh_sql_timeout;
     } else {
-      abs_timeout_us = ObTimeUtility::current_time() + 2 * ObLocationFetcher::OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT;
+      abs_timeout_us = ObTimeUtility::current_time() + 2 * GCONF.location_cache_refresh_rpc_timeout;
     }
   }
   if (THIS_WORKER.get_timeout_ts() > 0 && THIS_WORKER.get_timeout_ts() < abs_timeout_us) {
@@ -4676,7 +4678,7 @@ int ObPartitionLocationCache::batch_renew_sys_table_location_by_rpc(common::ObIA
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
-  ctx.set_timeout(ObLocationFetcher::OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT * 2);
+  ctx.set_timeout(GCONF.location_cache_refresh_rpc_timeout);
   ObPartitionLocation core_table_location;
   bool is_nonblock = false;
   bool filter_not_readable_replica = true;

@@ -283,6 +283,7 @@ int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(
 {
   int ret = OB_SUCCESS;
   bool is_standby = false;
+  bool is_restore = false;
   int64_t version_in_inner_table = OB_INVALID_VERSION;
   ObRefreshSchemaStatus schema_status;
   bool use_local = false;
@@ -294,7 +295,9 @@ int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", K(ret));
-  } else if (is_standby && OB_SYS_TENANT_ID != tenant_id) {
+  } else if (OB_FAIL(schema_service_->check_tenant_is_restore(NULL, tenant_id, is_restore))) {
+    LOG_WARN("fail to check tenant is restore", KR(ret), K(tenant_id));
+  } else if ((is_standby && OB_SYS_TENANT_ID != tenant_id) || is_restore) {
     ObSchemaStatusProxy* schema_status_proxy = GCTX.schema_status_proxy_;
     if (OB_ISNULL(schema_status_proxy)) {
       ret = OB_ERR_UNEXPECTED;
@@ -302,8 +305,11 @@ int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(
     } else if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id, schema_status))) {
       LOG_WARN("failed to get tenant refresh schema status", KR(ret), K(tenant_id));
     } else if (OB_INVALID_VERSION == schema_status.readable_schema_version_) {
-      // Although it is a standalone cluster, the schema status has been reset, and the internal table can be refreshed.
-      // At this time, the standby database already has a leader
+      // 1. For standby cluster: schema_status is reset, we can refresh schema now.
+      // 2. For restore tenant: sys replicas are restored.
+    } else if (is_restore) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("Can't refresh schema when sys replicas are not restored yet", KR(ret), K(tenant_id));
     } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
       LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
     } else {
@@ -14049,6 +14055,28 @@ int ObDDLService::drop_tenant(const ObDropTenantArg& arg)
         LOG_WARN("ddl_operator drop_tenant failed", K(tenant_id), KR(ret));
       } else if (OB_FAIL(ddl_operator.drop_restore_point(tenant_id, trans))) {
         LOG_WARN("fail to drop restore point", K(ret), K(tenant_id));
+      } else if (tenant_schema->is_in_recyclebin()) {
+        // try recycle record from __all_recyclebin
+        ObArray<ObRecycleObject> recycle_objs;
+        ObSchemaService* schema_service_impl = NULL;
+        if (OB_ISNULL(schema_service_) || OB_ISNULL(schema_service_->get_schema_service())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("schema service is null", KR(ret), KP_(schema_service));
+        } else if (FALSE_IT(schema_service_impl = schema_service_->get_schema_service())) {
+        } else if (OB_FAIL(schema_service_impl->fetch_recycle_object(OB_SYS_TENANT_ID,
+                       tenant_schema->get_tenant_name_str(),
+                       ObRecycleObject::TENANT,
+                       trans,
+                       recycle_objs))) {
+          LOG_WARN("get_recycle_object failed", KR(ret), KPC(tenant_schema));
+        } else if (0 == recycle_objs.size()) {
+          // skip
+        } else if (1 < recycle_objs.size()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("records should not be more than 1", KR(ret), KPC(tenant_schema), K(recycle_objs));
+        } else if (OB_FAIL(schema_service_impl->delete_recycle_object(OB_SYS_TENANT_ID, recycle_objs.at(0), trans))) {
+          LOG_WARN("delete_recycle_object failed", KR(ret), KPC(tenant_schema));
+        }
       }
     } else {  // put tenant into recyclebin
       ObTenantSchema new_tenant_schema = *tenant_schema;
@@ -18810,12 +18838,14 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg& arg)
       if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
         database_id = OB_OUTLINE_DEFAULT_DATABASE_ID;
         database_exist = true;
-      } else if (OB_FAIL(schema_service_->check_database_exist(tenant_id,
-                                                        database_name,
-                                                        database_id,
-                                                        database_exist))) {
-        LOG_WARN("failed to check database exist!", K(tenant_id), K(database_name),
-                 K(database_id), K(database_exist), K(ret));
+      } else if (OB_FAIL(
+                     schema_service_->check_database_exist(tenant_id, database_name, database_id, database_exist))) {
+        LOG_WARN("failed to check database exist!",
+            K(tenant_id),
+            K(database_name),
+            K(database_id),
+            K(database_exist),
+            K(ret));
       } else if (!database_exist) {
         ret = OB_ERR_BAD_DATABASE;
         LOG_USER_ERROR(OB_ERR_BAD_DATABASE, database_name.length(), database_name.ptr());

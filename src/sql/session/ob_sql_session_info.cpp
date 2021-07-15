@@ -689,7 +689,7 @@ bool ObSQLSessionInfo::has_user_process_privilege() const
 int ObSQLSessionInfo::check_global_read_only_privilege(const bool read_only, const ObSqlTraits& sql_traits)
 {
   int ret = OB_SUCCESS;
-  if (!has_user_super_privilege() && read_only) {
+  if (!has_user_super_privilege() && !is_tenant_changed() && read_only) {
     /** session1                session2
      *  insert into xxx;
      *                          set @@global.read_only = 1;

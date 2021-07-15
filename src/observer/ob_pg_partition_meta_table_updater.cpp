@@ -98,65 +98,42 @@ int ObPGPartitionMTUpdater::init()
                  max_partition_cnt,
                  "PGPTMTUp"))) {
     LOG_WARN("fail to init task queue", K(ret));
-  } else if (is_running_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ObPGPartitionMTUpdater already running", K(ret));
   } else {
     is_inited_ = true;
-    is_running_ = true;
+    stopped_ = false;
     LOG_INFO("ObPGPartitionMTUpdater init success", K(lbt()));
   }
   return ret;
 }
 
-void ObPGPartitionMTUpdater::reset()
-{
-  is_inited_ = false;
-  is_running_ = false;
-}
-
 void ObPGPartitionMTUpdater::stop()
 {
-  int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     LOG_WARN("ObPGPartitionMTUpdater has not been inited");
-  } else if (!is_running_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ObPGPartitionMTUpdater already not running", K(ret));
   } else {
     (void)task_queue_.stop();
-    is_running_ = false;
+    stopped_ = true;
     LOG_INFO("ObPGPartitionMTUpdater stop success");
   }
-  UNUSED(ret);
 }
 
 void ObPGPartitionMTUpdater::wait()
 {
-  int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     LOG_WARN("ObPGPartitionMTUpdater has not been inited");
-  } else if (!is_running_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ObPGPartitionMTUpdater already not running", K(ret));
   } else {
     (void)task_queue_.wait();
     LOG_INFO("ObPGPartitionMTUpdater wait success");
   }
-  UNUSED(ret);
 }
 
 void ObPGPartitionMTUpdater::destroy()
 {
-  if (is_inited_) {
-    if (is_running_) {
-      (void)task_queue_.stop();
-      (void)task_queue_.wait();
-    }
-    is_inited_ = false;
-    is_running_ = false;
-    LOG_INFO("ObPGPartitionMTUpdater wait success");
-  }
+  stop();
+  wait();
+  is_inited_ = false;
+  stopped_ = true;
+  LOG_INFO("ObPGPartitionMTUpdater destroy success");
 }
 
 ObPGPartitionMTUpdater& ObPGPartitionMTUpdater::get_instance()
@@ -355,11 +332,8 @@ int ObPGPartitionMTUpdater::batch_process_tasks(const ObIArray<ObPGPartitionMTUp
       }
     }
 
-    int tmp_ret = ObPartitionTableUpdater::throttle(
-        false /*is system table*/, ret, ObTimeUtility::current_time() - start_time, is_running_);
-    if (OB_SUCCESS != tmp_ret) {
-      LOG_WARN("throttle failed", K(tmp_ret));
-    }
+    (void)ObPartitionTableUpdater::throttle(
+        false /*is system table*/, ret, ObTimeUtility::current_time() - start_time, stopped_);
 
     // ignore retcode, reput into task queue
     if (OB_FAIL(ret) && !skip_to_reput_tasks) {

@@ -984,6 +984,7 @@ int ObForceDropSchemaChecker::force_drop_schema(
     const uint64_t tenant_id, const int64_t recycle_schema_version, int64_t& task_cnt)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_FORCE_DROP_SCHEMA);
   // drop schema according to the dependency of schema:
   // 1. data table schema is dropped defore index schema.
   // 2. table schema in tablegroup is dropped before tablegroup schema.
