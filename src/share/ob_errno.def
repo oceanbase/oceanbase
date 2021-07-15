@@ -1520,6 +1520,7 @@ DEFINE_ERROR(OB_CANCEL_DELETE_BACKUP_NOT_ALLOWED, -9053, -1, "HY000", "cancel de
 DEFINE_ERROR(OB_BACKUP_CLEAN_INFO_NOT_EXIST, -9054, -1, "HY000", "backup clean info not exists");
 DEFINE_ERROR_EXT(OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX, -9055, -1, "HY000", "rebuild global index failed when drop/truncate partitions", "rebuild global index:'%.*s' failed when drop/truncate partitions");
 DEFINE_ORACLE_ERROR(OB_ERR_ATLER_TABLE_ILLEGAL_FK, -9056, -1, "HY000", "unique/primary keys in table referenced by enabled foreign keys", 02266, "unique/primary keys in table referenced by enabled foreign keys");
+DEFINE_ERROR(OB_IO_LIMIT, -9061, -1, "HY000", "IO limit");
 
 ////////////////////////////////////////////////////////////////
 //error code for STORAGE3.0 -9100 ~

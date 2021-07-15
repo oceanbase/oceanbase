@@ -350,7 +350,7 @@ int ObStorageFileUtil::list_files(const common::ObString& uri, const common::ObS
     STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
   } else if (OB_ISNULL(open_dir = ::opendir(dir_path))) {
     if (ENOENT != errno) {
-      ret = OB_FILE_NOT_OPENED;
+      ret = OB_IO_ERROR;
       OB_LOG(WARN, "fail to open dir", K(ret), K(dir_path), K(strerror_r(errno, errno_buf, sizeof(errno_buf))));
     }
   }
@@ -418,7 +418,7 @@ int ObStorageFileUtil::del_dir(const common::ObString& uri, const common::ObStri
     STORAGE_LOG(WARN, "path is not to dir", K(ret), K(dir_path));
   } else if (OB_ISNULL(open_dir = ::opendir(dir_path))) {
     if (ENOENT != errno) {
-      ret = OB_FILE_NOT_OPENED;
+      ret = OB_IO_ERROR;
       OB_LOG(WARN, "fail to open dir", K(ret), K(dir_path), K(strerror_r(errno, errno_buf, sizeof(errno_buf))));
     }
   } else {
@@ -468,7 +468,7 @@ int ObStorageFileUtil::get_pkeys_from_dir(
     STORAGE_LOG(WARN, "failed to fill path", K(ret), K(uri));
   } else if (OB_ISNULL(open_dir = ::opendir(dir_path))) {
     if (ENOENT != errno) {
-      ret = OB_FILE_NOT_OPENED;
+      ret = OB_IO_ERROR;
       OB_LOG(WARN, "fail to open dir", K(ret), K(dir_path), K(strerror_r(errno, errno_buf, sizeof(errno_buf))));
     }
   }
@@ -476,7 +476,7 @@ int ObStorageFileUtil::get_pkeys_from_dir(
   ObPartitionKey pkey;
   // tmp file name format tableid_partitionid.tmp.timestamp
   const char* tmp_file_mark = ".tmp.";
-  while (OB_SUCC(ret)) {
+  while (OB_SUCC(ret) && NULL != open_dir) {
     pkey.reset();
     if (0 != ::readdir_r(open_dir, &entry, &result)) {
       ret = OB_IO_ERROR;
@@ -658,7 +658,7 @@ int ObStorageFileUtil::delete_tmp_files(const common::ObString& uri, const commo
     STORAGE_LOG(WARN, "path is not to dir", K(ret), K(dir_path));
   } else if (OB_ISNULL(open_dir = ::opendir(dir_path))) {
     if (ENOENT != errno) {
-      ret = OB_FILE_NOT_OPENED;
+      ret = OB_IO_ERROR;
       OB_LOG(WARN, "fail to open dir", K(ret), K(dir_path), "errno", strerror_r(errno, errno_buf, sizeof(errno_buf)));
     }
   } else {

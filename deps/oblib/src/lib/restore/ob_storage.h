@@ -30,23 +30,21 @@ int get_storage_type_from_name(const char* type_str, ObStorageType& type);
 const char* get_storage_type_str(const ObStorageType& type);
 
 enum ObAppendStrategy {
-  // Each write is a PUT operation that will overlay the old object
-  OB_APPEND_USE_SIMPLE_PUT = 0,
   // Each write will be done by the following operations:
   // 1. read the whole object
   // 2. write with previously read data as a newer object
-  OB_APPEND_USE_OVERRITE = 1,
+  OB_APPEND_USE_OVERRITE = 0,
   // Append data to the tail of the object with specific offset. The write
   // will be done only if actual tail is equal to the input offset. Otherwise,
   // return failed.
-  OB_APPEND_USE_APPEND = 2,
+  OB_APPEND_USE_APPEND = 1,
   // In this case, the object is a logical one which is actually composed of several
   // pythysical subobject. A number will be given for each write to format the name of
   // the subobject combined with the logical object name.
-  OB_APPEND_USE_SLICE_PUT = 3,
+  OB_APPEND_USE_SLICE_PUT = 2,
   // In this case, we will use multi-part upload provided by object storage, eg S3, to write
   // for the object. Note that the object is invisible before all parts are written.
-  OB_APPEND_USE_MULTI_PART_UPLOAD = 4,
+  OB_APPEND_USE_MULTI_PART_UPLOAD = 3,
   OB_APPEND_STRATEGY_TYPE
 };
 

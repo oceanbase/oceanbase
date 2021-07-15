@@ -4038,7 +4038,7 @@ int ObPartitionGroup::get_curr_clog_info_(
   if (OB_FAIL(get_base_storage_info_(clog_info))) {
     STORAGE_LOG(WARN, "fail to get base storage info", K(ret), K(pkey_));
   } else if (0 == clog_info.get_last_replay_log_id()) {
-    // skip fetching log_archive_status
+    // do nothing
   } else if (ObServerConfig::get_instance().enable_log_archive && !is_sys_tenant && !is_restore &&
              src_cluster_id == self_cluster_id) {
     // Only the requests from the database itself need to obtain the archive point if the archive is enabled.

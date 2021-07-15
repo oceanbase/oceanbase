@@ -428,6 +428,7 @@ int ObStorageOssBase::init_oss_options(aos_pool_t*& aos_pool, oss_request_option
     // time out To prevent overtime, reduce the minimum tolerable rate and increase the maximum tolerable time Control
     // the minimum rate that can be tolerated, the default is 1024, which is 1K oss_option->ctl->options->speed_limit =
     // 256; The maximum time that the control can tolerate, the default is 15 seconds
+    oss_option->ctl->options->speed_limit = 16000;
     oss_option->ctl->options->speed_time = 60;
   }
   return ret;

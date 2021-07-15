@@ -18,6 +18,7 @@
 
 namespace oceanbase {
 namespace common {
+
 constexpr int OB_LAST_ERROR_CODE = -38105;
 constexpr int OB_ERR_SQL_START = -5000;
 constexpr int OB_ERR_SQL_END = -5999;
@@ -654,7 +655,6 @@ constexpr int OB_ERR_WRONG_ROWID = -5337;
 constexpr int OB_ERR_INVALID_WINDOW_FUNCTION_PLACE = -5338;
 constexpr int OB_ERR_PARSE_PARTITION_LIST = -5339;
 constexpr int OB_ERR_MULTIPLE_DEF_CONST_IN_LIST_PART = -5340;
-// OB_ERR_INVALID_HEX_NUMBER(5342) has been moved to deps/oblib/src/lib/ob_errno.h
 constexpr int OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE = -5343;
 constexpr int OB_ERR_MULTI_UPDATE_KEY_CONFLICT = -5344;
 constexpr int OB_ERR_INSUFFICIENT_PX_WORKER = -5345;
@@ -2779,6 +2779,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX__USER_ERROR_MSG \
   "rebuild global index:'%.*s' failed when drop/truncate partitions"
 #define OB_ERR_ATLER_TABLE_ILLEGAL_FK__USER_ERROR_MSG "unique/primary keys in table referenced by enabled foreign keys"
+#define OB_IO_LIMIT__USER_ERROR_MSG "IO limit"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_ERR_DUPLICATE_HAVING_CLAUSE_IN_TABLE_EXPRESSION__USER_ERROR_MSG "Duplicate having-clause in table expression"
@@ -5184,6 +5185,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
   "ORA-00600: internal error code, arguments: -9055, rebuild global index:'%.*s' failed when drop/truncate partitions"
 #define OB_ERR_ATLER_TABLE_ILLEGAL_FK__ORA_USER_ERROR_MSG \
   "ORA-02266: unique/primary keys in table referenced by enabled foreign keys"
+#define OB_IO_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9061, IO limit"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG \
   "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG \

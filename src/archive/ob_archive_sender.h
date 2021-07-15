@@ -71,7 +71,9 @@ public:
   int handle_task_list(ObArchiveTaskStatus* task_status);
 
 private:
-  bool is_io_error_(const int ret_code);
+  // void run1();
+  // void do_thread_task_();
+  // int handle_task_list_(ObArchiveSendTaskStatus &task_status);
   bool is_not_leader_error_(const int ret_code);
 
   int try_retire_task_status_(ObArchiveSendTaskStatus& task_status);

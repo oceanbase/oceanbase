@@ -13,6 +13,7 @@
 #include "ob_storage.h"
 #include "lib/restore/ob_i_storage.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/stat/ob_diagnose_info.h"
 
 namespace oceanbase {
 namespace common {
@@ -202,6 +203,12 @@ int ObStorageUtil::del_file(const common::ObString& uri, const common::ObString&
   }
 #endif
   print_access_storage_log("del_file", uri, start_ts);
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_DEL_FAIL_COUNT);
+  }
+  EVENT_INC(ObStatEventIds::BACKUP_DELETE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_DELETE_DELAY, ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -409,6 +416,13 @@ int ObStorageUtil::list_files(const common::ObString& uri, const common::ObStrin
     }
   }
   print_access_storage_log("list_files", uri, start_ts, 0);
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_LS_FAIL_COUNT);
+  }
+
+  EVENT_INC(ObStatEventIds::BACKUP_IO_LS_COUNT);
+
   return ret;
 }
 
@@ -440,6 +454,8 @@ int ObStorageUtil::write_single_file(
           need_retry = true;
           ret = OB_SUCCESS;
         }
+      } else {
+        EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
       }
     }
   }
@@ -449,6 +465,14 @@ int ObStorageUtil::write_single_file(
   }
 #endif
   print_access_storage_log("write_single_file", uri, start_ts, size);
+
+  if (OB_FAIL(ret)) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
+  }
+
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
+
   return ret;
 }
 
@@ -685,6 +709,8 @@ int ObStorageReader::pread(char* buf, const int64_t buf_size, int64_t offset, in
 #ifdef ERRSIM
   ret = E(EventTable::EN_BACKUP_IO_READER_PREAD) OB_SUCCESS;
 #endif
+
+  const int64_t start_ts = ObTimeUtility::current_time();
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(reader_)) {
     ret = OB_NOT_INIT;
@@ -693,8 +719,15 @@ int ObStorageReader::pread(char* buf, const int64_t buf_size, int64_t offset, in
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), KP(buf), K(offset), K(file_length_));
   } else if (OB_FAIL(reader_->pread(buf, buf_size, offset, read_size))) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_READ_FAIL_COUNT);
     STORAGE_LOG(WARN, "failed to read file", K(ret));
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_BYTES, read_size);
   }
+
+  EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_DELAY, ObTimeUtility::current_time() - start_ts);
+
   return ret;
 }
 
@@ -783,13 +816,22 @@ int ObStorageWriter::write(const char* buf, const int64_t size)
 #ifdef ERRSIM
   ret = E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
 #endif
+
+  const int64_t start_ts = ObTimeUtility::current_time();
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(writer_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
   } else if (OB_FAIL(writer_->write(buf, size))) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
     STORAGE_LOG(WARN, "failed to write", K(ret));
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
   }
+
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
+
   return ret;
 }
 
@@ -936,13 +978,22 @@ int ObStorageAppender::write(const char* buf, const int64_t size)
 #ifdef ERRSIM
   ret = E(EventTable::EN_BACKUP_IO_APPENDER_WRITE) OB_SUCCESS;
 #endif
+
+  const int64_t start_ts = ObTimeUtility::current_time();
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
   } else if (OB_FAIL(appender_->write(buf, size))) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
     STORAGE_LOG(WARN, "failed to write", K(ret));
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
   }
+
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
+
   return ret;
 }
 
@@ -991,11 +1042,19 @@ int ObStorageMetaWrapper::get(const common::ObString& uri, const common::ObStrin
   int ret = OB_SUCCESS;
   ObIStorageMetaWrapper* meta = NULL;
 
+  const int64_t start_ts = ObTimeUtility::current_time();
   if (OB_FAIL(get_meta(uri, meta))) {
     STORAGE_LOG(WARN, "failed to get meta", K(ret), K(uri));
   } else if (OB_FAIL(meta->get(uri, storage_info, buf, buf_size, read_size))) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_READ_FAIL_COUNT);
     STORAGE_LOG(WARN, "failed to meta get", K(ret), K(uri));
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_BYTES, read_size);
   }
+
+  EVENT_INC(ObStatEventIds::BACKUP_IO_READ_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_READ_DELAY, ObTimeUtility::current_time() - start_ts);
+
   return ret;
 }
 
@@ -1005,11 +1064,19 @@ int ObStorageMetaWrapper::set(
   int ret = OB_SUCCESS;
   ObIStorageMetaWrapper* meta = NULL;
 
+  const int64_t start_ts = ObTimeUtility::current_time();
   if (OB_FAIL(get_meta(uri, meta))) {
     STORAGE_LOG(WARN, "failed to get meta", K(ret), K(uri));
   } else if (OB_FAIL(meta->set(uri, storage_info, buf, size))) {
+    EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
     STORAGE_LOG(WARN, "failed to meta set", K(ret), K(uri));
+  } else {
+    EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_BYTES, size);
   }
+
+  EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
+  EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
+
   return ret;
 }
 

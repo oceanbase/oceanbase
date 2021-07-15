@@ -16,6 +16,7 @@
 #include "ob_log_archive_struct.h"
 #include "clog/ob_log_entry.h"
 #include "observer/ob_server_struct.h"
+#include "ob_archive_util.h"  // is_io_error
 
 namespace oceanbase {
 using namespace common;
@@ -202,10 +203,15 @@ int ObArchiveEntryIterator::prepare_buffer_()
   ObReadRes read_res;
 
   const int64_t begin_time = ObClockGenerator::getClock();
-  if (OB_FAIL(file_store_->read_data_direct(param, rbuf_, read_res)) && OB_BACKUP_FILE_NOT_EXIST != ret) {
-    ARCHIVE_LOG(ERROR, "failed to read_data_direct", KR(ret), K(param), KPC(this));
-  } else if (0 == read_res.data_len_ || OB_BACKUP_FILE_NOT_EXIST == ret) {
-    // To end
+  if (OB_FAIL(file_store_->read_data_direct(param, rbuf_, read_res))) {
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      ret = OB_ITER_END;
+    } else if (is_io_error(ret) || OB_ALLOCATE_MEMORY_FAILED == ret || OB_IO_LIMIT == ret) {
+      // do nothing
+    } else {
+      ARCHIVE_LOG(ERROR, "failed to read_data_direct", KR(ret), K(param), KPC(this));
+    }
+  } else if (0 == read_res.data_len_) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(read_res.buf_) || OB_UNLIKELY(0 > read_res.data_len_)) {
     ret = OB_ERR_UNEXPECTED;

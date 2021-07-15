@@ -356,7 +356,7 @@ private:
 
 private:
   typedef common::ObLinkHashMap<ObTenantID, TenantRestoreMeta, ObArchiveRestoreEngine&> TenantRestoreMetaMap;
-  const int64_t MAX_FETCH_LOG_IO_FAIL_CNT = 5;
+  const int64_t MAX_FETCH_LOG_IO_FAIL_CNT = 5 * 100;
   const int64_t TASK_NUM_LIMIT = 1000000;
   const int64_t ACCESS_LOG_FILE_STORE_TIMEOUT = 3 * 1000 * 1000L;
   const int64_t MINI_MODE_RESTORE_THREAD_NUM = 1;

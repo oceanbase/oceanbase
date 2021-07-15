@@ -165,6 +165,7 @@ void ob_archive_free(void* ptr);
 
 int check_is_leader(const common::ObPGKey& pg_key, const int64_t epoch, bool& is_leader);
 bool is_valid_archive_compressor_type(const common::ObCompressorType compressor_type);
+bool is_io_error(const int ret_code);
 }  // namespace archive
 }  // namespace oceanbase
 

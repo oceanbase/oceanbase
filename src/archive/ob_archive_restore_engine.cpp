@@ -459,7 +459,7 @@ void ObArchiveRestoreEngine::handle(void* task)
           if (is_io_fail_ret_code_(ret)) {
             fetch_task->inc_io_fail_cnt();
             if (fetch_task->get_io_fail_cnt() > MAX_FETCH_LOG_IO_FAIL_CNT) {
-              encount_fatal_err = true;
+              //encount_fatal_err = true;
               LOG_ERROR("io fail too many times", "task", *fetch_task, KR(ret));
             }
           }
@@ -806,7 +806,7 @@ int ObArchiveRestoreEngine::process_normal_clog_(const clog::ObLogEntry& log_ent
 
 bool ObArchiveRestoreEngine::need_retry_ret_code_(const int ret)
 {
-  return (OB_EAGAIN == ret || OB_OSS_ERROR == ret || OB_IO_ERROR == ret);
+  return (OB_EAGAIN == ret || OB_OSS_ERROR == ret || OB_IO_ERROR == ret || OB_ALLOCATE_MEMORY_FAILED == ret || OB_IO_LIMIT == ret);
 }
 
 bool ObArchiveRestoreEngine::is_io_fail_ret_code_(const int ret)
