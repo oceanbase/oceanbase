@@ -560,7 +560,22 @@ int ObFreezeInfoSnapshotMgr::get_reserve_points(const int64_t tenant_id, const s
   return ret;
 }
 
-int ObFreezeInfoSnapshotMgr::get_latest_freeze_version(int64_t& freeze_version)
+int ObFreezeInfoSnapshotMgr::get_restore_point_min_schema_version(const int64_t tenant_id, int64_t &schema_version)
+{
+  int ret = OB_SUCCESS;
+  schema_version = INT64_MAX;
+  RLockGuard lock_guard(lock_);
+  ObIArray<ObSnapshotInfo> &snapshots = snapshots_[cur_idx_];
+  for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
+    const ObSnapshotInfo &snapshot = snapshots.at(i);
+    if (snapshot.snapshot_type_ == SNAPSHOT_FOR_RESTORE_POINT && tenant_id == snapshot.tenant_id_) {
+      schema_version = std::min(snapshot.schema_version_, schema_version);
+    }
+  }
+  return ret;
+}
+
+int ObFreezeInfoSnapshotMgr::get_latest_freeze_version(int64_t &freeze_version)
 {
   int ret = OB_SUCCESS;
 
