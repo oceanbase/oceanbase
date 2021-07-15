@@ -95,7 +95,8 @@ int ObSequenceDMLProxy::next_batch(const uint64_t tenant_id, const uint64_t sequ
   common::ObArenaAllocator allocator(ObModIds::OB_SCHEMA_SEQUENCE);
   ObSqlString sql;
   bool with_snap_shot = true;
-  ObNumber next_value;  // default to zero
+  ObNumber next_value; // default to zero
+  ObNumber tmp_next_value;
   ObNumber cache_inclusive_start;
   ObNumber cache_exclusive_end;
   ObNumber cache_size;
@@ -178,6 +179,13 @@ int ObSequenceDMLProxy::next_batch(const uint64_t tenant_id, const uint64_t sequ
   }
 
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(tmp_next_value.from(next_value, allocator))) {
+      // copy for check need update inner_table
+      LOG_WARN("fail deep copy next_val", K(next_value), K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     // The following piece of logic has the following purpose:
     // 1. calculate the new next_value for updating into the internal table
     // 2. for the cycle scenario, modify next_value to the correct value
@@ -249,7 +257,7 @@ int ObSequenceDMLProxy::next_batch(const uint64_t tenant_id, const uint64_t sequ
   }
 
   // update
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && tmp_next_value != next_value) {
     int64_t affected_rows = 0;
     if (OB_FAIL(sql.assign_fmt("UPDATE %s SET next_value = %s "
                                "WHERE SEQUENCE_ID = %lu",

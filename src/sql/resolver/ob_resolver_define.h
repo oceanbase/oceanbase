@@ -267,6 +267,7 @@ struct ObResolverParams {
         is_from_show_resolver_(false),
         is_restore_(false),
         is_from_create_view_(false),
+        is_from_create_table_(false),
         is_prepare_protocol_(false),
         is_prepare_stage_(false),
         is_dynamic_sql_(false),
@@ -313,6 +314,7 @@ public:
   bool is_from_show_resolver_;
   bool is_restore_;
   bool is_from_create_view_;
+  bool is_from_create_table_;
   bool is_prepare_protocol_;
   bool is_prepare_stage_;
   bool is_dynamic_sql_;

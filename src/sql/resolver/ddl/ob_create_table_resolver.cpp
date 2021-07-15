@@ -1449,7 +1449,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
   ParseNode* sub_sel_node = parse_tree.children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 1];
   ObSelectStmt* select_stmt = NULL;
   ObSelectResolver select_resolver(params_);
-  select_resolver.params_.is_from_create_view_ = true;
+  select_resolver.params_.is_from_create_table_ = true;
   // select stmt can not see upper insert stmt.
   select_resolver.set_parent_namespace_resolver(NULL);
   if (OB_ISNULL(session_info_)) {
@@ -1509,6 +1509,8 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid null expr in select_item", K(ret), K(select_item.expr_));
           } else if (select_item.is_real_alias_ || T_REF_COLUMN == select_item.expr_->get_expr_type()) {
+            // do nothing
+          } else if (select_item.expr_->get_expr_type() == T_FUN_SYS_SEQ_NEXTVAL) {
             // do nothing
           } else {
             ret = OB_NO_COLUMN_ALIAS;

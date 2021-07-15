@@ -1120,7 +1120,7 @@ int ObDMLResolver::resolve_basic_table(const ParseNode& parse_tree, TableItem*& 
       } else if (table_schema->is_vir_table() && !stmt->is_select_stmt()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "DML operation on Virtual Table/Temporary Table");
-      } else if (params_.is_from_create_view_ && table_schema->is_mysql_tmp_table()) {
+      } else if ((params_.is_from_create_view_ || params_.is_from_create_table_) && table_schema->is_mysql_tmp_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
       } else if (OB_FAIL(resolve_table_partition_expr(*table_item, *table_schema))) {

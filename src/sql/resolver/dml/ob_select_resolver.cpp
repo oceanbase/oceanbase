@@ -55,6 +55,7 @@ ObSelectResolver::ObSelectResolver(ObResolverParams& params)
       transpose_item_(NULL)
 {
   params_.is_from_create_view_ = params.is_from_create_view_;
+  params_.is_from_create_table_ = params.is_from_create_table_;
 }
 
 ObSelectResolver::~ObSelectResolver()
@@ -1357,8 +1358,8 @@ int ObSelectResolver::resolve_field_list(const ParseNode& node)
           ret = OB_ERR_TOO_LONG_IDENT;
           LOG_WARN("alias name too long", K(ret), K(select_item.alias_name_));
         }
-      } else if (OB_UNLIKELY(params_.is_from_create_view_ &&
-                             0 == select_item.expr_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME))) {
+      } else if (OB_UNLIKELY((params_.is_from_create_view_ || params_.is_from_create_table_)
+                             && 0 == select_item.expr_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME))) {
         // must name alias for rowid
         //  eg: create view/table as select rowid from t1;
         ret = OB_NO_COLUMN_ALIAS;
@@ -1421,6 +1422,9 @@ int ObSelectResolver::resolve_field_list(const ParseNode& node)
         } else if (T_FUN_SYS_SEQ_NEXTVAL == select_item.expr_->get_expr_type()) {
           // sequence expr, expr is seq_name.nextval or seq_name.currval
           // but column name displayed should be nextval or currval
+          if (T_OP_POS == project_node->type_) {
+            project_node = project_node->children_[0];
+          }
           if (T_OBJ_ACCESS_REF != project_node->type_) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected select item type", K(select_item), K(project_node->type_), K(ret));

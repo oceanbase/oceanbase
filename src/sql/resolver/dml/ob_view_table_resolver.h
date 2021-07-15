@@ -17,19 +17,19 @@ namespace oceanbase {
 namespace sql {
 class ObViewTableResolver : public ObSelectResolver {
 public:
-  ObViewTableResolver(ObResolverParams& params, const ObString& view_db_name, const ObString& view_name)
-      : ObSelectResolver(params),
-        parent_view_resolver_(NULL),
-        is_create_view_(false),
-        materialized_(false),
-        auto_name_id_(1),
-        view_db_name_(view_db_name),
-        view_name_(view_name)
-  {
-    params_.is_from_create_view_ = params.is_from_create_view_;
-  }
-  virtual ~ObViewTableResolver()
-  {}
+  ObViewTableResolver(ObResolverParams &params, const ObString &view_db_name, const ObString &view_name)
+    : ObSelectResolver(params),
+      parent_view_resolver_(NULL),
+      is_create_view_(false),
+      materialized_(false),
+      auto_name_id_(1),
+      view_db_name_(view_db_name),
+      view_name_(view_name)
+      {
+        params_.is_from_create_view_ = params.is_from_create_view_;
+        params_.is_from_create_table_ = params.is_from_create_table_;
+      }
+  virtual ~ObViewTableResolver() {}
 
   void set_current_view_item(const TableItem& view_item)
   {
