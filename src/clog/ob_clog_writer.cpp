@@ -179,8 +179,7 @@ void ObCLogWriter::set_clog_writer_thread_name()
 void ObCLogWriter::process_log_items(common::ObIBaseLogItem** items, const int64_t item_cnt, int64_t& finish_cnt)
 {
   int ret = OB_SUCCESS;
-  ObICLogItem* item = NULL;
-  int64_t sync_mode = ObServerConfig::get_instance().flush_log_at_trx_commit;
+  ObICLogItem *item = NULL;
   int64_t cur_time = 0;
   int64_t io_time = 0;
   int64_t flush_time = 0;
@@ -205,13 +204,7 @@ void ObCLogWriter::process_log_items(common::ObIBaseLogItem** items, const int64
   } else {
     const bool is_idempotent = false;
     const uint64_t write_len = block_meta_len + item->get_data_len();
-    ObCLogDiskErrorCB* cb = NULL;
-    if (CLOG_DISK_SYNC != sync_mode && CLOG_MEM_SYNC != sync_mode) {
-      if (REACH_TIME_INTERVAL(1000 * 1000)) {
-        CLOG_LOG(WARN, "Not supported sync mode, ", K(sync_mode));
-      }
-      sync_mode = CLOG_DISK_SYNC;
-    }
+    ObCLogDiskErrorCB *cb = NULL;
 
     lib::ObMutexGuard guard(file_mutex_);
 
@@ -241,10 +234,6 @@ void ObCLogWriter::process_log_items(common::ObIBaseLogItem** items, const int64
         CLOG_LOG(ERROR, "fail to add log item to buf, ", K(ret));
       }
     }
-    // invoke callback when memory sync
-    if (OB_SUCC(ret) && CLOG_MEM_SYNC == sync_mode) {
-      after_flush(item, block_meta_len, ret, file_writer_->get_cur_file_len(), finish_cnt);
-    }
 
     int64_t flush_start_offset = -1;
     if (OB_SUCC(ret)) {
@@ -268,10 +257,8 @@ void ObCLogWriter::process_log_items(common::ObIBaseLogItem** items, const int64
 
     if (OB_SUCC(ret)) {
       io_time = ObTimeUtility::current_time() - cur_time;
-      // log flush succeed, invoke callback when disk sync
-      if (CLOG_DISK_SYNC == sync_mode) {
-        after_flush(item, block_meta_len, ret, flush_start_offset, finish_cnt);
-      }
+      //log flush succeed, invoke callback when disk sync
+      after_flush(item, block_meta_len, ret, flush_start_offset, finish_cnt);
       flush_time = ObTimeUtility::current_time() - cur_time - io_time;
 
       if (flush_time + io_time > 100 * 1000) {

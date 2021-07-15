@@ -167,7 +167,7 @@ DEFINE_DESERIALIZE(ObLogEntry)
     CLOG_LOG(TRACE, "header deserialize error", K(ret), K(data_len), K(new_pos));
   } else if (data_len - new_pos < header_.get_data_len()) {
     ret = OB_DESERIALIZE_ERROR;
-    CLOG_LOG(TRACE, "buf is not enough to deserialize clog entry buf", K(ret));
+    CLOG_LOG(TRACE, "buf is not enough to deserialize clog entry buf", K(ret), K(header_), K(data_len), K(new_pos));
   } else if (header_.get_data_len() < 0) {
     ret = OB_INVALID_DATA;
     CLOG_LOG(WARN, "get invalid data len", K(ret), "data_len", header_.get_data_len());

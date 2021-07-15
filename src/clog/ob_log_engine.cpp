@@ -94,10 +94,14 @@ int ObLogEnv::init(const Config& cfg, const ObAddr& self_addr, ObIInfoBlockHandl
   } else if (NULL == (file_store_ = ObLogStoreFactory::create(cfg.log_dir_, cfg.file_size_, write_pool_type))) {
     ret = OB_INIT_FAIL;
     CLOG_LOG(WARN, "create file store failed.", K(ret));
-  } else if (OB_FAIL(direct_reader_.init(
-                 cfg.log_dir_, cfg.log_shm_path_, use_log_cache, &log_cache_, &log_tail_, write_pool_type))) {
+  } else if (OB_FAIL(direct_reader_.init(cfg.log_dir_,
+                                         nullptr/*no shared memory*/,
+                                         use_log_cache,
+                                         &log_cache_,
+                                         &log_tail_,
+                                         write_pool_type))) {
     CLOG_LOG(WARN, "direct reader init error", K(ret), K(enable_log_cache), K(write_pool_type));
-  } else if (OB_FAIL(init_log_file_writer(cfg.log_dir_, cfg.log_shm_path_, file_store_))) {
+  } else if (OB_FAIL(init_log_file_writer(cfg.log_dir_, file_store_))) {
     CLOG_LOG(WARN, "Fail to init log file writer ", K(ret));
   } else {
     // do nothing
@@ -334,14 +338,14 @@ bool ObLogEnv::cluster_version_before_2000_() const
   return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000;
 }
 
-int ObLogEnv::init_log_file_writer(const char* log_dir, const char* shm_path, const ObILogFileStore* file_store)
+int ObLogEnv::init_log_file_writer(const char *log_dir, const ObILogFileStore *file_store)
 {
   int ret = OB_SUCCESS;
   if (nullptr ==
       (log_file_writer_ = static_cast<ObCLogBaseFileWriter*>(OB_NEW(ObCLogLocalFileWriter, ObModIds::OB_LOG_WRITER)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "alloc file writer failed, ", K(ret));
-  } else if (OB_FAIL(log_file_writer_->init(log_dir, shm_path, CLOG_DIO_ALIGN_SIZE, file_store))) {
+  } else if (OB_FAIL(log_file_writer_->init(log_dir, CLOG_DIO_ALIGN_SIZE, file_store))) {
     CLOG_LOG(WARN, "Fail to init file writer, ", K(ret));
   }
 
@@ -758,13 +762,13 @@ int ObLogEngine::init(const ObLogEnv::Config& cfg, const ObAddr& self_addr, obrp
   } else if (OB_FAIL(ilog_log_cache_.init(
                  self_addr, cfg.index_cache_name_, cfg.index_cache_priority_, ilog_hot_cache_size))) {
     CLOG_LOG(WARN, "failed to init ilog_log_cache", K(ret));
-  } else if (OB_FAIL(ilog_storage_.init(cfg.index_log_dir_,
-                 cfg.index_log_shm_path_,
-                 server_seq,
-                 self_addr,
-                 &ilog_log_cache_,
-                 partition_service,
-                 &clog_env_))) {
+  } else if (OB_FAIL(ilog_storage_.init(
+      cfg.index_log_dir_,
+      server_seq,
+      self_addr,
+      &ilog_log_cache_,
+      partition_service,
+      &clog_env_))) {
     CLOG_LOG(WARN, "ilog_storage_ init failed", K(ret));
   } else {
     batch_rpc_ = batch_rpc;

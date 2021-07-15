@@ -143,7 +143,7 @@ protected:
   // the clog_writer is returned to be busy
   static const int64_t BUFFER_ITEM_CONGESTED_PERCENTAGE = 50;
   bool cluster_version_before_2000_() const;
-  int init_log_file_writer(const char* log_dir, const char* shm_path, const ObILogFileStore* file_store);
+  int init_log_file_writer(const char *log_dir, const ObILogFileStore *file_store);
 
   bool is_inited_;
   Config config_;

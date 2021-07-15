@@ -44,6 +44,7 @@ const int64_t CLOG_CACHE_SIZE = 64 * 1024;
 const int64_t CLOG_REPLAY_CHECKSUM_WINDOW_SIZE = 1 << 9;
 const int64_t CLOG_INFO_BLOCK_SIZE_LIMIT = 1 << 22;
 const offset_t OB_INVALID_OFFSET = -1;
+const int64_t CLOG_MAX_WRITE_BUFFER_SIZE = 2 << 20;
 
 inline bool is_valid_log_id(const uint64_t log_id)
 {
