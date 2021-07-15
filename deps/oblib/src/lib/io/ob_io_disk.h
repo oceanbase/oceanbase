@@ -56,13 +56,11 @@ class ObDiskDiagnose {
 public:
   ObDiskDiagnose();
   virtual ~ObDiskDiagnose();
-  void record_read_fail(const int64_t retry_cnt);
+  void record_read_fail(const int64_t diagnose_begin_ts);
   void record_write_fail();
   bool is_disk_warning() const;
   bool is_disk_error() const;
   void reset_disk_health();
-  int64_t get_max_retry_cnt() const;
-  int64_t get_warn_retry_cnt() const;
   int64_t get_disk_error_begin_ts() const
   {
     return disk_error_begin_ts_;

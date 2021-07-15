@@ -41,28 +41,23 @@ void ObDiskDiagnose::reset()
   MEMSET(write_failure_event_ts_, 0, sizeof(write_failure_event_ts_));
 }
 
-void ObDiskDiagnose::record_read_fail(const int64_t retry_cnt)
+void ObDiskDiagnose::record_read_fail(const int64_t diagnose_begin_ts)
 {
   const ObIOConfig io_config = OB_IO_MANAGER.get_io_config();
-  // in oder to reduce the misjudgement, here is the rules:
-  // watch the continuous read timeout with the exponential growth of timeout
-  // 1. for more than 3 times, record as dick warning,
-  //    after that, this server is not allowed to be the paxos leader for a period,
-  //    which is indicated by READ_FAILURE_IN_BLACK_LIST_INTERVAL, usually 300s.
-  //
-  // 2. for more than 6 times, record as disk error
-  //    if the disk is confirmed normal, the administrator can reset the disk error by
-  //    alter system set disk valid server [=] 'ip:port'
-  //
-  if (retry_cnt < io_config.retry_warn_limit_) {
-    // do nothing
-  } else if (retry_cnt < io_config.retry_error_limit_) {
-    last_read_failure_warn_ts_ = ObTimeUtility::current_time();
-  } else {
+  const int64_t current_ts = ObTimeUtility::current_time();
+  if (current_ts >= diagnose_begin_ts + io_config.data_storage_warning_tolerance_time_) {
+    // set disk warning and record warn_ts
+    // until warn_ts + READ_FAILURE_IN_BLACK_LIST_INTERVAL, this server is not allowed to be partition leader
+    last_read_failure_warn_ts_ = current_ts;
+  }
+  if (current_ts >= diagnose_begin_ts + io_config.data_storage_error_tolerance_time_) {
+    // set disk error and record error_ts
+    // if the disk is confirmed normal, the administrator can reset disk status by:
+    // alter system set disk valid server [=] 'ip:port'
     if (!is_disk_error_) {
-      disk_error_begin_ts_ = ObTimeUtility::current_time();
+      disk_error_begin_ts_ = current_ts;
     }
-    disk_error_last_ts_ = ObTimeUtility::current_time();
+    disk_error_last_ts_ = current_ts;
     is_disk_error_ = true;
     COMMON_LOG(ERROR, "set_disk_error: attention!!!");
   }
@@ -117,18 +112,6 @@ void ObDiskDiagnose::reset_disk_health()
 int64_t ObDiskDiagnose::get_last_io_failure_ts() const
 {
   return MAX(disk_error_last_ts_, last_read_failure_warn_ts_);
-}
-
-int64_t ObDiskDiagnose::get_max_retry_cnt() const
-{
-  const ObIOConfig io_config = OB_IO_MANAGER.get_io_config();
-  return io_config.retry_error_limit_;
-}
-
-int64_t ObDiskDiagnose::get_warn_retry_cnt() const
-{
-  const ObIOConfig io_config = OB_IO_MANAGER.get_io_config();
-  return io_config.retry_warn_limit_;
 }
 
 /**
@@ -648,33 +631,41 @@ void ObIOFaultDetector::handle(void* t)
     const ObIOInfo& info = task->info_;
     ObIOHandle handle;
     uint64_t timeout_ms = task->timeout_ms_;
-    int64_t retry_cnt = 0;
-    const int64_t MIN_IO_WAIT_TIME_MS = 30000;  // 30s
-
-    for (retry_cnt = 0; retry_cnt < disk_diagnose.get_max_retry_cnt(); ++retry_cnt) {
+    // remain 1s to avoid race condition for retry_black_list_interval
+    const int64_t retry_black_list_interval_ms =
+        OB_IO_MANAGER.get_io_config().read_failure_black_list_interval_ / 1000L - 1000L;
+    // rety_io_timeout must less than black_list_interval
+    const int64_t MIN_IO_RETRY_TIMEOUT_MS = min(10L * 1000L /* 10s */, retry_black_list_interval_ms);
+    const int64_t MAX_IO_RETRY_TIMEOUT_MS = min(180L * 1000L /* 180s*/, retry_black_list_interval_ms);
+    const int64_t diagnose_begin_ts = ObTimeUtility::current_time();
+    bool is_retry_succ = false;
+    while (OB_SUCC(ret) && !is_retry_succ && !disk_diagnose.is_disk_error()) {
       handle.reset();
-      // timeout grows exponentially
-      if (retry_cnt >= disk_diagnose.get_warn_retry_cnt() - 1) {
-        timeout_ms = max(timeout_ms * 2, MIN_IO_WAIT_TIME_MS);
-      } else {
-        timeout_ms = timeout_ms * 2;
+      const ObIOConfig io_conf = OB_IO_MANAGER.get_io_config();
+      const int64_t current_retry_ts = ObTimeUtility::current_time();
+      const int64_t warn_ts = diagnose_begin_ts + io_conf.data_storage_warning_tolerance_time_;
+      const int64_t error_ts = diagnose_begin_ts + io_conf.data_storage_error_tolerance_time_;
+      const int64_t left_timeout_ms =
+          !disk_diagnose.is_disk_warning() ? (warn_ts - current_retry_ts) / 1000 : (error_ts - current_retry_ts) / 1000;
+      // timeout of retry io increase exponentially
+      timeout_ms = min(left_timeout_ms, min(MAX_IO_RETRY_TIMEOUT_MS, max(timeout_ms * 2, MIN_IO_RETRY_TIMEOUT_MS)));
+      if (timeout_ms > 0) {
+        // do retry io
+        if (disk->get_admin_status() != DISK_USING) {
+          ret = OB_STATE_NOT_MATCH;
+          COMMON_LOG(WARN, "check_admin_status failed, disk is deleting", K(ret), "status", disk->get_admin_status());
+          break;
+        } else if (OB_FAIL(OB_IO_MANAGER.read(info, handle, timeout_ms))) {
+          COMMON_LOG(WARN, "ObIOManager::read failed", K(ret), K(info), K(timeout_ms));
+          ret = OB_SUCCESS;
+        } else {
+          is_retry_succ = true;
+        }
       }
-
-      if (retry_cnt == disk_diagnose.get_warn_retry_cnt()) {
-        disk_diagnose.record_read_fail(retry_cnt);
-      }
-
-      if (disk->get_admin_status() != DISK_USING) {
-        ret = OB_STATE_NOT_MATCH;
-        COMMON_LOG(WARN, "check_admin_status failed, disk is deleting", K(ret), "status", disk->get_admin_status());
-        break;
-      } else if (OB_FAIL(OB_IO_MANAGER.read(info, handle, timeout_ms))) {
-        COMMON_LOG(WARN, "ObIOManager::read failed", K(ret), K(info), K(timeout_ms));
-      } else {
-        break;  // stop retry if success
+      if (OB_SUCC(ret) && !is_retry_succ) {
+        disk_diagnose.record_read_fail(diagnose_begin_ts);
       }
     }
-    disk_diagnose.record_read_fail(retry_cnt);
 
     op_free(task);
     task = NULL;

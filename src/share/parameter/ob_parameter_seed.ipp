@@ -881,6 +881,15 @@ DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "120s", "[5s,600s]",
     "io timeout for data storage, Range [5s,600s]. "
     "The default value is 120s",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(data_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "30s", "[10s,300s]",
+    "time to tolerate disk read failure, after that, the disk status will be set warning. Range [10s,300s]. The "
+    "default value is 30s",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME_WITH_CHECKER(data_storage_error_tolerance_time, OB_CLUSTER_PARAMETER, "300s",
+    common::ObDataStorageErrorToleranceTimeChecker, "[10s,7200s]",
+    "time to tolerate disk read failure, after that, the disk status will be set error. Range [10s,7200s]. The default "
+    "value is 300s",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(data_disk_usage_limit_percentage, OB_CLUSTER_PARAMETER, "90", "[50,100]",
     "the safe use percentage of data disk"
     "Range: [50,100] in integer",
