@@ -104,8 +104,11 @@ int ObTransResultCollector::recv_result(const ObTaskID& task_id, const TransResu
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("TRC_recv_result", K(task_id));
-  OV(OB_NOT_NULL(trans_result_));
-  OZ(trans_result_->merge_result(trans_result));
+  {
+    ObLockGuard<ObSpinLock> lock_guard(lock_);
+    OV(OB_NOT_NULL(trans_result_));
+    OZ(trans_result_->merge_result(trans_result));
+  }
   if (OB_SUCCESS != ret) {
     err_code_ = ret;
   }
@@ -199,6 +202,7 @@ int ObTransResultCollector::init(ObSQLSessionInfo& session, ObExecutorRpcImpl* e
 {
   int ret = OB_SUCCESS;
   OX(reset());
+  ObLockGuard<ObSpinLock> lock_guard(lock_);
   OV(OB_NOT_NULL(exec_rpc));
   OX(rpc_tenant_id_ = session.get_rpc_tenant_id());
   OX(trans_id_ = session.get_trans_desc().get_trans_id());
@@ -216,7 +220,7 @@ int ObTransResultCollector::wait_all_task(int64_t query_timeout, const bool is_b
   int ret = OB_SUCCESS;
   int64_t cur_time = ObTimeUtility::current_time();
   int64_t next_ping_time = cur_time;
-  int64_t max_wait_time = MAX(cur_time + TTL_THRESHOLD * WAIT_ONCE_TIME, query_timeout);
+  int64_t max_wait_time = MIN(cur_time + TTL_THRESHOLD * WAIT_ONCE_TIME, query_timeout);
   bool need_wait = true;
   bool need_ping = true;
   while (/*OB_SUCC(ret)*/ need_wait && cur_time < max_wait_time) {
@@ -245,8 +249,11 @@ int ObTransResultCollector::wait_all_task(int64_t query_timeout, const bool is_b
   if (need_wait || OB_SUCCESS != err_code_) {
     // now we may get many errors, we must log every one, but return any one is OK.
     LOG_WARN("need set incomplete", K(need_wait), K(err_code_));
-    OV(OB_NOT_NULL(trans_result_));
-    OX(trans_result_->set_incomplete());
+    {
+      ObLockGuard<ObSpinLock> lock_guard(lock_);
+      OV (OB_NOT_NULL(trans_result_));
+      OX (trans_result_->set_incomplete());
+    }
     if (need_wait) {
       ret = OB_TIMEOUT;
       for (int64_t i = 0; i < reporters_.count(); i++) {
@@ -256,12 +263,14 @@ int ObTransResultCollector::wait_all_task(int64_t query_timeout, const bool is_b
       }
     }
   }
+  ObLockGuard<ObSpinLock> lock_guard(lock_);
   trans_result_ = NULL;
   return ret;
 }
 
 void ObTransResultCollector::reset()
 {
+  ObLockGuard<ObSpinLock> lock_guard(lock_);
   trans_result_ = NULL;
   err_code_ = OB_SUCCESS;
   trans_id_.reset();

@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_SESSION
+#define USING_LOG_PREFIX SQL
 #include "sql/ob_result_set.h"
 #include "lib/oblog/ob_trace_log.h"
 #include "lib/container/ob_id_set.h"
