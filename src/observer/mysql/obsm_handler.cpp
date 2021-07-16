@@ -126,8 +126,45 @@ int ObSMHandler::on_connect(easy_connection_t* c)
 
 int ObSMHandler::on_disconnect(easy_connection_t* c)
 {
-  UNUSED(c);
-  return EASY_OK;
+  // https://work.aone.alibaba-inc.com/issue/34775964
+  int eret = EASY_OK;
+  int tmp_ret = OB_SUCCESS;
+  ObSMConnection *conn = NULL;
+  if (OB_ISNULL(c) || OB_ISNULL(gctx_.session_mgr_)) {
+    eret = EASY_ERROR;
+    LOG_ERROR("easy_connection_t or gctx_.session_mgr_ is null", K(eret), K(c), K(gctx_.session_mgr_));
+  } else if (OB_ISNULL(c->user_data)) {
+    eret = EASY_ERROR;
+    LOG_ERROR("connection user data is NULL", K(eret));
+  } else if (OB_ISNULL(conn = reinterpret_cast<ObSMConnection*>(c->user_data))) {
+    eret = EASY_ERROR;
+    LOG_ERROR("conn is null", K(eret));
+  } else {
+    //set session shadow
+    if (conn->is_sess_alloc_
+        && !conn->is_sess_free_
+        && ObSMConnection::INITIAL_SESSID != conn->sessid_) {
+      sql::ObSQLSessionInfo *sess_info = NULL;
+      if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = gctx_.session_mgr_->get_session(conn->version_, conn->sessid_, sess_info)))) {
+        LOG_WARN("fail to get session", K(tmp_ret), K(conn->version_), K(conn->sessid_),
+                 "proxy_sessid", conn->proxy_sessid_);
+      } else if (OB_ISNULL(sess_info)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is NULL", K(tmp_ret), K(conn->version_), K(conn->sessid_),
+                 "proxy_sessid", conn->proxy_sessid_);
+      } else {
+        sess_info->set_session_state(sql::SESSION_KILLED);
+        sess_info->set_shadow(true);
+        if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = gctx_.session_mgr_->revert_session(sess_info)))) {
+          LOG_ERROR("fail to revert_session", K(tmp_ret), K(conn->version_), K(conn->sessid_),
+                    "proxy_sessid", conn->proxy_sessid_);
+        }
+      }
+    }
+    LOG_INFO("kill and revert session", K(conn->version_), K(conn->sessid_),
+               "proxy_sessid", conn->proxy_sessid_, "server_id", GCTX.server_id_, K(tmp_ret), K(eret));
+  }
+  return eret;
 }
 
 int ObSMHandler::on_close(easy_connection_t* c)
@@ -152,32 +189,10 @@ int ObSMHandler::on_close(easy_connection_t* c)
       ctx.proxy_sessid_ = conn->proxy_sessid_;
       ctx.has_inc_active_num_ = conn->has_inc_active_num_;
 
-      // set session shadow
-      if (ObSMConnection::INITIAL_SESSID != conn->sessid_) {
-        sql::ObSQLSessionInfo* sess_info = NULL;
-        if (OB_UNLIKELY(OB_FAIL(gctx_.session_mgr_->get_session(conn->version_, conn->sessid_, sess_info)))) {
-          LOG_WARN(
-              "fail to  get session", K(ret), K(conn->version_), K(conn->sessid_), "proxy_sessid", conn->proxy_sessid_);
-        } else if (OB_ISNULL(sess_info)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN(
-              "session info is NULL", K(ret), K(conn->version_), K(conn->sessid_), "proxy_sessid", conn->proxy_sessid_);
-        } else {
-          sess_info->set_session_state(sql::SESSION_KILLED);
-          sess_info->set_shadow(true);
-          if (OB_UNLIKELY(OB_FAIL(gctx_.session_mgr_->revert_session(sess_info)))) {
-            LOG_ERROR("fail to revert_session",
-                K(ret),
-                K(conn->version_),
-                K(conn->sessid_),
-                "proxy_sessid",
-                conn->proxy_sessid_);
-          }
-        }
-      }
-
-      // free session in task
-      ObSrvTask* task = OB_NEW(ObDisconnectTask, ObModIds::OB_RPC, ctx);
+      //free session in task
+      ObSrvTask *task = OB_NEW(ObDisconnectTask,
+                               ObModIds::OB_RPC,
+                               ctx);
       if (OB_UNLIKELY(NULL == task)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_UNLIKELY(NULL == conn->tenant_)) {
