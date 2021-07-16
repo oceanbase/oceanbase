@@ -246,7 +246,7 @@ public:
         col_params_(nullptr),
         allocator_(alloc)
   {}
-  ~ObPushdownFilterExecutor()
+  virtual ~ObPushdownFilterExecutor()
   {
     if (nullptr != filter_bitmap_) {
       filter_bitmap_->~ObBitmap();
@@ -471,7 +471,7 @@ private:
 
 class ObFilterExecutorConstructor {
 public:
-  ObFilterExecutorConstructor(common::ObIAllocator* alloc) : alloc_(alloc), factory_(alloc)
+  ObFilterExecutorConstructor(common::ObIAllocator* alloc) : factory_(alloc)
   {}
   int apply(ObPushdownFilterNode* filter_tree, ObPushdownFilterExecutor*& filter_executor);
 
@@ -480,7 +480,6 @@ private:
   int create_filter_executor(ObPushdownFilterNode* filter_tree, ObPushdownFilterExecutor*& filter_executor);
 
 private:
-  common::ObIAllocator* alloc_;
   ObPushdownFilterFactory factory_;
 };
 

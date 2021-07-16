@@ -61,8 +61,7 @@ int ObPxTransmitOpInput::get_parent_dfo_key(ObDtlDfoKey& key)
 int ObPxTransmitOpInput::get_data_ch(ObPxTaskChSet& task_ch_set, int64_t timeout_ts, ObDtlChTotalInfo*& ch_info)
 {
   int ret = OB_SUCCESS;
-  int64_t task_id = OB_INVALID_ID;
-  ObPxSQCProxy* ch_provider = reinterpret_cast<ObPxSQCProxy*>(ch_provider_ptr_);
+  ObPxSQCProxy* ch_provider = reinterpret_cast<ObPxSQCProxy *>(ch_provider_ptr_);
   if (OB_ISNULL(ch_provider)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ch provider not init", K(ret));
@@ -341,7 +340,6 @@ int ObPxTransmitOp::send_eof_row()
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx* phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   LOG_TRACE("Send eof row", "op_id", get_spec().id_, "ch_cnt", task_channels_.count(), K(ret));
-  int64_t max_loop = 0;
   if (OB_ISNULL(ch_info_) || ch_info_->receive_exec_server_.total_task_cnt_ != task_channels_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status: ch info is null", K(ret), KP(ch_info_), K(task_channels_.count()));

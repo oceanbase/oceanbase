@@ -254,9 +254,6 @@ int ObPxReceiveOp::rescan()
 int ObPxReceiveOp::drain_exch()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  const ObNewRow* row = NULL;
-  ObPxReceiveOpInput* recv_input = NULL;
   uint64_t version = -1;
   if (OB_FAIL(try_open())) {
     LOG_WARN("get operator ctx failed", K(ret));
@@ -296,7 +293,6 @@ int ObPxReceiveOp::drain_exch()
 int ObPxReceiveOp::active_all_receive_channel()
 {
   int ret = OB_SUCCESS;
-  const int batch = 10;
   while (!dfc_.is_all_channel_act() && OB_SUCC(ret)) {
     if (OB_FAIL(inner_get_next_row())) {
       if (OB_ITER_END != ret) {

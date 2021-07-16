@@ -839,7 +839,6 @@ int ObHashDistinct::ObHashDistinctCtx::get_dist_row_from_in_mem_partitions(
   ObNewRow* cur_row = NULL;
   uint64_t hash_value = 0;
   uint64_t bucket_idx = 0;
-  ObChunkRowStore* store;
   if (first_read_part_) {
     first_read_part_ = false;
     if (OB_FAIL(get_next_mem_partition())) {

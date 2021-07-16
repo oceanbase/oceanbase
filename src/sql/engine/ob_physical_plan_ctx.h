@@ -30,7 +30,7 @@ class ObSQLSessionInfo;
 class ObPhysicalPlan;
 class ObExecContext;
 class ObUdfCtxMgr;
-class ObPxDmlRowInfo;
+struct ObPxDmlRowInfo;
 
 struct PartParamIdxArray {
   PartParamIdxArray() : part_id_(-1), part_param_idxs_()
