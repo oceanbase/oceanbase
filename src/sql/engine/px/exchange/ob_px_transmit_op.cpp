@@ -253,6 +253,14 @@ int ObPxTransmitOp::inner_close()
   int ret = OB_SUCCESS;
   /* we must release channel even if there is some error happen before */
   chs_agent_.destroy();
+  ObDtlBasicChannel *ch = nullptr;
+  int64_t recv_cnt = 0;
+  for (int i = 0; i < task_channels_.count(); ++i) {
+    ch = static_cast<ObDtlBasicChannel *>(task_channels_.at(i));
+    recv_cnt += ch->get_send_buffer_cnt();
+  }
+  op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::DTL_SEND_RECV_COUNT;
+  op_monitor_info_.otherstat_3_value_ = recv_cnt;
   int release_channel_ret = loop_.unregister_all_channel();
   if (release_channel_ret != common::OB_SUCCESS) {
     // the following unlink actions is not safe is any unregister failure happened
@@ -336,6 +344,9 @@ int ObPxTransmitOp::send_eof_row()
         task_channels_, ch_info_, true, phy_plan_ctx->get_timeout_timestamp(), &eval_ctx_);
     if (OB_FAIL(eof_asyn_sender.asyn_send())) {
       LOG_WARN("failed to asyn send drain", K(ret), K(lbt()));
+    } else if (GCONF.enable_sql_audit) {
+      op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::EXCHANGE_EOF_TIMESTAMP;
+      op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
     }
   }
   return ret;
@@ -459,6 +470,9 @@ int ObPxTransmitOp::broadcast_eof_row()
     LOG_WARN("unexpected NULL ptr", K(ret));
   } else if (OB_FAIL(chs_agent_.flush())) {
     LOG_WARN("fail flush row to slice channel", K(ret));
+  } else if (GCONF.enable_sql_audit) {
+    op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::EXCHANGE_EOF_TIMESTAMP;
+    op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
   }
   return ret;
 }

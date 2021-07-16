@@ -795,6 +795,10 @@ int ObDtlBasicChannel::wait_unblocking()
     } else if (OB_FAIL(channel_loop_->find(this, idx))) {
       LOG_WARN("channel not exists in channel loop", K(ret));
     } else {
+      int64_t start_t = ObTimeUtility::current_time();
+      int64_t interval_t = 1 * 60 * 1000000; // 1min
+      int64_t last_t = 0;
+      int64_t print_log_t = 10 * 60 * 1000000;
       block_proc_.set_ch_idx_var(&idx);
       LOG_TRACE("wait unblocking", K(ret), K(dfc_->is_block()), KP(id_), K(peer_));
       do {
@@ -809,7 +813,8 @@ int ObDtlBasicChannel::wait_unblocking()
                        &block_proc_, timeout_ts - ObTimeUtility::current_time(), got_channel_idx))) {
           // no msg, then don't process
           if (OB_EAGAIN == ret) {
-            if (ObTimeUtility::current_time() > timeout_ts) {
+            int64_t end_t = ObTimeUtility::current_time();
+            if (end_t > timeout_ts) {
               ret = OB_TIMEOUT;
               LOG_WARN("get row from channel timeout", K(ret), K(timeout_ts));
             } else {
@@ -818,6 +823,18 @@ int ObDtlBasicChannel::wait_unblocking()
                 ret = tmp_ret;
                 LOG_WARN("worker interrupt", K(tmp_ret), K(ret));
                 break;
+              }
+              if (end_t - start_t > print_log_t) {
+                bool print_log = false;
+                if (0 == last_t || end_t - last_t > interval_t) {
+                  print_log = true;
+                  last_t = end_t;
+                }
+                if (print_log) {
+                  LOG_INFO("wait unblocking", K(id_), K(peer_id_), K(peer_id_),
+                    K(recv_buffer_cnt_), K(processed_buffer_cnt_), K(send_buffer_cnt_),
+                    K(idx), K(got_channel_idx));
+                }
               }
               ret = OB_SUCCESS;
             }

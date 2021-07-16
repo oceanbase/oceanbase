@@ -339,6 +339,10 @@ int ObPxMSCoordOp::next_row(bool& wait_next_msg)
 
   if (OB_SUCC(ret)) {
     if (0 == row_heap_.capacity()) {
+      if (GCONF.enable_sql_audit) {
+        op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::EXCHANGE_EOF_TIMESTAMP;
+        op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
+      }
       all_rows_finish_ = true;
       metric_.mark_last_out();
     } else if (row_heap_.capacity() == row_heap_.count()) {

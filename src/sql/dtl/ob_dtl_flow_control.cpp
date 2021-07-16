@@ -237,6 +237,7 @@ int ObDtlFlowControl::block_channel(ObDtlChannel* ch)
       LOG_WARN("channel is blocked", K(ret), K(idx));
     } else {
       set_block(idx);
+      ch->set_blocked();
       LOG_TRACE("transmit set channel block trace", K(ch), KP(ch->get_id()), K(ch->get_peer()), K(idx));
     }
   }
@@ -257,6 +258,7 @@ int ObDtlFlowControl::unblock_channel(ObDtlChannel* ch)
       LOG_WARN("failed to clear response block info", K(ret));
     } else if (is_block(idx)) {
       unblock(idx);
+      ch->set_blocked();
     }
     LOG_TRACE("channel unblock", K(ch), KP(ch->get_id()), K(ch->get_peer()), K(idx), K(is_block(idx)));
   }

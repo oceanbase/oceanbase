@@ -36,8 +36,14 @@ SQL_MONITOR_STATNAME_DEF(
     PDML_PARTITION_FLUSH_COUNT, "times write to storage", "total times writing data to storage by pdml op")
 // reshuffle
 SQL_MONITOR_STATNAME_DEF(
-    EXCHANGE_DROP_ROW_COUNT, "drop row count", "total row dropped by exchange out op for unmatched partition")
-// end
+  EXCHANGE_DROP_ROW_COUNT, "drop row count", "total row dropped by exchange out op for unmatched partition")
+// DTL
+SQL_MONITOR_STATNAME_DEF(
+  DTL_SEND_RECV_COUNT, "the count of buffer received or sended", "the count of dtl buffer that received or sended")
+SQL_MONITOR_STATNAME_DEF(
+  EXCHANGE_EOF_TIMESTAMP, "the timestamp of send eof or receive eof", "the timestamp of send eof or receive eof")
+//end
+
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, "monitor end", "monitor stat name end")
 #endif
 

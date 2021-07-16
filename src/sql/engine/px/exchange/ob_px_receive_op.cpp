@@ -327,10 +327,12 @@ int ObPxFifoReceiveOp::inner_close()
       LOG_WARN("release dtl channel failed", K(release_channel_ret));
     }
     ObDTLIntermResultKey key;
-    ObDtlBasicChannel* channel = NULL;
+    ObDtlBasicChannel *channel = NULL;
+    int64_t recv_cnt = 0;
     for (int i = 0; i < task_channels_.count(); ++i) {
       channel = static_cast<ObDtlBasicChannel*>(task_channels_.at(i));
       key.channel_id_ = channel->get_id();
+      recv_cnt += channel->get_recv_buffer_cnt();
       if (channel->use_interm_result()) {
         release_channel_ret = ObDTLIntermResultManager::getInstance().erase_interm_result_info(key);
         if (release_channel_ret != common::OB_SUCCESS) {
@@ -338,7 +340,8 @@ int ObPxFifoReceiveOp::inner_close()
         }
       }
     }
-
+    op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::DTL_SEND_RECV_COUNT;
+    op_monitor_info_.otherstat_3_value_ = recv_cnt;
     release_channel_ret = msg_loop_.unregister_all_channel();
     if (release_channel_ret != common::OB_SUCCESS) {
       // the following unlink actions is not safe is any unregister failure happened
@@ -378,6 +381,10 @@ int ObPxFifoReceiveOp::inner_get_next_row()
         LOG_DEBUG("Got one row from channel", K(ret));
         break;  // got one row
       } else if (OB_ITER_END == ret) {
+        if (GCONF.enable_sql_audit) {
+          op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::EXCHANGE_EOF_TIMESTAMP;
+          op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
+        }
         metric_.mark_last_out();
         LOG_TRACE("Got eof row from channel", K(ret));
         break;

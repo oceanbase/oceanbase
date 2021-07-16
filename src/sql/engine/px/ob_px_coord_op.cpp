@@ -554,6 +554,14 @@ int ObPxCoordOp::destroy_all_channel()
   // note: must unregister channel from msg_loop first. This enable unlink_channel safely.
   // Otherwise, channnel may receive data while unlink_channel,
   // and result in memory leak or something else.
+  int64_t recv_cnt = 0;
+  ObDtlBasicChannel *ch = nullptr;
+  for (int i = 0; i < task_channels_.count(); ++i) {
+    ch = static_cast<ObDtlBasicChannel *>(task_channels_.at(i));
+    recv_cnt += ch->get_recv_buffer_cnt();
+  }
+  op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::DTL_SEND_RECV_COUNT;
+  op_monitor_info_.otherstat_3_value_ = recv_cnt;
   int tmp_ret = OB_SUCCESS;
   if (OB_SUCCESS != (tmp_ret = msg_loop_.unregister_all_channel())) {
     LOG_WARN("fail unregister channels from msg_loop. ignore", KR(tmp_ret));
