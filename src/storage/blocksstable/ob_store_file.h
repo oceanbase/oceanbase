@@ -432,6 +432,8 @@ private:
   bool is_mark_sweep_enabled_;
   bool is_doing_mark_sweep_;
   ObThreadCond cond_;  // for mark sweep
+  bool is_fs_support_punch_hole_;
+  int block_file_fd_;
 };
 
 OB_INLINE bool ObStoreFile::is_valid(const MacroBlockId macro_id)

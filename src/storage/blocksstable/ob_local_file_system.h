@@ -113,6 +113,8 @@ public:
   virtual int get_super_block_version(int64_t& super_block_version) override;
   virtual int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage) override;
 
+  OB_INLINE int get_block_file_fd() const { return fd_.fd_; }
+
   TO_STRING_KV("type", "LOCAL");
 
 private:
