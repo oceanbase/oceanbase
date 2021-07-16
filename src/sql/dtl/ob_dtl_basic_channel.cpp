@@ -183,6 +183,13 @@ int ObDtlBasicChannel::wait_response()
     if (OB_FAIL(msg_response_.wait())) {
       LOG_WARN("send previous message fail", K(ret));
     }
+    if (OB_HASH_NOT_EXIST == ret) {
+      if (is_drain()) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER;
+      }
+    }
   }
   return ret;
 }
@@ -190,10 +197,8 @@ int ObDtlBasicChannel::wait_response()
 int ObDtlBasicChannel::clear_response_block()
 {
   int ret = OB_SUCCESS;
-  if (msg_response_.is_in_process()) {
-    if (OB_FAIL(msg_response_.wait())) {
-      LOG_WARN("send previous message fail", K(ret));
-    }
+  if (OB_FAIL(wait_response())) {
+    LOG_WARN("failed to wait response", K(ret));
   }
   msg_response_.reset_block();
   return ret;
@@ -684,7 +689,7 @@ int ObDtlBasicChannel::send1(std::function<int(const ObDtlLinkedBuffer&)>& proc,
   return ret;
 }
 
-int ObDtlBasicChannel::flush(bool force_flush, bool wait_response)
+int ObDtlBasicChannel::flush(bool force_flush, bool wait_resp)
 {
   int ret = OB_SUCCESS;
   if (force_flush == true) {
@@ -724,16 +729,9 @@ int ObDtlBasicChannel::flush(bool force_flush, bool wait_response)
       }
     } while (OB_SUCC(ret));
   }
-  if (OB_SUCC(ret) && force_flush && wait_response && msg_response_.is_in_process()) {
-    if (OB_FAIL(msg_response_.wait())) {
+  if (OB_SUCC(ret) && force_flush && wait_resp) {
+    if (OB_FAIL(wait_response())) {
       LOG_WARN("send previous message fail", K(ret), K(peer_), K(peer_id_), K(lbt()));
-    }
-  }
-  if (OB_HASH_NOT_EXIST == ret) {
-    if (is_drain()) {
-      ret = OB_SUCCESS;
-    } else {
-      ret = OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER;
     }
   }
   return ret;

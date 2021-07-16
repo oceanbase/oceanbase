@@ -252,7 +252,9 @@ int ObPxTransmitOp::inner_close()
 {
   int ret = OB_SUCCESS;
   /* we must release channel even if there is some error happen before */
-  chs_agent_.destroy();
+  if (OB_FAIL(chs_agent_.destroy())) {
+    LOG_WARN("failed to destroy ch agent", K(ret));
+  }
   ObDtlBasicChannel *ch = nullptr;
   int64_t recv_cnt = 0;
   for (int i = 0; i < task_channels_.count(); ++i) {
@@ -271,7 +273,11 @@ int ObPxTransmitOp::inner_close()
   if (release_channel_ret != common::OB_SUCCESS) {
     LOG_WARN("release dtl channel failed", K(release_channel_ret));
   }
-  if (OB_FAIL(ObTransmitOp::inner_close())) {
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = ObTransmitOp::inner_close())) {
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
     LOG_WARN("fail close op", K(ret));
   }
   return ret;

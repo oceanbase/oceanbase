@@ -238,16 +238,8 @@ int ObDtlRpcChannel::send_message(ObDtlLinkedBuffer*& buf)
     is_first = buf->is_data_msg() && 1 == buf->seq_no();
     is_eof = buf->is_eof();
 
-    if (msg_response_.is_in_process()) {
-      if (OB_FAIL(msg_response_.wait())) {
-        LOG_WARN("send previous message fail", K(ret));
-      } else if (OB_HASH_NOT_EXIST == ret) {
-        if (is_drain()) {
-          ret = OB_SUCCESS;
-        } else {
-          ret = OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER;
-        }
-      }
+    if (OB_FAIL(wait_response())) {
+      LOG_WARN("failed to wait for response", K(ret));
     }
     if (OB_SUCC(ret) && OB_FAIL(wait_unblocking_if_blocked())) {
       LOG_WARN("failed to block data flow", K(ret));

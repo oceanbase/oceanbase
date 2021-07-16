@@ -169,16 +169,8 @@ int ObDtlLocalChannel::send_message(ObDtlLinkedBuffer*& buf)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else {
-    if (msg_response_.is_in_process()) {
-      if (OB_FAIL(msg_response_.wait())) {
-        LOG_WARN("send previous message fail", K(ret));
-      } else if (OB_HASH_NOT_EXIST == ret) {
-        if (is_drain()) {
-          ret = OB_SUCCESS;
-        } else {
-          ret = OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER;
-        }
-      }
+    if (OB_FAIL(wait_response())) {
+      LOG_WARN("failed to wait response", K(ret));
     }
     if (OB_SUCC(ret) && OB_FAIL(wait_unblocking_if_blocked())) {
       LOG_WARN("failed to block data flow", K(ret));
@@ -204,6 +196,14 @@ int ObDtlLocalChannel::send_message(ObDtlLinkedBuffer*& buf)
     LOG_TRACE("local channel status", K_(peer), K(ret), KP(peer_id_));
     if (is_eof) {
       set_eof();
+    }
+  }
+  // it may return 4201 after send_message and it don't call wait_response
+  if (OB_HASH_NOT_EXIST == ret) {
+    if (is_drain()) {
+      ret = OB_SUCCESS;
+    } else {
+      ret = OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER;
     }
   }
   return ret;
