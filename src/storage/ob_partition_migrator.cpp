@@ -786,7 +786,7 @@ int ObPartitionMigrateCtx::add_sstable(ObSSTable& sstable)
   if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("ctx must not null", K(ret), K(*this));
-  } else if (!is_partition_exist_ || !ctx_->is_copy_index()) {
+  } else if (!ctx_->is_copy_index()) {
     common::SpinWLockGuard guard(lock_);
     if (OB_FAIL(handle_.add_table(&sstable))) {
       LOG_WARN("failed to add table", K(ret));
@@ -891,6 +891,7 @@ int ObMigratePrepareTask::create_new_partition(const ObAddr& src_server, ObRepli
   ObCreatePGParam param;
   common::ObReplicaProperty replica_property;  // TODO: need using RS appoint replica property
   ObMigrateStatus migrate_status;
+  bool need_create_memtable = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -962,7 +963,9 @@ int ObMigratePrepareTask::create_new_partition(const ObAddr& src_server, ObRepli
       STORAGE_LOG(WARN, "fail to write add partition (group) log.", K(ret), K(subcmd), K(log_attr));
     } else if (OB_FAIL(partition->create_partition_group(param))) {
       STORAGE_LOG(WARN, "fail to create partition group", K(ret));
-    } else if (OB_FAIL(partition->create_memtable(in_slog_trans))) {
+    } else if (FALSE_IT(need_create_memtable = !(partition->get_pg_storage().is_restoring_base_data() ||
+                                                 partition->get_pg_storage().is_restoring_standby()))) {
+    } else if (need_create_memtable && OB_FAIL(partition->create_memtable(in_slog_trans))) {
       STORAGE_LOG(WARN, "fail to create memtable", K(ret));
     } else {
       file_handle.reset();
@@ -2763,12 +2766,7 @@ int ObPartGroupMigrationTask::set_migrate_in(ObPGStorage& pg_storage)
       LOG_INFO("no need set migrate_status", K(task->arg_.type_), K(pkey));
     } else if (OB_FAIL(ObMigrateStatusHelper::trans_replica_op(task->arg_.type_, new_status))) {
       LOG_WARN("failed to trans_replica_op_to_migrate_status", K(ret), "arg", task->arg_);
-    } else if (OB_MIGRATE_STATUS_ADD == old_status || OB_MIGRATE_STATUS_MIGRATE == old_status ||
-               OB_MIGRATE_STATUS_REBUILD == old_status || OB_MIGRATE_STATUS_CHANGE == old_status ||
-               OB_MIGRATE_STATUS_RESTORE == old_status || OB_MIGRATE_STATUS_COPY_GLOBAL_INDEX == old_status ||
-               OB_MIGRATE_STATUS_COPY_LOCAL_INDEX == old_status || OB_MIGRATE_STATUS_HOLD == old_status ||
-               OB_MIGRATE_STATUS_RESTORE_FOLLOWER == old_status || OB_MIGRATE_STATUS_RESTORE_STANDBY == old_status ||
-               OB_MIGRATE_STATUS_LINK_MAJOR == old_status) {
+    } else if (OB_MIGRATE_STATUS_NONE != old_status) {
       ret = OB_STATE_NOT_MATCH;
       LOG_WARN("old migrate is not finish, cannot set new migrate status",
           K(ret),
@@ -3265,8 +3263,6 @@ int ObPartGroupMigrationTask::try_change_member_list(
   const int64_t start_ts = ObTimeUtility::current_time();
   ObMigrateSrcInfo leader_info;
   bool need_batch = false;
-  const int64_t local_switch_epoch = GCTX.get_switch_epoch2();
-  int64_t remote_switch_epoch = -1;
 
   DEBUG_SYNC(BEFORE_CHANGE_MEMBER_LIST);
 
@@ -3281,17 +3277,6 @@ int ObPartGroupMigrationTask::try_change_member_list(
   } else if (report_list.count() <= 0) {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "task list is empty", K(ret));
-  } else if (FALSE_IT(remote_switch_epoch = report_list.at(0).arg_.switch_epoch_)) {
-  } else if (remote_switch_epoch != local_switch_epoch) {
-    ret = OB_ERR_SYS;
-    STORAGE_LOG(ERROR,
-        "switch epoch is not equal local switch epoch",
-        K(ret),
-        K(report_list.at(0)),
-        K(local_switch_epoch),
-        K(remote_switch_epoch));
-    first_error_code_ = ret;
-    is_all_finish = true;
   } else if (NORMAL_CHANGE_MEMBER_LIST != change_member_option_) {
     if (MIGRATE_REPLICA_OP == type_) {
       if (OB_SUCCESS != (tmp_ret = batch_remove_src_replica(report_list))) {
@@ -5927,15 +5912,12 @@ int ObMigratePrepareTask::try_hold_local_partition()
     LOG_WARN("failed to get leader", K(ret), "arg", ctx_->replica_op_arg_);
   } else if (OB_FAIL(partition->get_role(role))) {
     LOG_WARN("failed to get partition role", K(ret), "arg", ctx_->replica_op_arg_);
-  } else if (leader.is_valid() &&
-             leader == MYADDR
-             // TODO
-             //&& is_strong_leader(role)
-             && (ADD_REPLICA_OP == ctx_->replica_op_arg_.type_ || MIGRATE_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
-                    FAST_MIGRATE_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
-                    REBUILD_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
-                    CHANGE_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
-                    LINK_SHARE_MAJOR_OP == ctx_->replica_op_arg_.type_)) {
+  } else if (leader.is_valid() && leader == MYADDR && is_strong_leader(role) &&
+             (ADD_REPLICA_OP == ctx_->replica_op_arg_.type_ || MIGRATE_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
+                 FAST_MIGRATE_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
+                 REBUILD_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
+                 CHANGE_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
+                 LINK_SHARE_MAJOR_OP == ctx_->replica_op_arg_.type_)) {
     if (REBUILD_REPLICA_OP == ctx_->replica_op_arg_.type_) {
       if (OB_FAIL(MIGRATOR.get_partition_service()->turn_off_rebuild_flag(ctx_->replica_op_arg_))) {
         LOG_WARN("Failed to report_rebuild_replica off", K(ret), "arg", ctx_->replica_op_arg_);
@@ -6723,7 +6705,7 @@ bool ObMigratePrepareTask::can_migrate_src_skip_log_sync(const obrpc::ObFetchPGI
     b_ret = false;
   } else if (ADD_REPLICA_OP == ctx.replica_op_arg_.type_ || MIGRATE_REPLICA_OP == ctx.replica_op_arg_.type_) {
     if (result.pg_meta_.is_restore_ > REPLICA_NOT_RESTORE &&
-        result.pg_meta_.is_restore_ < REPLICA_RESTORE_DUMP_MEMTABLE) {
+        result.pg_meta_.is_restore_ <= REPLICA_RESTORE_MEMBER_LIST) {
       b_ret = true;
     }
   }
@@ -6919,7 +6901,8 @@ int ObMigratePrepareTask::build_migrate_table_info(const uint64_t table_id, cons
                  local_inc_sstables,
                  remote_major_sstables,
                  remote_inc_sstables,
-                 info.major_sstables_))) {
+                 info.major_sstables_,
+                 part_ctx))) {
     LOG_WARN("failed to build migrate major sstable", K(ret));
   } else if (OB_FAIL(build_migrate_minor_sstable(need_reuse_local_minor,
                  local_inc_sstables,
@@ -7112,7 +7095,7 @@ int ObMigratePrepareTask::build_remote_minor_sstables(const common::ObIArray<ObI
 int ObMigratePrepareTask::build_migrate_major_sstable(const bool need_reuse_local_minor,
     ObIArray<ObITable::TableKey>& local_major_tables, ObIArray<ObITable::TableKey>& local_inc_tables,
     ObIArray<ObITable::TableKey>& remote_major_tables, ObIArray<ObITable::TableKey>& remote_inc_tables,
-    ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables)
+    ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables, ObPartitionMigrateCtx& part_ctx)
 {
   int ret = OB_SUCCESS;
 
@@ -7121,7 +7104,8 @@ int ObMigratePrepareTask::build_migrate_major_sstable(const bool need_reuse_loca
           local_inc_tables,
           remote_major_tables,
           remote_inc_tables,
-          copy_sstables))) {
+          copy_sstables,
+          part_ctx))) {
     LOG_WARN("failed to build_migrate_major_sstable", K(ret));
   }
   return ret;
@@ -7219,13 +7203,14 @@ int ObMigratePrepareTask::build_migrate_major_sstable_(ObIArray<ObITable::TableK
 int ObMigratePrepareTask::build_migrate_major_sstable_v2_(const bool need_reuse_local_minor,
     ObIArray<ObITable::TableKey>& local_major_tables, ObIArray<ObITable::TableKey>& local_inc_tables,
     ObIArray<ObITable::TableKey>& remote_major_tables, ObIArray<ObITable::TableKey>& remote_inc_tables,
-    ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables)
+    ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables, ObPartitionMigrateCtx& part_ctx)
 {
   int ret = OB_SUCCESS;
   int64_t max_snapshot_version = 0;
   UNUSED(local_inc_tables);
   UNUSED(remote_inc_tables);
   UNUSED(need_reuse_local_minor);
+  bool need_add_local_major = false;
 
   // D type replica major need to consider compaction_interval. Do local compaction when greater than 0, and meanwhile
   // need local major const int64_t follower_replica_merge_level = GCONF._follower_replica_merge_level;
@@ -7240,6 +7225,7 @@ int ObMigratePrepareTask::build_migrate_major_sstable_v2_(const bool need_reuse_
   for (int64_t i = 0; OB_SUCC(ret) && i < remote_major_tables.count(); ++i) {
     const ObITable::TableKey& remote_major_table = remote_major_tables.at(i);
     if (remote_major_table.get_snapshot_version() <= max_snapshot_version && !remote_major_table.is_trans_sstable()) {
+      need_add_local_major = true;
       continue;
     } else {
       ObMigrateTableInfo::SSTableInfo info;
@@ -7254,6 +7240,24 @@ int ObMigratePrepareTask::build_migrate_major_sstable_v2_(const bool need_reuse_
       }
     }
   }
+
+  if (OB_SUCC(ret) && need_add_local_major) {
+    ObTableHandle table_handle;
+    for (int64_t i = 0; OB_SUCC(ret) && i < local_major_tables.count(); ++i) {
+      const ObITable::TableKey& local_major_table = local_major_tables.at(i);
+      ObITable* table = NULL;
+      table_handle.reset();
+      if (OB_FAIL(ObPartitionService::get_instance().acquire_sstable(local_major_table, table_handle))) {
+        LOG_WARN("failed to get complete sstable by key", K(ret), K(local_major_table));
+      } else if (NULL == (table = table_handle.get_table())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table should not be NULL", K(ret), KP(table));
+      } else if (OB_FAIL(part_ctx.add_sstable(*reinterpret_cast<ObSSTable*>(table)))) {
+        LOG_WARN("failed to add sstable", K(ret));
+      }
+    }
+  }
+
   if (OB_SUCC(ret)) {
     FLOG_INFO("build_migrate_major_sstable",
         K(local_major_tables),
@@ -7959,7 +7963,14 @@ int ObMigrateUtil::merge_trans_table(ObMigrateCtx& ctx)
     ret = OB_ERR_SYS;
     LOG_WARN("partition group must not null", K(ret));
   } else if (FALSE_IT(pg_key = pg->get_partition_key())) {
-  } else {
+  } else if (FALSE_IT(ctx.old_trans_table_seq_ = pg->get_pg_storage().get_trans_table_seq())) {
+  } else if (OB_FAIL(
+                 ObMigrateUtil::add_trans_sstable_to_part_ctx(trans_sstable->get_key().pkey_, *trans_sstable, ctx))) {
+    LOG_WARN("failed to add trans sstable to part migrate ctx", K(ret), KPC(trans_sstable));
+  }
+  // TODO() need reconsider sstable reuse, now skip trans sstable reuse
+  /*
+  else {
     ObTransTableMergeTask merge_task;
     ObMacroBlockWriter writer;
     ObTableHandle new_trans_sstable;
@@ -7979,7 +7990,7 @@ int ObMigrateUtil::merge_trans_table(ObMigrateCtx& ctx)
       LOG_WARN("failed to add trans sstable to part migrate ctx", K(ret), KPC(new_sstable));
     }
   }
-
+  */
   return ret;
 }
 
@@ -8093,7 +8104,7 @@ int ObMigratePostPrepareTask::deal_with_rebuild_partition()
     LOG_WARN("failed to get leader", K(ret), "arg", ctx_->replica_op_arg_);
   } else if (OB_FAIL(partition->get_role(role))) {
     LOG_WARN("failed to get real role", K(ret), "arg", ctx_->replica_op_arg_);
-  } else if (leader.is_valid() && leader == MYADDR) {  // TODO //&& is_strong_leader(role)) {
+  } else if (leader.is_valid() && leader == MYADDR && is_strong_leader(role)) {
     if (OB_FAIL(MIGRATOR.get_partition_service()->turn_off_rebuild_flag(ctx_->replica_op_arg_))) {
       LOG_WARN("Failed to report_rebuild_replica off", K(ret), "arg", ctx_->replica_op_arg_);
     } else {
@@ -11417,6 +11428,11 @@ int ObMigrateFinishTask::process()
     LOG_WARN("failed to merge trans table", K(ret));
   } else if (OB_FAIL(create_pg_partition_if_need())) {
     LOG_WARN("Failed to create pg partition if need", K(ret));
+  } else if (ADD_REPLICA_OP == ctx_->replica_op_arg_.type_ &&
+             ((ctx_->is_restore_ > REPLICA_NOT_RESTORE && ctx_->is_restore_ < REPLICA_RESTORE_MAX) ||
+                 REPLICA_RESTORE_STANDBY == ctx_->is_restore_)) {
+    is_add_replica_during_restore = true;
+    LOG_INFO("no need check read add replica during restore", K(ctx_->is_restore_), "pkey", ctx_->replica_op_arg_.key_);
   } else {
     if (ObReplicaTypeCheck::is_replica_with_ssstore(ctx_->replica_op_arg_.dst_.get_replica_type())) {
       if (OB_FAIL(check_pg_partition_ready_for_read())) {
@@ -11429,8 +11445,10 @@ int ObMigrateFinishTask::process()
         LOG_WARN("failed to check_available_index_all_exist", K(ret));
       }
     }
+  }
 
-    if (OB_SUCC(ret) && OB_FAIL(enable_replay())) {
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(enable_replay())) {
       LOG_WARN("failed to enable replay", K(ret), K(ctx_->replica_op_arg_));
     }
   }
@@ -11602,52 +11620,16 @@ int ObMigrateFinishTask::create_pg_partition_if_need()
   } else if (OB_ISNULL(pg = ctx_->partition_guard_.get_partition_group())) {
     ret = OB_ERR_SYS;
     LOG_WARN("pg should not be NULL", K(ret), KP(pg));
-  } else if (!ctx_->is_copy_index()) {
+  } else if (ctx_->is_copy_index()) {
+    // no need to replace store map, just skip it.
+    LOG_INFO("replica op tyoe is no need batch replace sstable, skip it");
+  } else {
     const ObSavedStorageInfoV2& saved_storage_info = ctx_->pg_meta_.storage_info_;
     if (OB_FAIL(pg->get_pg_storage().batch_replace_store_map(ctx_->part_ctx_array_,
             saved_storage_info.get_data_info().get_schema_version(),
             ctx_->is_restore_,
             ctx_->old_trans_table_seq_))) {
       LOG_WARN("failed to batch replace store map", K(ret));
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->part_ctx_array_.count(); ++i) {
-      ObPartitionMigrateCtx& pctx = ctx_->part_ctx_array_.at(i);
-      const ObPGPartitionStoreMeta& meta = pctx.copy_info_.meta_;
-      if (pctx.is_partition_exist_) {
-        if (!pctx.handle_.empty()) {
-          ret = OB_ERR_SYS;
-          LOG_ERROR("handle must be empty when partition exist", K(ret), K(pctx));
-        }
-      } else {
-        obrpc::ObCreatePartitionArg arg;
-        const ObSavedStorageInfoV2& saved_storage_info = ctx_->pg_meta_.storage_info_;
-        arg.schema_version_ = saved_storage_info.get_data_info().get_schema_version();
-        arg.lease_start_ = meta.create_timestamp_;
-
-        if (ctx_->replica_op_arg_.is_physical_restore_leader()) {
-          arg.restore_ = REPLICA_RESTORE_DATA;
-        } else if (ctx_->replica_op_arg_.is_standby_restore()) {
-          arg.restore_ = REPLICA_RESTORE_STANDBY;
-        }
-
-        const bool is_replay = false;
-        const uint64_t unused = 0;
-
-        if (OB_FAIL(pg->create_pg_partition(meta.pkey_,
-                meta.multi_version_start_,
-                meta.data_table_id_,
-                arg,
-                in_slog_trans,
-                is_replay,
-                unused,
-                pctx.handle_))) {
-          LOG_WARN("fail to create pg partition", K(ret), K(meta));
-        } else {
-          FLOG_INFO("succeed to create pg partition during finish", "pkey", meta.pkey_, "handle", pctx.handle_);
-          pctx.handle_.reset();
-        }
-      }
     }
   }
   return ret;
@@ -12733,10 +12715,18 @@ int ObRestoreTailoredPrepareTask::update_restore_flag_cut_data()
 {
   int ret = OB_SUCCESS;
   const int16_t flag = REPLICA_RESTORE_CUT_DATA;
+  ObIPartitionGroup* partition_group = NULL;
+  int16_t restore_status = ObReplicaRestoreStatus::REPLICA_NOT_RESTORE;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("restore failored prepare task do not init", K(ret));
+  } else if (OB_ISNULL((partition_group = ctx_->partition_guard_.get_partition_group()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition group should not be NULL", K(ret), KP(partition_group));
+  } else if (FALSE_IT(restore_status = partition_group->get_pg_storage().get_restore_state())) {
+  } else if (restore_status == flag) {
+    // do nothing
   } else {
     const ObPGKey& pg_key = ctx_->replica_op_arg_.key_;
     if (OB_FAIL(MIGRATOR.get_partition_service()->set_restore_flag(pg_key, flag))) {
@@ -12753,6 +12743,7 @@ int ObRestoreTailoredPrepareTask::check_need_generate_task(bool& need_generate)
   ObIPartitionGroup* partition_group = NULL;
   ObTablesHandle tables_handle;
   int64_t max_upper_trans_version = 0;
+  transaction::ObTransService* trans_service = NULL;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -12762,18 +12753,46 @@ int ObRestoreTailoredPrepareTask::check_need_generate_task(bool& need_generate)
     LOG_WARN("partition group should not be NULL", K(ret), KP(partition_group));
   } else if (OB_FAIL(partition_group->get_all_tables(tables_handle))) {
     LOG_WARN("failed to get all tables", K(ret), KP(partition_group));
+  } else if (OB_ISNULL(trans_service = GCTX.par_ser_->get_trans_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trans service should not be NULL", K(ret), KP(trans_service));
+  } else if (RESTORE_STANDBY_OP == ctx_->replica_op_arg_.type_) {
+    need_generate = true;
   } else {
     const int64_t restore_snapshot_version =
         ctx_->replica_op_arg_.phy_restore_arg_.restore_info_.restore_snapshot_version_;
     for (int64_t i = 0; OB_SUCC(ret) && i < tables_handle.get_count(); ++i) {
-      const ObITable* table = tables_handle.get_table(i);
+      ObITable* table = tables_handle.get_table(i);
+      ObSSTable* sstable = NULL;
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table should not be NULL", K(ret), KP(table));
       } else if (table->is_major_sstable() || table->is_trans_sstable()) {
         // do nothing
+      } else if (OB_ISNULL(sstable = reinterpret_cast<ObSSTable*>(table))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sstable should not be NULL", K(ret), KP(sstable));
       } else {
-        max_upper_trans_version = std::max(table->get_upper_trans_version(), max_upper_trans_version);
+        int64_t max_trans_version = sstable->get_upper_trans_version();
+        if (INT64_MAX == sstable->get_upper_trans_version()) {
+          bool is_all_rollback_trans = false;
+          // get_all_latest_minor_sstables return all minor except complement
+          // all normal minor sstable consist of data between [start_log_ts, end_log_ts]
+          if (OB_FAIL(trans_service->get_max_trans_version_before_given_log_ts(
+                  sstable->get_partition_key(), sstable->get_end_log_ts(), max_trans_version, is_all_rollback_trans))) {
+            LOG_WARN("failed to get_max_trans_version_before_given_log_id", K(ret), KPC(sstable));
+          } else if (0 == max_trans_version && !is_all_rollback_trans) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("max trans version should not be 0",
+                K(sstable->get_partition_key()),
+                "end_log_ts",
+                sstable->get_end_log_ts());
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          max_upper_trans_version = std::max(max_trans_version, max_upper_trans_version);
+        }
       }
     }
 
@@ -12840,6 +12859,7 @@ int ObRestoreTailoredTask::process()
   ObMacroBlocksWriteCtx block_write_ctx;
   ObMacroBlocksWriteCtx lob_block_write_ctx;
   const int64_t schema_version = OB_INVALID_VERSION;
+  int64_t restore_snapshot = 0;
 
   LOG_INFO("start ObRestoreTailoredTask process", "table_id", index_id_, "partition_key", partition_key_);
 
@@ -12849,9 +12869,12 @@ int ObRestoreTailoredTask::process()
   } else if (minor_tables_handle_.empty()) {
     // do nothing
     LOG_INFO("minor tables handle is empty, no need cut", K(partition_key_), K(index_id_));
+  } else if (FALSE_IT(
+                 restore_snapshot = ctx_->replica_op_arg_.phy_restore_arg_.restore_info_.restore_snapshot_version_)) {
   } else if (OB_FAIL(get_tailored_table_key(table_key))) {
     LOG_WARN("failed to get tailored table key", K(ret), K(index_id_), K(pg_key_));
-  } else if (OB_FAIL(row_iter.init(index_id_, pg_key_, schema_version, table_key, minor_tables_handle_))) {
+  } else if (OB_FAIL(row_iter.init(
+                 index_id_, pg_key_, schema_version, table_key, restore_snapshot, minor_tables_handle_))) {
     LOG_WARN("failed to init tailored row iter", K(ret), K(index_id_), K(pg_key_), K(partition_key_));
   } else if (OB_FAIL(logic_row_writer.init(&row_iter, pg_key_, ctx_->get_partition()->get_storage_file_handle()))) {
     LOG_WARN("failed to init logic row writer", K(ret), K(pg_key_), K(partition_key_));
@@ -12882,6 +12905,7 @@ int ObRestoreTailoredTask::get_tailored_table_key(ObITable::TableKey& table_key)
   } else {
     int64_t base_version = INT64_MAX;
     int64_t multi_version_start = 0;
+    int64_t snapshot_version = 0;
     int64_t start_log_ts = INT64_MAX;
     int64_t end_log_ts = 0;
     int64_t max_log_ts = 0;
@@ -12912,6 +12936,7 @@ int ObRestoreTailoredTask::get_tailored_table_key(ObITable::TableKey& table_key)
         start_log_ts = std::min(start_log_ts, table->get_start_log_ts());
         end_log_ts = std::max(end_log_ts, table->get_end_log_ts());
         max_log_ts = std::max(max_log_ts, table->get_max_log_ts());
+        snapshot_version = std::max(snapshot_version, table->get_snapshot_version());
       }
     }
 
@@ -12922,7 +12947,7 @@ int ObRestoreTailoredTask::get_tailored_table_key(ObITable::TableKey& table_key)
       table_key.trans_version_range_.base_version_ = base_version;
       table_key.trans_version_range_.multi_version_start_ = multi_version_start;
       table_key.trans_version_range_.snapshot_version_ =
-          ctx_->replica_op_arg_.phy_restore_arg_.restore_info_.restore_snapshot_version_;
+          std::min(ctx_->replica_op_arg_.phy_restore_arg_.restore_info_.restore_snapshot_version_, snapshot_version);
       table_key.version_.version_ = ctx_->replica_op_arg_.phy_restore_arg_.restore_data_version_ + 1;
       // table_key.upper_trans_version
       // table_key.max_merged_version
@@ -13129,7 +13154,6 @@ int ObRestoreTailoredFinishTask::process()
   }
 
   if (OB_FAIL(ret)) {
-  } else if (part_ctx_array_.empty()) {
     // do nothing
   } else if (OB_ISNULL(partition_group = ctx_->partition_guard_.get_partition_group())) {
     ret = OB_ERR_UNEXPECTED;
@@ -13146,7 +13170,8 @@ int ObRestoreTailoredFinishTask::process()
       LOG_WARN("failed to get all saved info", K(ret));
     } else {
       ObDataStorageInfo& storage_info = save_info.get_data_info();
-      storage_info.set_publish_version(restore_snapshot_version);
+      const int64_t publish_version = std::min(storage_info.get_publish_version(), restore_snapshot_version);
+      storage_info.set_publish_version(publish_version);
       storage_info.set_schema_version(schema_version_);
       if (OB_FAIL(partition_group->set_storage_info(save_info))) {
         LOG_WARN("failed to set storage info", K(ret), K(save_info));

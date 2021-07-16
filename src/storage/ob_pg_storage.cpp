@@ -2872,7 +2872,8 @@ int ObPGStorage::set_pg_storage_info(const ObSavedStorageInfoV2& info)
     STORAGE_LOG(ERROR, "cannot set storage info when memtable count not zero", K(ret), K(*this));
   } else if (meta_->storage_info_.get_data_info().get_publish_version() > info.get_data_info().get_publish_version() &&
              ObReplicaRestoreStatus::REPLICA_RESTORE_DATA != meta_->is_restore_ &&
-             ObReplicaRestoreStatus::REPLICA_RESTORE_CUT_DATA != meta_->is_restore_) {
+             ObReplicaRestoreStatus::REPLICA_RESTORE_CUT_DATA != meta_->is_restore_ &&
+             ObReplicaRestoreStatus::REPLICA_RESTORE_STANDBY != meta_->is_restore_) {
     ret = OB_STATE_NOT_MATCH;
     STORAGE_LOG(WARN, "new storage info's publish version should not smaller than local", K(ret), K(*meta_), K(info));
   } else if (OB_FAIL(alloc_meta_(next_meta_ptr))) {
@@ -3470,6 +3471,8 @@ int ObPGStorage::check_can_release_pg_memtable_(ObTablesHandle& memtable_merged,
   int64_t timestamp = 0;
   memtable_merged.reset();
   memtable_to_release.reset();
+  // outside hold the lock
+  const bool is_physical_restore = meta_->is_restore_ > REPLICA_NOT_RESTORE && meta_->is_restore_ < REPLICA_RESTORE_MAX;
 
   if (OB_FAIL(get_all_pg_partition_keys_(partitions))) {
     STORAGE_LOG(WARN, "failed to get all pg partition keys", K(ret));
@@ -3506,7 +3509,7 @@ int ObPGStorage::check_can_release_pg_memtable_(ObTablesHandle& memtable_merged,
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "partition storage is null", K(ret), K(pkey));
           } else if (OB_FAIL(storage->get_partition_store().check_all_merged(
-                         *memtable, schema_version, part_all_merged, part_can_release))) {
+                         *memtable, schema_version, is_physical_restore, part_all_merged, part_can_release))) {
             STORAGE_LOG(WARN, "failed to check if partition merged", K(ret), K(pkey));
           } else {
             pg_all_merged = pg_all_merged && part_all_merged;

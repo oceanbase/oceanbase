@@ -2481,23 +2481,30 @@ ObTailoredRowIterator::ObTailoredRowIterator()
 {}
 
 int ObTailoredRowIterator::init(const uint64_t index_id, const ObPartitionKey& pg_key, const int64_t schema_version,
-    const ObITable::TableKey& table_key, ObTablesHandle& handle)
+    const ObITable::TableKey& table_key, const int64_t restore_snapshot_version, ObTablesHandle& handle)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("tailored row iterator init twice", K(ret));
-  } else if (OB_INVALID_ID == index_id || handle.empty() || !pg_key.is_valid() || !table_key.is_valid()) {
+  } else if (OB_INVALID_ID == index_id || handle.empty() || !pg_key.is_valid() || !table_key.is_valid() ||
+             restore_snapshot_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN(
-        "tailored row iter init get invalid argument", K(ret), K(index_id), K(pg_key), K(table_key), K(schema_version));
+    LOG_WARN("tailored row iter init get invalid argument",
+        K(ret),
+        K(index_id),
+        K(pg_key),
+        K(table_key),
+        K(schema_version),
+        K(restore_snapshot_version));
   } else {
     ObExtStoreRange key_range;
     key_range.get_range().set_whole_range();
     ObVersionRange version_range;
     version_range.base_version_ = 0;
     version_range.multi_version_start_ = 0;
-    version_range.snapshot_version_ = table_key.trans_version_range_.snapshot_version_;
+    version_range.snapshot_version_ =
+        std::max(table_key.trans_version_range_.snapshot_version_, restore_snapshot_version);
     snapshot_version_ = table_key.trans_version_range_.snapshot_version_;
     int64_t save_schema_version = -1;
     memtable::ObIMemtableCtxFactory* mem_ctx_factory = ObPartitionService::get_instance().get_mem_ctx_factory();

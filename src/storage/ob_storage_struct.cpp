@@ -522,7 +522,8 @@ int ObMigrateStatusHelper::trans_fail_status(const ObMigrateStatus& cur_status, 
         break;
       }
       case OB_MIGRATE_STATUS_RESTORE: {
-        fail_status = OB_MIGRATE_STATUS_RESTORE_FAIL;
+        // allow observer self reentry
+        fail_status = OB_MIGRATE_STATUS_NONE;
         break;
       }
       case OB_MIGRATE_STATUS_COPY_GLOBAL_INDEX: {
@@ -538,11 +539,13 @@ int ObMigrateStatusHelper::trans_fail_status(const ObMigrateStatus& cur_status, 
         break;
       }
       case OB_MIGRATE_STATUS_RESTORE_FOLLOWER: {
-        fail_status = OB_MIGRATE_STATUS_RESTORE_FAIL;
+        // allow observer self reentry
+        fail_status = OB_MIGRATE_STATUS_NONE;
         break;
       }
       case OB_MIGRATE_STATUS_RESTORE_STANDBY: {
-        fail_status = OB_MIGRATE_STATUS_RESTORE_FAIL;
+        // allow observer self reentry
+        fail_status = OB_MIGRATE_STATUS_NONE;
         break;
       }
       case OB_MIGRATE_STATUS_LINK_MAJOR: {
@@ -592,7 +595,10 @@ int ObMigrateStatusHelper::trans_reboot_status(const ObMigrateStatus& cur_status
       }
       case OB_MIGRATE_STATUS_RESTORE:
       case OB_MIGRATE_STATUS_RESTORE_FOLLOWER:
-      case OB_MIGRATE_STATUS_RESTORE_STANDBY:
+      case OB_MIGRATE_STATUS_RESTORE_STANDBY: {
+        reboot_status = OB_MIGRATE_STATUS_NONE;
+        break;
+      }
       case OB_MIGRATE_STATUS_RESTORE_FAIL: {
         reboot_status = OB_MIGRATE_STATUS_RESTORE_FAIL;
         break;

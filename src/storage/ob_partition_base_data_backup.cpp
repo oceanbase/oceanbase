@@ -1286,6 +1286,7 @@ int ObBackupFileAppender::open(common::ObInOutBandwidthThrottle& bandwidth_throt
     file_type_ = type;
     backup_arg_ = &backup_arg;
     bandwidth_throttle_ = &bandwidth_throttle;
+    file_offset_ = 0;
 
     switch (type) {
       case BACKUP_META:
@@ -1933,7 +1934,6 @@ int ObBackupFileAppender::close()
       STORAGE_LOG(WARN, "close appender fail", K(ret), K(tmp_ret), K(storage_appender_));
     }
   }
-  file_offset_ = 0;
   is_opened_ = false;
   STORAGE_LOG(INFO, "finish close bakcup file appender", K(ret), K(tmp_ret));
   return ret;
@@ -3797,6 +3797,7 @@ int ObBackupFinishTask::init(ObMigrateCtx& ctx)
 int ObBackupFinishTask::process()
 {
   int ret = OB_SUCCESS;
+
   if (NULL != ctx_) {
     STORAGE_LOG(INFO, "start ObBackupFinishTask process", "pkey", ctx_->replica_op_arg_.key_);
   }

@@ -3197,7 +3197,7 @@ int ObBackupDataClean::get_cluster_max_succeed_backup_set(int64_t& backup_set_id
     LOG_WARN("failed to init backup task history updater", K(ret));
   } else if (OB_FAIL(updater.get_tenant_max_succeed_backup_task(OB_SYS_TENANT_ID, task_info))) {
     if (OB_INVALID_BACKUP_SET_ID == ret) {
-      backup_set_id = 0;
+      backup_set_id = INT64_MAX;
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get tenant max succeed backup task", K(ret));

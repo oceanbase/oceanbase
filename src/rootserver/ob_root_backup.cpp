@@ -3555,9 +3555,18 @@ int ObTenantBackup::do_cancel(const share::ObTenantBackupTaskInfo& task_info, co
   } else if (OB_FAIL(get_finished_backup_task(task_info, pg_task_infos, trans))) {
     LOG_WARN("failed to get pg backup task result", K(ret), K(task_info));
   } else if (FALSE_IT(is_all_task_finished = pg_task_infos.count() == task_info.pg_count_)) {
-  } else if (!is_all_task_finished && OB_FAIL(check_doing_pg_tasks(task_info, trans))) {
-    LOG_WARN("failed to check doing pg task", K(ret), K(task_info));
-    // pg backup result is not ready, need wait
+  } else if (!is_all_task_finished) {
+    // 1.get finished backup need use all pg task inos instead, and use simpe pg task info to save memory
+    // 2.split all pg task into finish tasks and doing tasks and pending tasks
+    // 3.cancel pending pg tasks interface use pending tasks
+    // 4.check doing pg tasks interface use doing tasks
+    // 5.do_cancel interface trans should start in function
+    if (OB_FAIL(cancel_pending_pg_tasks(task_info, trans))) {
+      LOG_WARN("failed to cancel pending pg tasks", K(ret), K(task_info));
+    } else if (OB_FAIL(check_doing_pg_tasks(task_info, trans))) {
+      LOG_WARN("faield to check doing pg tasks", K(ret), K(task_info));
+      // pg backup result is not ready, need wait
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -3644,6 +3653,25 @@ int ObTenantBackup::check_standalone_table_need_backup(
     LOG_INFO("table is global index but not avaiable, skip it", K(status));
   } else {
     need_backup = true;
+  }
+  return ret;
+}
+
+int ObTenantBackup::cancel_pending_pg_tasks(const ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans)
+{
+  int ret = OB_SUCCESS;
+  share::ObPGBackupTaskUpdater pg_task_updater;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tenant backup do not init", K(ret));
+  } else if (!task_info.is_valid() || ObTenantBackupTaskInfo::CANCEL != task_info.status_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cancel pending pg tasks get invalid argument", K(ret), K(task_info));
+  } else if (OB_FAIL(pg_task_updater.init(trans))) {
+    LOG_WARN("failed to init pg task updater", K(ret), K(task_info));
+  } else if (OB_FAIL(pg_task_updater.cancel_pending_tasks(
+                 task_info.tenant_id_, task_info.incarnation_, task_info.backup_set_id_))) {
+    LOG_WARN("failed to cancel pending tasks", K(ret), K(task_info));
   }
   return ret;
 }

@@ -52,14 +52,14 @@ private:
   int rollback_backup_infos(ObBackupInfoManager& info_manager);
   int rollback_backup_info(const ObBaseBackupInfoStruct& info, ObBackupInfoManager& info_manager);
   int check_backup_task_infos_status(const ObBaseBackupInfoStruct& info);
-  int check_tenant_can_backup(const uint64_t tenant_id, const int64_t backup_schema_version,
-      ObBackupInfoManager& info_manager, bool& can_backup);
+  int check_tenant_can_backup(const uint64_t tenant_id, const int64_t backup_schema_version, bool& can_backup);
   int check_gts_(const common::ObIArray<uint64_t>& tenant_ids);
   int check_gts_(const uint64_t tenant_id);
   int init_frozen_schema_versions_(rootserver::ObFreezeInfoManager& freeze_info_manager, const int64_t frozen_version);
   int check_backup_schema_version_(const uint64_t tenant_id, const int64_t backup_schema_version);
   int create_backup_point(const uint64_t tenant_id);
   int check_log_archive_status();
+  int check_tenant_backup_data_version(const uint64_t tenant_id, ObBackupInfoManager& info_manager, bool& can_backup);
 
 private:
   static const int64_t MAX_TENANT_BUCKET = 1024;

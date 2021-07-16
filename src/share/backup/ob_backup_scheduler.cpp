@@ -219,6 +219,7 @@ int ObBackupScheduler::get_tenant_ids(ObIArray<uint64_t>& tenant_ids)
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard guard;
   int64_t backup_schema_version = 0;
+  ObArray<uint64_t> tmp_tenant_ids;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -230,8 +231,22 @@ int ObBackupScheduler::get_tenant_ids(ObIArray<uint64_t>& tenant_ids)
       } else if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
                      OB_SYS_TENANT_ID, *schema_service_, backup_schema_version, guard))) {
         LOG_WARN("failed to get tenant schema guard", K(ret), K(backup_schema_version));
-      } else if (OB_FAIL(guard.get_tenant_ids(tenant_ids))) {
+      } else if (OB_FAIL(guard.get_tenant_ids(tmp_tenant_ids))) {
         LOG_WARN("failed to get tenant ids", K(ret), K(arg_));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenant_ids.count(); ++i) {
+          const uint64_t tenant_id = tmp_tenant_ids.at(i);
+          bool can_backup = false;
+          if (OB_FAIL(get_tenant_schema_version(tenant_id, backup_schema_version))) {
+            LOG_WARN("failed to get tenant schem version", K(ret), K(tenant_id));
+          } else if (OB_FAIL(check_tenant_can_backup(tenant_id, backup_schema_version, can_backup))) {
+            LOG_WARN("failed to check tenant can backup", K(ret), K(tenant_id), K(backup_schema_version));
+          } else if (!can_backup) {
+            // do nothing
+          } else if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
+            LOG_WARN("failed to push tenant id into array", K(ret));
+          }
+        }
       }
     } else {
       ret = OB_NOT_SUPPORTED;
@@ -406,7 +421,7 @@ int ObBackupScheduler::schedule_tenant_backup(const int64_t backup_snapshot_vers
     LOG_WARN("tenant id should be sys tenant id", K(ret), K(tenant_id), K(backup_snapshot_version), K(backup_dest));
   } else if (OB_FAIL(get_tenant_schema_version(tenant_id, backup_schema_version))) {
     LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
-  } else if (OB_FAIL(check_tenant_can_backup(tenant_id, backup_schema_version, info_manager, can_backup))) {
+  } else if (OB_FAIL(check_tenant_backup_data_version(tenant_id, info_manager, can_backup))) {
     LOG_WARN("failed to check tenant can backup", K(ret), K(tenant_id));
   } else if (!can_backup) {
     // do nothing
@@ -731,33 +746,26 @@ int ObBackupScheduler::check_backup_task_infos_status(const ObBaseBackupInfoStru
 }
 
 int ObBackupScheduler::check_tenant_can_backup(
-    const uint64_t tenant_id, const int64_t backup_schema_version, ObBackupInfoManager& info_manager, bool& can_backup)
+    const uint64_t tenant_id, const int64_t backup_schema_version, bool& can_backup)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard guard;
   const ObSimpleTenantSchema* tenant_schema = NULL;
-  int64_t base_backup_version = 0;
-
   can_backup = true;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler do not init", K(ret));
   } else if (OB_INVALID_ID == tenant_id || backup_schema_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check tenant can backup get invalid argument", K(ret), K(tenant_id), K(backup_schema_version));
-  } else if (OB_FAIL(info_manager.get_base_backup_version(tenant_id, *proxy_, base_backup_version))) {
-    LOG_WARN("failed to get base backup version", K(ret), K(tenant_id), K(base_backup_version));
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, guard, backup_schema_version))) {
     LOG_WARN("failed to get tenant schema guard", K(ret), K(backup_schema_version));
   } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-  } else if (tenant_schema->is_dropping() || tenant_schema->is_restore() ||
-             backup_data_version_ < base_backup_version) {
+  } else if (tenant_schema->is_dropping() || tenant_schema->is_restore()) {
     can_backup = false;
-    FLOG_INFO("tenant can no join in backup, skip backup",
-        K(*tenant_schema),
-        K(backup_data_version_),
-        K(base_backup_version));
+    FLOG_INFO("tenant can no join in backup, skip backup", K(*tenant_schema));
   }
   return ret;
 }
@@ -831,6 +839,28 @@ int ObBackupScheduler::check_log_archive_status()
     } else {
       LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, error_msg);
     }
+  }
+  return ret;
+}
+
+int ObBackupScheduler::check_tenant_backup_data_version(
+    const uint64_t tenant_id, ObBackupInfoManager& info_manager, bool& can_backup)
+{
+  int ret = OB_SUCCESS;
+  int64_t base_backup_version = 0;
+  can_backup = true;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup scheduler do not init", K(ret));
+  } else if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check tenant can backup get invalid argument", K(ret), K(tenant_id));
+  } else if (OB_FAIL(info_manager.get_base_backup_version(tenant_id, *proxy_, base_backup_version))) {
+    LOG_WARN("failed to get base backup version", K(ret), K(tenant_id), K(base_backup_version));
+  } else if (backup_data_version_ < base_backup_version) {
+    can_backup = false;
+    FLOG_INFO("tenant can no join in backup, skip backup", K(backup_data_version_), K(base_backup_version));
   }
   return ret;
 }

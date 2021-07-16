@@ -766,7 +766,7 @@ int ObPartitionStore::create_multi_version_store_(
   return ret;
 }
 
-int ObPartitionStore::get_index_status(const int64_t schema_version,
+int ObPartitionStore::get_index_status(const int64_t schema_version, const bool is_physical_restore,
     common::ObIArray<share::schema::ObIndexTableStat>& index_status,
     common::ObIArray<uint64_t>& deleted_and_error_index_ids)
 {
@@ -807,7 +807,8 @@ int ObPartitionStore::get_index_status(const int64_t schema_version,
     LOG_WARN("failed to get full tenant schema guard", K(ret), K(fetch_tenant_id), K(pkey_));
   } else if (OB_FAIL(schema_guard.get_schema_version(fetch_tenant_id, latest_schema_version))) {
     LOG_WARN("failed to get schema version", K(ret), K(fetch_tenant_id), K(pkey_));
-  } else if (latest_schema_version > save_schema_version) {
+  } else if (latest_schema_version > save_schema_version
+      || (is_physical_restore && latest_schema_version >= save_schema_version)) {
     // befor check the delete status of index, we should make sure the schema guard is refreshed
     for (int64_t i = 0; OB_SUCC(ret) && i < index_status.count(); ++i) {
       const share::schema::ObTableSchema* table_schema = NULL;
@@ -3218,8 +3219,8 @@ int ObPartitionStore::get_kept_multi_version_start(
   return ret;
 }
 
-int ObPartitionStore::check_all_merged(
-    memtable::ObMemtable& memtable, const int64_t schema_version, bool& is_all_merged, bool& can_release)
+int ObPartitionStore::check_all_merged(memtable::ObMemtable& memtable, const int64_t schema_version,
+    const bool is_physical_restore, bool& is_all_merged, bool& can_release)
 {
   int ret = OB_SUCCESS;
   is_all_merged = false;
@@ -3232,7 +3233,8 @@ int ObPartitionStore::check_all_merged(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(get_index_status(schema_version, index_status, deleted_and_error_index_ids))) {
+  } else if (OB_FAIL(
+                 get_index_status(schema_version, is_physical_restore, index_status, deleted_and_error_index_ids))) {
     if (OB_EAGAIN != ret && OB_TABLE_IS_DELETED != ret) {
       LOG_WARN("failed to get index ids", K(ret));
     } else if (OB_TABLE_IS_DELETED == ret) {

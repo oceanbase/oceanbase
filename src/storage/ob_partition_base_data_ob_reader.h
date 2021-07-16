@@ -524,7 +524,7 @@ public:
   virtual ~ObTailoredRowIterator()
   {}
   int init(const uint64_t index_id, const ObPartitionKey& pg_key, const int64_t schema_version,
-      const ObITable::TableKey& table_key, ObTablesHandle& handle);
+      const ObITable::TableKey& table_key, const int64_t restore_snapshot_version, ObTablesHandle& handle);
   virtual int get_next_row(const ObStoreRow*& store_row);
   virtual const obrpc::ObFetchLogicRowArg* get_fetch_logic_row_arg()
   {

@@ -579,7 +579,7 @@ int ObBackupDataCleanUtil::touch_backup_file(
   if (path.is_empty() || OB_ISNULL(storage_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("touch backup file get invalid argument", K(ret), K(path), KP(storage_info));
-  } else if (OB_FAIL(check_can_delete(device_type, can_delete))) {
+  } else if (OB_FAIL(check_can_touch(device_type, can_delete))) {
     LOG_WARN("failed to check can delete", K(ret), K(device_type), K(path));
   } else if (!can_delete) {
     // do nothing

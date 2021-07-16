@@ -554,8 +554,11 @@ int ObStorageFileUtil::get_partition_ids_from_dir(const char* dir_path, common::
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "dir path is invalid", K(ret), KP(dir_path));
   } else if (OB_ISNULL(open_dir = ::opendir(dir_path))) {
-    if (ENOENT != errno) {
-      ret = OB_FILE_NOT_OPENED;
+    if (ENOENT == errno) {
+      ret = OB_DIR_NOT_EXIST;
+      OB_LOG(WARN, "fail to open dir", K(ret), K(dir_path), K(strerror_r(errno, errno_buf, sizeof(errno_buf))));
+    } else {
+      ret = OB_IO_ERROR;
       OB_LOG(WARN, "fail to open dir", K(ret), K(dir_path), K(strerror_r(errno, errno_buf, sizeof(errno_buf))));
     }
   }

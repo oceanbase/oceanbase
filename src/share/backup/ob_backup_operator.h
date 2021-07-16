@@ -95,6 +95,8 @@ public:
       common::ObISQLClient& sql_proxy, common::ObIArray<ObPGBackupTaskInfo>& pg_task_infos);
   static int update_result_and_status_and_statics(
       common::ObISQLClient& sql_proxy, const ObPGBackupTaskInfo& pg_task_info);
+  static int cancel_pending_tasks(const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id,
+      const int64_t limit_num, common::ObISQLClient& sql_proxy);
 
 private:
   static int fill_one_item(const ObPGBackupTaskItem& item, ObDMLSqlSplicer& dml);

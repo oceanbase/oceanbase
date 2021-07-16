@@ -111,7 +111,7 @@ public:
   void reset();
   bool is_valid() const;
   TO_STRING_KV(K_(replica_element));
-  common::ObSEArray<ObBackupElement, common::MAX_REPLICA_COUNT_TOTAL> replica_element_;
+  common::ObSEArray<ObBackupElement, common::OB_MAX_MEMBER_NUMBER> replica_element_;
   const ObBackupElement* choose_element_;
   DISALLOW_COPY_AND_ASSIGN(ObReplicaBackupElement);
 };
