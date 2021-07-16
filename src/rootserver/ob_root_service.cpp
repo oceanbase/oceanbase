@@ -2269,9 +2269,10 @@ int ObRootService::schedule_inspector_task()
 {
   int ret = OB_SUCCESS;
   int64_t inspect_interval = ObInspector::INSPECT_INTERVAL;
-#ifdef ERRSIM
+#ifdef DEBUG
   inspect_interval = ObServerConfig::get_instance().schema_drop_gc_delay_time;
 #endif
+
   int64_t delay = 1 * 60 * 1000 * 1000;
   int64_t purge_interval = GCONF._recyclebin_object_purge_frequency;
   int64_t expire_time = GCONF.recyclebin_object_expire_time;

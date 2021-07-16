@@ -473,7 +473,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_standby_cluster(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema_status_proxy is null", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.at(i); i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
         const uint64_t tenant_id = tenant_ids.at(i);
         int64_t recycle_schema_version = OB_INVALID_VERSION;
         ObRefreshSchemaStatus schema_status;
@@ -660,6 +660,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
       }
     }
     if (OB_SUCC(ret)) {
+      // step 4. restore point
       int64_t schema_version = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
         const uint64_t tenant_id = tenant_ids.at(i);
@@ -670,6 +671,8 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
                    OB_FAIL(fill_recycle_schema_versions(tenant_id, schema_version, recycle_schema_versions))) {
           LOG_WARN("fail to fill recycle schema versions", KR(ret), K(tenant_id), K(schema_version));
         }
+        LOG_INFO("[SCHEMA_RECYCLE] get recycle schema version by restore point",
+                 KR(ret), K(tenant_id), K(schema_version));
       }
     }
   }

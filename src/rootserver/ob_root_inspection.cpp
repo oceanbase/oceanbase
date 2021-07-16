@@ -1653,9 +1653,10 @@ int ObForceDropSchemaTask::process()
   int ret = OB_SUCCESS;
   const int64_t FAST_INTERVAL = 10 * 1000 * 1000;  // 10s
   int64_t delay = ObInspector::INSPECT_INTERVAL;
-#ifdef ERRSIM
+#ifdef DEBUG
   delay = ObServerConfig::get_instance().schema_drop_gc_delay_time;
 #endif
+
   ObForceDropSchemaChecker drop_schema_checker(root_service_,
       root_service_.get_schema_service(),
       root_service_.get_common_rpc_proxy(),
