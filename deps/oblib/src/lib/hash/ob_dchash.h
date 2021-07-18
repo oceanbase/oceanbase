@@ -138,6 +138,7 @@ public:
 private:
   static uint64_t calc_shift(uint64_t capacity)
   {
+    OB_ASSERT(0ULL != capacity);
     return __builtin_clzll(capacity) + 1;
   }
   HashNode* locate(uint64_t hash)

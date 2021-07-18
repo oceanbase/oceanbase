@@ -71,7 +71,7 @@ int32_t parse_string_to_int_array(const char* line, const char del, int32_t* arr
 bool is2n(int64_t input);
 constexpr int64_t next_pow2(const int64_t x)
 {
-  return x ? (1ULL << (8 * sizeof(int64_t) - __builtin_clzll(x - 1))) : 1;
+  return x > 1LL ? (1ULL << (8 * sizeof(int64_t) - __builtin_clzll(x - 1))) : 1LL;
 }
 
 bool all_zero(const char* buffer, const int64_t size);

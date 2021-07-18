@@ -79,11 +79,13 @@ private:
 
 inline int calc_clz(const uint32_t s)
 {
+  OB_ASSERT(0 != s);
   return __builtin_clz(s);
 }
 
 inline int calc_clz(const uint64_t s)
 {
+  OB_ASSERT(0ULL != s);
   return __builtin_clzl(s);
 }
 

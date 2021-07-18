@@ -126,8 +126,9 @@ public:
 
   typedef bool (*is_type_func)(common::ObObjType type);
 
-  static constexpr int flag2bit(uint64_t flag)
+  static int flag2bit(uint64_t flag)
   {
+    OB_ASSERT(0ULL != flag);
     return static_cast<int>(__builtin_ctzll(flag));
   }
 
