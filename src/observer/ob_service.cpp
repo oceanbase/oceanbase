@@ -920,7 +920,6 @@ int ObService::submit_pt_update_task(
 {
   int ret = OB_SUCCESS;
   const bool is_remove = false;
-  const int64_t version = 0;
   const ObSSTableChecksumUpdateType update_type = ObSSTableChecksumUpdateType::UPDATE_ALL;
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -930,12 +929,35 @@ int ObService::submit_pt_update_task(
     LOG_WARN("invalid argument", K(part_key), K(ret));
   } else if (OB_FAIL(partition_table_updater_.async_update(part_key, with_role))) {
     LOG_WARN("async_update failed", K(part_key), K(ret));
-  } else if (need_report_checksum && !part_key.is_pg() &&
-             OB_FAIL(checksum_updater_.add_task(part_key, is_remove, update_type))) {
-    LOG_WARN("fail to async update sstable checksum", K(ret));
-  } else {
-    // do nothing
+  } else if (need_report_checksum) {
+    if (part_key.is_pg()) {
+      ObPartitionArray pkeys;
+      ObIPartitionGroupGuard guard;
+      if (OB_FAIL(gctx_.par_ser_->get_partition(part_key, guard))) {
+        if (OB_PARTITION_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get partition", K(ret), K(part_key));
+        }
+      } else if (OB_ISNULL(guard.get_partition_group())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, partition must not be NULL", K(ret));
+      } else if (OB_FAIL(guard.get_partition_group()->get_all_pg_partition_keys(pkeys))) {
+        LOG_WARN("get pg partition fail", K(ret), K(part_key));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
+          if (OB_FAIL(checksum_updater_.add_task(pkeys.at(i), is_remove, update_type))) {
+            LOG_WARN("failt to async update sstable checksum", K(ret), K(pkeys.at(i)));
+          }
+        }
+      }
+    } else {
+      if (OB_FAIL(checksum_updater_.add_task(part_key, is_remove, update_type))) {
+        LOG_WARN("fail to async update sstable checksum", K(ret));
+      }
+    }
   }
+
   return ret;
 }
 

@@ -112,6 +112,7 @@ public:
   int set_drop_schema_info(const int64_t drop_schema_version);
   int get_drop_schema_info(int64_t& drop_schema_version, int64_t& drop_schema_refreshed_ts);
   int get_recovery_point_tables(const int64_t snapshot_version, ObTablesHandle& handle);
+  void set_create_schema_version(const int64_t schema_version) { create_schema_version_ = schema_version; }
 
   DECLARE_VIRTUAL_TO_STRING;
 

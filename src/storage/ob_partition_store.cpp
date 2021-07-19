@@ -749,7 +749,16 @@ int ObPartitionStore::create_multi_version_store_(
     if (OB_HASH_EXIST != ret) {
       LOG_WARN("failed to set table store to map", K(ret), K(table_id));
     } else {
-      ret = OB_ENTRY_EXIST;
+      ObMultiVersionTableStore *get_table_store = nullptr;
+      if (OB_FAIL(store_map_->get(table_id, get_table_store))) {
+        LOG_WARN("get store map failed", K(ret), K(table_id));
+      } else if (OB_ISNULL(get_table_store)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, get table store must not be nullptr", K(ret));
+      } else {
+        get_table_store->set_create_schema_version(schema_version);
+        ret = OB_ENTRY_EXIST;
+      }
     }
   } else {
     LOG_INFO("succeed to create multi version table store", KPC(tmp_table_store), KP(tmp_table_store), K(table_id));
