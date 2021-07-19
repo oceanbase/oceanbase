@@ -16,6 +16,7 @@
 #include "ob_log_file_store.h"
 #include "lib/file/file_directory_utils.h"
 #include "storage/blocksstable/ob_store_file_system.h"
+#include "share/config/ob_server_config.h"
 
 namespace oceanbase {
 using namespace clog;
@@ -869,11 +870,17 @@ const char* ObLogFileStore::get_dir_name() const
 int ObLogFileStore::get_total_disk_space(int64_t& total_space) const
 {
   int ret = OB_SUCCESS;
+  int64_t config_size = 0;
+  int64_t disk_size = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "not inited", K(ret));
-  } else if (OB_FAIL(disk_mgr_->get_total_disk_space(total_space))) {
+  } else if (FALSE_IT(config_size = ObServerConfig::get_instance().clog_usage_limit_size)) {
+    // do nothing
+  } else if (OB_FAIL(disk_mgr_->get_total_disk_space(disk_size))) {
     COMMON_LOG(ERROR, "get total disk space fail", K(ret));
+  } else {
+    total_space = common::min(config_size, disk_size);
   }
   return ret;
 }
