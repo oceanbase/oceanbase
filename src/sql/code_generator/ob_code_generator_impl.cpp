@@ -3272,11 +3272,6 @@ int ObCodeGeneratorImpl::convert_exchange(
       RowDesc* out_row_desc = NULL;
       if (OB_FAIL(create_phy_op_desc(type, receive, out_row_desc, out_ops, op.get_op_id()))) {
         LOG_WARN("failed to create phy op and desc", K(ret));
-      } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2250) {
-        // after 2.2.50, remote plan will send SQL, instead of plan to the remote server
-        if (OB_FAIL(construct_basic_row_desc(op.get_output_exprs(), *out_row_desc))) {
-          LOG_WARN("construct basic row desc failed", K(ret), K(op.get_output_exprs()));
-        }
       } else if (child_ops.at(0).first->get_output_count() > 0 && child_ops.at(0).second->get_column_num() > 0 &&
                  OB_FAIL(copy_row_desc_by_projector(*child_ops.at(0).second,
                      child_ops.at(0).first->get_projector(),

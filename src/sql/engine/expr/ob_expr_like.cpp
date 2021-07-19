@@ -760,6 +760,9 @@ int ObExprLike::like_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_d
       escape_val.assign_ptr("\\", 1);
     } else {
       escape_val = escape.get_string();
+      if (escape_val.empty()) {
+        escape_val.assign_ptr("\\", 1);
+      }
     }
     if (OB_SUCC(ret)) {
       if (do_optimization && like_id != OB_INVALID_ID && (!text_val.empty()) && (!pattern_val.empty())) {

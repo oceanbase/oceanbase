@@ -85,5 +85,12 @@ compile_commands.json
 test/tmp
 test/var
 *.ccls-cache/
-.cache/
-**/.vscode/
+
+###### Intellij files
+.idea
+cmake-build-debug
+cmake-build-release
+*.iml
+
+###### OSX dir files
+.DS_Store

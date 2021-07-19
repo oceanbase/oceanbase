@@ -645,6 +645,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprAtan2);
   REG_OP(ObExprToOutfileRow);
   REG_OP(ObExprFormat);
+  REG_OP(ObExprLog);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);

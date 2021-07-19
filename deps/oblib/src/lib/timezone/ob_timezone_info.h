@@ -576,27 +576,27 @@ public:
   {
     ++curr_idx_;
   }
-  const common::ObSArray<ObTZTransitionTypeInfo>& get_tz_tran_types() const
+  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& get_tz_tran_types() const
   {
     return tz_tran_types_[get_curr_idx() % 2];
   }
-  const common::ObSArray<ObTZRevertTypeInfo>& get_tz_revt_types() const
+  const common::ObSArray<ObTZRevertTypeInfo, ObMalloc>& get_tz_revt_types() const
   {
     return tz_revt_types_[get_curr_idx() % 2];
   }
-  const common::ObSArray<ObTZTransitionTypeInfo>& get_next_tz_tran_types() const
+  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& get_next_tz_tran_types() const
   {
     return tz_tran_types_[get_next_idx() % 2];
   }
-  const common::ObSArray<ObTZRevertTypeInfo>& get_next_tz_revt_types() const
+  const common::ObSArray<ObTZRevertTypeInfo, ObMalloc>& get_next_tz_revt_types() const
   {
     return tz_revt_types_[get_next_idx() % 2];
   }
-  common::ObSArray<ObTZTransitionTypeInfo>& get_next_tz_tran_types()
+  common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& get_next_tz_tran_types()
   {
     return tz_tran_types_[get_next_idx() % 2];
   }
-  common::ObSArray<ObTZRevertTypeInfo>& get_next_tz_revt_types()
+  common::ObSArray<ObTZRevertTypeInfo, ObMalloc>& get_next_tz_revt_types()
   {
     return tz_revt_types_[get_next_idx() % 2];
   }
@@ -621,9 +621,9 @@ private:
     there are no transitions at all.*/
   ObTZTransitionTypeInfo default_type_;
   // used for utc time -> local time
-  common::ObSArray<ObTZTransitionTypeInfo> tz_tran_types_[2];
+  common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> tz_tran_types_[2];
   // used for local time -> utc time
-  common::ObSArray<ObTZRevertTypeInfo> tz_revt_types_[2];
+  common::ObSArray<ObTZRevertTypeInfo, ObMalloc> tz_revt_types_[2];
   uint32_t curr_idx_;
   char tz_name_[common::OB_MAX_TZ_NAME_LEN];
 };

@@ -1438,3 +1438,7 @@ DEF_BOOL(_auto_drop_tenant_if_restore_failed, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(__major_merge_range_split_new_way, OB_CLUSTER_PARAMETER, "True",
     "Indicate whether to split ranges in the new way.",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(ob_proxy_readonly_transaction_routing_policy, OB_TENANT_PARAMETER, "true",
+         "Proxy route policy for readonly sql",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

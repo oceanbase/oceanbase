@@ -2348,7 +2348,8 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                       new_table_schema.get_charset_type(),
                       new_table_schema.get_collation_type()))) {
                 RS_LOG(WARN, "failed to fill column charset info");
-              } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema))) {
+              } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema,
+                  origin_table_schema.get_table_id()))) {
                 RS_LOG(WARN, "failed to check text or blob column length");
               }
             } else if (ObEnumSetTC == col_tc) {
@@ -2568,7 +2569,8 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                         new_table_schema.get_charset_type(),
                         new_table_schema.get_collation_type()))) {
                   RS_LOG(WARN, "failed to fill column charset info");
-                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema))) {
+                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema,
+                    origin_table_schema.get_table_id()))) {
                   RS_LOG(WARN, "failed to check text or blob column length");
                 }
               }
@@ -2775,7 +2777,8 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                         new_table_schema.get_charset_type(),
                         new_table_schema.get_collation_type()))) {
                   RS_LOG(WARN, "failed to fill column charset info");
-                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema))) {
+                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema,
+                    origin_table_schema.get_table_id()))) {
                   RS_LOG(WARN, "failed to check text or blob column length");
                 }
               }

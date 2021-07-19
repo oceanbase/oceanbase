@@ -554,6 +554,11 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
           // do nothing
         }
 
+        // 1、 resolve table_id first for check whether is inner_table
+        if (OB_SUCC(ret) && OB_FAIL(resolve_table_id_pre(create_table_node->children_[4]))) {
+          SQL_RESV_LOG(WARN, "resolve_table_id_pre failed", K(ret));
+        }
+
         // consider index can be defined before column, so column should be
         // resolved firstly;avoid to rescan table_element_list_node, use a
         // array named index_node_position_list to record the position of indexes
@@ -1576,7 +1581,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
           } else if (is_oracle_mode() && create_table_column_count > 0) {
             if (column.is_string_type()) {
               if (column.get_meta_type().is_lob()) {
-                if (OB_FAIL(check_text_column_length_and_promote(column))) {
+                if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
                   LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                 }
               } else if (OB_FAIL(check_string_column_length(column, share::is_oracle_mode()))) {
@@ -1619,7 +1624,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
             } else {
               if (column.is_string_type()) {
                 if (column.get_meta_type().is_lob()) {
-                  if (OB_FAIL(check_text_column_length_and_promote(column))) {
+                  if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
                     LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                   }
                 } else if (OB_FAIL(check_string_column_length(column, share::is_oracle_mode()))) {

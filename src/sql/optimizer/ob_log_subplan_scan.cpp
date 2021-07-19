@@ -249,6 +249,14 @@ int ObLogSubPlanScan::allocate_exchange_post(AllocExchContext* ctx)
   } else if (OB_FAIL(update_weak_part_exprs(ctx))) {
     LOG_WARN("failed to update weak part exprs", K(ret));
   } else {
+    ObShardingInfo &child_sharding = child->get_sharding_info();
+    if (child_sharding.get_partition_keys().count() != sharding_info_.get_partition_keys().count() ||
+        child_sharding.get_sub_partition_keys().count() != sharding_info_.get_sub_partition_keys().count() ||
+        child_sharding.get_partition_func().count() != sharding_info_.get_partition_func().count()) {
+      sharding_info_.get_partition_keys().reset();
+      sharding_info_.get_sub_partition_keys().reset();
+      sharding_info_.get_partition_func().reset();
+    }
     LOG_TRACE("subplan scan sharding info", K(sharding_info_));
   }
   return ret;

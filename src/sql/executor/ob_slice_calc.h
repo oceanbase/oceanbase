@@ -135,22 +135,7 @@ public:
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> PartId2ArrayIdxMap;
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> SubPartId2ArrayIdxMap;
 
-  virtual ~ObRepartSliceIdxCalc()
-  {
-    // destory map
-    if (part_id_to_part_array_idx_.created()) {
-      part_id_to_part_array_idx_.destroy();
-    }
-    if (part_idx_to_part_id_.created()) {
-      part_idx_to_part_id_.destroy();
-    }
-    if (subpart_id_to_subpart_array_idx_.created()) {
-      subpart_id_to_subpart_array_idx_.destroy();
-    }
-    if (subpart_idx_to_subpart_id_.created()) {
-      subpart_idx_to_subpart_id_.destroy();
-    }
-  }
+  virtual ~ObRepartSliceIdxCalc() {}
   virtual int get_slice_idx(const common::ObNewRow& row, int64_t& slice_idx) override;
 
   virtual int get_slice_idx(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, int64_t& slice_idx) override;
@@ -180,7 +165,6 @@ private:
   // get part id from hashmap, implicate that only one level-1 part in the map
   virtual int get_part_id_by_one_level_sub_ch_map(int64_t& part_id);
   virtual int get_sub_part_id_by_one_level_first_ch_map(const int64_t part_id, int64_t& sub_part_id);
-  int init_cache_map(hash::ObHashMap<int64_t, int64_t, hash::NoPthreadDefendMode>& map);
 
 protected:
   ObExecContext& exec_ctx_;
@@ -195,12 +179,6 @@ protected:
   int64_t round_robin_idx_;
   const ObPxPartChInfo& part_ch_info_;
   ObPxPartChMap px_repart_ch_map_;
-
-  const static int64_t DEFAULT_CACHE_MAP_BUCKET_NUM = 64;
-  PartId2ArrayIdxMap part_id_to_part_array_idx_;
-  ObShuffleService::PartIdx2PartIdMap part_idx_to_part_id_;
-  SubPartId2ArrayIdxMap subpart_id_to_subpart_array_idx_;
-  ObShuffleService::SubPartIdx2SubPartIdMap subpart_idx_to_subpart_id_;
   ObRepartitionType repart_type_;
 };
 

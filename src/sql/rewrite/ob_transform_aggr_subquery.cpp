@@ -258,7 +258,12 @@ int ObTransformAggrSubquery::check_subquery_validity(
     LOG_WARN("failed to check subquery on conditions", K(ret));
   } else if (!is_valid) {
     // do nothing
-    // 5. check correlated join contiditons
+    // 5. check correlated semi contiditons
+  } else if (OB_FAIL(check_subquery_semi_conditions(*subquery, is_valid))) {
+    LOG_WARN("failed to check subquery semi conditions", K(ret));
+  } else if (!is_valid) {
+    // do nothing
+    // 6. check correlated join contiditons
   } else if (OB_FAIL(check_subquery_conditions(*subquery, nested_conditions, is_valid))) {
     LOG_WARN("failed to check subquery conditions", K(ret));
   }
@@ -964,6 +969,11 @@ int ObTransformAggrSubquery::check_subquery_validity(
     // 4. check correlated join on contiditons
   } else if (OB_FAIL(check_subquery_on_conditions(*subquery, is_valid))) {
     LOG_WARN("failed to check subquery on conditions", K(ret));
+  } else if (!is_valid) {
+    // do nothing
+    // 5. check correlated semi contiditons
+  } else if (OB_FAIL(check_subquery_semi_conditions(*subquery, is_valid))) {
+    LOG_WARN("failed to check subquery semi conditions", K(ret));
   } else {
     stmt_level = subquery->get_current_level();
   }
@@ -1607,6 +1617,35 @@ int ObTransformAggrSubquery::extract_no_rewrite_expr(ObRawExpr* expr)
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(extract_no_rewrite_expr(expr->get_param_expr(i)))) {
         LOG_WARN("failed to extract no rewrite expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformAggrSubquery::check_subquery_semi_conditions(ObSelectStmt &subquery,
+                                                            bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < subquery.get_semi_info_size(); ++i) {
+    bool is_correlated = false;
+    SemiInfo *semi_info = subquery.get_semi_infos().at(i);
+    if (OB_ISNULL(semi_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && is_valid && j < semi_info->semi_conditions_.count(); ++j) {
+        ObRawExpr *cond = NULL;
+        if (OB_ISNULL(cond = semi_info->semi_conditions_.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("condition expr is null", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::is_correlated_expr(
+                            cond, subquery.get_current_level() - 1, is_correlated))) {
+          LOG_WARN("failed to check is correlated condition", K(ret));
+        } else if (is_correlated) {
+          is_valid = false;
+        }
       }
     }
   }
