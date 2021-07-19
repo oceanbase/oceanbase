@@ -769,7 +769,7 @@
 #define N_LPAD "lpad"
 #define N_SPACE "space"
 #define N_TRUNCATE "truncate"
-#define N_PI "PI"
+#define N_PI "pi"
 #define N_TIME_STAMP_ADD "timestampadd"
 #define N_CONNECT_BY_ROOT "connect_by_root"
 #define N_SYS_CONNECT_BY_PATH "sys_connect_by_path"

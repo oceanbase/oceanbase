@@ -256,6 +256,7 @@
 #include "sql/engine/expr/ob_expr_user_can_access_obj.h"
 #include "sql/engine/expr/ob_expr_empty_lob.h"
 #include "sql/engine/expr/ob_expr_radians.h"
+#include "sql/engine/expr/ob_expr_pi.h"
 #include "sql/engine/expr/ob_expr_to_outfile_row.h"
 #include "sql/engine/expr/ob_expr_format.h"
 #include "sql/engine/expr/ob_expr_quarter.h"
@@ -646,6 +647,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprToOutfileRow);
   REG_OP(ObExprFormat);
   REG_OP(ObExprLog);
+  REG_OP(ObExprPi);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);
