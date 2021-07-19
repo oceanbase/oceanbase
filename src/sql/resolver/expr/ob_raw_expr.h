@@ -1351,6 +1351,8 @@ public:
   {
     return T_FUN_PL_ASSOCIATIVE_INDEX == get_expr_type();
   }
+  bool is_non_pure_sys_func_expr() const;
+  bool is_specified_pseudocolumn_expr() const;
   void set_alias_column_name(const common::ObString& alias_name)
   {
     alias_column_name_ = alias_name;

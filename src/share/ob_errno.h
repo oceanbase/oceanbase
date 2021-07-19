@@ -2549,7 +2549,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_AT_LEAST_ONE_COLUMN_NOT_VIRTUAL__USER_ERROR_MSG "table must have at least 1 column that is not virtual"
 #define OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED__USER_ERROR_MSG "only pure functions can be indexed"
 #define OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION__USER_ERROR_MSG \
-  "only pure functions can be specified in a virtual column expression"
+  "Expression of generated column contains a disallowed function"
 #define OB_ERR_UPDATE_OPERATION_ON_VIRTUAL_COLUMNS__USER_ERROR_MSG "UPDATE operation disallowed on virtual columns"
 #define OB_ERR_INVALID_COLUMN_EXPRESSION__USER_ERROR_MSG "Invalid column expression was specified"
 #define OB_ERR_IDENTITY_COLUMN_COUNT_EXCE_LIMIT__USER_ERROR_MSG "table can have only one identity column"

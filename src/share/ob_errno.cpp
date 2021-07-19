@@ -11214,9 +11214,9 @@ static struct ObStrErrorInit {
     MYSQL_ERRNO[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] = -1;
     SQLSTATE[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] = "HY000";
     STR_ERROR[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] =
-        "only pure functions can be specified in a virtual column expression";
+        "Expression of generated column contains a disallowed function";
     STR_USER_ERROR[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] =
-        "only pure functions can be specified in a virtual column expression";
+        "Expression of generated column contains a disallowed function";
     ORACLE_ERRNO[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] = 54002;
     ORACLE_STR_ERROR[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] =
         "ORA-54002: only pure functions can be specified in a virtual column expression";

@@ -513,13 +513,13 @@ int ObDDLResolver::set_database_name(const ObString& database_name)
   return ret;
 }
 
-int ObDDLResolver::resolve_table_id_pre(ParseNode *node)
+int ObDDLResolver::resolve_table_id_pre(ParseNode* node)
 {
   int ret = OB_SUCCESS;
   if (NULL != node) {
-    ParseNode *option_node = NULL;
+    ParseNode* option_node = NULL;
     int32_t num = 0;
-    if(T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1) {
+    if (T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid parse node", K(ret));
     } else if (OB_ISNULL(node->children_) || OB_ISNULL(session_info_)) {
@@ -2945,12 +2945,8 @@ int ObDDLResolver::check_urowid_column_length(const share::schema::ObColumnSchem
   return ret;
 }
 
-int ObDDLResolver::check_text_length(ObCharsetType cs_type,
-                                     ObCollationType co_type,
-                                     const char* name,
-                                     ObObjType& type,
-                                     int32_t& length,
-                                     bool need_rewrite_length)
+int ObDDLResolver::check_text_length(ObCharsetType cs_type, ObCollationType co_type, const char* name, ObObjType& type,
+    int32_t& length, bool need_rewrite_length)
 {
   int ret = OB_SUCCESS;
   int64_t mbmaxlen = 0;
@@ -3009,14 +3005,13 @@ int ObDDLResolver::check_text_length(ObCharsetType cs_type,
 // old version ObTinyTextType, ObTextType, ObMediumTextType, ObLongTextType max_length is incorrect
 // correct max_legth is ObTinyTextType:255 etc.
 // so when create new user table, must rewrite max column length
-int ObDDLResolver::rewrite_text_length_mysql(ObObjType &type, int32_t &length)
+int ObDDLResolver::rewrite_text_length_mysql(ObObjType& type, int32_t& length)
 {
   int ret = OB_SUCCESS;
   int32_t max_length = ObAccuracy::MAX_ACCURACY[type].get_length();
   if (length < 0 || length > max_length) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("length can not be less than 0 or larger than max_length",
-        K(ret), K(type), K(length), K(max_length));
+    LOG_WARN("length can not be less than 0 or larger than max_length", K(ret), K(type), K(length), K(max_length));
   } else if (ob_is_text_tc(type) && max_length == length) {
     length = length - 1;
   }
@@ -3036,11 +3031,11 @@ int ObDDLResolver::check_text_column_length_and_promote(ObColumnSchemaV2& column
     need_check_length = false;
   }
   if (OB_FAIL(check_text_length(column.get_charset_type(),
-                                column.get_collation_type(),
-                                column.get_column_name(),
-                                type,
-                                length,
-                                need_check_length))) {
+          column.get_collation_type(),
+          column.get_column_name(),
+          type,
+          length,
+          need_check_length))) {
     LOG_WARN("failed to check text length", K(ret), K(column));
   } else {
     column.set_data_type(type);
@@ -3772,7 +3767,8 @@ int ObDDLResolver::check_default_value(ObObj& default_value, const common::ObTim
       LOG_WARN("session load default system variable failed", K(ret));
     } else if (OB_FAIL(input_default_value.get_string(expr_str))) {
       LOG_WARN("get expr string from default value failed", K(ret), K(input_default_value));
-    } else if (OB_FAIL(ObResolverUtils::resolve_generated_column_expr(params, expr_str, table_schema, column, expr))) {
+    } else if (OB_FAIL(ObResolverUtils::resolve_generated_column_expr(
+                   params, expr_str, table_schema, column, expr, ObResolverUtils::CHECK_FOR_GENERATED_COLUMN))) {
       LOG_WARN("resolve generated column expr failed", K(ret));
     } else if (column.get_meta_type().is_null()) {
       column.set_data_type(expr->get_data_type());

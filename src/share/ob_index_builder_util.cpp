@@ -552,8 +552,13 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
         LOG_WARN("init session failed", K(ret));
       } else if (OB_FAIL(session.load_default_sys_variable(false, false))) {
         LOG_WARN("session load default system variable failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(
-                     index_expr_def, expr_factory, session, data_schema, expr))) {
+      } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(index_expr_def,
+                     expr_factory,
+                     session,
+                     data_schema,
+                     expr,
+                     NULL,
+                     ObResolverUtils::CHECK_FOR_FUNCTION_INDEX))) {
         LOG_WARN("build generated column expr failed", K(ret));
       } else if (!expr->is_deterministic()) {
         ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;

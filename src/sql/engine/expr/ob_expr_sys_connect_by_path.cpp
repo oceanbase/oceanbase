@@ -28,18 +28,27 @@ int ObExprSysConnectByPath::calc_result_type2(
     ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const
 {
   int ret = OB_SUCCESS;
-  type.set_varchar();
-  // The length value result is related to the row count and cannot be determined in the analysis stage
-  type.set_length(OB_MAX_VARCHAR_LENGTH);
-  ObExprResType types[2];
-  type1.set_calc_type(ObVarcharType);
-  type2.set_calc_type(ObVarcharType);
-  types[0] = type1;
-  types[1] = type2;
-  if (OB_FAIL(aggregate_charsets_for_string_result(type, types, 2, type_ctx.get_coll_type()))) {
-    LOG_WARN("fail to aggregate charset", K(type1), K(type2), K(ret));
-  } else if (OB_FAIL(aggregate_charsets_for_comparison(type, types, 2, type_ctx.get_coll_type()))) {
-    LOG_WARN("fail to aggregate charset", K(type1), K(type2), K(ret));
+  if (is_oracle_mode()) {
+    ObSEArray<ObExprResType*, 2, ObNullAllocator> params;
+    OZ(params.push_back(&type1));
+    OZ(params.push_back(&type2));
+    OZ(aggregate_string_type_and_charset_oracle(*type_ctx.get_session(), params, type, true));
+    OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, params));
+    type.set_calc_meta(type);  // old engine need to set the calc_meta of type
+  } else {
+    type.set_varchar();
+    // The length value result is related to the row count and cannot be determined in the analysis stage
+    type.set_length(OB_MAX_VARCHAR_LENGTH);
+    ObExprResType types[2];
+    type1.set_calc_type(ObVarcharType);
+    type2.set_calc_type(ObVarcharType);
+    types[0] = type1;
+    types[1] = type2;
+    if (OB_FAIL(aggregate_charsets_for_string_result(type, types, 2, type_ctx.get_coll_type()))) {
+      LOG_WARN("fail to aggregate charset", K(type1), K(type2), K(ret));
+    } else if (OB_FAIL(aggregate_charsets_for_comparison(type, types, 2, type_ctx.get_coll_type()))) {
+      LOG_WARN("fail to aggregate charset", K(type1), K(type2), K(ret));
+    }
   }
   return ret;
 }
@@ -52,7 +61,7 @@ int ObExprSysConnectByPath::calc_result2(
   if (OB_ISNULL(expr_ctx.exec_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec ctx is null", K(ret));
-  } else if ((left.get_type() != ObVarcharType && left.get_type() != ObNullType) || right.get_type() != ObVarcharType) {
+  } else if ((!left.is_string_type() && left.get_type() != ObNullType) || !right.is_string_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid input type", K(left), K(right), K(ret));
   } else {

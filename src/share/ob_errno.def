@@ -1284,7 +1284,7 @@ DEFINE_ORACLE_ERROR(OB_ROWID_VIEW_NO_KEY_PRESERVED, -5902, -1, "HY000", "cannot 
 DEFINE_ORACLE_ERROR(OB_ROWID_VIEW_HAS_DISTINCT_ETC, -5903, -1, "HY000", "cannot select ROWID from, or sample, a view with DISTINCT, GROUP BY, etc", 1446, "cannot select ROWID from, or sample, a view with DISTINCT, GROUP BY, etc");
 DEFINE_ORACLE_ERROR(OB_ERR_AT_LEAST_ONE_COLUMN_NOT_VIRTUAL, -5904, -1, "HY000", "table must have at least 1 column that is not virtual", 54037, "table must have at least 1 column that is not virtual");
 DEFINE_ORACLE_ERROR(OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED, -5905, -1, "HY000", "only pure functions can be indexed", 1743, "only pure functions can be indexed");
-DEFINE_ORACLE_ERROR(OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION, -5906, -1, "HY000", "only pure functions can be specified in a virtual column expression", 54002, "only pure functions can be specified in a virtual column expression");
+DEFINE_ORACLE_ERROR(OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION, -5906, -1, "HY000", "Expression of generated column contains a disallowed function", 54002, "only pure functions can be specified in a virtual column expression");
 DEFINE_ORACLE_ERROR(OB_ERR_UPDATE_OPERATION_ON_VIRTUAL_COLUMNS, -5907, -1, "HY000", "UPDATE operation disallowed on virtual columns", 54017, "UPDATE operation disallowed on virtual columns");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_COLUMN_EXPRESSION, -5908, -1, "HY000", "Invalid column expression was specified", 54016, "Invalid column expression was specified");
 DEFINE_ORACLE_ERROR(OB_ERR_IDENTITY_COLUMN_COUNT_EXCE_LIMIT, -5909, -1, "HY000", "table can have only one identity column", 30669, "table can have only one identity column");

@@ -22,7 +22,7 @@
 #include "share/schema/ob_server_schema_service.h"
 #include "share/ob_cluster_type.h"
 #include "share/ob_get_compat_mode.h"
-#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server_struct.h"
 namespace oceanbase {
@@ -145,51 +145,40 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema& table_schema, ObColu
   int ret = OB_SUCCESS;
   ObString col_def;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
-  ObRawExprFactory expr_factory(allocator);
-  ObRawExpr* expr = NULL;
-  ObArray<ObQualifiedName> columns;
+  ObItemType root_expr_type = T_INVALID;
+  ObArray<ObString> column_names;
   ObColumnSchemaV2* col_schema = NULL;
   bool is_oracle_mode = false;
   if (column.is_generated_column()) {
-    // This is the mock session, so test_init should be used, otherwise it cannot be initialized for tz_mgr
-    ObSQLSessionInfo default_session;
-    if (OB_FAIL(default_session.test_init(0, 0, 0, &allocator))) {
-      LOG_WARN("init empty session failed", K(ret));
-    } else if (OB_FAIL(default_session.load_default_sys_variable(false, false))) {
-      LOG_WARN("session load default system variable failed", K(ret));
+    if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1471) {
+      // when 2.0liboblog fetch <1471 cluster, Parsing the column schema only needs to read orig_default_value
+      // Can not judge cur_default_value.is_null(), because the dependent column may have a default value
+      // cur_default_value is is_not_null, misjudgment
+      if (OB_FAIL(column.get_orig_default_value().get_string(col_def))) {
+        LOG_WARN("get orig default value failed", K(ret));
+      }
     } else {
-      if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1471) {
-        // when 2.0liboblog fetch <1471 cluster, Parsing the column schema only needs to read orig_default_value
-        // Can not judge cur_default_value.is_null(), because the dependent column may have a default value
-        // cur_default_value is is_not_null, misjudgment
+      // If the dependent column of the generated column has a change column, the current default value
+      // should be used instead of orig vaule
+      if (column.get_cur_default_value().is_null()) {
         if (OB_FAIL(column.get_orig_default_value().get_string(col_def))) {
           LOG_WARN("get orig default value failed", K(ret));
         }
       } else {
-        // If the dependent column of the generated column has a change column, the current default value
-        // should be used instead of orig vaule
-        if (column.get_cur_default_value().is_null()) {
-          if (OB_FAIL(column.get_orig_default_value().get_string(col_def))) {
-            LOG_WARN("get orig default value failed", K(ret));
-          }
-        } else {
-          if (OB_FAIL(column.get_cur_default_value().get_string(col_def))) {
-            LOG_WARN("get cur default value failed", K(ret));
-          }
+        if (OB_FAIL(column.get_cur_default_value().get_string(col_def))) {
+          LOG_WARN("get cur default value failed", K(ret));
         }
       }
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(col_def, expr_factory, default_session, expr, columns))) {
+      if (OB_FAIL(ObResolverUtils::resolve_generated_column_info(col_def, allocator, root_expr_type, column_names))) {
         LOG_WARN("get generated column expr failed", K(ret));
-      } else if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null");
-      } else if (T_FUN_SYS_WORD_SEGMENT == expr->get_expr_type()) {
+      } else if (T_FUN_SYS_WORD_SEGMENT == root_expr_type) {
         column.add_column_flag(GENERATED_CTXCAT_CASCADE_FLAG);
       } else {
-        LOG_DEBUG("succ to build_generated_column_expr", K(col_def), KPC(expr), K(columns), K(table_schema));
+        LOG_DEBUG(
+            "succ to resolve_generated_column_info", K(col_def), K(root_expr_type), K(column_names), K(table_schema));
       }
     }
 
@@ -202,18 +191,10 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema& table_schema, ObColu
 
     // TODO: materialized view
     if (table_schema.is_table() || table_schema.is_tmp_table()) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
-        // alter table t add  b char(10) as(concat(a, '1')); oracle mode
-        // The pl implementation causes concat to be parsed into T_OBJ_ACCESS_REF, so column_name may be empty
-        if (is_oracle_mode && columns.at(i).access_idents_.count() > 0 &&
-            columns.at(i).access_idents_[0].type_ != UNKNOWN) {
-          continue;
-        } else if (!columns.at(i).database_name_.empty() || !columns.at(i).tbl_name_.empty()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_names.count(); ++i) {
+        if (OB_ISNULL(col_schema = table_schema.get_column_schema(column_names.at(i)))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column is invalid", K(columns.at(i)));
-        } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(columns.at(i).col_name_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get column schema failed", K(columns.at(i)));
+          LOG_WARN("get column schema failed", K(column_names.at(i)));
         } else if (OB_FAIL(column.add_cascaded_column_id(col_schema->get_column_id()))) {
           LOG_WARN("add cascaded column id failed", K(ret));
         } else {

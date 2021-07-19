@@ -174,19 +174,27 @@ public:
       const common::ObString& expr_str, common::ObIAllocator& allocator, const ParseNode*& node);
   static int build_check_constraint_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session_info,
       const ParseNode& node, ObRawExpr*& expr, common::ObIArray<ObQualifiedName>& columns);
+  static int check_deterministic(const ObRawExpr* expr, common::ObIAllocator& allocator,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
+  static int check_deterministic_single(const ObRawExpr* expr,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
   static int build_generated_column_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session_info,
       const ParseNode& node, ObRawExpr*& expr, common::ObIArray<ObQualifiedName>& columns,
-      const ObSchemaChecker* schema_checker = NULL);
+      const ObSchemaChecker* schema_checker = NULL,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
   static int build_generated_column_expr(const common::ObString& expr_str, ObRawExprFactory& expr_factory,
       const ObSQLSessionInfo& session_info, ObRawExpr*& expr, common::ObIArray<ObQualifiedName>& columns,
-      const ObSchemaChecker* schema_checker = NULL);
+      const ObSchemaChecker* schema_checker = NULL,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
   static int build_generated_column_expr(const common::ObString& expr_str, ObRawExprFactory& expr_factory,
       const ObSQLSessionInfo& session_info, const share::schema::ObTableSchema& table_schema, ObRawExpr*& expr,
-      const ObSchemaChecker* schema_checker = NULL);
+      const ObSchemaChecker* schema_checker = NULL,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
   static int build_generated_column_expr(const common::ObString& expr_str, ObRawExprFactory& expr_factory,
       const ObSQLSessionInfo& session_info, uint64_t table_id, const share::schema::ObTableSchema& table_schema,
       const share::schema::ObColumnSchemaV2& gen_col_schema, ObRawExpr*& expr,
-      const ObSchemaChecker* schema_checker = NULL);
+      const ObSchemaChecker* schema_checker = NULL,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
   static int build_raw_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session_info, const ParseNode& node,
       ObRawExpr*& expr, common::ObIArray<ObQualifiedName>& columns, common::ObIArray<ObVarInfo>& sys_vars,
       common::ObIArray<ObAggFunRawExpr*>& aggr_exprs, common::ObIArray<ObWinFunRawExpr*>& win_exprs,

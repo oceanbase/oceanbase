@@ -472,6 +472,37 @@ int ObRawExpr::set_enum_set_values(const common::ObIArray<common::ObString>& val
   return ret;
 }
 
+bool ObRawExpr::is_non_pure_sys_func_expr() const
+{
+  if (lib::is_oracle_mode()) {
+    if (T_FUN_SYS_LOCALTIMESTAMP == type_ || T_FUN_SYS_SESSIONTIMEZONE == type_ || T_FUN_SYS_DBTIMEZONE == type_ ||
+        T_FUN_SYS_SYSDATE == type_ || T_FUN_SYS_SYSTIMESTAMP == type_ || T_FUN_SYS_UID == type_ ||
+        T_FUN_SYS_USER == type_ || T_FUN_SYS_CUR_TIMESTAMP == type_ || T_FUN_SYS_GUID == type_ ||
+        T_FUN_SYS_CUR_DATE == type_ || T_FUN_SYS_USERENV == type_ || T_FUN_SYS_REGEXP_REPLACE == type_) {
+      return true;
+    }
+  } else {
+    if (T_FUN_SYS_CONNECTION_ID == type_ || T_FUN_SYS_VERSION == type_ || T_FUN_SYS_CURRENT_USER == type_ ||
+        T_FUN_SYS_USER == type_ || T_FUN_SYS_DATABASE == type_ || T_FUN_SYS_SYSDATE == type_ ||
+        T_FUN_SYS_CUR_DATE == type_ || T_FUN_SYS_CUR_TIME == type_ || T_FUN_SYS_CUR_TIMESTAMP == type_ ||
+        T_FUN_SYS_UNIX_TIMESTAMP == type_ || T_FUN_SYS_UTC_TIMESTAMP == type_ || T_FUN_SYS_RAND == type_ ||
+        T_FUN_SYS_UUID == type_ || T_FUN_SYS_SLEEP == type_ || T_FUN_SYS_LAST_INSERT_ID == type_ ||
+        T_FUN_SYS_ROW_COUNT == type_ || T_FUN_SYS_FOUND_ROWS == type_ || T_FUN_SYS_REGEXP_INSTR == type_ ||
+        T_FUN_SYS_REGEXP_LIKE == type_ || T_FUN_SYS_REGEXP_REPLACE == type_ || T_FUN_SYS_REGEXP_SUBSTR == type_) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ObRawExpr::is_specified_pseudocolumn_expr() const
+{
+  if (T_FUN_SYS_ROWNUM == type_ || T_LEVEL == type_ || T_CONNECT_BY_ISCYCLE == type_ || T_CONNECT_BY_ISLEAF == type_) {
+    return true;
+  }
+  return false;
+}
+
 ////////////////////////////////////////////////////////////////
 int ObConstRawExpr::assign(const ObConstRawExpr& other)
 {

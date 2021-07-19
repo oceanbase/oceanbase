@@ -32,6 +32,7 @@
 
 namespace oceanbase {
 namespace sql {
+class ObRawExprUtils;
 class ObRoutineMatchInfo {
 public:
   struct MatchInfo {
@@ -87,6 +88,11 @@ public:
 };
 struct ObResolverUtils {
   enum RangeElementsNode { PARTITION_NAME_NODE = 0, PARTITION_ELEMENT_NODE = 1 };
+  enum PureFunctionCheckStatus {
+    DISABLE_CHECK = 0,
+    CHECK_FOR_GENERATED_COLUMN,
+    CHECK_FOR_FUNCTION_INDEX,
+  };
   static const int NAMENODE = 1;
   static ObItemType item_type_;
 
@@ -184,9 +190,14 @@ public:
       const share::schema::ObTableSchema& tbl_schema, share::schema::ObPartitionFuncType part_func_type,
       ObRawExpr*& part_expr, common::ObIArray<common::ObString>* part_keys);
   static int resolve_generated_column_expr(ObResolverParams& params, const common::ObString& expr_str,
-      share::schema::ObTableSchema& tbl_schema, share::schema::ObColumnSchemaV2& generated_column, ObRawExpr*& expr);
+      share::schema::ObTableSchema& tbl_schema, share::schema::ObColumnSchemaV2& generated_column, ObRawExpr*& expr,
+      const PureFunctionCheckStatus check_status = DISABLE_CHECK);
   static int resolve_generated_column_expr(ObResolverParams& params, const ParseNode* node,
-      share::schema::ObTableSchema& tbl_schema, share::schema::ObColumnSchemaV2& generated_column, ObRawExpr*& expr);
+      share::schema::ObTableSchema& tbl_schema, share::schema::ObColumnSchemaV2& generated_column, ObRawExpr*& expr,
+      const PureFunctionCheckStatus check_status = DISABLE_CHECK);
+  static int resolve_generated_column_info(const common::ObString& expr_str, ObIAllocator& allocator,
+      ObItemType& root_expr_type, common::ObIArray<common::ObString>& column_names);
+  static int resolve_column_info_recursively(const ParseNode* node, common::ObIArray<common::ObString>& column_names);
   static int resolve_default_expr_v2_column_expr(ObResolverParams& params, const common::ObString& expr_str,
       share::schema::ObColumnSchemaV2& default_expr_v2_column, ObRawExpr*& expr);
   static int resolve_default_expr_v2_column_expr(ObResolverParams& params, const ParseNode* node,
